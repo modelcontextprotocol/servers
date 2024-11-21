@@ -7,6 +7,7 @@ A collection of reference implementations and community-contributed servers for 
 
 ## 🌟 Featured Servers
 
+- **[SQLite](src/sqlite)** - Read and Write access to a local SQLite database with a helpful demo prompt to get started
 - **[Filesystem](src/filesystem)** - Secure file operations with configurable access controls
 - **[GitHub](src/github)** - Repository management, file operations, and GitHub API integration
 - **[Google Drive](src/gdrive)** - File access and search capabilities for Google Drive
@@ -16,6 +17,7 @@ A collection of reference implementations and community-contributed servers for 
 - **[Puppeteer](src/puppeteer)** - Browser automation and web scraping
 - **[Brave Search](src/brave-search)** - Web and local search using Brave's API
 - **[Google Maps](src/google-maps)** - Location services, directions, and place details
+
 
 ## 🚀 Getting Started
 
@@ -29,16 +31,6 @@ npm install -g @modelcontextprotocol/servers
 npm install -g @modelcontextprotocol/server-github
 npm install -g @modelcontextprotocol/server-filesystem
 # etc...
-```
-
-### Usage
-
-Each server can be run directly from the command line:
-
-```bash
-mcp-server-github
-mcp-server-filesystem ~/allowed/path
-mcp-server-postgres "postgresql://localhost/mydb"
 ```
 
 ## 🛠️ Creating Your Own Server
@@ -65,13 +57,7 @@ We welcome contributions from the community! Whether you're fixing bugs, adding 
    - Include a comprehensive README.md
    - Follow the implementation guidelines from [modelcontextprotocol.io](https://modelcontextprotocol.io)
 
-4. **Build & Test**:
-   ```bash
-   npm run build
-   npm test
-   ```
-
-5. **Submit a Pull Request**:
+4. **Submit a Pull Request**:
    - Describe your changes in detail
    - Reference any related issues
    - Follow the existing code style
