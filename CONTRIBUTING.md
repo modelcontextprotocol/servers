@@ -29,22 +29,6 @@ Documentation improvements are always welcome:
 - Improving setup instructions
 - Adding troubleshooting guides
 
-## Getting Started
-
-1. Fork the repository
-2. Clone your fork:
-   ```bash
-   git clone https://github.com/your-username/mcp-servers.git
-   ```
-3. Add the upstream remote:
-   ```bash
-   git remote add upstream https://github.com/modelcontextprotocol/servers.git
-   ```
-4. Create a branch:
-   ```bash
-   git checkout -b my-feature
-   ```
-
 ## Development Guidelines
 
 ### Code Style
@@ -55,33 +39,8 @@ Documentation improvements are always welcome:
 
 ### Documentation
 - Include a detailed README.md in your server directory
-- Document all configuration options
-- Provide setup instructions
-- Include usage examples
+- Document each Tool, Resource, and Prompt
 
-### Testing
-- Add appropriate tests for new functionality
-- Ensure existing tests pass
-- Test your changes thoroughly
-
-### Security
-- Follow security best practices
-- Implement proper input validation
-- Handle errors appropriately
-- Document security considerations
-
-## Submitting Changes
-
-1. Commit your changes:
-   ```bash
-   git add .
-   git commit -m "Description of changes"
-   ```
-2. Push to your fork:
-   ```bash
-   git push origin my-feature
-   ```
-3. Create a Pull Request through GitHub
 
 ### Pull Request Guidelines
 
@@ -103,9 +62,12 @@ Documentation improvements are always welcome:
 - Participate in [GitHub Discussions](https://github.com/modelcontextprotocol/servers/discussions)
 - Follow the [Code of Conduct](CODE_OF_CONDUCT.md)
 
+
 ## Questions?
 
 - Check the [documentation](https://modelcontextprotocol.io)
 - Ask in GitHub Discussions
 
-Thank you for contributing to MCP Servers!
+## License
+
+By contributing, you agree that your contributions will be licensed under the MIT License.

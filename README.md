@@ -8,7 +8,7 @@ A collection of reference implementations and community-contributed servers for 
 ## 🌟 Featured Servers
 
 - **[SQLite](src/sqlite)** - Read and Write access to a local SQLite database with a helpful demo prompt to get started
-- **[Filesystem](src/filesystem)** - Secure file operations with configurable access controls
+- **[Filesystem](src/filesystem)** -  File operations with configurable access controls
 - **[GitHub](src/github)** - Repository management, file operations, and GitHub API integration
 - **[Google Drive](src/gdrive)** - File access and search capabilities for Google Drive
 - **[PostgreSQL](src/postgres)** - Read-only database access with schema inspection
@@ -22,7 +22,7 @@ A collection of reference implementations and community-contributed servers for 
 ## 🚀 Getting Started
 
 ### Installation
-
+1. Install Servers
 ```bash
 # Install all servers globally
 npm install -g @modelcontextprotocol/servers
@@ -32,6 +32,20 @@ npm install -g @modelcontextprotocol/server-github
 npm install -g @modelcontextprotocol/server-filesystem
 # etc...
 ```
+2. Configure Client (Claude Desktop)
+```bash
+# Open the claude_desktop_config.json
+Interested in creating your own MCP server? Visit the official documentation at [modelcontextprotocol.io](https://modelcontextprotocol.io/introduction) for comprehensive guides, best practices, and technical details on implementing MCP servers.
+{
+  "mcpServers": {}
+}
+# Add the above servers and associated commands
+{
+  "mcpServers": {}
+}
+```
+
+
 
 ## 🛠️ Creating Your Own Server
 
@@ -39,28 +53,7 @@ Interested in creating your own MCP server? Visit the official documentation at 
 
 ## 🤝 Contributing
 
-We welcome contributions from the community! Whether you're fixing bugs, adding features to existing servers, or creating entirely new ones, here's how to contribute:
-
-1. **Fork & Clone**:
-   ```bash
-   git clone https://github.com/your-username/mcp-servers.git
-   cd mcp-servers
-   ```
-
-2. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Create Your Server**:
-   - Add your server in `src/your-server-name/`
-   - Include a comprehensive README.md
-   - Follow the implementation guidelines from [modelcontextprotocol.io](https://modelcontextprotocol.io)
-
-4. **Submit a Pull Request**:
-   - Describe your changes in detail
-   - Reference any related issues
-   - Follow the existing code style
+See [CONTRIBUTING.md](CONTRIBUTING.md) for information about how you can contribute to the MCP servers repository.
 
 ## 🔒 Security
 
@@ -72,7 +65,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 💬 Community
 
-- [Discord](https://discord.gg/modelcontextprotocol)
 - [GitHub Discussions](https://github.com/modelcontextprotocol/servers/discussions)
 
 ## ⭐ Support
