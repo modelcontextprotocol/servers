@@ -1,62 +1,48 @@
-# Simple SQLite Notes Server
+# SQLite MCP Server
 
-A basic MCP server implementation that demonstrates note-taking functionality using the three core MCP primitives: Resources, Prompts, and Tools.
+## Overview
+A Model Context Protocol (MCP) server implementation that provides database interaction and business intelligence capabilities through SQLite. This server enables running SQL queries, analyzing business data, and automatically generating business insight memos that can be enhanced with Claude's analysis when an Anthropic API key is provided.
 
-## Core Concepts
+## Components
 
 ### Resources
-Resources are how clients access data from the server. In this case, they're notes stored in SQLite.
-
-```python
-# Access notes through a custom URI scheme
-note:///example_note   # Gets the content of 'example_note'
-```
+The server exposes a single dynamic resource:
+- `memo://insights`: A continuously updated business insights memo that aggregates discovered insights during analysis
+  - Auto-updates as new insights are discovered via the append-insight tool
+  - Optional enhancement through Claude for professional formatting (requires Anthropic API key)
 
 ### Prompts
-Prompts allow generating text based on server state. Our server has a note summarization prompt that can be styled.
-
-```python
-# Example prompt with style argument
-{
-    "name": "summarize-notes",
-    "arguments": {
-        "style": "academic"  # Can be any style descriptor
-    }
-}
-```
+The server provides a demonstration prompt:
+- `mcp-demo`: Interactive prompt that guides users through database operations
+  - Required argument: `topic` - The business domain to analyze
+  - Generates appropriate database schemas and sample data
+  - Guides users through analysis and insight generation
+  - Integrates with the business insights memo
 
 ### Tools
-Tools modify server state. We have a simple tool to add new notes.
+The server offers six core tools:
 
-```python
-# Adding a new note
-{
-    "name": "add-note",
-    "arguments": {
-        "name": "my_note",
-        "content": "This is my note content"
-    }
-}
+#### Query Tools
+- `read-query`: Execute SELECT queries on the database
+- `write-query`: Execute INSERT, UPDATE, or DELETE queries
+- `create-table`: Create new database tables
+
+#### Schema Tools
+- `list-tables`: Get a list of all tables in the database
+- `describe-table`: View the schema of a specific table
+
+#### Analysis Tools
+- `append-insight`: Add new business insights to the memo resource
+
+## Installation
+
+```bash
+# Required: Python 3.10+
+python -m pip install mcp-sqlite-server
+
+# Run with default settings
+mcp-sqlite-server
+
+# Run with custom database and Anthropic integration
+mcp-sqlite-server --db-path ~/analysis.db --anthropic-key sk-xxx
 ```
-
-## Key Implementation Details
-
-### Handler Registration
-All decorated handlers must be inside `__init__`:
-```python
-def __init__(self):
-    super().__init__("sqlite")
-    
-    @self.list_resources()
-    async def handle_list_resources():
-        # Handler code here
-
-    @self.read_resource()
-    async def handle_read_resource():
-        # Handler code here
-```
-
-### Storage
-- Uses SQLite for persistent storage
-- Helper methods handle database operations
-- Clients are notified of state changes
