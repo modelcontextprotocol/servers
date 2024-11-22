@@ -6,19 +6,53 @@ A Model Context Protocol server for Git repository interaction and automation. T
 
 Please note that mcp-server-git is currently in early development. The functionality and available tools are subject to change and expansion as we continue to develop and improve the server.
 
-## Available Tools
+### Tools
 
-The current list of tools includes:
+1. `git_status`
+   - Shows the working tree status
+   - Input:
+     - `repo_path` (string): Path to Git repository
+   - Returns: Current status of working directory as text output
 
-- `git_status`: Shows the working tree status
-- `git_diff_unstaged`: Shows changes in the working directory that are not yet staged
-- `git_diff_staged`: Shows changes that are staged for commit
-- `git_commit`: Records changes to the repository
-- `git_add`: Adds file contents to the staging area
-- `git_reset`: Unstages all staged changes
-- `git_log`: Shows the commit logs
+2. `git_diff_unstaged`
+   - Shows changes in working directory not yet staged
+   - Input:
+     - `repo_path` (string): Path to Git repository
+   - Returns: Diff output of unstaged changes
 
-This list is expected to grow as we add more functionality to the server. We welcome contributions from the community to expand and enhance the available tools.
+3. `git_diff_staged`
+   - Shows changes that are staged for commit
+   - Input:
+     - `repo_path` (string): Path to Git repository
+   - Returns: Diff output of staged changes
+
+4. `git_commit`
+   - Records changes to the repository
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `message` (string): Commit message
+   - Returns: Confirmation with new commit hash
+
+5. `git_add`
+   - Adds file contents to the staging area
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `files` (string[]): Array of file paths to stage
+   - Returns: Confirmation of staged files
+
+6. `git_reset`
+   - Unstages all staged changes
+   - Input:
+     - `repo_path` (string): Path to Git repository
+   - Returns: Confirmation of reset operation
+
+7. `git_log`
+   - Shows the commit logs
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `max_count` (number, optional): Maximum number of commits to show (default: 10)
+   - Returns: Array of commit entries with hash, author, date, and message
+
 
 ## Installation
 
@@ -43,9 +77,9 @@ python -m mcp_server_git
 
 ## Configuration
 
-### Configure for Claude.app
+### Usage with Claude Desktop
 
-Add to your Claude settings:
+Add this to your `claude_desktop_config.json`:
 
 <details>
 <summary>Using uvx</summary>
@@ -73,7 +107,7 @@ Add to your Claude settings:
 ```
 </details>
 
-### Configure for Zed
+### Usage with [Zed](https://github.com/zed-industries/zed)
 
 Add to your Zed settings.json:
 
@@ -118,15 +152,6 @@ cd path/to/servers/src/git
 npx @modelcontextprotocol/inspector uv run mcp-server-git
 ```
 
-## Contributing
-
-We encourage contributions to help expand and improve mcp-server-git. Whether you want to add new tools, enhance existing functionality, or improve documentation, your input is valuable.
-
-For examples of other MCP servers and implementation patterns, see:
-https://github.com/modelcontextprotocol/servers
-
-Pull requests are welcome! Feel free to contribute new ideas, bug fixes, or enhancements to make mcp-server-git even more powerful and useful.
-
 ## License
 
-mcp-server-git is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
+This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.

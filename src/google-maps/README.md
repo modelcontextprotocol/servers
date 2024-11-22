@@ -52,9 +52,12 @@ MCP Server for the Google Maps API.
 
 ## Setup
 
-1. Get a Google Maps API key by following the instructions [here](https://developers.google.com/maps/documentation/javascript/get-api-key#create-api-keys).
+### API Key
+Get a Google Maps API key by following the instructions [here](https://developers.google.com/maps/documentation/javascript/get-api-key#create-api-keys).
 
-2. To use this with Claude Desktop, add the following to your `claude_desktop_config.json`:
+### Usage with Claude Desktop
+
+Add the following to your `claude_desktop_config.json`:
 
 ```json
 {
@@ -67,3 +70,7 @@ MCP Server for the Google Maps API.
   }
 }
 ```
+
+## License
+
+This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.

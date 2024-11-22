@@ -92,7 +92,7 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
 
 5. Get your Team ID (starts with a `T`) by following [this guidance](https://slack.com/help/articles/221769328-Locate-your-Slack-URL-or-ID#find-your-workspace-or-org-id)
 
-### Usage with the Claude Desktop app
+### Usage with Claude Desktop
 
 Add the following to your `claude_desktop_config.json`:
 
@@ -116,3 +116,7 @@ If you encounter permission errors, verify that:
 2. The app is properly installed to your workspace
 3. The tokens and workspace ID are correctly copied to your configuration
 4. The app has been added to the channels it needs to access
+
+## License
+
+This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.

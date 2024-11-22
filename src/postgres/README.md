@@ -20,7 +20,7 @@ The server provides schema information for each table in the database:
   - Includes column names and data types
   - Automatically discovered from database metadata
 
-## Example Usage with the Desktop App
+## Usage with Claude Desktop
 
 To use this server with the Claude Desktop app, add the following configuration to the "mcpServers" section of your `claude_desktop_config.json`:
 
@@ -34,3 +34,7 @@ To use this server with the Claude Desktop app, add the following configuration 
 ```
 
 Replace `/mydb` with your database name.
+
+## License
+
+This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
