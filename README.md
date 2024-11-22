@@ -18,13 +18,29 @@ Each MCP server is implemented with either the [Typescript MCP SDK](https://gith
 
 ## 🚀 Getting Started
 
-The servers in this repository can be used directly with `npx`. For example:
+### Using MCP Servers in this Repository
+Typescript-based servers in this repository can be used directly with `npx`. For example:
 
 ```sh
 npx -y @modelcontextprotocol/server-memory
 ```
 
-This will start the [Memory](src/memory) server. However, this isn't very useful on its own, and should instead be configured into an MCP client. For example, here's the Claude Desktop configuration to use the above server:
+This will start the [Memory](src/memory) server. 
+
+Python-based servers in this repository can be used directly with `uvx` or `pip`. For example:
+```sh
+# With uvx
+uvx mcp-server-git
+
+# With pip
+pip install mcp-server-git
+python -m mcp_server_git
+```
+
+This will start the [Git](src/git) server.
+
+### Using an MCP Client
+However, running a server on its own isn't very useful, and should instead be configured into an MCP client. For example, here's the Claude Desktop configuration to use the above server:
 
 ```json
 {
@@ -37,7 +53,7 @@ This will start the [Memory](src/memory) server. However, this isn't very useful
 }
 ```
 
-Additional examples might look like:
+Additional examples of using the Claude Desktop as an MCP client might look like:
 
 ```json
 {
