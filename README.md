@@ -26,7 +26,7 @@ For example, this will start the [Memory](src/memory) server:
 npx -y @modelcontextprotocol/server-memory
 ```
 
-Python-based servers in this repository can be used directly with `uvx` or `pip`. [`uvx`](https://docs.astral.sh/uv/concepts/tools/) is recommended for ease of use and setup. 
+Python-based servers in this repository can be used directly with [`uvx`](https://docs.astral.sh/uv/concepts/tools/) or [`pip`](https://pypi.org/project/pip/). `uvx` is recommended for ease of use and setup. 
 
 For example, this will start the [Git](src/git) server:
 ```sh
