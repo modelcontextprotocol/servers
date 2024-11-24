@@ -19,13 +19,16 @@ Each MCP server is implemented with either the [Typescript MCP SDK](https://gith
 ## 🚀 Getting Started
 
 ### Using MCP Servers in this Repository
-Typescript-based servers in this repository can be used directly with `npx`. For example, this will start the [Memory](src/memory) server:
+Typescript-based servers in this repository can be used directly with `npx`. 
 
+For example, this will start the [Memory](src/memory) server:
 ```sh
 npx -y @modelcontextprotocol/server-memory
 ```
 
-Python-based servers in this repository can be used directly with `uvx` or `pip`. [`uvx`](https://docs.astral.sh/uv/concepts/tools/) is recommended for ease of use and setup. For example, this will start the [Git](src/git) server:
+Python-based servers in this repository can be used directly with `uvx` or `pip`. [`uvx`](https://docs.astral.sh/uv/concepts/tools/) is recommended for ease of use and setup. 
+
+For example, this will start the [Git](src/git) server:
 ```sh
 # With uvx
 uvx mcp-server-git
