@@ -39,7 +39,7 @@ pip install mcp-server-git
 python -m mcp_server_git
 ```
 
-Follow [these](https://docs.astral.sh/uv/getting-started/installation/) instructions to install `uv` and [these](https://pip.pypa.io/en/stable/installation/) to install pip.
+Follow [these](https://docs.astral.sh/uv/getting-started/installation/) instructions to install `uv` / `uvx` and [these](https://pip.pypa.io/en/stable/installation/) to install pip.
 
 ### Using an MCP Client
 However, running a server on its own isn't very useful, and should instead be configured into an MCP client. For example, here's the Claude Desktop configuration to use the above server:
