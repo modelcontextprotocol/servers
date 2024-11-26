@@ -4,7 +4,12 @@ version = "0.5.1"
 description = "MCP server for using Zep long term memory with Claude"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["mcp>=1.0.0", "zep-cloud>=2.1.1", "click>=8.1.7", "packaging"]
+dependencies = [
+    "mcp>=1.0.0",
+    "zep-cloud>=2.1.1,<3.0.0",
+    "click>=8.1.7",
+    "packaging",
+]
 [[project.authors]]
 name = "Paul Paliychuk"
 email = "paul@getzep.com"
