@@ -24,11 +24,10 @@ It acts as a semantic memory layer on top of the Qdrant database.
 
 ### Using uv (recommended)
 
-When using [`uv`](https://docs.astral.sh/uv/) no specific installation is needed. We will
-use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run *mcp-server-qdrant*.
+When using [`uv`](https://docs.astral.sh/uv/) no specific installation is needed to directly run *mcp-server-qdrant*.
 
 ```shell
-uvx mcp-server-qdrant \
+uv run mcp-server-qdrant \
   --qdrant-url "http://localhost:6333" \
   --qdrant-api-key "your_api_key" \
   --collection-name "my_collection" \
@@ -65,6 +64,15 @@ This MCP server will automatically create a collection with the specified name i
 By default, the server will use the `sentence-transformers/all-MiniLM-L6-v2` embedding model to encode memories.
 For the time being, only [FastEmbed](https://qdrant.github.io/fastembed/) models are supported, and you can change it
 by passing the `--fastembed-model-name` argument to the server.
+
+### Environment Variables
+
+The configuration of the server can be also done using environment variables:
+
+- `QDRANT_URL`: URL of the Qdrant server
+- `QDRANT_API_KEY`: API key for the Qdrant server
+- `COLLECTION_NAME`: Name of the collection to use
+- `FASTEMBED_MODEL_NAME`: Name of the FastEmbed model to use
 
 ## License
 

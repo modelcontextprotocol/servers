@@ -83,11 +83,15 @@ def serve(
             raise ValueError(f"Unknown tool: {name}")
 
         if name == "qdrant-store-memory":
+            if not arguments or "information" not in arguments:
+                raise ValueError("Missing required argument 'information'")
             information = arguments["information"]
             await qdrant.store_memory(information)
             return [types.TextContent(type="text", text=f"Remembered: {information}")]
 
         if name == "qdrant-find-memories":
+            if not arguments or "query" not in arguments:
+                raise ValueError("Missing required argument 'query'")
             query = arguments["query"]
             memories = await qdrant.find_memories(query)
             content = [
