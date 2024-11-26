@@ -138,6 +138,25 @@ wheels = [
 ]
 
 [[package]]
+name = "mcp-server-zep"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "click" },
+    { name = "mcp" },
+    { name = "packaging" },
+    { name = "zep-cloud" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.1.7" },
+    { name = "mcp", specifier = ">=1.0.0" },
+    { name = "packaging" },
+    { name = "zep-cloud", specifier = ">=2.1.1" },
+]
+
+[[package]]
 name = "packaging"
 version = "24.2"
 source = { registry = "https://pypi.org/simple" }
@@ -291,25 +310,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/6a/3c/21dba3e7d76138725ef307e3d7ddd29b763119b3aa459d02cc05fefcff75/uvicorn-0.32.1.tar.gz", hash = "sha256:ee9519c246a72b1c084cea8d3b44ed6026e78a4a309cbedae9c37e4cb9fbb175", size = 77630 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/50/c1/2d27b0a15826c2b71dcf6e2f5402181ef85acf439617bb2f1453125ce1f3/uvicorn-0.32.1-py3-none-any.whl", hash = "sha256:82ad92fd58da0d12af7482ecdb5f2470a04c9c9a53ced65b9bbb4a205377602e", size = 63828 },
-]
-
-[[package]]
-name = "zep"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "click" },
-    { name = "mcp" },
-    { name = "packaging" },
-    { name = "zep-cloud" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "click", specifier = ">=8.1.7" },
-    { name = "mcp", specifier = ">=1.0.0" },
-    { name = "packaging" },
-    { name = "zep-cloud", specifier = ">=2.1.1" },
 ]
 
 [[package]]

@@ -47,7 +47,7 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "zep": {
     "command": "uvx",
-    "args": ["zep", "--api-key", "YOUR_API_KEY"]
+    "args": ["mcp-server-zep", "--api-key", "YOUR_API_KEY"]
   }
 }
 ```
@@ -58,9 +58,9 @@ Add this to your `claude_desktop_config.json`:
 
 ```json
 "mcpServers": {
-  "zep": {
+  "mcp-server-zep": {
     "command": "python",
-    "args": ["-m", "zep", "--api-key", "YOUR_API_KEY"]
+    "args": ["-m", "mcp-server-zep", "--api-key", "YOUR_API_KEY"]
   }
 }
 ```
@@ -75,9 +75,9 @@ Add to your Zed settings.json:
 
 ```json
 "context_servers": [
-  "zep": {
+  "mcp-server-zep": {
     "command": "uvx",
-    "args": ["zep", "--api-key", "YOUR_API_KEY"]
+    "args": ["mcp-server-zep", "--api-key", "YOUR_API_KEY"]
   }
 ],
 ```
@@ -88,9 +88,9 @@ Add to your Zed settings.json:
 
 ```json
 "context_servers": {
-  "zep": {
+  "mcp-server-zep": {
     "command": "python",
-    "args": ["-m", "zep", "--api-key", "YOUR_API_KEY"]
+    "args": ["-m", "mcp-server-zep", "--api-key", "YOUR_API_KEY"]
   }
 },
 ```
@@ -101,14 +101,14 @@ Add to your Zed settings.json:
 You can use the MCP inspector to debug the server. For uvx installations:
 
 ```
-npx @modelcontextprotocol/inspector uvx zep --api-key YOUR_API_KEY
+npx @modelcontextprotocol/inspector uvx mcp-server-zep --api-key YOUR_API_KEY
 ```
 
 Or if you've installed the package in a specific directory or are developing on it:
 
 ```
 cd path/to/servers/src/zep
-npx @modelcontextprotocol/inspector uv run zep --api-key YOUR_API_KEY
+npx @modelcontextprotocol/inspector uv run mcp-server-zep --api-key YOUR_API_KEY
 ```
 
 

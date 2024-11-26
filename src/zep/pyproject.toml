@@ -1,5 +1,5 @@
 [project]
-name = "zep"
+name = "mcp-server-zep"
 version = "0.1.0"
 description = "MCP server for using Zep long term memory with Claude"
 readme = "README.md"
@@ -14,4 +14,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-zep = "zep:main"
+mcp-server-zep = "mcp_server_zep:main"
