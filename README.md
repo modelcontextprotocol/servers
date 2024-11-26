@@ -16,6 +16,7 @@ Each MCP server is implemented with either the [Typescript MCP SDK](https://gith
 - **[Brave Search](src/brave-search)** - Web and local search using Brave's Search API
 - **[Google Maps](src/google-maps)** - Location services, directions, and place details
 - **[Fetch](src/fetch)** - Web content fetching and conversion for efficient LLM usage
+- **[Qdrant](src/qdrant)** - Semantic memory layer on top of the Qdrant vector search engine
 
 ## 🚀 Getting Started
 
