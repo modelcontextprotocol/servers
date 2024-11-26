@@ -52,6 +52,19 @@ The server provides access to two types of resources:
 - JavaScript execution
 - Basic web interaction (navigation, clicking, form filling)
 
+## Configuration to use Puppeteer Server
+Here's the Claude Desktop configuration to use the Puppeter server:
+
+```json
+{
+  "mcpServers": {
+    "puppeteer": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"]
+    }
+  }
+}
+
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
