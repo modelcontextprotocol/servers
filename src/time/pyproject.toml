@@ -1,10 +1,10 @@
 [project]
 name = "mcp-server-time"
-version = "0.1.0"
+version = "0.5.1"
 description = "A Model Context Protocol server providing tools for time queries and timezone conversions for LLMs"
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{ name = "Your Name" }]
+authors = [{ name = "Mariusz 'maledorak' Korzekwa", email = "mariusz@korzekwa.dev" }]
 keywords = ["time", "timezone", "mcp", "llm"]
 license = { text = "MIT" }
 classifiers = [

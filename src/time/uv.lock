@@ -139,7 +139,7 @@ wheels = [
 
 [[package]]
 name = "mcp-server-time"
-version = "0.1.0"
+version = "0.5.1"
 source = { editable = "." }
 dependencies = [
     { name = "mcp" },
