@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-zep"
-version = "0.1.0"
+version = "0.5.1"
 description = "MCP server for using Zep long term memory with Claude"
 readme = "README.md"
 requires-python = ">=3.10"
