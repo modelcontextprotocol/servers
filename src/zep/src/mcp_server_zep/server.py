@@ -65,58 +65,39 @@ async def serve(api_key: str) -> Server:
         return [
             types.Tool(
                 name="add-memory",
-                description="""Add new messages to the conversation memory. You MUST use this tool:
-                1. After EVERY message exchange to maintain conversation history
-                2. Immediately after receiving a user message
-                3. Immediately after sending your response
+                description="""Add a single message to the conversation memory. Follow this exact workflow:
+                1. When you receive a user message, IMMEDIATELY call this tool with the user's message
+                2. Call get-memory to retrieve context
+                3. Generate your response
+                4. Call this tool again with your response
                 
-                Format each message as:
+                Format the message as:
                 - For user messages: {"role_type": "user", "content": "<their message>"}
-                - For your responses: {"role_type": "assistant", "content": "<your message>"}
-                
-                This is critical for maintaining conversation context and history.
-                If you don't add messages to memory, you won't be able to reference them later.""",
+                - For your responses: {"role_type": "assistant", "content": "<your message>"}""",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "messages": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "role_type": {
-                                        "type": "string",
-                                        "enum": ["system", "assistant", "user", "function", "tool"],
-                                        "description": "The role of the message sender (required)"
-                                    },
-                                    "content": {
-                                        "type": "string",
-                                        "description": "The exact message content"
-                                    }
-                                },
-                                "required": ["role_type", "content"]
-                            },
-                            "description": "The message(s) to store in memory. Always include both user messages and your responses."
+                        "role_type": {
+                            "type": "string",
+                            "enum": ["system", "assistant", "user", "function", "tool"],
+                            "description": "The role of the message sender (required)"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "The exact message content"
                         }
                     },
-                    "required": ["messages"]
+                    "required": ["role_type", "content"]
                 }
             ),
             types.Tool(
                 name="get-memory",
-                description="""REQUIRED FIRST STEP: You MUST call this tool at the start of EVERY interaction.
+                description="""Retrieve conversation memory and context. 
+                You MUST call this tool:
+                1. AFTER saving the user's message with add-memory
+                2. BEFORE generating your response
                 
-                This is step 1 of 2 in your required workflow:
-                1. FIRST: Call get-memory to retrieve context
-                2. THEN: Generate your response using the context
-                3. FINALLY: Use add-memory to store the interaction
-                
-                The tool provides:
-                - Previous messages and conversation history
-                - Contextual information about past interactions
-                - Important details mentioned earlier
-                
-                This is NOT optional - you must call this tool before responding to maintain conversation coherence.""",
+                This ensures you have full context before responding.""",
                 inputSchema={
                     "type": "object",
                     "properties": {}
@@ -131,16 +112,10 @@ async def serve(api_key: str) -> Server:
                 raise ValueError("Missing arguments")
             
             try:
-                # Handle both string and list inputs
-                messages_input = arguments["messages"]
-                parsed_messages = messages_input if isinstance(messages_input, list) else json.loads(messages_input)
-                # Convert to Zep Message
-                messages = []
-                for msg in parsed_messages:
-                    messages.append(Message(
-                        role_type=msg.get("role_type"),
-                        content=msg["content"]
-                    ))
+                message = Message(
+                    role_type=arguments["role_type"],
+                    content=arguments["content"]
+                )
                 
                 try:
                     await client.memory.get_session(session_id)
@@ -152,12 +127,12 @@ async def serve(api_key: str) -> Server:
                 
                 await client.memory.add(
                     session_id=session_id,
-                    messages=messages
+                    messages=[message]  # Still passed as a list, but always single message
                 )
                 
                 memory_data = ZepMemoryData(
                     session_id=session_id,
-                    message=f"Successfully added {len(messages)} messages to memory session {session_id}"
+                    message=f"Successfully added message to memory session {session_id}"
                 )
                 return memory_data.to_tool_result()
             except Exception as e:
