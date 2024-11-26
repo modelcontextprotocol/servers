@@ -98,12 +98,17 @@ Add the following to your `claude_desktop_config.json`:
 
 ```json
 {
-  "slack": {
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-slack"],
-    "env": {
-      "SLACK_BOT_TOKEN": "xoxb-your-bot-token",
-      "SLACK_TEAM_ID": "T01234567"
+  "mcpServers": {
+    "slack": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-slack"
+      ],
+      "env": {
+        "SLACK_BOT_TOKEN": "xoxb-your-bot-token",
+        "SLACK_TEAM_ID": "T01234567"
+      }
     }
   }
 }

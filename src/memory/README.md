@@ -130,9 +130,14 @@ Example:
 Add this to your claude_desktop_config.json:
 ```json
 {
-  "memory": {
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-memory"]
+  "mcpServers": {
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    }
   }
 }
 ```
