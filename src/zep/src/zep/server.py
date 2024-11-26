@@ -1,7 +1,6 @@
 import asyncio
 from dataclasses import dataclass
 from typing import Optional
-import uuid
 
 import click
 import mcp.types as types
@@ -11,10 +10,7 @@ from mcp.server.models import InitializationOptions
 from mcp.shared.exceptions import McpError
 from zep_cloud.client import AsyncZep
 from zep_cloud.types import Message
-from zep_cloud.errors import NotFoundError
 import json
-import logging
-import sys
 
 MISSING_API_KEY_MESSAGE = (
     """Zep API key not found. Please specify your Zep API key."""
@@ -62,96 +58,6 @@ async def serve(api_key: str) -> Server:
     client = AsyncZep(api_key=api_key)
     user_id = USER_ID
     session_id = SESSION_ID
-
-
-    @server.list_prompts()
-    async def handle_list_prompts() -> list[types.Prompt]:
-        return [
-            types.Prompt(
-                name="memory-context",
-                description="Retrieve memory context for the current conversation",
-            ),
-            types.Prompt(
-                name="add-memory",
-                description="""Add new messages to the conversation memory. You MUST use this prompt:
-                1. After EVERY message exchange to maintain conversation history
-                2. Immediately after receiving a user message
-                3. Immediately after sending your response
-                
-                This is critical for maintaining conversation context and history.
-                If you don't add messages to memory, you won't be able to reference them later.""",
-                arguments=[
-                    types.PromptArgument(
-                        name="messages",
-                        description="The message(s) to store in memory. Format as JSON array of {role_type, content} objects.",
-                        required=True,
-                    ),
-                ],
-            )
-        ]
-
-    @server.get_prompt()
-    async def handle_get_prompt(
-        name: str, arguments: dict[str, str] | None
-    ) -> types.GetPromptResult:
-        if name == "memory-context":
-            try:
-                memory = await client.memory.get(session_id)
-                memory_data = ZepMemoryData(
-                    session_id=session_id,
-                    context=memory.context
-                )
-                return memory_data.to_prompt_result()
-            except Exception as e:
-                raise McpError(f"Error retrieving memory: {str(e)}")
-                
-        elif name == "add-memory":
-            try:
-                if not arguments or "messages" not in arguments:
-                    raise ValueError("Messages are required")
-
-                # Parse messages if it's a string
-                messages_str = arguments["messages"]
-                try:
-                    parsed_messages = json.loads(messages_str)
-                    if not isinstance(parsed_messages, list):
-                        parsed_messages = [parsed_messages]
-                except json.JSONDecodeError:
-                    parsed_messages = [{
-                        "role_type": "user",
-                        "content": messages_str
-                    }]
-
-                # Convert to Zep Message objects
-                messages = [
-                    Message(
-                        role_type=msg.get("role_type", "user"),
-                        content=msg["content"]
-                    ) for msg in parsed_messages
-                ]
-
-                # Create session if it doesn't exist
-                try:
-                    await client.memory.get_session(session_id)
-                except NotFoundError:
-                    await client.memory.add_session(
-                        session_id=session_id,
-                        user_id=user_id
-                    )
-
-                # Add messages to memory
-                await client.memory.add(
-                    session_id=session_id,
-                    messages=messages
-                )
-
-                memory_data = ZepMemoryData(
-                    session_id=session_id,
-                    message=f"Successfully added {len(messages)} messages to memory session {session_id}"
-                )
-                return memory_data.to_prompt_result()
-            except Exception as e:
-                raise McpError(f"Error adding memory: {str(e)}")
 
     @server.list_tools()
     async def handle_list_tools() -> list[types.Tool]:
@@ -217,7 +123,9 @@ async def serve(api_key: str) -> Server:
                 raise ValueError("Missing arguments")
             
             try:
-                parsed_messages = json.loads(arguments["messages"])
+                # Handle both string and list inputs
+                messages_input = arguments["messages"]
+                parsed_messages = messages_input if isinstance(messages_input, list) else json.loads(messages_input)
                 # Convert to Zep Message
                 messages = []
                 for msg in parsed_messages:
