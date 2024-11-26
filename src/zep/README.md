@@ -34,7 +34,8 @@ The server implements two tools:
 
 ### Environment Variables
 
-- `ZEP_API_KEY`: Required API key for Zep service authentication. Expected to be passed as `--api-key` flag. You can get it from project settings in Zep Cloud.
+- `ZEP_API_KEY`: Required API key for Zep service authentication. Expected to be passed as `--api-key` flag or as `ZEP_API_KEY` environment variable in your `claude_desktop_config.json`. The environment variable is recommended for better security.
+You can get your api key from project settings in Zep Cloud.
 
 ### Usage with Claude Desktop
 
@@ -47,7 +48,10 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "zep": {
     "command": "uvx",
-    "args": ["mcp-server-zep", "--api-key", "YOUR_API_KEY"]
+    "args": ["mcp-server-zep", "--api-key", "YOUR_API_KEY"],
+    "env": {
+      "ZEP_API_KEY": "YOUR_API_KEY"
+    }
   }
 }
 ```
@@ -60,7 +64,10 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "mcp-server-zep": {
     "command": "python",
-    "args": ["-m", "mcp-server-zep", "--api-key", "YOUR_API_KEY"]
+    "args": ["-m", "mcp-server-zep", "--api-key", "YOUR_API_KEY"],
+    "env": {
+      "ZEP_API_KEY": "YOUR_API_KEY"
+    }
   }
 }
 ```
@@ -77,7 +84,10 @@ Add to your Zed settings.json:
 "context_servers": [
   "mcp-server-zep": {
     "command": "uvx",
-    "args": ["mcp-server-zep", "--api-key", "YOUR_API_KEY"]
+    "args": ["mcp-server-zep", "--api-key", "YOUR_API_KEY"],
+    "env": {
+      "ZEP_API_KEY": "YOUR_API_KEY"
+    }
   }
 ],
 ```
@@ -90,7 +100,10 @@ Add to your Zed settings.json:
 "context_servers": {
   "mcp-server-zep": {
     "command": "python",
-    "args": ["-m", "mcp-server-zep", "--api-key", "YOUR_API_KEY"]
+    "args": ["-m", "mcp-server-zep", "--api-key", "YOUR_API_KEY"],
+    "env": {
+      "ZEP_API_KEY": "YOUR_API_KEY"
+    }
   }
 },
 ```
