@@ -2,7 +2,6 @@ from typing import Optional
 
 from mcp.server import Server, NotificationOptions
 from mcp.server.models import InitializationOptions
-from pydantic import AnyUrl
 
 import click
 import mcp.types as types
