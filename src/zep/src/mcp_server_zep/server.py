@@ -10,6 +10,7 @@ from mcp.server.models import InitializationOptions
 from mcp.shared.exceptions import McpError
 from zep_cloud.client import AsyncZep
 from zep_cloud.types import Message
+from zep_cloud.errors import NotFoundError
 import json
 
 MISSING_API_KEY_MESSAGE = (
@@ -103,17 +104,24 @@ async def serve(api_key: str) -> Server:
             ),
             types.Tool(
                 name="get-memory",
-                description="""Retrieve memory context for the current conversation. Use this tool when you need to:
-                - Review previous messages and context
-                - Check what was discussed earlier
-                - Ensure consistent responses based on conversational context
+                description="""REQUIRED FIRST STEP: You MUST call this tool at the start of EVERY interaction.
                 
-                You should check memory at the start of each conversation.""",
+                This is step 1 of 2 in your required workflow:
+                1. FIRST: Call get-memory to retrieve context
+                2. THEN: Generate your response using the context
+                3. FINALLY: Use add-memory to store the interaction
+                
+                The tool provides:
+                - Previous messages and conversation history
+                - Contextual information about past interactions
+                - Important details mentioned earlier
+                
+                This is NOT optional - you must call this tool before responding to maintain conversation coherence.""",
                 inputSchema={
                     "type": "object",
                     "properties": {}
                 }
-            )
+            ),
         ]
 
     @server.call_tool()
@@ -136,7 +144,7 @@ async def serve(api_key: str) -> Server:
                 
                 try:
                     await client.memory.get_session(session_id)
-                except:
+                except NotFoundError:
                     await client.memory.add_session(
                         session_id=session_id,
                         user_id=user_id
