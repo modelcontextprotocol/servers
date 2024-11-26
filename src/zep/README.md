@@ -34,7 +34,7 @@ The server implements two tools:
 
 ### Environment Variables
 
-- `ZEP_API_KEY`: Required API key for Zep service authentication. Expected to be passed as `--api-key` flag. You can get it from project settings in Zep Cloud.
+- `ZEP_API_KEY`: Required API key for Zep service authentication. Expected to be passed as `--api-key` flag as Servers don't yet support setting environment variables. You can get it from project settings in Zep Cloud.
 
 ### Usage with Claude Desktop
 
