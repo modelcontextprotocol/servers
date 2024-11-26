@@ -78,8 +78,14 @@ Add to your `claude_desktop_config.json`:
 
 ```json
 {
-  "everything": {
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-everything"]
+  "mcpServers": {
+    "everything": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-everything"
+      ]
+    }
   }
 }
+```
