@@ -50,6 +50,9 @@ Documentation improvements are always welcome:
 - Follow the existing code style in the repository
 - Include appropriate type definitions
 - Add comments for complex logic
+
+#### For Python based servers
+
 - Use `uvx ruff check` to check your code
 - Use `uvx ruff format` to automatically format your code 
 
