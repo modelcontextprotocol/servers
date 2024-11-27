@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-raygun",
-  "version": "0.1.0",
+  "version": "0.5.2",
   "description": "MCP Server for Raygun's API V3 endpoints for interacting with your Crash Reporting and Real User Monitoring applications",
   "license": "MIT",
   "author": "Raygun (https://raygun.com/)",
