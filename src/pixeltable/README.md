@@ -57,12 +57,6 @@ results = (
     .collect()
 )
 ```
-
-## Installation
-```bash
-pip install mcp-server-pixeltable
-```
-
 ## Configuration
 
 Add to `claude_desktop_config.json`:
