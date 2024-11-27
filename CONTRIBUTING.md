@@ -50,6 +50,8 @@ Documentation improvements are always welcome:
 - Follow the existing code style in the repository
 - Include appropriate type definitions
 - Add comments for complex logic
+- Use `uvx ruff check` to check your code
+- Use `uvx ruff format` to automatically format your code 
 
 ### Documentation
 - Include a detailed README.md in your server directory

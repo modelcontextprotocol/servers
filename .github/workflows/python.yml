@@ -49,6 +49,10 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: uv run --frozen pyright
 
+      - name: Run Ruff
+        uses: astral-sh/ruff-action@v1
+        src: src/${{ matrix.package }}
+
       - name: Build package
         working-directory: src/${{ matrix.package }}
         run: uv build
