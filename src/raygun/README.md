@@ -56,7 +56,7 @@ MCP Server for Raygun's API V3 endpoints for interacting with your Crash Reporti
 
 The server requires the following environment variables:
 
-- `RAYGUN_API_KEY` (required): Your Raygun API key
+- `RAYGUN_PAT_TOKEN` (required): Your [Raygun PAT token](https://raygun.com/documentation/product-guides/raygun-api/)
 - `SOURCEMAP_ALLOWED_DIRS` (optional): Comma-separated list of directories allowed for source map operations
 
 ## Usage with Claude Desktop
@@ -70,7 +70,7 @@ Add to your `claude_desktop_config.json`:
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-raygun"],
       "env": {
-        "RAYGUN_API_KEY": "your-api-key-here"
+        "RAYGUN_PAT_TOKEN": "your-pat-token-here"
       }
     }
   }
@@ -107,7 +107,7 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
     "raygun-server": {
       "command": "/path/to/server-raygun/build/index.js",
       "env": {
-        "RAYGUN_API_KEY": "your-api-key-here"
+        "RAYGUN_PAT_TOKEN": "your-pat-token-ken"
       }
     }
   }

@@ -13,13 +13,13 @@ import path from "node:path";
 import {ToolHandler} from "./types.js";
 import {toolRegistry} from "./tool-repository.js";
 
-if (!process.env.RAYGUN_API_KEY) {
-  throw new Error("RAYGUN_API_KEY environment variable must be set");
+if (!process.env.RAYGUN_PAT_TOKEN) {
+  throw new Error("RAYGUN_PAT_TOKEN environment variable must be set");
 }
 
 export const raygunAPIV3Client = new RaygunAPIV3Client({
   baseUrl: "https://api.raygun.com/v3",
-  apiKey: process.env.RAYGUN_API_KEY
+  apiKey: process.env.RAYGUN_PAT_TOKEN
 });
 
 export const allowedDirectories = process.env.SOURCEMAP_ALLOWED_DIRS ?
