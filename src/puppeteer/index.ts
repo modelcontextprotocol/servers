@@ -65,6 +65,29 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "puppeteer_select",
+    description: "Select an element on the page with Select tag",
+    inputSchema: {
+      type: "object",
+      properties: {
+        selector: { type: "string", description: "CSS selector for element to select" },
+        value: { type: "string", description: "Value to select" },
+      },
+      required: ["selector", "value"],
+    },
+  },
+  {
+    name: "puppeteer_hover",
+    description: "Hover an element on the page",
+    inputSchema: {
+      type: "object",
+      properties: {
+        selector: { type: "string", description: "CSS selector for element to hover" },
+      },
+      required: ["selector"],
+    },
+  },
+  {
     name: "puppeteer_evaluate",
     description: "Execute JavaScript in the browser console",
     inputSchema: {
@@ -88,7 +111,7 @@ async function ensureBrowser() {
     browser = await puppeteer.launch({ headless: false });
     const pages = await browser.pages();
     page = pages[0];
-    
+
     page.on("console", (msg) => {
       const logEntry = `[${msg.type()}] ${msg.text()}`;
       consoleLogs.push(logEntry);
@@ -122,7 +145,7 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
       const height = args.height ?? 600;
       await page.setViewport({ width, height });
 
-      const screenshot = await (args.selector ? 
+      const screenshot = await (args.selector ?
         (await page.$(args.selector))?.screenshot({ encoding: "base64" }) :
         page.screenshot({ encoding: "base64", fullPage: false }));
 
@@ -210,12 +233,62 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
         };
       }
 
+    case "puppeteer_select":
+      try {
+        await page.waitForSelector(args.selector);
+        await page.select(args.selector, args.value);
+        return {
+          toolResult: {
+            content: [{
+              type: "text",
+              text: `Selected ${args.selector} with: ${args.value}`,
+            }],
+            isError: false,
+          },
+        };
+      } catch (error) {
+        return {
+          toolResult: {
+            content: [{
+              type: "text",
+              text: `Failed to select ${args.selector}: ${(error as Error).message}`,
+            }],
+            isError: true,
+          },
+        };
+      }
+
+    case "puppeteer_hover":
+      try {
+        await page.waitForSelector(args.selector);
+        await page.hover(args.selector);
+        return {
+          toolResult: {
+            content: [{
+              type: "text",
+              text: `Hovered ${args.selector}`,
+            }],
+            isError: false,
+          },
+        };
+      } catch (error) {
+        return {
+          toolResult: {
+            content: [{
+              type: "text",
+              text: `Failed to hover ${args.selector}: ${(error as Error).message}`,
+            }],
+            isError: true,
+          },
+        };
+      }
+
     case "puppeteer_evaluate":
       try {
         const result = await page.evaluate((script) => {
           const logs: string[] = [];
           const originalConsole = { ...console };
-          
+
           ['log', 'info', 'warn', 'error'].forEach(method => {
             (console as any)[method] = (...args: any[]) => {
               logs.push(`[${method}] ${args.join(' ')}`);
@@ -301,7 +374,7 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => ({
 
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const uri = request.params.uri.toString();
-  
+
   if (uri === "console://logs") {
     return {
       contents: [{
@@ -333,7 +406,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: TOOLS,
 }));
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => 
+server.setRequestHandler(CallToolRequestSchema, async (request) =>
   handleToolCall(request.params.name, request.params.arguments ?? {})
 );
 
