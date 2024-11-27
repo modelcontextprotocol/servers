@@ -1,0 +1,37 @@
+[project]
+name = "mcp-server-pixeltable"
+version = "0.1.0"
+description = "MCP server for storing and retrieving context using Pixeltable"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Pixeltable, Inc." }]
+maintainers = [{ name = "Pierre Brunelle", email = "pbrunelle@pixeltable.com" }]
+keywords = ["pixeltable", "mcp", "llm", "data store"]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "mcp>=0.9.1",
+    "pixeltable>=0.2.26",
+    "numpy>=1.24.0",
+    "transformers>=4.46.3",
+    "sentence-transformers>=3.3.1"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+mcp-server-pixeltable = "mcp_server_pixeltable.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_server_pixeltable"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
