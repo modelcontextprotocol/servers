@@ -1,0 +1,17 @@
+[project]
+name = "mcp-server-neo4j"
+version = "0.5.1"
+description = "A simple neo4j MCP server"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["mcp>=0.9.1", "neo4j>=5.26.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = ["pyright>=1.1.389"]
+
+[project.scripts]
+mcp-server-neo4j = "mcp_server_neo4j:main"
