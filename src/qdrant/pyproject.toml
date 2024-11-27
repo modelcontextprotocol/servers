@@ -1,0 +1,20 @@
+[project]
+name = "mcp-server-qdrant"
+version = "0.5.1"
+description = "MCP server for retrieving context from a Qdrant vector database"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=0.9.1",
+    "qdrant-client[fastembed]>=1.12.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = ["pyright>=1.1.389", "pytest>=8.3.3", "ruff>=0.8.0"]
+
+[project.scripts]
+mcp-server-qdrant = "mcp_server_qdrant:main"
