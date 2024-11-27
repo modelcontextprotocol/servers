@@ -1,0 +1,29 @@
+{
+  "name": "@modelcontextprotocol/server-raygun",
+  "version": "0.1.0",
+  "description": "MCP Server for Raygun's API V3 endpoints for interacting with your Crash Reporting and Real User Monitoring applications",
+  "license": "MIT",
+  "author": "Raygun (https://raygun.com/)",
+  "type": "module",
+  "bin": {
+    "raygun-server": "./build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x build/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0",
+    "zod-to-json-schema": "^3.23.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "shx": "^0.3.4",
+    "typescript": "^5.3.3"
+  }
+}
