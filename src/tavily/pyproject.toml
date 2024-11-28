@@ -1,0 +1,32 @@
+[project]
+name = "mcp-server-tavily"
+version = "0.0.1"
+description = "A Model Context Protocol server providing tools to access Tavily search integration"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Markus Rollwagen" }]
+keywords = ["tavily", "mcp", "llm", "search"]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "click>=8.1.7",
+    "mcp>=1.0.0",
+    "pydantic>=2.10.2",
+    "tavily-python>=0.5.0",
+]
+
+[project.scripts]
+mcp-server-tavily = "mcp_server_tavily:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = ["pyright>=1.1.389", "ruff>=0.7.3"]
