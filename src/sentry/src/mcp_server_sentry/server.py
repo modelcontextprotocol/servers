@@ -1,6 +1,5 @@
 import asyncio
 from dataclasses import dataclass
-from typing import Any
 from urllib.parse import urlparse
 
 import click

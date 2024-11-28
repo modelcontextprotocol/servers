@@ -1,6 +1,5 @@
 import sqlite3
 import logging
-from logging.handlers import RotatingFileHandler
 from contextlib import closing
 from pathlib import Path
 from mcp.server.models import InitializationOptions
@@ -25,7 +24,7 @@ Here is some more information about mcp and this specific mcp server:
 Prompts:
 This server provides a pre-written prompt called "mcp-demo" that helps users create and analyze database scenarios. The prompt accepts a "topic" argument and guides users through creating tables, analyzing data, and generating insights. For example, if a user provides "retail sales" as the topic, the prompt will help create relevant database tables and guide the analysis process. Prompts basically serve as interactive templates that help structure the conversation with the LLM in a useful way.
 Resources:
-This server exposes one key resource: "memo://insights", which is a business insights memo that gets automatically updated throughout the analysis process. As users analyze the database and discover insights, the memo resource gets updated in real-time to reflect new findings. The memo can even be enhanced with Claude's help if an Anthropic API key is provided, turning raw insights into a well-structured business document. Resources act as living documents that provide context to the conversation.
+This server exposes one key resource: "memo://insights", which is a business insights memo that gets automatically updated throughout the analysis process. As users analyze the database and discover insights, the memo resource gets updated in real-time to reflect new findings. Resources act as living documents that provide context to the conversation.
 Tools:
 This server provides several SQL-related tools:
 "read-query": Executes SELECT queries to read data from the database

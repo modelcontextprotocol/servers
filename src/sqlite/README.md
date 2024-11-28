@@ -1,7 +1,7 @@
 # SQLite MCP Server
 
 ## Overview
-A Model Context Protocol (MCP) server implementation that provides database interaction and business intelligence capabilities through SQLite. This server enables running SQL queries, analyzing business data, and automatically generating business insight memos that can be enhanced with Claude's analysis when an Anthropic API key is provided.
+A Model Context Protocol (MCP) server implementation that provides database interaction and business intelligence capabilities through SQLite. This server enables running SQL queries, analyzing business data, and automatically generating business insight memos.
 
 ## Components
 
@@ -9,7 +9,6 @@ A Model Context Protocol (MCP) server implementation that provides database inte
 The server exposes a single dynamic resource:
 - `memo://insights`: A continuously updated business insights memo that aggregates discovered insights during analysis
   - Auto-updates as new insights are discovered via the append-insight tool
-  - Optional enhancement through Claude for professional formatting (requires Anthropic API key)
 
 ### Prompts
 The server provides a demonstration prompt:
@@ -25,7 +24,7 @@ The server offers six core tools:
 #### Query Tools
 - `read-query`
    - Execute SELECT queries to read data from the database
-   - Input: 
+   - Input:
      - `query` (string): The SELECT SQL query to execute
    - Returns: Query results as array of objects
 

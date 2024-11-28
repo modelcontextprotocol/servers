@@ -1,5 +1,4 @@
 import logging
-import json
 from pathlib import Path
 from typing import Sequence
 from mcp.server import Server
@@ -14,8 +13,7 @@ from mcp.types import (
 )
 from enum import Enum
 import git
-from pydantic import BaseModel, Field
-from typing import List, Optional
+from pydantic import BaseModel
 
 class GitStatus(BaseModel):
     repo_path: str
@@ -32,7 +30,7 @@ class GitCommit(BaseModel):
 
 class GitAdd(BaseModel):
     repo_path: str
-    files: List[str]
+    files: list[str]
 
 class GitReset(BaseModel):
     repo_path: str
