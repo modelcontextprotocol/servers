@@ -47,7 +47,7 @@ def get_robots_txt_url(url: str) -> str:
 async def check_may_autonomously_fetch_url(url: str, user_agent: str):
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
-    Raises an McpError if not.
+    Raises a McpError if not.
     """
     from httpx import AsyncClient, HTTPError
 
