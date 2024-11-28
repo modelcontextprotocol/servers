@@ -1,0 +1,29 @@
+{
+  "name": "youtube-transcript",
+  "version": "0.1.0",
+  "description": "This is an MCP server that allows you to directly download transcripts of YouTube videos.",
+  "license": "MIT",
+  "author": "Freddie",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "type": "module",
+  "bin": {
+    "youtube-transcript": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0",
+    "youtube-captions-scraper": "^2.0.3"
+  },
+  "devDependencies": {
+    "shx": "^0.3.4",
+    "typescript": "^5.6.2"
+  }
+}
