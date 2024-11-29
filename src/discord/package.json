@@ -1,0 +1,29 @@
+{
+  "name": "discord",
+  "version": "0.5.1",
+  "description": "MCP server for interacting with Discord",
+  "license": "MIT",
+  "type": "module",
+  "author": "Kosuke Suenaga",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "bin": {
+    "discord": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "shx": "^0.3.4",
+    "typescript": "^5.6.2"
+  }
+}
