@@ -1,192 +1,86 @@
-#!/usr/bin/env node
-
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListResourcesRequestSchema,
-  ListToolsRequestSchema,
-  ReadResourceRequestSchema,
-  CallToolResult,
-  TextContent,
-  ImageContent,
-  Tool,
-} from "@modelcontextprotocol/sdk/types.js";
-import puppeteer, { Browser, Page } from "puppeteer";
-
-// Define the tools once to avoid repetition
-const TOOLS: Tool[] = [
-  {
-    name: "puppeteer_navigate",
-    description: "Navigate to a URL",
-    inputSchema: {
-      type: "object",
-      properties: {
-        url: { type: "string" },
-      },
-      required: ["url"],
-    },
-  },
-  {
-    name: "puppeteer_screenshot",
-    description: "Take a screenshot of the current page or a specific element",
-    inputSchema: {
-      type: "object",
-      properties: {
-        name: { type: "string", description: "Name for the screenshot" },
-        selector: { type: "string", description: "CSS selector for element to screenshot" },
-        width: { type: "number", description: "Width in pixels (default: 800)" },
-        height: { type: "number", description: "Height in pixels (default: 600)" },
-      },
-      required: ["name"],
-    },
-  },
-  {
-    name: "puppeteer_click",
-    description: "Click an element on the page",
-    inputSchema: {
-      type: "object",
-      properties: {
-        selector: { type: "string", description: "CSS selector for element to click" },
-      },
-      required: ["selector"],
-    },
-  },
-  {
-    name: "puppeteer_fill",
-    description: "Fill out an input field",
-    inputSchema: {
-      type: "object",
-      properties: {
-        selector: { type: "string", description: "CSS selector for input field" },
-        value: { type: "string", description: "Value to fill" },
-      },
-      required: ["selector", "value"],
-    },
-  },
-  {
-    name: "puppeteer_select",
-    description: "Select an element on the page with Select tag",
-    inputSchema: {
-      type: "object",
-      properties: {
-        selector: { type: "string", description: "CSS selector for element to select" },
-        value: { type: "string", description: "Value to select" },
-      },
-      required: ["selector", "value"],
-    },
-  },
-  {
-    name: "puppeteer_hover",
-    description: "Hover an element on the page",
-    inputSchema: {
-      type: "object",
-      properties: {
-        selector: { type: "string", description: "CSS selector for element to hover" },
-      },
-      required: ["selector"],
-    },
-  },
-  {
-    name: "puppeteer_evaluate",
-    description: "Execute JavaScript in the browser console",
-    inputSchema: {
-      type: "object",
-      properties: {
-        script: { type: "string", description: "JavaScript code to execute" },
-      },
-      required: ["script"],
-    },
-  },
-];
-
-// Global state
-let browser: Browser | undefined;
-let page: Page | undefined;
-const consoleLogs: string[] = [];
-const screenshots = new Map<string, string>();
-
-async function ensureBrowser() {
-  if (!browser) {
-    browser = await puppeteer.launch({ headless: false });
-    const pages = await browser.pages();
-    page = pages[0];
-
-    page.on("console", (msg) => {
-      const logEntry = `[${msg.type()}] ${msg.text()}`;
-      consoleLogs.push(logEntry);
-      server.notification({
-        method: "notifications/resources/updated",
-        params: { uri: "console://logs" },
-      });
-    });
-  }
-  return page!;
-}
-
-async function handleToolCall(name: string, args: any): Promise<{ toolResult: CallToolResult }> {
-  const page = await ensureBrowser();
-
-  switch (name) {
-    case "puppeteer_navigate":
-      await page.goto(args.url);
-      return {
-        toolResult: {
-          content: [{
-            type: "text",
-            text: `Navigated to ${args.url}`,
-          }],
-          isError: false,
-        },
-      };
-
-    case "puppeteer_screenshot": {
-      const width = args.width ?? 800;
-      const height = args.height ?? 600;
-      await page.setViewport({ width, height });
-
-      const screenshot = await (args.selector ?
-        (await page.$(args.selector))?.screenshot({ encoding: "base64" }) :
-        page.screenshot({ encoding: "base64", fullPage: false }));
-
-      if (!screenshot) {
-        return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: args.selector ? `Element not found: ${args.selector}` : "Screenshot failed",
-            }],
             isError: true,
           },
         };
       }
 
-      screenshots.set(args.name, screenshot as string);
-      server.notification({
-        method: "notifications/resources/list_changed",
-      });
+    case "puppeteer_screenshot": {
+      const width = args.width ?? config.screenshotOptions.defaultWidth;
+      const height = args.height ?? config.screenshotOptions.defaultHeight;
+      
+      try {
+        await page.setViewport({ width, height });
+        
+        // Wait for any animations to complete
+        await page.waitForTimeout(500);
+        
+        let screenshot;
+        if (args.selector) {
+          const element = await withTimeout(
+            page.waitForSelector(args.selector, { timeout: 5000 })
+          );
+          if (!element) {
+            throw new Error(`Element not found: ${args.selector}`);
+          }
+          screenshot = await element.screenshot({ 
+            encoding: "base64",
+            quality: config.screenshotOptions.quality
+          });
+        } else {
+          screenshot = await page.screenshot({ 
+            encoding: "base64", 
+            fullPage: false,
+            captureBeyondViewport: false,
+            quality: config.screenshotOptions.quality
+          });
+        }
+        
+        if (!screenshot) {
+          throw new Error('Screenshot capture failed');
+        }
 
-      return {
-        toolResult: {
-          content: [
-            {
+        screenshots.set(args.name, screenshot as string);
+        server.notification({
+          method: "notifications/resources/list_changed",
+        });
+
+        return {
+          toolResult: {
+            content: [
+              {
+                type: "text",
+                text: `Screenshot '${args.name}' taken at ${width}x${height}`,
+              } as TextContent,
+              {
+                type: "image",
+                data: screenshot,
+                mimeType: "image/png",
+              } as ImageContent,
+            ],
+            isError: false,
+          },
+        };
+      } catch (error) {
+        return {
+          toolResult: {
+            content: [{
               type: "text",
-              text: `Screenshot '${args.name}' taken at ${width}x${height}`,
-            } as TextContent,
-            {
-              type: "image",
-              data: screenshot,
-              mimeType: "image/png",
-            } as ImageContent,
-          ],
-          isError: false,
-        },
-      };
+              text: `Screenshot failed: ${(error as Error).message}`,
+            }],
+            isError: true,
+          },
+        };
+      }
     }
 
     case "puppeteer_click":
       try {
-        await page.click(args.selector);
+        const element = await withTimeout(
+          page.waitForSelector(args.selector, { timeout: 5000 })
+        );
+        if (!element) {
+          throw new Error(`Element not found: ${args.selector}`);
+        }
+        await element.click();
         return {
           toolResult: {
             content: [{
@@ -210,8 +104,13 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
 
     case "puppeteer_fill":
       try {
-        await page.waitForSelector(args.selector);
-        await page.type(args.selector, args.value);
+        const element = await withTimeout(
+          page.waitForSelector(args.selector, { timeout: 5000 })
+        );
+        if (!element) {
+          throw new Error(`Element not found: ${args.selector}`);
+        }
+        await element.type(args.value);
         return {
           toolResult: {
             content: [{
@@ -235,7 +134,12 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
 
     case "puppeteer_select":
       try {
-        await page.waitForSelector(args.selector);
+        const element = await withTimeout(
+          page.waitForSelector(args.selector, { timeout: 5000 })
+        );
+        if (!element) {
+          throw new Error(`Element not found: ${args.selector}`);
+        }
         await page.select(args.selector, args.value);
         return {
           toolResult: {
@@ -260,8 +164,13 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
 
     case "puppeteer_hover":
       try {
-        await page.waitForSelector(args.selector);
-        await page.hover(args.selector);
+        const element = await withTimeout(
+          page.waitForSelector(args.selector, { timeout: 5000 })
+        );
+        if (!element) {
+          throw new Error(`Element not found: ${args.selector}`);
+        }
+        await element.hover();
         return {
           toolResult: {
             content: [{
@@ -285,26 +194,28 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
 
     case "puppeteer_evaluate":
       try {
-        const result = await page.evaluate((script) => {
-          const logs: string[] = [];
-          const originalConsole = { ...console };
+        const result = await withTimeout(
+          page.evaluate((script) => {
+            const logs: string[] = [];
+            const originalConsole = { ...console };
 
-          ['log', 'info', 'warn', 'error'].forEach(method => {
-            (console as any)[method] = (...args: any[]) => {
-              logs.push(`[${method}] ${args.join(' ')}`);
-              (originalConsole as any)[method](...args);
-            };
-          });
+            ['log', 'info', 'warn', 'error'].forEach(method => {
+              (console as any)[method] = (...args: any[]) => {
+                logs.push(`[${method}] ${args.join(' ')}`);
+                (originalConsole as any)[method](...args);
+              };
+            });
 
-          try {
-            const result = eval(script);
-            Object.assign(console, originalConsole);
-            return { result, logs };
-          } catch (error) {
-            Object.assign(console, originalConsole);
-            throw error;
-          }
-        }, args.script);
+            try {
+              const result = eval(script);
+              Object.assign(console, originalConsole);
+              return { result, logs };
+            } catch (error) {
+              Object.assign(console, originalConsole);
+              throw error;
+            }
+          }, args.script)
+        );
 
         return {
           toolResult: {
@@ -345,7 +256,7 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
 const server = new Server(
   {
     name: "example-servers/puppeteer",
-    version: "0.1.0",
+    version: "0.5.2",
   },
   {
     capabilities: {
@@ -354,7 +265,6 @@ const server = new Server(
     },
   },
 );
-
 
 // Setup request handlers
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
@@ -400,7 +310,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   }
 
   throw new Error(`Resource not found: ${uri}`);
-});
+}));
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: TOOLS,
@@ -409,6 +319,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) =>
   handleToolCall(request.params.name, request.params.arguments ?? {})
 );
+
+// Add signal handlers for cleanup
+process.on('SIGTERM', cleanup);
+process.on('SIGINT', cleanup);
+
+// Add global error handler
+process.on('unhandledRejection', (error) => {
+  console.error('Unhandled promise rejection:', error);
+});
 
 async function runServer() {
   const transport = new StdioServerTransport();
