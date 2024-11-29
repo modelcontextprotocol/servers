@@ -1,0 +1,45 @@
+{
+  "name": "search1api-mcp",
+  "version": "0.1.2",
+  "description": "A Model Context Protocol (MCP) server that provides search and crawl functionality using Search1API",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "search1api-mcp": "build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0",
+    "axios": "^1.7.8",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "typescript": "^5.3.3"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "search",
+    "crawl",
+    "google",
+    "search1api"
+  ],
+  "author": "fatwang2",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fatwang2/search1api-mcp.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
