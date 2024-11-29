@@ -22,6 +22,10 @@ Each MCP server is implemented with either the [Typescript MCP SDK](https://gith
 - **[Google Maps](src/google-maps)** - Location services, directions, and place details
 - **[Fetch](src/fetch)** - Web content fetching and conversion for efficient LLM usage
 
+## 🌎 Community Servers
+
+- **[Cloudflare](https://github.com/cloudflare/mcp-server-cloudflare)** - Deploy, configure & interrogate your resources on the Cloudflare developer platform (e.g. Workers/KV/R2/D1)
+
 ## 🚀 Getting Started
 
 ### Using MCP Servers in this Repository
