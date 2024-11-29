@@ -1,81 +1,126 @@
-# Puppeteer
-
-A Model Context Protocol server that provides browser automation capabilities using Puppeteer. This server enables LLMs to interact with web pages, take screenshots, and execute JavaScript in a real browser environment.
-
-## Components
-
-### Tools
-
-- **puppeteer_navigate**
-  - Navigate to any URL in the browser
-  - Input: `url` (string)
-
-- **puppeteer_screenshot**
-  - Capture screenshots of the entire page or specific elements
-  - Inputs:
-    - `name` (string, required): Name for the screenshot
-    - `selector` (string, optional): CSS selector for element to screenshot
-    - `width` (number, optional, default: 800): Screenshot width
-    - `height` (number, optional, default: 600): Screenshot height
-
-- **puppeteer_click**
-  - Click elements on the page
-  - Input: `selector` (string): CSS selector for element to click
-
-- **puppeteer_hover**
-  - Hover elements on the page
-  - Input: `selector` (string): CSS selector for element to hover
-
-- **puppeteer_fill**
-  - Fill out input fields
-  - Inputs:
-    - `selector` (string): CSS selector for input field
-    - `value` (string): Value to fill
-
-- **puppeteer_select**
-  - Select an element with SELECT tag
-  - Inputs:
-    - `selector` (string): CSS selector for element to select
-    - `value` (string): Value to select
-
-- **puppeteer_evaluate**
-  - Execute JavaScript in the browser console
-  - Input: `script` (string): JavaScript code to execute
-
-### Resources
-
-The server provides access to two types of resources:
-
-1. **Console Logs** (`console://logs`)
-   - Browser console output in text format
-   - Includes all console messages from the browser
-
-2. **Screenshots** (`screenshot://<name>`)
-   - PNG images of captured screenshots
-   - Accessible via the screenshot name specified during capture
-
-## Key Features
-
-- Browser automation
-- Console log monitoring
-- Screenshot capabilities
-- JavaScript execution
-- Basic web interaction (navigation, clicking, form filling)
-
-## Configuration to use Puppeteer Server
-Here's the Claude Desktop configuration to use the Puppeter server:
-
-```json
-{
-  "mcpServers": {
-    "puppeteer": {
-      "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-puppeteer"]
     }
   }
 }
 ```
 
+## Error Handling
+
+The server includes comprehensive error handling:
+
+- Automatic browser reconnection on disconnection
+- Operation timeouts with configurable limits
+- Detailed error messages for failed operations
+- Graceful cleanup on process termination
+- Unhandled rejection catching
+
+## Resource Management
+
+The server implements several resource management features:
+
+- Automatic browser cleanup on shutdown
+- Memory leak prevention
+- Screenshot storage management
+- Console log buffering
+
+## Browser Recovery
+
+The server includes automatic recovery mechanisms:
+
+- Reconnection on browser crashes
+- Page recreation on navigation errors
+- Connection state verification
+- Graceful error handling during recovery
+
+## Development
+
+### Prerequisites
+
+- Node.js 16 or higher
+- npm or yarn
+
+### Installation
+
+```bash
+npm install @modelcontextprotocol/server-puppeteer
+```
+
+### Development Commands
+
+```bash
+# Build the project
+npm run build
+
+# Run in watch mode
+npm run watch
+
+# Run tests
+npm run test
+
+# Lint the code
+npm run lint
+
+# Format the code
+npm run format
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Browser Launch Fails**
+   - Check system dependencies
+   - Verify sufficient memory
+   - Check browser executable permissions
+
+2. **Navigation Timeout**
+   - Increase timeout in configuration
+   - Check network connectivity
+   - Verify URL accessibility
+
+3. **Screenshot Fails**
+   - Verify element visibility
+   - Check viewport dimensions
+   - Ensure sufficient memory
+
+4. **Element Interaction Fails**
+   - Verify selector correctness
+   - Check element visibility and interactability
+   - Increase wait timeout if needed
+
+### Debug Logging
+
+To enable debug logging, set the environment variable:
+
+```bash
+DEBUG=mcp:puppeteer* npm start
+```
+
+## Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests and linting
+5. Submit a pull request
+
 ## License
 
-This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
+This MCP server is licensed under the MIT License. See the LICENSE file for details.
+
+## Security
+
+The server implements several security measures:
+
+- Sandboxed browser environment
+- Restricted JavaScript execution
+- Resource usage limits
+- Input validation
+
+Please report security issues to the security contact listed in the repository.
+
+## Versioning
+
+This project follows [Semantic Versioning](https://semver.org/). Release notes can be found in the CHANGELOG.md file.
