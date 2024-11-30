@@ -1,59 +1,74 @@
 # Todoist MCP Server
 
-MCP Server for the Todoist API, enabling Claude to interact with Todoist tasks and projects.
+An MCP server implementation that integrates with Todoist API, providing comprehensive task management capabilities through natural language interactions.
+
+## Features
+
+- **Task Management**: Create, read, update, and delete tasks with natural language
+- **Smart Task Search**: Find and modify tasks using partial name matches
+- **Flexible Filtering**: Filter tasks by due date, priority, and project
+- **Natural Language Dates**: Use human-readable date formats like "tomorrow", "next Monday"
+- **Priority Levels**: Support for Todoist's 4-level priority system
 
 ## Tools
 
-1. `todoist_create_task`
-    - Create a new task in Todoist
-    - Required inputs:
-        - `content` (string): The content of the task
-        - `project_id` (string, optional): Project to add task to
-        - `due_string` (string, optional): Natural language due date (e.g., "tomorrow", "next Monday")
-    - Returns: Information about the created task
+- **todoist_create_task**
+  - Create new tasks with optional details
+  - Inputs:
+    - `content` (string): The content/title of the task
+    - `description` (string, optional): Detailed task description
+    - `due_string` (string, optional): Natural language due date
+    - `priority` (number, optional): Priority level (1-4)
 
-2. `todoist_complete_task`
-    - Mark a task as completed
-    - Required inputs:
-        - `task_id` (string): ID of the task to complete
-    - Returns: Operation status
+- **todoist_get_tasks**
+  - Retrieve and filter tasks
+  - Inputs:
+    - `filter` (string, optional): Natural language filter (e.g., "today", "overdue")
+    - `priority` (number, optional): Filter by priority (1-4)
+    - `project_id` (string, optional): Filter by project
+    - `limit` (number, optional): Maximum results to return
 
-3. `todoist_list_tasks`
-    - Get a list of active tasks
-    - Optional inputs:
-        - `project_id` (string): Filter tasks by project
-        - `section_id` (string): Filter tasks by section
-    - Returns: Array of task objects
+- **todoist_update_task**
+  - Update existing tasks using natural language search
+  - Inputs:
+    - `task_name` (string): Task to search for and update
+    - `content` (string, optional): New task title
+    - `description` (string, optional): New description
+    - `due_string` (string, optional): New due date
+    - `priority` (number, optional): New priority level
 
-4. `todoist_get_projects`
-    - Get list of all projects
-    - No required inputs
-    - Returns: Array of project objects
-
-5. `todoist_create_project`
-    - Create a new project
-    - Required inputs:
-        - `name` (string): Name of the project
-        - `color` (string, optional): Color of the project
-    - Returns: Created project information
-
-## Setup
-
-Requires a Todoist API token set as the environment variable `TODOIST_API_TOKEN`. Get your API token from Todoist Settings -> Integrations -> Developer.
+- **todoist_delete_task**
+  - Remove tasks using natural language search
+  - Inputs:
+    - `task_name` (string): Task to search for and delete
 
 ## Configuration
 
-Example configuration for Claude Desktop:
+### Getting an API Token
+1. Log in to your Todoist account
+2. Go to Settings → Integrations
+3. Find your API token under "Developer"
+
+### Usage with Claude Desktop
+Add this to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "todoist": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-todoist"],
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-todoist"
+      ],
       "env": {
-        "TODOIST_API_TOKEN": "${TODOIST_API_TOKEN}"
+        "TODOIST_API_TOKEN": "YOUR_API_TOKEN_HERE"
       }
     }
   }
 }
+```
+
+## License
+
+This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
