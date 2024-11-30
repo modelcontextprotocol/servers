@@ -1,7 +1,5 @@
 from google.cloud import bigquery
 import logging
-from contextlib import closing
-from pathlib import Path
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 from mcp.server import NotificationOptions, Server
