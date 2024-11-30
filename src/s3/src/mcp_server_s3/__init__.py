@@ -1,26 +1,37 @@
-import click
-from functools import partial
-from pathlib import Path
-import logging
-import sys
 from .server import serve
 
 
-@click.command()
-@click.option("--repository", "-r", type=Path, help="Git repository path")
-@click.option("-v", "--verbose", count=True)
-def main(repository: Path | None, verbose: bool) -> None:
-    """MCP Git Server - Git functionality for MCP"""
+def main():
+    """
+    MCP S3 Server - Provides S3 document search and analysis capabilities for MCP
+
+    This server allows AI models to:
+    - Search through documents in S3 buckets
+    - Analyze document content
+    - Extract and process text from various file types
+    - Filter and retrieve documents based on metadata
+    """
+    import argparse
     import asyncio
 
-    logging_level = logging.WARN
-    if verbose == 1:
-        logging_level = logging.INFO
-    elif verbose >= 2:
-        logging_level = logging.DEBUG
+    parser = argparse.ArgumentParser(
+        description="Give a model the ability to search and analyze documents in S3 buckets"
+    )
+    parser.add_argument(
+        "--bucket",
+        type=str,
+        required=True,
+        help="S3 bucket name"
+    )
+    parser.add_argument(
+        "--prefix",
+        type=str,
+        default="",
+        help="S3 bucket prefix (folder path)"
+    )
 
-    logging.basicConfig(level=logging_level, stream=sys.stderr)
-    asyncio.run(serve(repository))
+    args = parser.parse_args()
+    asyncio.run(serve(args.local_timezone))
 
 
 if __name__ == "__main__":
