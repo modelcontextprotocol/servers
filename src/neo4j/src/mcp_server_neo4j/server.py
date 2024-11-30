@@ -16,7 +16,7 @@ logger = logging.getLogger('mcp_neo4j_server')
 logger.info("Starting MCP neo4j Server")
 
 def is_write_query(query: str) -> bool:
-    return re.match(r"\b(MERGE|CREATE|SET|DELETE|REMOVE|ADD)\b", query, re.IGNORECASE) is not None
+    return re.search(r"\b(MERGE|CREATE|SET|DELETE|REMOVE|ADD)\b", query, re.IGNORECASE) is not None
 
 class neo4jDatabase:
     def __init__(self,  neo4j_uri: str, neo4j_username: str, neo4j_password: str):
