@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
 import markdownify
@@ -17,26 +17,44 @@ from mcp.types import (
     INTERNAL_ERROR,
 )
 from protego import Protego
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, AnyUrl
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
 
 
-def extract_content(html: str) -> str:
-    ret = readabilipy.simple_json.simple_json_from_html_string(html)
-    if not ret["plain_content"]:
+def extract_content_from_html(html: str) -> str:
+    """Extract and convert HTML content to Markdown format.
+
+    Args:
+        html: Raw HTML content to process
+
+    Returns:
+        Simplified markdown version of the content
+    """
+    ret = readabilipy.simple_json.simple_json_from_html_string(
+        html, use_readability=True
+    )
+    if not ret["content"]:
         return "<error>Page failed to be simplified from HTML</error>"
     content = markdownify.markdownify(
-        ret["plain_content"],
+        ret["content"],
         heading_style=markdownify.ATX,
     )
     return content
 
 
-def get_robots_txt_url(url: str) -> str:
+def get_robots_txt_url(url: AnyUrl | str) -> str:
+    """Get the robots.txt URL for a given website URL.
+
+    Args:
+        url: Website URL to get robots.txt for
+
+    Returns:
+        URL of the robots.txt file
+    """
     # Parse the URL into components
-    parsed = urlparse(url)
+    parsed = urlparse(str(url))
 
     # Reconstruct the base URL with just scheme, netloc, and /robots.txt path
     robots_url = urlunparse((parsed.scheme, parsed.netloc, "/robots.txt", "", "", ""))
@@ -44,7 +62,7 @@ def get_robots_txt_url(url: str) -> str:
     return robots_url
 
 
-async def check_may_autonomously_fetch_url(url: str, user_agent: str):
+async def check_may_autonomously_fetch_url(url: AnyUrl | str, user_agent: str) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
@@ -87,34 +105,85 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str):
         )
 
 
-async def fetch_url(url: str, user_agent: str) -> str:
+async def fetch_url(
+    url: AnyUrl | str, user_agent: str, force_raw: bool = False
+) -> Tuple[str, str]:
+    """
+    Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
+    """
     from httpx import AsyncClient, HTTPError
 
     async with AsyncClient() as client:
         try:
             response = await client.get(
-                url, follow_redirects=True, headers={"User-Agent": user_agent}
+                str(url),
+                follow_redirects=True,
+                headers={"User-Agent": user_agent},
+                timeout=30,
             )
-        except HTTPError:
-            raise McpError(INTERNAL_ERROR, f"Failed to fetch {url}")
+        except HTTPError as e:
+            raise McpError(INTERNAL_ERROR, f"Failed to fetch {url}: {e!r}")
         if response.status_code >= 400:
             raise McpError(
                 INTERNAL_ERROR,
                 f"Failed to fetch {url} - status code {response.status_code}",
             )
 
-        page_html = response.text
+        page_raw = response.text
 
-    return extract_content(page_html)
+    content_type = response.headers.get("content-type", "")
+    is_page_html = (
+        "<html" in page_raw[:100] or "text/html" in content_type or not content_type
+    )
+
+    if is_page_html and not force_raw:
+        return extract_content_from_html(page_raw), ""
+
+    return (
+        page_raw,
+        f"Content type {content_type} cannot be simplified to markdown, but here is the raw content:\n",
+    )
 
 
 class Fetch(BaseModel):
-    url: str = Field(..., description="URL to fetch")
+    """Parameters for fetching a URL."""
+
+    url: Annotated[AnyUrl, Field(description="URL to fetch")]
+    max_length: Annotated[
+        int,
+        Field(
+            default=5000,
+            description="Maximum number of characters to return.",
+            gt=0,
+            lt=1000000,
+        ),
+    ]
+    start_index: Annotated[
+        int,
+        Field(
+            default=0,
+            description="On return output starting at this character index, useful if a previous fetch was truncated and more context is required.",
+            ge=0,
+        ),
+    ]
+    raw: Annotated[
+        bool,
+        Field(
+            default=False,
+            description="Get the actual HTML content if the requested page, without simplification.",
+        ),
+    ]
 
 
 async def serve(
-    custom_user_agent: Optional[str] = None, ignore_robots_txt: bool = False
+    custom_user_agent: str | None = None, ignore_robots_txt: bool = False
 ) -> None:
+    """Run the fetch MCP server.
+
+    Args:
+        custom_user_agent: Optional custom User-Agent string to use for requests
+        ignore_robots_txt: Whether to ignore robots.txt restrictions
+    """
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
     user_agent_manual = custom_user_agent or DEFAULT_USER_AGENT_MANUAL
@@ -124,7 +193,7 @@ async def serve(
         return [
             Tool(
                 name="fetch",
-                description="""Fetches a URL from the internet and extracts its contents as markdown.
+                description="""Fetches a URL from the internet and optionally extracts its contents as markdown.
 
 Although originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that.""",
                 inputSchema=Fetch.model_json_schema(),
@@ -147,15 +216,25 @@ Although originally you did not have internet access, and were advised to refuse
 
     @server.call_tool()
     async def call_tool(name, arguments: dict) -> list[TextContent]:
-        url = arguments.get("url")
+        try:
+            args = Fetch(**arguments)
+        except ValueError as e:
+            raise McpError(INVALID_PARAMS, str(e))
+
+        url = args.url
         if not url:
             raise McpError(INVALID_PARAMS, "URL is required")
 
         if not ignore_robots_txt:
             await check_may_autonomously_fetch_url(url, user_agent_autonomous)
 
-        content = await fetch_url(url, user_agent_autonomous)
-        return [TextContent(type="text", text=f"Contents of {url}:\n{content}")]
+        content, prefix = await fetch_url(
+            url, user_agent_autonomous, force_raw=args.raw
+        )
+        if len(content) > args.max_length:
+            content = content[args.start_index : args.start_index + args.max_length]
+            content += f"\n\n<error>Content truncated. Call the fetch tool with a start_index of {args.start_index + args.max_length} to get more content.</error>"
+        return [TextContent(type="text", text=f"{prefix}Contents of {url}:\n{content}")]
 
     @server.get_prompt()
     async def get_prompt(name: str, arguments: dict | None) -> GetPromptResult:
@@ -165,7 +244,7 @@ Although originally you did not have internet access, and were advised to refuse
         url = arguments["url"]
 
         try:
-            content = await fetch_url(url, user_agent_manual)
+            content, prefix = await fetch_url(url, user_agent_manual)
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:
             return GetPromptResult(
@@ -181,7 +260,7 @@ Although originally you did not have internet access, and were advised to refuse
             description=f"Contents of {url}",
             messages=[
                 PromptMessage(
-                    role="user", content=TextContent(type="text", text=content)
+                    role="user", content=TextContent(type="text", text=prefix + content)
                 )
             ],
         )
