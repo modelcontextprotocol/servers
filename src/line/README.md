@@ -1,29 +1,22 @@
-# line MCP Server
+# LINE MCP Server
 
-MCP server for interacting with Line
+MCP server for interacting with LINE Messaging API
 
-This is a TypeScript-based MCP server that implements a simple notes system. It demonstrates core MCP concepts by providing:
+This is a TypeScript-based MCP server that implements LINE bot functionality. It demonstrates core MCP concepts by providing:
 
-- Resources representing text notes with URIs and metadata
-- Tools for creating new notes
-- Prompts for generating summaries of notes
+- Tools for sending messages to LINE users
+- Tools for retrieving LINE user profiles
+- Integration with LINE Messaging API
 
 ## Features
 
-### Resources
-- List and access notes via `note://` URIs
-- Each note has a title, content and metadata
-- Plain text mime type for simple content access
-
 ### Tools
-- `create_note` - Create new text notes
-  - Takes title and content as required parameters
-  - Stores note in server state
-
-### Prompts
-- `summarize_notes` - Generate a summary of all stored notes
-  - Includes all note contents as embedded resources
-  - Returns structured prompt for LLM summarization
+- `line_send_message` - Send messages to LINE users
+  - Takes `user_id` and `message` as required parameters
+  - Sends text messages via LINE Bot API
+- `line_get_profile` - Get LINE user profile information
+  - Takes `user_id` as required parameter
+  - Retrieves user profile data from LINE Platform
 
 ## Development
 
@@ -46,20 +39,25 @@ npm run watch
 
 To use with Claude Desktop, add the server config:
 
-On MacOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+On MacOS: `~/Library/Application Support/Claude/claude_desktop_config.json`  
 On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
 ```json
 "line": {
-      "command": "node",
-      "args": [
-        "/.../index.js"
-      ],
-      "env": {
-        "LINE_CHANNEL_ACCESS_TOKEN": ""
-      }
-    }
+  "command": "node",
+  "args": [
+    "path/to/your/build/index.js"
+  ],
+  "env": {
+    "LINE_CHANNEL_ACCESS_TOKEN": "your_line_channel_access_token"
+  }
+}
 ```
+
+### Prerequisites
+- Node.js and npm installed
+- LINE Channel Access Token (obtainable from [LINE Developers Console](https://developers.line.biz/console/))
+- LINE Bot account set up in LINE Developers Console
 
 ### Debugging
 
@@ -70,3 +68,38 @@ npm run inspector
 ```
 
 The Inspector will provide a URL to access debugging tools in your browser.
+
+## API Reference
+
+### line_send_message
+Sends a text message to a specified LINE user.
+
+Parameters:
+- `user_id` (string): The LINE user ID of the recipient
+- `message` (string): The text content to send
+
+Returns:
+- JSON response from LINE Messaging API confirming delivery status
+
+### line_get_profile
+Retrieves profile information for a specified LINE user.
+
+Parameters:
+- `user_id` (string): The LINE user ID to lookup
+
+Returns:
+- JSON response containing user profile information
+
+## Security Notes
+- Keep your LINE Channel Access Token secure
+- Do not commit tokens to version control
+- Use environment variables for token management in production
+- Follow LINE's security best practices and usage guidelines
+
+## Error Handling
+The server includes robust error handling for:
+- Invalid/missing parameters
+- Authentication failures
+- API rate limits
+- Network connectivity issues
+- Invalid user IDs
