@@ -1,0 +1,21 @@
+[project]
+name = "mcp-server-aws"
+version = "0.1.0"
+description = "A Model Context Protocol server providing tools to read and manipulate AWS resources using an LLM"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [ 
+    "mcp>=1.0.0",
+    "python-dotenv>=1.0.1",
+    "boto3>=1.35.53",
+]
+[[project.authors]]
+name = "Rishi Kavikondala"
+email = "rishi.kavikondala@gmail.com"
+
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project.scripts]
+mcp-server-aws = "mcp_server_aws:main"
