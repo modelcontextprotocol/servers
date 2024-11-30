@@ -75,7 +75,7 @@ const appendBlockChildrenTool: Tool = {
     properties: {
       block_id: {
         type: "string",
-        description: "The ID of the parent block",
+        description: "The ID of the parent block. It should be a 32-character string (excluding hyphens) formatted as 8-4-4-4-12 with hyphens (-).",
       },
       children: {
         type: "array",
@@ -94,7 +94,7 @@ const retrieveBlockTool: Tool = {
     properties: {
       block_id: {
         type: "string",
-        description: "The ID of the block to retrieve",
+        description: "The ID of the block to retrieve. It should be a 32-character string (excluding hyphens) formatted as 8-4-4-4-12 with hyphens (-).",
       },
     },
     required: ["block_id"],
@@ -109,7 +109,7 @@ const retrieveBlockChildrenTool: Tool = {
     properties: {
       block_id: {
         type: "string",
-        description: "The ID of the block",
+        description: "The ID of the block. It should be a 32-character string (excluding hyphens) formatted as 8-4-4-4-12 with hyphens (-).",
       },
       start_cursor: {
         type: "string",
@@ -132,7 +132,7 @@ const deleteBlockTool: Tool = {
     properties: {
       block_id: {
         type: "string",
-        description: "The ID of the block to delete",
+        description: "The ID of the block to delete. It should be a 32-character string (excluding hyphens) formatted as 8-4-4-4-12 with hyphens (-).",
       },
     },
     required: ["block_id"],
@@ -148,7 +148,7 @@ const retrievePageTool: Tool = {
     properties: {
       page_id: {
         type: "string",
-        description: "The ID of the page to retrieve",
+        description: "The ID of the page to retrieve. It should be a 32-character string (excluding hyphens) formatted as 8-4-4-4-12 with hyphens (-).",
       },
     },
     required: ["page_id"],
@@ -163,7 +163,7 @@ const updatePagePropertiesTool: Tool = {
     properties: {
       page_id: {
         type: "string",
-        description: "The ID of the page to update",
+        description: "The ID of the page to update. It should be a 32-character string (excluding hyphens) formatted as 8-4-4-4-12 with hyphens (-).",
       },
       properties: {
         type: "object",
@@ -206,7 +206,7 @@ const queryDatabaseTool: Tool = {
     properties: {
       database_id: {
         type: "string",
-        description: "The ID of the database to query",
+        description: "The ID of the database to query. It should be a 32-character string (excluding hyphens) formatted as 8-4-4-4-12 with hyphens (-).",
       },
       filter: {
         type: "object",
@@ -237,7 +237,7 @@ const retrieveDatabaseTool: Tool = {
     properties: {
       database_id: {
         type: "string",
-        description: "The ID of the database to retrieve",
+        description: "The ID of the database to retrieve. It should be a 32-character string (excluding hyphens) formatted as 8-4-4-4-12 with hyphens (-).",
       },
     },
     required: ["database_id"],
@@ -252,7 +252,7 @@ const updateDatabaseTool: Tool = {
     properties: {
       database_id: {
         type: "string",
-        description: "The ID of the database to update",
+        description: "The ID of the database to update. It should be a 32-character string (excluding hyphens) formatted as 8-4-4-4-12 with hyphens (-).",
       },
       title: {
         type: "array",
