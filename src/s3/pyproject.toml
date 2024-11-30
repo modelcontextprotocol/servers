@@ -1,0 +1,35 @@
+[project]
+name = "mcp-server-s3"
+version = "0.6.2"
+description = "A Model Context Protocol server providing tools to search, analyze, and manipulate documents in AWS S3 buckets via LLMs"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Jasbir Singh" }]
+keywords = ["s3", "mcp", "llm", "automation"]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "boto3>=1.34.0",
+    "mcp>=0.6.0",
+    "pydantic>=2.0.0",
+    "python-magic>=0.4.27",
+    "textract>=1.6.5",
+    "python-dateutil>=2.8.2",
+    "typing-extensions>=4.8.0",
+]
+
+[project.scripts]
+mcp-server-git = "mcp_server_s3.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = ["pyright>=1.1.389", "ruff>=0.7.3"]
