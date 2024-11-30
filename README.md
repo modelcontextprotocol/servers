@@ -116,6 +116,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you find MCP servers useful, please consider starring the repository and contributing new servers or improvements!
 
+## Star History
+
+<a href="https://star-history.com/#modelcontextprotocol/servers&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=modelcontextprotocol/servers&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=modelcontextprotocol/servers&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=modelcontextprotocol/servers&type=Date" />
+ </picture>
+</a>
+
 ---
 
 Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvements!
