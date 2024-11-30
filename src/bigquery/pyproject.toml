@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-bigquery"
-version = "0.1.0"
+version = "0.2.0"
 description = "A Model Context Protocol server that provides access to BigQuery. This server enables LLMs to inspect database schemas and execute queries."
 readme = "README.md"
 requires-python = ">=3.13"
