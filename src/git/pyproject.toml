@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-git"
-version = "0.5.1"
+version = "0.6.1"
 description = "A Model Context Protocol server providing tools to read, search, and manipulate Git repositories programmatically via LLMs"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -18,7 +18,7 @@ classifiers = [
 dependencies = [
     "click>=8.1.7",
     "gitpython>=3.1.43",
-    "mcp>=0.6.0",
+    "mcp>=1.0.0",
     "pydantic>=2.0.0",
 ]
 
