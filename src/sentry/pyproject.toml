@@ -1,10 +1,10 @@
 [project]
 name = "mcp-server-sentry"
-version = "0.5.1"
+version = "0.6.1"
 description = "MCP server for retrieving issues from sentry.io"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["mcp>=0.9.1"]
+dependencies = ["mcp>=1.0.0"]
 
 [build-system]
 requires = ["hatchling"]
