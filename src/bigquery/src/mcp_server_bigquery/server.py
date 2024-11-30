@@ -28,7 +28,7 @@ logger.setLevel(logging.DEBUG)
 logger.info("Starting MCP BigQuery Server")
 
 class BigQueryDatabase:
-    def __init__(self, project: str, location: str):
+    def __init__(self, project: str, location: str, datasets_filter: list[str]):
         """Initialize a BigQuery database client"""
         if not project:
             raise ValueError("Project is required")
@@ -36,6 +36,7 @@ class BigQueryDatabase:
             raise ValueError("Location is required")
 
         self.client = bigquery.Client(project=project, location=location)
+        self.datasets_filter = datasets_filter
 
     def execute_query(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Execute a SQL query and return results as a list of dictionaries"""
@@ -58,7 +59,11 @@ class BigQueryDatabase:
         """List all tables in the BigQuery database"""
         logger.debug("Listing all tables")
 
-        datasets = list(self.client.list_datasets())
+        if self.datasets_filter:
+            datasets = [self.client.dataset(dataset) for dataset in self.datasets_filter]
+        else:
+            datasets = list(self.client.list_datasets())
+
         logger.debug(f"Found {len(datasets)} datasets")
 
         tables = []
@@ -91,10 +96,10 @@ class BigQueryDatabase:
             bigquery.ScalarQueryParameter("table_name", "STRING", table_id),
         ])
 
-async def main(project: str, location: str):
+async def main(project: str, location: str, datasets_filter: list[str]):
     logger.info(f"Starting BigQuery MCP Server with project: {project} and location: {location}")
 
-    db = BigQueryDatabase(project, location)
+    db = BigQueryDatabase(project, location, datasets_filter)
     server = Server("bigquery-manager")
 
     # Register handlers
@@ -105,7 +110,7 @@ async def main(project: str, location: str):
         """List available tools"""
         return [
             types.Tool(
-                name="read-query",
+                name="execute-query",
                 description="Execute a SELECT query on the BigQuery database",
                 inputSchema={
                     "type": "object",
@@ -129,7 +134,7 @@ async def main(project: str, location: str):
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "table_name": {"type": "string", "description": "Name of the table to describe"},
+                        "table_name": {"type": "string", "description": "Name of the table to describe (e.g. my_dataset.my_table)"},
                     },
                     "required": ["table_name"],
                 },
@@ -154,9 +159,7 @@ async def main(project: str, location: str):
                 results = db.describe_table(arguments["table_name"])
                 return [types.TextContent(type="text", text=str(results))]
 
-            if name == "read-query":
-                if not arguments["query"].strip().upper().startswith("SELECT"):
-                    raise ValueError("Only SELECT queries are allowed for read-query")
+            if name == "execute-query":
                 results = db.execute_query(arguments["query"])
                 return [types.TextContent(type="text", text=str(results))]
 

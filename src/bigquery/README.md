@@ -8,9 +8,17 @@ A Model Context Protocol server that provides access to BigQuery. This server en
 
 The server implements one tool:
 
-- `read-query`: Executes a SQL query using BigQuery dialect
+- `execute-query`: Executes a SQL query using BigQuery dialect
 - `list-tables`: Lists all tables in the BigQuery database
 - `describe-table`: Describes the schema of a specific table
+
+## Configuration
+
+The server can be configured with the following arguments:
+
+- `--project` (required): The GCP project ID.
+- `--location` (required): The GCP location (e.g. `europe-west9`).
+- `--dataset` (optional): Only take specific BigQuery datasets into consideration. Several datasets can be specified by repeating the argument (e.g. `--dataset my_dataset_1 --dataset my_dataset_2`). If not provided, all tables in the project will be considered.
 
 ## Quickstart
 
@@ -101,7 +109,7 @@ experience, we strongly recommend using the [MCP Inspector](https://github.com/m
 You can launch the MCP Inspector via [`npm`](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) with this command:
 
 ```bash
-npx @modelcontextprotocol/inspector uv --directory /Users/lucashild/Code/mcp_server_bigquery run mcp-server-bigquery
+npx @modelcontextprotocol/inspector uv --directory {{PATH_TO_REPO}} run mcp-server-bigquery
 ```
 
 Upon launching, the Inspector will display a URL that you can access in your browser to begin debugging.
