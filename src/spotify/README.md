@@ -9,6 +9,13 @@ A standalone repo for this project can be found at [github.com/varunneal/spotify
 - Get info about a track/album/artist/playlist
 - Manage the Spotify queue
 
+
+## Demo
+
+Make sure to turn on the audio:
+https://github.com/user-attachments/assets/20ee1f92-f3e3-4dfa-b945-ca57bc1e0894
+
+
 ## Configuration
 
 ### Getting Spotify API Keys
