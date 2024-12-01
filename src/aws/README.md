@@ -3,9 +3,8 @@
 This directory contains a Model Context Protocol server providing tools to read and manipulate AWS resources using an LLM. 
 
 Overview of functionality:
-- Create, list, and delete S3 buckets
+- Create, list, and delete S3 buckets and their contents
 - Create, list, and delete DynamoDB tables, as well as modify data within them
-- Pull Cloudwatch logs
 - View an audit log of all actions taken
 
 ## Components
