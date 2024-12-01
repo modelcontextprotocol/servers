@@ -26,6 +26,7 @@ I set `APIs used` to "Web Playback SDK".
 
 ### Run this project locally
 This project is not yet set up for ephemeral environments (e.g. `uvx` usage). 
+
 Run this project locally by cloning this repo:
 
 ```bash
@@ -41,8 +42,8 @@ git clone https://github.com/varunneal/servers.git
 Add this tool (`spotify`) as an MCP server.
 
 On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`
-On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
+On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
   ```json
   "spotify": {
