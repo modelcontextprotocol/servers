@@ -1,52 +1,93 @@
-# mcp-server-aws MCP server
+# AWS MCP Server
 
-This directory contains a Model Context Protocol server providing tools to read and manipulate AWS resources using an LLM. 
+An MCP server implementation for AWS operations, supporting S3 and DynamoDB services. All operations are automatically logged and can be accessed through the `audit://aws-operations` resource endpoint.
 
-Overview of functionality:
-- Create, list, and delete S3 buckets and their contents
-- Create, list, and delete DynamoDB tables, as well as modify data within them
-- View an audit log of all actions taken
+## Setup
 
-## Components
+1. Install dependencies
+2. Configure AWS credentials using either:
+   - Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`)
+   - AWS credentials file
+3. Run the server
 
-### Resources
+## Available Tools
 
-The server implements an audit logging system with:
-- Custom audit:// URI scheme for accessing AWS operations log
-- Audit log resource contains timestamped entries of all AWS operations performed
-- Each entry includes service name, operation type, and parameters used
+### S3 Operations
 
-### Tools
+- **s3_bucket_create**: Create a new S3 bucket
+  - Required: `bucket_name`
 
-The server implements several AWS management tools:
+- **s3_bucket_list**: List all S3 buckets
 
-1. aws_operation
-   - General-purpose AWS CLI command executor
-   - Takes service, operation, and parameters as arguments
-   - Converts parameters to appropriate CLI format
+- **s3_bucket_delete**: Delete an S3 bucket
+  - Required: `bucket_name`
 
-2. s3_bucket_operation
-   - Manage S3 buckets
-   - Operations: create, list, delete
-   - Takes bucket_name as required parameter
+- **s3_object_upload**: Upload an object to S3
+  - Required: `bucket_name`, `object_key`, `file_content` (Base64 encoded)
 
-3. s3_object_operation
-   - Manage objects within S3 buckets
-   - Operations: upload, download, delete, list
-   - Required parameters: operation, bucket_name
-   - Optional parameters: object_key, file_path (for upload/download)
+- **s3_object_delete**: Delete an object from S3
+  - Required: `bucket_name`, `object_key`
 
-4. dynamodb_table_operation
-   - Manage DynamoDB tables
-   - Operations: create, describe, list, delete, update
-   - Required parameters: operation, table_name
-   - Optional parameters: key_schema, attribute_definitions (for create/update)
+- **s3_object_list**: List objects in an S3 bucket
+  - Required: `bucket_name`
 
-5. dynamodb_item_operation
-   - Manage items in DynamoDB tables
-   - Operations: put, get, update, delete, query, scan
-   - Required parameters: operation, table_name
-   - Optional parameters: item, key, key_condition, expression_values
+- **s3_object_read**: Read an object's content from S3
+  - Required: `bucket_name`, `object_key`
+
+### DynamoDB Operations
+
+#### Table Operations
+- **dynamodb_table_create**: Create a new DynamoDB table
+  - Required: `table_name`, `key_schema`, `attribute_definitions`
+
+- **dynamodb_table_describe**: Get details about a DynamoDB table
+  - Required: `table_name`
+
+- **dynamodb_table_list**: List all DynamoDB tables
+
+- **dynamodb_table_delete**: Delete a DynamoDB table
+  - Required: `table_name`
+
+- **dynamodb_table_update**: Update a DynamoDB table
+  - Required: `table_name`, `attribute_definitions`
+
+#### Item Operations
+- **dynamodb_item_put**: Put an item into a DynamoDB table
+  - Required: `table_name`, `item`
+
+- **dynamodb_item_get**: Get an item from a DynamoDB table
+  - Required: `table_name`, `key`
+
+- **dynamodb_item_update**: Update an item in a DynamoDB table
+  - Required: `table_name`, `key`, `item`
+
+- **dynamodb_item_delete**: Delete an item from a DynamoDB table
+  - Required: `table_name`, `key`
+
+- **dynamodb_item_query**: Query items in a DynamoDB table
+  - Required: `table_name`, `key_condition`, `expression_values`
+
+- **dynamodb_item_scan**: Scan items in a DynamoDB table
+  - Required: `table_name`
+  - Optional: `filter_expression`, `expression_attributes` (with `values` and `names`)
+
+#### Batch Operations
+- **dynamodb_batch_get**: Batch get multiple items from DynamoDB tables
+  - Required: `request_items`
+
+- **dynamodb_item_batch_write**: Batch write operations (put/delete) for DynamoDB items
+  - Required: `table_name`, `operation` (put/delete), `items`
+  - Optional: `key_attributes` (for delete operations)
+
+- **dynamodb_batch_execute**: Execute multiple PartiQL statements in a batch
+  - Required: `statements`, `parameters`
+
+#### TTL Operations
+- **dynamodb_describe_ttl**: Get the TTL settings for a table
+  - Required: `table_name`
+
+- **dynamodb_update_ttl**: Update the TTL settings for a table
+  - Required: `table_name`, `ttl_enabled`, `ttl_attribute`
 
 ## Configuration
 
@@ -82,58 +123,3 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
   }
   ```
 </details>
-
-<details>
-  <summary>Published Servers Configuration</summary>
-  ```
-  "mcpServers": {
-    "mcp-server-aws": {
-      "command": "uvx",
-      "args": [
-        "mcp-server-aws"
-      ]
-
-    }
-  }
-  ```
-</details>
-
-## Development
-
-### Building and Publishing
-
-To prepare the package for distribution:
-
-1. Sync dependencies and update lockfile:
-```bash
-uv sync
-```
-
-2. Build package distributions:
-```bash
-uv build
-```
-
-This will create source and wheel distributions in the `dist/` directory.
-
-3. Publish to PyPI:
-```bash
-uv publish
-```
-
-Note: You'll need to set PyPI credentials via environment variables or command flags:
-- Token: `--token` or `UV_PUBLISH_TOKEN`
-- Or username/password: `--username`/`UV_PUBLISH_USERNAME` and `--password`/`UV_PUBLISH_PASSWORD`
-
-### Debugging
-
-Since MCP servers run over stdio, debugging can be challenging. For the best debugging
-experience, we strongly recommend using the [MCP Inspector](https://github.com/modelcontextprotocol/inspector).
-
-You can launch the MCP Inspector via [`npm`](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) with this command:
-
-```bash
-npx @modelcontextprotocol/inspector uv --directory /Users/rishikavikondala/Code/servers/src/aws run mcp-server-aws
-```
-
-Upon launching, the Inspector will display a URL that you can access in your browser to begin debugging.

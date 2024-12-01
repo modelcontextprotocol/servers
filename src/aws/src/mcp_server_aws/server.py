@@ -16,7 +16,7 @@ from mcp.server.models import InitializationOptions
 from mcp.types import Resource, Tool, TextContent, ImageContent, EmbeddedResource
 from pydantic import AnyUrl
 from .tools import get_aws_tools
-from .util import get_dynamodb_type
+from .utils import get_dynamodb_type
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
