@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-fetch"
-version = "0.1.2"
+version = "0.6.1"
 description = "A Model Context Protocol server providing tools to fetch and convert web content for usage by LLMs"
 readme = "README.md"
 requires-python = ">=3.10"
