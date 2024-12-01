@@ -12,7 +12,8 @@ A standalone repo for this project can be found at [github.com/varunneal/spotify
 
 ## Demo
 
-Make sure to turn on the audio:
+Make sure to turn on audio
+
 https://github.com/user-attachments/assets/20ee1f92-f3e3-4dfa-b945-ca57bc1e0894
 
 
