@@ -39,6 +39,10 @@ class GitLog(BaseModel):
     repo_path: str
     max_count: int = 10
 
+class GitCheckout(BaseModel):
+    repo_path: str
+    branch_name: str
+
 class GitTools(str, Enum):
     STATUS = "git_status"
     DIFF_UNSTAGED = "git_diff_unstaged"
@@ -47,6 +51,7 @@ class GitTools(str, Enum):
     ADD = "git_add"
     RESET = "git_reset"
     LOG = "git_log"
+    CHECKOUT = "git_checkout"
 
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
@@ -80,6 +85,10 @@ def git_log(repo: git.Repo, max_count: int = 10) -> list[str]:
             f"Message: {commit.message}\n"
         )
     return log
+
+def git_checkout(repo: git.Repo, branch_name: str) -> str:
+    repo.git.checkout(branch_name)
+    return f"Switched to branch '{branch_name}'"
 
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
@@ -131,6 +140,11 @@ async def serve(repository: Path | None) -> None:
                 name=GitTools.LOG,
                 description="Shows the commit logs",
                 inputSchema=GitLog.schema(),
+            ),
+            Tool(
+                name=GitTools.CHECKOUT,
+                description="Switches branches",
+                inputSchema=GitCheckout.schema(),
             ),
         ]
 
@@ -216,6 +230,13 @@ async def serve(repository: Path | None) -> None:
                 return [TextContent(
                     type="text",
                     text="Commit history:\n" + "\n".join(log)
+                )]
+
+            case GitTools.CHECKOUT:
+                result = git_checkout(repo, arguments["branch_name"])
+                return [TextContent(
+                    type="text",
+                    text=result
                 )]
 
             case _:
