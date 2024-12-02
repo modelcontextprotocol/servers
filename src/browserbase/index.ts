@@ -33,22 +33,12 @@ Object.entries(requiredEnvVars).forEach(([name, value]) => {
   if (!value) throw new Error(`${name} environment variable is required`);
 });
 
-// Optional environment variables
-const NOTION_PAGE_URL = process.env.NOTION_PAGE_URL || "https://www.notion.so/default-page";
-const NOTION_DATABASE_ID = process.env.NOTION_DATABASE_ID || "default-database-id";
-
 // 2. Global State
 const browsers = new Map<string, { browser: Browser, page: Page }>();
 const consoleLogs: string[] = [];
 const screenshots = new Map<string, string>();
 
 // 3. Helper Functions
-function extractNotionPageId(url: string): string {
-  const match = url.match(/[a-zA-Z0-9]{8}-?[a-zA-Z0-9]{4}-?[a-zA-Z0-9]{4}-?[a-zA-Z0-9]{4}-?[a-zA-Z0-9]{12}/);
-  if (!match) throw new Error("Could not extract page ID from Notion URL");
-  return match[0].replace(/-/g, '');
-}
-
 async function createNewBrowserSession(sessionId: string) {
   const browser = await puppeteer.connect({
     browserWSEndpoint: `wss://connect.browserbase.com?apiKey=${process.env.BROWSERBASE_API_KEY}`
