@@ -20,6 +20,7 @@ Each MCP server is implemented with either the [Typescript MCP SDK](https://gith
 - **[Brave Search](src/brave-search)** - Web and local search using Brave's Search API
 - **[Google Maps](src/google-maps)** - Location services, directions, and place details
 - **[Fetch](src/fetch)** - Web content fetching and conversion for efficient LLM usage
+- **[Time](src/time)** - Time and timezone conversion capabilities
 
 ## 🌎 Community Servers
 
@@ -115,6 +116,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## ⭐ Support
 
 If you find MCP servers useful, please consider starring the repository and contributing new servers or improvements!
+
+## Star History
+
+<a href="https://star-history.com/#modelcontextprotocol/servers&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=modelcontextprotocol/servers&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=modelcontextprotocol/servers&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=modelcontextprotocol/servers&type=Date" />
+ </picture>
+</a>
 
 ---
 
