@@ -53,6 +53,12 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `max_count` (number, optional): Maximum number of commits to show (default: 10)
    - Returns: Array of commit entries with hash, author, date, and message
 
+8. `git_checkout`
+   - Switches branches
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `branch_name` (string): Name of branch to checkout
+   - Returns: Confirmation of branch switch
 
 ## Installation
 
