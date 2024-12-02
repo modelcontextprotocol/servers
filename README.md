@@ -17,6 +17,7 @@ Each MCP server is implemented with either the [Typescript MCP SDK](https://gith
 - **[Sentry](src/sentry)** - Retrieving and analyzing issues from Sentry.io
 - **[Memory](src/memory)** - Knowledge graph-based persistent memory system
 - **[Puppeteer](src/puppeteer)** - Browser automation and web scraping
+- **[Playwright](src/playwright)** - Browser automation and web scraping
 - **[Brave Search](src/brave-search)** - Web and local search using Brave's Search API
 - **[Google Maps](src/google-maps)** - Location services, directions, and place details
 - **[Fetch](src/fetch)** - Web content fetching and conversion for efficient LLM usage
