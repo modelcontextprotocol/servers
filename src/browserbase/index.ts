@@ -170,16 +170,26 @@ const TOOLS: Tool[] = [
 
 // 5. Tool Handler Implementation
 async function handleToolCall(name: string, args: any): Promise<{ toolResult: CallToolResult }> {
-// const { browser, page } = browsers.get(args.sessionId) || await createNewBrowserSession(args.sessionId);
-    
-  // Only create default session if it's not a parallel_sessions call
-  const defaultSession = name !== "browserbase_parallel_sessions" ? 
+  // Only auto-create sessions for tools OTHER than create_session and parallel_sessions
+  const defaultSession = !["browserbase_create_session", "browserbase_parallel_sessions"].includes(name) ? 
     (browsers.get(args.sessionId) || await createNewBrowserSession(args.sessionId)) : 
     null;
   
   switch (name) {
     case "browserbase_create_session":
       try {
+        // Check if session already exists
+        if (browsers.has(args.sessionId)) {
+          return {
+            toolResult: {
+              content: [{
+                type: "text",
+                text: "Session already exists",
+              }],
+              isError: false,
+            },
+          };
+        }
         await createNewBrowserSession(args.sessionId);
         return {
           toolResult: {
