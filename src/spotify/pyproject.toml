@@ -1,0 +1,29 @@
+[project]
+name = "spotify-mcp"
+version = "0.1.0"
+description = "MCP spotify project"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+ "mcp>=1.0.0",
+ "python-dotenv>=1.0.1",
+ "spotipy==2.24.0",
+]
+[[project.authors]]
+name = "Varun Srivastava"
+email = "varun.neal@berkeley.edu"
+
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "spotify-mcp",
+]
+
+[tool.uv.sources]
+spotify-mcp = { workspace = true }
+
+[project.scripts]
+spotify-mcp = "spotify_mcp:main"
