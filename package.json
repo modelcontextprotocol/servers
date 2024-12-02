@@ -19,12 +19,9 @@
     "link-all": "npm link --workspaces"
   },
   "dependencies": {
-    "@modelcontextprotocol/server-brave-search": "*",
     "@modelcontextprotocol/server-browserbase": "*",
     "@modelcontextprotocol/server-everything": "*",
-    "@modelcontextprotocol/server-filesystem": "*",
     "@modelcontextprotocol/server-gdrive": "*",
-    "@modelcontextprotocol/server-memory": "*",
     "@modelcontextprotocol/server-postgres": "*",
     "@modelcontextprotocol/server-puppeteer": "*",
     "@modelcontextprotocol/server-slack": "*",
@@ -32,7 +29,6 @@
     "@modelcontextprotocol/server-memory": "*",
     "@modelcontextprotocol/server-filesystem": "*",
     "@modelcontextprotocol/server-everart": "*",
-    "@modelcontextprotocol/server-sequentialthinking": "*",
-    "@modelcontextprotocol/server-slack": "*"
+    "@modelcontextprotocol/server-sequentialthinking": "*"
   }
 }
