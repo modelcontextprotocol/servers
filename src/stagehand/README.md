@@ -1,76 +1,62 @@
-# Puppeteer
+# Stagehand MCP Server
 
-A Model Context Protocol server that provides browser automation capabilities using Puppeteer. This server enables LLMs to interact with web pages, take screenshots, and execute JavaScript in a real browser environment.
+A Model Context Protocol (MCP) server that provides AI-powered web automation capabilities using [Stagehand](https://github.com/browserbase/stagehand). This server enables LLMs to interact with web pages, perform actions, extract data, and observe possible actions in a real browser environment.
 
 ## Components
 
 ### Tools
 
-- **puppeteer_navigate**
+- **stagehand_navigate**
   - Navigate to any URL in the browser
-  - Input: `url` (string)
+  - Input:
+    - `url` (string): The URL to navigate to
 
-- **puppeteer_screenshot**
-  - Capture screenshots of the entire page or specific elements
+- **stagehand_act**
+  - Perform an action on the web page
   - Inputs:
-    - `name` (string, required): Name for the screenshot
-    - `selector` (string, optional): CSS selector for element to screenshot
-    - `width` (number, optional, default: 800): Screenshot width
-    - `height` (number, optional, default: 600): Screenshot height
+    - `action` (string): The action to perform (e.g., "click the login button")
+    - `variables` (object, optional): Variables used in the action template
 
-- **puppeteer_click**
-  - Click elements on the page
-  - Input: `selector` (string): CSS selector for element to click
-
-- **puppeteer_hover**
-  - Hover elements on the page
-  - Input: `selector` (string): CSS selector for element to hover
-
-- **puppeteer_fill**
-  - Fill out input fields
+- **stagehand_extract**
+  - Extract data from the web page based on an instruction and schema
   - Inputs:
-    - `selector` (string): CSS selector for input field
-    - `value` (string): Value to fill
+    - `instruction` (string): Instruction for extraction (e.g., "extract the price of the item")
+    - `schema` (object): JSON schema for the extracted data
 
-- **puppeteer_select**
-  - Select an element with SELECT tag
-  - Inputs:
-    - `selector` (string): CSS selector for element to select
-    - `value` (string): Value to select
-
-- **puppeteer_evaluate**
-  - Execute JavaScript in the browser console
-  - Input: `script` (string): JavaScript code to execute
-
-### Resources
-
-The server provides access to two types of resources:
-
-1. **Console Logs** (`console://logs`)
-   - Browser console output in text format
-   - Includes all console messages from the browser
-
-2. **Screenshots** (`screenshot://<name>`)
-   - PNG images of captured screenshots
-   - Accessible via the screenshot name specified during capture
+- **stagehand_observe**
+  - Observe actions that can be performed on the web page
+  - Input:
+    - `instruction` (string, optional): Instruction for observation
 
 ## Key Features
 
-- Browser automation
-- Console log monitoring
-- Screenshot capabilities
-- JavaScript execution
-- Basic web interaction (navigation, clicking, form filling)
+- AI-powered web automation
+- Perform actions on web pages
+- Extract structured data from web pages
+- Observe possible actions on web pages
+- Simple and extensible API
+- Model-agnostic support for various LLM providers
 
-## Configuration to use Puppeteer Server
-Here's the Claude Desktop configuration to use the Puppeter server:
+## Configuration to Use Stagehand Server
+
+### Installation
+
+First, install the Stagehand MCP server package globally:
+
+```bash
+npm install -g @modelcontextprotocol/server-stagehand
+```
+
+### Setup
+
+Here's how to configure your application to use the Stagehand server:
 
 ```json
 {
   "mcpServers": {
-    "puppeteer": {
+    "stagehand": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-puppeteer"]
+      "args": ["-y", "@modelcontextprotocol/server-stagehand"]
     }
   }
 }
@@ -78,4 +64,7 @@ Here's the Claude Desktop configuration to use the Puppeter server:
 
 ## License
 
-This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
+Licensed under the MIT License.
+
+Copyright 2024 Browserbase, Inc.
+
