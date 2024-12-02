@@ -1,0 +1,24 @@
+{
+  "name": "@modelcontextprotocol/server-fire-crawl",
+  "version": "0.5.1",
+  "description": "FireCrawl server implementation for Model Context Protocol",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@mendable/firecrawl-js": "1.9.1",
+    "@modelcontextprotocol/sdk": "0.5.0"
+  },
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.10.5",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.3.3"
+  }
+}

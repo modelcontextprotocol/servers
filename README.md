@@ -20,6 +20,7 @@ Each MCP server is implemented with either the [Typescript MCP SDK](https://gith
 - **[Brave Search](src/brave-search)** - Web and local search using Brave's Search API
 - **[Google Maps](src/google-maps)** - Location services, directions, and place details
 - **[Fetch](src/fetch)** - Web content fetching and conversion for efficient LLM usage
+- **[FireCrawl](src/fire-crawl)** - Advanced web scraping with JavaScript, PDF support, and rate limiting
 
 ## 🌎 Community Servers
 
@@ -87,6 +88,13 @@ Additional examples of using the Claude Desktop as an MCP client might look like
     "postgres": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+    },
+    "fire-crawl": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fire-crawl"],
+      "env": {
+        "FIRE_CRAWL_API_KEY": "<YOUR_API_KEY>"
+      }
     }
   }
 }
