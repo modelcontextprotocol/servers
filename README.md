@@ -20,6 +20,7 @@ Each MCP server is implemented with either the [Typescript MCP SDK](https://gith
 - **[Brave Search](src/brave-search)** - Web and local search using Brave's Search API
 - **[Google Maps](src/google-maps)** - Location services, directions, and place details
 - **[Fetch](src/fetch)** - Web content fetching and conversion for efficient LLM usage
+- **[LlamaCloud](src/llamacloud)** - Connection to a managed index on [LlamaCloud](https://cloud.llamaindex.ai/)
 
 ## 🌎 Community Servers
 

@@ -1,0 +1,31 @@
+{
+  "name": "@modelcontextprotocol/server-llamacloud",
+  "version": "0.5.1",
+  "description": "A MCP server connecting to a managed index on LlamaCloud",
+  "license": "MIT",
+  "author": "LlamaIndex Inc.",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "type": "module",
+  "bin": {
+    "mcp-server-llamacloud": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0",
+    "llamaindex": "0.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.3",
+    "shx": "^0.3.4",
+    "typescript": "^5.6.2"
+  }
+}
