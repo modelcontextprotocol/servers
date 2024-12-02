@@ -44,7 +44,7 @@ def extract_content_from_html(html: str) -> str:
     return content
 
 
-def get_robots_txt_url(url: AnyUrl | str) -> str:
+def get_robots_txt_url(url: str) -> str:
     """Get the robots.txt URL for a given website URL.
 
     Args:
@@ -54,7 +54,7 @@ def get_robots_txt_url(url: AnyUrl | str) -> str:
         URL of the robots.txt file
     """
     # Parse the URL into components
-    parsed = urlparse(str(url))
+    parsed = urlparse(url)
 
     # Reconstruct the base URL with just scheme, netloc, and /robots.txt path
     robots_url = urlunparse((parsed.scheme, parsed.netloc, "/robots.txt", "", "", ""))
@@ -62,7 +62,7 @@ def get_robots_txt_url(url: AnyUrl | str) -> str:
     return robots_url
 
 
-async def check_may_autonomously_fetch_url(url: AnyUrl | str, user_agent: str) -> None:
+async def check_may_autonomously_fetch_url(url: str, user_agent: str) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
@@ -106,7 +106,7 @@ async def check_may_autonomously_fetch_url(url: AnyUrl | str, user_agent: str) -
 
 
 async def fetch_url(
-    url: AnyUrl | str, user_agent: str, force_raw: bool = False
+    url: str, user_agent: str, force_raw: bool = False
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
@@ -116,7 +116,7 @@ async def fetch_url(
     async with AsyncClient() as client:
         try:
             response = await client.get(
-                str(url),
+                url,
                 follow_redirects=True,
                 headers={"User-Agent": user_agent},
                 timeout=30,
@@ -221,7 +221,7 @@ Although originally you did not have internet access, and were advised to refuse
         except ValueError as e:
             raise McpError(INVALID_PARAMS, str(e))
 
-        url = args.url
+        url = str(args.url)
         if not url:
             raise McpError(INVALID_PARAMS, "URL is required")
 
