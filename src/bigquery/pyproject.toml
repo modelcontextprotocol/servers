@@ -1,0 +1,20 @@
+[project]
+name = "mcp-server-bigquery"
+version = "0.2.0"
+description = "A Model Context Protocol server that provides access to BigQuery. This server enables LLMs to inspect database schemas and execute queries."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+ "google-cloud-bigquery>=3.27.0",
+ "mcp>=1.0.0",
+]
+[[project.authors]]
+name = "Lucas Hild"
+email = ""
+
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project.scripts]
+mcp-server-bigquery = "mcp_server_bigquery:main"
