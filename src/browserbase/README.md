@@ -1,16 +1,20 @@
-# Puppeteer
+# Browserbase
 
-A Model Context Protocol server that provides browser automation capabilities using Puppeteer. This server enables LLMs to interact with web pages, take screenshots, and execute JavaScript in a real browser environment.
+A Model Context Protocol server that provides cloud browser automation capabilities using Browserbase and Puppeteer. This server enables LLMs to interact with web pages, take screenshots, and execute JavaScript in a cloud browser environment.
 
 ## Components
 
 ### Tools
 
-- **puppeteer_navigate**
+- **browserbase_create_session**
+  - Create a new cloud browser session using Browserbase
+  - No required inputs
+
+- **browserbase_navigate**
   - Navigate to any URL in the browser
   - Input: `url` (string)
 
-- **puppeteer_screenshot**
+- **browserbase_screenshot**
   - Capture screenshots of the entire page or specific elements
   - Inputs:
     - `name` (string, required): Name for the screenshot
@@ -18,29 +22,29 @@ A Model Context Protocol server that provides browser automation capabilities us
     - `width` (number, optional, default: 800): Screenshot width
     - `height` (number, optional, default: 600): Screenshot height
 
-- **puppeteer_click**
+- **browserbase_click**
   - Click elements on the page
   - Input: `selector` (string): CSS selector for element to click
 
-- **puppeteer_hover**
-  - Hover elements on the page
-  - Input: `selector` (string): CSS selector for element to hover
-
-- **puppeteer_fill**
+- **browserbase_fill**
   - Fill out input fields
   - Inputs:
     - `selector` (string): CSS selector for input field
     - `value` (string): Value to fill
 
-- **puppeteer_select**
-  - Select an element with SELECT tag
-  - Inputs:
-    - `selector` (string): CSS selector for element to select
-    - `value` (string): Value to select
-
-- **puppeteer_evaluate**
+- **browserbase_evaluate**
   - Execute JavaScript in the browser console
   - Input: `script` (string): JavaScript code to execute
+
+- **browserbase_get_content**
+  - Extract all content from the current page
+  - Input: `selector` (string, optional): CSS selector to get content from specific elements
+
+- **browserbase_parallel_sessions**
+  - Create multiple browser sessions and navigate to different URLs
+  - Input: `sessions` (array): Array of objects containing:
+    - `url` (string): URL to navigate to
+    - `id` (string): Session identifier
 
 ### Resources
 
@@ -56,19 +60,29 @@ The server provides access to two types of resources:
 
 ## Key Features
 
-- Browser automation
+- Cloud browser automation
+- Parallel browser sessions
 - Console log monitoring
 - Screenshot capabilities
 - JavaScript execution
 - Basic web interaction (navigation, clicking, form filling)
 
-## Configuration to use Browserbase Server
-Here's the Claude Desktop configuration to use the Browserbase server:
+## Configuration
 
+### Environment Variables
+Required:
+- `BROWSERBASE_API_KEY`: Your Browserbase API key
+- `BROWSERBASE_PROJECT_ID`: Your Browserbase project ID
+
+Optional:
+- `NOTION_PAGE_URL`: Default Notion page URL (default: "https://www.notion.so/default-page")
+- `NOTION_DATABASE_ID`: Default Notion database ID (default: "default-database-id")
+
+### Claude Desktop Configuration
 ```json
 {
   "mcpServers": {
-    "puppeteer": {
+    "browserbase": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-browserbase"]
     }
