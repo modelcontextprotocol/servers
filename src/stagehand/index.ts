@@ -96,8 +96,8 @@ async function ensureStagehand() {
   if (!stagehand) {
     log("Initializing Stagehand...");
     stagehand = new Stagehand({
-      env: "LOCAL",
-      headless: false,
+      env: "BROWSERBASE",
+      headless: true,
       verbose: 2,
       debugDom: true,
     });
