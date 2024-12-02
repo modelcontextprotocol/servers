@@ -1,0 +1,28 @@
+{
+  "name": "@modelcontextprotocol/server-notion",
+  "version": "0.5.1",
+  "description": "MCP server for interacting with Notion",
+  "license": "MIT",
+  "author": "Kosuke Suenaga",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "type": "module",
+  "bin": {
+    "mcp-server-notion": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.3",
+    "typescript": "^5.6.2"
+  }
+}
