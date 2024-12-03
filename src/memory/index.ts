@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -12,15 +10,11 @@ import { KnowledgeGraphMemory, Entity, KnowledgeGraph, Relation } from "./types.
 export * from "./types.js";
 import { JsonMemory } from './json-memory.js'
 
-// Default path to the JSONL file, you can change this to your desired local path by passing in an arg to the memory-server
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_MEMORY_FILE_PATH = path.join(__dirname, 'memory.json');
 
 const args = process.argv.slice(2);
-const memoryFilePath = (args.length > 0) ? args[0] : DEFAULT_MEMORY_FILE_PATH;
 
 // Default to using the json file-based memory
-const knowledgeGraphManager:KnowledgeGraphMemory = new JsonMemory(memoryFilePath);
+const knowledgeGraphManager:KnowledgeGraphMemory = new JsonMemory(args);
 
 // The server instance and tools exposed to Claude
 const server = new Server({

@@ -1,10 +1,20 @@
+
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { promises as fs } from 'fs';
 import { KnowledgeGraphMemory, Entity, KnowledgeGraph, Relation } from "./types.js";
 
+// Default path to the JSONL file, you can change this to your desired local path 
+// by passing in an arg to the memory-server
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_MEMORY_FILE_PATH = path.join(__dirname, 'memory.json');
 
 // The JsonMemory class contains all operations to interact with the knowledge graph
 export class JsonMemory implements KnowledgeGraphMemory {
-  constructor(private memoryFilePath: string) {}
+  private memoryFilePath: string;
+  constructor(args: string[]) {
+    this.memoryFilePath = (args.length > 0) ? args[0] : DEFAULT_MEMORY_FILE_PATH;
+  }
 
   private async loadGraph(): Promise<KnowledgeGraph> {
     console.log(`loadGraph(${this.memoryFilePath})`);
