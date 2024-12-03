@@ -24,13 +24,14 @@ const server = new Server(
 );
 
 const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error("Please provide a project ID as a command-line argument");
+if (args.length < 1) {
+  console.error("Usage: mcp-server-bigquery <project-id> [location]");
   process.exit(1);
 }
 
 const projectId = args[0];
-console.error(`Initializing BigQuery with project ID: ${projectId}`);
+const location = args[1] || 'us-central1';
+console.error(`Initializing BigQuery with project ID: ${projectId} and location: ${location}`);
 const bigquery = new BigQuery({ projectId });
 const resourceBaseUrl = new URL(`bigquery://${projectId}`);
 
@@ -113,6 +114,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             sql: { type: "string" },
+            maximumBytesBilled: { 
+              type: "string",
+              description: "Maximum bytes billed (default: 1GB)",
+              optional: true
+            }
           },
         },
       },
@@ -123,6 +129,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === "query") {
     let sql = request.params.arguments?.sql as string;
+    let maximumBytesBilled = request.params.arguments?.maximumBytesBilled || "1000000000";
     
     // Validate read-only query
     const upperSql = sql.toUpperCase();
@@ -140,13 +147,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         sql = qualifyTablePath(sql, projectId);
       }
 
-      const options = {
+      const [rows] = await bigquery.query({
         query: sql,
-        location: 'us-central1',
-        maximumBytesBilled: "1000000000", // 1GB limit for safety
-      };
+        location,
+        maximumBytesBilled: maximumBytesBilled.toString(),
+      });
 
-      const [rows] = await bigquery.query(options);
       return {
         content: [{ type: "text", text: JSON.stringify(rows, null, 2) }],
         isError: false,

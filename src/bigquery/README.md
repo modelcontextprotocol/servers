@@ -32,7 +32,8 @@ Add the following to your `claude_desktop_config.json`:
       "args": [
         "-y",
         "@modelcontextprotocol/server-bigquery",
-        "your-project-id"
+        "your-project-id",
+        "location"  // Optional, defaults to us-central1
       ]
     }
   }
