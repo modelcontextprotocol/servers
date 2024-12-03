@@ -142,6 +142,23 @@ Add this to your claude_desktop_config.json:
 }
 ```
 
+Optionally, you can specify the full path to the `memory.json` file:
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory",
+        "/full/path/to/memory.json"
+      ]
+    }
+  }
+}
+```
+
+
 ### System Prompt
 
 The prompt for utilizing memory depends on the use case. Changing the prompt will help the model determine the frequency and types of memories created.
