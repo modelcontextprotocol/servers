@@ -117,8 +117,10 @@ Add to your Zed settings.json:
 ```json
 "context_servers": [
   "mcp-server-git": {
-    "command": "uvx",
-    "args": ["mcp-server-git"]
+    "command": {
+      "path": "uvx",
+      "args": ["mcp-server-git"]
+    }
   }
 ],
 ```
@@ -130,8 +132,10 @@ Add to your Zed settings.json:
 ```json
 "context_servers": {
   "mcp-server-git": {
-    "command": "python",
-    "args": ["-m", "mcp_server_git"]
+    "command": {
+      "path": "python",
+      "args": ["-m", "mcp_server_git"]
+    }
   }
 },
 ```

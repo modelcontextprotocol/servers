@@ -88,7 +88,7 @@ Documentation improvements are always welcome:
 
 ## Community
 
-- Participate in [GitHub Discussions](https://github.com/modelcontextprotocol/servers/discussions)
+- Participate in [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
 - Follow the [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Questions?

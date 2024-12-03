@@ -91,8 +91,10 @@ Add to your Zed settings.json:
 ```json
 "context_servers": [
   "mcp-server-sentry": {
-    "command": "uvx",
-    "args": ["mcp-server-sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+    "command": {
+      "path": "uvx",
+      "args": ["mcp-server-sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+    }
   }
 ],
 ```
