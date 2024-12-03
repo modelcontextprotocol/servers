@@ -1,5 +1,7 @@
 # Browserbase
 
+![Demo](./img/demo.png)
+
 A Model Context Protocol server that provides cloud browser automation capabilities using Browserbase and Puppeteer. This server enables LLMs to interact with web pages, take screenshots, and execute JavaScript in a cloud browser environment.
 
 ## Components
