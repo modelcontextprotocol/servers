@@ -84,11 +84,6 @@ Required:
 - `BROWSERBASE_API_KEY`: Your Browserbase API key
 - `BROWSERBASE_PROJECT_ID`: Your Browserbase project ID
 
-Optional:
-
-- `NOTION_PAGE_URL`: Default Notion page URL (default: "https://www.notion.so/default-page")
-- `NOTION_DATABASE_ID`: Default Notion database ID (default: "default-database-id")
-
 ### Claude Desktop Configuration
 
 ```json
