@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-filesystem",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "MCP server for filesystem access",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
@@ -19,7 +19,7 @@
     "watch": "tsc --watch"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.5.0",
+    "@modelcontextprotocol/sdk": "1.0.1",
     "glob": "^10.3.10",
     "zod-to-json-schema": "^3.23.5"
   },

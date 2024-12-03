@@ -529,7 +529,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "fork_repository": {
         const args = ForkRepositorySchema.parse(request.params.arguments);
         const fork = await forkRepository(args.owner, args.repo, args.organization);
-        return { toolResult: fork };
+        return { content: [{ type: "text", text: JSON.stringify(fork, null, 2) }] };
       }
 
       case "create_branch": {
@@ -562,25 +562,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           sha
         });
 
-        return { toolResult: branch };
+        return { content: [{ type: "text", text: JSON.stringify(branch, null, 2) }] };
       }
 
       case "search_repositories": {
         const args = SearchRepositoriesSchema.parse(request.params.arguments);
         const results = await searchRepositories(args.query, args.page, args.perPage);
-        return { toolResult: results };
+        return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
       }
 
       case "create_repository": {
         const args = CreateRepositorySchema.parse(request.params.arguments);
         const repository = await createRepository(args);
-        return { toolResult: repository };
+        return { content: [{ type: "text", text: JSON.stringify(repository, null, 2) }] };
       }
 
       case "get_file_contents": {
         const args = GetFileContentsSchema.parse(request.params.arguments);
         const contents = await getFileContents(args.owner, args.repo, args.path, args.branch);
-        return { toolResult: contents };
+        return { content: [{ type: "text", text: JSON.stringify(contents, null, 2) }] };
       }
 
       case "create_or_update_file": {
@@ -594,7 +594,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args.branch,
           args.sha
         );
-        return { toolResult: result };
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
 
       case "push_files": {
@@ -606,21 +606,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args.files,
           args.message
         );
-        return { toolResult: result };
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
 
       case "create_issue": {
         const args = CreateIssueSchema.parse(request.params.arguments);
         const { owner, repo, ...options } = args;
         const issue = await createIssue(owner, repo, options);
-        return { toolResult: issue };
+        return { content: [{ type: "text", text: JSON.stringify(issue, null, 2) }] };
       }
 
       case "create_pull_request": {
         const args = CreatePullRequestSchema.parse(request.params.arguments);
         const { owner, repo, ...options } = args;
         const pullRequest = await createPullRequest(owner, repo, options);
-        return { toolResult: pullRequest };
+        return { content: [{ type: "text", text: JSON.stringify(pullRequest, null, 2) }] };
       }
 
       default:
