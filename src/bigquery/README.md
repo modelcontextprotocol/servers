@@ -68,7 +68,7 @@ npm run build
     }
   }
 }
-
+```
 
 ## Authentication
 
