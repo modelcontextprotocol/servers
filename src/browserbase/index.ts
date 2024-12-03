@@ -13,19 +13,12 @@ import {
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import puppeteer, { Browser, Page } from "puppeteer-core";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
-
-// 1. Configuration & Environment Setup
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+import { Browserbase } from "@browserbasehq/sdk";
 
 // Environment variables configuration
 const requiredEnvVars = {
   BROWSERBASE_API_KEY: process.env.BROWSERBASE_API_KEY,
-  BROWSERBASE_PROJECT_ID: process.env.BROWSERBASE_PROJECT_ID
+  BROWSERBASE_PROJECT_ID: process.env.BROWSERBASE_PROJECT_ID,
 };
 
 // Validate required environment variables
@@ -34,19 +27,25 @@ Object.entries(requiredEnvVars).forEach(([name, value]) => {
 });
 
 // 2. Global State
-const browsers = new Map<string, { browser: Browser, page: Page }>();
+const browsers = new Map<string, { browser: Browser; page: Page }>();
 const consoleLogs: string[] = [];
 const screenshots = new Map<string, string>();
 
 // 3. Helper Functions
 async function createNewBrowserSession(sessionId: string) {
-  const browser = await puppeteer.connect({
-    browserWSEndpoint: `wss://connect.browserbase.com?apiKey=${process.env.BROWSERBASE_API_KEY}`
+  const bb = new Browserbase({
+    apiKey: process.env.BROWSERBASE_API_KEY!,
   });
-  
+  const session = await bb.sessions.create({
+    projectId: process.env.BROWSERBASE_PROJECT_ID!,
+  });
+  const browser = await puppeteer.connect({
+    browserWSEndpoint: session.connectUrl,
+  });
+
   const page = (await browser.pages())[0];
   browsers.set(sessionId, { browser, page });
-  
+
   // Set up console logging for this session
   page.on("console", (msg) => {
     const logEntry = `[Session ${sessionId}][${msg.type()}] ${msg.text()}`;
@@ -56,7 +55,7 @@ async function createNewBrowserSession(sessionId: string) {
       params: { message: logEntry, type: "console_log" },
     });
   });
-  
+
   return { browser, page };
 }
 
@@ -69,6 +68,17 @@ const TOOLS: Tool[] = [
       type: "object",
       properties: {},
       required: [],
+    },
+  },
+  {
+    name: "browserbase_close_session",
+    description: "Close a browser session on Browserbase",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: { type: "string" },
+      },
+      required: ["sessionId"],
     },
   },
   {
@@ -89,9 +99,18 @@ const TOOLS: Tool[] = [
       type: "object",
       properties: {
         name: { type: "string", description: "Name for the screenshot" },
-        selector: { type: "string", description: "CSS selector for element to screenshot" },
-        width: { type: "number", description: "Width in pixels (default: 800)" },
-        height: { type: "number", description: "Height in pixels (default: 600)" },
+        selector: {
+          type: "string",
+          description: "CSS selector for element to screenshot",
+        },
+        width: {
+          type: "number",
+          description: "Width in pixels (default: 800)",
+        },
+        height: {
+          type: "number",
+          description: "Height in pixels (default: 600)",
+        },
       },
       required: ["name"],
     },
@@ -102,7 +121,10 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        selector: { type: "string", description: "CSS selector for element to click" },
+        selector: {
+          type: "string",
+          description: "CSS selector for element to click",
+        },
       },
       required: ["selector"],
     },
@@ -113,7 +135,10 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        selector: { type: "string", description: "CSS selector for input field" },
+        selector: {
+          type: "string",
+          description: "CSS selector for input field",
+        },
         value: { type: "string", description: "Value to fill" },
       },
       required: ["selector", "value"],
@@ -136,56 +161,61 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        selector: { 
-          type: "string", 
-          description: "Optional CSS selector to get content from specific elements (default: returns whole page)",
-          required: false 
-        }
+        selector: {
+          type: "string",
+          description:
+            "Optional CSS selector to get content from specific elements (default: returns whole page)",
+          required: false,
+        },
       },
       required: [],
     },
   },
   {
-    name: "browserbase_parallel_sessions",
-    description: "Create multiple browser sessions and navigate to different URLs",
+    name: "browserbase_close_session",
+    description: "Close a browser session",
     inputSchema: {
       type: "object",
       properties: {
-        sessions: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              url: { type: "string" },
-              id: { type: "string" }
-            },
-            required: ["url", "id"]
-          }
-        }
+        sessionId: { type: "string" },
       },
-      required: ["sessions"]
-    }
-  }
+      required: ["sessionId"],
+    },
+  },
 ];
 
 // 5. Tool Handler Implementation
-async function handleToolCall(name: string, args: any): Promise<{ toolResult: CallToolResult }> {
-  // Only auto-create sessions for tools OTHER than create_session and parallel_sessions
-  const defaultSession = !["browserbase_create_session", "browserbase_parallel_sessions"].includes(name) ? 
-    (browsers.get(args.sessionId) || await createNewBrowserSession(args.sessionId)) : 
-    null;
-  
+async function handleToolCall(
+  name: string,
+  args: any
+): Promise<{ toolResult: CallToolResult }> {
+  // Only auto-create sessions for tools OTHER than create_session
+  const defaultSession = !["browserbase_create_session"].includes(name)
+    ? browsers.get(args.sessionId) ||
+      (await createNewBrowserSession(args.sessionId))
+    : null;
+
   switch (name) {
+    case "browserbase_close_session":
+      await defaultSession!.browser.close();
+      browsers.delete(args.sessionId);
+      return {
+        toolResult: {
+          content: [{ type: "text", text: "Closed session" }],
+        },
+      };
     case "browserbase_create_session":
       try {
         // Check if session already exists
         if (browsers.has(args.sessionId)) {
           return {
             toolResult: {
-              content: [{
-                type: "text",
-                text: "Session already exists",
-              }],
+              content: [
+                {
+                  type: "text",
+                  text: "Session already exists",
+                },
+              ],
               isError: false,
             },
           };
@@ -193,20 +223,26 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
         await createNewBrowserSession(args.sessionId);
         return {
           toolResult: {
-            content: [{
-              type: "text",
-              text: "Created new browser session",
-            }],
+            content: [
+              {
+                type: "text",
+                text: "Created new browser session",
+              },
+            ],
             isError: false,
           },
         };
       } catch (error) {
         return {
           toolResult: {
-            content: [{
-              type: "text",
-              text: `Failed to create browser session: ${(error as Error).message}`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Failed to create browser session: ${
+                  (error as Error).message
+                }`,
+              },
+            ],
             isError: true,
           },
         };
@@ -215,10 +251,12 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
       await defaultSession!.page.goto(args.url);
       return {
         toolResult: {
-          content: [{
-            type: "text",
-            text: `Navigated to ${args.url}`,
-          }],
+          content: [
+            {
+              type: "text",
+              text: `Navigated to ${args.url}`,
+            },
+          ],
           isError: false,
         },
       };
@@ -228,17 +266,26 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
       const height = args.height ?? 600;
       await defaultSession!.page.setViewport({ width, height });
 
-      const screenshot = await (args.selector ? 
-        (await defaultSession!.page.$(args.selector))?.screenshot({ encoding: "base64" }) :
-        defaultSession!.page.screenshot({ encoding: "base64", fullPage: false }));
+      const screenshot = await (args.selector
+        ? (
+            await defaultSession!.page.$(args.selector)
+          )?.screenshot({ encoding: "base64" })
+        : defaultSession!.page.screenshot({
+            encoding: "base64",
+            fullPage: false,
+          }));
 
       if (!screenshot) {
         return {
           toolResult: {
-            content: [{
-              type: "text",
-              text: args.selector ? `Element not found: ${args.selector}` : "Screenshot failed",
-            }],
+            content: [
+              {
+                type: "text",
+                text: args.selector
+                  ? `Element not found: ${args.selector}`
+                  : "Screenshot failed",
+              },
+            ],
             isError: true,
           },
         };
@@ -272,20 +319,26 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
         await defaultSession!.page.click(args.selector);
         return {
           toolResult: {
-            content: [{
-              type: "text",
-              text: `Clicked: ${args.selector}`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Clicked: ${args.selector}`,
+              },
+            ],
             isError: false,
           },
         };
       } catch (error) {
         return {
           toolResult: {
-            content: [{
-              type: "text",
-              text: `Failed to click ${args.selector}: ${(error as Error).message}`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Failed to click ${args.selector}: ${
+                  (error as Error).message
+                }`,
+              },
+            ],
             isError: true,
           },
         };
@@ -297,20 +350,26 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
         await defaultSession!.page.type(args.selector, args.value);
         return {
           toolResult: {
-            content: [{
-              type: "text",
-              text: `Filled ${args.selector} with: ${args.value}`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Filled ${args.selector} with: ${args.value}`,
+              },
+            ],
             isError: false,
           },
         };
       } catch (error) {
         return {
           toolResult: {
-            content: [{
-              type: "text",
-              text: `Failed to fill ${args.selector}: ${(error as Error).message}`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Failed to fill ${args.selector}: ${
+                  (error as Error).message
+                }`,
+              },
+            ],
             isError: true,
           },
         };
@@ -321,10 +380,10 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
         const result = await defaultSession!.page.evaluate((script) => {
           const logs: string[] = [];
           const originalConsole = { ...console };
-          
-          ['log', 'info', 'warn', 'error'].forEach(method => {
+
+          ["log", "info", "warn", "error"].forEach((method) => {
             (console as any)[method] = (...args: any[]) => {
-              logs.push(`[${method}] ${args.join(' ')}`);
+              logs.push(`[${method}] ${args.join(" ")}`);
               (originalConsole as any)[method](...args);
             };
           });
@@ -344,7 +403,11 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
             content: [
               {
                 type: "text",
-                text: `Execution result:\n${JSON.stringify(result.result, null, 2)}\n\nConsole output:\n${result.logs.join('\n')}`,
+                text: `Execution result:\n${JSON.stringify(
+                  result.result,
+                  null,
+                  2
+                )}\n\nConsole output:\n${result.logs.join("\n")}`,
               },
             ],
             isError: false,
@@ -353,10 +416,12 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
       } catch (error) {
         return {
           toolResult: {
-            content: [{
-              type: "text",
-              text: `Script execution failed: ${(error as Error).message}`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Script execution failed: ${(error as Error).message}`,
+              },
+            ],
             isError: true,
           },
         };
@@ -370,12 +435,12 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
             const jsonObjects = [];
             let braceCount = 0;
             let start = -1;
-            
+
             for (let i = 0; i < text.length; i++) {
-              if (text[i] === '{') {
+              if (text[i] === "{") {
                 if (braceCount === 0) start = i;
                 braceCount++;
-              } else if (text[i] === '}') {
+              } else if (text[i] === "}") {
                 braceCount--;
                 if (braceCount === 0 && start !== -1) {
                   try {
@@ -392,47 +457,52 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
           }
 
           // Get all text content based on selector or full page
-          const elements = selector ? 
-            Array.from(document.querySelectorAll(selector)) : 
-            [document.body];
-          
+          const elements = selector
+            ? Array.from(document.querySelectorAll(selector))
+            : [document.body];
+
           const results = {
             // Look for JSON in text content
-            textContent: elements.flatMap(el => extractJSON(el.textContent || '')),
-            
+            textContent: elements.flatMap((el) =>
+              extractJSON(el.textContent || "")
+            ),
+
             // Look for JSON in script tags
-            scriptTags: Array.from(document.getElementsByTagName('script'))
-              .flatMap(script => {
-                try {
-                  if (script.type === 'application/json') {
-                    return [JSON.parse(script.textContent || '')];
-                  }
-                  return extractJSON(script.textContent || '');
-                } catch (e) {
-                  return [];
+            scriptTags: Array.from(
+              document.getElementsByTagName("script")
+            ).flatMap((script) => {
+              try {
+                if (script.type === "application/json") {
+                  return [JSON.parse(script.textContent || "")];
                 }
-              }),
-            
+                return extractJSON(script.textContent || "");
+              } catch (e) {
+                return [];
+              }
+            }),
+
             // Look for JSON in meta tags
-            metaTags: Array.from(document.getElementsByTagName('meta'))
-              .flatMap(meta => {
+            metaTags: Array.from(document.getElementsByTagName("meta")).flatMap(
+              (meta) => {
                 try {
-                  const content = meta.getAttribute('content') || '';
+                  const content = meta.getAttribute("content") || "";
                   return extractJSON(content);
                 } catch (e) {
                   return [];
                 }
-              }),
-            
+              }
+            ),
+
             // Look for JSON-LD
-            jsonLd: Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
-              .flatMap(script => {
-                try {
-                  return [JSON.parse(script.textContent || '')];
-                } catch (e) {
-                  return [];
-                }
-              })
+            jsonLd: Array.from(
+              document.querySelectorAll('script[type="application/ld+json"]')
+            ).flatMap((script) => {
+              try {
+                return [JSON.parse(script.textContent || "")];
+              } catch (e) {
+                return [];
+              }
+            }),
           };
 
           return results;
@@ -440,20 +510,24 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
 
         return {
           toolResult: {
-            content: [{
-              type: "text",
-              text: `Found JSON content:\n${JSON.stringify(result, null, 2)}`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Found JSON content:\n${JSON.stringify(result, null, 2)}`,
+              },
+            ],
             isError: false,
           },
         };
       } catch (error) {
         return {
           toolResult: {
-            content: [{
-              type: "text",
-              text: `Failed to extract JSON: ${(error as Error).message}`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Failed to extract JSON: ${(error as Error).message}`,
+              },
+            ],
             isError: true,
           },
         };
@@ -466,75 +540,37 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
           // If selector is provided, get content from specific elements
           content = await defaultSession!.page.evaluate((selector) => {
             const elements = document.querySelectorAll(selector);
-            return Array.from(elements).map(el => el.textContent || '');
+            return Array.from(elements).map((el) => el.textContent || "");
           }, args.selector);
         } else {
           // If no selector is provided, get content from the whole page
           content = await defaultSession!.page.evaluate(() => {
-            return Array.from(document.querySelectorAll('*')).map(el => el.textContent || '');
+            return Array.from(document.querySelectorAll("*")).map(
+              (el) => el.textContent || ""
+            );
           });
         }
 
         return {
           toolResult: {
-            content: [{
-              type: "text",
-              text: `Extracted content:\n${JSON.stringify(content, null, 2)}`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Extracted content:\n${JSON.stringify(content, null, 2)}`,
+              },
+            ],
             isError: false,
           },
         };
       } catch (error) {
         return {
           toolResult: {
-            content: [{
-              type: "text",
-              text: `Failed to extract content: ${(error as Error).message}`,
-            }],
-            isError: true,
-          },
-        };
-      }
-
-    case "browserbase_parallel_sessions":
-      try {
-        console.log(`Starting parallel sessions for ${args.sessions.length} sessions`);
-        const results = await Promise.all(args.sessions.map(async (session: { url: string, id: string }) => {
-          console.log(`Creating session for ${session.id}: ${session.url}`);
-          const { page } = await createNewBrowserSession(session.id);
-          try {
-            await page.goto(session.url);
-            const content = await page.evaluate(() => document.body.innerText);
-            return {
-              id: session.id,
-              url: session.url,
-              content: content
-            };
-          } catch (error) {
-            return {
-              id: session.id,
-              url: session.url,
-              error: (error as Error).message
-            };
-          }
-        }));
-
-        return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: `Parallel sessions results:\n${JSON.stringify(results, null, 2)}`,
-            }],
-            isError: false,
-          },
-        };
-      } catch (error) {
-        return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: `Failed to execute parallel sessions: ${(error as Error).message}`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Failed to extract content: ${(error as Error).message}`,
+              },
+            ],
             isError: true,
           },
         };
@@ -543,10 +579,12 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
     default:
       return {
         toolResult: {
-          content: [{
-            type: "text",
-            text: `Unknown tool: ${name}`,
-          }],
+          content: [
+            {
+              type: "text",
+              text: `Unknown tool: ${name}`,
+            },
+          ],
           isError: true,
         },
       };
@@ -564,7 +602,7 @@ const server = new Server(
       resources: {},
       tools: {},
     },
-  },
+  }
 );
 
 // 7. Request Handlers
@@ -575,7 +613,7 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => ({
       mimeType: "text/plain",
       name: "Browser console logs",
     },
-    ...Array.from(screenshots.keys()).map(name => ({
+    ...Array.from(screenshots.keys()).map((name) => ({
       uri: `screenshot://${name}`,
       mimeType: "image/png",
       name: `Screenshot: ${name}`,
@@ -585,14 +623,16 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => ({
 
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const uri = request.params.uri.toString();
-  
+
   if (uri === "console://logs") {
     return {
-      contents: [{
-        uri,
-        mimeType: "text/plain",
-        text: consoleLogs.join("\n"),
-      }],
+      contents: [
+        {
+          uri,
+          mimeType: "text/plain",
+          text: consoleLogs.join("\n"),
+        },
+      ],
     };
   }
 
@@ -601,11 +641,13 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     const screenshot = screenshots.get(name);
     if (screenshot) {
       return {
-        contents: [{
-          uri,
-          mimeType: "image/png",
-          blob: screenshot,
-        }],
+        contents: [
+          {
+            uri,
+            mimeType: "image/png",
+            blob: screenshot,
+          },
+        ],
       };
     }
   }
@@ -617,7 +659,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: TOOLS,
 }));
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => 
+server.setRequestHandler(CallToolRequestSchema, async (request) =>
   handleToolCall(request.params.name, request.params.arguments ?? {})
 );
 

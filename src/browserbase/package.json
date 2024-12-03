@@ -19,8 +19,11 @@
     "watch": "tsc --watch"
   },
   "dependencies": {
+    "@browserbasehq/sdk": "^2.0.0",
     "@modelcontextprotocol/sdk": "0.5.0",
-    "puppeteer": "^23.4.0"
+    "@types/dotenv": "^6.1.1",
+    "dotenv": "^16.4.5",
+    "puppeteer-core": "^23.9.0"
   },
   "devDependencies": {
     "shx": "^0.3.4",
