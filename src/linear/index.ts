@@ -347,7 +347,7 @@ class LinearMCPClient {
 }
 
 const createIssueTool: Tool = {
-  name: "create_issue",
+  name: "linear_create_issue",
   description: "Creates a new Linear issue with specified details. Use this to create tickets for tasks, bugs, or feature requests. Returns the created issue's identifier and URL. Required fields are title and teamId, with optional description, priority (0-4, where 0 is no priority and 1 is urgent), and status.",
   inputSchema: {
     type: "object",
@@ -363,7 +363,7 @@ const createIssueTool: Tool = {
 };
 
 const updateIssueTool: Tool = {
-  name: "update_issue",
+  name: "linear_update_issue",
   description: "Updates an existing Linear issue's properties. Use this to modify issue details like title, description, priority, or status. Requires the issue ID and accepts any combination of updatable fields. Returns the updated issue's identifier and URL.",
   inputSchema: {
     type: "object",
@@ -379,7 +379,7 @@ const updateIssueTool: Tool = {
 };
 
 const searchIssuesTool: Tool = {
-  name: "search_issues",
+  name: "linear_search_issues",
   description: "Searches Linear issues using flexible criteria. Supports filtering by any combination of: title/description text, team, status, assignee, labels, priority (1=urgent, 2=high, 3=normal, 4=low), and estimate. Returns up to 10 issues by default (configurable via limit).",
   inputSchema: {
     type: "object",
@@ -414,7 +414,7 @@ const searchIssuesTool: Tool = {
 };
 
 const getUserIssuesTool: Tool = {
-  name: "get_user_issues",
+  name: "linear_get_user_issues",
   description: "Retrieves issues assigned to a specific user or the authenticated user if no userId is provided. Returns issues sorted by last updated, including priority, status, and other metadata. Useful for finding a user's workload or tracking assigned tasks.",
   inputSchema: {
     type: "object",
@@ -427,7 +427,7 @@ const getUserIssuesTool: Tool = {
 };
 
 const addCommentTool: Tool = {
-  name: "add_comment",
+  name: "linear_add_comment",
   description: "Adds a comment to an existing Linear issue. Supports markdown formatting in the comment body. Can optionally specify a custom user name and avatar for the comment. Returns the created comment's details including its URL.",
   inputSchema: {
     type: "object",
@@ -518,43 +518,42 @@ Key capabilities:
 - Organization overview: View team structures and user assignments across the organization.
 
 Tool Usage:
-- create_issue:
+- linear_create_issue:
   - use teamId from linear-organization: resource
   - priority levels: 1=urgent, 2=high, 3=normal, 4=low
   - status must match exact Linear workflow state names (e.g., "In Progress", "Done")
 
-- update_issue:
+- linear_update_issue:
   - get issue IDs from search_issues or linear-issue:/// resources
   - only include fields you want to change
   - status changes must use valid state IDs from the team's workflow
 
-- search_issues:
+- linear_search_issues:
   - combine multiple filters for precise results
   - use labels array for multiple tag filtering
   - query searches both title and description
   - returns max 10 results by default
 
-- get_user_issues:
+- linear_get_user_issues:
   - omit userId to get authenticated user's issues
   - useful for workload analysis and sprint planning
   - returns most recently updated issues first
 
-- add_comment:
+- linear_add_comment:
   - supports full markdown formatting
   - use displayIconUrl for bot/integration avatars
   - createAsUser for custom comment attribution
 
 Best practices:
 - When creating issues:
-  - Write clear, actionable titles that describe the task (e.g., "Implement user authentication for mobile app")
-  - Include detailed descriptions in markdown format with context and acceptance criteria
-  - Set appropriate priority (1=critical to 4=nice-to-have)
-  - Always specify the correct team ID to ensure proper routing
+  - Write clear, actionable titles that describe the task well (e.g., "Implement user authentication for mobile app")
+  - Include concise but appropriately detailed descriptions in markdown format with context and acceptance criteria
+  - Set appropriate priority based on the context (1=critical to 4=nice-to-have)
+  - Always specify the correct team ID (default to the user's team if possible)
 
 - When searching:
   - Use specific, targeted queries for better results (e.g., "auth mobile app" rather than just "auth")
-  - Apply team filters when you know the relevant team to narrow results
-  - Set appropriate result limits to avoid information overload
+  - Apply relevant filters when asked or when you can infer the appropriate filters to narrow results
 
 - When adding comments:
   - Use markdown formatting to improve readability and structure
@@ -563,16 +562,14 @@ Best practices:
 
 - General best practices:
   - Fetch organization data first to get valid team IDs
-  - Use search_issues for bulk operations
+  - Use search_issues to find issues for bulk operations
   - Include markdown formatting in descriptions and comments
-  - Set priorities consistently across teams
-  - Use specific status names from team workflows
 
 Resource patterns:
 - linear-issue:///{issueId} - Single issue details (e.g., linear-issue:///c2b318fb-95d2-4a81-9539-f3268f34af87)
 - linear-team:///{teamId}/issues - Team's issue list (e.g., linear-team:///OPS/issues)
 - linear-user:///{userId}/assigned - User assignments (e.g., linear-user:///USER-123/assigned)
-- linear-organization: - Teams and members list
+- linear-organization: - Organization for the current user
 - linear-viewer: - Current user context
 
 The server uses the authenticated user's permissions for all operations.`
@@ -710,7 +707,7 @@ async function main() {
       if (!args) throw new Error("Missing arguments");
 
       switch (name) {
-        case "create_issue": {
+        case "linear_create_issue": {
           if (!args.title || !args.teamId) {
             throw new Error("Missing required fields: title and teamId");
           }
@@ -732,7 +729,7 @@ async function main() {
           };
         }
 
-        case "update_issue": {
+        case "linear_update_issue": {
           if (!args.id) {
             throw new Error("Missing required field: id");
           }
@@ -754,7 +751,7 @@ async function main() {
           };
         }
 
-        case "search_issues": {
+        case "linear_search_issues": {
           const searchArgs: SearchIssuesArgs = {
             query: args.query ? String(args.query) : undefined,
             teamId: args.teamId ? String(args.teamId) : undefined,
@@ -780,7 +777,7 @@ async function main() {
           };
         }
 
-        case "get_user_issues": {
+        case "linear_get_user_issues": {
           const issues = await linearClient.getUserIssues({
             userId: args.userId ? String(args.userId) : undefined,
             includeArchived: args.includeArchived ? Boolean(args.includeArchived) : undefined,
@@ -799,7 +796,7 @@ async function main() {
           };
         }
 
-        case "add_comment": {
+        case "linear_add_comment": {
           if (!args.issueId || !args.body) {
             throw new Error("Missing required fields: issueId and body");
           }

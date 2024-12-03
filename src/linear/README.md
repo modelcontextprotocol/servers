@@ -32,7 +32,7 @@ This server provides integration with Linear's issue tracking system through MCP
 
 ### Tools
 
-1. **`create_issue`**: Create a new Linear issues
+1. **`linear_create_issue`**: Create a new Linear issues
    - Required inputs:
      - `title` (string): Issue title
      - `teamId` (string): Team ID to create issue in
@@ -41,7 +41,7 @@ This server provides integration with Linear's issue tracking system through MCP
      - `priority` (number, 0-4): Priority level (1=urgent, 4=low)
      - `status` (string): Initial status name
 
-2. **`update_issue`**: Update existing issues
+2. **`linear_update_issue`**: Update existing issues
    - Required inputs:
      - `id` (string): Issue ID to update
    - Optional inputs:
@@ -50,7 +50,7 @@ This server provides integration with Linear's issue tracking system through MCP
      - `priority` (number, 0-4): New priority
      - `status` (string): New status name
 
-3. **`search_issues`**: Search issues with flexible filtering
+3. **`linear_search_issues`**: Search issues with flexible filtering
    - Optional inputs:
      - `query` (string): Text to search in title/description
      - `teamId` (string): Filter by team
@@ -60,13 +60,13 @@ This server provides integration with Linear's issue tracking system through MCP
      - `priority` (number): Filter by priority
      - `limit` (number, default: 10): Max results
 
-4. **`get_user_issues`**: Get issues assigned to a user
+4. **`linear_get_user_issues`**: Get issues assigned to a user
    - Optional inputs:
      - `userId` (string): User ID (omit for authenticated user)
      - `includeArchived` (boolean): Include archived issues
      - `limit` (number, default: 50): Max results
 
-5. **`add_comment`**: Add comments to issues
+5. **`linear_add_comment`**: Add comments to issues
    - Required inputs:
      - `issueId` (string): Issue ID to comment on
      - `body` (string): Comment text (markdown supported)
