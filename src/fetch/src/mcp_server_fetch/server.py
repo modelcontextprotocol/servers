@@ -148,7 +148,7 @@ async def fetch_url(
 class Fetch(BaseModel):
     """Parameters for fetching a URL."""
 
-    url: Annotated[AnyUrl, Field(description="URL to fetch")]
+    url: Annotated[str, Field(description="URL to fetch")]
     max_length: Annotated[
         int,
         Field(
