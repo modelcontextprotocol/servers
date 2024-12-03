@@ -22,6 +22,7 @@ The server provides schema information for each table:
 
 ## Usage with Claude Desktop
 
+### Via NPX
 Add the following to your `claude_desktop_config.json`:
 
 ```json
@@ -40,12 +41,47 @@ Add the following to your `claude_desktop_config.json`:
 }
 ```
 
+### Local Development
+1. Clone the repository
+2. Install dependencies:
+```bash
+npm install
+```
+Note: If any dependency fails during installation, you can remove it from the root `package.json` and proceed with the installation.
+
+3. Build the project:
+```bash
+npm run build
+```
+
+4. Configure Claude Desktop for local development. Add to your `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "bigquery": {
+      "command": "node",
+      "args": [
+        "/path/to/your/clone/servers/src/bigquery/dist/index.js",
+        "your-project-id",
+        "location"  // Optional, defaults to us-central1
+      ]
+    }
+  }
+}
+
+
 ## Authentication
 
 The server uses Google Cloud authentication. Ensure you have:
 1. Installed Google Cloud CLI
 2. Run `gcloud auth application-default login`
-3. Set up appropriate IAM permissions for BigQuery access
+3. Required IAM Roles:
+   - Option 1: `roles/bigquery.user` (recommended)
+   - Option 2: Both of these roles:
+     - `roles/bigquery.dataViewer` - Grants read access to tables
+     - `roles/bigquery.jobUser` - Allows query execution
+   
+   Note: Contact your GCP administrator to get the necessary roles assigned to your account.
 
 ## License
 
