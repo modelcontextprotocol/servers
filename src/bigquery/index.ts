@@ -36,6 +36,17 @@ const resourceBaseUrl = new URL(`bigquery://${projectId}`);
 
 const SCHEMA_PATH = "schema";
 
+function qualifyTablePath(sql: string, projectId: string): string {
+  // Match FROM INFORMATION_SCHEMA.TABLES or FROM dataset.INFORMATION_SCHEMA.TABLES
+  const unqualifiedPattern = /FROM\s+(?:(\w+)\.)?INFORMATION_SCHEMA\.TABLES/gi;
+  return sql.replace(unqualifiedPattern, (match, dataset) => {
+    if (dataset) {
+      return `FROM \`${projectId}.${dataset}.INFORMATION_SCHEMA.TABLES\``;
+    }
+    throw new Error("Dataset must be specified when querying INFORMATION_SCHEMA (e.g. dataset.INFORMATION_SCHEMA.TABLES)");
+  });
+}
+
 server.setRequestHandler(ListResourcesRequestSchema, async () => {
   try {
     console.error('Fetching datasets...');
@@ -66,11 +77,6 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
   }
 });
 
-
-
-
-
-
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const resourceUrl = new URL(request.params.uri);
   const pathComponents = resourceUrl.pathname.split("/");
@@ -82,8 +88,8 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     throw new Error("Invalid resource URI");
   }
 
-  const dataset = bigquery.dataset(datasetId!);  // Add ! to assert non-null
-  const table = dataset.table(tableId!);  // Add ! to assert non-null
+  const dataset = bigquery.dataset(datasetId!);
+  const table = dataset.table(tableId!);
   const [metadata] = await table.getMetadata();
 
   return {
@@ -116,7 +122,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === "query") {
-    const sql = request.params.arguments?.sql as string;
+    let sql = request.params.arguments?.sql as string;
     
     // Validate read-only query
     const upperSql = sql.toUpperCase();
@@ -129,9 +135,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     try {
+      // Qualify INFORMATION_SCHEMA queries
+      if (sql.toUpperCase().includes('INFORMATION_SCHEMA')) {
+        sql = qualifyTablePath(sql, projectId);
+      }
+
       const options = {
         query: sql,
-        location: 'us-central1',  // Default to US location
+        location: 'us-central1',
         maximumBytesBilled: "1000000000", // 1GB limit for safety
       };
 
