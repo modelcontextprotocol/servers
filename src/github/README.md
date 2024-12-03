@@ -102,6 +102,43 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `from_branch` (optional string): Source branch (defaults to repo default)
    - Returns: Created branch reference
 
+10. `list_issues`
+    - List and filter repository issues
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `state` (optional string): Filter by state ('open', 'closed', 'all')
+      - `labels` (optional string[]): Filter by labels
+      - `sort` (optional string): Sort by ('created', 'updated', 'comments')
+      - `direction` (optional string): Sort direction ('asc', 'desc')
+      - `since` (optional string): Filter by date (ISO 8601 timestamp)
+      - `page` (optional number): Page number
+      - `per_page` (optional number): Results per page
+    - Returns: Array of issue details
+
+11. `update_issue`
+    - Update an existing issue
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `issue_number` (number): Issue number to update
+      - `title` (optional string): New title
+      - `body` (optional string): New description
+      - `state` (optional string): New state ('open' or 'closed')
+      - `labels` (optional string[]): New labels
+      - `assignees` (optional string[]): New assignees
+      - `milestone` (optional number): New milestone number
+    - Returns: Updated issue details
+
+12. `add_issue_comment`
+    - Add a comment to an issue
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `issue_number` (number): Issue number to comment on
+      - `body` (string): Comment text
+    - Returns: Created comment details
+
 ## Setup
 
 ### Personal Access Token
