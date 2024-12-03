@@ -53,6 +53,9 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Linear](https://github.com/jerhadf/linear-mcp-server)** - Allows an LLM to interact with Linear's API for project management, allowing searching, creating, and updating issues and more
 
 
+- **[Linear](https://github.com/jerhadf/linear-mcp-server)** - Allows an LLM to interact with Linear's API for project management, allowing searching, creating, and updating issues and more
+
+
 ## 📚 Resources
 
 Additional resources on MCP.
