@@ -106,6 +106,20 @@ const WriteFileArgsSchema = z.object({
   content: z.string(),
 });
 
+const EditOperation = z.object({
+  // The text to search for
+  oldText: z.string().describe('Text to search for - can be a substring of the target'),
+  // The new text to replace with
+  newText: z.string().describe('Text to replace the found text with'),
+  // Optional: preview changes without applying them
+  dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format')
+});
+
+const EditFileArgsSchema = z.object({
+  path: z.string(),
+  edits: z.array(EditOperation),
+});
+
 const CreateDirectoryArgsSchema = z.object({
   path: z.string(),
 });
@@ -202,6 +216,61 @@ async function searchFiles(
   return results;
 }
 
+// Edit preview type
+interface EditPreview {
+  original: string;
+  modified: string;
+  lineNumber: number;
+  preview: string;  // Git-style diff format
+}
+
+// File editing utilities
+async function applyFileEdits(filePath: string, edits: z.infer<typeof EditOperation>[]): Promise<string | EditPreview[]> {
+  let content = await fs.readFile(filePath, 'utf-8');
+  const previews: EditPreview[] = [];
+  
+  for (const edit of edits) {
+    const pos = content.indexOf(edit.oldText);
+    if (pos === -1) {
+      throw new Error(
+        `Search text not found in ${filePath}:\n${edit.oldText}`
+      );
+    }
+    
+    // Calculate line number for reporting
+    const lineNumber = content.slice(0, pos).split(/\r?\n/).length;
+    
+    if (edit.dryRun) {
+      // Create git-style diff preview
+      const preview = [
+        `@@ line ${lineNumber} @@`,
+        '<<<<<<< ORIGINAL',
+        edit.oldText,
+        '=======',
+        edit.newText,
+        '>>>>>>> MODIFIED'
+      ].join('\n');
+      
+      previews.push({
+        original: edit.oldText,
+        modified: edit.newText,
+        lineNumber,
+        preview
+      });
+      continue;
+    }
+    
+    // Apply the edit
+    content = content.slice(0, pos) + edit.newText + content.slice(pos + edit.oldText.length);
+  }
+  
+  if (edits.some(e => e.dryRun)) {
+    return previews;
+  }
+  
+  return content;
+}
+
 // Tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -232,6 +301,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "Use with caution as it will overwrite existing files without warning. " +
           "Handles text content with proper encoding. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(WriteFileArgsSchema) as ToolInput,
+      },
+      {
+        name: "edit_file",
+        description:
+          "Make selective edits to a text file using simple search and replace with git-style preview format. " +
+          "Finds text to replace using substring matching and shows changes in a familiar git-diff format. " +
+          "Use dry run mode to preview changes before applying them. " +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(EditFileArgsSchema) as ToolInput,
       },
       {
         name: "create_directory",
@@ -343,6 +421,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         await fs.writeFile(validPath, parsed.data.content, "utf-8");
         return {
           content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
+        };
+      }
+
+      case "edit_file": {
+        const parsed = EditFileArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for edit_file: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const result = await applyFileEdits(validPath, parsed.data.edits);
+        
+        // If it's a dry run, format the previews
+        if (Array.isArray(result)) {
+          const previewText = result.map(preview => preview.preview).join('\n\n');
+          return {
+            content: [{ type: "text", text: `Edit preview:\n${previewText}` }],
+          };
+        }
+
+        // Otherwise write the changes
+        await fs.writeFile(validPath, result, "utf-8");
+        return {
+          content: [{ type: "text", text: `Successfully applied edits to ${parsed.data.path}` }],
         };
       }
 
