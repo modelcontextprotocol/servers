@@ -7,14 +7,17 @@ A Model Context Protocol server that provides cloud browser automation capabilit
 ### Tools
 
 - **browserbase_create_session**
+
   - Create a new cloud browser session using Browserbase
   - No required inputs
 
 - **browserbase_navigate**
+
   - Navigate to any URL in the browser
   - Input: `url` (string)
 
 - **browserbase_screenshot**
+
   - Capture screenshots of the entire page or specific elements
   - Inputs:
     - `name` (string, required): Name for the screenshot
@@ -23,20 +26,24 @@ A Model Context Protocol server that provides cloud browser automation capabilit
     - `height` (number, optional, default: 600): Screenshot height
 
 - **browserbase_click**
+
   - Click elements on the page
   - Input: `selector` (string): CSS selector for element to click
 
 - **browserbase_fill**
+
   - Fill out input fields
   - Inputs:
     - `selector` (string): CSS selector for input field
     - `value` (string): Value to fill
 
 - **browserbase_evaluate**
+
   - Execute JavaScript in the browser console
   - Input: `script` (string): JavaScript code to execute
 
 - **browserbase_get_content**
+
   - Extract all content from the current page
   - Input: `selector` (string, optional): CSS selector to get content from specific elements
 
@@ -51,6 +58,7 @@ A Model Context Protocol server that provides cloud browser automation capabilit
 The server provides access to two types of resources:
 
 1. **Console Logs** (`console://logs`)
+
    - Browser console output in text format
    - Includes all console messages from the browser
 
@@ -61,7 +69,7 @@ The server provides access to two types of resources:
 ## Key Features
 
 - Cloud browser automation
-- Parallel browser sessions
+- Web data extraction
 - Console log monitoring
 - Screenshot capabilities
 - JavaScript execution
@@ -70,15 +78,14 @@ The server provides access to two types of resources:
 ## Configuration
 
 ### Environment Variables
+
 Required:
+
 - `BROWSERBASE_API_KEY`: Your Browserbase API key
 - `BROWSERBASE_PROJECT_ID`: Your Browserbase project ID
 
-Optional:
-- `NOTION_PAGE_URL`: Default Notion page URL (default: "https://www.notion.so/default-page")
-- `NOTION_DATABASE_ID`: Default Notion database ID (default: "default-database-id")
-
 ### Claude Desktop Configuration
+
 ```json
 {
   "mcpServers": {
