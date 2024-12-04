@@ -32,6 +32,7 @@ These servers aim to demonstrate MCP features and the Typescript and Python SDK.
 Official integrations are maintained by companies building production ready MCP servers for their platforms.
 
 - <img height="12" width="12" src="https://cdn.simpleicons.org/cloudflare" /> **[Cloudflare](https://github.com/cloudflare/mcp-server-cloudflare)** - Deploy, configure & interrogate your resources on the Cloudflare developer platform (e.g. Workers/KV/R2/D1)
+- <img height="12" width="12" src="https://icon.icepanel.io/AWS/svg/Storage/Simple-Storage-Service.svg" /> **[Amazon S3](https://github.com/modelcontextprotocol/servers/tree/main/src/s3)** - Tools to interact with your buckets and their objects
 - **[Raygun](https://github.com/MindscapeHQ/mcp-server-raygun)** - Interact with your crash reporting and real using monitoring data on your Raygun account
 - <img height="12" width="12" src="https://e2b.dev/favicon.ico" alt="E2B Logo" /> **[E2B](https://github.com/e2b-dev/mcp-server)** - Run code in secure sandboxes hosted by [E2B](https://e2b.dev)
 - **[Neon](https://github.com/neondatabase/mcp-server-neon)** - Interact with the Neon serverless Postgres platform
