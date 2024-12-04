@@ -98,6 +98,35 @@ async def serve() -> Server:
                     "type": "object",
                 },
             ),
+            types.Tool(
+                name=RememberizerTools.LIST_DOCUMENTS.value,
+                description="""Retrieves a paginated list of all documents in the system. 
+Use this tool to browse through available documents and their metadata.
+
+Examples:
+- List first 100 documents: {"page": 1, "page_size": 100}
+- Get next page: {"page": 2, "page_size": 100}
+- Get maximum allowed documents: {"page": 1, "page_size": 1000}
+""",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "page": {
+                            "type": "integer",
+                            "description": "Page number for pagination (starts at 1)",
+                            "minimum": 1,
+                            "default": 1,
+                        },
+                        "page_size": {
+                            "type": "integer",
+                            "description": "Number of documents per page (1-1000)",
+                            "minimum": 1,
+                            "maximum": 1000,
+                            "default": 100,
+                        },
+                    }
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -115,6 +144,13 @@ async def serve() -> Server:
                 return [types.TextContent(type="text", text=str(data.get("data", [])))]
             case RememberizerTools.ACCOUNT_INFORMATION.value:
                 data = await client.get(ACCOUNT_INFORMATION_PATH)
+                return [types.TextContent(type="text", text=str(data))]
+            case RememberizerTools.LIST_DOCUMENTS.value:
+                page = arguments.get("page", 1)
+                page_size = arguments.get("page_size", 100)
+                data = await client.get(
+                    f"{LIST_DOCUMENTS_PATH}?page_size={page_size}&page={page}"
+                )
                 return [types.TextContent(type="text", text=str(data))]
             case _:
                 raise ValueError(f"Unknown tool: {name}")
