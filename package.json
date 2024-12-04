@@ -28,6 +28,7 @@
     "@modelcontextprotocol/server-memory": "*",
     "@modelcontextprotocol/server-filesystem": "*",
     "@modelcontextprotocol/server-everart": "*",
-    "@modelcontextprotocol/server-sequential-thinking": "*"
+    "@modelcontextprotocol/server-sequential-thinking": "*",
+    "@modelcontextprotocol/server-llm-txt": "*"
   }
 }

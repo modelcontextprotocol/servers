@@ -1,0 +1,44 @@
+{
+  "name": "@modelcontextprotocol/server-llm-txt",
+  "version": "0.6.1",
+  "description": "MCP server for serving llm.txt files",
+  "author": "Michael Latman (https://michaellatman.com)",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "mcp-server-llm-txt": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.0.1",
+    "@types/node-fetch": "^2.6.12",
+    "node-fetch": "^3.3.2",
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.23.5",
+    "jsdom": "^22.1.0",
+    "@types/jsdom": "^21.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.4",
+    "shx": "^0.3.4",
+    "typescript": "^5.6.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/modelcontextprotocol/servers.git"
+  },
+  "bugs": {
+    "url": "https://github.com/modelcontextprotocol/servers/issues"
+  },
+  "homepage": "https://github.com/modelcontextprotocol/servers#readme",
+  "publishConfig": {
+    "access": "public"
+  }
+}
