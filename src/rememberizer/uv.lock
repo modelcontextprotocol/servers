@@ -77,18 +77,17 @@ wheels = [
 
 [[package]]
 name = "httpx"
-version = "0.27.2"
+version = "0.28.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
     { name = "certifi" },
     { name = "httpcore" },
     { name = "idna" },
-    { name = "sniffio" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/78/82/08f8c936781f67d9e6b9eeb8a0c8b4e406136ea4c3d1f89a5db71d42e0e6/httpx-0.27.2.tar.gz", hash = "sha256:f7c2be1d2f3c3c3160d441802406b206c2b76f5947b11115e6df10c6c65e66c2", size = 144189 }
+sdist = { url = "https://files.pythonhosted.org/packages/10/df/676b7cf674dd1bdc71a64ad393c89879f75e4a0ab8395165b498262ae106/httpx-0.28.0.tar.gz", hash = "sha256:0858d3bab51ba7e386637f22a61d8ccddaeec5f3fe4209da3a6168dbb91573e0", size = 141307 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/56/95/9377bcb415797e44274b51d46e3249eba641711cf3348050f76ee7b15ffc/httpx-0.27.2-py3-none-any.whl", hash = "sha256:7bb2708e112d8fdd7829cd4243970f0c223274051cb35ee80c03301ee29a3df0", size = 76395 },
+    { url = "https://files.pythonhosted.org/packages/8f/fb/a19866137577ba60c6d8b69498dc36be479b13ba454f691348ddf428f185/httpx-0.28.0-py3-none-any.whl", hash = "sha256:dc0b419a0cfeb6e8b34e85167c0da2671206f5095f1baa9663d23bcfd6b535fc", size = 73551 },
 ]
 
 [[package]]
@@ -111,7 +110,7 @@ wheels = [
 
 [[package]]
 name = "mcp"
-version = "1.0.0"
+version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -121,9 +120,9 @@ dependencies = [
     { name = "sse-starlette" },
     { name = "starlette" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/97/de/a9ec0a1b6439f90ea59f89004bb2e7ec6890dfaeef809751d9e6577dca7e/mcp-1.0.0.tar.gz", hash = "sha256:dba51ce0b5c6a80e25576f606760c49a91ee90210fed805b530ca165d3bbc9b7", size = 82891 }
+sdist = { url = "https://files.pythonhosted.org/packages/77/f2/067b1fc114e8d3ae4af02fc4f4ed8971a2c4900362d976fabe0f4e9a3418/mcp-1.1.0.tar.gz", hash = "sha256:e3c8d6df93a4de90230ea944dd667730744a3cd91a4cc0ee66a5acd53419e100", size = 83802 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/56/89/900c0c8445ec001d3725e475fc553b0feb2e8a51be018f3bb7de51e683db/mcp-1.0.0-py3-none-any.whl", hash = "sha256:bbe70ffa3341cd4da78b5eb504958355c68381fb29971471cea1e642a2af5b8a", size = 36361 },
+    { url = "https://files.pythonhosted.org/packages/b9/3e/aef19ac08a6f9a347c086c4e628c2f7329659828cbe92ffd524ec2aac833/mcp-1.1.0-py3-none-any.whl", hash = "sha256:44aa4d2e541f0924d6c344aa7f96b427a6ee1df2fab70b5f9ae2f8777b3f05f2", size = 36576 },
 ]
 
 [[package]]
@@ -162,16 +161,16 @@ wheels = [
 
 [[package]]
 name = "pydantic"
-version = "2.10.2"
+version = "2.10.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-types" },
     { name = "pydantic-core" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/41/86/a03390cb12cf64e2a8df07c267f3eb8d5035e0f9a04bb20fb79403d2a00e/pydantic-2.10.2.tar.gz", hash = "sha256:2bc2d7f17232e0841cbba4641e65ba1eb6fafb3a08de3a091ff3ce14a197c4fa", size = 785401 }
+sdist = { url = "https://files.pythonhosted.org/packages/45/0f/27908242621b14e649a84e62b133de45f84c255eecb350ab02979844a788/pydantic-2.10.3.tar.gz", hash = "sha256:cb5ac360ce894ceacd69c403187900a02c4b20b693a9dd1d643e1effab9eadf9", size = 786486 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d5/74/da832196702d0c56eb86b75bfa346db9238617e29b0b7ee3b8b4eccfe654/pydantic-2.10.2-py3-none-any.whl", hash = "sha256:cfb96e45951117c3024e6b67b25cdc33a3cb7b2fa62e239f7af1378358a1d99e", size = 456364 },
+    { url = "https://files.pythonhosted.org/packages/62/51/72c18c55cf2f46ff4f91ebcc8f75aa30f7305f3d726be3f4ebffb4ae972b/pydantic-2.10.3-py3-none-any.whl", hash = "sha256:be04d85bbc7b65651c5f8e6b9976ed9c6f41782a55524cef079a34a0bb82144d", size = 456997 },
 ]
 
 [[package]]

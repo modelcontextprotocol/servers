@@ -10,7 +10,7 @@ from pydantic import AnyUrl
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-APP_NAME = "rememberizer"
+APP_NAME = "mcp_server_rememberizer"
 ACCOUNT_INFORMATION_PATH = "account/"
 LIST_DOCUMENTS_PATH = "documents/"
 RETRIEVE_DOCUMENT_PATH = "documents/{id}/contents/"

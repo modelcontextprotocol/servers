@@ -1,7 +1,7 @@
 [project]
 name = "mcp-server-rememberizer"
 version = "0.1.0"
-description = "A MCP server project"
+description = "A Model Context Protocol server for interacting with Rememberizer's document and knowledge management API. This server enables Large Language Models to search, retrieve, and manage documents and integrations through Rememberizer."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -23,4 +23,4 @@ dev = [
 ]
 
 [project.scripts]
-rememberizer = "mcp_server_rememberizer:main"
+mcp-server-rememberizer = "mcp_server_rememberizer:main"
