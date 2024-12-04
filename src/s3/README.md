@@ -56,6 +56,18 @@ python -m mcp_server_s3
 
 ## Configuration
 
+### Configure your AWS credentials
+
+[AWS IAM](https://aws.amazon.com/iam/) is used to authenticate requests to S3 service. You'll need to set up local credentials. The easiest way to do this is via [aws cli](https://aws.amazon.com/cli/)
+
+Once installed, you can run
+
+```
+aws configure
+```
+
+to initialize your credentials file
+
 ### Usage with Claude Desktop
 
 Add this to your `claude_desktop_config.json`:
