@@ -107,10 +107,11 @@ async def serve() -> Server:
         match name:
             case RememberizerTools.SEARCH.value:
                 q = arguments["q"]
-                data = await client.get(f"{SEARCH_PATH}?q={quote(q)}")
+                n = arguments.get("n", 5)
+                data = await client.get(f"{SEARCH_PATH}?q={quote(q)}&n={quote(n)}")
                 return [types.TextContent(type="text", text=str(data))]
             case RememberizerTools.LIST_INTEGRATIONS.value:
-                data = await client.get(f"{LIST_INTEGRATIONS_PATH}")
+                data = await client.get(LIST_INTEGRATIONS_PATH)
                 return [types.TextContent(type="text", text=str(data.get("data", [])))]
             case RememberizerTools.ACCOUNT_INFORMATION.value:
                 data = await client.get(ACCOUNT_INFORMATION_PATH)
