@@ -537,10 +537,6 @@ export const SearchCodeSchema = z.object({
     .describe(
       "Search query. See GitHub code search syntax: https://docs.github.com/en/search-github/searching-on-github/searching-code"
     ),
-  sort: z
-    .enum(["", "indexed"])
-    .optional()
-    .describe("Sort field. Only 'indexed' is supported"),
   order: z
     .enum(["asc", "desc"])
     .optional()
