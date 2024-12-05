@@ -58,7 +58,8 @@ async def serve() -> Server:
 
         document_id = uri.path.lstrip("/")
         data = await client.get(path.format(id=document_id))
-        return json.dumps(data.get("content", {}), indent=2)
+
+        return json.dumps(data, indent=2)
 
     @server.list_tools()
     async def list_tools() -> list[types.Tool]:
