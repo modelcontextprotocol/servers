@@ -1,7 +1,7 @@
 {
   "name": "@modelcontextprotocol/servers",
   "private": true,
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Model Context Protocol servers",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
