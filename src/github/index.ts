@@ -251,7 +251,10 @@ async function createOrUpdateFile(
   branch: string,
   sha?: string
 ): Promise<GitHubCreateUpdateFileResponse> {
-  const encodedContent = Buffer.from(content).toString('base64');
+  const encodedContent = { 
+    content: Buffer.from(content).toString('base64'), 
+    "encoding": "base64",
+  }
 
   let currentSha = sha;
   if (!currentSha) {
