@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-filesystem",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "MCP server for filesystem access",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
@@ -10,22 +10,23 @@
   "bin": {
     "mcp-server-filesystem": "dist/index.js"
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
     "watch": "tsc --watch"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.0.1",
+    "@modelcontextprotocol/sdk": "^1.1.0",
     "glob": "^10.3.10",
-    "zod-to-json-schema": "^3.23.5"
+    "zod-to-json-schema": "^3.22.3"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "shx": "^0.3.4",
-    "typescript": "^5.3.3"
+    "typescript": "^5.4.0-beta"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
