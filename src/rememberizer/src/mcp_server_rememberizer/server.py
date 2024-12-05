@@ -23,13 +23,11 @@ from pydantic import AnyUrl
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+REMEMBERIZER_BASE_URL = "https://api.rememberizer.ai/api/v1/"
 REMEMBERIZER_API_TOKEN = os.getenv("REMEMBERIZER_API_TOKEN")
-REMEMBERIZER_BASE_URL = os.getenv("REMEMBERIZER_BASE_URL")
 
-if not REMEMBERIZER_API_TOKEN or not REMEMBERIZER_BASE_URL:
-    raise ValueError(
-        "REMEMBERIZER_API_BASE or REMEMBERIZER_API_TOKEN environment variable required"
-    )
+if not REMEMBERIZER_API_TOKEN:
+    raise ValueError("REMEMBERIZER_API_BASE environment variable required")
 client = APIClient(base_url=REMEMBERIZER_BASE_URL, api_key=REMEMBERIZER_API_TOKEN)
 
 

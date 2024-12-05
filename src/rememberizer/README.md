@@ -10,10 +10,7 @@ Please note that mcp-server-rememberizer is currently in development and the fun
 
 ### Resources
 
-The server provides access to two types of resources:
-
-- Documents (`rememberizer://document/{id}`)
-- Slack discussions (`rememberizer://slack/{id}`)
+The server provides access to two types of resources: Documents or Slack discussions
 
 ### Tools
 
@@ -64,16 +61,6 @@ The server provides access to two types of resources:
 
 When using [`uv`](https://docs.astral.sh/uv/), no specific installation is needed. Use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run _mcp-server-rememberizer_.
 
-### Using PIP
-
-Install `mcp-server-rememberizer` via pip:
-
-`pip install mcp-server-rememberizer`
-
-After installation, run it as a script:
-
-`python -m mcp_server_rememberizer`
-
 ## Configuration
 
 ### Environment Variables
@@ -81,7 +68,8 @@ After installation, run it as a script:
 The following environment variables are required:
 
 - `REMEMBERIZER_API_TOKEN`: Your Rememberizer API token
-- `REMEMBERIZER_BASE_URL`: The base URL for the Rememberizer API
+
+You can register an API key by create your own [Common Knowledge in Rememberizer](https://docs.rememberizer.ai/developer/registering-and-using-api-keys).
 
 ### Usage with Claude Desktop
 
@@ -99,26 +87,16 @@ Add this to your `claude_desktop_config.json`:
       "~/rememberizer-mcp-servers/src/rememberizer",
       "run",
       "mcp-server-rememberizer"
-    ]
+    ],
+    "env": {
+      "REMEMBERIZER_API_TOKEN": "your-rememberizer-api-token",
+    }
   }
 }
 ```
 
 </details>
 
-<details>
-<summary>Using pip installation</summary>
-
-```json
-"mcpServers": {
-  "rememberizer": {
-    "command": "python",
-    "args": ["-m", "mcp_server_rememberizer"]
-  }
-}
-```
-
-</details>
 
 ### Usage with [Zed](https://github.com/zed-industries/zed)
 
@@ -128,66 +106,26 @@ Add to your Zed `settings.json`:
 <summary>Using uv</summary>
 
 ```json
-"context_servers": [
-  "mcp-server-rememberizer": {
-    "command": {
-      "path": "uv",
-      "args": ["mcp-server-rememberizer"]
-    }
-  }
-],
-```
-
-</details>
-
-<details>
-<summary>Using pip installation</summary>
-
-```json
 "context_servers": {
   "mcp-server-rememberizer": {
     "command": {
-      "path": "python",
-      "args": ["-m", "mcp_server_rememberizer"]
+      "path": "uv",
+      "args": [
+        "--directory",
+        "~/rememberizer-mcp-servers/src/rememberizer",
+        "run",
+        "mcp-server-rememberizer"
+      ],
+      "env": {
+        "REMEMBERIZER_API_TOKEN": "your-rememberizer-api-token",
+      }
     }
   }
 },
 ```
-
 </details>
 
-## Development
-
-### Building and Publishing
-
-To prepare the package for distribution:
-
-1. Sync dependencies and update lockfile:
-
-```bash
-uv sync
-```
-
-2. Build package distributions:
-
-```bash
-uv build
-```
-
-This will create source and wheel distributions in the `dist/` directory.
-
-3. Publish to PyPI:
-
-```bash
-uv publish
-```
-
-Note: You'll need to set PyPI credentials via environment variables or command flags:
-
-- Token: `--token` or `UV_PUBLISH_TOKEN`
-- Or username/password: `--username`/`UV_PUBLISH_USERNAME` and `--password`/`UV_PUBLISH_PASSWORD`
-
-### Debugging
+## Debugging
 
 Since MCP servers run over stdio, debugging can be challenging. For the best debugging
 experience, we strongly recommend using the [MCP Inspector](https://github.com/modelcontextprotocol/inspector).
