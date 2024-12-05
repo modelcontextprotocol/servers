@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -7,54 +6,56 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import fetch from "node-fetch";
+import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
-  GitHubForkSchema,
-  GitHubReferenceSchema,
-  GitHubRepositorySchema,
-  GitHubIssueSchema,
-  GitHubPullRequestSchema,
+  CreateBranchOptionsSchema,
+  CreateBranchSchema,
+  CreateIssueOptionsSchema,
+  CreateIssueSchema,
+  CreateOrUpdateFileSchema,
+  CreatePullRequestOptionsSchema,
+  CreatePullRequestSchema,
+  CreateRepositoryOptionsSchema,
+  CreateRepositorySchema,
+  ForkRepositorySchema,
+  GetFileContentsSchema,
+  GitHubCommitSchema,
   GitHubContentSchema,
   GitHubCreateUpdateFileResponseSchema,
+  GitHubForkSchema,
+  GitHubIssueSchema,
+  GitHubPullRequestSchema,
+  GitHubReferenceSchema,
+  GitHubRepositorySchema,
   GitHubSearchResponseSchema,
   GitHubTreeSchema,
-  GitHubCommitSchema,
-  CreateRepositoryOptionsSchema,
-  CreateIssueOptionsSchema,
-  CreatePullRequestOptionsSchema,
-  CreateBranchOptionsSchema,
-  type GitHubFork,
-  type GitHubReference,
-  type GitHubRepository,
-  type GitHubIssue,
-  type GitHubPullRequest,
+  IssueCommentSchema,
+  ListIssuesOptionsSchema,
+  PushFilesSchema,
+  SearchCodeResponseSchema,
+  SearchCodeSchema,
+  SearchIssuesResponseSchema,
+  SearchIssuesSchema,
+  SearchRepositoriesSchema,
+  SearchUsersResponseSchema,
+  SearchUsersSchema,
+  UpdateIssueOptionsSchema,
+  type FileOperation,
+  type GitHubCommit,
   type GitHubContent,
   type GitHubCreateUpdateFileResponse,
+  type GitHubFork,
+  type GitHubIssue,
+  type GitHubPullRequest,
+  type GitHubReference,
+  type GitHubRepository,
   type GitHubSearchResponse,
   type GitHubTree,
-  type GitHubCommit,
-  type FileOperation,
-  CreateOrUpdateFileSchema,
-  SearchRepositoriesSchema,
-  CreateRepositorySchema,
-  GetFileContentsSchema,
-  PushFilesSchema,
-  CreateIssueSchema,
-  CreatePullRequestSchema,
-  ForkRepositorySchema,
-  CreateBranchSchema,
-  SearchCodeSchema,
-  SearchIssuesSchema,
-  SearchUsersSchema,
-  SearchCodeResponseSchema,
-  SearchIssuesResponseSchema,
-  SearchUsersResponseSchema,
   type SearchCodeResponse,
   type SearchIssuesResponse,
   type SearchUsersResponse,
-} from "./schemas.js";
-import { zodToJsonSchema } from "zod-to-json-schema";
-import { z } from "zod";
-import type { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
+} from './schemas.js';
 
 const server = new Server(
   {
@@ -486,6 +487,98 @@ async function createRepository(
   return GitHubRepositorySchema.parse(await response.json());
 }
 
+async function listIssues(
+  owner: string,
+  repo: string,
+  options: Omit<z.infer<typeof ListIssuesOptionsSchema>, 'owner' | 'repo'>
+): Promise<GitHubIssue[]> {
+  const url = new URL(`https://api.github.com/repos/${owner}/${repo}/issues`);
+
+  // Add query parameters
+  if (options.state) url.searchParams.append('state', options.state);
+  if (options.labels) url.searchParams.append('labels', options.labels.join(','));
+  if (options.sort) url.searchParams.append('sort', options.sort);
+  if (options.direction) url.searchParams.append('direction', options.direction);
+  if (options.since) url.searchParams.append('since', options.since);
+  if (options.page) url.searchParams.append('page', options.page.toString());
+  if (options.per_page) url.searchParams.append('per_page', options.per_page.toString());
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+      "Accept": "application/vnd.github.v3+json",
+      "User-Agent": "github-mcp-server"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return z.array(GitHubIssueSchema).parse(await response.json());
+}
+
+async function updateIssue(
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  options: Omit<z.infer<typeof UpdateIssueOptionsSchema>, 'owner' | 'repo' | 'issue_number'>
+): Promise<GitHubIssue> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: options.title,
+        body: options.body,
+        state: options.state,
+        labels: options.labels,
+        assignees: options.assignees,
+        milestone: options.milestone
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return GitHubIssueSchema.parse(await response.json());
+}
+
+async function addIssueComment(
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  body: string
+): Promise<z.infer<typeof IssueCommentSchema>> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ body })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return IssueCommentSchema.parse(await response.json());
+}
+
 async function searchCode(
   params: z.infer<typeof SearchCodeSchema>
 ): Promise<SearchCodeResponse> {
@@ -611,6 +704,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_branch",
         description: "Create a new branch in a GitHub repository",
         inputSchema: zodToJsonSchema(CreateBranchSchema),
+      },
+      {
+        name: "list_issues",
+        description: "List issues in a GitHub repository with filtering options",
+        inputSchema: zodToJsonSchema(ListIssuesOptionsSchema)
+      },
+      {
+        name: "update_issue",
+        description: "Update an existing issue in a GitHub repository",
+        inputSchema: zodToJsonSchema(UpdateIssueOptionsSchema)
+      },
+      {
+        name: "add_issue_comment",
+        description: "Add a comment to an existing issue",
+        inputSchema: zodToJsonSchema(IssueCommentSchema)
       },
       {
         name: "search_code",
@@ -793,6 +901,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
         };
+      }
+
+      case "list_issues": {
+        const args = ListIssuesOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const issues = await listIssues(owner, repo, options);
+        return { toolResult: issues };
+      }
+
+      case "update_issue": {
+        const args = UpdateIssueOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number, ...options } = args;
+        const issue = await updateIssue(owner, repo, issue_number, options);
+        return { toolResult: issue };
+      }
+
+      case "add_issue_comment": {
+        const args = IssueCommentSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number, body } = args;
+        const comment = await addIssueComment(owner, repo, issue_number, body);
+        return { toolResult: comment };
       }
 
       default:

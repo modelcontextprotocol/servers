@@ -103,7 +103,44 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `from_branch` (optional string): Source branch (defaults to repo default)
    - Returns: Created branch reference
 
-10. `search_code`
+10. `list_issues`
+    - List and filter repository issues
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `state` (optional string): Filter by state ('open', 'closed', 'all')
+      - `labels` (optional string[]): Filter by labels
+      - `sort` (optional string): Sort by ('created', 'updated', 'comments')
+      - `direction` (optional string): Sort direction ('asc', 'desc')
+      - `since` (optional string): Filter by date (ISO 8601 timestamp)
+      - `page` (optional number): Page number
+      - `per_page` (optional number): Results per page
+    - Returns: Array of issue details
+
+11. `update_issue`
+    - Update an existing issue
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `issue_number` (number): Issue number to update
+      - `title` (optional string): New title
+      - `body` (optional string): New description
+      - `state` (optional string): New state ('open' or 'closed')
+      - `labels` (optional string[]): New labels
+      - `assignees` (optional string[]): New assignees
+      - `milestone` (optional number): New milestone number
+    - Returns: Updated issue details
+
+12. `add_issue_comment`
+    - Add a comment to an issue
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `issue_number` (number): Issue number to comment on
+      - `body` (string): Comment text
+    - Returns: Created comment details
+
+13. `search_code`
     - Search for code across GitHub repositories
     - Inputs:
       - `q` (string): Search query using GitHub code search syntax
@@ -113,7 +150,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
       - `page` (optional number): Page number
     - Returns: Code search results with repository context
 
-11. `search_issues`
+14. `search_issues`
     - Search for issues and pull requests
     - Inputs:
       - `q` (string): Search query using GitHub issues search syntax
@@ -123,7 +160,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
       - `page` (optional number): Page number
     - Returns: Issue and pull request search results
 
-12. `search_users`
+15. `search_users`
     - Search for GitHub users
     - Inputs:
       - `q` (string): Search query using GitHub users search syntax

@@ -616,6 +616,39 @@ export const SearchUsersSchema = z.object({
   page: z.number().min(1).optional().describe("Page number"),
 });
 
+// Add these schema definitions for issue management
+
+export const ListIssuesOptionsSchema = z.object({
+  owner: z.string(),
+  repo: z.string(),
+  state: z.enum(['open', 'closed', 'all']).optional(),
+  labels: z.array(z.string()).optional(),
+  sort: z.enum(['created', 'updated', 'comments']).optional(),
+  direction: z.enum(['asc', 'desc']).optional(),
+  since: z.string().optional(), // ISO 8601 timestamp
+  page: z.number().optional(),
+  per_page: z.number().optional()
+});
+
+export const UpdateIssueOptionsSchema = z.object({
+  owner: z.string(),
+  repo: z.string(),
+  issue_number: z.number(),
+  title: z.string().optional(),
+  body: z.string().optional(),
+  state: z.enum(['open', 'closed']).optional(),
+  labels: z.array(z.string()).optional(),
+  assignees: z.array(z.string()).optional(),
+  milestone: z.number().optional()
+});
+
+export const IssueCommentSchema = z.object({
+  owner: z.string(),
+  repo: z.string(),
+  issue_number: z.number(),
+  body: z.string()
+});
+
 // Export types
 export type GitHubAuthor = z.infer<typeof GitHubAuthorSchema>;
 export type GitHubFork = z.infer<typeof GitHubForkSchema>;
