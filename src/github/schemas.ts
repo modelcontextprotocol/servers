@@ -304,7 +304,7 @@ export const GitHubPullRequestSchema = z.object({
   updated_at: z.string(),
   closed_at: z.string().nullable(),
   merged_at: z.string().nullable(),
-  merge_commit_sha: z.string(),
+  merge_commit_sha: z.string().nullable(),
   assignee: GitHubIssueAssigneeSchema.nullable(),
   assignees: z.array(GitHubIssueAssigneeSchema),
   head: GitHubPullRequestHeadSchema,
