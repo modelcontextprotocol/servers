@@ -22,22 +22,35 @@ The server provides access to two types of resources:
    - Search for documents by semantic similarity
    - Input:
      - `q` (string): Up to a 400-word sentence to find semantically similar chunks of knowledge
-     - `n` (integer, optional): Number of similar documents to return
+     - `n` (integer, optional): Number of similar documents to return (default: 5)
+     - `from` (string, optional): Start date in ISO 8601 format with timezone (e.g., 2023-01-01T00:00:00Z). Use this to filter results from a specific date (default: None)
+     - `to` (string, optional): End date in ISO 8601 format with timezone (e.g., 2024-01-01T00:00:00Z). Use this to filter results until a specific date (default: None)
    - Returns: Search results as text output
 
-2. `rememberizer_list_integrations`
+2. `rememberizer_agentic_search`
+
+   - Search for documents by semantic similarity with LLM Agents augmentation
+   - Input:
+     - `query` (string): Up to a 400-word sentence to find semantically similar chunks of knowledge. This query can be augmented by our LLM Agents for better results.
+     - `n_chunks` (integer, optional): Number of similar documents to return (default: 5)
+     - `user_context` (string, optional): The additional context for the query. You might need to summarize the conversation up to this point for better context-awared results (default: None)
+     - `from` (string, optional): Start date in ISO 8601 format with timezone (e.g., 2023-01-01T00:00:00Z). Use this to filter results from a specific date (default: None)
+     - `to` (string, optional): End date in ISO 8601 format with timezone (e.g., 2024-01-01T00:00:00Z). Use this to filter results until a specific date (default: None)
+   - Returns: Search results as text output
+
+3. `rememberizer_list_integrations`
 
    - List available data source integrations
    - Input: None required
    - Returns: List of available integrations
 
-3. `rememberizer_account_information`
+4. `rememberizer_account_information`
 
    - Get account information
    - Input: None required
    - Returns: Account information details
 
-4. `rememberizer_list_documents`
+5. `rememberizer_list_documents`
 
    - Retrieves a paginated list of all documents
    - Input:

@@ -1,13 +1,13 @@
 import json
 import logging
 import os
-from urllib.parse import quote
 
 import mcp.server.stdio
 import mcp.types as types
 from mcp.server import Server
 from mcp_server_rememberizer.utils import (
     ACCOUNT_INFORMATION_PATH,
+    AGENTIC_SEARCH_PATH,
     APP_NAME,
     LIST_DOCUMENTS_PATH,
     LIST_INTEGRATIONS_PATH,
@@ -85,10 +85,49 @@ async def serve() -> Server:
                         },
                         "n": {
                             "type": "integer",
-                            "description": "Number of similar documents to return.",
+                            "description": "Number of semantically similar chunks of text to return. Use 'n_results=3' for up to 5, and 'n_results=10' for more information. If you do not receive enough information, consider trying again with a larger 'n_results' value.",
+                        },
+                        "from": {
+                            "type": "string",
+                            "description": "Start date in ISO 8601 format with timezone (e.g., 2023-01-01T00:00:00Z). Use this to filter results from a specific date.",
+                        },
+                        "to": {
+                            "type": "string",
+                            "description": "End date in ISO 8601 format with timezone (e.g., 2024-01-01T00:00:00Z). Use this to filter results until a specific date.",
                         },
                     },
                     "required": ["q"],
+                },
+            ),
+            types.Tool(
+                name=RememberizerTools.AGENTIC_SEARCH.value,
+                description="Search for documents by semantic similarity",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Up to a 400-word sentence for which you wish to find "
+                            "semantically similar chunks of knowledge.",
+                        },
+                        "user_context": {
+                            "type": "string",
+                            "description": "The additional context for the query. You might need to summarize the conversation up to this point for better context-awared results.",
+                        },
+                        "n_chunks": {
+                            "type": "integer",
+                            "description": "Number of semantically similar chunks of text to return. Use 'n_results=3' for up to 5, and 'n_results=10' for more information. If you do not receive enough information, consider trying again with a larger 'n_results' value.",
+                        },
+                        "from": {
+                            "type": "string",
+                            "description": "Start date in ISO 8601 format with timezone (e.g., 2023-01-01T00:00:00Z). Use this to filter results from a specific date.",
+                        },
+                        "to": {
+                            "type": "string",
+                            "description": "End date in ISO 8601 format with timezone (e.g., 2024-01-01T00:00:00Z). Use this to filter results until a specific date.",
+                        },
+                    },
+                    "required": ["query"],
                 },
             ),
             types.Tool(
@@ -124,7 +163,7 @@ Examples:
                             "maximum": 1000,
                             "default": 100,
                         },
-                    }
+                    },
                 },
             ),
         ]
@@ -137,8 +176,23 @@ Examples:
             case RememberizerTools.SEARCH.value:
                 q = arguments["q"]
                 n = arguments.get("n", 5)
-                data = await client.get(f"{SEARCH_PATH}?q={quote(q)}&n={quote(n)}")
+                params = {"q": q, "n": n}
+                data = await client.get(SEARCH_PATH, params=params)
                 return [types.TextContent(type="text", text=str(data))]
+            case RememberizerTools.AGENTIC_SEARCH.value:
+                query = arguments["query"]
+                n_chunks = arguments.get("n_chunks", 5)
+                user_context = arguments.get("user_context", None)
+                from_time = arguments.get("from", None)
+                to_time = arguments.get("to", None)
+                params = {
+                    "query": query,
+                    "n_chunks": n_chunks,
+                    "user_context": user_context,
+                    "from": from_time,
+                    "to": to_time,
+                }
+                data = await client.post(AGENTIC_SEARCH_PATH, data=params)
             case RememberizerTools.LIST_INTEGRATIONS.value:
                 data = await client.get(LIST_INTEGRATIONS_PATH)
                 return [types.TextContent(type="text", text=str(data.get("data", [])))]
@@ -148,9 +202,8 @@ Examples:
             case RememberizerTools.LIST_DOCUMENTS.value:
                 page = arguments.get("page", 1)
                 page_size = arguments.get("page_size", 100)
-                data = await client.get(
-                    f"{LIST_DOCUMENTS_PATH}?page_size={page_size}&page={page}"
-                )
+                params = {"page": page, "page_size": page_size}
+                data = await client.get(LIST_DOCUMENTS_PATH, params=params)
                 return [types.TextContent(type="text", text=str(data))]
             case _:
                 raise ValueError(f"Unknown tool: {name}")
