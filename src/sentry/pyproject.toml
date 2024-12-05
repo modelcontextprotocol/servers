@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-sentry"
-version = "0.6.1"
+version = "0.6.2"
 description = "MCP server for retrieving issues from sentry.io"
 readme = "README.md"
 requires-python = ">=3.10"

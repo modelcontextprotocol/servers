@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-time"
-version = "0.6.1"
+version = "0.6.2"
 description = "A Model Context Protocol server providing tools for time queries and timezone conversions for LLMs"
 readme = "README.md"
 requires-python = ">=3.10"
