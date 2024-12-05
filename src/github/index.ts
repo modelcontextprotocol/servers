@@ -41,19 +41,32 @@ import {
   CreateIssueSchema,
   CreatePullRequestSchema,
   ForkRepositorySchema,
-  CreateBranchSchema
-} from './schemas.js';
-import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+  CreateBranchSchema,
+  SearchCodeSchema,
+  SearchIssuesSchema,
+  SearchUsersSchema,
+  SearchCodeResponseSchema,
+  SearchIssuesResponseSchema,
+  SearchUsersResponseSchema,
+  type SearchCodeResponse,
+  type SearchIssuesResponse,
+  type SearchUsersResponse,
+} from "./schemas.js";
+import { zodToJsonSchema } from "zod-to-json-schema";
+import { z } from "zod";
+import type { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
 
-const server = new Server({
-  name: "github-mcp-server",
-  version: "0.1.0",
-}, {
-  capabilities: {
-    tools: {}
+const server = new Server(
+  {
+    name: "github-mcp-server",
+    version: "0.1.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
   }
-});
+);
 
 const GITHUB_PERSONAL_ACCESS_TOKEN = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
 
@@ -67,17 +80,17 @@ async function forkRepository(
   repo: string,
   organization?: string
 ): Promise<GitHubFork> {
-  const url = organization 
+  const url = organization
     ? `https://api.github.com/repos/${owner}/${repo}/forks?organization=${organization}`
     : `https://api.github.com/repos/${owner}/${repo}/forks`;
 
   const response = await fetch(url, {
     method: "POST",
     headers: {
-      "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-      "Accept": "application/vnd.github.v3+json",
-      "User-Agent": "github-mcp-server"
-    }
+      Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "github-mcp-server",
+    },
   });
 
   if (!response.ok) {
@@ -93,21 +106,21 @@ async function createBranch(
   options: z.infer<typeof CreateBranchOptionsSchema>
 ): Promise<GitHubReference> {
   const fullRef = `refs/heads/${options.ref}`;
-  
+
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/git/refs`,
     {
       method: "POST",
       headers: {
-        "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-        "Accept": "application/vnd.github.v3+json",
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
         "User-Agent": "github-mcp-server",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         ref: fullRef,
-        sha: options.sha
-      })
+        sha: options.sha,
+      }),
     }
   );
 
@@ -126,10 +139,10 @@ async function getDefaultBranchSHA(
     `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/main`,
     {
       headers: {
-        "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-        "Accept": "application/vnd.github.v3+json",
-        "User-Agent": "github-mcp-server"
-      }
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+      },
     }
   );
 
@@ -138,15 +151,17 @@ async function getDefaultBranchSHA(
       `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/master`,
       {
         headers: {
-          "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-          "Accept": "application/vnd.github.v3+json",
-          "User-Agent": "github-mcp-server"
-        }
+          Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "github-mcp-server",
+        },
       }
     );
 
     if (!masterResponse.ok) {
-      throw new Error("Could not find default branch (tried 'main' and 'master')");
+      throw new Error(
+        "Could not find default branch (tried 'main' and 'master')"
+      );
     }
 
     const data = GitHubReferenceSchema.parse(await masterResponse.json());
@@ -170,10 +185,10 @@ async function getFileContents(
 
   const response = await fetch(url, {
     headers: {
-      "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-      "Accept": "application/vnd.github.v3+json",
-      "User-Agent": "github-mcp-server"
-    }
+      Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "github-mcp-server",
+    },
   });
 
   if (!response.ok) {
@@ -184,7 +199,7 @@ async function getFileContents(
 
   // If it's a file, decode the content
   if (!Array.isArray(data) && data.content) {
-    data.content = Buffer.from(data.content, 'base64').toString('utf8');
+    data.content = Buffer.from(data.content, "base64").toString("utf8");
   }
 
   return data;
@@ -200,12 +215,12 @@ async function createIssue(
     {
       method: "POST",
       headers: {
-        "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-        "Accept": "application/vnd.github.v3+json",
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
         "User-Agent": "github-mcp-server",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(options)
+      body: JSON.stringify(options),
     }
   );
 
@@ -226,12 +241,12 @@ async function createPullRequest(
     {
       method: "POST",
       headers: {
-        "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-        "Accept": "application/vnd.github.v3+json",
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
         "User-Agent": "github-mcp-server",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(options)
+      body: JSON.stringify(options),
     }
   );
 
@@ -251,7 +266,7 @@ async function createOrUpdateFile(
   branch: string,
   sha?: string
 ): Promise<GitHubCreateUpdateFileResponse> {
-  const encodedContent = Buffer.from(content).toString('base64');
+  const encodedContent = Buffer.from(content).toString("base64");
 
   let currentSha = sha;
   if (!currentSha) {
@@ -261,28 +276,30 @@ async function createOrUpdateFile(
         currentSha = existingFile.sha;
       }
     } catch (error) {
-      console.error('Note: File does not exist in branch, will create new file');
+      console.error(
+        "Note: File does not exist in branch, will create new file"
+      );
     }
   }
 
   const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-  
+
   const body = {
     message,
     content: encodedContent,
     branch,
-    ...(currentSha ? { sha: currentSha } : {})
+    ...(currentSha ? { sha: currentSha } : {}),
   };
 
   const response = await fetch(url, {
     method: "PUT",
     headers: {
-      "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-      "Accept": "application/vnd.github.v3+json",
+      Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
       "User-Agent": "github-mcp-server",
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -298,11 +315,11 @@ async function createTree(
   files: FileOperation[],
   baseTree?: string
 ): Promise<GitHubTree> {
-  const tree = files.map(file => ({
+  const tree = files.map((file) => ({
     path: file.path,
-    mode: '100644' as const,
-    type: 'blob' as const,
-    content: file.content
+    mode: "100644" as const,
+    type: "blob" as const,
+    content: file.content,
   }));
 
   const response = await fetch(
@@ -310,15 +327,15 @@ async function createTree(
     {
       method: "POST",
       headers: {
-        "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-        "Accept": "application/vnd.github.v3+json",
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
         "User-Agent": "github-mcp-server",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         tree,
-        base_tree: baseTree
-      })
+        base_tree: baseTree,
+      }),
     }
   );
 
@@ -341,16 +358,16 @@ async function createCommit(
     {
       method: "POST",
       headers: {
-        "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-        "Accept": "application/vnd.github.v3+json",
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
         "User-Agent": "github-mcp-server",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         message,
         tree,
-        parents
-      })
+        parents,
+      }),
     }
   );
 
@@ -372,15 +389,15 @@ async function updateReference(
     {
       method: "PATCH",
       headers: {
-        "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-        "Accept": "application/vnd.github.v3+json",
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
         "User-Agent": "github-mcp-server",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         sha,
-        force: true
-      })
+        force: true,
+      }),
     }
   );
 
@@ -402,10 +419,10 @@ async function pushFiles(
     `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`,
     {
       headers: {
-        "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-        "Accept": "application/vnd.github.v3+json",
-        "User-Agent": "github-mcp-server"
-      }
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+      },
     }
   );
 
@@ -417,7 +434,9 @@ async function pushFiles(
   const commitSha = ref.object.sha;
 
   const tree = await createTree(owner, repo, files, commitSha);
-  const commit = await createCommit(owner, repo, message, tree.sha, [commitSha]);
+  const commit = await createCommit(owner, repo, message, tree.sha, [
+    commitSha,
+  ]);
   return await updateReference(owner, repo, `heads/${branch}`, commit.sha);
 }
 
@@ -433,10 +452,10 @@ async function searchRepositories(
 
   const response = await fetch(url.toString(), {
     headers: {
-      "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-      "Accept": "application/vnd.github.v3+json",
-      "User-Agent": "github-mcp-server"
-    }
+      Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "github-mcp-server",
+    },
   });
 
   if (!response.ok) {
@@ -452,12 +471,12 @@ async function createRepository(
   const response = await fetch("https://api.github.com/user/repos", {
     method: "POST",
     headers: {
-      "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-      "Accept": "application/vnd.github.v3+json",
+      Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
       "User-Agent": "github-mcp-server",
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify(options)
+    body: JSON.stringify(options),
   });
 
   if (!response.ok) {
@@ -467,55 +486,149 @@ async function createRepository(
   return GitHubRepositorySchema.parse(await response.json());
 }
 
+async function searchCode(
+  params: z.infer<typeof SearchCodeSchema>
+): Promise<SearchCodeResponse> {
+  const url = new URL("https://api.github.com/search/code");
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      url.searchParams.append(key, value.toString());
+    }
+  });
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "github-mcp-server",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return SearchCodeResponseSchema.parse(await response.json());
+}
+
+async function searchIssues(
+  params: z.infer<typeof SearchIssuesSchema>
+): Promise<SearchIssuesResponse> {
+  const url = new URL("https://api.github.com/search/issues");
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      url.searchParams.append(key, value.toString());
+    }
+  });
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "github-mcp-server",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return SearchIssuesResponseSchema.parse(await response.json());
+}
+
+async function searchUsers(
+  params: z.infer<typeof SearchUsersSchema>
+): Promise<SearchUsersResponse> {
+  const url = new URL("https://api.github.com/search/users");
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      url.searchParams.append(key, value.toString());
+    }
+  });
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "github-mcp-server",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return SearchUsersResponseSchema.parse(await response.json());
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
         name: "create_or_update_file",
         description: "Create or update a single file in a GitHub repository",
-        inputSchema: zodToJsonSchema(CreateOrUpdateFileSchema)
+        inputSchema: zodToJsonSchema(CreateOrUpdateFileSchema),
       },
       {
         name: "search_repositories",
         description: "Search for GitHub repositories",
-        inputSchema: zodToJsonSchema(SearchRepositoriesSchema)
+        inputSchema: zodToJsonSchema(SearchRepositoriesSchema),
       },
       {
         name: "create_repository",
         description: "Create a new GitHub repository in your account",
-        inputSchema: zodToJsonSchema(CreateRepositorySchema)
+        inputSchema: zodToJsonSchema(CreateRepositorySchema),
       },
       {
         name: "get_file_contents",
-        description: "Get the contents of a file or directory from a GitHub repository",
-        inputSchema: zodToJsonSchema(GetFileContentsSchema)
+        description:
+          "Get the contents of a file or directory from a GitHub repository",
+        inputSchema: zodToJsonSchema(GetFileContentsSchema),
       },
       {
         name: "push_files",
-        description: "Push multiple files to a GitHub repository in a single commit",
-        inputSchema: zodToJsonSchema(PushFilesSchema)
+        description:
+          "Push multiple files to a GitHub repository in a single commit",
+        inputSchema: zodToJsonSchema(PushFilesSchema),
       },
       {
         name: "create_issue",
         description: "Create a new issue in a GitHub repository",
-        inputSchema: zodToJsonSchema(CreateIssueSchema)
+        inputSchema: zodToJsonSchema(CreateIssueSchema),
       },
       {
         name: "create_pull_request",
         description: "Create a new pull request in a GitHub repository",
-        inputSchema: zodToJsonSchema(CreatePullRequestSchema)
+        inputSchema: zodToJsonSchema(CreatePullRequestSchema),
       },
       {
         name: "fork_repository",
-        description: "Fork a GitHub repository to your account or specified organization",
-        inputSchema: zodToJsonSchema(ForkRepositorySchema)
+        description:
+          "Fork a GitHub repository to your account or specified organization",
+        inputSchema: zodToJsonSchema(ForkRepositorySchema),
       },
       {
         name: "create_branch",
         description: "Create a new branch in a GitHub repository",
-        inputSchema: zodToJsonSchema(CreateBranchSchema)
-      }
-    ]
+        inputSchema: zodToJsonSchema(CreateBranchSchema),
+      },
+      {
+        name: "search_code",
+        description: "Search for code across GitHub repositories",
+        inputSchema: zodToJsonSchema(SearchCodeSchema),
+      },
+      {
+        name: "search_issues",
+        description:
+          "Search for issues and pull requests across GitHub repositories",
+        inputSchema: zodToJsonSchema(SearchIssuesSchema),
+      },
+      {
+        name: "search_users",
+        description: "Search for users on GitHub",
+        inputSchema: zodToJsonSchema(SearchUsersSchema),
+      },
+    ],
   };
 });
 
@@ -528,8 +641,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     switch (request.params.name) {
       case "fork_repository": {
         const args = ForkRepositorySchema.parse(request.params.arguments);
-        const fork = await forkRepository(args.owner, args.repo, args.organization);
-        return { content: [{ type: "text", text: JSON.stringify(fork, null, 2) }] };
+        const fork = await forkRepository(
+          args.owner,
+          args.repo,
+          args.organization
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(fork, null, 2) }],
+        };
       }
 
       case "create_branch": {
@@ -540,10 +659,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             `https://api.github.com/repos/${args.owner}/${args.repo}/git/refs/heads/${args.from_branch}`,
             {
               headers: {
-                "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-                "Accept": "application/vnd.github.v3+json",
-                "User-Agent": "github-mcp-server"
-              }
+                Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+                Accept: "application/vnd.github.v3+json",
+                "User-Agent": "github-mcp-server",
+              },
             }
           );
 
@@ -559,28 +678,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const branch = await createBranch(args.owner, args.repo, {
           ref: args.branch,
-          sha
+          sha,
         });
 
-        return { content: [{ type: "text", text: JSON.stringify(branch, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(branch, null, 2) }],
+        };
       }
 
       case "search_repositories": {
         const args = SearchRepositoriesSchema.parse(request.params.arguments);
-        const results = await searchRepositories(args.query, args.page, args.perPage);
-        return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+        const results = await searchRepositories(
+          args.query,
+          args.page,
+          args.perPage
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+        };
       }
 
       case "create_repository": {
         const args = CreateRepositorySchema.parse(request.params.arguments);
         const repository = await createRepository(args);
-        return { content: [{ type: "text", text: JSON.stringify(repository, null, 2) }] };
+        return {
+          content: [
+            { type: "text", text: JSON.stringify(repository, null, 2) },
+          ],
+        };
       }
 
       case "get_file_contents": {
         const args = GetFileContentsSchema.parse(request.params.arguments);
-        const contents = await getFileContents(args.owner, args.repo, args.path, args.branch);
-        return { content: [{ type: "text", text: JSON.stringify(contents, null, 2) }] };
+        const contents = await getFileContents(
+          args.owner,
+          args.repo,
+          args.path,
+          args.branch
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(contents, null, 2) }],
+        };
       }
 
       case "create_or_update_file": {
@@ -594,7 +732,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args.branch,
           args.sha
         );
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
       case "push_files": {
@@ -606,21 +746,53 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args.files,
           args.message
         );
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
       case "create_issue": {
         const args = CreateIssueSchema.parse(request.params.arguments);
         const { owner, repo, ...options } = args;
         const issue = await createIssue(owner, repo, options);
-        return { content: [{ type: "text", text: JSON.stringify(issue, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
+        };
       }
 
       case "create_pull_request": {
         const args = CreatePullRequestSchema.parse(request.params.arguments);
         const { owner, repo, ...options } = args;
         const pullRequest = await createPullRequest(owner, repo, options);
-        return { content: [{ type: "text", text: JSON.stringify(pullRequest, null, 2) }] };
+        return {
+          content: [
+            { type: "text", text: JSON.stringify(pullRequest, null, 2) },
+          ],
+        };
+      }
+
+      case "search_code": {
+        const args = SearchCodeSchema.parse(request.params.arguments);
+        const results = await searchCode(args);
+        return {
+          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+        };
+      }
+
+      case "search_issues": {
+        const args = SearchIssuesSchema.parse(request.params.arguments);
+        const results = await searchIssues(args);
+        return {
+          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+        };
+      }
+
+      case "search_users": {
+        const args = SearchUsersSchema.parse(request.params.arguments);
+        const results = await searchUsers(args);
+        return {
+          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+        };
       }
 
       default:
@@ -628,7 +800,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Invalid arguments: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+      throw new Error(
+        `Invalid arguments: ${error.errors
+          .map(
+            (e: z.ZodError["errors"][number]) =>
+              `${e.path.join(".")}: ${e.message}`
+          )
+          .join(", ")}`
+      );
     }
     throw error;
   }
