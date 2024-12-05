@@ -23,6 +23,7 @@ These servers aim to demonstrate MCP features and the Typescript and Python SDK.
 - **[Memory](src/memory)** - Knowledge graph-based persistent memory system
 - **[PostgreSQL](src/postgres)** - Read-only database access with schema inspection
 - **[Puppeteer](src/puppeteer)** - Browser automation and web scraping
+- **[Python Interpreter](src/python)** - Give LLMs access to a Python interpreter REPL
 - **[Sentry](src/sentry)** - Retrieving and analyzing issues from Sentry.io
 - **[Sequential Thinking](src/sequential-thinking)** - Dynamic and reflective problem-solving through thought sequences
 - **[Slack](src/slack)** - Channel management and messaging capabilities
