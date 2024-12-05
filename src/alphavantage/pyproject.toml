@@ -5,10 +5,8 @@ description = "Alphavantage MCP server"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
- "black>=24.10.0",
- "load-dotenv>=0.1.0",
- "mcp>=1.0.0",
- "ruff>=0.8.1",
+    "load-dotenv>=0.1.0",
+    "mcp>=1.0.0",
 ]
 [[project.authors]]
 name = "Cesar Alvernaz"
@@ -19,4 +17,4 @@ requires = [ "hatchling",]
 build-backend = "hatchling.build"
 
 [project.scripts]
-alphavantage = "alphavantage:main"
+alphavantage = "mcp_server_alphavantage:main"

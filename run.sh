@@ -1,1 +1,0 @@
- uv --directory ~/code/alphavantage run alphavantage

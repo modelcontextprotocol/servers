@@ -1,4 +1,4 @@
-from . import server
+from alphavantage import server
 import asyncio
 
 
