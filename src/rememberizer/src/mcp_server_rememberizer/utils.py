@@ -23,6 +23,7 @@ class RememberizerTools(Enum):
     SEARCH = "rememberizer_search"
     LIST_INTEGRATIONS = "rememberizer_list_integrations"
     ACCOUNT_INFORMATION = "rememberizer_account_information"
+    LIST_DOCUMENTS = "rememberizer_list_documents"
 
 
 class APIClient:

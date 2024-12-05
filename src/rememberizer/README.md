@@ -11,12 +11,14 @@ Please note that mcp-server-rememberizer is currently in development and the fun
 ### Resources
 
 The server provides access to two types of resources:
+
 - Documents (`rememberizer://document/{id}`)
 - Slack discussions (`rememberizer://slack/{id}`)
 
 ### Tools
 
 1. `rememberizer_search`
+
    - Search for documents by semantic similarity
    - Input:
      - `q` (string): Up to a 400-word sentence to find semantically similar chunks of knowledge
@@ -24,20 +26,30 @@ The server provides access to two types of resources:
    - Returns: Search results as text output
 
 2. `rememberizer_list_integrations`
+
    - List available data source integrations
    - Input: None required
    - Returns: List of available integrations
 
 3. `rememberizer_account_information`
+
    - Get account information
    - Input: None required
    - Returns: Account information details
+
+4. `rememberizer_list_documents`
+
+   - Retrieves a paginated list of all documents
+   - Input:
+     - `page` (integer, optional): Page number for pagination, starts at 1 (default: 1)
+     - `page_size` (integer, optional): Number of documents per page, range 1-1000 (default: 100)
+   - Returns: List of documents
 
 ## Installation
 
 ### Using uv (recommended)
 
-When using [`uv`](https://docs.astral.sh/uv/), no specific installation is needed. Use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run *mcp-server-rememberizer*.
+When using [`uv`](https://docs.astral.sh/uv/), no specific installation is needed. Use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run _mcp-server-rememberizer_.
 
 ### Using PIP
 
@@ -54,6 +66,7 @@ After installation, run it as a script:
 ### Environment Variables
 
 The following environment variables are required:
+
 - `REMEMBERIZER_API_TOKEN`: Your Rememberizer API token
 - `REMEMBERIZER_BASE_URL`: The base URL for the Rememberizer API
 
@@ -62,12 +75,12 @@ The following environment variables are required:
 Add this to your `claude_desktop_config.json`:
 
 <details>
-<summary>Using uvx</summary>
+<summary>Using uv</summary>
 
 ```json
 "mcpServers": {
   "rememberizer": {
-    "command": "uvx",
+    "command": "uv",
     "args": [
       "--directory",
       "~/rememberizer-mcp-servers/src/rememberizer",
@@ -77,6 +90,7 @@ Add this to your `claude_desktop_config.json`:
   }
 }
 ```
+
 </details>
 
 <details>
@@ -90,6 +104,7 @@ Add this to your `claude_desktop_config.json`:
   }
 }
 ```
+
 </details>
 
 ### Usage with [Zed](https://github.com/zed-industries/zed)
@@ -97,18 +112,19 @@ Add this to your `claude_desktop_config.json`:
 Add to your Zed `settings.json`:
 
 <details>
-<summary>Using uvx</summary>
+<summary>Using uv</summary>
 
 ```json
 "context_servers": [
   "mcp-server-rememberizer": {
     "command": {
-      "path": "uvx",
+      "path": "uv",
       "args": ["mcp-server-rememberizer"]
     }
   }
 ],
 ```
+
 </details>
 
 <details>
@@ -124,6 +140,7 @@ Add to your Zed `settings.json`:
   }
 },
 ```
+
 </details>
 
 ## Development
@@ -133,11 +150,13 @@ Add to your Zed `settings.json`:
 To prepare the package for distribution:
 
 1. Sync dependencies and update lockfile:
+
 ```bash
 uv sync
 ```
 
 2. Build package distributions:
+
 ```bash
 uv build
 ```
@@ -145,11 +164,13 @@ uv build
 This will create source and wheel distributions in the `dist/` directory.
 
 3. Publish to PyPI:
+
 ```bash
 uv publish
 ```
 
 Note: You'll need to set PyPI credentials via environment variables or command flags:
+
 - Token: `--token` or `UV_PUBLISH_TOKEN`
 - Or username/password: `--username`/`UV_PUBLISH_USERNAME` and `--password`/`UV_PUBLISH_PASSWORD`
 
@@ -158,13 +179,11 @@ Note: You'll need to set PyPI credentials via environment variables or command f
 Since MCP servers run over stdio, debugging can be challenging. For the best debugging
 experience, we strongly recommend using the [MCP Inspector](https://github.com/modelcontextprotocol/inspector).
 
-
 You can launch the MCP Inspector via [`npm`](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) with this command:
 
 ```bash
-npx @modelcontextprotocol/inspector uv --directory /Users/eastagile/Developer/mcp/weather_service run rememberizer
+npx @modelcontextprotocol/inspector uv --directory /path/to/directory/rememberizer-mcp-servers/src/rememberizer run mcp-server-rememberizer
 ```
-
 
 Upon launching, the Inspector will display a URL that you can access in your browser to begin debugging.
 
