@@ -25,12 +25,15 @@ import {
   GitHubCreateUpdateFileResponseSchema,
   GitHubForkSchema,
   GitHubIssueSchema,
+  GitHubListCommits,
+  GitHubListCommitsSchema,
   GitHubPullRequestSchema,
   GitHubReferenceSchema,
   GitHubRepositorySchema,
   GitHubSearchResponseSchema,
   GitHubTreeSchema,
   IssueCommentSchema,
+  ListCommitsSchema,
   ListIssuesOptionsSchema,
   PushFilesSchema,
   SearchCodeResponseSchema,
@@ -54,7 +57,7 @@ import {
   type GitHubTree,
   type SearchCodeResponse,
   type SearchIssuesResponse,
-  type SearchUsersResponse,
+  type SearchUsersResponse
 } from './schemas.js';
 
 const server = new Server(
@@ -487,6 +490,40 @@ async function createRepository(
   return GitHubRepositorySchema.parse(await response.json());
 }
 
+async function listCommits(
+  owner: string,
+  repo: string,
+  page: number = 1,
+  perPage: number = 30,
+  sha?: string,
+): Promise<GitHubListCommits> {
+  const url = new URL(`https://api.github.com/repos/${owner}/${repo}/commits`);
+  url.searchParams.append("page", page.toString());
+  url.searchParams.append("per_page", perPage.toString());
+  if (sha) {
+    url.searchParams.append("sha", sha);
+  }
+
+  const response = await fetch(
+    url.toString(),
+    {
+      method: "GET",
+      headers: {
+        "Authorization": `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+        "Content-Type": "application/json"
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return GitHubListCommitsSchema.parse(await response.json());
+}
+
 async function listIssues(
   owner: string,
   repo: string,
@@ -706,6 +743,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(CreateBranchSchema),
       },
       {
+        name: "list_commits",
+        description: "Get list of commits of a branch in a GitHub repository",
+        inputSchema: zodToJsonSchema(ListCommitsSchema)
+      },
+      {
         name: "list_issues",
         description: "List issues in a GitHub repository with filtering options",
         inputSchema: zodToJsonSchema(ListIssuesOptionsSchema)
@@ -922,6 +964,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { owner, repo, issue_number, body } = args;
         const comment = await addIssueComment(owner, repo, issue_number, body);
         return { toolResult: comment };
+      }
+
+      case "list_commits": {
+        const args = ListCommitsSchema.parse(request.params.arguments);
+        const results = await listCommits(args.owner, args.repo, args.page, args.perPage, args.sha);
+        return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
       }
 
       default:

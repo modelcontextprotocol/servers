@@ -93,6 +93,25 @@ export const GitHubTreeSchema = z.object({
   truncated: z.boolean(),
 });
 
+export const GitHubListCommitsSchema = z.array(z.object({
+  sha: z.string(),
+  node_id: z.string(),
+  commit: z.object({
+    author: GitHubAuthorSchema,
+    committer: GitHubAuthorSchema,
+    message: z.string(),
+    tree: z.object({
+      sha: z.string(),
+      url: z.string()
+    }),
+    url: z.string(),
+    comment_count: z.number(),
+  }),
+  url: z.string(),
+  html_url: z.string(),
+  comments_url: z.string()
+}));
+
 export const GitHubCommitSchema = z.object({
   sha: z.string(),
   node_id: z.string(),
@@ -320,6 +339,15 @@ export const SearchRepositoriesSchema = z.object({
     .number()
     .optional()
     .describe("Number of results per page (default: 30, max: 100)"),
+});
+
+export const ListCommitsSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  page: z.number().optional().describe("Page number for pagination (default: 1)"),
+  perPage: z.number().optional().describe("Number of results per page (default: 30, max: 100)"),
+  sha: z.string().optional()
+    .describe("SHA of the file being replaced (required when updating existing files)")
 });
 
 export const CreateRepositorySchema = z.object({
@@ -663,6 +691,7 @@ export type GitHubContent = z.infer<typeof GitHubContentSchema>;
 export type FileOperation = z.infer<typeof FileOperationSchema>;
 export type GitHubTree = z.infer<typeof GitHubTreeSchema>;
 export type GitHubCommit = z.infer<typeof GitHubCommitSchema>;
+export type GitHubListCommits = z.infer<typeof GitHubListCommitsSchema>;
 export type GitHubReference = z.infer<typeof GitHubReferenceSchema>;
 export type CreateRepositoryOptions = z.infer<
   typeof CreateRepositoryOptionsSchema
