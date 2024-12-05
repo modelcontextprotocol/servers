@@ -8,9 +8,7 @@
   "homepage": "https://modelcontextprotocol.io",
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
   "type": "module",
-  "workspaces": [
-    "src/*"
-  ],
+  "workspaces": ["src/*"],
   "files": [],
   "scripts": {
     "build": "npm run build --workspaces",
