@@ -11,6 +11,7 @@ Each MCP server is implemented with either the [Typescript MCP SDK](https://gith
 These servers aim to demonstrate MCP features and the Typescript and Python SDK.
 
 - **[AWS KB Retrieval](src/aws-kb-retrieval)** - Retrieval from AWS Knowledge Base using Bedrock Agent Runtime
+- **[Amazon Fresh](src/amazon-fresh)** - Shopping list creation based on a recipe or a list of ingredients
 - **[Brave Search](src/brave-search)** - Web and local search using Brave's Search API
 - **[EverArt](src/everart)** - AI image generation using various models
 - **[Fetch](src/fetch)** - Web content fetching and conversion for efficient LLM usage
