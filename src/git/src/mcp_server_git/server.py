@@ -24,6 +24,10 @@ class GitDiffUnstaged(BaseModel):
 class GitDiffStaged(BaseModel):
     repo_path: str
 
+class GitDiff(BaseModel):
+    repo_path: str
+    target: str
+
 class GitCommit(BaseModel):
     repo_path: str
     message: str
@@ -48,6 +52,7 @@ class GitTools(str, Enum):
     STATUS = "git_status"
     DIFF_UNSTAGED = "git_diff_unstaged"
     DIFF_STAGED = "git_diff_staged"
+    DIFF = "git_diff"
     COMMIT = "git_commit"
     ADD = "git_add"
     RESET = "git_reset"
@@ -62,6 +67,9 @@ def git_diff_unstaged(repo: git.Repo) -> str:
 
 def git_diff_staged(repo: git.Repo) -> str:
     return repo.git.diff("--cached")
+
+def git_diff(repo: git.Repo, target: str) -> str:
+    return repo.git.diff(target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
     commit = repo.index.commit(message)
@@ -126,6 +134,11 @@ async def serve(repository: Path | None) -> None:
                 name=GitTools.DIFF_STAGED,
                 description="Shows changes that are staged for commit",
                 inputSchema=GitDiffStaged.schema(),
+            ),
+            Tool(
+                name=GitTools.DIFF,
+                description="Shows differences between branches or commits",
+                inputSchema=GitDiff.schema(),
             ),
             Tool(
                 name=GitTools.COMMIT,
@@ -208,6 +221,13 @@ async def serve(repository: Path | None) -> None:
                 return [TextContent(
                     type="text",
                     text=f"Staged changes:\n{diff}"
+                )]
+
+            case GitTools.DIFF:
+                diff = git_diff(repo, arguments["target"])
+                return [TextContent(
+                    type="text",
+                    text=f"Diff with {arguments['target']}:\n{diff}"
                 )]
 
             case GitTools.COMMIT:
