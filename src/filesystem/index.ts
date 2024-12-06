@@ -163,8 +163,9 @@ const server = new Server(
   },
   {
     capabilities: {
-      tools: {
-        search_files: {
+      tools: [
+        {
+          name: "search_files",
           description: "Recursively search for files/directories with optional exclude patterns",
           inputSchema: zodToJsonSchema(SearchFilesArgsSchema),
           handler: async (args: z.infer<typeof SearchFilesArgsSchema>) => {
@@ -172,7 +173,7 @@ const server = new Server(
             return searchFiles(validatedPath, args.pattern, args.excludePatterns);
           },
         },
-      },
+      ],
     },
   },
 );
