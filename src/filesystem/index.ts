@@ -163,6 +163,7 @@ const server = new Server(
   },
   {
     capabilities: {
+      listChanged: false,
       tools: {
         search_files: {
           description: "Recursively search for files/directories with optional exclude patterns",
