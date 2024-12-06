@@ -163,7 +163,16 @@ const server = new Server(
   },
   {
     capabilities: {
-      tools: {},
+      tools: {
+        search_files: {
+          description: "Recursively search for files/directories with optional exclude patterns",
+          inputSchema: zodToJsonSchema(SearchFilesArgsSchema),
+          handler: async ({ path: searchPath, pattern, excludePatterns }) => {
+            const validatedPath = await validatePath(searchPath);
+            return searchFiles(validatedPath, pattern, excludePatterns);
+          },
+        },
+      },
     },
   },
 );
