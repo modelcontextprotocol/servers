@@ -164,7 +164,7 @@ const server = new Server(
   {
     capabilities: {
       listChanged: false,
-      tools: true,
+      tools: {},
     },
   },
 );
