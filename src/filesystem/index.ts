@@ -163,9 +163,8 @@ const server = new Server(
   },
   {
     capabilities: {
-      tools: [
-        {
-          name: "search_files",
+      tools: {
+        search_files: {
           description: "Recursively search for files/directories with optional exclude patterns",
           inputSchema: zodToJsonSchema(SearchFilesArgsSchema),
           handler: async (args: z.infer<typeof SearchFilesArgsSchema>) => {
@@ -173,7 +172,7 @@ const server = new Server(
             return searchFiles(validatedPath, args.pattern, args.excludePatterns);
           },
         },
-      ],
+      },
     },
   },
 );
@@ -546,7 +545,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const results = await searchFiles(validPath, parsed.data.pattern);
+        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };
@@ -568,9 +567,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "list_allowed_directories": {
         return {
-          content: [{ 
-            type: "text", 
-            text: `Allowed directories:\n${allowedDirectories.join('\n')}` 
+          content: [{
+            type: "text",
+            text: `Allowed directories:\n${allowedDirectories.join('\n')}`
           }],
         };
       }
