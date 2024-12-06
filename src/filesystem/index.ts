@@ -126,6 +126,10 @@ const ListDirectoryArgsSchema = z.object({
   path: z.string(),
 });
 
+const DirectoryTreeArgsSchema = z.object({
+  path: z.string(),
+});
+
 const MoveFileArgsSchema = z.object({
   source: z.string(),
   destination: z.string(),
@@ -370,6 +374,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(ListDirectoryArgsSchema) as ToolInput,
       },
       {
+        name: "directory_tree",
+        description:
+            "Get a recursive tree view of files and directories starting from a specified path. " +
+            "Results are formatted in a hierarchical ASCII tree structure with proper indentation " +
+            "using pipes and dashes (│ ├ └ ─). Files and directories are distinguished " +
+            "with [F] and [D] prefixes. This tool provides a comprehensive visualization of nested " +
+            "directory structures. Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(DirectoryTreeArgsSchema) as ToolInput,
+      },
+      {
         name: "move_file",
         description:
           "Move or rename files and directories. Can move files between directories " +
@@ -502,6 +516,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{ type: "text", text: formatted }],
         };
       }
+
+        case "directory_tree": {
+            const parsed = ListDirectoryArgsSchema.safeParse(args);
+            if (!parsed.success) {
+                throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
+            }
+
+            async function buildTree(currentPath: string, prefix = ""): Promise<string> {
+                const validPath = await validatePath(currentPath);
+                const entries = await fs.readdir(validPath, {withFileTypes: true});
+                let result = "";
+
+                for (let i = 0; i < entries.length; i++) {
+                    const entry = entries[i];
+                    const isLast = i === entries.length - 1;
+                    const connector = isLast ? "└── " : "├── ";
+                    const newPrefix = prefix + (isLast ? "    " : "│   ");
+
+                    result += `${prefix}${connector}${entry.isDirectory() ? "[D]" : "[F]"} ${entry.name}\n`;
+
+                    if (entry.isDirectory()) {
+                        const subPath = path.join(currentPath, entry.name);
+                        result += await buildTree(subPath, newPrefix);
+                    }
+                }
+
+                return result;
+            }
+
+            const treeOutput = await buildTree(parsed.data.path);
+            return {
+                content: [{type: "text", text: treeOutput}],
+            };
+        }
 
       case "move_file": {
         const parsed = MoveFileArgsSchema.safeParse(args);
