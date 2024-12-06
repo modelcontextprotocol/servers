@@ -167,9 +167,9 @@ const server = new Server(
         search_files: {
           description: "Recursively search for files/directories with optional exclude patterns",
           inputSchema: zodToJsonSchema(SearchFilesArgsSchema),
-          handler: async ({ path: searchPath, pattern, excludePatterns }) => {
-            const validatedPath = await validatePath(searchPath);
-            return searchFiles(validatedPath, pattern, excludePatterns);
+          handler: async (args: z.infer<typeof SearchFilesArgsSchema>) => {
+            const validatedPath = await validatePath(args.path);
+            return searchFiles(validatedPath, args.pattern, args.excludePatterns);
           },
         },
       },
