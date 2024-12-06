@@ -3,8 +3,8 @@
 ## Description
 
 ## Server Details
-<!-- If modifying an existing server or adding a new one, provide details -->
-- Server: <!-- e.g., filesystem, github, new-server-name -->
+<!-- If modifying an existing server, provide details -->
+- Server: <!-- e.g., filesystem, github -->
 - Changes to: <!-- e.g., tools, resources, prompts -->
 
 ## Motivation and Context
@@ -18,7 +18,6 @@
 
 ## Types of changes
 <!-- What types of changes does your code introduce? Put an `x` in all the boxes that apply: -->
-- [ ] New MCP Server
 - [ ] Bug fix (non-breaking change which fixes an issue)
 - [ ] New feature (non-breaking change which adds functionality)
 - [ ] Breaking change (fix or feature that would cause existing functionality to change)
@@ -27,7 +26,7 @@
 ## Checklist
 <!-- Go over all the following points, and put an `x` in all the boxes that apply. -->
 - [ ] I have read the [MCP Protocol Documentation](https://modelcontextprotocol.io)
-- [ ] My server follows MCP security best practices
+- [ ] My changes follows MCP security best practices
 - [ ] I have updated the server's README accordingly
 - [ ] I have tested this with an LLM client
 - [ ] My code follows the repository's style guidelines

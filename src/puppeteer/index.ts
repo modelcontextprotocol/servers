@@ -124,20 +124,27 @@ async function ensureBrowser() {
   return page!;
 }
 
-async function handleToolCall(name: string, args: any): Promise<{ toolResult: CallToolResult }> {
+declare global {
+  interface Window {
+    mcpHelper: {
+      logs: string[],
+      originalConsole: Partial<typeof console>,
+    }
+  }
+}
+
+async function handleToolCall(name: string, args: any): Promise<CallToolResult> {
   const page = await ensureBrowser();
 
   switch (name) {
     case "puppeteer_navigate":
       await page.goto(args.url);
       return {
-        toolResult: {
-          content: [{
-            type: "text",
-            text: `Navigated to ${args.url}`,
-          }],
-          isError: false,
-        },
+        content: [{
+          type: "text",
+          text: `Navigated to ${args.url}`,
+        }],
+        isError: false,
       };
 
     case "puppeteer_screenshot": {
@@ -151,13 +158,11 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
 
       if (!screenshot) {
         return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: args.selector ? `Element not found: ${args.selector}` : "Screenshot failed",
-            }],
-            isError: true,
-          },
+          content: [{
+            type: "text",
+            text: args.selector ? `Element not found: ${args.selector}` : "Screenshot failed",
+          }],
+          isError: true,
         };
       }
 
@@ -167,20 +172,18 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
       });
 
       return {
-        toolResult: {
-          content: [
-            {
-              type: "text",
-              text: `Screenshot '${args.name}' taken at ${width}x${height}`,
-            } as TextContent,
-            {
-              type: "image",
-              data: screenshot,
-              mimeType: "image/png",
-            } as ImageContent,
-          ],
-          isError: false,
-        },
+        content: [
+          {
+            type: "text",
+            text: `Screenshot '${args.name}' taken at ${width}x${height}`,
+          } as TextContent,
+          {
+            type: "image",
+            data: screenshot,
+            mimeType: "image/png",
+          } as ImageContent,
+        ],
+        isError: false,
       };
     }
 
@@ -188,23 +191,19 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
       try {
         await page.click(args.selector);
         return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: `Clicked: ${args.selector}`,
-            }],
-            isError: false,
-          },
+          content: [{
+            type: "text",
+            text: `Clicked: ${args.selector}`,
+          }],
+          isError: false,
         };
       } catch (error) {
         return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: `Failed to click ${args.selector}: ${(error as Error).message}`,
-            }],
-            isError: true,
-          },
+          content: [{
+            type: "text",
+            text: `Failed to click ${args.selector}: ${(error as Error).message}`,
+          }],
+          isError: true,
         };
       }
 
@@ -213,23 +212,19 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
         await page.waitForSelector(args.selector);
         await page.type(args.selector, args.value);
         return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: `Filled ${args.selector} with: ${args.value}`,
-            }],
-            isError: false,
-          },
+          content: [{
+            type: "text",
+            text: `Filled ${args.selector} with: ${args.value}`,
+          }],
+          isError: false,
         };
       } catch (error) {
         return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: `Failed to fill ${args.selector}: ${(error as Error).message}`,
-            }],
-            isError: true,
-          },
+          content: [{
+            type: "text",
+            text: `Failed to fill ${args.selector}: ${(error as Error).message}`,
+          }],
+          isError: true,
         };
       }
 
@@ -238,23 +233,19 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
         await page.waitForSelector(args.selector);
         await page.select(args.selector, args.value);
         return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: `Selected ${args.selector} with: ${args.value}`,
-            }],
-            isError: false,
-          },
+          content: [{
+            type: "text",
+            text: `Selected ${args.selector} with: ${args.value}`,
+          }],
+          isError: false,
         };
       } catch (error) {
         return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: `Failed to select ${args.selector}: ${(error as Error).message}`,
-            }],
-            isError: true,
-          },
+          content: [{
+            type: "text",
+            text: `Failed to select ${args.selector}: ${(error as Error).message}`,
+          }],
+          isError: true,
         };
       }
 
@@ -263,81 +254,73 @@ async function handleToolCall(name: string, args: any): Promise<{ toolResult: Ca
         await page.waitForSelector(args.selector);
         await page.hover(args.selector);
         return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: `Hovered ${args.selector}`,
-            }],
-            isError: false,
-          },
+          content: [{
+            type: "text",
+            text: `Hovered ${args.selector}`,
+          }],
+          isError: false,
         };
       } catch (error) {
         return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: `Failed to hover ${args.selector}: ${(error as Error).message}`,
-            }],
-            isError: true,
-          },
+          content: [{
+            type: "text",
+            text: `Failed to hover ${args.selector}: ${(error as Error).message}`,
+          }],
+          isError: true,
         };
       }
 
     case "puppeteer_evaluate":
       try {
-        const result = await page.evaluate((script) => {
-          const logs: string[] = [];
-          const originalConsole = { ...console };
+        await page.evaluate(() => {
+          window.mcpHelper = {
+            logs: [],
+            originalConsole: { ...console },
+          };
 
           ['log', 'info', 'warn', 'error'].forEach(method => {
             (console as any)[method] = (...args: any[]) => {
-              logs.push(`[${method}] ${args.join(' ')}`);
-              (originalConsole as any)[method](...args);
+              window.mcpHelper.logs.push(`[${method}] ${args.join(' ')}`);
+              (window.mcpHelper.originalConsole as any)[method](...args);
             };
-          });
+          } );
+        } );
 
-          try {
-            const result = eval(script);
-            Object.assign(console, originalConsole);
-            return { result, logs };
-          } catch (error) {
-            Object.assign(console, originalConsole);
-            throw error;
-          }
-        }, args.script);
+        const result = await page.evaluate( args.script );
+
+        const logs = await page.evaluate(() => {
+          Object.assign(console, window.mcpHelper.originalConsole);
+          const logs = window.mcpHelper.logs;
+          delete ( window as any).mcpHelper;
+          return logs;
+        });
 
         return {
-          toolResult: {
-            content: [
-              {
-                type: "text",
-                text: `Execution result:\n${JSON.stringify(result.result, null, 2)}\n\nConsole output:\n${result.logs.join('\n')}`,
-              },
-            ],
-            isError: false,
-          },
+          content: [
+            {
+              type: "text",
+              text: `Execution result:\n${JSON.stringify(result, null, 2)}\n\nConsole output:\n${logs.join('\n')}`,
+            },
+          ],
+          isError: false,
         };
       } catch (error) {
         return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: `Script execution failed: ${(error as Error).message}`,
-            }],
-            isError: true,
-          },
+          content: [{
+            type: "text",
+            text: `Script execution failed: ${(error as Error).message}`,
+          }],
+          isError: true,
         };
       }
 
     default:
       return {
-        toolResult: {
-          content: [{
-            type: "text",
-            text: `Unknown tool: ${name}`,
-          }],
-          isError: true,
-        },
+        content: [{
+          type: "text",
+          text: `Unknown tool: ${name}`,
+        }],
+        isError: true,
       };
   }
 }

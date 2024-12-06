@@ -74,6 +74,6 @@ jobs:
 
       - name: Publish package
         working-directory: src/${{ matrix.package }}
-        run: npm publish # --provenance
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

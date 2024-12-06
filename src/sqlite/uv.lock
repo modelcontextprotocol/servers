@@ -138,7 +138,7 @@ wheels = [
 
 [[package]]
 name = "mcp-server-sqlite"
-version = "0.6.0"
+version = "0.6.2"
 source = { editable = "." }
 dependencies = [
     { name = "mcp" },
