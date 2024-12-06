@@ -592,6 +592,6 @@ async function runServer() {
 }
 
 runServer().catch((error) => {
-  console.error("Fatal error running server:", error);
+  console.error("Server error:", error);
   process.exit(1);
 });
