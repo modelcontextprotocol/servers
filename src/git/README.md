@@ -73,7 +73,7 @@ Please note that mcp-server-git is currently in early development. The functiona
 ### Using uv (recommended)
 
 When using [`uv`](https://docs.astral.sh/uv/) no specific installation is needed. We will
-use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run _mcp-server-git_.
+use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run *mcp-server-git*.
 
 ### Using PIP
 
