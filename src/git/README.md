@@ -106,7 +106,6 @@ Add this to your `claude_desktop_config.json`:
   }
 }
 ```
-
 </details>
 
 <details>
@@ -120,7 +119,6 @@ Add this to your `claude_desktop_config.json`:
   }
 }
 ```
-
 </details>
 
 ### Usage with [Zed](https://github.com/zed-industries/zed)
@@ -140,7 +138,6 @@ Add to your Zed settings.json:
   }
 ],
 ```
-
 </details>
 
 <details>
@@ -156,7 +153,6 @@ Add to your Zed settings.json:
   }
 },
 ```
-
 </details>
 
 ## Debugging
