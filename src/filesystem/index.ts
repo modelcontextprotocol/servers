@@ -442,6 +442,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     switch (name) {
+      case "search_files": {
+        const parsed = SearchFilesArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
+        return {
+          content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
+        };
+      }
+
       case "read_file": {
         const parsed = ReadFileArgsSchema.safeParse(args);
         if (!parsed.success) {
@@ -537,18 +549,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         await fs.rename(validSourcePath, validDestPath);
         return {
           content: [{ type: "text", text: `Successfully moved ${parsed.data.source} to ${parsed.data.destination}` }],
-        };
-      }
-
-      case "search_files": {
-        const parsed = SearchFilesArgsSchema.safeParse(args);
-        if (!parsed.success) {
-          throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
-        }
-        const validPath = await validatePath(parsed.data.path);
-        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
-        return {
-          content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };
       }
 
