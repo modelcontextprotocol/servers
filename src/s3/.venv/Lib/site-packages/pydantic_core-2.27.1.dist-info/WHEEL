@@ -1,0 +1,4 @@
+Wheel-Version: 1.0
+Generator: maturin (1.7.4)
+Root-Is-Purelib: false
+Tag: cp311-none-win_amd64

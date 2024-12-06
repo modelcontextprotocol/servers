@@ -1,0 +1,17 @@
+[project]
+name = "s3"
+version = "0.1.0"
+description = "testing the s3 on the MinIO"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [ "mcp>=1.1.0",]
+[[project.authors]]
+name = "Tuguldur Tserenbaljir"
+email = "btuudo@gmail.com"
+
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project.scripts]
+s3 = "s3:main"

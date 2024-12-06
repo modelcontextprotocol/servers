@@ -1,0 +1,116 @@
+# Copyright (c) 2020-202x The virtualenv developers
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+# This file must be used with "source bin/activate" *from bash*
+# you cannot run it directly
+
+# Get script path (only used if environment is relocatable).
+if [ -n "${BASH_VERSION:+x}" ] ; then
+    SCRIPT_PATH="${BASH_SOURCE[0]}"
+    if [ "$SCRIPT_PATH" = "$0" ]; then
+        # Only bash has a reasonably robust check for source'dness.
+        echo "You must source this script: \$ source $0" >&2
+        exit 33
+    fi
+elif [ -n "${ZSH_VERSION:+x}" ] ; then
+    SCRIPT_PATH="${(%):-%x}"
+elif [ -n "${KSH_VERSION:+x}" ] ; then
+    SCRIPT_PATH="${.sh.file}"
+fi
+
+deactivate () {
+    unset -f pydoc >/dev/null 2>&1 || true
+
+    # reset old environment variables
+    # ! [ -z ${VAR+_} ] returns true if VAR is declared at all
+    if ! [ -z "${_OLD_VIRTUAL_PATH:+_}" ] ; then
+        PATH="$_OLD_VIRTUAL_PATH"
+        export PATH
+        unset _OLD_VIRTUAL_PATH
+    fi
+    if ! [ -z "${_OLD_VIRTUAL_PYTHONHOME+_}" ] ; then
+        PYTHONHOME="$_OLD_VIRTUAL_PYTHONHOME"
+        export PYTHONHOME
+        unset _OLD_VIRTUAL_PYTHONHOME
+    fi
+
+    # The hash command must be called to get it to forget past
+    # commands. Without forgetting past commands the $PATH changes
+    # we made may not be respected
+    hash -r 2>/dev/null
+
+    if ! [ -z "${_OLD_VIRTUAL_PS1+_}" ] ; then
+        PS1="$_OLD_VIRTUAL_PS1"
+        export PS1
+        unset _OLD_VIRTUAL_PS1
+    fi
+
+    unset VIRTUAL_ENV
+    unset VIRTUAL_ENV_PROMPT
+    if [ ! "${1-}" = "nondestructive" ] ; then
+    # Self destruct!
+        unset -f deactivate
+    fi
+}
+
+# unset irrelevant variables
+deactivate nondestructive
+
+VIRTUAL_ENV='C:\Users\btuud\s3\.venv'
+if ([ "$OSTYPE" = "cygwin" ] || [ "$OSTYPE" = "msys" ]) && $(command -v cygpath &> /dev/null) ; then
+    VIRTUAL_ENV=$(cygpath -u "$VIRTUAL_ENV")
+fi
+export VIRTUAL_ENV
+
+_OLD_VIRTUAL_PATH="$PATH"
+PATH="$VIRTUAL_ENV/Scripts:$PATH"
+export PATH
+
+if [ "xs3" != x ] ; then
+    VIRTUAL_ENV_PROMPT="(s3) "
+else
+    VIRTUAL_ENV_PROMPT="($(basename "$VIRTUAL_ENV")) "
+fi
+export VIRTUAL_ENV_PROMPT
+
+# unset PYTHONHOME if set
+if ! [ -z "${PYTHONHOME+_}" ] ; then
+    _OLD_VIRTUAL_PYTHONHOME="$PYTHONHOME"
+    unset PYTHONHOME
+fi
+
+if [ -z "${VIRTUAL_ENV_DISABLE_PROMPT-}" ] ; then
+    _OLD_VIRTUAL_PS1="${PS1-}"
+    PS1="${VIRTUAL_ENV_PROMPT}${PS1-}"
+    export PS1
+fi
+
+# Make sure to unalias pydoc if it's already there
+alias pydoc 2>/dev/null >/dev/null && unalias pydoc || true
+
+pydoc () {
+    python -m pydoc "$@"
+}
+
+# The hash command must be called to get it to forget past
+# commands. Without forgetting past commands the $PATH changes
+# we made may not be respected
+hash -r 2>/dev/null
