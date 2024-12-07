@@ -13,6 +13,7 @@ import os from 'os';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
+import { minimatch } from 'minimatch';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -134,6 +135,7 @@ const MoveFileArgsSchema = z.object({
 const SearchFilesArgsSchema = z.object({
   path: z.string(),
   pattern: z.string(),
+  excludePatterns: z.array(z.string()).optional().default([])
 });
 
 const GetFileInfoArgsSchema = z.object({
@@ -183,6 +185,7 @@ async function getFileStats(filePath: string): Promise<FileInfo> {
 async function searchFiles(
   rootPath: string,
   pattern: string,
+  excludePatterns: string[] = []
 ): Promise<string[]> {
   const results: string[] = [];
 
@@ -191,10 +194,21 @@ async function searchFiles(
 
     for (const entry of entries) {
       const fullPath = path.join(currentPath, entry.name);
-      
+
       try {
         // Validate each path before processing
         await validatePath(fullPath);
+
+        // Check if path matches any exclude pattern
+        const relativePath = path.relative(rootPath, fullPath);
+        const shouldExclude = excludePatterns.some(pattern => {
+          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
+          return minimatch(relativePath, globPattern, { dot: true });
+        });
+
+        if (shouldExclude) {
+          continue;
+        }
 
         if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
           results.push(fullPath);
@@ -522,7 +536,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const results = await searchFiles(validPath, parsed.data.pattern);
+        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };
@@ -544,9 +558,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "list_allowed_directories": {
         return {
-          content: [{ 
-            type: "text", 
-            text: `Allowed directories:\n${allowedDirectories.join('\n')}` 
+          content: [{
+            type: "text",
+            text: `Allowed directories:\n${allowedDirectories.join('\n')}`
           }],
         };
       }
