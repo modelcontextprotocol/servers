@@ -163,13 +163,7 @@ const server = new Server(
   },
   {
     capabilities: {
-      listChanged: false,
-      tools: {
-        search_files: {
-          description: "Recursively search for files/directories with optional exclude patterns",
-          inputSchema: zodToJsonSchema(SearchFilesArgsSchema),
-        },
-      },
+      tools: {},
     },
   },
 );
@@ -208,7 +202,7 @@ async function searchFiles(
         // Check if path matches any exclude pattern
         const relativePath = path.relative(rootPath, fullPath);
         const shouldExclude = excludePatterns.some(pattern => {
-          const globPattern = pattern.startsWith('*') ? pattern : `*/${pattern}/*`;
+          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
           return minimatch(relativePath, globPattern, { dot: true });
         });
 
@@ -438,18 +432,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     switch (name) {
-      case "search_files": {
-        const parsed = SearchFilesArgsSchema.safeParse(args);
-        if (!parsed.success) {
-          throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
-        }
-        const validPath = await validatePath(parsed.data.path);
-        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
-        return {
-          content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
-        };
-      }
-
       case "read_file": {
         const parsed = ReadFileArgsSchema.safeParse(args);
         if (!parsed.success) {
@@ -548,6 +530,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "search_files": {
+        const parsed = SearchFilesArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
+        return {
+          content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
+        };
+      }
+
       case "get_file_info": {
         const parsed = GetFileInfoArgsSchema.safeParse(args);
         if (!parsed.success) {
@@ -592,6 +586,6 @@ async function runServer() {
 }
 
 runServer().catch((error) => {
-  console.error("Server error:", error);
+  console.error("Fatal error running server:", error);
   process.exit(1);
 });
