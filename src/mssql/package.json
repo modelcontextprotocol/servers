@@ -4,6 +4,9 @@
   "description": "MCP server for interacting with Microsoft SQL Server databases",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "bin": {
     "mcp-server-mssql": "dist/index.js"
   },

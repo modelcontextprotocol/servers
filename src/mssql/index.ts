@@ -22,19 +22,24 @@ const server = new Server(
   },
 );
 
+// รับ connection string จาก command line argument
+const connectionString = process.argv[2];
+if (!connectionString) {
+  console.error('Connection string is required');
+  process.exit(1);
+}
+
+// แปลง connection string เป็น config object
 const sqlConfig = {
-  user: 'SA',
-  password: 'Passw0rd123456',
-  database: 'TestDB',
-  server: '34.87.129.116',
+  ...sql.ConnectionPool.parseConnectionString(connectionString),
+  options: {
+    encrypt: false,
+    trustServerCertificate: true
+  },
   pool: {
     max: 10,
     min: 0,
     idleTimeoutMillis: 30000
-  },
-  options: {
-    encrypt: false,
-    trustServerCertificate: true
   }
 };
 
