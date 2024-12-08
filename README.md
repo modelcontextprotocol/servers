@@ -70,6 +70,7 @@ A growing set of community-developed and maintained servers demonstrates various
 
 Additional resources on MCP.
 
+- **[Unroute framework](https://github.com/unroute/typescript-sdk)** - A framework to easily connect language models (LLMs) to Model Context Protocols (MCPs) for developing agents.
 - **[Awesome MCP Servers by punkpeye](https://github.com/punkpeye/awesome-mcp-servers)** - A curated list of MCP servers by **[Frank Fiegel](https://github.com/punkpeye)**
 - **[Awesome MCP Servers by wong2](https://github.com/wong2/awesome-mcp-servers)** - A curated list of MCP servers by **[wong2](https://github.com/wong2)**
 - **[Awesome MCP Servers by appcypher](https://github.com/appcypher/awesome-mcp-servers)** - A curated list of MCP servers by **[Stephen Akinyemi](https://github.com/appcypher)**
