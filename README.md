@@ -65,6 +65,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Any Chat Completions](https://github.com/pyroprompts/any-chat-completions-mcp)** - Interact with any OpenAI SDK Compatible Chat Completions API like OpenAI, Perplexity, Groq, xAI and many more.
 - **[Windows CLI](https://github.com/SimonB97/win-cli-mcp-server)** - MCP server for secure command-line interactions on Windows systems, enabling controlled access to PowerShell, CMD, and Git Bash shells.
 - **[OpenRPC](https://github.com/shanejonas/openrpc-mpc-server)** - Interact with and discover JSON-RPC APIs via [OpenRPC](https://open-rpc.org).
+- **[Pandoc](https://github.com/vivekVells/mcp-pandoc)** - This MCP Server enables seamless document format conversion between Markdown, HTML, and text (with other format supports like PDF, docx, csv in development) using Pandoc. 
 
 ## 📚 Resources
 
