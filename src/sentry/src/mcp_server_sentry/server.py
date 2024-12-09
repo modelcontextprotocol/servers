@@ -223,7 +223,7 @@ async def serve(auth_token: str) -> Server:
     async def handle_list_tools() -> list[types.Tool]:
         return [
             types.Tool(
-                name="get-sentry-issue",
+                name="get_sentry_issue",
                 description="""Retrieve and analyze a Sentry issue by ID or URL. Use this tool when you need to:
                 - Investigate production errors and crashes
                 - Access detailed stacktraces from Sentry
@@ -247,7 +247,7 @@ async def serve(auth_token: str) -> Server:
     async def handle_call_tool(
         name: str, arguments: dict | None
     ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-        if name != "get-sentry-issue":
+        if name != "get_sentry_issue":
             raise ValueError(f"Unknown tool: {name}")
 
         if not arguments or "issue_id_or_url" not in arguments:

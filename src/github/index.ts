@@ -20,6 +20,7 @@ import {
   CreateRepositorySchema,
   ForkRepositorySchema,
   GetFileContentsSchema,
+  GetIssueSchema,
   GitHubCommitSchema,
   GitHubContentSchema,
   GitHubCreateUpdateFileResponseSchema,
@@ -691,6 +692,29 @@ async function searchUsers(
   return SearchUsersResponseSchema.parse(await response.json());
 }
 
+async function getIssue(
+  owner: string,
+  repo: string,
+  issueNumber: number
+): Promise<GitHubIssue> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`,
+    {
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+      },
+    }
+);
+
+  if (!response.ok) {
+    throw new Error(`Github API error: ${response.statusText}`);
+  }
+
+  return GitHubIssueSchema.parse(await response.json());
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -778,6 +802,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "Search for users on GitHub",
         inputSchema: zodToJsonSchema(SearchUsersSchema),
       },
+      {
+        name: "get_issue",
+        description: "Get details of a specific issue in a GitHub repository.",
+        inputSchema: zodToJsonSchema(GetIssueSchema)
+      }
     ],
   };
 });
@@ -970,6 +999,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const args = ListCommitsSchema.parse(request.params.arguments);
         const results = await listCommits(args.owner, args.repo, args.page, args.perPage, args.sha);
         return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+      }
+
+      case "get_issue": {
+        const args = z.object({
+          owner: z.string(),
+          repo: z.string(),
+          issue_number: z.number()
+        }).parse(request.params.arguments);
+        const issue = await getIssue(args.owner, args.repo, args.issue_number);
+        return { toolResult: issue };
       }
 
       default:
