@@ -21,14 +21,6 @@ interface ColumnRow {
   data_type: string;
 }
 
-interface QueryResult {
-  content: Array<{
-    type: string;
-    text: string;
-  }>;
-  isError: boolean;
-}
-
 const config = {
   server: {
     name: "example-servers/mysql",
