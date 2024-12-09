@@ -28,7 +28,6 @@
     "@modelcontextprotocol/server-memory": "*",
     "@modelcontextprotocol/server-filesystem": "*",
     "@modelcontextprotocol/server-everart": "*",
-    "@modelcontextprotocol/server-sequential-thinking": "*",
-    "@modelcontextprotocol/server-mysql": "*"
+    "@modelcontextprotocol/server-sequential-thinking": "*"
   }
 }
