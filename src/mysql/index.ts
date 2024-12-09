@@ -44,7 +44,7 @@ const MYSQL_DB = process.env.MYSQL_DB || "";
 const pool = mysql.createPool({
   connectionLimit: 10,
   host: MYSQL_HOST,
-  port: MYSQL_PORT,
+  port: Number(MYSQL_PORT),
   user: MYSQL_USER,
   password: MYSQL_PASS,
   database: MYSQL_DB,
@@ -54,7 +54,7 @@ const SCHEMA_PATH = "schema";
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => {
   return new Promise((resolve, reject) => {
-    pool.query<TableRow[]>(
+    pool.query(
       "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()",
       (error: MySQLErrorType, results: TableRow[]) => {
         if (error) reject(error);
@@ -85,7 +85,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   }
 
   return new Promise((resolve, reject) => {
-    pool.query<ColumnRow[]>(
+    pool.query(
       "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = ?",
       [tableName],
       (error: MySQLErrorType, results: ColumnRow[]) => {
