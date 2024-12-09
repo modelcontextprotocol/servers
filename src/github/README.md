@@ -1,6 +1,6 @@
 # GitHub MCP Server
 
-MCP Server for the GitHub API, enabling file operations, repository management, and more.
+MCP Server for the GitHub API, enabling file operations, repository management, search functionality, and more.
 
 ### Features
 
@@ -8,6 +8,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
 - **Comprehensive Error Handling**: Clear error messages for common issues
 - **Git History Preservation**: Operations maintain proper Git history without force pushing
 - **Batch Operations**: Support for both single-file and multi-file operations
+- **Advanced Search**: Support for searching code, issues/PRs, and users
 
 
 ## Tools
@@ -101,6 +102,107 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `branch` (string): Name for new branch
      - `from_branch` (optional string): Source branch (defaults to repo default)
    - Returns: Created branch reference
+
+10. `list_issues`
+    - List and filter repository issues
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `state` (optional string): Filter by state ('open', 'closed', 'all')
+      - `labels` (optional string[]): Filter by labels
+      - `sort` (optional string): Sort by ('created', 'updated', 'comments')
+      - `direction` (optional string): Sort direction ('asc', 'desc')
+      - `since` (optional string): Filter by date (ISO 8601 timestamp)
+      - `page` (optional number): Page number
+      - `per_page` (optional number): Results per page
+    - Returns: Array of issue details
+
+11. `update_issue`
+    - Update an existing issue
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `issue_number` (number): Issue number to update
+      - `title` (optional string): New title
+      - `body` (optional string): New description
+      - `state` (optional string): New state ('open' or 'closed')
+      - `labels` (optional string[]): New labels
+      - `assignees` (optional string[]): New assignees
+      - `milestone` (optional number): New milestone number
+    - Returns: Updated issue details
+
+12. `add_issue_comment`
+    - Add a comment to an issue
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `issue_number` (number): Issue number to comment on
+      - `body` (string): Comment text
+    - Returns: Created comment details
+
+13. `search_code`
+    - Search for code across GitHub repositories
+    - Inputs:
+      - `q` (string): Search query using GitHub code search syntax
+      - `sort` (optional string): Sort field ('indexed' only)
+      - `order` (optional string): Sort order ('asc' or 'desc')
+      - `per_page` (optional number): Results per page (max 100)
+      - `page` (optional number): Page number
+    - Returns: Code search results with repository context
+
+14. `search_issues`
+    - Search for issues and pull requests
+    - Inputs:
+      - `q` (string): Search query using GitHub issues search syntax
+      - `sort` (optional string): Sort field (comments, reactions, created, etc.)
+      - `order` (optional string): Sort order ('asc' or 'desc')
+      - `per_page` (optional number): Results per page (max 100)
+      - `page` (optional number): Page number
+    - Returns: Issue and pull request search results
+
+15. `search_users`
+    - Search for GitHub users
+    - Inputs:
+      - `q` (string): Search query using GitHub users search syntax
+      - `sort` (optional string): Sort field (followers, repositories, joined)
+      - `order` (optional string): Sort order ('asc' or 'desc')
+      - `per_page` (optional number): Results per page (max 100)
+      - `page` (optional number): Page number
+    - Returns: User search results
+
+16. `list_commits`
+   - Gets commits of a branch in a repository
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `page` (optional string): page number
+     - `per_page` (optional string): number of record per page
+     - `sha` (optional string): branch name
+   - Returns: List of commits
+
+## Search Query Syntax
+
+### Code Search
+- `language:javascript`: Search by programming language
+- `repo:owner/name`: Search in specific repository
+- `path:app/src`: Search in specific path
+- `extension:js`: Search by file extension
+- Example: `q: "import express" language:typescript path:src/`
+
+### Issues Search
+- `is:issue` or `is:pr`: Filter by type
+- `is:open` or `is:closed`: Filter by state
+- `label:bug`: Search by label
+- `author:username`: Search by author
+- Example: `q: "memory leak" is:issue is:open label:bug`
+
+### Users Search
+- `type:user` or `type:org`: Filter by account type
+- `followers:>1000`: Filter by followers
+- `location:London`: Search by location
+- Example: `q: "fullstack developer" location:London followers:>100`
+
+For detailed search syntax, see [GitHub's searching documentation](https://docs.github.com/en/search-github/searching-on-github).
 
 ## Setup
 

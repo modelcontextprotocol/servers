@@ -53,6 +53,13 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `max_count` (number, optional): Maximum number of commits to show (default: 10)
    - Returns: Array of commit entries with hash, author, date, and message
 
+8. `git_create_branch`
+   - Creates a new branch
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `branch_name` (string): Name of the new branch
+     - `start_point` (string, optional): Starting point for the new branch
+   - Returns: Confirmation of branch creation
 
 ## Installation
 
@@ -154,6 +161,29 @@ Or if you've installed the package in a specific directory or are developing on 
 ```
 cd path/to/servers/src/git
 npx @modelcontextprotocol/inspector uv run mcp-server-git
+```
+
+Running `tail -n 20 -f ~/Library/Logs/Claude/mcp*.log` will show the logs from the server and may
+help you debug any issues.
+
+## Development
+
+If you are doing local development, there are two ways to test your changes:
+
+1. Run the MCP inspector to test your changes. See [Debugging](#debugging) for run instructions.
+
+2. Test using the Claude desktop app. Add the following to your `claude_desktop_config.json`:
+
+```json
+"git": {
+  "command": "uv",
+  "args": [
+    "--directory",
+    "/<path to mcp-servers>/mcp-servers/src/git",
+    "run",
+    "mcp-server-git"
+  ]
+}
 ```
 
 ## License

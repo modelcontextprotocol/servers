@@ -1,7 +1,7 @@
 {
   "name": "@modelcontextprotocol/servers",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.6.2",
   "description": "Model Context Protocol servers",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
@@ -26,6 +26,8 @@
     "@modelcontextprotocol/server-slack": "*",
     "@modelcontextprotocol/server-brave-search": "*",
     "@modelcontextprotocol/server-memory": "*",
-    "@modelcontextprotocol/server-filesystem": "*"
+    "@modelcontextprotocol/server-filesystem": "*",
+    "@modelcontextprotocol/server-everart": "*",
+    "@modelcontextprotocol/server-sequential-thinking": "*"
   }
 }
