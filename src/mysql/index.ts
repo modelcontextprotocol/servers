@@ -21,6 +21,14 @@ interface ColumnRow {
   data_type: string;
 }
 
+interface QueryResult {
+  content: Array<{
+    type: string;
+    text: string;
+  }>;
+  isError: boolean;
+}
+
 const config = {
   server: {
     name: "example-servers/mysql",
@@ -39,11 +47,11 @@ const config = {
   },
 };
 
-const mysqlQuery = (
+const mysqlQuery = <T>(
   connection: PoolConnection,
   sql: string,
   params: any[] = [],
-): Promise<any> => {
+): Promise<T> => {
   return new Promise((resolve, reject) => {
     connection.query(sql, params, (error: MySQLErrorType, results: any) => {
       if (error) reject(error);
@@ -91,17 +99,17 @@ const server = new Server(config.server, {
   },
 });
 
-async function executeQuery(sql: string, params: any[] = []): Promise<any> {
+async function executeQuery<T>(sql: string, params: any[] = []): Promise<T> {
   const connection = await mysqlGetConnection(pool);
   try {
-    const results = await mysqlQuery(connection, sql, params);
+    const results = await mysqlQuery<T>(connection, sql, params);
     return results;
   } finally {
     connection.release();
   }
 }
 
-async function executeReadOnlyQuery(sql: string): Promise<any> {
+async function executeReadOnlyQuery<T>(sql: string): Promise<T> {
   const connection = await mysqlGetConnection(pool);
 
   try {
@@ -120,7 +128,7 @@ async function executeReadOnlyQuery(sql: string): Promise<any> {
     // Reset to read-write mode
     await mysqlQuery(connection, "SET SESSION TRANSACTION READ WRITE");
 
-    return {
+    return <T>{
       content: [
         {
           type: "text",
