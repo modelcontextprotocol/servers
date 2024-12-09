@@ -1,0 +1,30 @@
+{
+  "name": "@modelcontextprotocol/server-mssql",
+  "version": "0.6.2",
+  "description": "MCP server for interacting with Microsoft SQL Server databases",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "bin": {
+    "mcp-server-mssql": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.0.1",
+    "mssql": "^10.0.1"
+  },
+  "devDependencies": {
+    "@types/mssql": "^9.1.5",
+    "shx": "^0.3.4",
+    "typescript": "^5.6.2"
+  }
+}
