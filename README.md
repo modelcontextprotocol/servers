@@ -22,6 +22,7 @@ These servers aim to demonstrate MCP features and the Typescript and Python SDK.
 - **[Google Maps](src/google-maps)** - Location services, directions, and place details
 - **[Memory](src/memory)** - Knowledge graph-based persistent memory system
 - **[PostgreSQL](src/postgres)** - Read-only database access with schema inspection
+- **[MySQL](src/mysql)** - Read-only database access with schema inspection for MySQL
 - **[Puppeteer](src/puppeteer)** - Browser automation and web scraping
 - **[Sentry](src/sentry)** - Retrieving and analyzing issues from Sentry.io
 - **[Sequential Thinking](src/sequentialthinking)** - Dynamic and reflective problem-solving through thought sequences
