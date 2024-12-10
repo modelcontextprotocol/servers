@@ -65,6 +65,21 @@ The server provides access to two types of resources:
 ## Configuration to use Puppeteer Server
 Here's the Claude Desktop configuration to use the Puppeter server:
 
+### Docker
+
+```json
+{
+  "mcpServers": {
+    "puppeteer": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "--init", "ai/mcp-puppeteer"]
+    }
+  }
+}
+```
+
+### NPX
+
 ```json
 {
   "mcpServers": {
@@ -74,6 +89,14 @@ Here's the Claude Desktop configuration to use the Puppeter server:
     }
   }
 }
+```
+
+## Build
+
+Docker build:
+
+```bash
+docker build -t ai/mcp-puppeteer -f src/puppeteer/Dockerfile .
 ```
 
 ## License

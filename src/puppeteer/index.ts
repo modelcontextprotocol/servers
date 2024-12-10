@@ -108,7 +108,7 @@ const screenshots = new Map<string, string>();
 
 async function ensureBrowser() {
   if (!browser) {
-    browser = await puppeteer.launch({ headless: false });
+    browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"] });
     const pages = await browser.pages();
     page = pages[0];
 
