@@ -124,6 +124,15 @@ async function ensureBrowser() {
   return page!;
 }
 
+declare global {
+  interface Window {
+    mcpHelper: {
+      logs: string[],
+      originalConsole: Partial<typeof console>,
+    }
+  }
+}
+
 async function handleToolCall(name: string, args: any): Promise<CallToolResult> {
   const page = await ensureBrowser();
 
@@ -263,32 +272,34 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
 
     case "puppeteer_evaluate":
       try {
-        const result = await page.evaluate((script) => {
-          const logs: string[] = [];
-          const originalConsole = { ...console };
+        await page.evaluate(() => {
+          window.mcpHelper = {
+            logs: [],
+            originalConsole: { ...console },
+          };
 
           ['log', 'info', 'warn', 'error'].forEach(method => {
             (console as any)[method] = (...args: any[]) => {
-              logs.push(`[${method}] ${args.join(' ')}`);
-              (originalConsole as any)[method](...args);
+              window.mcpHelper.logs.push(`[${method}] ${args.join(' ')}`);
+              (window.mcpHelper.originalConsole as any)[method](...args);
             };
-          });
+          } );
+        } );
 
-          try {
-            const result = eval(script);
-            Object.assign(console, originalConsole);
-            return { result, logs };
-          } catch (error) {
-            Object.assign(console, originalConsole);
-            throw error;
-          }
-        }, args.script);
+        const result = await page.evaluate( args.script );
+
+        const logs = await page.evaluate(() => {
+          Object.assign(console, window.mcpHelper.originalConsole);
+          const logs = window.mcpHelper.logs;
+          delete ( window as any).mcpHelper;
+          return logs;
+        });
 
         return {
           content: [
             {
               type: "text",
-              text: `Execution result:\n${JSON.stringify(result.result, null, 2)}\n\nConsole output:\n${result.logs.join('\n')}`,
+              text: `Execution result:\n${JSON.stringify(result, null, 2)}\n\nConsole output:\n${logs.join('\n')}`,
             },
           ],
           isError: false,
