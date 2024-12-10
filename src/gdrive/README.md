@@ -49,6 +49,21 @@ To authenticate and save credentials:
 
 To integrate this server with the desktop app, add the following to your app's server configuration:
 
+#### Docker
+
+```json
+{
+  "mcpServers": {
+    "gdrive": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "ai/mcp-gdrive"]
+    }
+  }
+}
+```
+
+#### NPX
+
 ```json
 {
   "mcpServers": {

@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.0.1",
-    "@types/node": "^20.11.0",
+    "@types/node": "^22",
     "@types/node-fetch": "^2.6.12",
     "node-fetch": "^3.3.2",
     "zod": "^3.22.4",

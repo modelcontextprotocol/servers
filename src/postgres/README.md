@@ -24,6 +24,21 @@ The server provides schema information for each table in the database:
 
 To use this server with the Claude Desktop app, add the following configuration to the "mcpServers" section of your `claude_desktop_config.json`:
 
+### Docker
+
+```json
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "ai/mcp-postgres", "host.docker.internal:5432/mydb"]
+    }
+  }
+}
+```
+
+### NPX
+
 ```json
 {
   "mcpServers": {
@@ -40,6 +55,14 @@ To use this server with the Claude Desktop app, add the following configuration 
 ```
 
 Replace `/mydb` with your database name.
+
+## Building
+
+Docker:
+
+```sh
+docker build -t ai/mcp-postgres -f src/postgres/Dockerfile . 
+```
 
 ## License
 
