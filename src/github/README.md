@@ -180,6 +180,14 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `sha` (optional string): branch name
    - Returns: List of commits
 
+17. `get_issue`
+   - Gets the contents of an issue within a repository
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `issue_number` (number): Issue number to retrieve
+   - Returns: Github Issue object & details
+
 ## Search Query Syntax
 
 ### Code Search

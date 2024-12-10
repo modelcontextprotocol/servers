@@ -27,12 +27,12 @@ Resources:
 This server exposes one key resource: "memo://insights", which is a business insights memo that gets automatically updated throughout the analysis process. As users analyze the database and discover insights, the memo resource gets updated in real-time to reflect new findings. Resources act as living documents that provide context to the conversation.
 Tools:
 This server provides several SQL-related tools:
-"read-query": Executes SELECT queries to read data from the database
-"write-query": Executes INSERT, UPDATE, or DELETE queries to modify data
-"create-table": Creates new tables in the database
-"list-tables": Shows all existing tables
-"describe-table": Shows the schema for a specific table
-"append-insight": Adds a new business insight to the memo resource
+"read_query": Executes SELECT queries to read data from the database
+"write_query": Executes INSERT, UPDATE, or DELETE queries to modify data
+"create_table": Creates new tables in the database
+"list_tables": Shows all existing tables
+"describe_table": Shows the schema for a specific table
+"append_insight": Adds a new business insight to the memo resource
 </mcp>
 <demo-instructions>
 You are an AI assistant tasked with generating a comprehensive business scenario based on a given topic.
@@ -68,7 +68,7 @@ a. Present 1 additional multiple-choice query options to the user. Its important
 b. Explain the purpose of each query option.
 c. Wait for the user to select one of the query options.
 d. After each query be sure to opine on the results.
-e. Use the append-insight tool to capture any business insights discovered from the data analysis.
+e. Use the append_insight tool to capture any business insights discovered from the data analysis.
 
 7. Generate a dashboard:
 a. Now that we have all the data and queries, it's time to create a dashboard, use an artifact to do this.
@@ -233,7 +233,7 @@ async def main(db_path: str):
         """List available tools"""
         return [
             types.Tool(
-                name="read-query",
+                name="read_query",
                 description="Execute a SELECT query on the SQLite database",
                 inputSchema={
                     "type": "object",
@@ -244,7 +244,7 @@ async def main(db_path: str):
                 },
             ),
             types.Tool(
-                name="write-query",
+                name="write_query",
                 description="Execute an INSERT, UPDATE, or DELETE query on the SQLite database",
                 inputSchema={
                     "type": "object",
@@ -255,7 +255,7 @@ async def main(db_path: str):
                 },
             ),
             types.Tool(
-                name="create-table",
+                name="create_table",
                 description="Create a new table in the SQLite database",
                 inputSchema={
                     "type": "object",
@@ -266,7 +266,7 @@ async def main(db_path: str):
                 },
             ),
             types.Tool(
-                name="list-tables",
+                name="list_tables",
                 description="List all tables in the SQLite database",
                 inputSchema={
                     "type": "object",
@@ -274,7 +274,7 @@ async def main(db_path: str):
                 },
             ),
             types.Tool(
-                name="describe-table",
+                name="describe_table",
                 description="Get the schema information for a specific table",
                 inputSchema={
                     "type": "object",
@@ -285,7 +285,7 @@ async def main(db_path: str):
                 },
             ),
             types.Tool(
-                name="append-insight",
+                name="append_insight",
                 description="Add a business insight to the memo",
                 inputSchema={
                     "type": "object",
@@ -303,13 +303,13 @@ async def main(db_path: str):
     ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
         """Handle tool execution requests"""
         try:
-            if name == "list-tables":
+            if name == "list_tables":
                 results = db._execute_query(
                     "SELECT name FROM sqlite_master WHERE type='table'"
                 )
                 return [types.TextContent(type="text", text=str(results))]
 
-            elif name == "describe-table":
+            elif name == "describe_table":
                 if not arguments or "table_name" not in arguments:
                     raise ValueError("Missing table_name argument")
                 results = db._execute_query(
@@ -317,7 +317,7 @@ async def main(db_path: str):
                 )
                 return [types.TextContent(type="text", text=str(results))]
 
-            elif name == "append-insight":
+            elif name == "append_insight":
                 if not arguments or "insight" not in arguments:
                     raise ValueError("Missing insight argument")
 
@@ -332,19 +332,19 @@ async def main(db_path: str):
             if not arguments:
                 raise ValueError("Missing arguments")
 
-            if name == "read-query":
+            if name == "read_query":
                 if not arguments["query"].strip().upper().startswith("SELECT"):
-                    raise ValueError("Only SELECT queries are allowed for read-query")
+                    raise ValueError("Only SELECT queries are allowed for read_query")
                 results = db._execute_query(arguments["query"])
                 return [types.TextContent(type="text", text=str(results))]
 
-            elif name == "write-query":
+            elif name == "write_query":
                 if arguments["query"].strip().upper().startswith("SELECT"):
-                    raise ValueError("SELECT queries are not allowed for write-query")
+                    raise ValueError("SELECT queries are not allowed for write_query")
                 results = db._execute_query(arguments["query"])
                 return [types.TextContent(type="text", text=str(results))]
 
-            elif name == "create-table":
+            elif name == "create_table":
                 if not arguments["query"].strip().upper().startswith("CREATE TABLE"):
                     raise ValueError("Only CREATE TABLE statements are allowed")
                 db._execute_query(arguments["query"])

@@ -6,7 +6,7 @@ A Model Context Protocol server for retrieving and analyzing issues from Sentry.
 
 ### Tools
 
-1. `get-sentry-issue`
+1. `get_sentry_issue`
    - Retrieve and analyze a Sentry issue by ID or URL
    - Input:
      - `issue_id_or_url` (string): Sentry issue ID or URL to analyze

@@ -677,6 +677,12 @@ export const IssueCommentSchema = z.object({
   body: z.string()
 });
 
+export const GetIssueSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  issue_number: z.number().describe("Issue number")
+});
+
 // Export types
 export type GitHubAuthor = z.infer<typeof GitHubAuthorSchema>;
 export type GitHubFork = z.infer<typeof GitHubForkSchema>;

@@ -26,34 +26,41 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `repo_path` (string): Path to Git repository
    - Returns: Diff output of staged changes
 
-4. `git_commit`
+4. `git_diff`
+   - Shows differences between branches or commits
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `target` (string): Target branch or commit to compare with
+   - Returns: Diff output comparing current state with target
+
+5. `git_commit`
    - Records changes to the repository
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `message` (string): Commit message
    - Returns: Confirmation with new commit hash
 
-5. `git_add`
+6. `git_add`
    - Adds file contents to the staging area
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `files` (string[]): Array of file paths to stage
    - Returns: Confirmation of staged files
 
-6. `git_reset`
+7. `git_reset`
    - Unstages all staged changes
    - Input:
      - `repo_path` (string): Path to Git repository
    - Returns: Confirmation of reset operation
 
-7. `git_log`
+8. `git_log`
    - Shows the commit logs
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `max_count` (number, optional): Maximum number of commits to show (default: 10)
    - Returns: Array of commit entries with hash, author, date, and message
 
-8. `git_create_branch`
+9. `git_create_branch`
    - Creates a new branch
    - Inputs:
      - `repo_path` (string): Path to Git repository
