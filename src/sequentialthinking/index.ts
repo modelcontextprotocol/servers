@@ -101,7 +101,7 @@ class SequentialThinkingServer {
       }
 
       const formattedThought = this.formatThought(validatedInput);
-      console.error(formattedThought);
+      console.log(formattedThought);
 
       return {
         content: [{
@@ -269,7 +269,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Sequential Thinking MCP Server running on stdio");
+  console.log("Sequential Thinking MCP Server running on stdio");
 }
 
 runServer().catch((error) => {

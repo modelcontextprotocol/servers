@@ -154,7 +154,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("EverArt MCP Server running on stdio");
+  console.log("EverArt MCP Server running on stdio");
 }
 
 runServer().catch(console.error);

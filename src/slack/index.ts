@@ -363,7 +363,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.error("Starting Slack MCP Server...");
+  console.log("Starting Slack MCP Server...");
   const server = new Server(
     {
       name: "Slack MCP Server",
@@ -381,7 +381,7 @@ async function main() {
   server.setRequestHandler(
     CallToolRequestSchema,
     async (request: CallToolRequest) => {
-      console.error("Received CallToolRequest:", request);
+      console.log("Received CallToolRequest:", request);
       try {
         if (!request.params.arguments) {
           throw new Error("No arguments provided");
@@ -526,7 +526,7 @@ async function main() {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    console.error("Received ListToolsRequest");
+    console.log("Received ListToolsRequest");
     return {
       tools: [
         listChannelsTool,
@@ -542,10 +542,10 @@ async function main() {
   });
 
   const transport = new StdioServerTransport();
-  console.error("Connecting server to transport...");
+  console.log("Connecting server to transport...");
   await server.connect(transport);
 
-  console.error("Slack MCP Server running on stdio");
+  console.log("Slack MCP Server running on stdio");
 }
 
 main().catch((error) => {
