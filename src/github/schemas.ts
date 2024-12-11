@@ -299,7 +299,7 @@ export const GitHubPullRequestSchema = z.object({
   locked: z.boolean(),
   title: z.string(),
   user: GitHubIssueAssigneeSchema,
-  body: z.string(),
+  body: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
   closed_at: z.string().nullable(),
@@ -555,6 +555,37 @@ export const SearchUsersResponseSchema = z.object({
   items: z.array(SearchUserItemSchema).describe("The search results"),
 });
 
+export const ListPullRequestsOptionsSchema = z.object({
+  owner: z.string(),
+  repo: z.string(),
+  state: z.enum(['open', 'closed', 'all']).optional(),
+  head: z.string().optional(),
+  base: z.string().optional(),
+  sort: z.enum(['created', 'updated', 'popularity', 'long-running']).optional(),
+  direction: z.enum(['asc', 'desc']).optional(),
+  page: z.number().optional(),
+  per_page: z.number().optional(),
+});
+
+export const GetPullRequestSchema = z.object({
+  owner: z.string(),
+  repo: z.string(),
+  pull_number: z.number(),
+});
+
+export const ReviewPullRequestSchema = z.object({
+  owner: z.string(),
+  repo: z.string(),
+  pull_number: z.number(),
+  event: z.enum(['APPROVE', 'REQUEST_CHANGES', 'COMMENT']),
+  body: z.string(),
+  comments: z.array(z.object({
+    path: z.string(),
+    position: z.number(),
+    body: z.string(),
+  })).optional(),
+});
+
 /**
  * Input schema for code search
  * @see https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-code--parameters
@@ -683,6 +714,12 @@ export const GetIssueSchema = z.object({
   issue_number: z.number().describe("Issue number")
 });
 
+export const GetPullRequestDiffSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number"),
+});
+
 // Export types
 export type GitHubAuthor = z.infer<typeof GitHubAuthorSchema>;
 export type GitHubFork = z.infer<typeof GitHubForkSchema>;
@@ -717,3 +754,12 @@ export type SearchIssueItem = z.infer<typeof SearchIssueItemSchema>;
 export type SearchIssuesResponse = z.infer<typeof SearchIssuesResponseSchema>;
 export type SearchUserItem = z.infer<typeof SearchUserItemSchema>;
 export type SearchUsersResponse = z.infer<typeof SearchUsersResponseSchema>;
+
+export type ListPullRequestsOptions = z.infer<
+  typeof ListPullRequestsOptionsSchema
+>;
+export type GetPullRequest = z.infer<typeof GetPullRequestSchema>;
+export type ReviewPullRequest = z.infer<typeof ReviewPullRequestSchema>;
+export type SearchCode = z.infer<typeof SearchCodeSchema>;
+export type SearchIssues = z.infer<typeof SearchIssuesSchema>;
+export type SearchUsers = z.infer<typeof SearchUsersSchema>;
