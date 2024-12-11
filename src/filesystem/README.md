@@ -82,6 +82,7 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - Inputs:
     - `path` (string): Starting directory
     - `pattern` (string): Search pattern
+    - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
   - Case-insensitive matching
   - Returns full paths to matches
 
