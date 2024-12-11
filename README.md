@@ -79,7 +79,6 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[RAG Web Browser](https://github.com/apify/mcp-server-rag-web-browser)** An MCP server for Apify's RAG Web Browser Actor to perform web searches, scrape URLs, and return content in Markdown.
 
 
-
 ## 📚 Resources
 
 Additional resources on MCP.
