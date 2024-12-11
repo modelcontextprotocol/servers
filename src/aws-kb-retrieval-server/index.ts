@@ -157,7 +157,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("AWS KB Retrieval Server running on stdio");
+  console.log("AWS KB Retrieval Server running on stdio");
 }
 
 runServer().catch((error) => {

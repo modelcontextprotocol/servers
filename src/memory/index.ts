@@ -405,7 +405,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Knowledge Graph MCP Server running on stdio");
+  console.log("Knowledge Graph MCP Server running on stdio");
 }
 
 main().catch((error) => {
