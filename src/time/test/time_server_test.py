@@ -1,9 +1,9 @@
-
 from freezegun import freeze_time
 from mcp.shared.exceptions import McpError
 import pytest
+from zoneinfo import ZoneInfo
 
-from mcp_server_time.server import TimeServer
+from mcp_server_time.server import TimeServer, parse_offset_timezone
 
 
 @pytest.mark.parametrize(
@@ -447,6 +447,125 @@ def test_convert_time_errors(source_tz, time_str, target_tz, expected_error):
     ],
 )
 def test_convert_time(test_time, source_tz, time_str, target_tz, expected):
+    with freeze_time(test_time):
+        time_server = TimeServer()
+        result = time_server.convert_time(source_tz, time_str, target_tz)
+
+        assert result.source.timezone == expected["source"]["timezone"]
+        assert result.target.timezone == expected["target"]["timezone"]
+        assert result.source.datetime == expected["source"]["datetime"]
+        assert result.target.datetime == expected["target"]["datetime"]
+        assert result.source.is_dst == expected["source"]["is_dst"]
+        assert result.target.is_dst == expected["target"]["is_dst"]
+        assert result.time_difference == expected["time_difference"]
+
+
+@pytest.mark.parametrize(
+    "offset,expected_timezone",
+    [
+        ("+0530", "Asia/Kolkata"),
+        ("+0800", "Asia/Singapore"),
+        ("+0900", "Asia/Tokyo"),
+        ("-0500", "America/New_York"),
+        ("-0800", "America/Los_Angeles"),
+        ("+0545", "Asia/Kathmandu"),
+        ("+0330", "Asia/Tehran"),
+    ],
+)
+def test_parse_offset_timezone(offset, expected_timezone):
+    """Test that offset timezones are correctly mapped to IANA timezones"""
+    result = parse_offset_timezone(offset)
+    assert isinstance(result, ZoneInfo)
+    # Convert both to the same time to compare their offsets
+    test_time = "2024-01-01 12:00:00"
+    with freeze_time(test_time):
+        offset_time = result.utcoffset(None)
+        expected_time = ZoneInfo(expected_timezone).utcoffset(None)
+        assert offset_time == expected_time
+
+
+@pytest.mark.parametrize(
+    "invalid_offset",
+    [
+        "0530",  # Missing sign
+        "+530",  # Missing leading zero
+        "+05300",  # Too many digits
+        "+05:30",  # Invalid format with colon
+        "invalid",  # Invalid format
+    ],
+)
+def test_parse_offset_timezone_invalid(invalid_offset):
+    """Test that invalid offset formats return None"""
+    assert parse_offset_timezone(invalid_offset) is None
+
+
+@pytest.mark.parametrize(
+    "test_time,source_tz,time_str,target_tz,expected",
+    [
+        # Test offset timezone as source
+        (
+            "2024-01-01 00:00:00+00:00",
+            "+0530",
+            "12:00",
+            "Europe/London",
+            {
+                "source": {
+                    "timezone": "+0530",
+                    "datetime": "2024-01-01T12:00:00+05:30",
+                    "is_dst": False,
+                },
+                "target": {
+                    "timezone": "Europe/London",
+                    "datetime": "2024-01-01T06:30:00+00:00",
+                    "is_dst": False,
+                },
+                "time_difference": "-5.5h",
+            },
+        ),
+        # Test offset timezone as target
+        (
+            "2024-01-01 00:00:00+00:00",
+            "Europe/London",
+            "12:00",
+            "+0530",
+            {
+                "source": {
+                    "timezone": "Europe/London",
+                    "datetime": "2024-01-01T12:00:00+00:00",
+                    "is_dst": False,
+                },
+                "target": {
+                    "timezone": "+0530",
+                    "datetime": "2024-01-01T17:30:00+05:30",
+                    "is_dst": False,
+                },
+                "time_difference": "+5.5h",
+            },
+        ),
+        # Test offset timezone with unusual offset
+        (
+            "2024-01-01 00:00:00+00:00", 
+            "Europe/London",
+            "12:00",
+            "+0545",
+            {
+                "source": {
+                    "timezone": "Europe/London",
+                    "datetime": "2024-01-01T12:00:00+00:00", 
+                    "is_dst": False,
+                },
+                "target": {
+                    "timezone": "+0545",
+                    "datetime": "2024-01-01T17:45:00+05:45",
+                    "is_dst": False,
+                },
+                "time_difference": "+5.75h",
+            },
+        ),
+    ],
+)
+def test_convert_time_with_offset_timezone(test_time, source_tz, time_str, target_tz, expected):
+    """Test time conversion using offset-style timezones"""
     with freeze_time(test_time):
         time_server = TimeServer()
         result = time_server.convert_time(source_tz, time_str, target_tz)
