@@ -1,18 +1,18 @@
 # Time MCP Server
 
-A Model Context Protocol server that provides time and timezone conversion capabilities. This server enables LLMs to get current time information and perform timezone conversions using IANA timezone names, with automatic system timezone detection.
+A Model Context Protocol server that provides time and timezone conversion capabilities. This server enables LLMs to get current time information and perform timezone conversions using IANA timezone names or offset formats (e.g. +0530), with automatic system timezone detection.
 
 ### Available Tools
 
 - `get_current_time` - Get current time in a specific timezone or system timezone.
   - Required arguments:
-    - `timezone` (string): IANA timezone name (e.g., 'America/New_York', 'Europe/London')
+    - `timezone` (string): IANA timezone name (e.g., 'America/New_York', 'Europe/London') or offset format (e.g., '+0530', '-0800')
 
 - `convert_time` - Convert time between timezones.
   - Required arguments:
-    - `source_timezone` (string): Source IANA timezone name
+    - `source_timezone` (string): Source IANA timezone name or offset format
     - `time` (string): Time in 24-hour format (HH:MM)
-    - `target_timezone` (string): Target IANA timezone name
+    - `target_timezone` (string): Target IANA timezone name or offset format
 
 ## Installation
 
