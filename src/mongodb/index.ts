@@ -420,7 +420,6 @@ class MongoDBServer {
       this.client = new MongoClient(MONGODB_URI!);
       await this.client.connect();
       this.db = this.client.db();
-      console.log("Connected to MongoDB successfully");
     } catch (error) {
       console.error("Failed to connect to MongoDB:", error);
       throw error;
@@ -437,7 +436,6 @@ class MongoDBServer {
     await this.connect();
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.log("MongoDB MCP server running on stdio");
   }
 }
 

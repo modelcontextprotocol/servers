@@ -1,9 +1,11 @@
 {
-  "name": "@pash1986/mcp-server-mongodb",
+  "name": "@modelcontextprotocol/server-mongodb",
   "version": "0.1.7",
   "description": "MongoDB MCP server for local mongodb queries",
   "type": "module",
-  "bin": "./bin/mcp-server-mongodb.js",
+  "bin": {
+    "mcp-server-mongodb": "build/index.js"
+  },
   "engines": {
     "node": ">=18.0.0"
   },
@@ -11,13 +13,13 @@
   "homepage": "https://modelcontextprotocol.io",
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
   "files": [
-    "bin",
+    "build",
     "src",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "start": "node ./bin/mcp-server-mongodb.js",
+    "start": "node ./build/index.js",
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
     "prepare": "npm run build",
     "watch": "tsc --watch",
