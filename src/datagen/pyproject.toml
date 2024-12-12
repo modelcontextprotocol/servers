@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mcp-server-datagen"
+version = "0.1.0"
+description = "MCP server for generating notional data using Python libraries"
+requires-python = ">=3.11"
+dependencies = [
+    "faker>=20.1.0",
+    "mimesis>=13.1.0",
+    "numpy>=2.1.2",
+    "sdv>=1.5.0",
+    "pandas>=2.1.0",
+    "mcp>=1.0.0",
+    "pydantic>=2.0.0"
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",
+    "black>=23.0.0",
+    "pyright>=1.1.0",
+    "ruff>=0.8.2"
+]
