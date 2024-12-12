@@ -38,14 +38,22 @@ class TimeConversionInput(BaseModel):
     target_tz_list: list[str]
 
 
+
 def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     if local_tz_override:
+        # Try to handle offset-style timezone first
+        if local_tz_override.startswith('+') or local_tz_override.startswith('-'):
+            return get_zoneinfo(local_tz_override)
         return ZoneInfo(local_tz_override)
 
     # Get local timezone from datetime.now()
     tzinfo = datetime.now().astimezone(tz=None).tzinfo
     if tzinfo is not None:
-        return ZoneInfo(str(tzinfo))
+        # Convert tzinfo to string and handle potential offset format
+        tz_str = str(tzinfo)
+        if tz_str.startswith('+') or tz_str.startswith('-'):
+            return get_zoneinfo(tz_str)
+        return ZoneInfo(tz_str)
     raise McpError("Could not determine local timezone - tzinfo is None")
 
 
