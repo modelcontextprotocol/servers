@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 import json
 from typing import Sequence
+import re
 
 from zoneinfo import ZoneInfo
 from mcp.server import Server
@@ -10,6 +11,8 @@ from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
 from mcp.shared.exceptions import McpError
 
 from pydantic import BaseModel
+from zoneinfo import available_timezones
+
 
 
 class TimeTools(str, Enum):
@@ -46,8 +49,47 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     raise McpError("Could not determine local timezone - tzinfo is None")
 
 
+def parse_offset_timezone(timezone_name: str) -> ZoneInfo | None:
+    """Handle offset-style timezones like +0530 and convert to the closest matching IANA timezone"""
+    offset_pattern = re.compile(r'^[+-]\d{4}$')
+    if not offset_pattern.match(timezone_name):
+        return None
+        
+    sign = timezone_name[0]
+    hours = int(timezone_name[1:3])
+    minutes = int(timezone_name[3:5])
+    
+    # Convert to total minutes
+    total_minutes = hours * 60 + minutes
+    if sign == "-":
+        total_minutes = -total_minutes
+
+    # Get all available timezones and find the one that matches our offset
+    now = datetime.now()
+    
+    for tz_name in available_timezones():
+        try:
+            tz = ZoneInfo(tz_name)
+            dt = now.astimezone(tz)
+            offset = dt.utcoffset()
+            if offset and offset.total_seconds() / 60 == total_minutes:
+                return tz
+        except Exception:
+            continue
+            
+    raise McpError(f"Could not find a timezone matching offset {timezone_name}")
+
+
 def get_zoneinfo(timezone_name: str) -> ZoneInfo:
+    """Get ZoneInfo object from timezone name, handling both IANA names and offset formats"""
     try:
+        # First try to handle offset-style timezone
+        if timezone_name.startswith('+') or timezone_name.startswith('-'):
+            tz = parse_offset_timezone(timezone_name)
+            if tz:
+                return tz
+        
+        # If not an offset or offset parsing failed, try as IANA timezone
         return ZoneInfo(timezone_name)
     except Exception as e:
         raise McpError(f"Invalid timezone: {str(e)}")
