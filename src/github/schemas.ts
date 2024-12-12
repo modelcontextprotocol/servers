@@ -274,7 +274,7 @@ export const GitHubIssueSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   closed_at: z.string().nullable(),
-  body: z.string(),
+  body: z.string().nullable(),
 });
 
 // Pull Request related schemas
