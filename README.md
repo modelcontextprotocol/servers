@@ -13,6 +13,7 @@ These servers aim to demonstrate MCP features and the Typescript and Python SDK.
 - **[AWS KB Retrieval](src/aws-kb-retrieval-server)** - Retrieval from AWS Knowledge Base using Bedrock Agent Runtime
 - **[Brave Search](src/brave-search)** - Web and local search using Brave's Search API
 - **[EverArt](src/everart)** - AI image generation using various models
+- **[Everything](src/everything)** - Reference / test server with prompts, resources, and tools
 - **[Fetch](src/fetch)** - Web content fetching and conversion for efficient LLM usage
 - **[Filesystem](src/filesystem)** - Secure file operations with configurable access controls
 - **[Git](src/git)** - Tools to read, search, and manipulate Git repositories
@@ -27,6 +28,7 @@ These servers aim to demonstrate MCP features and the Typescript and Python SDK.
 - **[Sequential Thinking](src/sequentialthinking)** - Dynamic and reflective problem-solving through thought sequences
 - **[Slack](src/slack)** - Channel management and messaging capabilities
 - **[Sqlite](src/sqlite)** - Database interaction and business intelligence capabilities
+- **[Time](src/time)** - Time and timezone conversion capabilities
 
 ## 🤝 Third-Party Servers
 
