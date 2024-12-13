@@ -44,6 +44,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://www.tinybird.co/favicon.ico" alt="Tinybird Logo" /> **[Tinybird](https://github.com/tinybirdco/mcp-tinybird)** - Interact with Tinybird serverless ClickHouse platform
 - <img height="12" width="12" src="https://pics.fatwang2.com/56912e614b35093426c515860f9f2234.svg" /> [Search1API](https://github.com/fatwang2/search1api-mcp) - One API for Search, Crawling, and Sitemaps
 - <img height="12" width="12" src="https://qdrant.tech/img/brand-resources-logos/logomark.svg" /> **[Qdrant](https://github.com/qdrant/mcp-server-qdrant/)** - Implement semantic memory layer on top of the Qdrant vector search engine
+- <img height="12" width="12" src="https://www.mongodb.com/assets/images/global/favicon.ico" /> **[MongoDB](https://github.com/mongodb-developer/mongodb-mcp-server)** - A Model Context Protocol server that provides read-only access to MongoDB databases. This server enables LLMs to inspect collection schemas and execute aggregation pipelines.
 
 ### 🌎 Community Servers
 
