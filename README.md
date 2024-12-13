@@ -88,7 +88,7 @@ Additional resources on MCP.
 - **[mcp-get](https://mcp-get.com)** - Command line tool for installing and managing MCP servers by **[Michael Latman](https://github.com/michaellatman)**
 - **[mcp-cli](https://github.com/wong2/mcp-cli)** - A CLI inspector for the Model Context Protocol by **[wong2](https://github.com/wong2)**
 - **[r/mcp](https://www.reddit.com/r/mcp)** – A Reddit community dedicated to MCP by **[Frank Fiegel](https://github.com/punkpeye)**
-- **[MCPHub](https://github.com/Jeamee/MCPHub-Desktop)** – An Open Source GUI Desktop app for discover, installing and managing MCP servers by **[Jeamee](https://github.com/jeamee)**
+- **[MCPHub](https://github.com/Jeamee/MCPHub-Desktop)** – An Open Source GUI Desktop app for discovering, installing and managing MCP servers by **[Jeamee](https://github.com/jeamee)**
 
 ## 🚀 Getting Started
 
