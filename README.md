@@ -79,6 +79,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[ChatSum](https://github.com/mcpso/mcp-server-chatsum)** - Query and Summarize chat messages with LLM. by [mcpso](https://mcp.so)
 - **[Rememberizer AI](https://github.com/skydeckai/mcp-server-rememberizer)** - An MCP server designed for interacting with the Rememberizer data source, facilitating enhanced knowledge retrieval.
 - **[Twitter](https://github.com/EnesCinr/twitter-mcp)** - Interact with twitter API. Post tweets and search for tweets by query.
+- **[RAG Web Browser](https://github.com/apify/mcp-server-rag-web-browser)** An MCP server for Apify's RAG Web Browser Actor to perform web searches, scrape URLs, and return content in Markdown.
 
 ## 📚 Resources
 
