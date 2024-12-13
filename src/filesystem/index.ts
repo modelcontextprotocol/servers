@@ -13,6 +13,7 @@ import os from 'os';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
+import { minimatch } from 'minimatch';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -23,7 +24,7 @@ if (args.length === 0) {
 
 // Normalize all paths consistently
 function normalizePath(p: string): string {
-  return path.normalize(p).toLowerCase();
+  return path.normalize(p);
 }
 
 function expandHome(filepath: string): string {
@@ -34,7 +35,7 @@ function expandHome(filepath: string): string {
 }
 
 // Store allowed directories in normalized form
-const allowedDirectories = args.map(dir => 
+const allowedDirectories = args.map(dir =>
   normalizePath(path.resolve(expandHome(dir)))
 );
 
@@ -58,7 +59,7 @@ async function validatePath(requestedPath: string): Promise<string> {
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
     : path.resolve(process.cwd(), expandedPath);
-    
+
   const normalizedRequested = normalizePath(absolute);
 
   // Check if path is within allowed directories
@@ -126,6 +127,10 @@ const ListDirectoryArgsSchema = z.object({
   path: z.string(),
 });
 
+const DirectoryTreeArgsSchema = z.object({
+  path: z.string(),
+});
+
 const MoveFileArgsSchema = z.object({
   source: z.string(),
   destination: z.string(),
@@ -134,6 +139,7 @@ const MoveFileArgsSchema = z.object({
 const SearchFilesArgsSchema = z.object({
   path: z.string(),
   pattern: z.string(),
+  excludePatterns: z.array(z.string()).optional().default([])
 });
 
 const GetFileInfoArgsSchema = z.object({
@@ -183,6 +189,7 @@ async function getFileStats(filePath: string): Promise<FileInfo> {
 async function searchFiles(
   rootPath: string,
   pattern: string,
+  excludePatterns: string[] = []
 ): Promise<string[]> {
   const results: string[] = [];
 
@@ -191,10 +198,21 @@ async function searchFiles(
 
     for (const entry of entries) {
       const fullPath = path.join(currentPath, entry.name);
-      
+
       try {
         // Validate each path before processing
         await validatePath(fullPath);
+
+        // Check if path matches any exclude pattern
+        const relativePath = path.relative(rootPath, fullPath);
+        const shouldExclude = excludePatterns.some(pattern => {
+          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
+          return minimatch(relativePath, globPattern, { dot: true });
+        });
+
+        if (shouldExclude) {
+          continue;
+        }
 
         if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
           results.push(fullPath);
@@ -223,7 +241,7 @@ function createUnifiedDiff(originalContent: string, newContent: string, filepath
   // Ensure consistent line endings for diff
   const normalizedOriginal = normalizeLineEndings(originalContent);
   const normalizedNew = normalizeLineEndings(newContent);
-  
+
   return createTwoFilesPatch(
     filepath,
     filepath,
@@ -241,33 +259,33 @@ async function applyFileEdits(
 ): Promise<string> {
   // Read file content and normalize line endings
   const content = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
-  
+
   // Apply edits sequentially
   let modifiedContent = content;
   for (const edit of edits) {
     const normalizedOld = normalizeLineEndings(edit.oldText);
     const normalizedNew = normalizeLineEndings(edit.newText);
-    
+
     // If exact match exists, use it
     if (modifiedContent.includes(normalizedOld)) {
       modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
       continue;
     }
-    
+
     // Otherwise, try line-by-line matching with flexibility for whitespace
     const oldLines = normalizedOld.split('\n');
     const contentLines = modifiedContent.split('\n');
     let matchFound = false;
-    
+
     for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
       const potentialMatch = contentLines.slice(i, i + oldLines.length);
-      
+
       // Compare lines with normalized whitespace
       const isMatch = oldLines.every((oldLine, j) => {
         const contentLine = potentialMatch[j];
         return oldLine.trim() === contentLine.trim();
       });
-      
+
       if (isMatch) {
         // Preserve original indentation of first line
         const originalIndent = contentLines[i].match(/^\s*/)?.[0] || '';
@@ -282,33 +300,33 @@ async function applyFileEdits(
           }
           return line;
         });
-        
+
         contentLines.splice(i, oldLines.length, ...newLines);
         modifiedContent = contentLines.join('\n');
         matchFound = true;
         break;
       }
     }
-    
+
     if (!matchFound) {
       throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
     }
   }
-  
+
   // Create unified diff
   const diff = createUnifiedDiff(content, modifiedContent, filePath);
-  
+
   // Format diff with appropriate number of backticks
   let numBackticks = 3;
   while (diff.includes('`'.repeat(numBackticks))) {
     numBackticks++;
   }
   const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
-  
+
   if (!dryRun) {
     await fs.writeFile(filePath, modifiedContent, 'utf-8');
   }
-  
+
   return formattedDiff;
 }
 
@@ -370,6 +388,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(ListDirectoryArgsSchema) as ToolInput,
       },
       {
+        name: "directory_tree",
+        description:
+            "Get a recursive tree view of files and directories as a JSON structure. " +
+            "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
+            "Files have no children array, while directories always have a children array (which may be empty). " +
+            "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(DirectoryTreeArgsSchema) as ToolInput,
+      },
+      {
         name: "move_file",
         description:
           "Move or rename files and directories. Can move files between directories " +
@@ -399,7 +426,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "list_allowed_directories",
-        description: 
+        description:
           "Returns the list of directories that this server is allowed to access. " +
           "Use this to understand which directories are available before trying to access files.",
         inputSchema: {
@@ -503,6 +530,49 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+        case "directory_tree": {
+            const parsed = DirectoryTreeArgsSchema.safeParse(args);
+            if (!parsed.success) {
+                throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
+            }
+
+            interface TreeEntry {
+                name: string;
+                type: 'file' | 'directory';
+                children?: TreeEntry[];
+            }
+
+            async function buildTree(currentPath: string): Promise<TreeEntry[]> {
+                const validPath = await validatePath(currentPath);
+                const entries = await fs.readdir(validPath, {withFileTypes: true});
+                const result: TreeEntry[] = [];
+
+                for (const entry of entries) {
+                    const entryData: TreeEntry = {
+                        name: entry.name,
+                        type: entry.isDirectory() ? 'directory' : 'file'
+                    };
+
+                    if (entry.isDirectory()) {
+                        const subPath = path.join(currentPath, entry.name);
+                        entryData.children = await buildTree(subPath);
+                    }
+
+                    result.push(entryData);
+                }
+
+                return result;
+            }
+
+            const treeData = await buildTree(parsed.data.path);
+            return {
+                content: [{
+                    type: "text",
+                    text: JSON.stringify(treeData, null, 2)
+                }],
+            };
+        }
+
       case "move_file": {
         const parsed = MoveFileArgsSchema.safeParse(args);
         if (!parsed.success) {
@@ -522,7 +592,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const results = await searchFiles(validPath, parsed.data.pattern);
+        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };
@@ -544,9 +614,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "list_allowed_directories": {
         return {
-          content: [{ 
-            type: "text", 
-            text: `Allowed directories:\n${allowedDirectories.join('\n')}` 
+          content: [{
+            type: "text",
+            text: `Allowed directories:\n${allowedDirectories.join('\n')}`
           }],
         };
       }

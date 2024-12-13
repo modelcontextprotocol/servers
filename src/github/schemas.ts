@@ -274,7 +274,7 @@ export const GitHubIssueSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   closed_at: z.string().nullable(),
-  body: z.string(),
+  body: z.string().nullable(),
 });
 
 // Pull Request related schemas
@@ -675,6 +675,12 @@ export const IssueCommentSchema = z.object({
   repo: z.string(),
   issue_number: z.number(),
   body: z.string()
+});
+
+export const GetIssueSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  issue_number: z.number().describe("Issue number")
 });
 
 // Export types

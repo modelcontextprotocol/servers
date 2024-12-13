@@ -24,6 +24,10 @@ class GitDiffUnstaged(BaseModel):
 class GitDiffStaged(BaseModel):
     repo_path: str
 
+class GitDiff(BaseModel):
+    repo_path: str
+    target: str
+
 class GitCommit(BaseModel):
     repo_path: str
     message: str
@@ -44,15 +48,21 @@ class GitCreateBranch(BaseModel):
     branch_name: str
     base_branch: str | None = None
 
+class GitCheckout(BaseModel):
+    repo_path: str
+    branch_name: str
+
 class GitTools(str, Enum):
     STATUS = "git_status"
     DIFF_UNSTAGED = "git_diff_unstaged"
     DIFF_STAGED = "git_diff_staged"
+    DIFF = "git_diff"
     COMMIT = "git_commit"
     ADD = "git_add"
     RESET = "git_reset"
     LOG = "git_log"
     CREATE_BRANCH = "git_create_branch"
+    CHECKOUT = "git_checkout"
 
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
@@ -62,6 +72,9 @@ def git_diff_unstaged(repo: git.Repo) -> str:
 
 def git_diff_staged(repo: git.Repo) -> str:
     return repo.git.diff("--cached")
+
+def git_diff(repo: git.Repo, target: str) -> str:
+    return repo.git.diff(target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
     commit = repo.index.commit(message)
@@ -96,6 +109,10 @@ def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None 
     repo.create_head(branch_name, base)
     return f"Created branch '{branch_name}' from '{base.name}'"
 
+def git_checkout(repo: git.Repo, branch_name: str) -> str:
+    repo.git.checkout(branch_name)
+    return f"Switched to branch '{branch_name}'"
+
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
 
@@ -128,6 +145,11 @@ async def serve(repository: Path | None) -> None:
                 inputSchema=GitDiffStaged.schema(),
             ),
             Tool(
+                name=GitTools.DIFF,
+                description="Shows differences between branches or commits",
+                inputSchema=GitDiff.schema(),
+            ),
+            Tool(
                 name=GitTools.COMMIT,
                 description="Records changes to the repository",
                 inputSchema=GitCommit.schema(),
@@ -151,6 +173,11 @@ async def serve(repository: Path | None) -> None:
                 name=GitTools.CREATE_BRANCH,
                 description="Creates a new branch from an optional base branch",
                 inputSchema=GitCreateBranch.schema(),
+            ),
+            Tool(
+                name=GitTools.CHECKOUT,
+                description="Switches branches",
+                inputSchema=GitCheckout.schema(),
             ),
         ]
 
@@ -210,6 +237,13 @@ async def serve(repository: Path | None) -> None:
                     text=f"Staged changes:\n{diff}"
                 )]
 
+            case GitTools.DIFF:
+                diff = git_diff(repo, arguments["target"])
+                return [TextContent(
+                    type="text",
+                    text=f"Diff with {arguments['target']}:\n{diff}"
+                )]
+
             case GitTools.COMMIT:
                 result = git_commit(repo, arguments["message"])
                 return [TextContent(
@@ -244,6 +278,13 @@ async def serve(repository: Path | None) -> None:
                     arguments["branch_name"],
                     arguments.get("base_branch")
                 )
+                return [TextContent(
+                    type="text",
+                    text=result
+                )]
+
+            case GitTools.CHECKOUT:
+                result = git_checkout(repo, arguments["branch_name"])
                 return [TextContent(
                     type="text",
                     text=result
