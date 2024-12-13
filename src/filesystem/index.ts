@@ -24,7 +24,7 @@ if (args.length === 0) {
 
 // Normalize all paths consistently
 function normalizePath(p: string): string {
-  return path.normalize(p).toLowerCase();
+  return path.normalize(p);
 }
 
 function expandHome(filepath: string): string {
