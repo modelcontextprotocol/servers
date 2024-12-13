@@ -78,6 +78,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[HuggingFace Spaces](https://github.com/evalstate/mcp-hfspace)** - Server for using HuggingFace Spaces, supporting Open Source Image, Audio, Text Models and more. Claude Desktop mode for easy integration.
 - **[ChatSum](https://github.com/mcpso/mcp-server-chatsum)** - Query and Summarize chat messages with LLM. by [mcpso](https://mcp.so)
 - **[Rememberizer AI](https://github.com/skydeckai/mcp-server-rememberizer)** - An MCP server designed for interacting with the Rememberizer data source, facilitating enhanced knowledge retrieval.
+- **[Twitter](https://github.com/EnesCinr/twitter-mcp)** - Interact with twitter API. Post tweets and search for tweets by query.
 
 ## 📚 Resources
 
