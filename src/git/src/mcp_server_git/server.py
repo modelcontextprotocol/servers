@@ -52,6 +52,10 @@ class GitCheckout(BaseModel):
     repo_path: str
     branch_name: str
 
+class GitShow(BaseModel):
+    repo_path: str
+    revision: str
+
 class GitTools(str, Enum):
     STATUS = "git_status"
     DIFF_UNSTAGED = "git_diff_unstaged"
@@ -63,6 +67,7 @@ class GitTools(str, Enum):
     LOG = "git_log"
     CREATE_BRANCH = "git_create_branch"
     CHECKOUT = "git_checkout"
+    SHOW = "git_show"
 
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
@@ -112,6 +117,24 @@ def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None 
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
     repo.git.checkout(branch_name)
     return f"Switched to branch '{branch_name}'"
+
+def git_show(repo: git.Repo, revision: str) -> str:
+    commit = repo.commit(revision)
+    output = [
+        f"Commit: {commit.hexsha}\n"
+        f"Author: {commit.author}\n"
+        f"Date: {commit.authored_datetime}\n"
+        f"Message: {commit.message}\n"
+    ]
+    if commit.parents:
+        parent = commit.parents[0]
+        diff = parent.diff(commit, create_patch=True)
+    else:
+        diff = commit.diff(git.NULL_TREE, create_patch=True)
+    for d in diff:
+        output.append(f"\n--- {d.a_path}\n+++ {d.b_path}\n")
+        output.append(d.diff.decode('utf-8'))
+    return "".join(output)
 
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
@@ -179,6 +202,11 @@ async def serve(repository: Path | None) -> None:
                 description="Switches branches",
                 inputSchema=GitCheckout.schema(),
             ),
+            Tool(
+                name=GitTools.SHOW,
+                description="Shows the contents of a commit",
+                inputSchema=GitShow.schema(),
+            )
         ]
 
     async def list_repos() -> Sequence[str]:
@@ -285,6 +313,13 @@ async def serve(repository: Path | None) -> None:
 
             case GitTools.CHECKOUT:
                 result = git_checkout(repo, arguments["branch_name"])
+                return [TextContent(
+                    type="text",
+                    text=result
+                )]
+
+            case GitTools.SHOW:
+                result = git_show(repo, arguments["revision"])
                 return [TextContent(
                     type="text",
                     text=result
