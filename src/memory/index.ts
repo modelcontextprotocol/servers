@@ -10,16 +10,32 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-
 // Define the path to the JSONL file, you can change this to your desired local path
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MEMORY_FILE_PATH = path.join(__dirname, 'memory.json');
+
+// Define the TimeManager interface
+interface TimeManager {
+  getCurrentTimestamp(): number;
+}
+
+// Implementation that standardizes all timestamps
+
+class UnixTimeManager implements TimeManager {
+  getCurrentTimestamp(): number {
+    // Convert to Unix seconds and ensure integer
+    return Math.floor(Date.now() / 1000);
+  }
+}
+
+// Create a single instance to use throughout the app
+const timeManager = new UnixTimeManager();
 
 // We are storing our memory using entities, relations, and observations in a graph structure
 interface Entity {
   name: string;
   entityType: string;
-  observations: string[];
+  observations: { content: string; timestamp: number }[]; // Updated to include timestamp
 }
 
 interface Relation {
@@ -35,6 +51,12 @@ interface KnowledgeGraph {
 
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
 class KnowledgeGraphManager {
+  private timeManager: TimeManager;
+
+  constructor(timeManager: TimeManager) {
+    this.timeManager = timeManager;
+  }
+
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
       const data = await fs.readFile(MEMORY_FILE_PATH, "utf-8");
@@ -81,14 +103,17 @@ class KnowledgeGraphManager {
     return newRelations;
   }
 
-  async addObservations(observations: { entityName: string; contents: string[] }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
+  async addObservations(observations: { entityName: string; contents: string[] }[]): Promise<{ entityName: string; addedObservations: { content: string; timestamp: number }[] }[]> {
     const graph = await this.loadGraph();
     const results = observations.map(o => {
       const entity = graph.entities.find(e => e.name === o.entityName);
       if (!entity) {
         throw new Error(`Entity with name ${o.entityName} not found`);
       }
-      const newObservations = o.contents.filter(content => !entity.observations.includes(content));
+      const newObservations = o.contents.map(content => ({
+        content,
+        timestamp: this.timeManager.getCurrentTimestamp() // Use standardized timestamp
+      }));
       entity.observations.push(...newObservations);
       return { entityName: o.entityName, addedObservations: newObservations };
     });
@@ -108,7 +133,7 @@ class KnowledgeGraphManager {
     deletions.forEach(d => {
       const entity = graph.entities.find(e => e.name === d.entityName);
       if (entity) {
-        entity.observations = entity.observations.filter(o => !d.observations.includes(o));
+        entity.observations = entity.observations.filter(o => !d.observations.includes(o.content));
       }
     });
     await this.saveGraph(graph);
@@ -136,7 +161,7 @@ class KnowledgeGraphManager {
     const filteredEntities = graph.entities.filter(e => 
       e.name.toLowerCase().includes(query.toLowerCase()) ||
       e.entityType.toLowerCase().includes(query.toLowerCase()) ||
-      e.observations.some(o => o.toLowerCase().includes(query.toLowerCase()))
+      e.observations.some(o => o.content.toLowerCase().includes(query.toLowerCase()))
     );
   
     // Create a Set of filtered entity names for quick lookup
@@ -178,9 +203,7 @@ class KnowledgeGraphManager {
   }
 }
 
-const knowledgeGraphManager = new KnowledgeGraphManager();
-
-
+const knowledgeGraphManager = new KnowledgeGraphManager(timeManager);
 // The server instance and tools exposed to Claude
 const server = new Server({
   name: "memory-server",
@@ -189,7 +212,7 @@ const server = new Server({
     capabilities: {
       tools: {},
     },
-  },);
+  });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -209,7 +232,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   entityType: { type: "string", description: "The type of the entity" },
                   observations: { 
                     type: "array", 
-                    items: { type: "string" },
+                    items: { 
+                      type: "object",
+                      properties: {
+                        content: { type: "string", description: "An observation content" },
+                        timestamp: { type: "number", description: "The timestamp of the observation" }
+                      },
+                      required: ["content", "timestamp"],
+                    },
                     description: "An array of observation contents associated with the entity"
                   },
                 },
@@ -256,8 +286,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   entityName: { type: "string", description: "The name of the entity to add the observations to" },
                   contents: { 
                     type: "array", 
-                    items: { type: "string" },
-                    description: "An array of observation contents to add"
+                    items: { 
+                      type: "object",
+                      properties: {
+                        content: { type: "string", description: "An observation content" },
+                        timestamp: { type: "number", description: "The timestamp of the observation" }
+                      },
+                      required: ["content", "timestamp"]
+                    },
+                    description: "An array of observations with content and timestamp"
                   },
                 },
                 required: ["entityName", "contents"],
