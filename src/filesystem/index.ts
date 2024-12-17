@@ -17,9 +17,20 @@ import { minimatch } from 'minimatch';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
-  process.exit(1);
+
+let allowedDirectories: string[] = [];
+
+if (process.env.DOCKER_ROOT_WORKSPACE) {
+  allowedDirectories = await fs.readdir(process.env.DOCKER_ROOT_WORKSPACE);
+}
+else {
+  if (args.length === 0) {
+    console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
+    process.exit(1);
+  }
+  allowedDirectories = args.map(dir =>
+    normalizePath(path.resolve(expandHome(dir)))
+  );
 }
 
 // Normalize all paths consistently
@@ -35,12 +46,9 @@ function expandHome(filepath: string): string {
 }
 
 // Store allowed directories in normalized form
-const allowedDirectories = args.map(dir =>
-  normalizePath(path.resolve(expandHome(dir)))
-);
 
 // Validate that all directories exist and are accessible
-await Promise.all(args.map(async (dir) => {
+await Promise.all(allowedDirectories.map(async (dir) => {
   try {
     const stats = await fs.stat(dir);
     if (!stats.isDirectory()) {
