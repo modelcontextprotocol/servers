@@ -183,9 +183,9 @@ const credentialsPath = process.env.GDRIVE_CREDENTIALS_PATH || path.join(
 async function authenticateAndSaveCredentials() {
   console.log("Launching auth flow…");
   const auth = await authenticate({
-    keyfilePath: path.join(
+    keyfilePath: process.env.GDRIVE_OAUTH_PATH || path.join(
       path.dirname(new URL(import.meta.url).pathname),
-      process.env.GDRIVE_OAUTH_PATH || "../../../gcp-oauth.keys.json",
+      "../../../gcp-oauth.keys.json",
     ),
     scopes: ["https://www.googleapis.com/auth/drive.readonly"],
   });
