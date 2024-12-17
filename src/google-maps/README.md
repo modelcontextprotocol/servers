@@ -4,19 +4,19 @@ MCP Server for the Google Maps API.
 
 ## Tools
 
-1. `geocode`
+1. `maps_geocode`
    - Convert address to coordinates
    - Input: `address` (string)
    - Returns: location, formatted_address, place_id
 
-2. `reverse_geocode`
+2. `maps_reverse_geocode`
    - Convert coordinates to address
    - Inputs:
      - `latitude` (number)
      - `longitude` (number)
    - Returns: formatted_address, place_id, address_components
 
-3. `search_places`
+3. `maps_search_places`
    - Search for places using text query
    - Inputs:
      - `query` (string)
@@ -24,12 +24,12 @@ MCP Server for the Google Maps API.
      - `radius` (optional): number (meters, max 50000)
    - Returns: array of places with names, addresses, locations
 
-4. `get_place_details`
+4. `maps_place_details`
    - Get detailed information about a place
    - Input: `place_id` (string)
    - Returns: name, address, contact info, ratings, reviews, opening hours
 
-5. `get_distance_matrix`
+5. `maps_distance_matrix`
    - Calculate distances and times between points
    - Inputs:
      - `origins` (string[])
@@ -37,12 +37,12 @@ MCP Server for the Google Maps API.
      - `mode` (optional): "driving" | "walking" | "bicycling" | "transit"
    - Returns: distances and durations matrix
 
-6. `get_elevation`
+6. `maps_elevation`
    - Get elevation data for locations
    - Input: `locations` (array of {latitude, longitude})
    - Returns: elevation data for each point
 
-7. `get_directions`
+7. `maps_directions`
    - Get directions between points
    - Inputs:
      - `origin` (string)
