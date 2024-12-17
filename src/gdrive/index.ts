@@ -152,13 +152,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const userQuery = request.params.arguments?.query as string;
     const escapedQuery = userQuery.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
     const formattedQuery = `fullText contains '${escapedQuery}'`;
-    
+
     const res = await drive.files.list({
       q: formattedQuery,
       pageSize: 10,
       fields: "files(id, name, mimeType, modifiedTime, size)",
     });
-    
+
     const fileList = res.data.files
       ?.map((file: any) => `${file.name} (${file.mimeType})`)
       .join("\n");
@@ -175,7 +175,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   throw new Error("Tool not found");
 });
 
-const credentialsPath = path.join(
+const credentialsPath = process.env.GDRIVE_CREDENTIALS_PATH || path.join(
   path.dirname(new URL(import.meta.url).pathname),
   "../../../.gdrive-server-credentials.json",
 );
@@ -185,7 +185,7 @@ async function authenticateAndSaveCredentials() {
   const auth = await authenticate({
     keyfilePath: path.join(
       path.dirname(new URL(import.meta.url).pathname),
-      "../../../gcp-oauth.keys.json",
+      process.env.GDRIVE_OAUTH_PATH || "../../../gcp-oauth.keys.json",
     ),
     scopes: ["https://www.googleapis.com/auth/drive.readonly"],
   });
