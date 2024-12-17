@@ -98,6 +98,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[TMDB](https://github.com/Laksh-star/mcp-server-tmdb)** - This MCP server integrates with The Movie Database (TMDB) API to provide movie information, search capabilities, and recommendations.
 - **[MongoDB](https://github.com/kiliczsh/mcp-mongo-server)** - A Model Context Protocol Server for MongoDB.
 
+- **[Video Editor](https://github.com/burningion/video-editing-mcp)** - A Model Context Protocol Server to add, edit, and search videos directly from your favorite LLM with [Video Jungle](https://www.video-jungle.com/).
 
 ## 📚 Resources
 
