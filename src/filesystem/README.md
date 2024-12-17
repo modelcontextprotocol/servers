@@ -122,6 +122,7 @@ Note: you can provide sandboxed directories to the server by mounting them to `/
         "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
         "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
         "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
+        "--env", "DOCKER_ROOT_WORKSPACE=/projects",
         "ai/mcp-filesystem"
       ]
     }
