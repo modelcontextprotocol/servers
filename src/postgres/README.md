@@ -26,12 +26,20 @@ To use this server with the Claude Desktop app, add the following configuration 
 
 ### Docker
 
+* when running docker on macos, use host.docker.internal if the server is running on the host network (eg localhost)
+* username/password can be added to the postgresql url with `postgresql://user:password@host:port/db-name`
+
 ```json
 {
   "mcpServers": {
     "postgres": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ai/mcp-postgres", "host.docker.internal:5432/mydb"]
+      "args": [
+        "run", 
+        "-i", 
+        "--rm", 
+        "ai/mcp-postgres", 
+        "postgresql://host.docker.internal:5432/mydb"]
     }
   }
 }
