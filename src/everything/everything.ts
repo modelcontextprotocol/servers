@@ -1,6 +1,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
+  CompleteRequestSchema,
   CreateMessageRequest,
   CreateMessageResultSchema,
   GetPromptRequestSchema,
@@ -49,6 +50,13 @@ const SampleLLMSchema = z.object({
     .default(100)
     .describe("Maximum number of tokens to generate"),
 });
+
+// Example completion values
+const EXAMPLE_COMPLETIONS = {
+  style: ["casual", "formal", "technical", "friendly"],
+  temperature: ["0", "0.5", "0.7", "1.0"],
+  resourceId: ["1", "2", "3", "4", "5"],
+};
 
 const GetTinyImageSchema = z.object({});
 
@@ -429,6 +437,34 @@ export const createServer = () => {
     }
 
     throw new Error(`Unknown tool: ${name}`);
+  });
+
+  server.setRequestHandler(CompleteRequestSchema, async (request) => {
+    const { ref, argument } = request.params;
+
+    if (ref.type === "ref/resource") {
+      const resourceId = ref.uri.split("/").pop();
+      if (!resourceId) return { completion: { values: [] } };
+
+      // Filter resource IDs that start with the input value
+      const values = EXAMPLE_COMPLETIONS.resourceId.filter(id => 
+        id.startsWith(argument.value)
+      );
+      return { completion: { values, hasMore: false, total: values.length } };
+    }
+
+    if (ref.type === "ref/prompt") {
+      // Handle completion for prompt arguments
+      const completions = EXAMPLE_COMPLETIONS[argument.name as keyof typeof EXAMPLE_COMPLETIONS];
+      if (!completions) return { completion: { values: [] } };
+
+      const values = completions.filter(value => 
+        value.startsWith(argument.value)
+      );
+      return { completion: { values, hasMore: false, total: values.length } };
+    }
+
+    throw new Error(`Unknown reference type`);
   });
 
   server.setRequestHandler(SetLevelRequestSchema, async (request) => {
