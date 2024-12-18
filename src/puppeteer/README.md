@@ -72,7 +72,7 @@ Here's the Claude Desktop configuration to use the Puppeter server:
   "mcpServers": {
     "puppeteer": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "--init", "ai/mcp-puppeteer"]
+      "args": ["run", "-i", "--rm", "--init", "-e", "DOCKER_CONTAINER=true", "ai/mcp-puppeteer"]
     }
   }
 }

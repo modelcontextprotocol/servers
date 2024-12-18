@@ -236,7 +236,7 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
         "-i",
         "--rm",
         "-e",
-        "GITHUB_PERSONAL_ACCESS_TOKEN=$GITHUB_PERSONAL_ACCESS_TOKEN",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
         "ai/mcp-github"
       ],
       "env": {

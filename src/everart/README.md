@@ -17,7 +17,7 @@ Add to Claude Desktop config:
   "mcpServers": {
     "everart": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "-e", "EVERART_API_KEY=$EVERART_API_KEY", "ai/mcp-everart"],
+      "args": ["run", "-i", "--rm", "-e", "EVERART_API_KEY", "ai/mcp-everart"],
     "env": {
       "EVERART_API_KEY": "your_key_here"
     }

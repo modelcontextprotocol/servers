@@ -48,7 +48,7 @@ Add this to your `claude_desktop_config.json`:
         "-i",
         "--rm",
         "-e",
-        "BRAVE_API_KEY=$BRAVE_API_KEY",
+        "BRAVE_API_KEY",
         "ai/mcp-brave-search"
       ],
       "env": {

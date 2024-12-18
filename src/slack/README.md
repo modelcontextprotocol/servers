@@ -121,9 +121,9 @@ Add the following to your `claude_desktop_config.json`:
         "-i",
         "--rm",
         "-e",
-        "SLACK_BOT_TOKEN=$SLACK_BOT_TOKEN",
+        "SLACK_BOT_TOKEN",
         "-e",
-        "SLACK_TEAM_ID=$SLACK_TEAM_ID",
+        "SLACK_TEAM_ID",
         "ai/mcp-slack"
       ],
       "env": {
