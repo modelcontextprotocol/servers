@@ -118,9 +118,9 @@ Add the following to your `claude_desktop_config.json`:
       "args": [
         "run",
         "-e",
-        "GITLAB_PERSONAL_ACCESS_TOKEN=$GITLAB_PERSONAL_ACCESS_TOKEN",
+        "GITLAB_PERSONAL_ACCESS_TOKEN",
         "-e",
-        "GITLAB_API_URL=$GITLAB_API_URL",
+        "GITLAB_API_URL",
         "ai/mcp-gitlab"
       ],
       "env": {

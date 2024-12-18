@@ -71,7 +71,7 @@ Add the following to your `claude_desktop_config.json`:
         "-i",
         "--rm",
         "-e",
-        "GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY",
+        "GOOGLE_MAPS_API_KEY",
         "ai/mcp-google-maps"
       ],
       "env": {
