@@ -29,6 +29,7 @@ These servers aim to demonstrate MCP features and the Typescript and Python SDK.
 - **[Slack](src/slack)** - Channel management and messaging capabilities
 - **[Sqlite](src/sqlite)** - Database interaction and business intelligence capabilities
 - **[Time](src/time)** - Time and timezone conversion capabilities
+- **[ReactFlow UI](src/reactflow-ui)** - User interface for designing MCP servers with ReactFlow
 
 ## 🤝 Third-Party Servers
 
@@ -186,6 +187,27 @@ Additional examples of using the Claude Desktop as an MCP client might look like
   }
 }
 ```
+
+### Setting up and running the ReactFlow-based UI
+
+To set up and run the ReactFlow-based UI for designing MCP servers, follow these steps:
+
+1. Navigate to the `src/reactflow-ui` directory:
+   ```sh
+   cd src/reactflow-ui
+   ```
+
+2. Install the required dependencies:
+   ```sh
+   npm install
+   ```
+
+3. Start the development server:
+   ```sh
+   npm start
+   ```
+
+4. Open your browser and go to `http://localhost:3000` to access the ReactFlow-based UI.
 
 ## 🛠️ Creating Your Own Server
 

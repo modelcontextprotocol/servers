@@ -1,0 +1,29 @@
+.reactflow-ui {
+  display: flex;
+  height: 100vh;
+}
+
+.reactflow-wrapper {
+  flex: 1;
+  height: 100%;
+}
+
+.sidebar {
+  width: 250px;
+  padding: 10px;
+  background: #f0f0f0;
+  border-right: 1px solid #ddd;
+}
+
+.node {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.node-label {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
