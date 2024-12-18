@@ -40,6 +40,8 @@ const LongRunningOperationSchema = z.object({
   steps: z.number().default(5).describe("Number of steps in the operation"),
 });
 
+const PrintEnvSchema = z.object({});
+
 const SampleLLMSchema = z.object({
   prompt: z.string().describe("The prompt to send to the LLM"),
   maxTokens: z
@@ -54,6 +56,7 @@ enum ToolName {
   ECHO = "echo",
   ADD = "add",
   LONG_RUNNING_OPERATION = "longRunningOperation",
+  PRINT_ENV = "printEnv",
   SAMPLE_LLM = "sampleLLM",
   GET_TINY_IMAGE = "getTinyImage",
 }
@@ -298,6 +301,11 @@ export const createServer = () => {
         inputSchema: zodToJsonSchema(AddSchema) as ToolInput,
       },
       {
+        name: ToolName.PRINT_ENV,
+        description: "Prints all environment variables, helpful for debugging MCP server configuration",
+        inputSchema: zodToJsonSchema(PrintEnvSchema) as ToolInput,
+      },
+      {
         name: ToolName.LONG_RUNNING_OPERATION,
         description:
           "Demonstrates a long running operation with progress updates",
@@ -369,6 +377,17 @@ export const createServer = () => {
           {
             type: "text",
             text: `Long running operation completed. Duration: ${duration} seconds, Steps: ${steps}.`,
+          },
+        ],
+      };
+    }
+
+    if (name === ToolName.PRINT_ENV) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(process.env, null, 2),
           },
         ],
       };
