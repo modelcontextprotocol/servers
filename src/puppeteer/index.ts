@@ -404,5 +404,5 @@ runServer().catch(console.error);
 
 process.stdin.on("close", () => {
   console.error("Puppeteer MCP Server closed");
-  process.exit(1);
+  server.close();
 });
