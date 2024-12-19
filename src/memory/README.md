@@ -137,7 +137,7 @@ Add this to your claude_desktop_config.json:
   "mcpServers": {
     "memory": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "ai/mcp-memory"]
+      "args": ["run", "-i", "--rm", "mcp/memory"]
     }
   }
 }
@@ -195,7 +195,7 @@ Follow these steps for each interaction:
 Docker:
 
 ```sh
-docker build -t ai/mcp-memory -f src/memory/Dockerfile . 
+docker build -t mcp/memory -f src/memory/Dockerfile . 
 ```
 
 ## License

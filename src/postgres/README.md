@@ -38,7 +38,7 @@ To use this server with the Claude Desktop app, add the following configuration 
         "run", 
         "-i", 
         "--rm", 
-        "ai/mcp-postgres", 
+        "mcp/postgres", 
         "postgresql://host.docker.internal:5432/mydb"]
     }
   }
@@ -69,7 +69,7 @@ Replace `/mydb` with your database name.
 Docker:
 
 ```sh
-docker build -t ai/mcp-postgres -f src/postgres/Dockerfile . 
+docker build -t mcp/postgres -f src/postgres/Dockerfile . 
 ```
 
 ## License

@@ -207,7 +207,7 @@ If you are doing local development, there are two ways to test your changes:
         "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
         "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
         "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
-        "ai/mcp-git"
+        "mcp/git"
       ]
     }
   }
@@ -236,7 +236,7 @@ Docker build:
 
 ```bash
 cd src/git
-docker build -t ai/mcp-git .
+docker build -t mcp/git .
 ```
 
 ## License

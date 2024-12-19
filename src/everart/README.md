@@ -17,7 +17,7 @@ Add to Claude Desktop config:
   "mcpServers": {
     "everart": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "-e", "EVERART_API_KEY", "ai/mcp-everart"],
+      "args": ["run", "-i", "--rm", "-e", "EVERART_API_KEY", "mcp/everart"],
     "env": {
       "EVERART_API_KEY": "your_key_here"
     }
@@ -94,5 +94,5 @@ You can also click the URL above to view the image again.
 ## Building w/ Docker
 
 ```sh
-docker build -t ai/mcp-everart -f src/everart/Dockerfile . 
+docker build -t mcp/everart -f src/everart/Dockerfile . 
 ```

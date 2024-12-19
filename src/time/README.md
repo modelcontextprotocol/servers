@@ -61,7 +61,7 @@ Add to your Claude settings:
 "mcpServers": {
   "time": {
     "command": "docker",
-    "args": ["run", "-i", "--rm", "ai/mcp-time"]
+    "args": ["run", "-i", "--rm", "mcp/time"]
   }
 }
 ```
@@ -198,7 +198,7 @@ Docker build:
 
 ```bash
 cd src/time
-docker build -t ai/mcp-time .
+docker build -t mcp/time .
 ```
 
 ## Contributing

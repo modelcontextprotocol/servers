@@ -95,7 +95,7 @@ The server offers six core tools:
       "-i",
       "-v",
       "mcp-test:/mcp",
-      "ai/mcp-sqlite",
+      "mcp/sqlite",
       "--db-path",
       "/mcp/test.db"
     ]
@@ -108,7 +108,7 @@ The server offers six core tools:
 Docker:
 
 ```bash
-docker build -t ai/mcp-sqlite .
+docker build -t mcp/sqlite .
 ```
 
 ## License

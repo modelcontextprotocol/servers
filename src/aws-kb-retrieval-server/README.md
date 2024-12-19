@@ -34,7 +34,7 @@ Add this to your `claude_desktop_config.json`:
   "mcpServers": {
     "aws-kb-retrieval": {
       "command": "docker",
-      "args": [ "run", "-i", "--rm", "-e", "AWS_ACCESS_KEY_ID", "-e", "AWS_SECRET_ACCESS_KEY", "-e", "AWS_REGION", "ai/mcp-aws-kb-retrieval-server" ],
+      "args": [ "run", "-i", "--rm", "-e", "AWS_ACCESS_KEY_ID", "-e", "AWS_SECRET_ACCESS_KEY", "-e", "AWS_REGION", "mcp/aws-kb-retrieval-server" ],
       "env": {
         "AWS_ACCESS_KEY_ID": "YOUR_ACCESS_KEY_HERE",
         "AWS_SECRET_ACCESS_KEY": "YOUR_SECRET_ACCESS_KEY_HERE",
@@ -69,7 +69,7 @@ Add this to your `claude_desktop_config.json`:
 Docker: 
 
 ```sh
-docker build -t ai/mcp-aws-kb-retrieval -f src/aws-kb-retrieval-server/Dockerfile . 
+docker build -t mcp/aws-kb-retrieval -f src/aws-kb-retrieval-server/Dockerfile . 
 ```
 
 ## License

@@ -124,7 +124,7 @@ Add the following to your `claude_desktop_config.json`:
         "SLACK_BOT_TOKEN",
         "-e",
         "SLACK_TEAM_ID",
-        "ai/mcp-slack"
+        "mcp/slack"
       ],
       "env": {
         "SLACK_BOT_TOKEN": "xoxb-your-bot-token",
@@ -148,7 +148,7 @@ If you encounter permission errors, verify that:
 Docker build:
 
 ```bash
-docker build -t ai/mcp-slack -f src/slack/Dockerfile .
+docker build -t mcp/slack -f src/slack/Dockerfile .
 ```
 
 ## License

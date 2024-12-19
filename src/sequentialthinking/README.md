@@ -71,7 +71,7 @@ Add this to your `claude_desktop_config.json`:
         "run",
         "--rm",
         "-i",
-        "ai/mcp-sequentialthinking"
+        "mcp/sequentialthinking"
       ]
     }
   }
@@ -83,7 +83,7 @@ Add this to your `claude_desktop_config.json`:
 Docker:
 
 ```bash
-docker build -t ai/mcp-sequentialthinking -f sequentialthinking/Dockerfile .
+docker build -t mcp/sequentialthinking -f sequentialthinking/Dockerfile .
 ```
 
 ## License

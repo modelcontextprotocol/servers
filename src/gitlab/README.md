@@ -121,7 +121,7 @@ Add the following to your `claude_desktop_config.json`:
         "GITLAB_PERSONAL_ACCESS_TOKEN",
         "-e",
         "GITLAB_API_URL",
-        "ai/mcp-gitlab"
+        "mcp/gitlab"
       ],
       "env": {
         "GITLAB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",

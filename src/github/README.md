@@ -237,7 +237,7 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
         "--rm",
         "-e",
         "GITHUB_PERSONAL_ACCESS_TOKEN",
-        "ai/mcp-github"
+        "mcp/github"
       ],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
@@ -271,7 +271,7 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
 Docker build:
 
 ```bash
-docker build -t ai/mcp-github -f src/github/Dockerfile .
+docker build -t mcp/github -f src/github/Dockerfile .
 ```
 
 ## License

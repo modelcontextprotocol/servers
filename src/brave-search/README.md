@@ -49,7 +49,7 @@ Add this to your `claude_desktop_config.json`:
         "--rm",
         "-e",
         "BRAVE_API_KEY",
-        "ai/mcp-brave-search"
+        "mcp/brave-search"
       ],
       "env": {
         "BRAVE_API_KEY": "YOUR_API_KEY_HERE"

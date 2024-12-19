@@ -123,7 +123,7 @@ Note: all directories must be mounted to `/projects` by default.
         "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
         "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
         "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
-        "ai/mcp-filesystem",
+        "mcp/filesystem",
         "/projects",
       ]
     }
@@ -154,7 +154,7 @@ Note: all directories must be mounted to `/projects` by default.
 Docker build:
 
 ```bash
-docker build -t ai/mcp-filesystem -f src/filesystem/Dockerfile .
+docker build -t mcp/filesystem -f src/filesystem/Dockerfile .
 ```
 
 ## License
