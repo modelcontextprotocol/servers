@@ -121,6 +121,19 @@ Add this to your `claude_desktop_config.json`:
 </details>
 
 <details>
+<summary>Using docker</summary>
+
+```json
+"mcpServers": {
+  "git": {
+    "command": "docker",
+    "args": ["run", "--rm", "-i", "type=bind,src=/Users/slim,dst=/projects", "mcp/git"]
+  }
+}
+```
+</details>
+
+<details>
 <summary>Using pip installation</summary>
 
 ```json
