@@ -67,6 +67,8 @@ Here's the Claude Desktop configuration to use the Puppeter server:
 
 ### Docker
 
+**NOTE** The docker implementation will use headless chromium, where as the NPX version will open a browser window.
+
 ```json
 {
   "mcpServers": {
