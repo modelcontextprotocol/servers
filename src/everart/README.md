@@ -10,6 +10,25 @@ export EVERART_API_KEY=your_key_here
 
 ## Config
 Add to Claude Desktop config:
+
+### Docker
+```json
+{
+  "mcpServers": {
+    "everart": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "EVERART_API_KEY", "mcp/everart"],
+    "env": {
+      "EVERART_API_KEY": "your_key_here"
+    }
+    },
+    
+  }
+}
+```
+
+### NPX
+
 ```json
 {
   "mcpServers": {
@@ -70,4 +89,10 @@ Generation details:
 - Image URL: https://storage.googleapis.com/...
 
 You can also click the URL above to view the image again.
+```
+
+## Building w/ Docker
+
+```sh
+docker build -t mcp/everart -f src/everart/Dockerfile . 
 ```
