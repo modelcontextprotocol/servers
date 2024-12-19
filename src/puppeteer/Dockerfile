@@ -23,5 +23,4 @@ WORKDIR /project
 
 RUN npm install
 
-CMD ["node", "dist/index.js"]
-
+ENTRYPOINT ["node", "dist/index.js"]
