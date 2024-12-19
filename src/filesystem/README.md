@@ -123,7 +123,8 @@ Note: all directories must be mounted to `/projects` by default.
         "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
         "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
         "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
-        "ai/mcp-filesystem"
+        "ai/mcp-filesystem",
+        "/projects",
       ]
     }
   }
