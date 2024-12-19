@@ -127,7 +127,7 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "git": {
     "command": "docker",
-    "args": ["run", "--rm", "-i", "type=bind,src=/Users/slim,dst=/projects", "mcp/git"]
+    "args": ["run", "--rm", "-i", "--mount", "type=bind,src=/Users/username,dst=/projects", "mcp/git"]
   }
 }
 ```

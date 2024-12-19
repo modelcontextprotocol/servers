@@ -84,7 +84,7 @@ Add this to your `claude_desktop_config.json`:
 Docker build:
 
 ```bash
-docker build -t vonwig/brave-search:mcp -f src/brave-search/Dockerfile .
+docker build -t mcp/brave-search:latest -f src/brave-search/Dockerfile .
 ```
 
 ## License
