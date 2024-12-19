@@ -18,11 +18,10 @@ Add to Claude Desktop config:
     "everart": {
       "command": "docker",
       "args": ["run", "-i", "--rm", "-e", "EVERART_API_KEY", "mcp/everart"],
-    "env": {
-      "EVERART_API_KEY": "your_key_here"
+      "env": {
+        "EVERART_API_KEY": "your_key_here"
+      }
     }
-    },
-    
   }
 }
 ```
