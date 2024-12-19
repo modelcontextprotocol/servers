@@ -58,6 +58,7 @@ A growing set of community-developed and maintained servers demonstrates various
 > **Note:** Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
 
 - **[MCP Installer](https://github.com/anaisbetts/mcp-installer)** - This server is a server that installs other MCP servers for you.
+- **[mcpm-server](https://github.com/mcp-club/mcpm)** - A cli with a MCP Server help you add/remove/enable/disable your MCP Servers by **[MCP-Club](https://github.com/mcp-club)**
 - **[NS Travel Information](https://github.com/r-huijts/ns-mcp-server)** - Access Dutch Railways (NS) real-time train travel information and disruptions through the official NS API.
 - **[Spotify](https://github.com/varunneal/spotify-mcp)** - This MCP allows an LLM to play and use Spotify. 
 - **[Inoyu](https://github.com/sergehuber/inoyu-mcp-unomi-server)** - Interact with an Apache Unomi CDP customer data platform to retrieve and update customer profiles
@@ -120,6 +121,7 @@ Additional resources on MCP.
 - **[MCP X Community](https://x.com/i/communities/1861891349609603310)** – A X community for MCP by **[Xiaoyi](https://x.com/chxy)**
 - **[mcp-manager](https://github.com/zueai/mcp-manager)** - Simple Web UI to install and manage MCP servers for Claude Desktop by **[Zue](https://github.com/zueai)**
 - **[MCPHub](https://github.com/Jeamee/MCPHub-Desktop)** – An Open Source MacOS & Windows GUI Desktop app for discovering, installing and managing MCP servers by **[Jeamee](https://github.com/jeamee)**
+- **[mcpm-cli](https://github.com/mcp-club/mcpm)** - A cli help you add/remove/enable/disable your MCP Servers by **[MCP-Club](https://github.com/mcp-club)**
 
 ## 🚀 Getting Started
 
