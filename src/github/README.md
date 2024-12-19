@@ -188,6 +188,42 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `issue_number` (number): Issue number to retrieve
    - Returns: Github Issue object & details
 
+18. `list_pull_requests`
+    - List and filter repository pull requests
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `state` (optional string): Filter by state ('open', 'closed', 'all')
+      - `head` (optional string): Filter by head user/branch
+      - `base` (optional string): Filter by base branch
+      - `sort` (optional string): Sort by ('created', 'updated', 'popularity', 'long-running')
+      - `direction` (optional string): Sort direction ('asc', 'desc')
+      - `page` (optional number): Page number
+      - `per_page` (optional number): Results per page
+    - Returns: Array of pull request details
+
+19. `get_pull_request`
+    - Get details of a specific pull request
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `pull_number` (number): Pull request number
+    - Returns: Pull request details
+
+20. `review_pull_request`
+    - Submit a review for a pull request
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `pull_number` (number): Pull request number
+      - `event` (string): Review event type ('APPROVE', 'REQUEST_CHANGES', 'COMMENT')
+      - `body` (string): Review comment text
+      - `comments` (optional array): Review comments on specific lines
+        - `path` (string): File path
+        - `position` (number): Line position in the diff
+        - `body` (string): Comment text
+    - Returns: Review details
+
 ## Search Query Syntax
 
 ### Code Search

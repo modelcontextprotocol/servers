@@ -36,7 +36,10 @@ import {
   IssueCommentSchema,
   ListCommitsSchema,
   ListIssuesOptionsSchema,
+  ListPullRequestsOptionsSchema,
+  GetPullRequestSchema,
   PushFilesSchema,
+  ReviewPullRequestSchema,
   SearchCodeResponseSchema,
   SearchCodeSchema,
   SearchIssuesResponseSchema,
@@ -706,13 +709,123 @@ async function getIssue(
         "User-Agent": "github-mcp-server",
       },
     }
-);
+  );
 
   if (!response.ok) {
     throw new Error(`Github API error: ${response.statusText}`);
   }
 
   return GitHubIssueSchema.parse(await response.json());
+}
+
+async function listPullRequests(
+  owner: string,
+  repo: string,
+  options: Omit<z.infer<typeof ListPullRequestsOptionsSchema>, 'owner' | 'repo'>
+): Promise<GitHubPullRequest[]> {
+  const url = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
+
+  // Add query parameters
+  if (options.state) url.searchParams.append('state', options.state);
+  if (options.head) url.searchParams.append('head', options.head);
+  if (options.base) url.searchParams.append('base', options.base);
+  if (options.sort) url.searchParams.append('sort', options.sort);
+  if (options.direction) url.searchParams.append('direction', options.direction);
+  if (options.page) url.searchParams.append('page', options.page.toString());
+  if (options.per_page) url.searchParams.append('per_page', options.per_page.toString());
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "github-mcp-server",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to list pull requests: ${await response.text()}`);
+  }
+
+  return z.array(GitHubPullRequestSchema).parse(await response.json());
+}
+
+async function getPullRequest(
+  owner: string,
+  repo: string,
+  pull_number: number
+): Promise<GitHubPullRequest> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`,
+    {
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to get pull request: ${await response.text()}`);
+  }
+
+  return GitHubPullRequestSchema.parse(await response.json());
+}
+
+async function reviewPullRequest(
+  owner: string,
+  repo: string,
+  pull_number: number,
+  event: string,
+  body: string,
+  comments?: { path: string; position: number; body: string }[]
+): Promise<any> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}/reviews`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        event,
+        body,
+        comments,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to review pull request: ${await response.text()}`);
+  }
+
+  return response.json();
+}
+
+async function getPullRequestDiff(
+  owner: string,
+  repo: string,
+  pull_number: number
+): Promise<string> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`,
+    {
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3.diff",
+        "User-Agent": "github-mcp-server",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to get pull request diff: ${await response.text()}`);
+  }
+
+  return response.text();
 }
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -806,6 +919,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_issue",
         description: "Get details of a specific issue in a GitHub repository.",
         inputSchema: zodToJsonSchema(GetIssueSchema)
+      },
+      {
+        name: "list_pull_requests",
+        description: "List pull requests in a GitHub repository with filtering options",
+        inputSchema: zodToJsonSchema(ListPullRequestsOptionsSchema)
+      },
+      {
+        name: "get_pull_request",
+        description: "Get details of a specific pull request in a GitHub repository.",
+        inputSchema: zodToJsonSchema(GetPullRequestSchema)
+      },
+      {
+        name: "review_pull_request",
+        description: "Review a pull request in a GitHub repository.",
+        inputSchema: zodToJsonSchema(ReviewPullRequestSchema)
+      },
+      {
+        name: "get_pull_request_diff",
+        description: "Get the diff content of a specific pull request",
+        inputSchema: zodToJsonSchema(GetPullRequestDiffSchema)
       }
     ],
   };
@@ -1009,6 +1142,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }).parse(request.params.arguments);
         const issue = await getIssue(args.owner, args.repo, args.issue_number);
         return { toolResult: issue };
+      }
+
+      case "list_pull_requests": {
+        const args = ListPullRequestsOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const pullRequests = await listPullRequests(owner, repo, options);
+        return { toolResult: pullRequests };
+      }
+
+      case "get_pull_request": {
+        const args = GetPullRequestSchema.parse(request.params.arguments);
+        const pullRequest = await getPullRequest(args.owner, args.repo, args.pull_number);
+        return { toolResult: pullRequest };
+      }
+
+      case "review_pull_request": {
+        const args = ReviewPullRequestSchema.parse(request.params.arguments);
+        const { owner, repo, pull_number, event, body, comments } = args;
+        const review = await reviewPullRequest(owner, repo, pull_number, event, body, comments);
+        return { toolResult: review };
+      }
+
+      case "get_pull_request_diff": {
+        const args = GetPullRequestDiffSchema.parse(request.params.arguments);
+        const diff = await getPullRequestDiff(args.owner, args.repo, args.pull_number);
+        return { toolResult: diff };
       }
 
       default:
