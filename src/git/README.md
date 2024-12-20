@@ -123,11 +123,13 @@ Add this to your `claude_desktop_config.json`:
 <details>
 <summary>Using docker</summary>
 
+* Note: replace '/Users/username' with the a path that you want to be accessible by this tool
+
 ```json
 "mcpServers": {
   "git": {
     "command": "docker",
-    "args": ["run", "--rm", "-i", "--mount", "type=bind,src=/Users/username,dst=/projects", "mcp/git"]
+    "args": ["run", "--rm", "-i", "--mount", "type=bind,src=/Users/username,dst=/Users/username", "mcp/git"]
   }
 }
 ```
