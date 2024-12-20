@@ -31,9 +31,8 @@ The server provides access to Google Drive files:
 3. [Configure an OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent) ("internal" is fine for testing)
 4. Add OAuth scope `https://www.googleapis.com/auth/drive.readonly`
 5. [Create an OAuth Client ID](https://console.cloud.google.com/apis/credentials/oauthclient) for application type "Desktop App"
-6. Add http://localhost:3000/oauth2callback as a redirect URI
-7. Download the JSON file of your client's OAuth keys
-8. Rename the key file to `gcp-oauth.keys.json` and place into the root of this repo (i.e. `servers/gcp-oauth.keys.json`)
+6. Download the JSON file of your client's OAuth keys
+7. Rename the key file to `gcp-oauth.keys.json` and place into the root of this repo (i.e. `servers/gcp-oauth.keys.json`)
 
 Make sure to build the server with either `npm run build` or `npm run watch`.
 
