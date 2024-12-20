@@ -59,6 +59,31 @@ Get a Google Maps API key by following the instructions [here](https://developer
 
 Add the following to your `claude_desktop_config.json`:
 
+#### Docker
+
+```json
+{
+  "mcpServers": {
+    "google-maps": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GOOGLE_MAPS_API_KEY",
+        "mcp/google-maps"
+      ],
+      "env": {
+        "GOOGLE_MAPS_API_KEY": "<YOUR_API_KEY>"
+      }
+    }
+  }
+}
+```
+
+### NPX
+
 ```json
 {
   "mcpServers": {
@@ -74,6 +99,14 @@ Add the following to your `claude_desktop_config.json`:
     }
   }
 }
+```
+
+## Build
+
+Docker build:
+
+```bash
+docker build -t vonwig/google-maps:mcp -f src/google-maps/Dockerfile .
 ```
 
 ## License
