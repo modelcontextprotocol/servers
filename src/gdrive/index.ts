@@ -206,7 +206,7 @@ async function loadCredentialsAndRunServer() {
   auth.setCredentials(credentials);
   google.options({ auth });
 
-  console.log("Credentials loaded. Starting server.");
+  console.error("Credentials loaded. Starting server.");
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
