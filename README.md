@@ -104,7 +104,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[MongoDB](https://github.com/kiliczsh/mcp-mongo-server)** - A Model Context Protocol Server for MongoDB.
 - **[Airtable](https://github.com/felores/airtable-mcp)** - Airtable Model Context Protocol Server.
 - **[Fetch](https://github.com/zcaceres/fetch-mcp)** - A server that flexibly fetches HTML, JSON, Markdown, or plaintext
-
+- **[Minima]([https://github.com/zcaceres/fetch-mcp](https://github.com/dmayboroda/minima))** - MCP server for RAG on local files
 ## 📚 Resources
 
 Additional resources on MCP.
