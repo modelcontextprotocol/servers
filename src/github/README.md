@@ -225,6 +225,30 @@ For detailed search syntax, see [GitHub's searching documentation](https://docs.
 ### Usage with Claude Desktop
 To use this with Claude Desktop, add the following to your `claude_desktop_config.json`:
 
+#### Docker
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "mcp/github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+      }
+    }
+  }
+}
+```
+
+### NPX
+
 ```json
 {
   "mcpServers": {
@@ -233,13 +257,21 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
       "args": [
         "-y",
         "@modelcontextprotocol/server-github"
-      ],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
-      }
+      ]
+    },
+    "env": {
+      "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
     }
   }
 }
+```
+
+## Build
+
+Docker build:
+
+```bash
+docker build -t mcp/github -f src/github/Dockerfile .
 ```
 
 ## License
