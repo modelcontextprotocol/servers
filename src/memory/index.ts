@@ -183,7 +183,7 @@ class KnowledgeGraphManager {
   }
 }
 
-const knowledgeGraphManager = new KnowledgeGraphManager;
+const knowledgeGraphManager = new KnowledgeGraphManager();
 
 // The server instance and tools exposed to Claude
 const server = new Server({
