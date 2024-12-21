@@ -44,6 +44,8 @@ The Sequential Thinking tool is designed for:
 
 Add this to your `claude_desktop_config.json`:
 
+#### npx
+
 ```json
 {
   "mcpServers": {
@@ -56,6 +58,32 @@ Add this to your `claude_desktop_config.json`:
     }
   }
 }
+```
+
+#### docker
+
+```json
+{
+  "mcpServers": {
+    "sequentialthinking": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "mcp/sequentialthinking"
+      ]
+    }
+  }
+}
+```
+
+## Building
+
+Docker:
+
+```bash
+docker build -t mcp/sequentialthinking -f sequentialthinking/Dockerfile .
 ```
 
 ## License

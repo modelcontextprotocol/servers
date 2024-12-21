@@ -28,7 +28,7 @@
   "devDependencies": {
     "@types/diff": "^5.0.9",
     "@types/minimatch": "^5.1.2",
-    "@types/node": "^20.11.0",
+    "@types/node": "^22",
     "shx": "^0.3.4",
     "typescript": "^5.3.3"
   }

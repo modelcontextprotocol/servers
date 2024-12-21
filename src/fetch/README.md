@@ -62,6 +62,19 @@ Add to your Claude settings:
 </details>
 
 <details>
+<summary>Using docker</summary>
+
+```json
+"mcpServers": {
+  "fetch": {
+    "command": "docker",
+    "args": ["run", "-i", "--rm", "mcp/fetch"]
+  }
+}
+```
+</details>
+
+<details>
 <summary>Using pip installation</summary>
 
 ```json

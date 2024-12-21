@@ -55,6 +55,19 @@ Add to your Claude settings:
 </details>
 
 <details>
+<summary>Using docker</summary>
+
+```json
+"mcpServers": {
+  "time": {
+    "command": "docker",
+    "args": ["run", "-i", "--rm", "mcp/time"]
+  }
+}
+```
+</details>
+
+<details>
 <summary>Using pip installation</summary>
 
 ```json
@@ -178,6 +191,15 @@ npx @modelcontextprotocol/inspector uv run mcp-server-time
 2. "What time is it in Tokyo?"
 3. "When it's 4 PM in New York, what time is it in London?"
 4. "Convert 9:30 AM Tokyo time to New York time"
+
+## Build
+
+Docker build:
+
+```bash
+cd src/time
+docker build -t mcp/time .
+```
 
 ## Contributing
 
