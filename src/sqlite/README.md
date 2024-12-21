@@ -63,6 +63,8 @@ The server offers six core tools:
 
 ## Usage with Claude Desktop
 
+### uv
+
 ```bash
 # Add the server to your claude_desktop_config.json
 "mcpServers": {
@@ -78,6 +80,35 @@ The server offers six core tools:
     ]
   }
 }
+```
+
+### Docker
+
+```json
+# Add the server to your claude_desktop_config.json
+"mcpServers": {
+  "sqlite": {
+    "command": "docker",
+    "args": [
+      "run",
+      "--rm",
+      "-i",
+      "-v",
+      "mcp-test:/mcp",
+      "mcp/sqlite",
+      "--db-path",
+      "/mcp/test.db"
+    ]
+  }
+}
+```
+
+## Building
+
+Docker:
+
+```bash
+docker build -t mcp/sqlite .
 ```
 
 ## License

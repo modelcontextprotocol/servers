@@ -108,7 +108,9 @@ const screenshots = new Map<string, string>();
 
 async function ensureBrowser() {
   if (!browser) {
-    browser = await puppeteer.launch({ headless: false });
+    const npx_args = { headless: false }
+    const docker_args = { headless: true, args: ["--no-sandbox", "--single-process", "--no-zygote"] }
+    browser = await puppeteer.launch(process.env.DOCKER_CONTAINER ? docker_args : npx_args);
     const pages = await browser.pages();
     page = pages[0];
 
@@ -399,3 +401,8 @@ async function runServer() {
 }
 
 runServer().catch(console.error);
+
+process.stdin.on("close", () => {
+  console.error("Puppeteer MCP Server closed");
+  server.close();
+});
