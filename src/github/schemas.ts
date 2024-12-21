@@ -683,6 +683,24 @@ export const GetIssueSchema = z.object({
   issue_number: z.number().describe("Issue number")
 });
 
+// Comment related schemas
+export const GitHubCommentSchema = z.object({
+  id: z.number(),
+  node_id: z.string(),
+  url: z.string(),
+  html_url: z.string(),
+  body: z.string(),
+  user: GitHubIssueAssigneeSchema,
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const GetIssueCommentsSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  issue_number: z.number().describe("Issue/PR number"),
+});
+
 // Export types
 export type GitHubAuthor = z.infer<typeof GitHubAuthorSchema>;
 export type GitHubFork = z.infer<typeof GitHubForkSchema>;
@@ -717,3 +735,4 @@ export type SearchIssueItem = z.infer<typeof SearchIssueItemSchema>;
 export type SearchIssuesResponse = z.infer<typeof SearchIssuesResponseSchema>;
 export type SearchUserItem = z.infer<typeof SearchUserItemSchema>;
 export type SearchUsersResponse = z.infer<typeof SearchUsersResponseSchema>;
+export type GitHubComment = z.infer<typeof GitHubCommentSchema>;

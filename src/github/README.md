@@ -188,6 +188,14 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `issue_number` (number): Issue number to retrieve
    - Returns: Github Issue object & details
 
+18. `get_issue_comments`
+   - Gets the comments on an issue or pull request
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `issue_number` (number): Issue/PR number to retrieve comments from
+   - Returns: Array of GitHub comment objects containing comment ID, body text, author, and timestamps
+
 ## Search Query Syntax
 
 ### Code Search
