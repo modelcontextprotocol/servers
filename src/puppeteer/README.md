@@ -65,6 +65,23 @@ The server provides access to two types of resources:
 ## Configuration to use Puppeteer Server
 Here's the Claude Desktop configuration to use the Puppeter server:
 
+### Docker
+
+**NOTE** The docker implementation will use headless chromium, where as the NPX version will open a browser window.
+
+```json
+{
+  "mcpServers": {
+    "puppeteer": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "--init", "-e", "DOCKER_CONTAINER=true", "mcp/puppeteer"]
+    }
+  }
+}
+```
+
+### NPX
+
 ```json
 {
   "mcpServers": {
@@ -74,6 +91,14 @@ Here's the Claude Desktop configuration to use the Puppeter server:
     }
   }
 }
+```
+
+## Build
+
+Docker build:
+
+```bash
+docker build -t mcp/puppeteer -f src/puppeteer/Dockerfile .
 ```
 
 ## License
