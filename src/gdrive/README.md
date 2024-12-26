@@ -76,6 +76,18 @@ Once authenticated, you can use the server in your app's server configuration:
 
 #### NPX
 
+Authentication:
+
+Assuming you have completed setting up the OAuth application on Google Cloud, you can now auth the server with the following command, replacing `/path/to/gcp-oauth.keys.json` with the path to your OAuth keys file:
+
+```sh
+GDRIVE_OAUTH_PATH=/path/to/gcp-oauth.keys.json npx @modelcontextprotocol/server-gdrive auth
+```
+
+The command will print the URL to open in your browser. Open this URL in your browser and complete the authentication process. The credentials will be saved in the package's root.
+
+Once authenticated, you can use the server in your app's server configuration:
+
 ```json
 {
   "mcpServers": {
