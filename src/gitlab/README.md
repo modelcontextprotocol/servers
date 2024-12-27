@@ -109,17 +109,55 @@ MCP Server for the GitLab API, enabling project management, file operations, and
 ### Usage with Claude Desktop
 Add the following to your `claude_desktop_config.json`:
 
+#### Docker
 ```json
 {
-  "gitlab": {
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-gitlab"],
-    "env": {
-      "GITLAB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
-      "GITLAB_API_URL": "https://gitlab.com/api/v4" // Optional, for self-hosted instances
+  "mcpServers": { 
+    "gitlab": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-e",
+        "GITLAB_PERSONAL_ACCESS_TOKEN",
+        "-e",
+        "GITLAB_API_URL",
+        "mcp/gitlab"
+      ],
+      "env": {
+        "GITLAB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
+        "GITLAB_API_URL": "https://gitlab.com/api/v4" // Optional, for self-hosted instances
+      }
     }
   }
 }
+```
+
+### NPX
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-gitlab"
+      ],
+      "env": {
+        "GITLAB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
+        "GITLAB_API_URL": "https://gitlab.com/api/v4" // Optional, for self-hosted instances
+      }
+    }
+  }
+}
+```
+
+## Build
+
+Docker build:
+
+```bash
+docker build -t vonwig/gitlab:mcp -f src/gitlab/Dockerfile .
 ```
 
 ## Environment Variables

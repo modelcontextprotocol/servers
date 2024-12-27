@@ -73,6 +73,12 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of branch to checkout
    - Returns: Confirmation of branch switch
+9. `git_show`
+   - Shows the contents of a commit
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `revision` (string): The revision (commit hash, branch name, tag) to show
+   - Returns: Contents of the specified commit
 
 ## Installation
 
@@ -109,6 +115,21 @@ Add this to your `claude_desktop_config.json`:
   "git": {
     "command": "uvx",
     "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using docker</summary>
+
+* Note: replace '/Users/username' with the a path that you want to be accessible by this tool
+
+```json
+"mcpServers": {
+  "git": {
+    "command": "docker",
+    "args": ["run", "--rm", "-i", "--mount", "type=bind,src=/Users/username,dst=/Users/username", "mcp/git"]
   }
 }
 ```
@@ -187,16 +208,50 @@ If you are doing local development, there are two ways to test your changes:
 
 2. Test using the Claude desktop app. Add the following to your `claude_desktop_config.json`:
 
+### Docker
+
 ```json
-"git": {
-  "command": "uv",
-  "args": [
-    "--directory",
-    "/<path to mcp-servers>/mcp-servers/src/git",
-    "run",
-    "mcp-server-git"
-  ]
+{
+  "mcpServers": {
+    "brave-search": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
+        "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
+        "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
+        "mcp/git"
+      ]
+    }
+  }
 }
+```
+
+### UVX
+```json
+{
+"mcpServers": {
+  "git": {
+    "command": "uv",
+    "args": [ 
+      "--directory",
+      "/<path to mcp-servers>/mcp-servers/src/git",
+      "run",
+      "mcp-server-git"
+    ]
+  }
+}
+```
+
+## Build
+
+Docker build:
+
+```bash
+cd src/git
+docker build -t mcp/git .
 ```
 
 ## License
