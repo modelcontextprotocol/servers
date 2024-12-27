@@ -1,0 +1,32 @@
+{
+  "name": "@modelcontextprotocol/server-sequential-thinking",
+  "version": "0.6.2",
+  "description": "MCP server for sequential thinking and problem solving",
+  "license": "MIT",
+  "author": "Anthropic, PBC (https://anthropic.com)",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "type": "module",
+  "bin": {
+    "mcp-server-sequential-thinking": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.5.0",
+    "chalk": "^5.3.0",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/yargs": "^17.0.32",
+    "shx": "^0.3.4",
+    "typescript": "^5.3.3"
+  }
+}
