@@ -1,33 +1,42 @@
 {
-  "name": "@modelcontextprotocol/servers",
-  "private": true,
-  "version": "0.6.2",
-  "description": "Model Context Protocol servers",
-  "license": "MIT",
-  "author": "Anthropic, PBC (https://anthropic.com)",
-  "homepage": "https://modelcontextprotocol.io",
-  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
-  "type": "module",
-  "workspaces": [
-    "src/*"
-  ],
-  "files": [],
+  "name": "@modelcontextprotocol/server-azure-devops",
+  "version": "0.1.0",
+  "description": "Azure DevOps MCP Server Implementation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "build": "npm run build --workspaces",
-    "watch": "npm run watch --workspaces",
-    "publish-all": "npm publish --workspaces --access public",
-    "link-all": "npm link --workspaces"
+    "build": "tsc",
+    "prepare": "npm run build",
+    "test": "jest --coverage",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\""
   },
   "dependencies": {
-    "@modelcontextprotocol/server-everything": "*",
-    "@modelcontextprotocol/server-gdrive": "*",
-    "@modelcontextprotocol/server-postgres": "*",
-    "@modelcontextprotocol/server-puppeteer": "*",
-    "@modelcontextprotocol/server-slack": "*",
-    "@modelcontextprotocol/server-brave-search": "*",
-    "@modelcontextprotocol/server-memory": "*",
-    "@modelcontextprotocol/server-filesystem": "*",
-    "@modelcontextprotocol/server-everart": "*",
-    "@modelcontextprotocol/server-sequential-thinking": "*"
+    "@modelcontextprotocol/typescript-sdk": "^0.1.0",
+    "azure-devops-node-api": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^18.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.5.0",
+    "prettier": "^2.0.0",
+    "ts-jest": "^29.5.0",
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/modelcontextprotocol/servers.git"
   }
 }
