@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    paths:
+      - 'src/azure-devops/**'
+  pull_request:
+    paths:
+      - 'src/azure-devops/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x]
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        
+    - name: Install dependencies
+      working-directory: ./src/azure-devops
+      run: npm ci
+      
+    - name: Lint
+      working-directory: ./src/azure-devops
+      run: npm run lint
+      
+    - name: Build
+      working-directory: ./src/azure-devops
+      run: npm run build
+      
+    - name: Test
+      working-directory: ./src/azure-devops
+      run: npm test
+      
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        directory: ./src/azure-devops/coverage

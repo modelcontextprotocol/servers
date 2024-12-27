@@ -2,11 +2,20 @@ import { MCPFunction, MCPFunctionGroup } from '@modelcontextprotocol/typescript-
 import * as azdev from 'azure-devops-node-api';
 import { WorkItem } from '../types';
 
+/**
+ * WorkItemManagement class handles all work item related operations in Azure DevOps
+ * through the Model Context Protocol interface.
+ * 
+ * @implements {MCPFunctionGroup}
+ */
 export class WorkItemManagement implements MCPFunctionGroup {
   private connection: azdev.WebApi;
 
+  /**
+   * Initializes the WorkItemManagement with Azure DevOps credentials
+   * @throws {Error} If required environment variables are not set
+   */
   constructor() {
-    // Initialize Azure DevOps connection
     const orgUrl = process.env.AZURE_DEVOPS_ORG_URL;
     const token = process.env.AZURE_PERSONAL_ACCESS_TOKEN;
     
@@ -18,6 +27,14 @@ export class WorkItemManagement implements MCPFunctionGroup {
     this.connection = new azdev.WebApi(orgUrl, authHandler);
   }
 
+  /**
+   * Retrieves a work item by its ID
+   * 
+   * @param {Object} params - Parameters for the function
+   * @param {number} params.id - The ID of the work item to retrieve
+   * @returns {Promise<WorkItem>} The requested work item
+   * @throws {Error} If the work item is not found or access is denied
+   */
   @MCPFunction({
     description: 'Get work item by ID',
     parameters: {
@@ -29,18 +46,37 @@ export class WorkItemManagement implements MCPFunctionGroup {
     }
   })
   async getWorkItem({ id }: { id: number }): Promise<WorkItem> {
-    const client = await this.connection.getWorkItemTrackingApi();
-    const item = await client.getWorkItem(id);
-    
-    return {
-      id: item.id,
-      title: item.fields['System.Title'],
-      state: item.fields['System.State'],
-      type: item.fields['System.WorkItemType'],
-      description: item.fields['System.Description']
-    };
+    try {
+      const client = await this.connection.getWorkItemTrackingApi();
+      const item = await client.getWorkItem(id);
+      
+      if (!item) {
+        throw new Error(`Work item ${id} not found`);
+      }
+
+      return {
+        id: item.id,
+        title: item.fields['System.Title'],
+        state: item.fields['System.State'],
+        type: item.fields['System.WorkItemType'],
+        description: item.fields['System.Description']
+      };
+    } catch (error) {
+      throw new Error(`Failed to get work item ${id}: ${error.message}`);
+    }
   }
 
+  /**
+   * Creates a new work item
+   * 
+   * @param {Object} params - Parameters for creating the work item
+   * @param {string} params.project - The project where the work item will be created
+   * @param {string} params.type - The type of work item (e.g., Bug, Task, User Story)
+   * @param {string} params.title - The title of the work item
+   * @param {string} [params.description] - Optional description for the work item
+   * @returns {Promise<WorkItem>} The created work item
+   * @throws {Error} If creation fails or parameters are invalid
+   */
   @MCPFunction({
     description: 'Create new work item',
     parameters: {
@@ -60,29 +96,47 @@ export class WorkItemManagement implements MCPFunctionGroup {
     title: string;
     description?: string;
   }): Promise<WorkItem> {
-    const client = await this.connection.getWorkItemTrackingApi();
-    
-    const patchDocument = [
-      { op: 'add', path: '/fields/System.Title', value: title },
-      { op: 'add', path: '/fields/System.Description', value: description }
-    ];
+    try {
+      const client = await this.connection.getWorkItemTrackingApi();
+      
+      const patchDocument = [
+        { op: 'add', path: '/fields/System.Title', value: title }
+      ];
 
-    const item = await client.createWorkItem(
-      null,
-      patchDocument,
-      project,
-      type
-    );
+      if (description) {
+        patchDocument.push({ op: 'add', path: '/fields/System.Description', value: description });
+      }
 
-    return {
-      id: item.id,
-      title: item.fields['System.Title'],
-      state: item.fields['System.State'],
-      type: item.fields['System.WorkItemType'],
-      description: item.fields['System.Description']
-    };
+      const item = await client.createWorkItem(
+        null,
+        patchDocument,
+        project,
+        type
+      );
+
+      return {
+        id: item.id,
+        title: item.fields['System.Title'],
+        state: item.fields['System.State'],
+        type: item.fields['System.WorkItemType'],
+        description: item.fields['System.Description']
+      };
+    } catch (error) {
+      throw new Error(`Failed to create work item: ${error.message}`);
+    }
   }
 
+  /**
+   * Updates an existing work item
+   * 
+   * @param {Object} params - Parameters for updating the work item
+   * @param {number} params.id - The ID of the work item to update
+   * @param {string} [params.title] - New title for the work item
+   * @param {string} [params.state] - New state for the work item
+   * @param {string} [params.description] - New description for the work item
+   * @returns {Promise<WorkItem>} The updated work item
+   * @throws {Error} If update fails or work item is not found
+   */
   @MCPFunction({
     description: 'Update work item',
     parameters: {
@@ -102,25 +156,33 @@ export class WorkItemManagement implements MCPFunctionGroup {
     state?: string;
     description?: string;
   }): Promise<WorkItem> {
-    const client = await this.connection.getWorkItemTrackingApi();
-    
-    const patchDocument = [];
-    if (title) patchDocument.push({ op: 'add', path: '/fields/System.Title', value: title });
-    if (state) patchDocument.push({ op: 'add', path: '/fields/System.State', value: state });
-    if (description) patchDocument.push({ op: 'add', path: '/fields/System.Description', value: description });
+    try {
+      const client = await this.connection.getWorkItemTrackingApi();
+      
+      const patchDocument = [];
+      if (title) patchDocument.push({ op: 'add', path: '/fields/System.Title', value: title });
+      if (state) patchDocument.push({ op: 'add', path: '/fields/System.State', value: state });
+      if (description) patchDocument.push({ op: 'add', path: '/fields/System.Description', value: description });
 
-    const item = await client.updateWorkItem(
-      null,
-      patchDocument,
-      id
-    );
+      if (patchDocument.length === 0) {
+        throw new Error('No updates specified');
+      }
 
-    return {
-      id: item.id,
-      title: item.fields['System.Title'],
-      state: item.fields['System.State'],
-      type: item.fields['System.WorkItemType'],
-      description: item.fields['System.Description']
-    };
+      const item = await client.updateWorkItem(
+        null,
+        patchDocument,
+        id
+      );
+
+      return {
+        id: item.id,
+        title: item.fields['System.Title'],
+        state: item.fields['System.State'],
+        type: item.fields['System.WorkItemType'],
+        description: item.fields['System.Description']
+      };
+    } catch (error) {
+      throw new Error(`Failed to update work item ${id}: ${error.message}`);
+    }
   }
 }
