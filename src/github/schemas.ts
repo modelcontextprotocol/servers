@@ -46,16 +46,17 @@ const GithubFileContentLinks = z.object({
 
 // File content schemas
 export const GitHubFileContentSchema = z.object({
-  type: z.string(),
-  size: z.number(),
   name: z.string(),
   path: z.string(),
-  content: z.string(),
   sha: z.string(),
+  size: z.number(),
   url: z.string(),
-  git_url: z.string(),
   html_url: z.string(),
+  git_url: z.string(),
   download_url: z.string(),
+  type: z.string(),
+  content: z.string(),
+  encoding: z.string().nullable(),
   _links: GithubFileContentLinks
 });
 
