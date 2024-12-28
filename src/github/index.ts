@@ -15,6 +15,16 @@ import * as pulls from './operations/pulls.js';
 import * as branches from './operations/branches.js';
 import * as search from './operations/search.js';
 import * as commits from './operations/commits.js';
+import {
+  GitHubError,
+  GitHubValidationError,
+  GitHubResourceNotFoundError,
+  GitHubAuthenticationError,
+  GitHubPermissionError,
+  GitHubRateLimitError,
+  GitHubConflictError,
+  isGitHubError,
+} from './common/errors.js';
 
 const server = new Server(
   {
@@ -27,6 +37,29 @@ const server = new Server(
     },
   }
 );
+
+function formatGitHubError(error: GitHubError): string {
+  let message = `GitHub API Error: ${error.message}`;
+  
+  if (error instanceof GitHubValidationError) {
+    message = `Validation Error: ${error.message}`;
+    if (error.response) {
+      message += `\nDetails: ${JSON.stringify(error.response)}`;
+    }
+  } else if (error instanceof GitHubResourceNotFoundError) {
+    message = `Not Found: ${error.message}`;
+  } else if (error instanceof GitHubAuthenticationError) {
+    message = `Authentication Failed: ${error.message}`;
+  } else if (error instanceof GitHubPermissionError) {
+    message = `Permission Denied: ${error.message}`;
+  } else if (error instanceof GitHubRateLimitError) {
+    message = `Rate Limit Exceeded: ${error.message}\nResets at: ${error.resetAt.toISOString()}`;
+  } else if (error instanceof GitHubConflictError) {
+    message = `Conflict: ${error.message}`;
+  }
+
+  return message;
+}
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -298,7 +331,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`ZodErrors: ${JSON.stringify(error.errors)}`);
+      throw new Error(`Invalid input: ${JSON.stringify(error.errors)}`);
+    }
+    if (isGitHubError(error)) {
+      throw new Error(formatGitHubError(error));
     }
     throw error;
   }
