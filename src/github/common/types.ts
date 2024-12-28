@@ -121,6 +121,15 @@ export const GitHubReferenceSchema = z.object({
   }),
 });
 
+// User and assignee schemas
+export const GitHubIssueAssigneeSchema = z.object({
+  login: z.string(),
+  id: z.number(),
+  avatar_url: z.string(),
+  url: z.string(),
+  html_url: z.string(),
+});
+
 // Export types
 export type GitHubAuthor = z.infer<typeof GitHubAuthorSchema>;
 export type GitHubRepository = z.infer<typeof GitHubRepositorySchema>;
@@ -130,3 +139,4 @@ export type GitHubContent = z.infer<typeof GitHubContentSchema>;
 export type GitHubTree = z.infer<typeof GitHubTreeSchema>;
 export type GitHubCommit = z.infer<typeof GitHubCommitSchema>;
 export type GitHubReference = z.infer<typeof GitHubReferenceSchema>;
+export type GitHubIssueAssignee = z.infer<typeof GitHubIssueAssigneeSchema>;
