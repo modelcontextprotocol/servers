@@ -55,7 +55,7 @@ export const GitHubFileContentSchema = z.object({
   git_url: z.string(),
   download_url: z.string(),
   type: z.string(),
-  content: z.string(),
+  content: z.string().optional(),
   encoding: z.string().optional(),
   _links: GithubFileContentLinks
 });
