@@ -5,46 +5,41 @@ import {
   GitHubRepositorySchema 
 } from "../common/types.js";
 
-// Constants for GitHub limits and constraints
 const GITHUB_TITLE_MAX_LENGTH = 256;
 const GITHUB_BODY_MAX_LENGTH = 65536;
 
-// Base schema for repository identification
 export const RepositoryParamsSchema = z.object({
-  owner: z.string().min(1).describe("Repository owner (username or organization)"),
-  repo: z.string().min(1).describe("Repository name"),
+  owner: z.string().min(1),
+  repo: z.string().min(1),
 });
 
-// Common validation schemas
 export const GitHubPullRequestStateSchema = z.enum([
   "open",
   "closed",
   "merged",
   "draft"
-]).describe("The current state of the pull request");
+]);
 
 export const GitHubPullRequestSortSchema = z.enum([
   "created",
   "updated",
   "popularity",
   "long-running"
-]).describe("The sorting field for pull requests");
+]);
 
 export const GitHubDirectionSchema = z.enum([
   "asc",
   "desc"
-]).describe("The sort direction");
+]);
 
-// Pull request head/base schema
 export const GitHubPullRequestRefSchema = z.object({
   label: z.string(),
   ref: z.string().min(1),
   sha: z.string().length(40),
   user: GitHubIssueAssigneeSchema,
   repo: GitHubRepositorySchema,
-}).describe("Reference information for pull request head or base");
+});
 
-// Main pull request schema
 export const GitHubPullRequestSchema = z.object({
   url: z.string().url(),
   id: z.number().positive(),
@@ -76,7 +71,6 @@ export const GitHubPullRequestSchema = z.object({
   base: GitHubPullRequestRefSchema,
 });
 
-// Request schemas
 export const ListPullRequestsOptionsSchema = z.object({
   state: GitHubPullRequestStateSchema.optional(),
   head: z.string().optional(),
@@ -85,37 +79,27 @@ export const ListPullRequestsOptionsSchema = z.object({
   direction: GitHubDirectionSchema.optional(),
   per_page: z.number().min(1).max(100).optional(),
   page: z.number().min(1).optional(),
-}).describe("Options for listing pull requests");
+});
 
 export const CreatePullRequestOptionsSchema = z.object({
-  title: z.string().max(GITHUB_TITLE_MAX_LENGTH).describe("Pull request title"),
-  body: z.string().max(GITHUB_BODY_MAX_LENGTH).optional().describe("Pull request body/description"),
-  head: z.string().min(1).describe("The name of the branch where your changes are implemented"),
-  base: z.string().min(1).describe("The name of the branch you want the changes pulled into"),
-  maintainer_can_modify: z.boolean().optional().describe("Whether maintainers can modify the pull request"),
-  draft: z.boolean().optional().describe("Whether to create the pull request as a draft"),
-}).describe("Options for creating a pull request");
+  title: z.string().max(GITHUB_TITLE_MAX_LENGTH),
+  body: z.string().max(GITHUB_BODY_MAX_LENGTH).optional(),
+  head: z.string().min(1),
+  base: z.string().min(1),
+  maintainer_can_modify: z.boolean().optional(),
+  draft: z.boolean().optional(),
+});
 
-// Combine repository params with operation options
 export const CreatePullRequestSchema = RepositoryParamsSchema.extend({
   ...CreatePullRequestOptionsSchema.shape,
 });
 
-// Type exports
 export type RepositoryParams = z.infer<typeof RepositoryParamsSchema>;
 export type CreatePullRequestOptions = z.infer<typeof CreatePullRequestOptionsSchema>;
 export type ListPullRequestsOptions = z.infer<typeof ListPullRequestsOptionsSchema>;
 export type GitHubPullRequest = z.infer<typeof GitHubPullRequestSchema>;
 export type GitHubPullRequestRef = z.infer<typeof GitHubPullRequestRefSchema>;
 
-/**
- * Creates a new pull request in a repository.
- * 
- * @param params Repository identification and pull request creation options
- * @returns Promise resolving to the created pull request
- * @throws {ZodError} If the input parameters fail validation
- * @throws {Error} If the GitHub API request fails
- */
 export async function createPullRequest(
   params: z.infer<typeof CreatePullRequestSchema>
 ): Promise<GitHubPullRequest> {
@@ -132,13 +116,6 @@ export async function createPullRequest(
   return GitHubPullRequestSchema.parse(response);
 }
 
-/**
- * Retrieves a specific pull request by its number.
- * 
- * @param params Repository parameters and pull request number
- * @returns Promise resolving to the pull request details
- * @throws {Error} If the pull request is not found or the request fails
- */
 export async function getPullRequest(
   params: RepositoryParams & { pullNumber: number }
 ): Promise<GitHubPullRequest> {
@@ -154,14 +131,6 @@ export async function getPullRequest(
   return GitHubPullRequestSchema.parse(response);
 }
 
-/**
- * Lists pull requests in a repository with optional filtering.
- * 
- * @param params Repository parameters and listing options
- * @returns Promise resolving to an array of pull requests
- * @throws {ZodError} If the input parameters fail validation
- * @throws {Error} If the GitHub API request fails
- */
 export async function listPullRequests(
   params: RepositoryParams & Partial<ListPullRequestsOptions>
 ): Promise<GitHubPullRequest[]> {
