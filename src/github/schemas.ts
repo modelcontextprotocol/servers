@@ -38,19 +38,25 @@ export const GitHubRepositorySchema = z.object({
   default_branch: z.string(),
 });
 
+const GithubFileContentLinks = z.object({
+  self: z.string(),
+  git:z.number().nullable(),
+  html: z.string().nullable()
+});
+
 // File content schemas
 export const GitHubFileContentSchema = z.object({
   type: z.string(),
-  encoding: z.string(),
   size: z.number(),
   name: z.string(),
   path: z.string(),
-  content: z.string(),
+  content: z.string().nullable(),
   sha: z.string(),
   url: z.string(),
   git_url: z.string(),
   html_url: z.string(),
   download_url: z.string(),
+  _links: GithubFileContentLinks
 });
 
 export const GitHubDirectoryContentSchema = z.object({
