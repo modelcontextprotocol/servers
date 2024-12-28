@@ -8,7 +8,6 @@ import {
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
-// Import operations
 import * as repository from './operations/repository.js';
 import * as files from './operations/files.js';
 import * as issues from './operations/issues.js';
@@ -223,8 +222,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "create_pull_request": {
         const args = pulls.CreatePullRequestSchema.parse(request.params.arguments);
-        const { owner, repo, ...options } = args;
-        const pullRequest = await pulls.createPullRequest(owner, repo, options);
+        const pullRequest = await pulls.createPullRequest(args);
         return {
           content: [{ type: "text", text: JSON.stringify(pullRequest, null, 2) }],
         };
@@ -315,4 +313,3 @@ async function runServer() {
 runServer().catch((error) => {
   console.error("Fatal error in main():", error);
   process.exit(1);
-});
