@@ -2,10 +2,11 @@ import { z } from "zod";
 import { githubRequest } from "../common/utils";
 import {
   GitHubContentSchema,
-  GitHubCreateUpdateFileResponseSchema,
+  GitHubAuthorSchema,
   GitHubTreeSchema,
   GitHubCommitSchema,
   GitHubReferenceSchema,
+  GitHubFileContentSchema,
 } from "../common/types";
 
 // Schema definitions
@@ -39,8 +40,33 @@ export const PushFilesSchema = z.object({
   message: z.string().describe("Commit message"),
 });
 
+export const GitHubCreateUpdateFileResponseSchema = z.object({
+  content: GitHubFileContentSchema.nullable(),
+  commit: z.object({
+    sha: z.string(),
+    node_id: z.string(),
+    url: z.string(),
+    html_url: z.string(),
+    author: GitHubAuthorSchema,
+    committer: GitHubAuthorSchema,
+    message: z.string(),
+    tree: z.object({
+      sha: z.string(),
+      url: z.string(),
+    }),
+    parents: z.array(
+      z.object({
+        sha: z.string(),
+        url: z.string(),
+        html_url: z.string(),
+      })
+    ),
+  }),
+});
+
 // Type exports
 export type FileOperation = z.infer<typeof FileOperationSchema>;
+export type GitHubCreateUpdateFileResponse = z.infer<typeof GitHubCreateUpdateFileResponseSchema>;
 
 // Function implementations
 export async function getFileContents(
