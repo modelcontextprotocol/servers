@@ -367,6 +367,8 @@ export const CreateRepositorySchema = z.object({
 });
 
 export const GetFileContentsSchema = RepoParamsSchema.extend({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
   path: z.string().describe("Path to the file or directory"),
   branch: z.string().optional().describe("Branch to get contents from"),
 });
