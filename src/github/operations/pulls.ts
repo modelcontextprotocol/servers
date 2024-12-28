@@ -149,12 +149,15 @@ async function checkForExistingPullRequest(
   const existingPRs = await listPullRequests({
     owner,
     repo,
-    head,
-    base,
     state: "open",
   });
 
-  if (existingPRs.length > 0) {
+  // Check if any existing open PR has the exact same head and base combination
+  const duplicatePR = existingPRs.find(pr => 
+    pr.head.ref === head && pr.base.ref === base
+  );
+
+  if (duplicatePR) {
     throw new GitHubConflictError(
       `A pull request already exists for ${head} into ${base}`
     );
