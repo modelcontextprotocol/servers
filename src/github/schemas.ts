@@ -40,7 +40,7 @@ export const GitHubRepositorySchema = z.object({
 
 const GithubFileContentLinks = z.object({
   self: z.string(),
-  git: z.number().nullable(),
+  git: z.string().nullable(),
   html: z.string().nullable()
 });
 

@@ -1016,14 +1016,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(
-        `Invalid arguments: ${error.errors
-          .map(
-            (e: z.ZodError["errors"][number]) =>
-              `${e.path.join(".")}: ${e.message}`
-          )
-          .join(", ")}`
-      );
+      throw new Error(`ZodErrors: ${JSON.stringify(error.errors)}`)
     }
     throw error;
   }
