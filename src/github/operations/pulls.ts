@@ -1,8 +1,44 @@
 import { z } from "zod";
 import { githubRequest } from "../common/utils";
-import { GitHubPullRequestSchema } from "../common/types";
+import { 
+  GitHubIssueAssigneeSchema, 
+  GitHubRepositorySchema 
+} from "../common/types";
 
 // Schema definitions
+export const GitHubPullRequestHeadSchema = z.object({
+  label: z.string(),
+  ref: z.string(),
+  sha: z.string(),
+  user: GitHubIssueAssigneeSchema,
+  repo: GitHubRepositorySchema,
+});
+
+export const GitHubPullRequestSchema = z.object({
+  url: z.string(),
+  id: z.number(),
+  node_id: z.string(),
+  html_url: z.string(),
+  diff_url: z.string(),
+  patch_url: z.string(),
+  issue_url: z.string(),
+  number: z.number(),
+  state: z.string(),
+  locked: z.boolean(),
+  title: z.string(),
+  user: GitHubIssueAssigneeSchema,
+  body: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  closed_at: z.string().nullable(),
+  merged_at: z.string().nullable(),
+  merge_commit_sha: z.string().nullable(),
+  assignee: GitHubIssueAssigneeSchema.nullable(),
+  assignees: z.array(GitHubIssueAssigneeSchema),
+  head: GitHubPullRequestHeadSchema,
+  base: GitHubPullRequestHeadSchema,
+});
+
 export const CreatePullRequestOptionsSchema = z.object({
   title: z.string().describe("Pull request title"),
   body: z.string().optional().describe("Pull request body/description"),
@@ -25,6 +61,8 @@ export const CreatePullRequestSchema = z.object({
 
 // Type exports
 export type CreatePullRequestOptions = z.infer<typeof CreatePullRequestOptionsSchema>;
+export type GitHubPullRequest = z.infer<typeof GitHubPullRequestSchema>;
+export type GitHubPullRequestHead = z.infer<typeof GitHubPullRequestHeadSchema>;
 
 // Function implementations
 export async function createPullRequest(
