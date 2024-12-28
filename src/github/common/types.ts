@@ -130,6 +130,54 @@ export const GitHubIssueAssigneeSchema = z.object({
   html_url: z.string(),
 });
 
+// Issue-related schemas
+export const GitHubLabelSchema = z.object({
+  id: z.number(),
+  node_id: z.string(),
+  url: z.string(),
+  name: z.string(),
+  color: z.string(),
+  default: z.boolean(),
+  description: z.string().optional(),
+});
+
+export const GitHubMilestoneSchema = z.object({
+  url: z.string(),
+  html_url: z.string(),
+  labels_url: z.string(),
+  id: z.number(),
+  node_id: z.string(),
+  number: z.number(),
+  title: z.string(),
+  description: z.string(),
+  state: z.string(),
+});
+
+export const GitHubIssueSchema = z.object({
+  url: z.string(),
+  repository_url: z.string(),
+  labels_url: z.string(),
+  comments_url: z.string(),
+  events_url: z.string(),
+  html_url: z.string(),
+  id: z.number(),
+  node_id: z.string(),
+  number: z.number(),
+  title: z.string(),
+  user: GitHubIssueAssigneeSchema,
+  labels: z.array(GitHubLabelSchema),
+  state: z.string(),
+  locked: z.boolean(),
+  assignee: GitHubIssueAssigneeSchema.nullable(),
+  assignees: z.array(GitHubIssueAssigneeSchema),
+  milestone: GitHubMilestoneSchema.nullable(),
+  comments: z.number(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  closed_at: z.string().nullable(),
+  body: z.string().nullable(),
+});
+
 // Export types
 export type GitHubAuthor = z.infer<typeof GitHubAuthorSchema>;
 export type GitHubRepository = z.infer<typeof GitHubRepositorySchema>;
@@ -140,3 +188,6 @@ export type GitHubTree = z.infer<typeof GitHubTreeSchema>;
 export type GitHubCommit = z.infer<typeof GitHubCommitSchema>;
 export type GitHubReference = z.infer<typeof GitHubReferenceSchema>;
 export type GitHubIssueAssignee = z.infer<typeof GitHubIssueAssigneeSchema>;
+export type GitHubLabel = z.infer<typeof GitHubLabelSchema>;
+export type GitHubMilestone = z.infer<typeof GitHubMilestoneSchema>;
+export type GitHubIssue = z.infer<typeof GitHubIssueSchema>;
