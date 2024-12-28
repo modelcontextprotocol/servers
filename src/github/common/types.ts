@@ -110,6 +110,25 @@ export const GitHubCommitSchema = z.object({
   ),
 });
 
+export const GitHubListCommitsSchema = z.array(z.object({
+  sha: z.string(),
+  node_id: z.string(),
+  commit: z.object({
+    author: GitHubAuthorSchema,
+    committer: GitHubAuthorSchema,
+    message: z.string(),
+    tree: z.object({
+      sha: z.string(),
+      url: z.string()
+    }),
+    url: z.string(),
+    comment_count: z.number(),
+  }),
+  url: z.string(),
+  html_url: z.string(),
+  comments_url: z.string()
+}));
+
 export const GitHubReferenceSchema = z.object({
   ref: z.string(),
   node_id: z.string(),
@@ -178,6 +197,13 @@ export const GitHubIssueSchema = z.object({
   body: z.string().nullable(),
 });
 
+// Search-related schemas
+export const GitHubSearchResponseSchema = z.object({
+  total_count: z.number(),
+  incomplete_results: z.boolean(),
+  items: z.array(GitHubRepositorySchema),
+});
+
 // Export types
 export type GitHubAuthor = z.infer<typeof GitHubAuthorSchema>;
 export type GitHubRepository = z.infer<typeof GitHubRepositorySchema>;
@@ -186,8 +212,10 @@ export type GitHubDirectoryContent = z.infer<typeof GitHubDirectoryContentSchema
 export type GitHubContent = z.infer<typeof GitHubContentSchema>;
 export type GitHubTree = z.infer<typeof GitHubTreeSchema>;
 export type GitHubCommit = z.infer<typeof GitHubCommitSchema>;
+export type GitHubListCommits = z.infer<typeof GitHubListCommitsSchema>;
 export type GitHubReference = z.infer<typeof GitHubReferenceSchema>;
 export type GitHubIssueAssignee = z.infer<typeof GitHubIssueAssigneeSchema>;
 export type GitHubLabel = z.infer<typeof GitHubLabelSchema>;
 export type GitHubMilestone = z.infer<typeof GitHubMilestoneSchema>;
 export type GitHubIssue = z.infer<typeof GitHubIssueSchema>;
+export type GitHubSearchResponse = z.infer<typeof GitHubSearchResponseSchema>;
