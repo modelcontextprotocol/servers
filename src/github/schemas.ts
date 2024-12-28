@@ -40,7 +40,7 @@ export const GitHubRepositorySchema = z.object({
 
 const GithubFileContentLinks = z.object({
   self: z.string(),
-  git:z.number().nullable(),
+  git: z.number().nullable(),
   html: z.string().nullable()
 });
 
@@ -50,7 +50,7 @@ export const GitHubFileContentSchema = z.object({
   size: z.number(),
   name: z.string(),
   path: z.string(),
-  content: z.string().nullable(),
+  content: z.string(),
   sha: z.string(),
   url: z.string(),
   git_url: z.string(),
@@ -367,8 +367,6 @@ export const CreateRepositorySchema = z.object({
 });
 
 export const GetFileContentsSchema = RepoParamsSchema.extend({
-  owner: z.string().describe("Repository owner (username or organization)"),
-  repo: z.string().describe("Repository name"),
   path: z.string().describe("Path to the file or directory"),
   branch: z.string().optional().describe("Branch to get contents from"),
 });
