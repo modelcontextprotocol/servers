@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { githubRequest, buildUrl } from "../common/utils";
+import { githubRequest, buildUrl } from "../common/utils.js";
 import {
   GitHubIssueSchema,
   GitHubLabelSchema,
   GitHubIssueAssigneeSchema,
   GitHubMilestoneSchema,
-} from "../common/types";
+} from "../common/types.js";
 
 // Schema definitions
 export const CreateIssueOptionsSchema = z.object({

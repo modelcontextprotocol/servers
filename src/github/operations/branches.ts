@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { githubRequest } from "../common/utils";
-import { GitHubReferenceSchema } from "../common/types";
+import { githubRequest } from "../common/utils.js";
+import { GitHubReferenceSchema } from "../common/types.js";
 
 // Schema definitions
 export const CreateBranchOptionsSchema = z.object({

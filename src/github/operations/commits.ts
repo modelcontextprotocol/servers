@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { githubRequest, buildUrl } from "../common/utils";
-import { GitHubCommitSchema, GitHubListCommitsSchema } from "../common/types";
+import { githubRequest, buildUrl } from "../common/utils.js";
+import { GitHubCommitSchema, GitHubListCommitsSchema } from "../common/types.js";
 
 // Schema definitions
 export const ListCommitsSchema = z.object({

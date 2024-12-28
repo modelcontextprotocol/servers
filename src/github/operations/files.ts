@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRequest } from "../common/utils";
+import { githubRequest } from "../common/utils.js";
 import {
   GitHubContentSchema,
   GitHubAuthorSchema,
@@ -7,7 +7,7 @@ import {
   GitHubCommitSchema,
   GitHubReferenceSchema,
   GitHubFileContentSchema,
-} from "../common/types";
+} from "../common/types.js";
 
 // Schema definitions
 export const FileOperationSchema = z.object({

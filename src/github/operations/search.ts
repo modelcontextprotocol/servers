@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRequest, buildUrl } from "../common/utils";
+import { githubRequest, buildUrl } from "../common/utils.js";
 
 // Schema definitions
 export const SearchCodeSchema = z.object({
