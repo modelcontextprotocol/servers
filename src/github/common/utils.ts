@@ -1,46 +1,123 @@
-import fetch from "node-fetch";
+import { createGitHubError } from "./errors.js";
 
-if (!process.env.GITHUB_PERSONAL_ACCESS_TOKEN) {
-  console.error("GITHUB_PERSONAL_ACCESS_TOKEN environment variable is not set");
-  process.exit(1);
-}
-
-export const GITHUB_PERSONAL_ACCESS_TOKEN = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
-
-interface GitHubRequestOptions {
+type RequestOptions = {
   method?: string;
-  body?: any;
+  body?: unknown;
+  headers?: Record<string, string>;
+};
+
+async function parseResponseBody(response: Response): Promise<unknown> {
+  const contentType = response.headers.get("content-type");
+  if (contentType?.includes("application/json")) {
+    return response.json();
+  }
+  return response.text();
 }
 
-export async function githubRequest(url: string, options: GitHubRequestOptions = {}) {
-  const response = await fetch(url, {
-    method: options.method || "GET",
-    headers: {
-      Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
-      Accept: "application/vnd.github.v3+json",
-      "User-Agent": "github-mcp-server",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-    },
-    ...(options.body ? { body: JSON.stringify(options.body) } : {}),
-  });
+export async function githubRequest(
+  url: string,
+  options: RequestOptions = {}
+): Promise<unknown> {
+  const headers = {
+    "Accept": "application/vnd.github.v3+json",
+    "Content-Type": "application/json",
+    ...options.headers,
+  };
 
-  if (!response.ok) {
-    throw new Error(`GitHub API error: ${response.statusText}`);
+  if (process.env.GITHUB_TOKEN) {
+    headers["Authorization"] = `Bearer ${process.env.GITHUB_TOKEN}`;
   }
 
-  return response.json();
+  const response = await fetch(url, {
+    method: options.method || "GET",
+    headers,
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+
+  const responseBody = await parseResponseBody(response);
+
+  if (!response.ok) {
+    throw createGitHubError(response.status, responseBody);
+  }
+
+  return responseBody;
 }
 
-export function buildUrl(baseUrl: string, params: Record<string, any> = {}) {
-  const url = new URL(baseUrl);
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      if (Array.isArray(value)) {
-        url.searchParams.append(key, value.join(","));
-      } else {
-        url.searchParams.append(key, value.toString());
-      }
+export function validateBranchName(branch: string): string {
+  const sanitized = branch.trim();
+  if (!sanitized) {
+    throw new Error("Branch name cannot be empty");
+  }
+  if (sanitized.includes("..")) {
+    throw new Error("Branch name cannot contain '..'");
+  }
+  if (/[\s~^:?*[\\\]]/.test(sanitized)) {
+    throw new Error("Branch name contains invalid characters");
+  }
+  if (sanitized.startsWith("/") || sanitized.endsWith("/")) {
+    throw new Error("Branch name cannot start or end with '/'");
+  }
+  if (sanitized.endsWith(".lock")) {
+    throw new Error("Branch name cannot end with '.lock'");
+  }
+  return sanitized;
+}
+
+export function validateRepositoryName(name: string): string {
+  const sanitized = name.trim().toLowerCase();
+  if (!sanitized) {
+    throw new Error("Repository name cannot be empty");
+  }
+  if (!/^[a-z0-9_.-]+$/.test(sanitized)) {
+    throw new Error(
+      "Repository name can only contain lowercase letters, numbers, hyphens, periods, and underscores"
+    );
+  }
+  if (sanitized.startsWith(".") || sanitized.endsWith(".")) {
+    throw new Error("Repository name cannot start or end with a period");
+  }
+  return sanitized;
+}
+
+export function validateOwnerName(owner: string): string {
+  const sanitized = owner.trim().toLowerCase();
+  if (!sanitized) {
+    throw new Error("Owner name cannot be empty");
+  }
+  if (!/^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/.test(sanitized)) {
+    throw new Error(
+      "Owner name must start with a letter or number and can contain up to 39 characters"
+    );
+  }
+  return sanitized;
+}
+
+export async function checkBranchExists(
+  owner: string,
+  repo: string,
+  branch: string
+): Promise<boolean> {
+  try {
+    await githubRequest(
+      `https://api.github.com/repos/${owner}/${repo}/branches/${branch}`
+    );
+    return true;
+  } catch (error) {
+    if (error && typeof error === "object" && "status" in error && error.status === 404) {
+      return false;
     }
-  });
-  return url.toString();
+    throw error;
+  }
+}
+
+export async function checkUserExists(username: string): Promise<boolean> {
+  try {
+    await githubRequest(`https://api.github.com/users/${username}`);
+    return true;
+  } catch (error) {
+    if (error && typeof error === "object" && "status" in error && error.status === 404) {
+      return false;
+    }
+    throw error;
+  }
 }
