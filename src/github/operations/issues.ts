@@ -87,8 +87,18 @@ export async function listIssues(
   repo: string,
   options: Omit<z.infer<typeof ListIssuesOptionsSchema>, "owner" | "repo">
 ) {
+  const urlParams: Record<string, string | undefined> = {
+    direction: options.direction,
+    labels: options.labels?.join(","),
+    page: options.page?.toString(),
+    per_page: options.per_page?.toString(),
+    since: options.since,
+    sort: options.sort,
+    state: options.state
+  };
+
   return githubRequest(
-    buildUrl(`https://api.github.com/repos/${owner}/${repo}/issues`, options)
+    buildUrl(`https://api.github.com/repos/${owner}/${repo}/issues`, urlParams)
   );
 }
 
