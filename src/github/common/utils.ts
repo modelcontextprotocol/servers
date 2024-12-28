@@ -14,11 +14,21 @@ async function parseResponseBody(response: Response): Promise<unknown> {
   return response.text();
 }
 
+export function buildUrl(baseUrl: string, params: Record<string, string | number | undefined>): string {
+  const url = new URL(baseUrl);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) {
+      url.searchParams.append(key, value.toString());
+    }
+  });
+  return url.toString();
+}
+
 export async function githubRequest(
   url: string,
   options: RequestOptions = {}
 ): Promise<unknown> {
-  const headers = {
+  const headers: Record<string, string> = {
     "Accept": "application/vnd.github.v3+json",
     "Content-Type": "application/json",
     ...options.headers,
