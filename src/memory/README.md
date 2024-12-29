@@ -127,7 +127,23 @@ Example:
 # Usage with Claude Desktop
 
 ### Setup
+
 Add this to your claude_desktop_config.json:
+
+#### Docker
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "mcp/memory"]
+    }
+  }
+}
+```
+
+#### NPX
 ```json
 {
   "mcpServers": {
@@ -172,6 +188,14 @@ Follow these steps for each interaction:
      a) Create entities for recurring organizations, people, and significant events
      b) Connect them to the current entities using relations
      b) Store facts about them as observations
+```
+
+## Building
+
+Docker:
+
+```sh
+docker build -t mcp/memory -f src/memory/Dockerfile . 
 ```
 
 ## License

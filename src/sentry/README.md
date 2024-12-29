@@ -69,6 +69,22 @@ Add this to your `claude_desktop_config.json`:
 </details>
 
 <details>
+
+<details>
+<summary>Using docker</summary>
+
+```json
+"mcpServers": {
+  "sentry": {
+    "command": "docker",
+    "args": ["run", "-i", "--rm", "mcp/sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+  }
+}
+```
+</details>
+
+<details>
+
 <summary>Using pip installation</summary>
 
 ```json

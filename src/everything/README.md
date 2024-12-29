@@ -1,4 +1,4 @@
-# Everything MCP Server 
+# Everything MCP Server
 
 This MCP server attempts to exercise all the features of the MCP protocol. It is not intended to be a useful server, but rather a test server for builders of MCP clients. It implements prompts, tools, resources, sampling, and more to showcase MCP capabilities.
 
@@ -15,7 +15,7 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
 2. `add`
    - Adds two numbers together
    - Inputs:
-     - `a` (number): First number 
+     - `a` (number): First number
      - `b` (number): Second number
    - Returns: Text result of the addition
 
@@ -27,7 +27,7 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
    - Returns: Completion message with duration and steps
    - Sends progress notifications during execution
 
-4. `sampleLLM` 
+4. `sampleLLM`
    - Demonstrates LLM sampling capability using MCP sampling feature
    - Inputs:
      - `prompt` (string): The prompt to send to the LLM
@@ -39,17 +39,23 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
    - No inputs required
    - Returns: Base64 encoded PNG image data
 
+6. `printEnv`
+   - Prints all environment variables
+   - Useful for debugging MCP server configuration
+   - No inputs required
+   - Returns: JSON string of all environment variables
+
 ### Resources
 
 The server provides 100 test resources in two formats:
-- Even numbered resources: 
+- Even numbered resources:
   - Plaintext format
   - URI pattern: `test://static/resource/{even_number}`
   - Content: Simple text description
 
 - Odd numbered resources:
   - Binary blob format
-  - URI pattern: `test://static/resource/{odd_number}`  
+  - URI pattern: `test://static/resource/{odd_number}`
   - Content: Base64 encoded binary data
 
 Resource features:
