@@ -21,6 +21,9 @@ import {
   ForkRepositorySchema,
   GetFileContentsSchema,
   GetIssueSchema,
+  GetIssueCommentsSchema,
+  GitHubComment,
+  GitHubCommentSchema,
   GitHubCommitSchema,
   GitHubContentSchema,
   GitHubCreateUpdateFileResponseSchema,
@@ -806,10 +809,39 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_issue",
         description: "Get details of a specific issue in a GitHub repository.",
         inputSchema: zodToJsonSchema(GetIssueSchema)
-      }
+      },
+      {
+        name: "get_issue_comments",
+        description: "Get comments on an issue or pull request",
+        inputSchema: zodToJsonSchema(GetIssueCommentsSchema),
+      },
     ],
   };
 });
+
+// Add this function near the other GitHub API functions
+async function getIssueComments(
+  owner: string,
+  repo: string,
+  issueNumber: number
+): Promise<GitHubComment[]> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+    {
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return z.array(GitHubCommentSchema).parse(await response.json());
+}
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
@@ -1009,6 +1041,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }).parse(request.params.arguments);
         const issue = await getIssue(args.owner, args.repo, args.issue_number);
         return { toolResult: issue };
+      }
+
+      case "get_issue_comments": {
+        const args = GetIssueCommentsSchema.parse(request.params.arguments);
+        const comments = await getIssueComments(
+          args.owner,
+          args.repo,
+          args.issue_number
+        );
+        return { toolResult: comments };
       }
 
       default:
