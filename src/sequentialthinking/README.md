@@ -83,7 +83,7 @@ Add this to your `claude_desktop_config.json`:
 Docker:
 
 ```bash
-docker build -t mcp/sequentialthinking -f sequentialthinking/Dockerfile .
+docker build -t mcp/sequentialthinking -f src/sequentialthinking/Dockerfile .
 ```
 
 ## License
