@@ -257,11 +257,11 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
       "args": [
         "-y",
         "@modelcontextprotocol/server-github"
-      ]
+      ],
       "env": {
-         "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
       }
-    }, 
+    }
   }
 }
 ```
