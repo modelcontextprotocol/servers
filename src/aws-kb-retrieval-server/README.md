@@ -27,6 +27,24 @@ An MCP server implementation for retrieving information from the AWS Knowledge B
 
 Add this to your `claude_desktop_config.json`:
 
+#### Docker
+
+```json
+{
+  "mcpServers": {
+    "aws-kb-retrieval": {
+      "command": "docker",
+      "args": [ "run", "-i", "--rm", "-e", "AWS_ACCESS_KEY_ID", "-e", "AWS_SECRET_ACCESS_KEY", "-e", "AWS_REGION", "mcp/aws-kb-retrieval-server" ],
+      "env": {
+        "AWS_ACCESS_KEY_ID": "YOUR_ACCESS_KEY_HERE",
+        "AWS_SECRET_ACCESS_KEY": "YOUR_SECRET_ACCESS_KEY_HERE",
+        "AWS_REGION": "YOUR_AWS_REGION_HERE"
+      }
+    }
+  }
+}
+```
+
 ```json
 {
   "mcpServers": {
@@ -44,6 +62,14 @@ Add this to your `claude_desktop_config.json`:
     }
   }
 }
+```
+
+## Building
+
+Docker: 
+
+```sh
+docker build -t mcp/aws-kb-retrieval -f src/aws-kb-retrieval-server/Dockerfile . 
 ```
 
 ## License
