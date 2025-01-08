@@ -111,6 +111,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Google Tasks](https://github.com/zcaceres/gtasks-mcp)** - Google Tasks API Model Context Protocol Server.
 - **[Fetch](https://github.com/zcaceres/fetch-mcp)** - A server that flexibly fetches HTML, JSON, Markdown, or plaintext
 - **[Neo4j](https://github.com/da-okazaki/mcp-neo4j-server)** - A server that interacts with Neo4j Graph Database.
+- **[AWS S3](https://github.com/aws-samples/sample-mcp-server-s3)** - A sample MCP server for AWS S3 that flexibly fetches objects from S3 such as PDF documents
 
 ## 📚 Frameworks
 
