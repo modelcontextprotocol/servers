@@ -112,6 +112,13 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Fetch](https://github.com/zcaceres/fetch-mcp)** - A server that flexibly fetches HTML, JSON, Markdown, or plaintext
 - **[Neo4j](https://github.com/da-okazaki/mcp-neo4j-server)** - A server that interacts with Neo4j Graph Database.
 
+## 📚 Frameworks
+
+These are high-level frameworks that make it easier to build MCP servers.
+
+* [FastMCP](https://github.com/punkpeye/fastmcp) (TypeScript)
+* [EasyMCP](https://github.com/zcaceres/easy-mcp/) (TypeScript)
+
 ## 📚 Resources
 
 Additional resources on MCP.
