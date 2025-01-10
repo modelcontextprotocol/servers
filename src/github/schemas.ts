@@ -856,3 +856,26 @@ export type CombinedStatus = z.infer<typeof CombinedStatusSchema>;
 export type UpdatePullRequestBranch = z.infer<typeof UpdatePullRequestBranchSchema>;
 export type GetPullRequestComments = z.infer<typeof GetPullRequestCommentsSchema>;
 export type PullRequestComment = z.infer<typeof PullRequestCommentSchema>;
+
+// Schema for listing PR reviews
+export const GetPullRequestReviewsSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number")
+});
+
+export const PullRequestReviewSchema = z.object({
+  id: z.number(),
+  node_id: z.string(),
+  user: GitHubIssueAssigneeSchema,
+  body: z.string().nullable(),
+  state: z.enum(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED', 'PENDING']),
+  html_url: z.string(),
+  pull_request_url: z.string(),
+  commit_id: z.string(),
+  submitted_at: z.string().nullable(),
+  author_association: z.string()
+});
+
+export type GetPullRequestReviews = z.infer<typeof GetPullRequestReviewsSchema>;
+export type PullRequestReview = z.infer<typeof PullRequestReviewSchema>;

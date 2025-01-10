@@ -56,6 +56,8 @@ import {
   UpdateIssueOptionsSchema,
   GetPullRequestCommentsSchema,
   PullRequestCommentSchema,
+  GetPullRequestReviewsSchema,
+  PullRequestReviewSchema,
   type FileOperation,
   type GitHubCommit,
   type GitHubContent,
@@ -904,6 +906,29 @@ async function getPullRequestComments(
   return z.array(PullRequestCommentSchema).parse(await response.json());
 }
 
+async function getPullRequestReviews(
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<z.infer<typeof PullRequestReviewSchema>[]> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`,
+    {
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return z.array(PullRequestReviewSchema).parse(await response.json());
+}
+
 async function getPullRequestStatus(
   owner: string,
   repo: string,
@@ -1078,6 +1103,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_comments",
         description: "Get the review comments on a pull request",
         inputSchema: zodToJsonSchema(GetPullRequestCommentsSchema)
+      },
+      {
+        name: "get_pull_request_reviews",
+        description: "Get the reviews on a pull request",
+        inputSchema: zodToJsonSchema(GetPullRequestReviewsSchema)
       }
     ],
   };
@@ -1332,6 +1362,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const args = GetPullRequestCommentsSchema.parse(request.params.arguments);
         const comments = await getPullRequestComments(args.owner, args.repo, args.pull_number);
         return { content: [{ type: "text", text: JSON.stringify(comments, null, 2) }] };
+      }
+
+      case "get_pull_request_reviews": {
+        const args = GetPullRequestReviewsSchema.parse(request.params.arguments);
+        const reviews = await getPullRequestReviews(args.owner, args.repo, args.pull_number);
+        return { content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }] };
       }
 
       default:

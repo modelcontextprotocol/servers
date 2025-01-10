@@ -269,6 +269,14 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request review comments with details like the comment text, author, and location in the diff
 
+26. `get_pull_request_reviews`
+   - Get the reviews on a pull request
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `pull_number` (number): Pull request number
+   - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
+
 ## Search Query Syntax
 
 ### Code Search
