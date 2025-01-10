@@ -121,6 +121,21 @@ Add this to your `claude_desktop_config.json`:
 </details>
 
 <details>
+<summary>Using docker</summary>
+
+* Note: replace '/Users/username' with the a path that you want to be accessible by this tool
+
+```json
+"mcpServers": {
+  "git": {
+    "command": "docker",
+    "args": ["run", "--rm", "-i", "--mount", "type=bind,src=/Users/username,dst=/Users/username", "mcp/git"]
+  }
+}
+```
+</details>
+
+<details>
 <summary>Using pip installation</summary>
 
 ```json
@@ -193,16 +208,50 @@ If you are doing local development, there are two ways to test your changes:
 
 2. Test using the Claude desktop app. Add the following to your `claude_desktop_config.json`:
 
+### Docker
+
 ```json
-"git": {
-  "command": "uv",
-  "args": [
-    "--directory",
-    "/<path to mcp-servers>/mcp-servers/src/git",
-    "run",
-    "mcp-server-git"
-  ]
+{
+  "mcpServers": {
+    "git": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
+        "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
+        "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
+        "mcp/git"
+      ]
+    }
+  }
 }
+```
+
+### UVX
+```json
+{
+"mcpServers": {
+  "git": {
+    "command": "uv",
+    "args": [ 
+      "--directory",
+      "/<path to mcp-servers>/mcp-servers/src/git",
+      "run",
+      "mcp-server-git"
+    ]
+  }
+}
+```
+
+## Build
+
+Docker build:
+
+```bash
+cd src/git
+docker build -t mcp/git .
 ```
 
 ## License
