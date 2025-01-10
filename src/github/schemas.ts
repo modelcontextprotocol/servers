@@ -683,6 +683,38 @@ export const GetIssueSchema = z.object({
   issue_number: z.number().describe("Issue number")
 });
 
+export const GetPullRequestSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number")
+});
+
+export const ListPullRequestsSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  state: z.enum(['open', 'closed', 'all']).optional().describe("State of the pull requests to return"),
+  head: z.string().optional().describe("Filter by head user or head organization and branch name"),
+  base: z.string().optional().describe("Filter by base branch name"),
+  sort: z.enum(['created', 'updated', 'popularity', 'long-running']).optional().describe("What to sort results by"),
+  direction: z.enum(['asc', 'desc']).optional().describe("The direction of the sort"),
+  per_page: z.number().optional().describe("Results per page (max 100)"),
+  page: z.number().optional().describe("Page number of the results")
+});
+
+export const CreatePullRequestReviewSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number"),
+  commit_id: z.string().optional().describe("The SHA of the commit that needs a review"),
+  body: z.string().describe("The body text of the review"),
+  event: z.enum(['APPROVE', 'REQUEST_CHANGES', 'COMMENT']).describe("The review action to perform"),
+  comments: z.array(z.object({
+    path: z.string().describe("The relative path to the file being commented on"),
+    position: z.number().describe("The position in the diff where you want to add a review comment"),
+    body: z.string().describe("Text of the review comment")
+  })).optional().describe("Comments to post as part of the review")
+});
+
 // Export types
 export type GitHubAuthor = z.infer<typeof GitHubAuthorSchema>;
 export type GitHubFork = z.infer<typeof GitHubForkSchema>;
@@ -717,3 +749,6 @@ export type SearchIssueItem = z.infer<typeof SearchIssueItemSchema>;
 export type SearchIssuesResponse = z.infer<typeof SearchIssuesResponseSchema>;
 export type SearchUserItem = z.infer<typeof SearchUserItemSchema>;
 export type SearchUsersResponse = z.infer<typeof SearchUsersResponseSchema>;
+export type GetPullRequest = z.infer<typeof GetPullRequestSchema>;
+export type ListPullRequests = z.infer<typeof ListPullRequestsSchema>;
+export type CreatePullRequestReview = z.infer<typeof CreatePullRequestReviewSchema>;

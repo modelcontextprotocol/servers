@@ -21,6 +21,7 @@ import {
   ForkRepositorySchema,
   GetFileContentsSchema,
   GetIssueSchema,
+  GetPullRequestSchema,
   GitHubCommitSchema,
   GitHubContentSchema,
   GitHubCreateUpdateFileResponseSchema,
@@ -36,6 +37,8 @@ import {
   IssueCommentSchema,
   ListCommitsSchema,
   ListIssuesOptionsSchema,
+  ListPullRequestsSchema,
+  CreatePullRequestReviewSchema,
   PushFilesSchema,
   SearchCodeResponseSchema,
   SearchCodeSchema,
@@ -715,6 +718,86 @@ async function getIssue(
   return GitHubIssueSchema.parse(await response.json());
 }
 
+async function getPullRequest(
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<GitHubPullRequest> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    {
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return GitHubPullRequestSchema.parse(await response.json());
+}
+
+async function listPullRequests(
+  owner: string,
+  repo: string,
+  options: Omit<z.infer<typeof ListPullRequestsSchema>, 'owner' | 'repo'>
+): Promise<GitHubPullRequest[]> {
+  const url = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
+  
+  if (options.state) url.searchParams.append('state', options.state);
+  if (options.head) url.searchParams.append('head', options.head);
+  if (options.base) url.searchParams.append('base', options.base);
+  if (options.sort) url.searchParams.append('sort', options.sort);
+  if (options.direction) url.searchParams.append('direction', options.direction);
+  if (options.per_page) url.searchParams.append('per_page', options.per_page.toString());
+  if (options.page) url.searchParams.append('page', options.page.toString());
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "github-mcp-server",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return z.array(GitHubPullRequestSchema).parse(await response.json());
+}
+
+async function createPullRequestReview(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  options: Omit<z.infer<typeof CreatePullRequestReviewSchema>, 'owner' | 'repo' | 'pull_number'>
+): Promise<any> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(options),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -806,6 +889,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_issue",
         description: "Get details of a specific issue in a GitHub repository.",
         inputSchema: zodToJsonSchema(GetIssueSchema)
+      },
+      {
+        name: "get_pull_request",
+        description: "Get details of a specific pull request in a GitHub repository",
+        inputSchema: zodToJsonSchema(GetPullRequestSchema)
+      },
+      {
+        name: "list_pull_requests",
+        description: "List pull requests in a GitHub repository with filtering options",
+        inputSchema: zodToJsonSchema(ListPullRequestsSchema)
+      },
+      {
+        name: "create_pull_request_review",
+        description: "Create a review on a pull request",
+        inputSchema: zodToJsonSchema(CreatePullRequestReviewSchema)
       }
     ],
   };
@@ -1009,6 +1107,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }).parse(request.params.arguments);
         const issue = await getIssue(args.owner, args.repo, args.issue_number);
         return { toolResult: issue };
+      }
+
+      case "get_pull_request": {
+        const args = GetPullRequestSchema.parse(request.params.arguments);
+        const pullRequest = await getPullRequest(args.owner, args.repo, args.pull_number);
+        return { toolResult: pullRequest };
+      }
+
+      case "list_pull_requests": {
+        const args = ListPullRequestsSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const pullRequests = await listPullRequests(owner, repo, options);
+        return { toolResult: pullRequests };
+      }
+
+      case "create_pull_request_review": {
+        const args = CreatePullRequestReviewSchema.parse(request.params.arguments);
+        const { owner, repo, pull_number, ...options } = args;
+        const review = await createPullRequestReview(owner, repo, pull_number, options);
+        return { toolResult: review };
       }
 
       default:
