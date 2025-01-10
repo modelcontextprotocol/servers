@@ -1189,21 +1189,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const args = ListIssuesOptionsSchema.parse(request.params.arguments);
         const { owner, repo, ...options } = args;
         const issues = await listIssues(owner, repo, options);
-        return { toolResult: issues };
+        return { content: [{ type: "text", text: JSON.stringify(issues, null, 2) }] };
       }
 
       case "update_issue": {
         const args = UpdateIssueOptionsSchema.parse(request.params.arguments);
         const { owner, repo, issue_number, ...options } = args;
         const issue = await updateIssue(owner, repo, issue_number, options);
-        return { toolResult: issue };
+        return { content: [{ type: "text", text: JSON.stringify(issue, null, 2) }] };
       }
 
       case "add_issue_comment": {
         const args = IssueCommentSchema.parse(request.params.arguments);
         const { owner, repo, issue_number, body } = args;
         const comment = await addIssueComment(owner, repo, issue_number, body);
-        return { toolResult: comment };
+        return { content: [{ type: "text", text: JSON.stringify(comment, null, 2) }] };
       }
 
       case "list_commits": {
@@ -1219,46 +1219,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           issue_number: z.number()
         }).parse(request.params.arguments);
         const issue = await getIssue(args.owner, args.repo, args.issue_number);
-        return { toolResult: issue };
+        return { content: [{ type: "text", text: JSON.stringify(issue, null, 2) }] };
       }
 
       case "get_pull_request": {
         const args = GetPullRequestSchema.parse(request.params.arguments);
         const pullRequest = await getPullRequest(args.owner, args.repo, args.pull_number);
-        return { toolResult: pullRequest };
+        return { content: [{ type: "text", text: JSON.stringify(pullRequest, null, 2) }] };
       }
 
       case "list_pull_requests": {
         const args = ListPullRequestsSchema.parse(request.params.arguments);
         const { owner, repo, ...options } = args;
         const pullRequests = await listPullRequests(owner, repo, options);
-        return { toolResult: pullRequests };
+        return { content: [{ type: "text", text: JSON.stringify(pullRequests, null, 2) }] };
       }
 
       case "create_pull_request_review": {
         const args = CreatePullRequestReviewSchema.parse(request.params.arguments);
         const { owner, repo, pull_number, ...options } = args;
         const review = await createPullRequestReview(owner, repo, pull_number, options);
-        return { toolResult: review };
+        return { content: [{ type: "text", text: JSON.stringify(review, null, 2) }] };
       }
 
       case "merge_pull_request": {
         const args = MergePullRequestSchema.parse(request.params.arguments);
         const { owner, repo, pull_number, ...options } = args;
         const result = await mergePullRequest(owner, repo, pull_number, options);
-        return { toolResult: result };
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
 
       case "get_pull_request_files": {
         const args = GetPullRequestFilesSchema.parse(request.params.arguments);
         const files = await getPullRequestFiles(args.owner, args.repo, args.pull_number);
-        return { toolResult: files };
+        return { content: [{ type: "text", text: JSON.stringify(files, null, 2) }] };
       }
 
       case "get_pull_request_status": {
         const args = GetPullRequestStatusSchema.parse(request.params.arguments);
         const status = await getPullRequestStatus(args.owner, args.repo, args.pull_number);
-        return { toolResult: status };
+        return { content: [{ type: "text", text: JSON.stringify(status, null, 2) }] };
       }
 
       default:
