@@ -54,6 +54,8 @@ import {
   SearchUsersResponseSchema,
   SearchUsersSchema,
   UpdateIssueOptionsSchema,
+  GetPullRequestCommentsSchema,
+  PullRequestCommentSchema,
   type FileOperation,
   type GitHubCommit,
   type GitHubContent,
@@ -879,6 +881,29 @@ async function updatePullRequestBranch(
   }
 }
 
+async function getPullRequestComments(
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<z.infer<typeof PullRequestCommentSchema>[]> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/comments`,
+    {
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return z.array(PullRequestCommentSchema).parse(await response.json());
+}
+
 async function getPullRequestStatus(
   owner: string,
   repo: string,
@@ -1048,6 +1073,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "update_pull_request_branch",
         description: "Update a pull request branch with the latest changes from the base branch",
         inputSchema: zodToJsonSchema(UpdatePullRequestBranchSchema)
+      },
+      {
+        name: "get_pull_request_comments",
+        description: "Get the review comments on a pull request",
+        inputSchema: zodToJsonSchema(GetPullRequestCommentsSchema)
       }
     ],
   };
@@ -1296,6 +1326,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const args = UpdatePullRequestBranchSchema.parse(request.params.arguments);
         await updatePullRequestBranch(args.owner, args.repo, args.pull_number, args.expected_head_sha);
         return { content: [{ type: "text", text: "Pull request branch updated successfully" }] };
+      }
+
+      case "get_pull_request_comments": {
+        const args = GetPullRequestCommentsSchema.parse(request.params.arguments);
+        const comments = await getPullRequestComments(args.owner, args.repo, args.pull_number);
+        return { content: [{ type: "text", text: JSON.stringify(comments, null, 2) }] };
       }
 
       default:

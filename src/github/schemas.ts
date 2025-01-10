@@ -820,5 +820,39 @@ export const UpdatePullRequestBranchSchema = z.object({
   expected_head_sha: z.string().optional().describe("The expected SHA of the pull request's HEAD ref")
 });
 
+// Schema for PR comments
+export const GetPullRequestCommentsSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number")
+});
+
+export const PullRequestCommentSchema = z.object({
+  url: z.string(),
+  id: z.number(),
+  node_id: z.string(),
+  pull_request_review_id: z.number().nullable(),
+  diff_hunk: z.string(),
+  path: z.string().nullable(),
+  position: z.number().nullable(),
+  original_position: z.number().nullable(),
+  commit_id: z.string(),
+  original_commit_id: z.string(),
+  user: GitHubIssueAssigneeSchema,
+  body: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  html_url: z.string(),
+  pull_request_url: z.string(),
+  author_association: z.string(),
+  _links: z.object({
+    self: z.object({ href: z.string() }),
+    html: z.object({ href: z.string() }),
+    pull_request: z.object({ href: z.string() })
+  })
+});
+
 export type CombinedStatus = z.infer<typeof CombinedStatusSchema>;
 export type UpdatePullRequestBranch = z.infer<typeof UpdatePullRequestBranchSchema>;
+export type GetPullRequestComments = z.infer<typeof GetPullRequestCommentsSchema>;
+export type PullRequestComment = z.infer<typeof PullRequestCommentSchema>;

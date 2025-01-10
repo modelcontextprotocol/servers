@@ -261,6 +261,14 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `expected_head_sha` (optional string): The expected SHA of the pull request's HEAD ref
    - Returns: Success message when branch is updated
 
+25. `get_pull_request_comments`
+   - Get the review comments on a pull request
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `pull_number` (number): Pull request number
+   - Returns: Array of pull request review comments with details like the comment text, author, and location in the diff
+
 ## Search Query Syntax
 
 ### Code Search
