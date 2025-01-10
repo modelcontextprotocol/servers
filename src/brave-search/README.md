@@ -36,6 +36,31 @@ An MCP server implementation that integrates the Brave Search API, providing bot
 ### Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
 
+### Docker
+
+```json
+{
+  "mcpServers": {
+    "brave-search": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "BRAVE_API_KEY",
+        "mcp/brave-search"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+### NPX
+
 ```json
 {
   "mcpServers": {
@@ -51,6 +76,15 @@ Add this to your `claude_desktop_config.json`:
     }
   }
 }
+```
+
+
+## Build
+
+Docker build:
+
+```bash
+docker build -t mcp/brave-search:latest -f src/brave-search/Dockerfile .
 ```
 
 ## License

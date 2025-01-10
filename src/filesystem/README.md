@@ -105,6 +105,34 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
+
+Note: you can provide sandboxed directories to the server by mounting them to `/projects`. Adding the `ro` flag will make the directory readonly by the server.
+
+### Docker
+Note: all directories must be mounted to `/projects` by default.
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
+        "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
+        "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
+        "mcp/filesystem",
+        "/projects",
+      ]
+    }
+  }
+}
+```
+
+### NPX
+
 ```json
 {
   "mcpServers": {
@@ -119,6 +147,14 @@ Add this to your `claude_desktop_config.json`:
     }
   }
 }
+```
+
+## Build
+
+Docker build:
+
+```bash
+docker build -t mcp/filesystem -f src/filesystem/Dockerfile .
 ```
 
 ## License
