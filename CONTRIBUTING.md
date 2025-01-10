@@ -10,6 +10,8 @@ The repository contains reference implementations, as well as a list of communit
 We generally don't accept new servers into the repository. We do accept pull requests to the [README.md](./README.md)
 adding a reference to your servers.
 
+Please keep lists in alphabetical order to minimize merge conflicts when adding new items.
+
 - Check the [modelcontextprotocol.io](https://modelcontextprotocol.io) documentation
 - Ensure your server doesn't duplicate existing functionality
 - Consider whether your server would be generally useful to others
