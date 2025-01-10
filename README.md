@@ -134,8 +134,8 @@ A growing set of community-developed and maintained servers demonstrates various
 
 These are high-level frameworks that make it easier to build MCP servers.
 
-- * [EasyMCP](https://github.com/zcaceres/easy-mcp/) (TypeScript)
-- * [FastMCP](https://github.com/punkpeye/fastmcp) (TypeScript)
+* [EasyMCP](https://github.com/zcaceres/easy-mcp/) (TypeScript)
+* [FastMCP](https://github.com/punkpeye/fastmcp) (TypeScript)
 
 ## 📚 Resources
 
