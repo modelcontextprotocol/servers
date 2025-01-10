@@ -122,6 +122,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Scholarly](https://github.com/adityak74/mcp-scholarly)** - A MCP server to search for scholarly and academic articles.
 - **[Chroma](https://github.com/privetin/chroma)** - Vector database server for semantic document search and metadata filtering, built on Chroma
 - **[Markdownify](https://github.com/zcaceres/mcp-markdownify-server)** - MCP to convert almost anything to Markdown (PPTX, HTML, PDF, Youtube Transcripts and more)
+- **[Minima](https://github.com/dmayboroda/minima)** - MCP server for RAG on local files
 
 ## 📚 Frameworks
 
