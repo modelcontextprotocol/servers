@@ -213,7 +213,7 @@ If you are doing local development, there are two ways to test your changes:
 ```json
 {
   "mcpServers": {
-    "brave-search": {
+    "git": {
       "command": "docker",
       "args": [
         "run",
