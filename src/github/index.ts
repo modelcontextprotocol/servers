@@ -48,6 +48,7 @@ import {
   SearchCodeResponseSchema,
   SearchCodeSchema,
   SearchIssuesResponseSchema,
+  UpdatePullRequestBranchSchema,
   SearchIssuesSchema,
   SearchRepositoriesSchema,
   SearchUsersResponseSchema,
@@ -853,6 +854,31 @@ async function getPullRequestFiles(
   return z.array(PullRequestFileSchema).parse(await response.json());
 }
 
+async function updatePullRequestBranch(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  expectedHeadSha?: string
+): Promise<void> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/update-branch`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+        "Content-Type": "application/json",
+      },
+      body: expectedHeadSha ? JSON.stringify({ expected_head_sha: expectedHeadSha }) : undefined,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+}
+
 async function getPullRequestStatus(
   owner: string,
   repo: string,
@@ -1017,6 +1043,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_status",
         description: "Get the combined status of all status checks for a pull request",
         inputSchema: zodToJsonSchema(GetPullRequestStatusSchema)
+      },
+      {
+        name: "update_pull_request_branch",
+        description: "Update a pull request branch with the latest changes from the base branch",
+        inputSchema: zodToJsonSchema(UpdatePullRequestBranchSchema)
       }
     ],
   };
@@ -1259,6 +1290,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const args = GetPullRequestStatusSchema.parse(request.params.arguments);
         const status = await getPullRequestStatus(args.owner, args.repo, args.pull_number);
         return { content: [{ type: "text", text: JSON.stringify(status, null, 2) }] };
+      }
+
+      case "update_pull_request_branch": {
+        const args = UpdatePullRequestBranchSchema.parse(request.params.arguments);
+        await updatePullRequestBranch(args.owner, args.repo, args.pull_number, args.expected_head_sha);
+        return { content: [{ type: "text", text: "Pull request branch updated successfully" }] };
       }
 
       default:

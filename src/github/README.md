@@ -252,6 +252,15 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Combined status check results and individual check details
 
+24. `update_pull_request_branch`
+   - Update a pull request branch with the latest changes from the base branch (equivalent to GitHub's "Update branch" button)
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `pull_number` (number): Pull request number
+     - `expected_head_sha` (optional string): The expected SHA of the pull request's HEAD ref
+   - Returns: Success message when branch is updated
+
 ## Search Query Syntax
 
 ### Code Search

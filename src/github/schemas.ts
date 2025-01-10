@@ -812,4 +812,13 @@ export type GetPullRequestFiles = z.infer<typeof GetPullRequestFilesSchema>;
 export type PullRequestFile = z.infer<typeof PullRequestFileSchema>;
 export type GetPullRequestStatus = z.infer<typeof GetPullRequestStatusSchema>;
 export type StatusCheck = z.infer<typeof StatusCheckSchema>;
+// Schema for updating a pull request branch
+export const UpdatePullRequestBranchSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number"),
+  expected_head_sha: z.string().optional().describe("The expected SHA of the pull request's HEAD ref")
+});
+
 export type CombinedStatus = z.infer<typeof CombinedStatusSchema>;
+export type UpdatePullRequestBranch = z.infer<typeof UpdatePullRequestBranchSchema>;
