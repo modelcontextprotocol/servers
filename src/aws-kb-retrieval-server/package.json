@@ -23,7 +23,7 @@
     "@aws-sdk/client-bedrock-agent-runtime": "^3.0.0"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
+    "@types/node": "^22",
     "shx": "^0.3.4",
     "typescript": "^5.6.2"
   }
