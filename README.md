@@ -124,6 +124,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Chroma](https://github.com/privetin/chroma)** - Vector database server for semantic document search and metadata filtering, built on Chroma
 - **[Markdownify](https://github.com/zcaceres/mcp-markdownify-server)** - MCP to convert almost anything to Markdown (PPTX, HTML, PDF, Youtube Transcripts and more)
 - **[Minima](https://github.com/dmayboroda/minima)** - MCP server for RAG on local files
+- **[Google Calendar](https://github.com/v-3/google-calendar)** - Integration with Google Calendar to check schedules, find time, and add/delete events
 
 ## 📚 Frameworks
 
@@ -131,7 +132,6 @@ These are high-level frameworks that make it easier to build MCP servers.
 
 * [FastMCP](https://github.com/punkpeye/fastmcp) (TypeScript)
 * [EasyMCP](https://github.com/zcaceres/easy-mcp/) (TypeScript)
-
 
 ## 📚 Resources
 
