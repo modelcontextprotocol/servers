@@ -22,6 +22,9 @@ import {
   GetFileContentsSchema,
   GetIssueSchema,
   GetPullRequestSchema,
+  GetPullRequestFilesSchema,
+  GetPullRequestStatusSchema,
+  MergePullRequestSchema,
   GitHubCommitSchema,
   GitHubContentSchema,
   GitHubCreateUpdateFileResponseSchema,
@@ -40,6 +43,8 @@ import {
   ListPullRequestsSchema,
   CreatePullRequestReviewSchema,
   PushFilesSchema,
+  PullRequestFileSchema,
+  CombinedStatusSchema,
   SearchCodeResponseSchema,
   SearchCodeSchema,
   SearchIssuesResponseSchema,
@@ -798,6 +803,99 @@ async function createPullRequestReview(
   return await response.json();
 }
 
+async function mergePullRequest(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  options: Omit<z.infer<typeof MergePullRequestSchema>, 'owner' | 'repo' | 'pull_number'>
+): Promise<any> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/merge`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(options),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+
+async function getPullRequestFiles(
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<z.infer<typeof PullRequestFileSchema>[]> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/files`,
+    {
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return z.array(PullRequestFileSchema).parse(await response.json());
+}
+
+async function getPullRequestStatus(
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<z.infer<typeof CombinedStatusSchema>> {
+  // First get the PR to get the head SHA
+  const prResponse = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    {
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+      },
+    }
+  );
+
+  if (!prResponse.ok) {
+    throw new Error(`GitHub API error: ${prResponse.statusText}`);
+  }
+
+  const pr = GitHubPullRequestSchema.parse(await prResponse.json());
+  const sha = pr.head.sha;
+
+  // Then get the combined status for that SHA
+  const statusResponse = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/commits/${sha}/status`,
+    {
+      headers: {
+        Authorization: `token ${GITHUB_PERSONAL_ACCESS_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "github-mcp-server",
+      },
+    }
+  );
+
+  if (!statusResponse.ok) {
+    throw new Error(`GitHub API error: ${statusResponse.statusText}`);
+  }
+
+  return CombinedStatusSchema.parse(await statusResponse.json());
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -904,6 +1002,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_pull_request_review",
         description: "Create a review on a pull request",
         inputSchema: zodToJsonSchema(CreatePullRequestReviewSchema)
+      },
+      {
+        name: "merge_pull_request",
+        description: "Merge a pull request",
+        inputSchema: zodToJsonSchema(MergePullRequestSchema)
+      },
+      {
+        name: "get_pull_request_files",
+        description: "Get the list of files changed in a pull request",
+        inputSchema: zodToJsonSchema(GetPullRequestFilesSchema)
+      },
+      {
+        name: "get_pull_request_status",
+        description: "Get the combined status of all status checks for a pull request",
+        inputSchema: zodToJsonSchema(GetPullRequestStatusSchema)
       }
     ],
   };
@@ -1127,6 +1240,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { owner, repo, pull_number, ...options } = args;
         const review = await createPullRequestReview(owner, repo, pull_number, options);
         return { toolResult: review };
+      }
+
+      case "merge_pull_request": {
+        const args = MergePullRequestSchema.parse(request.params.arguments);
+        const { owner, repo, pull_number, ...options } = args;
+        const result = await mergePullRequest(owner, repo, pull_number, options);
+        return { toolResult: result };
+      }
+
+      case "get_pull_request_files": {
+        const args = GetPullRequestFilesSchema.parse(request.params.arguments);
+        const files = await getPullRequestFiles(args.owner, args.repo, args.pull_number);
+        return { toolResult: files };
+      }
+
+      case "get_pull_request_status": {
+        const args = GetPullRequestStatusSchema.parse(request.params.arguments);
+        const status = await getPullRequestStatus(args.owner, args.repo, args.pull_number);
+        return { toolResult: status };
       }
 
       default:

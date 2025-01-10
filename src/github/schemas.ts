@@ -752,3 +752,64 @@ export type SearchUsersResponse = z.infer<typeof SearchUsersResponseSchema>;
 export type GetPullRequest = z.infer<typeof GetPullRequestSchema>;
 export type ListPullRequests = z.infer<typeof ListPullRequestsSchema>;
 export type CreatePullRequestReview = z.infer<typeof CreatePullRequestReviewSchema>;
+
+// Schema for merging a pull request
+export const MergePullRequestSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number"),
+  commit_title: z.string().optional().describe("Title for the automatic commit message"),
+  commit_message: z.string().optional().describe("Extra detail to append to automatic commit message"),
+  merge_method: z.enum(['merge', 'squash', 'rebase']).optional().describe("Merge method to use")
+});
+
+// Schema for getting PR files
+export const GetPullRequestFilesSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"), 
+  pull_number: z.number().describe("Pull request number")
+});
+
+export const PullRequestFileSchema = z.object({
+  sha: z.string(),
+  filename: z.string(),
+  status: z.enum(['added', 'removed', 'modified', 'renamed', 'copied', 'changed', 'unchanged']),
+  additions: z.number(),
+  deletions: z.number(),
+  changes: z.number(),
+  blob_url: z.string(),
+  raw_url: z.string(),
+  contents_url: z.string(),
+  patch: z.string().optional()
+});
+
+// Schema for checking PR status
+export const GetPullRequestStatusSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number")
+});
+
+export const StatusCheckSchema = z.object({
+  url: z.string(),
+  state: z.enum(['error', 'failure', 'pending', 'success']),
+  description: z.string().nullable(),
+  target_url: z.string().nullable(),
+  context: z.string(),
+  created_at: z.string(),
+  updated_at: z.string()
+});
+
+export const CombinedStatusSchema = z.object({
+  state: z.enum(['error', 'failure', 'pending', 'success']),
+  statuses: z.array(StatusCheckSchema),
+  sha: z.string(),
+  total_count: z.number()
+});
+
+export type MergePullRequest = z.infer<typeof MergePullRequestSchema>;
+export type GetPullRequestFiles = z.infer<typeof GetPullRequestFilesSchema>;
+export type PullRequestFile = z.infer<typeof PullRequestFileSchema>;
+export type GetPullRequestStatus = z.infer<typeof GetPullRequestStatusSchema>;
+export type StatusCheck = z.infer<typeof StatusCheckSchema>;
+export type CombinedStatus = z.infer<typeof CombinedStatusSchema>;

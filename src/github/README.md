@@ -225,6 +225,33 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
        - `body` (string): Comment text
    - Returns: Created review details
 
+21. `merge_pull_request`
+   - Merge a pull request
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `pull_number` (number): Pull request number
+     - `commit_title` (optional string): Title for merge commit
+     - `commit_message` (optional string): Extra detail for merge commit
+     - `merge_method` (optional string): Merge method ('merge', 'squash', 'rebase')
+   - Returns: Merge result details
+
+22. `get_pull_request_files`
+   - Get the list of files changed in a pull request
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `pull_number` (number): Pull request number
+   - Returns: Array of changed files with patch and status details
+
+23. `get_pull_request_status`
+   - Get the combined status of all status checks for a pull request
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `pull_number` (number): Pull request number
+   - Returns: Combined status check results and individual check details
+
 ## Search Query Syntax
 
 ### Code Search
