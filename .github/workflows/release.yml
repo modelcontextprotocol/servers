@@ -64,7 +64,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: uv run --script scripts/release.py "${{ matrix.directory }}" "${{ needs.prepare.outputs.last_release }}" >> "$GITHUB_OUTPUT"
+          run: uv run --script scripts/release.py "${{ matrix.directory }}" "${{ needs.prepare.outputs.last_release }}" >> "$GITHUB_OUTPUT"
 
   create-release:
     needs: [prepare, release]

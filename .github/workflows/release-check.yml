@@ -30,6 +30,8 @@ jobs:
   check-release:
     needs: prepare
     runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.check.outputs.release }}
     strategy:
       matrix:
         directory: ${{ fromJson(needs.prepare.outputs.matrix) }}
@@ -53,8 +55,15 @@ jobs:
         run: uv python install
 
       - name: Check release
+        id: check
         run: |
-          uv run --script scripts/release.py --dry-run "${{ matrix.directory }}" "${{ needs.prepare.outputs.last_release }}" | tee -a "$GITHUB_OUTPUT"
+          output=$(uv run --script scripts/release.py --dry-run "${{ matrix.directory }}" "${{ needs.prepare.outputs.last_release }}" \
+            | grep -o -E "[a-zA-Z0-9\-]+@[0-9]+\.[0-9]+\.[0-9]+" || true)
+          if [ ! -z "$output" ]; then
+            echo "release<<EOF" >> $GITHUB_OUTPUT
+            echo "$output" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
 
   check-tag:
     needs: [prepare, check-release]
@@ -64,7 +73,8 @@ jobs:
 
       - name: Simulate tag creation
         run: |
-          if [ -s "$GITHUB_OUTPUT" ]; then
+          echo "${{ needs.check-release.outputs.release }}" > packages.txt
+          if [ -s packages.txt ]; then
             DATE=$(date +%Y.%m.%d)
             echo "🔍 Dry run: Would create tag v${DATE} if this was a real release"
 
@@ -72,8 +82,8 @@ jobs:
             echo "" >> notes.md
             echo "## Updated Packages" >> notes.md
             while IFS= read -r line; do
-              echo "- ${line}" >> notes.md
-            done < "$GITHUB_OUTPUT"
+              echo "- $line" >> notes.md
+            done < packages.txt
 
             echo "🔍 Would create release with following notes:"
             cat notes.md

@@ -171,7 +171,7 @@ def main(directory: Path, git_hash: GitHash, dry_run: bool) -> int:
         if not dry_run:
             click.echo(f"{name}@{version}")
         else:
-            click.echo(f"🔍 Dry run: Would have published {name}@{version} if this was a real release")
+            click.echo(f"Dry run: Would have published {name}@{version}")
         return 0
     except Exception as e:
         return 1
