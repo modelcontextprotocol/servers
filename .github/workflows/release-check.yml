@@ -1,4 +1,4 @@
-name: Daily Release Check
+name: Release Check
 
 on:
   # Allow manual trigger for testing
