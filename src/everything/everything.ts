@@ -411,7 +411,7 @@ export const createServer = () => {
         maxTokens,
       );
       return {
-        content: [{ type: "text", text: `LLM sampling result: ${result}` }],
+        content: [{ type: "text", text: `LLM sampling result: ${result.content.text}` }],
       };
     }
 
