@@ -54,4 +54,27 @@ jobs:
 
       - name: Check release
         run: |
-          uv run --script scripts/release.py --dry-run "${{ matrix.directory }}" "${{ needs.prepare.outputs.last_release }}"
+          uv run --script scripts/release.py --dry-run "${{ matrix.directory }}" "${{ needs.prepare.outputs.last_release }}" | tee -a "$GITHUB_OUTPUT"
+
+  check-tag:
+    needs: [prepare, check-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Simulate tag creation
+        run: |
+          if [ -s "$GITHUB_OUTPUT" ]; then
+            DATE=$(date +%Y.%m.%d)
+            echo "🔍 Dry run: Would create tag v${DATE} if this was a real release"
+
+            echo "# Release ${DATE}" > notes.md
+            echo "" >> notes.md
+            echo "## Updated Packages" >> notes.md
+            while IFS= read -r line; do
+              echo "- ${line}" >> notes.md
+            done < "$GITHUB_OUTPUT"
+
+            echo "🔍 Would create release with following notes:"
+            cat notes.md
+          fi

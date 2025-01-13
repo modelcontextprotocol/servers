@@ -33,6 +33,7 @@ jobs:
   release:
     needs: prepare
     runs-on: ubuntu-latest
+    environment: release
     strategy:
       matrix:
         directory: ${{ fromJson(needs.prepare.outputs.matrix) }}
