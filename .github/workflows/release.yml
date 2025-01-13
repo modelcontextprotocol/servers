@@ -21,14 +21,17 @@ jobs:
       - name: Find package directories
         id: set-matrix
         run: |
+          # Find all package.json and pyproject.toml files, excluding root
           DIRS=$(git ls-tree -r HEAD --name-only | grep -E "package.json|pyproject.toml" | xargs dirname | grep -v "^.$" | jq -R -s -c 'split("\n")[:-1]')
           echo "matrix=${DIRS}" >> $GITHUB_OUTPUT
+          echo "Found directories: ${DIRS}"
 
       - name: Get last release hash
         id: last-release
         run: |
           HASH=$(git rev-list --tags --max-count=1 || echo "HEAD~1")
           echo "hash=${HASH}" >> $GITHUB_OUTPUT
+          echo "Using last release hash: ${HASH}"
 
   release:
     needs: prepare
@@ -50,23 +53,76 @@ jobs:
       - uses: astral-sh/setup-uv@v5
 
       - name: Setup Node.js
-        if: endsWith(matrix.directory, 'package.json')
+        if: endsWith(matrix.directory, '/package.json')
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Setup Python
-        if: endsWith(matrix.directory, 'pyproject.toml')
+        if: endsWith(matrix.directory, '/pyproject.toml')
         run: uv python install
 
       - name: Release package
+        id: release
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
-          run: uv run --script scripts/release.py "${{ matrix.directory }}" "${{ needs.prepare.outputs.last_release }}" >> "$GITHUB_OUTPUT"
+        run: |
+          # Create unique hash for this directory
+          dir_hash=$(echo "${{ matrix.directory }}" | sha256sum | awk '{print $1}')
 
-  create-release:
+          # Run git diff first to show changes
+          echo "Changes since last release:"
+          git diff --name-only "${{ needs.prepare.outputs.last_release }}" -- "${{ matrix.directory }}" || true
+
+          # Run the release
+          output=$(uv run --script scripts/release.py "${{ matrix.directory }}" "${{ needs.prepare.outputs.last_release }}" 2>&1)
+          exit_code=$?
+
+          echo "Release output (exit code: $exit_code):"
+          echo "$output"
+
+          # Extract package info if successful
+          if [ $exit_code -eq 0 ]; then
+            pkg_info=$(echo "$output" | grep -o -E "[a-zA-Z0-9\-]+@[0-9]+\.[0-9]+\.[0-9]+" || true)
+          else
+            echo "Release failed"
+            exit 1
+          fi
+
+          if [ ! -z "$pkg_info" ]; then
+            echo "Released package: $pkg_info"
+
+            # Create outputs directory
+            mkdir -p ./outputs
+
+            # Save both package info and full changes
+            echo "$pkg_info" > "./outputs/${dir_hash}_info"
+            echo "dir_hash=${dir_hash}" >> $GITHUB_OUTPUT
+
+            # Log what we're saving
+            echo "Saved package info to ./outputs/${dir_hash}_info:"
+            cat "./outputs/${dir_hash}_info"
+          else
+            echo "No release needed for this package"
+          fi
+
+      - name: Set artifact name
+        if: steps.release.outputs.dir_hash
+        id: artifact
+        run: |
+          # Replace forward slashes with dashes
+          SAFE_DIR=$(echo "${{ matrix.directory }}" | tr '/' '-')
+          echo "name=release-outputs-${SAFE_DIR}" >> $GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        if: steps.release.outputs.dir_hash
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ./outputs/${{ steps.release.outputs.dir_hash }}*
+
+  create-tag:
     needs: [prepare, release]
     runs-on: ubuntu-latest
     permissions:
@@ -74,30 +130,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create Release
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-outputs-src-*
+          merge-multiple: true
+          path: outputs
+
+      - name: Create tag and release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Check if there's output from release step
-          if [ -s "$GITHUB_OUTPUT" ]; then
-            DATE=$(date +%Y.%m.%d)
+          if [ -d outputs ]; then
+            # Collect package info
+            find outputs -name "*_info" -exec cat {} \; > packages.txt
 
-            # Create git tag
-            git tag -s -a -m"automated release v${DATE}" "v${DATE}"
-            git push origin "v${DATE}"
+            if [ -s packages.txt ]; then
+              DATE=$(date +%Y.%m.%d)
+              echo "Creating tag v${DATE}"
 
-            # Create release notes
-            echo "# Release ${DATE}" > notes.md
-            echo "" >> notes.md
-            echo "## Updated Packages" >> notes.md
+              # Generate comprehensive release notes
+              {
+                echo "# Release ${DATE}"
+                echo ""
+                echo "## Updated Packages"
+                while IFS= read -r line; do
+                  echo "- $line"
+                done < packages.txt
+              } > notes.md
 
-            # Read updated packages from github output
-            while IFS= read -r line; do
-              echo "- ${line}" >> notes.md
-            done < "$GITHUB_OUTPUT"
+              # Create and push tag
+              git tag -a "v${DATE}" -m "Release ${DATE}"
+              git push origin "v${DATE}"
 
-            # Create GitHub release
-            gh release create "v${DATE}" \
-              --title "Release ${DATE}" \
-              --notes-file notes.md
+              # Create GitHub release
+              gh release create "v${DATE}" \
+                --title "Release ${DATE}" \
+                --notes-file notes.md
+            else
+              echo "No packages need release"
+            fi
+          else
+            echo "No release artifacts found"
           fi
