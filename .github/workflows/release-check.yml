@@ -1,9 +1,6 @@
 name: Daily Release Check
 
 on:
-  schedule:
-    # Run every day at 9:00 UTC
-    - cron: '0 9 * * *'
   # Allow manual trigger for testing
   workflow_dispatch:
 

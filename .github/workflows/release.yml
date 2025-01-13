@@ -1,9 +1,9 @@
-name: Weekly Release
+name: Daily Release
 
 on:
   schedule:
-    # Run every Monday at 9:00 UTC
-    - cron: '0 9 * * 1'
+    # Run every day at 9:00 UTC
+    - cron: '0 9 * * *'
   # Allow manual trigger for testing
   workflow_dispatch:
 
