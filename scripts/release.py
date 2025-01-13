@@ -135,7 +135,7 @@ def publish_package(
                     # Build and publish to PyPI
                     subprocess.run(["uv", "build"], cwd=path, check=True)
                     subprocess.run(
-                        ["uv", "publish", "--username", "__token__"],
+                        ["uv", "publish"],
                         cwd=path,
                         check=True,
                     )
