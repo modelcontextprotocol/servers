@@ -1,30 +1,17 @@
-name: Release
+name: Automatic Release Creation
 
 on:
-  schedule:
-    # Run every day at 9:00 UTC
-    - cron: '0 9 * * *'
-  # Allow manual trigger for testing
   workflow_dispatch:
 
 jobs:
-  prepare:
+  detect-last-release:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
       last_release: ${{ steps.last-release.outputs.hash }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Find package directories
-        id: set-matrix
-        run: |
-          # Find all package.json and pyproject.toml files, excluding root
-          DIRS=$(git ls-tree -r HEAD --name-only | grep -E "package.json|pyproject.toml" | xargs dirname | grep -v "^.$" | jq -R -s -c 'split("\n")[:-1]')
-          echo "matrix=${DIRS}" >> $GITHUB_OUTPUT
-          echo "Found directories: ${DIRS}"
 
       - name: Get last release hash
         id: last-release
@@ -33,142 +20,112 @@ jobs:
           echo "hash=${HASH}" >> $GITHUB_OUTPUT
           echo "Using last release hash: ${HASH}"
 
-  release:
-    needs: prepare
+  create-tag-name:
     runs-on: ubuntu-latest
-    environment: release
-    strategy:
-      matrix:
-        directory: ${{ fromJson(needs.prepare.outputs.matrix) }}
-      fail-fast: false
-    permissions:
-      contents: write
-      packages: write
+    outputs:
+      tag_name: ${{ steps.last-release.outputs.tag}}
+    steps:
+      - name: Get last release hash
+        id: last-release
+        run: |
+          DATE=$(date +%Y.%m.%d)
+          echo "tag=v${DATE}" >> $GITHUB_OUTPUT
+          echo "Using tag: v${DATE}"
 
+  detect-packages:
+    needs: [detect-last-release]
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.find-packages.outputs.packages }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-      - name: Setup Node.js
-        if: endsWith(matrix.directory, '/package.json')
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Setup Python
-        if: endsWith(matrix.directory, '/pyproject.toml')
-        run: uv python install
-
-      - name: Release package
-        id: release
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+      - name: Find packages
+        id: find-packages
+        working-directory: src
         run: |
-          # Create unique hash for this directory
-          dir_hash=$(echo "${{ matrix.directory }}" | sha256sum | awk '{print $1}')
+          cat << 'EOF' > find_packages.py
+          import json
+          import os
+          import subprocess
+          from itertools import chain
+          from pathlib import Path
 
-          # Run git diff first to show changes
-          echo "Changes since last release:"
-          git diff --name-only "${{ needs.prepare.outputs.last_release }}" -- "${{ matrix.directory }}" || true
+          packages = []
 
-          # Run the release
-          output=$(uv run --script scripts/release.py "${{ matrix.directory }}" "${{ needs.prepare.outputs.last_release }}" 2>&1)
-          exit_code=$?
+          print("Starting package detection...")
+          print(f"Using LAST_RELEASE: {os.environ['LAST_RELEASE']}")
 
-          echo "Release output (exit code: $exit_code):"
-          echo "$output"
+          # Find all directories containing package.json or pyproject.toml
+          paths = chain(Path('.').glob('*/package.json'), Path('.').glob('*/pyproject.toml'))
+          for path in paths:
+                print(f"\nChecking path: {path}")
+                # Check for changes in .py or .ts files
+                # Run git diff from the specific directory
+                cmd = ['git', 'diff', '--name-only', f'{os.environ["LAST_RELEASE"]}..HEAD', '--', '.']
+                result = subprocess.run(cmd, capture_output=True, text=True, cwd=path.parent)
 
-          # Extract package info if successful
-          if [ $exit_code -eq 0 ]; then
-            pkg_info=$(echo "$output" | grep -o -E "[a-zA-Z0-9\-]+@[0-9]+\.[0-9]+\.[0-9]+" || true)
-          else
-            echo "Release failed"
-            exit 1
-          fi
+                # Check if any .py or .ts files were changed
+                changed_files = result.stdout.strip().split('\n')
+                print(f"Changed files found: {changed_files}")
 
-          if [ ! -z "$pkg_info" ]; then
-            echo "Released package: $pkg_info"
+                has_changes = any(f.endswith(('.py', '.ts')) for f in changed_files if f)
+                if has_changes:
+                    print(f"Adding package: {path.parent}")
+                    packages.append(str(path.parent))
 
-            # Create outputs directory
-            mkdir -p ./outputs
+          print(f"\nFinal packages list: {packages}")
 
-            # Save both package info and full changes
-            echo "$pkg_info" > "./outputs/${dir_hash}_info"
-            echo "dir_hash=${dir_hash}" >> $GITHUB_OUTPUT
+          # Write output
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"packages={json.dumps(packages)}\n")
+          EOF
 
-            # Log what we're saving
-            echo "Saved package info to ./outputs/${dir_hash}_info:"
-            cat "./outputs/${dir_hash}_info"
-          else
-            echo "No release needed for this package"
-          fi
-
-      - name: Set artifact name
-        if: steps.release.outputs.dir_hash
-        id: artifact
-        run: |
-          # Replace forward slashes with dashes
-          SAFE_DIR=$(echo "${{ matrix.directory }}" | tr '/' '-')
-          echo "name=release-outputs-${SAFE_DIR}" >> $GITHUB_OUTPUT
-
-      - uses: actions/upload-artifact@v4
-        if: steps.release.outputs.dir_hash
-        with:
-          name: ${{ steps.artifact.outputs.name }}
-          path: ./outputs/${{ steps.release.outputs.dir_hash }}*
+          LAST_RELEASE=${{ needs.detect-last-release.outputs.last_release }} uv run --script --python 3.12 find_packages.py
 
   create-tag:
-    needs: [prepare, release]
+    needs: [detect-packages, create-tag-name]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: release-outputs-src-*
-          merge-multiple: true
-          path: outputs
-
-      - name: Create tag and release
+      - name: Create release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -d outputs ]; then
-            # Collect package info
-            find outputs -name "*_info" -exec cat {} \; > packages.txt
+          # Configure git
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
 
-            if [ -s packages.txt ]; then
-              DATE=$(date +%Y.%m.%d)
-              echo "Creating tag v${DATE}"
+          # Get packages array
+          PACKAGES='${{ needs.detect-packages.outputs.packages }}'
 
-              # Generate comprehensive release notes
-              {
-                echo "# Release ${DATE}"
-                echo ""
-                echo "## Updated Packages"
-                while IFS= read -r line; do
-                  echo "- $line"
-                done < packages.txt
-              } > notes.md
+          if [ "$(echo "$PACKAGES" | jq 'length')" -gt 0 ]; then
+            # Generate comprehensive release notes
+            {
+              echo "# Release ${{ needs.create-tag-name.outputs.tag_name }}"
+              echo ""
+              echo "## Updated Packages"
+              echo "$PACKAGES" | jq -r '.[]' | while read -r package; do
+                echo "- $package"
+              done
+            } > notes.md
 
-              # Create and push tag
-              git tag -a "v${DATE}" -m "Release ${DATE}"
-              git push origin "v${DATE}"
+            # Create and push tag
+            git tag -a "${{ needs.create-tag-name.outputs.tag_name }}" -m "Release ${{ needs.create-tag-name.outputs.tag_name }}"
+            git push origin "${{ needs.create-tag-name.outputs.tag_name }}"
 
-              # Create GitHub release
-              gh release create "v${DATE}" \
-                --title "Release ${DATE}" \
-                --notes-file notes.md
-            else
-              echo "No packages need release"
-            fi
+            # Create GitHub release
+            gh release create "${{ needs.create-tag-name.outputs.tag_name }}" \
+              --title "Release ${{ needs.create-tag-name.outputs.tag_name }}" \
+              --notes-file notes.md
           else
-            echo "No release artifacts found"
+            echo "No packages need release"
           fi
