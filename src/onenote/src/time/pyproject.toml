@@ -1,0 +1,38 @@
+[project]
+name = "mcp-server-time"
+version = "0.6.2"
+description = "A Model Context Protocol server providing tools for time queries and timezone conversions for LLMs"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Mariusz 'maledorak' Korzekwa", email = "mariusz@korzekwa.dev" },
+]
+keywords = ["time", "timezone", "mcp", "llm"]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "pydantic>=2.0.0",
+    "tzdata>=2024.2",
+]
+
+[project.scripts]
+mcp-server-time = "mcp_server_time:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "freezegun>=1.5.1",
+    "pyright>=1.1.389",
+    "pytest>=8.3.3",
+    "ruff>=0.8.1",
+]

@@ -1,0 +1,39 @@
+[project]
+name = "mcp-server-git"
+version = "0.6.2"
+description = "A Model Context Protocol server providing tools to read, search, and manipulate Git repositories programmatically via LLMs"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Anthropic, PBC." }]
+maintainers = [{ name = "David Soria Parra", email = "davidsp@anthropic.com" }]
+keywords = ["git", "mcp", "llm", "automation"]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "click>=8.1.7",
+    "gitpython>=3.1.43",
+    "mcp>=1.0.0",
+    "pydantic>=2.0.0",
+]
+
+[project.scripts]
+mcp-server-git = "mcp_server_git:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = ["pyright>=1.1.389", "ruff>=0.7.3", "pytest>=8.0.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"

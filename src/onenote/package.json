@@ -1,0 +1,33 @@
+{
+  "name": "@modelcontextprotocol/servers",
+  "private": true,
+  "version": "0.6.2",
+  "description": "Model Context Protocol servers",
+  "license": "MIT",
+  "author": "Anthropic, PBC (https://anthropic.com)",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "type": "module",
+  "workspaces": [
+    "src/*"
+  ],
+  "files": [],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "watch": "npm run watch --workspaces",
+    "publish-all": "npm publish --workspaces --access public",
+    "link-all": "npm link --workspaces"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server-everything": "*",
+    "@modelcontextprotocol/server-gdrive": "*",
+    "@modelcontextprotocol/server-postgres": "*",
+    "@modelcontextprotocol/server-puppeteer": "*",
+    "@modelcontextprotocol/server-slack": "*",
+    "@modelcontextprotocol/server-brave-search": "*",
+    "@modelcontextprotocol/server-memory": "*",
+    "@modelcontextprotocol/server-filesystem": "*",
+    "@modelcontextprotocol/server-everart": "*",
+    "@modelcontextprotocol/server-sequential-thinking": "*"
+  }
+}
