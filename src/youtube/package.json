@@ -1,0 +1,32 @@
+{
+  "name": "@modelcontextprotocol/server-youtube",
+  "version": "0.1.0",
+  "description": "YouTube MCP Server Implementation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest --coverage",
+    "lint": "eslint . --ext .ts",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/typescript-sdk": "^0.1.0",
+    "googleapis": "^126.0.1",
+    "youtube-transcript": "^1.0.6",
+    "youtube-search-api": "^1.2.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^18.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": ["mcp", "youtube", "video", "transcript"],
+  "author": "Zubeid Hendricks",
+  "license": "MIT"
+}
