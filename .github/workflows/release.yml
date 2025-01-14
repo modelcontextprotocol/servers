@@ -196,7 +196,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      
       - name: Download release notes
         uses: actions/download-artifact@v4
         with:
