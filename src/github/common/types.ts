@@ -204,6 +204,42 @@ export const GitHubSearchResponseSchema = z.object({
   items: z.array(GitHubRepositorySchema),
 });
 
+// Pull request schemas
+export const GitHubPullRequestRefSchema = z.object({
+  label: z.string(),
+  ref: z.string(),
+  sha: z.string(),
+  user: GitHubIssueAssigneeSchema,
+  repo: GitHubRepositorySchema,
+});
+
+export const GitHubPullRequestSchema = z.object({
+  url: z.string(),
+  id: z.number(),
+  node_id: z.string(),
+  html_url: z.string(),
+  diff_url: z.string(),
+  patch_url: z.string(),
+  issue_url: z.string(),
+  number: z.number(),
+  state: z.string(),
+  locked: z.boolean(),
+  title: z.string(),
+  user: GitHubIssueAssigneeSchema,
+  body: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  closed_at: z.string().nullable(),
+  merged_at: z.string().nullable(),
+  merge_commit_sha: z.string().nullable(),
+  assignee: GitHubIssueAssigneeSchema.nullable(),
+  assignees: z.array(GitHubIssueAssigneeSchema),
+  requested_reviewers: z.array(GitHubIssueAssigneeSchema),
+  labels: z.array(GitHubLabelSchema),
+  head: GitHubPullRequestRefSchema,
+  base: GitHubPullRequestRefSchema,
+});
+
 // Export types
 export type GitHubAuthor = z.infer<typeof GitHubAuthorSchema>;
 export type GitHubRepository = z.infer<typeof GitHubRepositorySchema>;
@@ -219,3 +255,5 @@ export type GitHubLabel = z.infer<typeof GitHubLabelSchema>;
 export type GitHubMilestone = z.infer<typeof GitHubMilestoneSchema>;
 export type GitHubIssue = z.infer<typeof GitHubIssueSchema>;
 export type GitHubSearchResponse = z.infer<typeof GitHubSearchResponseSchema>;
+export type GitHubPullRequest = z.infer<typeof GitHubPullRequestSchema>;
+export type GitHubPullRequestRef = z.infer<typeof GitHubPullRequestRefSchema>;
