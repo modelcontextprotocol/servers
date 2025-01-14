@@ -182,5 +182,29 @@ def generate_version() -> int:
     return 0
 
 
+@cli.command("generate-matrix")
+@click.option(
+    "--directory", type=click.Path(exists=True, path_type=Path), default=Path.cwd()
+)
+@click.option("--npm", is_flag=True, default=False)
+@click.option("--pypi", is_flag=True, default=False)
+@click.argument("git_hash", type=GIT_HASH)
+def generate_matrix(directory: Path, git_hash: GitHash, pypi: bool, npm: bool) -> int:
+    # Detect package type
+    path = directory.resolve(strict=True)
+    version = gen_version()
+
+    changes = []
+    for package in find_changed_packages(path, git_hash):
+        pkg = package.path.relative_to(path)
+        if npm and isinstance(package, NpmPackage):
+            changes.append(str(pkg))
+        if pypi and isinstance(package, PyPiPackage):
+            changes.append(str(pkg))
+
+    click.echo(json.dumps(changes))
+    return 0
+
+
 if __name__ == "__main__":
     sys.exit(cli())

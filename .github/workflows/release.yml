@@ -2,6 +2,8 @@ name: Automatic Release Creation
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 10 * * *'
 
 jobs:
   create-metadata:
@@ -9,6 +11,8 @@ jobs:
     outputs:
       hash: ${{ steps.last-release.outputs.hash }}
       version: ${{ steps.create-version.outputs.version}}
+      npm_packages: ${{ steps.create-npm-packages.outputs.npm_packages}}
+      pypi_packages: ${{ steps.create-pypi-packages.outputs.pypi_packages}}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,8 +47,25 @@ jobs:
           name: release-notes
           path: RELEASE_NOTES.md
 
+      - name: Create python matrix
+        id: create-pypi-packages
+        run: |
+          HASH="${{ steps.last-release.outputs.hash }}"
+          PYPI=$(uv run --script scripts/release.py generate-matrix --pypi --directory src $HASH)
+          echo "pypi_packages $PYPI"
+          echo "pypi_packages=$PYPI" >> $GITHUB_OUTPUT
+
+      - name: Create npm matrix
+        id: create-npm-packages
+        run: |
+          HASH="${{ steps.last-release.outputs.hash }}"
+          NPM=$(uv run --script scripts/release.py generate-matrix --npm --directory src $HASH)
+          echo "npm_packages $NPM"
+          echo "npm_packages=$NPM" >> $GITHUB_OUTPUT
+
   update-packages:
     needs: [create-metadata]
+    if: ${{ needs.create-metadata.outputs.npm_packages != '[]' || needs.create-metadata.outputs.pypi_packages != '[]' }}
     runs-on: ubuntu-latest
     outputs:
       changes_made: ${{ steps.commit.outputs.changes_made }}
@@ -80,8 +101,94 @@ jobs:
             echo "changes_made=true" >> $GITHUB_OUTPUT
           fi
 
-  create-release:
+  publish-pypi:
     needs: [update-packages, create-metadata]
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.create-metadata.outputs.pypi_packages) }}
+    name: Build ${{ matrix.package }}
+    environment: release
+    permissions:
+      id-token: write # Required for trusted publishing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-metadata.outputs.version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "src/${{ matrix.package }}/.python-version"
+
+      - name: Install dependencies
+        working-directory: src/${{ matrix.package }}
+        run: uv sync --frozen --all-extras --dev
+
+      - name: Run pyright
+        working-directory: src/${{ matrix.package }}
+        run: uv run --frozen pyright
+
+      - name: Build package
+        working-directory: src/${{ matrix.package }}
+        run: uv build
+
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: src/${{ matrix.package }}/dist
+
+  publish-npm:
+    needs: [update-packages, create-metadata]
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.create-metadata.outputs.npm_packages) }}
+    name: Build ${{ matrix.package }}
+    environment: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-metadata.outputs.version }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        working-directory: src/${{ matrix.package }}
+        run: npm ci
+
+      - name: Check if version exists on npm
+        working-directory: src/${{ matrix.package }}
+        run: |
+          VERSION=$(jq -r .version package.json)
+          if npm view --json | jq --arg version "$VERSION" '[.[]][0].versions | contains([$version])'; then
+            echo "Version $VERSION already exists on npm"
+            exit 1
+          fi
+          echo "Version $VERSION is new, proceeding with publish"
+
+      - name: Build package
+        working-directory: src/${{ matrix.package }}
+        run: npm run build
+
+      - name: Publish package
+        working-directory: src/${{ matrix.package }}
+        run: |
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  create-release:
+    needs: [update-packages, create-metadata, publish-pypi, publish-npm]
     if: needs.update-packages.outputs.changes_made == 'true'
     runs-on: ubuntu-latest
     environment: release
@@ -97,7 +204,7 @@ jobs:
 
       - name: Create release
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN}}
         run: |
           VERSION="${{ needs.create-metadata.outputs.version }}"
           gh release create "$VERSION" \
