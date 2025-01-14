@@ -1,6 +1,6 @@
 #!/usr/bin/env uv run --script
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.12"
 # dependencies = [
 #     "click>=8.1.8",
 #     "tomlkit>=0.13.2"
@@ -14,8 +14,8 @@ import json
 import tomlkit
 import datetime
 import subprocess
-from enum import Enum
-from typing import Any, NewType
+from dataclasses import dataclass
+from typing import Any, Iterator, NewType, Protocol
 
 
 Version = NewType("Version", str)
@@ -51,25 +51,58 @@ class GitHashParamType(click.ParamType):
 GIT_HASH = GitHashParamType()
 
 
-class PackageType(Enum):
-    NPM = 1
-    PYPI = 2
+class Package(Protocol):
+    path: Path
 
-    @classmethod
-    def from_path(cls, directory: Path) -> "PackageType":
-        if (directory / "package.json").exists():
-            return cls.NPM
-        elif (directory / "pyproject.toml").exists():
-            return cls.PYPI
-        else:
-            raise Exception("No package.json or pyproject.toml found")
+    def package_name(self) -> str: ...
+
+    def update_version(self, version: Version) -> None: ...
 
 
-def get_changes(path: Path, git_hash: str) -> bool:
+@dataclass
+class NpmPackage:
+    path: Path
+
+    def package_name(self) -> str:
+        with open(self.path / "package.json", "r") as f:
+            return json.load(f)["name"]
+
+    def update_version(self, version: Version):
+        with open(self.path / "package.json", "r+") as f:
+            data = json.load(f)
+            data["version"] = version
+            f.seek(0)
+            json.dump(data, f, indent=2)
+            f.truncate()
+
+
+@dataclass
+class PyPiPackage:
+    path: Path
+
+    def package_name(self) -> str:
+        with open(self.path / "pyproject.toml") as f:
+            toml_data = tomlkit.parse(f.read())
+            name = toml_data.get("project", {}).get("name")
+            if not name:
+                raise Exception("No name in pyproject.toml project section")
+            return str(name)
+
+    def update_version(self, version: Version):
+        # Update version in pyproject.toml
+        with open(self.path / "pyproject.toml") as f:
+            data = tomlkit.parse(f.read())
+            data["project"]["version"] = version
+
+        with open(self.path / "pyproject.toml", "w") as f:
+            f.write(tomlkit.dumps(data))
+
+
+def has_changes(path: Path, git_hash: GitHash) -> bool:
     """Check if any files changed between current state and git hash"""
     try:
         output = subprocess.run(
-            ["git", "diff", "--name-only", git_hash, "--", path],
+            ["git", "diff", "--name-only", git_hash, "--", "."],
             cwd=path,
             check=True,
             capture_output=True,
@@ -77,105 +110,77 @@ def get_changes(path: Path, git_hash: str) -> bool:
         )
 
         changed_files = [Path(f) for f in output.stdout.splitlines()]
-        relevant_files = [f for f in changed_files if f.suffix in ['.py', '.ts']]
+        relevant_files = [f for f in changed_files if f.suffix in [".py", ".ts"]]
         return len(relevant_files) >= 1
     except subprocess.CalledProcessError:
         return False
 
 
-def get_package_name(path: Path, pkg_type: PackageType) -> str:
-    """Get package name from package.json or pyproject.toml"""
-    match pkg_type:
-        case PackageType.NPM:
-            with open(path / "package.json", "rb") as f:
-                return json.load(f)["name"]
-        case PackageType.PYPI:
-            with open(path / "pyproject.toml") as f:
-                toml_data = tomlkit.parse(f.read())
-                name = toml_data.get("project", {}).get("name")
-                if not name:
-                    raise Exception("No name in pyproject.toml project section")
-                return str(name)
-
-
-def generate_version() -> Version:
+def gen_version() -> Version:
     """Generate version based on current date"""
     now = datetime.datetime.now()
     return Version(f"{now.year}.{now.month}.{now.day}")
 
 
-def publish_package(
-    path: Path, pkg_type: PackageType, version: Version, dry_run: bool = False
-):
-    """Publish package based on type"""
-    try:
-        match pkg_type:
-            case PackageType.NPM:
-                # Update version in package.json
-                with open(path / "package.json", "rb+") as f:
-                    data = json.load(f)
-                    data["version"] = version
-                    f.seek(0)
-                    json.dump(data, f, indent=2)
-                    f.truncate()
-
-                if not dry_run:
-                    # Publish to npm
-                    subprocess.run(["npm", "publish"], cwd=path, check=True)
-            case PackageType.PYPI:
-                # Update version in pyproject.toml
-                with open(path / "pyproject.toml") as f:
-                    data = tomlkit.parse(f.read())
-                    data["project"]["version"] = version
-
-                with open(path / "pyproject.toml", "w") as f:
-                    f.write(tomlkit.dumps(data))
-
-                if not dry_run:
-                    # Build and publish to PyPI
-                    subprocess.run(["uv", "build"], cwd=path, check=True)
-                    subprocess.run(
-                        ["uv", "publish"],
-                        cwd=path,
-                        check=True,
-                    )
-    except Exception as e:
-        raise Exception(f"Failed to publish: {e}") from e
+def find_changed_packages(directory: Path, git_hash: GitHash) -> Iterator[Package]:
+    for path in directory.glob("*/package.json"):
+        if has_changes(path.parent, git_hash):
+            yield NpmPackage(path.parent)
+    for path in directory.glob("*/pyproject.toml"):
+        if has_changes(path.parent, git_hash):
+            yield PyPiPackage(path.parent)
 
 
-@click.command()
-@click.argument("directory", type=click.Path(exists=True, path_type=Path))
-@click.argument("git_hash", type=GIT_HASH)
+@click.group()
+def cli():
+    pass
+
+
+@cli.command("update-packages")
 @click.option(
-    "--dry-run", is_flag=True, help="Update version numbers but don't publish"
+    "--directory", type=click.Path(exists=True, path_type=Path), default=Path.cwd()
 )
-def main(directory: Path, git_hash: GitHash, dry_run: bool) -> int:
-    """Release package if changes detected"""
+@click.argument("git_hash", type=GIT_HASH)
+def update_packages(directory: Path, git_hash: GitHash) -> int:
     # Detect package type
-    try:
-        path = directory.resolve(strict=True)
-        pkg_type = PackageType.from_path(path)
-    except Exception as e:
-        return 1
+    path = directory.resolve(strict=True)
+    version = gen_version()
 
-    # Check for changes
-    if not get_changes(path, git_hash):
-        return 0
+    for package in find_changed_packages(path, git_hash):
+        name = package.package_name()
+        package.update_version(version)
 
-    try:
-        # Generate version and publish
-        version = generate_version()
-        name = get_package_name(path, pkg_type)
+        click.echo(f"{name}@{version}")
 
-        publish_package(path, pkg_type, version, dry_run)
-        if not dry_run:
-            click.echo(f"{name}@{version}")
-        else:
-            click.echo(f"Dry run: Would have published {name}@{version}")
-        return 0
-    except Exception as e:
-        return 1
+    return 0
+
+
+@cli.command("generate-notes")
+@click.option(
+    "--directory", type=click.Path(exists=True, path_type=Path), default=Path.cwd()
+)
+@click.argument("git_hash", type=GIT_HASH)
+def generate_notes(directory: Path, git_hash: GitHash) -> int:
+    # Detect package type
+    path = directory.resolve(strict=True)
+    version = gen_version()
+
+    click.echo(f"# Release : v{version}")
+    click.echo("")
+    click.echo("## Updated packages")
+    for package in find_changed_packages(path, git_hash):
+        name = package.package_name()
+        click.echo(f"- {name}@{version}")
+
+    return 0
+
+
+@cli.command("generate-version")
+def generate_version() -> int:
+    # Detect package type
+    click.echo(gen_version())
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli())

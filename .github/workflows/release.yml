@@ -4,10 +4,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  detect-last-release:
+  create-metadata:
     runs-on: ubuntu-latest
     outputs:
-      last_release: ${{ steps.last-release.outputs.hash }}
+      hash: ${{ steps.last-release.outputs.hash }}
+      version: ${{ steps.create-version.outputs.version}}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,23 +21,33 @@ jobs:
           echo "hash=${HASH}" >> $GITHUB_OUTPUT
           echo "Using last release hash: ${HASH}"
 
-  create-tag-name:
-    runs-on: ubuntu-latest
-    outputs:
-      tag_name: ${{ steps.last-release.outputs.tag}}
-    steps:
-      - name: Get last release hash
-        id: last-release
-        run: |
-          DATE=$(date +%Y.%m.%d)
-          echo "tag=v${DATE}" >> $GITHUB_OUTPUT
-          echo "Using tag: v${DATE}"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-  detect-packages:
-    needs: [detect-last-release]
+      - name: Create version name
+        id: create-version
+        run: |
+          VERSION=$(uv run --script scripts/release.py generate-version)
+          echo "version $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create notes
+        run: |
+          HASH="${{ steps.last-release.outputs.hash }}"
+          uv run --script scripts/release.py generate-notes --directory src/ $HASH > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
+      - name: Release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+
+  update-packages:
+    needs: [create-metadata]
     runs-on: ubuntu-latest
     outputs:
-      packages: ${{ steps.find-packages.outputs.packages }}
+      changes_made: ${{ steps.commit.outputs.changes_made }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,52 +56,33 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Find packages
-        id: find-packages
-        working-directory: src
+      - name: Update packages
         run: |
-          cat << 'EOF' > find_packages.py
-          import json
-          import os
-          import subprocess
-          from itertools import chain
-          from pathlib import Path
+          HASH="${{ needs.create-metadata.outputs.hash }}"
+          uv run --script scripts/release.py update-packages --directory src/ $HASH
 
-          packages = []
+      - name: Configure git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
 
-          print("Starting package detection...")
-          print(f"Using LAST_RELEASE: {os.environ['LAST_RELEASE']}")
+      - name: Commit changes
+        id: commit
+        run: |
+          VERSION="${{ needs.create-metadata.outputs.version }}"
+          git add -u
+          if git diff-index --quiet HEAD; then
+            echo "changes_made=false" >> $GITHUB_OUTPUT
+          else
+            git commit -m 'Automatic update of packages'
+            git tag -a "$VERSION" -m "Release $VERSION"
+            git push origin "$VERSION"
+            echo "changes_made=true" >> $GITHUB_OUTPUT
+          fi
 
-          # Find all directories containing package.json or pyproject.toml
-          paths = chain(Path('.').glob('*/package.json'), Path('.').glob('*/pyproject.toml'))
-          for path in paths:
-                print(f"\nChecking path: {path}")
-                # Check for changes in .py or .ts files
-                # Run git diff from the specific directory
-                cmd = ['git', 'diff', '--name-only', f'{os.environ["LAST_RELEASE"]}..HEAD', '--', '.']
-                result = subprocess.run(cmd, capture_output=True, text=True, cwd=path.parent)
-
-                # Check if any .py or .ts files were changed
-                changed_files = result.stdout.strip().split('\n')
-                print(f"Changed files found: {changed_files}")
-
-                has_changes = any(f.endswith(('.py', '.ts')) for f in changed_files if f)
-                if has_changes:
-                    print(f"Adding package: {path.parent}")
-                    packages.append(str(path.parent))
-
-          print(f"\nFinal packages list: {packages}")
-
-          # Write output
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"packages={json.dumps(packages)}\n")
-          EOF
-
-          LAST_RELEASE=${{ needs.detect-last-release.outputs.last_release }} uv run --script --python 3.12 find_packages.py
-
-  create-tag:
-    needs: [detect-packages, create-tag-name]
-    if: fromJson(needs.detect-packages.outputs.packages)[0] != null
+  create-release:
+    needs: [update-packages, create-metadata]
+    if: needs.update-packages.outputs.changes_made == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -98,103 +90,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+      - name: Download release notes
+        uses: actions/download-artifact@v4
         with:
-          node-version: '20'
-
-      - name: Update package versions and create tag
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Configure git
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-
-          # Get packages array and version
-          PACKAGES='${{ needs.detect-packages.outputs.packages }}'
-          VERSION="${{ needs.create-tag-name.outputs.tag_name }}"
-          VERSION_NO_V="${VERSION#v}"  # Remove 'v' prefix for package versions
-
-          # Create version update script
-          cat << 'EOF' > update_versions.py
-          import json
-          import os
-          import sys
-          import toml
-          from pathlib import Path
-
-          def update_package_json(path, version):
-              with open(path) as f:
-                  data = json.load(f)
-              data['version'] = version
-              with open(path, 'w') as f:
-                  json.dump(data, f, indent=2)
-                  f.write('\n')
-
-          def update_pyproject_toml(path, version):
-              data = toml.load(path)
-              if 'project' in data:
-                  data['project']['version'] = version
-              elif 'tool' in data and 'poetry' in data['tool']:
-                  data['tool']['poetry']['version'] = version
-              with open(path, 'w') as f:
-                  toml.dump(data, f)
-
-          packages = json.loads(os.environ['PACKAGES'])
-          version = os.environ['VERSION']
-
-          for package_dir in packages:
-              package_dir = Path('src') / package_dir
-              
-              # Update package.json if it exists
-              package_json = package_dir / 'package.json'
-              if package_json.exists():
-                  update_package_json(package_json, version)
-                  
-              # Update pyproject.toml if it exists
-              pyproject_toml = package_dir / 'pyproject.toml'
-              if pyproject_toml.exists():
-                  update_pyproject_toml(pyproject_toml, version)
-          EOF
-
-          # Install toml package for Python
-          uv pip install toml
-
-          # Update versions
-          PACKAGES="$PACKAGES" VERSION="$VERSION_NO_V" uv run update_versions.py
-
-          # Commit version updates
-          git add src/*/package.json src/*/pyproject.toml
-          git commit -m "chore: update package versions to $VERSION"
-
-          # Create and push tag
-          git tag -a "$VERSION" -m "Release $VERSION"
-          git push origin HEAD "$VERSION"
+          name: release-notes
 
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
-          PACKAGES='${{ needs.detect-packages.outputs.packages }}'
-
-          if [ "$(echo "$PACKAGES" | jq 'length')" -gt 0 ]; then
-            # Generate comprehensive release notes
-            {
-              echo "# Release ${{ needs.create-tag-name.outputs.tag_name }}"
-              echo ""
-              echo "## Updated Packages"
-              echo "$PACKAGES" | jq -r '.[]' | while read -r package; do
-                echo "- $package"
-              done
-            } > notes.md
-            # Create GitHub release
-            gh release create "${{ needs.create-tag-name.outputs.tag_name }}" \
-              --title "Release ${{ needs.create-tag-name.outputs.tag_name }}" \
-              --notes-file notes.md
-          else
-            echo "No packages need release"
-          fi
+          VERSION="${{ needs.create-metadata.outputs.version }}"
+          gh release create "$VERSION" \
+            --title "Release $VERSION" \
+            --notes-file RELEASE_NOTES.md
