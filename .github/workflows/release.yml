@@ -90,6 +90,7 @@ jobs:
 
   create-tag:
     needs: [detect-packages, create-tag-name]
+    if: fromJson(needs.detect-packages.outputs.packages)[0] != null
     runs-on: ubuntu-latest
     environment: release
     permissions:
