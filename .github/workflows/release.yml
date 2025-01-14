@@ -98,7 +98,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create tag
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Update package versions and create tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -106,16 +114,66 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-          # Get packages array
+          # Get packages array and version
           PACKAGES='${{ needs.detect-packages.outputs.packages }}'
+          VERSION="${{ needs.create-tag-name.outputs.tag_name }}"
+          VERSION_NO_V="${VERSION#v}"  # Remove 'v' prefix for package versions
 
-          if [ "$(echo "$PACKAGES" | jq 'length')" -gt 0 ]; then
-            # Create and push tag
-            git tag -a "${{ needs.create-tag-name.outputs.tag_name }}" -m "Release ${{ needs.create-tag-name.outputs.tag_name }}"
-            git push origin "${{ needs.create-tag-name.outputs.tag_name }}"
-          else
-            echo "No packages need release"
-          fi
+          # Create version update script
+          cat << 'EOF' > update_versions.py
+          import json
+          import os
+          import sys
+          import toml
+          from pathlib import Path
+
+          def update_package_json(path, version):
+              with open(path) as f:
+                  data = json.load(f)
+              data['version'] = version
+              with open(path, 'w') as f:
+                  json.dump(data, f, indent=2)
+                  f.write('\n')
+
+          def update_pyproject_toml(path, version):
+              data = toml.load(path)
+              if 'project' in data:
+                  data['project']['version'] = version
+              elif 'tool' in data and 'poetry' in data['tool']:
+                  data['tool']['poetry']['version'] = version
+              with open(path, 'w') as f:
+                  toml.dump(data, f)
+
+          packages = json.loads(os.environ['PACKAGES'])
+          version = os.environ['VERSION']
+
+          for package_dir in packages:
+              package_dir = Path('src') / package_dir
+              
+              # Update package.json if it exists
+              package_json = package_dir / 'package.json'
+              if package_json.exists():
+                  update_package_json(package_json, version)
+                  
+              # Update pyproject.toml if it exists
+              pyproject_toml = package_dir / 'pyproject.toml'
+              if pyproject_toml.exists():
+                  update_pyproject_toml(pyproject_toml, version)
+          EOF
+
+          # Install toml package for Python
+          uv pip install toml
+
+          # Update versions
+          PACKAGES="$PACKAGES" VERSION="$VERSION_NO_V" uv run update_versions.py
+
+          # Commit version updates
+          git add src/*/package.json src/*/pyproject.toml
+          git commit -m "chore: update package versions to $VERSION"
+
+          # Create and push tag
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin HEAD "$VERSION"
 
       - name: Create release
         env:
