@@ -2,12 +2,17 @@ name: Automatic Release Creation
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 10 * * *'
 
 jobs:
-  detect-last-release:
+  create-metadata:
     runs-on: ubuntu-latest
     outputs:
-      last_release: ${{ steps.last-release.outputs.hash }}
+      hash: ${{ steps.last-release.outputs.hash }}
+      version: ${{ steps.create-version.outputs.version}}
+      npm_packages: ${{ steps.create-npm-packages.outputs.npm_packages}}
+      pypi_packages: ${{ steps.create-pypi-packages.outputs.pypi_packages}}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,23 +25,50 @@ jobs:
           echo "hash=${HASH}" >> $GITHUB_OUTPUT
           echo "Using last release hash: ${HASH}"
 
-  create-tag-name:
-    runs-on: ubuntu-latest
-    outputs:
-      tag_name: ${{ steps.last-release.outputs.tag}}
-    steps:
-      - name: Get last release hash
-        id: last-release
-        run: |
-          DATE=$(date +%Y.%m.%d)
-          echo "tag=v${DATE}" >> $GITHUB_OUTPUT
-          echo "Using tag: v${DATE}"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-  detect-packages:
-    needs: [detect-last-release]
+      - name: Create version name
+        id: create-version
+        run: |
+          VERSION=$(uv run --script scripts/release.py generate-version)
+          echo "version $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create notes
+        run: |
+          HASH="${{ steps.last-release.outputs.hash }}"
+          uv run --script scripts/release.py generate-notes --directory src/ $HASH > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
+      - name: Release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+
+      - name: Create python matrix
+        id: create-pypi-packages
+        run: |
+          HASH="${{ steps.last-release.outputs.hash }}"
+          PYPI=$(uv run --script scripts/release.py generate-matrix --pypi --directory src $HASH)
+          echo "pypi_packages $PYPI"
+          echo "pypi_packages=$PYPI" >> $GITHUB_OUTPUT
+
+      - name: Create npm matrix
+        id: create-npm-packages
+        run: |
+          HASH="${{ steps.last-release.outputs.hash }}"
+          NPM=$(uv run --script scripts/release.py generate-matrix --npm --directory src $HASH)
+          echo "npm_packages $NPM"
+          echo "npm_packages=$NPM" >> $GITHUB_OUTPUT
+
+  update-packages:
+    needs: [create-metadata]
+    if: ${{ needs.create-metadata.outputs.npm_packages != '[]' || needs.create-metadata.outputs.pypi_packages != '[]' }}
     runs-on: ubuntu-latest
     outputs:
-      packages: ${{ steps.find-packages.outputs.packages }}
+      changes_made: ${{ steps.commit.outputs.changes_made }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,87 +77,136 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Find packages
-        id: find-packages
-        working-directory: src
+      - name: Update packages
         run: |
-          cat << 'EOF' > find_packages.py
-          import json
-          import os
-          import subprocess
-          from itertools import chain
-          from pathlib import Path
+          HASH="${{ needs.create-metadata.outputs.hash }}"
+          uv run --script scripts/release.py update-packages --directory src/ $HASH
 
-          packages = []
+      - name: Configure git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
 
-          print("Starting package detection...")
-          print(f"Using LAST_RELEASE: {os.environ['LAST_RELEASE']}")
+      - name: Commit changes
+        id: commit
+        run: |
+          VERSION="${{ needs.create-metadata.outputs.version }}"
+          git add -u
+          if git diff-index --quiet HEAD; then
+            echo "changes_made=false" >> $GITHUB_OUTPUT
+          else
+            git commit -m 'Automatic update of packages'
+            git tag -a "$VERSION" -m "Release $VERSION"
+            git push origin "$VERSION"
+            echo "changes_made=true" >> $GITHUB_OUTPUT
+          fi
 
-          # Find all directories containing package.json or pyproject.toml
-          paths = chain(Path('.').glob('*/package.json'), Path('.').glob('*/pyproject.toml'))
-          for path in paths:
-                print(f"\nChecking path: {path}")
-                # Check for changes in .py or .ts files
-                # Run git diff from the specific directory
-                cmd = ['git', 'diff', '--name-only', f'{os.environ["LAST_RELEASE"]}..HEAD', '--', '.']
-                result = subprocess.run(cmd, capture_output=True, text=True, cwd=path.parent)
-
-                # Check if any .py or .ts files were changed
-                changed_files = result.stdout.strip().split('\n')
-                print(f"Changed files found: {changed_files}")
-
-                has_changes = any(f.endswith(('.py', '.ts')) for f in changed_files if f)
-                if has_changes:
-                    print(f"Adding package: {path.parent}")
-                    packages.append(str(path.parent))
-
-          print(f"\nFinal packages list: {packages}")
-
-          # Write output
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"packages={json.dumps(packages)}\n")
-          EOF
-
-          LAST_RELEASE=${{ needs.detect-last-release.outputs.last_release }} uv run --script --python 3.12 find_packages.py
-
-  create-tag:
-    needs: [detect-packages, create-tag-name]
+  publish-pypi:
+    needs: [update-packages, create-metadata]
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.create-metadata.outputs.pypi_packages) }}
+    name: Build ${{ matrix.package }}
+    environment: release
+    permissions:
+      id-token: write # Required for trusted publishing
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-metadata.outputs.version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "src/${{ matrix.package }}/.python-version"
+
+      - name: Install dependencies
+        working-directory: src/${{ matrix.package }}
+        run: uv sync --frozen --all-extras --dev
+
+      - name: Run pyright
+        working-directory: src/${{ matrix.package }}
+        run: uv run --frozen pyright
+
+      - name: Build package
+        working-directory: src/${{ matrix.package }}
+        run: uv build
+
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: src/${{ matrix.package }}/dist
+
+  publish-npm:
+    needs: [update-packages, create-metadata]
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.create-metadata.outputs.npm_packages) }}
+    name: Build ${{ matrix.package }}
+    environment: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-metadata.outputs.version }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        working-directory: src/${{ matrix.package }}
+        run: npm ci
+
+      - name: Check if version exists on npm
+        working-directory: src/${{ matrix.package }}
+        run: |
+          VERSION=$(jq -r .version package.json)
+          if npm view --json | jq --arg version "$VERSION" '[.[]][0].versions | contains([$version])'; then
+            echo "Version $VERSION already exists on npm"
+            exit 1
+          fi
+          echo "Version $VERSION is new, proceeding with publish"
+
+      - name: Build package
+        working-directory: src/${{ matrix.package }}
+        run: npm run build
+
+      - name: Publish package
+        working-directory: src/${{ matrix.package }}
+        run: |
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  create-release:
+    needs: [update-packages, create-metadata, publish-pypi, publish-npm]
+    if: needs.update-packages.outputs.changes_made == 'true'
+    runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
       - name: Create release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN}}
         run: |
-          # Configure git
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-
-          # Get packages array
-          PACKAGES='${{ needs.detect-packages.outputs.packages }}'
-
-          if [ "$(echo "$PACKAGES" | jq 'length')" -gt 0 ]; then
-            # Generate comprehensive release notes
-            {
-              echo "# Release ${{ needs.create-tag-name.outputs.tag_name }}"
-              echo ""
-              echo "## Updated Packages"
-              echo "$PACKAGES" | jq -r '.[]' | while read -r package; do
-                echo "- $package"
-              done
-            } > notes.md
-
-            # Create and push tag
-            git tag -a "${{ needs.create-tag-name.outputs.tag_name }}" -m "Release ${{ needs.create-tag-name.outputs.tag_name }}"
-            git push origin "${{ needs.create-tag-name.outputs.tag_name }}"
-
-            # Create GitHub release
-            gh release create "${{ needs.create-tag-name.outputs.tag_name }}" \
-              --title "Release ${{ needs.create-tag-name.outputs.tag_name }}" \
-              --notes-file notes.md
-          else
-            echo "No packages need release"
-          fi
+          VERSION="${{ needs.create-metadata.outputs.version }}"
+          gh release create "$VERSION" \
+            --title "Release $VERSION" \
+            --notes-file RELEASE_NOTES.md
