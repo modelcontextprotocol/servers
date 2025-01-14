@@ -1,261 +1,302 @@
 import { z } from "zod";
+import { githubRequest } from "../common/utils.js";
 import {
-  githubRequest,
-  validateBranchName,
-  validateOwnerName,
-  validateRepositoryName,
-  checkBranchExists,
-} from "../common/utils.js";
-import { 
-  GitHubIssueAssigneeSchema, 
-  GitHubRepositorySchema 
+  GitHubPullRequestSchema,
+  GitHubIssueAssigneeSchema,
+  GitHubRepositorySchema,
 } from "../common/types.js";
-import {
-  GitHubError,
-  GitHubValidationError,
-  GitHubResourceNotFoundError,
-  GitHubConflictError,
-} from "../common/errors.js";
 
-const GITHUB_TITLE_MAX_LENGTH = 256;
-const GITHUB_BODY_MAX_LENGTH = 65536;
-
-export const RepositoryParamsSchema = z.object({
-  owner: z.string().min(1).transform(validateOwnerName),
-  repo: z.string().min(1).transform(validateRepositoryName),
+// Schema definitions
+export const PullRequestFileSchema = z.object({
+  sha: z.string(),
+  filename: z.string(),
+  status: z.enum(['added', 'removed', 'modified', 'renamed', 'copied', 'changed', 'unchanged']),
+  additions: z.number(),
+  deletions: z.number(),
+  changes: z.number(),
+  blob_url: z.string(),
+  raw_url: z.string(),
+  contents_url: z.string(),
+  patch: z.string().optional()
 });
 
-export const GitHubPullRequestStateSchema = z.enum([
-  "open",
-  "closed",
-  "merged",
-  "draft"
-]);
-
-export const GitHubPullRequestSortSchema = z.enum([
-  "created",
-  "updated",
-  "popularity",
-  "long-running"
-]);
-
-export const GitHubDirectionSchema = z.enum([
-  "asc",
-  "desc"
-]);
-
-export const GitHubPullRequestRefSchema = z.object({
-  label: z.string(),
-  ref: z.string().min(1).transform(validateBranchName),
-  sha: z.string().length(40),
-  user: GitHubIssueAssigneeSchema,
-  repo: GitHubRepositorySchema,
+export const StatusCheckSchema = z.object({
+  url: z.string(),
+  state: z.enum(['error', 'failure', 'pending', 'success']),
+  description: z.string().nullable(),
+  target_url: z.string().nullable(),
+  context: z.string(),
+  created_at: z.string(),
+  updated_at: z.string()
 });
 
-export const GitHubPullRequestSchema = z.object({
-  url: z.string().url(),
-  id: z.number().positive(),
+export const CombinedStatusSchema = z.object({
+  state: z.enum(['error', 'failure', 'pending', 'success']),
+  statuses: z.array(StatusCheckSchema),
+  sha: z.string(),
+  total_count: z.number()
+});
+
+export const PullRequestCommentSchema = z.object({
+  url: z.string(),
+  id: z.number(),
   node_id: z.string(),
-  html_url: z.string().url(),
-  diff_url: z.string().url(),
-  patch_url: z.string().url(),
-  issue_url: z.string().url(),
-  number: z.number().positive(),
-  state: GitHubPullRequestStateSchema,
-  locked: z.boolean(),
-  title: z.string().max(GITHUB_TITLE_MAX_LENGTH),
+  pull_request_review_id: z.number().nullable(),
+  diff_hunk: z.string(),
+  path: z.string().nullable(),
+  position: z.number().nullable(),
+  original_position: z.number().nullable(),
+  commit_id: z.string(),
+  original_commit_id: z.string(),
   user: GitHubIssueAssigneeSchema,
-  body: z.string().max(GITHUB_BODY_MAX_LENGTH).nullable(),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
-  closed_at: z.string().datetime().nullable(),
-  merged_at: z.string().datetime().nullable(),
-  merge_commit_sha: z.string().length(40).nullable(),
-  assignee: GitHubIssueAssigneeSchema.nullable(),
-  assignees: z.array(GitHubIssueAssigneeSchema),
-  requested_reviewers: z.array(GitHubIssueAssigneeSchema),
-  labels: z.array(z.object({
-    name: z.string(),
-    color: z.string().regex(/^[0-9a-fA-F]{6}$/),
-    description: z.string().nullable(),
-  })),
-  head: GitHubPullRequestRefSchema,
-  base: GitHubPullRequestRefSchema,
+  body: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  html_url: z.string(),
+  pull_request_url: z.string(),
+  author_association: z.string(),
+  _links: z.object({
+    self: z.object({ href: z.string() }),
+    html: z.object({ href: z.string() }),
+    pull_request: z.object({ href: z.string() })
+  })
 });
 
-export const ListPullRequestsOptionsSchema = z.object({
-  state: GitHubPullRequestStateSchema.optional(),
-  head: z.string().transform(validateBranchName).optional(),
-  base: z.string().transform(validateBranchName).optional(),
-  sort: GitHubPullRequestSortSchema.optional(),
-  direction: GitHubDirectionSchema.optional(),
-  per_page: z.number().min(1).max(100).optional(),
-  page: z.number().min(1).optional(),
+export const PullRequestReviewSchema = z.object({
+  id: z.number(),
+  node_id: z.string(),
+  user: GitHubIssueAssigneeSchema,
+  body: z.string().nullable(),
+  state: z.enum(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED', 'PENDING']),
+  html_url: z.string(),
+  pull_request_url: z.string(),
+  commit_id: z.string(),
+  submitted_at: z.string().nullable(),
+  author_association: z.string()
 });
 
-export const CreatePullRequestOptionsSchema = z.object({
-  title: z.string().max(GITHUB_TITLE_MAX_LENGTH),
-  body: z.string().max(GITHUB_BODY_MAX_LENGTH).optional(),
-  head: z.string().min(1).transform(validateBranchName),
-  base: z.string().min(1).transform(validateBranchName),
-  maintainer_can_modify: z.boolean().optional(),
-  draft: z.boolean().optional(),
+// Input schemas
+export const CreatePullRequestSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  title: z.string().describe("Pull request title"),
+  body: z.string().optional().describe("Pull request body/description"),
+  head: z.string().describe("The name of the branch where your changes are implemented"),
+  base: z.string().describe("The name of the branch you want the changes pulled into"),
+  draft: z.boolean().optional().describe("Whether to create the pull request as a draft"),
+  maintainer_can_modify: z.boolean().optional().describe("Whether maintainers can modify the pull request")
 });
 
-export const CreatePullRequestSchema = RepositoryParamsSchema.extend({
-  ...CreatePullRequestOptionsSchema.shape,
+export const GetPullRequestSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number")
 });
 
-export type RepositoryParams = z.infer<typeof RepositoryParamsSchema>;
-export type CreatePullRequestOptions = z.infer<typeof CreatePullRequestOptionsSchema>;
-export type ListPullRequestsOptions = z.infer<typeof ListPullRequestsOptionsSchema>;
-export type GitHubPullRequest = z.infer<typeof GitHubPullRequestSchema>;
-export type GitHubPullRequestRef = z.infer<typeof GitHubPullRequestRefSchema>;
+export const ListPullRequestsSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  state: z.enum(['open', 'closed', 'all']).optional().describe("State of the pull requests to return"),
+  head: z.string().optional().describe("Filter by head user or head organization and branch name"),
+  base: z.string().optional().describe("Filter by base branch name"),
+  sort: z.enum(['created', 'updated', 'popularity', 'long-running']).optional().describe("What to sort results by"),
+  direction: z.enum(['asc', 'desc']).optional().describe("The direction of the sort"),
+  per_page: z.number().optional().describe("Results per page (max 100)"),
+  page: z.number().optional().describe("Page number of the results")
+});
 
-async function validatePullRequestBranches(
-  owner: string,
-  repo: string,
-  head: string,
-  base: string
-): Promise<void> {
-  const [headExists, baseExists] = await Promise.all([
-    checkBranchExists(owner, repo, head),
-    checkBranchExists(owner, repo, base),
-  ]);
+export const CreatePullRequestReviewSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number"),
+  commit_id: z.string().optional().describe("The SHA of the commit that needs a review"),
+  body: z.string().describe("The body text of the review"),
+  event: z.enum(['APPROVE', 'REQUEST_CHANGES', 'COMMENT']).describe("The review action to perform"),
+  comments: z.array(z.object({
+    path: z.string().describe("The relative path to the file being commented on"),
+    position: z.number().describe("The position in the diff where you want to add a review comment"),
+    body: z.string().describe("Text of the review comment")
+  })).optional().describe("Comments to post as part of the review")
+});
 
-  if (!headExists) {
-    throw new GitHubResourceNotFoundError(`Branch '${head}' not found`);
-  }
+export const MergePullRequestSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number"),
+  commit_title: z.string().optional().describe("Title for the automatic commit message"),
+  commit_message: z.string().optional().describe("Extra detail to append to automatic commit message"),
+  merge_method: z.enum(['merge', 'squash', 'rebase']).optional().describe("Merge method to use")
+});
 
-  if (!baseExists) {
-    throw new GitHubResourceNotFoundError(`Branch '${base}' not found`);
-  }
+export const GetPullRequestFilesSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"), 
+  pull_number: z.number().describe("Pull request number")
+});
 
-  if (head === base) {
-    throw new GitHubValidationError(
-      "Head and base branches cannot be the same",
-      422,
-      { message: "Head and base branches must be different" }
-    );
-  }
-}
+export const GetPullRequestStatusSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number")
+});
 
-async function checkForExistingPullRequest(
-  owner: string,
-  repo: string,
-  head: string,
-  base: string
-): Promise<void> {
-  const existingPRs = await listPullRequests({
-    owner,
-    repo,
-    state: "open",
-  });
+export const UpdatePullRequestBranchSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number"),
+  expected_head_sha: z.string().optional().describe("The expected SHA of the pull request's HEAD ref")
+});
 
-  // Check if any existing open PR has the exact same head and base combination
-  const duplicatePR = existingPRs.find(pr => 
-    pr.head.ref === head && pr.base.ref === base
-  );
+export const GetPullRequestCommentsSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number")
+});
 
-  if (duplicatePR) {
-    throw new GitHubConflictError(
-      `A pull request already exists for ${head} into ${base}`
-    );
-  }
-}
+export const GetPullRequestReviewsSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number")
+});
 
+// Function implementations
 export async function createPullRequest(
   params: z.infer<typeof CreatePullRequestSchema>
-): Promise<GitHubPullRequest> {
+): Promise<z.infer<typeof GitHubPullRequestSchema>> {
   const { owner, repo, ...options } = CreatePullRequestSchema.parse(params);
 
-  try {
-    await validatePullRequestBranches(owner, repo, options.head, options.base);
-    await checkForExistingPullRequest(owner, repo, options.head, options.base);
-
-    const response = await githubRequest(
-      `https://api.github.com/repos/${owner}/${repo}/pulls`,
-      {
-        method: "POST",
-        body: options,
-      }
-    );
-
-    return GitHubPullRequestSchema.parse(response);
-  } catch (error) {
-    if (error instanceof GitHubError) {
-      throw error;
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls`,
+    {
+      method: "POST",
+      body: options,
     }
-    if (error instanceof z.ZodError) {
-      throw new GitHubValidationError(
-        "Invalid pull request data",
-        422,
-        { errors: error.errors }
-      );
-    }
-    throw error;
-  }
+  );
+
+  return GitHubPullRequestSchema.parse(response);
 }
 
 export async function getPullRequest(
-  params: RepositoryParams & { pullNumber: number }
-): Promise<GitHubPullRequest> {
-  const { owner, repo, pullNumber } = z.object({
-    ...RepositoryParamsSchema.shape,
-    pullNumber: z.number().positive(),
-  }).parse(params);
-
-  try {
-    const response = await githubRequest(
-      `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`
-    );
-
-    return GitHubPullRequestSchema.parse(response);
-  } catch (error) {
-    if (error instanceof GitHubError) {
-      throw error;
-    }
-    if (error instanceof z.ZodError) {
-      throw new GitHubValidationError(
-        "Invalid pull request response data",
-        422,
-        { errors: error.errors }
-      );
-    }
-    throw error;
-  }
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<z.infer<typeof GitHubPullRequestSchema>> {
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`
+  );
+  return GitHubPullRequestSchema.parse(response);
 }
 
 export async function listPullRequests(
-  params: RepositoryParams & Partial<ListPullRequestsOptions>
-): Promise<GitHubPullRequest[]> {
-  const { owner, repo, ...options } = z.object({
-    ...RepositoryParamsSchema.shape,
-    ...ListPullRequestsOptionsSchema.partial().shape,
-  }).parse(params);
+  owner: string,
+  repo: string,
+  options: Omit<z.infer<typeof ListPullRequestsSchema>, 'owner' | 'repo'>
+): Promise<z.infer<typeof GitHubPullRequestSchema>[]> {
+  const url = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
+  
+  if (options.state) url.searchParams.append('state', options.state);
+  if (options.head) url.searchParams.append('head', options.head);
+  if (options.base) url.searchParams.append('base', options.base);
+  if (options.sort) url.searchParams.append('sort', options.sort);
+  if (options.direction) url.searchParams.append('direction', options.direction);
+  if (options.per_page) url.searchParams.append('per_page', options.per_page.toString());
+  if (options.page) url.searchParams.append('page', options.page.toString());
 
-  try {
-    const url = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
-    
-    Object.entries(options).forEach(([key, value]) => {
-      if (value !== undefined) {
-        url.searchParams.append(key, value.toString());
-      }
-    });
+  const response = await githubRequest(url.toString());
+  return z.array(GitHubPullRequestSchema).parse(response);
+}
 
-    const response = await githubRequest(url.toString());
-    return z.array(GitHubPullRequestSchema).parse(response);
-  } catch (error) {
-    if (error instanceof GitHubError) {
-      throw error;
+export async function createPullRequestReview(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  options: Omit<z.infer<typeof CreatePullRequestReviewSchema>, 'owner' | 'repo' | 'pull_number'>
+): Promise<z.infer<typeof PullRequestReviewSchema>> {
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`,
+    {
+      method: 'POST',
+      body: options,
     }
-    if (error instanceof z.ZodError) {
-      throw new GitHubValidationError(
-        "Invalid pull request list response data",
-        422,
-        { errors: error.errors }
-      );
+  );
+  return PullRequestReviewSchema.parse(response);
+}
+
+export async function mergePullRequest(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  options: Omit<z.infer<typeof MergePullRequestSchema>, 'owner' | 'repo' | 'pull_number'>
+): Promise<any> {
+  return githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/merge`,
+    {
+      method: 'PUT',
+      body: options,
     }
-    throw error;
-  }
+  );
+}
+
+export async function getPullRequestFiles(
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<z.infer<typeof PullRequestFileSchema>[]> {
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/files`
+  );
+  return z.array(PullRequestFileSchema).parse(response);
+}
+
+export async function updatePullRequestBranch(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  expectedHeadSha?: string
+): Promise<void> {
+  await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/update-branch`,
+    {
+      method: "PUT",
+      body: expectedHeadSha ? { expected_head_sha: expectedHeadSha } : undefined,
+    }
+  );
+}
+
+export async function getPullRequestComments(
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<z.infer<typeof PullRequestCommentSchema>[]> {
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/comments`
+  );
+  return z.array(PullRequestCommentSchema).parse(response);
+}
+
+export async function getPullRequestReviews(
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<z.infer<typeof PullRequestReviewSchema>[]> {
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`
+  );
+  return z.array(PullRequestReviewSchema).parse(response);
+}
+
+export async function getPullRequestStatus(
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<z.infer<typeof CombinedStatusSchema>> {
+  // First get the PR to get the head SHA
+  const pr = await getPullRequest(owner, repo, pullNumber);
+  const sha = pr.head.sha;
+
+  // Then get the combined status for that SHA
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/commits/${sha}/status`
+  );
+  return CombinedStatusSchema.parse(response);
 }
