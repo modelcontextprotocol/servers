@@ -138,6 +138,7 @@ A growing set of community-developed and maintained servers demonstrates various
 
 These are high-level frameworks that make it easier to build MCP servers.
 
+* **[codemirror-mcp](https://github.com/marimo-team/codemirror-mcp)** - CodeMirror extension that implements the Model Context Protocol (MCP) for resource mentions and prompt commands
 * [EasyMCP](https://github.com/zcaceres/easy-mcp/) (TypeScript)
 * [FastMCP](https://github.com/punkpeye/fastmcp) (TypeScript)
 
