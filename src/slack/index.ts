@@ -102,7 +102,7 @@ const replyToThreadTool: Tool = {
       },
       thread_ts: {
         type: "string",
-        description: "The timestamp of the parent message",
+        description: "The timestamp of the parent message in the format '1234567890.123456'. Timestamps in the format without the period can be converted by adding the period such that 6 numbers come after it.",
       },
       text: {
         type: "string",
@@ -168,7 +168,7 @@ const getThreadRepliesTool: Tool = {
       },
       thread_ts: {
         type: "string",
-        description: "The timestamp of the parent message",
+        description: "The timestamp of the parent message in the format '1234567890.123456'. Timestamps in the format without the period can be converted by adding the period such that 6 numbers come after it.",
       },
     },
     required: ["channel_id", "thread_ts"],
