@@ -67,6 +67,7 @@ jobs:
     needs: [create-metadata]
     if: ${{ needs.create-metadata.outputs.npm_packages != '[]' || needs.create-metadata.outputs.pypi_packages != '[]' }}
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       changes_made: ${{ steps.commit.outputs.changes_made }}
     steps:
@@ -170,7 +171,7 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: |
           VERSION=$(jq -r .version package.json)
-          if npm view --json | jq --arg version "$VERSION" '[.[]][0].versions | contains([$version])'; then
+          if npm view --json | jq -e --arg version "$VERSION" '[.[]][0].versions | contains([$version])'; then
             echo "Version $VERSION already exists on npm"
             exit 1
           fi
