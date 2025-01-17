@@ -1,6 +1,6 @@
 # Model Context Protocol servers
 
-This repository is a collection of *reference implementations* for the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), as well as references
+This repository is a collection of _reference implementations_ for the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), as well as references
 to community built servers and additional resources.
 
 The servers in this repository showcase the versatility and extensibility of MCP, demonstrating how it can be used to give Large Language Models (LLMs) secure, controlled access to tools and data sources.
@@ -129,6 +129,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Spotify](https://github.com/varunneal/spotify-mcp)** - This MCP allows an LLM to play and use Spotify.
 - **[TMDB](https://github.com/Laksh-star/mcp-server-tmdb)** - This MCP server integrates with The Movie Database (TMDB) API to provide movie information, search capabilities, and recommendations.
 - **[Tavily search](https://github.com/RamXX/mcp-tavily)** - An MCP server for Tavily's search & news API, with explicit site inclusions/exclusions
+- **[Ticketmaster](https://github.com/delorenj/mcp-server-ticketmaster)** - Search for events, venues, and attractions through the Ticketmaster Discovery API
 - **[Todoist](https://github.com/abhiz123/todoist-mcp-server)** - Interact with Todoist to manage your tasks.
 - **[Vega-Lite](https://github.com/isaacwasserman/mcp-vegalite-server)** - Generate visualizations from fetched data using the VegaLite format and renderer.
 - **[Windows CLI](https://github.com/SimonB97/win-cli-mcp-server)** - MCP server for secure command-line interactions on Windows systems, enabling controlled access to PowerShell, CMD, and Git Bash shells.
@@ -140,8 +141,8 @@ A growing set of community-developed and maintained servers demonstrates various
 
 These are high-level frameworks that make it easier to build MCP servers.
 
-* [EasyMCP](https://github.com/zcaceres/easy-mcp/) (TypeScript)
-* [FastMCP](https://github.com/punkpeye/fastmcp) (TypeScript)
+- [EasyMCP](https://github.com/zcaceres/easy-mcp/) (TypeScript)
+- [FastMCP](https://github.com/punkpeye/fastmcp) (TypeScript)
 
 ## 📚 Resources
 
@@ -168,9 +169,11 @@ Additional resources on MCP.
 ## 🚀 Getting Started
 
 ### Using MCP Servers in this Repository
+
 Typescript-based servers in this repository can be used directly with `npx`.
 
 For example, this will start the [Memory](src/memory) server:
+
 ```sh
 npx -y @modelcontextprotocol/server-memory
 ```
@@ -178,6 +181,7 @@ npx -y @modelcontextprotocol/server-memory
 Python-based servers in this repository can be used directly with [`uvx`](https://docs.astral.sh/uv/concepts/tools/) or [`pip`](https://pypi.org/project/pip/). `uvx` is recommended for ease of use and setup.
 
 For example, this will start the [Git](src/git) server:
+
 ```sh
 # With uvx
 uvx mcp-server-git
@@ -190,6 +194,7 @@ python -m mcp_server_git
 Follow [these](https://docs.astral.sh/uv/getting-started/installation/) instructions to install `uv` / `uvx` and [these](https://pip.pypa.io/en/stable/installation/) to install `pip`.
 
 ### Using an MCP Client
+
 However, running a server on its own isn't very useful, and should instead be configured into an MCP client. For example, here's the Claude Desktop configuration to use the above server:
 
 ```json
@@ -210,7 +215,11 @@ Additional examples of using the Claude Desktop as an MCP client might look like
   "mcpServers": {
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/files"]
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/path/to/allowed/files"
+      ]
     },
     "git": {
       "command": "uvx",
@@ -225,7 +234,11 @@ Additional examples of using the Claude Desktop as an MCP client might look like
     },
     "postgres": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://localhost/mydb"
+      ]
     }
   }
 }
