@@ -36,15 +36,25 @@ Observations are discrete pieces of information about an entity. They are:
 - Attached to specific entities
 - Can be added or removed independently
 - Should be atomic (one fact per observation)
+- Must include a Unix timestamp
 
 Example:
 ```json
 {
   "entityName": "John_Smith",
   "observations": [
-    "Speaks fluent Spanish",
-    "Graduated in 2019",
-    "Prefers morning meetings"
+    {
+      "content": "Speaks fluent Spanish",
+      "timestamp": 1734940800
+    },
+    {
+      "content": "Graduated in 2019",
+      "timestamp": 1734940800
+    },
+    {
+      "content": "Prefers morning meetings",
+      "timestamp": 1734940800
+    }
   ]
 }
 ```
@@ -187,7 +197,8 @@ Follow these steps for each interaction:
    - If any new information was gathered during the interaction, update your memory as follows:
      a) Create entities for recurring organizations, people, and significant events
      b) Connect them to the current entities using relations
-     b) Store facts about them as observations
+     c) Store facts about them as observations
+     d) IMPORTANT: Always include the Unix timestamp with each observation (e.g., for December 17, 2024, use timestamp: 1734940800)
 ```
 
 ## Building
