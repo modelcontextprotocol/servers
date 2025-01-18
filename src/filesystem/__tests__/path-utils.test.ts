@@ -1,19 +1,7 @@
 import { describe, it, expect } from '@jest/globals';
-import { quotePath, normalizePath, expandHome, convertToWindowsPath } from '../path-utils.js';
+import { normalizePath, expandHome, convertToWindowsPath } from '../path-utils.js';
 
 describe('Path Utilities', () => {
-  describe('quotePath', () => {
-    it('adds quotes to paths with spaces', () => {
-      expect(quotePath('C:\\NS\\My Kindle Content')).toBe('"C:\\NS\\My Kindle Content"');
-      expect(quotePath('C:/NS/My Kindle Content')).toBe('"C:/NS/My Kindle Content"');
-    });
-
-    it('leaves paths without spaces unquoted', () => {
-      expect(quotePath('C:\\Windows')).toBe('C:\\Windows');
-      expect(quotePath('C:/Windows')).toBe('C:/Windows');
-    });
-  });
-
   describe('convertToWindowsPath', () => {
     it('converts WSL paths to Windows format', () => {
       expect(convertToWindowsPath('/mnt/c/NS/MyKindleContent'))
@@ -25,9 +13,18 @@ describe('Path Utilities', () => {
         .toBe('C:\\NS\\MyKindleContent');
     });
 
-    it('leaves Windows paths unchanged', () => {
+    it('leaves Windows paths unchanged but ensures backslashes', () => {
       expect(convertToWindowsPath('C:\\NS\\MyKindleContent'))
         .toBe('C:\\NS\\MyKindleContent');
+      expect(convertToWindowsPath('C:/NS/MyKindleContent'))
+        .toBe('C:\\NS\\MyKindleContent');
+    });
+
+    it('handles Windows paths with spaces', () => {
+      expect(convertToWindowsPath('C:\\Program Files\\Some App'))
+        .toBe('C:\\Program Files\\Some App');
+      expect(convertToWindowsPath('C:/Program Files/Some App'))
+        .toBe('C:\\Program Files\\Some App');
     });
 
     it('handles uppercase and lowercase drive letters', () => {
@@ -69,6 +66,21 @@ describe('Path Utilities', () => {
         .toBe('C:\\NS\\My Kindle Content');
       expect(normalizePath('/mnt/c/NS/My Kindle Content'))
         .toBe('C:\\NS\\My Kindle Content');
+      expect(normalizePath('C:\\Program Files (x86)\\App Name'))
+        .toBe('C:\\Program Files (x86)\\App Name');
+      expect(normalizePath('"C:\\Program Files\\App Name"'))
+        .toBe('C:\\Program Files\\App Name');
+      expect(normalizePath('  C:\\Program Files\\App Name  '))
+        .toBe('C:\\Program Files\\App Name');
+    });
+
+    it('preserves spaces in all path formats', () => {
+      expect(normalizePath('/mnt/c/Program Files/App Name'))
+        .toBe('C:\\Program Files\\App Name');
+      expect(normalizePath('/c/Program Files/App Name'))
+        .toBe('C:\\Program Files\\App Name');
+      expect(normalizePath('C:/Program Files/App Name'))
+        .toBe('C:\\Program Files\\App Name');
     });
   });
 
