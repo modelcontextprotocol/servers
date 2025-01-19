@@ -347,7 +347,7 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
         "-y",
         "@modelcontextprotocol/server-github"
       ],
-       "env": {
+      "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
       }
     }
