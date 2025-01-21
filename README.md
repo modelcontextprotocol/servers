@@ -10,7 +10,7 @@ Each MCP server is implemented with either the [Typescript MCP SDK](https://gith
 
 ## 🌟 Reference Servers
 
-These servers aim to demonstrate MCP features and the Typescript and Python SDK.
+These servers aim to demonstrate MCP features for the Typescript and Python SDK.
 
 - **[AWS KB Retrieval](src/aws-kb-retrieval-server)** - Retrieval from AWS Knowledge Base using Bedrock Agent Runtime
 - **[Brave Search](src/brave-search)** - Web and local search using Brave's Search API
