@@ -289,21 +289,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const args = issues.ListIssuesOptionsSchema.parse(request.params.arguments);
         const { owner, repo, ...options } = args;
         const result = await issues.listIssues(owner, repo, options);
-        return { toolResult: result };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
       case "update_issue": {
         const args = issues.UpdateIssueOptionsSchema.parse(request.params.arguments);
         const { owner, repo, issue_number, ...options } = args;
         const result = await issues.updateIssue(owner, repo, issue_number, options);
-        return { toolResult: result };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
       case "add_issue_comment": {
         const args = issues.IssueCommentSchema.parse(request.params.arguments);
         const { owner, repo, issue_number, body } = args;
         const result = await issues.addIssueComment(owner, repo, issue_number, body);
-        return { toolResult: result };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
       case "list_commits": {
@@ -323,7 +329,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "get_issue": {
         const args = issues.GetIssueSchema.parse(request.params.arguments);
         const issue = await issues.getIssue(args.owner, args.repo, args.issue_number);
-        return { toolResult: issue };
+        return {
+          content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
+        };
       }
 
       default:
