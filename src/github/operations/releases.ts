@@ -10,7 +10,13 @@ export const ListReleasesOptionsSchema = z.object({
   perPage: z.number().optional().describe("Number of results per page (default: 30, max: 100)"),
 });
 
+export const GetLatestReleaseSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+});
+
 export type ListReleasesOptions = z.infer<typeof ListReleasesOptionsSchema>;
+export type GetLatestReleaseOptions = z.infer<typeof GetLatestReleaseSchema>;
 
 // Function implementations
 export async function listReleases({
@@ -26,4 +32,13 @@ export async function listReleases({
 
   const response = await githubRequest(url);
   return z.array(GitHubReleaseSchema).parse(response);
+}
+
+export async function getLatestRelease({
+  owner,
+  repo,
+}: GetLatestReleaseOptions) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
+  const response = await githubRequest(url);
+  return GitHubReleaseSchema.parse(response);
 }
