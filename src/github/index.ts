@@ -15,6 +15,7 @@ import * as pulls from './operations/pulls.js';
 import * as branches from './operations/branches.js';
 import * as search from './operations/search.js';
 import * as commits from './operations/commits.js';
+import * as releases from './operations/releases.js';
 import {
   GitHubError,
   GitHubValidationError,
@@ -148,6 +149,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_issue",
         description: "Get details of a specific issue in a GitHub repository.",
         inputSchema: zodToJsonSchema(issues.GetIssueSchema)
+      },
+      {
+        name: "list_releases",
+        description: "List releases for a GitHub repository",
+        inputSchema: zodToJsonSchema(releases.ListReleasesOptionsSchema)
       }
     ],
   };
@@ -331,6 +337,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const issue = await issues.getIssue(args.owner, args.repo, args.issue_number);
         return {
           content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
+        };
+      }
+
+      case "list_releases": {
+        const args = releases.ListReleasesOptionsSchema.parse(request.params.arguments);
+        const releasesList = await releases.listReleases(args);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releasesList, null, 2) }],
         };
       }
 
