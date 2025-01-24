@@ -286,11 +286,17 @@ export const GitHubReleaseSchema = z.object({
   prerelease: z.boolean(),
   created_at: z.string(),
   published_at: z.string().nullable(),
-  assets: z.array(GitHubReleaseAssetSchema),
+  assets: z.array(GitHubReleaseAssetSchema).optional(),
   tarball_url: z.string(),
   zipball_url: z.string(),
   body: z.string().nullable(),
   author: GitHubOwnerSchema
+}).transform(data => {
+  // Ensure assets is always an array even if not included
+  return {
+    ...data,
+    assets: data.assets || []
+  };
 });
 
 export type GitHubRelease = z.infer<typeof GitHubReleaseSchema>;
