@@ -1,0 +1,18 @@
+[project]
+name = "mcp-server-mongodb"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.1.2",
+    "pymongo>=4.10.1",
+    "python-dotenv>=1.0.1",
+]
+
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project.scripts]
+mcp-server-mongodb = "mcp_server_mongodb:main"
