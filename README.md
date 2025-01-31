@@ -147,7 +147,7 @@ These are high-level frameworks that make it easier to build MCP servers.
 
 * [EasyMCP](https://github.com/zcaceres/easy-mcp/) (TypeScript)
 * [FastMCP](https://github.com/punkpeye/fastmcp) (TypeScript)
-* [Quarkus MCP Server](https://github.com/quarkiverse/quarkus-mcp-server) (Java)
+* [Quarkus MCP Server SDK](https://github.com/quarkiverse/quarkus-mcp-server) (Java)
 
 ## 📚 Resources
 
