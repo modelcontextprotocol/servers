@@ -124,7 +124,7 @@ Note: all directories must be mounted to `/projects` by default.
         "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
         "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
         "mcp/filesystem",
-        "/projects",
+        "/projects"
       ]
     }
   }
