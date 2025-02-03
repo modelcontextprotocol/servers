@@ -56,6 +56,9 @@ class GitShow(BaseModel):
     repo_path: str
     revision: str
 
+class GitInit(BaseModel):
+    repo_path: str
+
 class GitTools(str, Enum):
     STATUS = "git_status"
     DIFF_UNSTAGED = "git_diff_unstaged"
@@ -68,6 +71,7 @@ class GitTools(str, Enum):
     CREATE_BRANCH = "git_create_branch"
     CHECKOUT = "git_checkout"
     SHOW = "git_show"
+    INIT = "git_init"
 
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
@@ -117,6 +121,13 @@ def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None 
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
     repo.git.checkout(branch_name)
     return f"Switched to branch '{branch_name}'"
+
+def git_init(repo_path: str) -> str:
+    try:
+        repo = git.Repo.init(path=repo_path, mkdir=True)
+        return f"Initialized empty Git repository in {repo.git_dir}"
+    except Exception as e:
+        return f"Error initializing repository: {str(e)}"
 
 def git_show(repo: git.Repo, revision: str) -> str:
     commit = repo.commit(revision)
@@ -206,6 +217,11 @@ async def serve(repository: Path | None) -> None:
                 name=GitTools.SHOW,
                 description="Shows the contents of a commit",
                 inputSchema=GitShow.schema(),
+            ),
+            Tool(
+                name=GitTools.INIT,
+                description="Initialize a new Git repository",
+                inputSchema=GitInit.schema(),
             )
         ]
 
@@ -241,6 +257,16 @@ async def serve(repository: Path | None) -> None:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         repo_path = Path(arguments["repo_path"])
+        
+        # Handle git init separately since it doesn't require an existing repo
+        if name == GitTools.INIT:
+            result = git_init(str(repo_path))
+            return [TextContent(
+                type="text",
+                text=result
+            )]
+            
+        # For all other commands, we need an existing repo
         repo = git.Repo(repo_path)
 
         match name:

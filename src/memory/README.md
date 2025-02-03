@@ -137,7 +137,7 @@ Add this to your claude_desktop_config.json:
   "mcpServers": {
     "memory": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "mcp/memory"]
+      "args": ["run", "-i", "-v", "claude-memory:/app/dist", "--rm", "mcp/memory"]
     }
   }
 }
@@ -157,6 +157,29 @@ Add this to your claude_desktop_config.json:
   }
 }
 ```
+
+#### NPX with custom setting
+
+The server can be configured using the following environment variables:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "/path/to/custom/memory.json"
+      }
+    }
+  }
+}
+```
+
+- `MEMORY_FILE_PATH`: Path to the memory storage JSON file (default: `memory.json` in the server directory)
 
 ### System Prompt
 

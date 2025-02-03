@@ -16,7 +16,9 @@
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "start:sse": "node dist/sse.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.0.1",

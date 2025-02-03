@@ -12,6 +12,7 @@ import {
 import fs from "fs";
 import { google } from "googleapis";
 import path from "path";
+import { fileURLToPath } from 'url';
 
 const drive = google.drive("v3");
 
@@ -176,7 +177,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 const credentialsPath = process.env.GDRIVE_CREDENTIALS_PATH || path.join(
-  path.dirname(new URL(import.meta.url).pathname),
+  path.dirname(fileURLToPath(import.meta.url)),
   "../../../.gdrive-server-credentials.json",
 );
 
@@ -184,7 +185,7 @@ async function authenticateAndSaveCredentials() {
   console.log("Launching auth flow…");
   const auth = await authenticate({
     keyfilePath: process.env.GDRIVE_OAUTH_PATH || path.join(
-      path.dirname(new URL(import.meta.url).pathname),
+      path.dirname(fileURLToPath(import.meta.url)),
       "../../../gcp-oauth.keys.json",
     ),
     scopes: ["https://www.googleapis.com/auth/drive.readonly"],
