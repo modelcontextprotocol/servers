@@ -9,6 +9,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
 - **Git History Preservation**: Operations maintain proper Git history without force pushing
 - **Batch Operations**: Support for both single-file and multi-file operations
 - **Advanced Search**: Support for searching code, issues/PRs, and users
+- **Get Repo Releases**: Retrieve the latest releases of a repository to assist with dependency management
 
 
 ## Tools
@@ -276,6 +277,24 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `repo` (string): Repository name
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
+
+27. `list_releases`
+   - List releases for a GitHub repository
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `page` (optional number): Page number for pagination
+     - `perPage` (optional number): Results per page (max 100)
+     - `includeAssets` (optional boolean): Whether to include release assets (default: false)
+   - Returns: Array of repository releases with metadata (and optionally assets)
+
+28. `get_latest_release`
+   - Get the latest release for a GitHub repository
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `includeAssets` (optional boolean): Whether to include release assets (default: false)
+   - Returns: Latest release with metadata (and optionally assets)
 
 ## Search Query Syntax
 
