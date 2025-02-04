@@ -3,6 +3,34 @@ import { handleRequest as handleWebSearchRequest, type Response as WebSearchResp
 import { checkRateLimit } from "../rateLimit.js";
 import { BRAVE_API_KEY } from "../env.js";
 
+export const DESCRIPTION: Tool = {
+    name: "brave_local_search",
+    description:
+        "Searches for local businesses and places using Brave's Local Search API. " +
+        "Best for queries related to physical locations, businesses, restaurants, services, etc. " +
+        "Returns detailed information including:\n" +
+        "- Business names and addresses\n" +
+        "- Ratings and review counts\n" +
+        "- Phone numbers and opening hours\n" +
+        "Use this when the query implies 'near me' or mentions specific locations. " +
+        "Automatically falls back to web search if no local results are found.",
+    inputSchema: {
+        type: "object",
+        properties: {
+            query: {
+                type: "string",
+                description: "Local search query (e.g. 'pizza near Central Park')",
+            },
+            count: {
+                type: "number",
+                description: "Number of results (1-20, default 5)",
+                default: 5,
+            },
+        },
+        required: ["query"],
+    },
+};
+
 interface BraveLocation {
     id: string;
     name: string;
@@ -150,31 +178,3 @@ function formatLocalResults(poisData: BravePoiResponse, descData: BraveDescripti
   `;
     }).join('\n---\n') || 'No local results found';
 }
-
-export const DESCRIPTION: Tool = {
-    name: "brave_local_search",
-    description:
-        "Searches for local businesses and places using Brave's Local Search API. " +
-        "Best for queries related to physical locations, businesses, restaurants, services, etc. " +
-        "Returns detailed information including:\n" +
-        "- Business names and addresses\n" +
-        "- Ratings and review counts\n" +
-        "- Phone numbers and opening hours\n" +
-        "Use this when the query implies 'near me' or mentions specific locations. " +
-        "Automatically falls back to web search if no local results are found.",
-    inputSchema: {
-        type: "object",
-        properties: {
-            query: {
-                type: "string",
-                description: "Local search query (e.g. 'pizza near Central Park')",
-            },
-            count: {
-                type: "number",
-                description: "Number of results (1-20, default 5)",
-                default: 5,
-            },
-        },
-        required: ["query"],
-    },
-};
