@@ -4,8 +4,9 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "src/github/**"
+  pull_request:
+  release:
+    types: [published]
 
 jobs:
   github:
