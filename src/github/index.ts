@@ -150,7 +150,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "Get details of a specific issue in a GitHub repository.",
         inputSchema: zodToJsonSchema(issues.GetIssueSchema)
       },
-      // Adding missing pull request operations
       {
         name: "get_pull_request",
         description: "Get details of a specific pull request",
@@ -381,7 +380,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      // Adding handlers for missing pull request operations
       case "get_pull_request": {
         const args = pulls.GetPullRequestSchema.parse(request.params.arguments);
         const pullRequest = await pulls.getPullRequest(args.owner, args.repo, args.pull_number);
