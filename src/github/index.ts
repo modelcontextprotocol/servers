@@ -156,6 +156,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(branches.CreateBranchSchema),
       },
       {
+        name: "delete_branch",
+        description: "Delete a branch in a GitHub repository",
+        inputSchema: zodToJsonSchema(branches.DeleteBranchSchema),
+      },
+      {
         name: "list_commits",
         description: "Get list of commits of a branch in a GitHub repository",
         inputSchema: zodToJsonSchema(commits.ListCommitsSchema)
@@ -224,6 +229,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
         return {
           content: [{ type: "text", text: JSON.stringify(branch, null, 2) }],
+        };
+      }
+
+      case "delete_branch": {
+        const args = branches.DeleteBranchSchema.parse(request.params.arguments);
+        await branches.deleteBranch(args.owner, args.repo, args.branch);
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: true, branch: args.branch }, null, 2) }],
         };
       }
 
@@ -361,9 +374,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "update_pull_request_branch": {
         const args = pulls.UpdatePullRequestBranchSchema.parse(request.params.arguments);
         const { owner, repo, pull_number, expected_head_sha } = args;
-        await pulls.updatePullRequestBranch(owner, repo, pull_number, expected_head_sha);
+        const result = await pulls.updatePullRequestBranch(owner, repo, pull_number, expected_head_sha);
         return {
-          content: [{ type: "text", text: JSON.stringify({ success: true }, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          status: 202
         };
       }
 

@@ -15,6 +15,12 @@ export const CreateBranchSchema = z.object({
   from_branch: z.string().optional().describe("Optional: source branch to create from (defaults to the repository's default branch)"),
 });
 
+export const DeleteBranchSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  branch: z.string().describe("Name of the branch to delete"),
+});
+
 // Type exports
 export type CreateBranchOptions = z.infer<typeof CreateBranchOptionsSchema>;
 
@@ -109,4 +115,17 @@ export async function updateBranch(
   );
 
   return GitHubReferenceSchema.parse(response);
+}
+
+export async function deleteBranch(
+  owner: string,
+  repo: string,
+  branch: string
+): Promise<void> {
+  await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`,
+    {
+      method: "DELETE",
+    }
+  );
 }
