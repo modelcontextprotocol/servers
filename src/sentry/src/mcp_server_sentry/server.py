@@ -4,11 +4,11 @@ from urllib.parse import urlparse
 
 import click
 import httpx
+import mcp.server.stdio
 import mcp.types as types
 from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 from mcp.shared.exceptions import McpError
-import mcp.server.stdio
 
 SENTRY_API_BASE = "https://sentry.io/api/0/"
 MISSING_AUTH_TOKEN_MESSAGE = (
@@ -45,12 +45,15 @@ Event Count: {self.count}
             description=f"Sentry Issue: {self.title}",
             messages=[
                 types.PromptMessage(
-                    role="user", content=types.TextContent(type="text", text=self.to_text())
+                    role="user",
+                    content=types.TextContent(type="text", text=self.to_text()),
                 )
             ],
         )
 
-    def to_tool_result(self) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
+    def to_tool_result(
+        self,
+    ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
         return [types.TextContent(type="text", text=self.to_text())]
 
 
@@ -72,7 +75,9 @@ def extract_issue_id(issue_id_or_url: str) -> str:
     if issue_id_or_url.startswith(("http://", "https://")):
         parsed_url = urlparse(issue_id_or_url)
         if not parsed_url.hostname or not parsed_url.hostname.endswith(".sentry.io"):
-            raise SentryError("Invalid Sentry URL. Must be a URL ending with .sentry.io")
+            raise SentryError(
+                "Invalid Sentry URL. Must be a URL ending with .sentry.io"
+            )
 
         path_parts = parsed_url.path.strip("/").split("/")
         if len(path_parts) < 2 or path_parts[0] != "issues":
@@ -177,7 +182,7 @@ async def handle_sentry_issue(
             first_seen=issue_data["firstSeen"],
             last_seen=issue_data["lastSeen"],
             count=issue_data["count"],
-            stacktrace=stacktrace
+            stacktrace=stacktrace,
         )
 
     except SentryError as e:
@@ -235,11 +240,11 @@ async def serve(auth_token: str) -> Server:
                     "properties": {
                         "issue_id_or_url": {
                             "type": "string",
-                            "description": "Sentry issue ID or URL to analyze"
+                            "description": "Sentry issue ID or URL to analyze",
                         }
                     },
-                    "required": ["issue_id_or_url"]
-                }
+                    "required": ["issue_id_or_url"],
+                },
             )
         ]
 
@@ -253,10 +258,13 @@ async def serve(auth_token: str) -> Server:
         if not arguments or "issue_id_or_url" not in arguments:
             raise ValueError("Missing issue_id_or_url argument")
 
-        issue_data = await handle_sentry_issue(http_client, auth_token, arguments["issue_id_or_url"])
+        issue_data = await handle_sentry_issue(
+            http_client, auth_token, arguments["issue_id_or_url"]
+        )
         return issue_data.to_tool_result()
 
     return server
+
 
 @click.command()
 @click.option(

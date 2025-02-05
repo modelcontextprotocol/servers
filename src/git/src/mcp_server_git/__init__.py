@@ -1,8 +1,11 @@
-import click
-from pathlib import Path
 import logging
 import sys
+from pathlib import Path
+
+import click
+
 from .server import serve
+
 
 @click.command()
 @click.option("--repository", "-r", type=Path, help="Git repository path")
@@ -19,6 +22,7 @@ def main(repository: Path | None, verbose: bool) -> None:
 
     logging.basicConfig(level=logging_level, stream=sys.stderr)
     asyncio.run(serve(repository))
+
 
 if __name__ == "__main__":
     main()
