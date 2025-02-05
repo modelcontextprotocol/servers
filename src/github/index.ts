@@ -101,6 +101,51 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(pulls.CreatePullRequestSchema),
       },
       {
+        name: "get_pull_request",
+        description: "Get details of a specific pull request",
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestSchema),
+      },
+      {
+        name: "list_pull_requests",
+        description: "List and filter repository pull requests",
+        inputSchema: zodToJsonSchema(pulls.ListPullRequestsSchema),
+      },
+      {
+        name: "create_pull_request_review",
+        description: "Create a review on a pull request",
+        inputSchema: zodToJsonSchema(pulls.CreatePullRequestReviewSchema),
+      },
+      {
+        name: "merge_pull_request",
+        description: "Merge a pull request",
+        inputSchema: zodToJsonSchema(pulls.MergePullRequestSchema),
+      },
+      {
+        name: "get_pull_request_files",
+        description: "Get the list of files changed in a pull request",
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestFilesSchema),
+      },
+      {
+        name: "get_pull_request_status",
+        description: "Get the combined status of all status checks for a pull request",
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestStatusSchema),
+      },
+      {
+        name: "update_pull_request_branch",
+        description: "Update a pull request branch with the latest changes from the base branch",
+        inputSchema: zodToJsonSchema(pulls.UpdatePullRequestBranchSchema),
+      },
+      {
+        name: "get_pull_request_comments",
+        description: "Get the review comments on a pull request",
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestCommentsSchema),
+      },
+      {
+        name: "get_pull_request_reviews",
+        description: "Get the reviews on a pull request",
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema),
+      },
+      {
         name: "fork_repository",
         description: "Fork a GitHub repository to your account or specified organization",
         inputSchema: zodToJsonSchema(repository.ForkRepositorySchema),
@@ -149,51 +194,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_issue",
         description: "Get details of a specific issue in a GitHub repository.",
         inputSchema: zodToJsonSchema(issues.GetIssueSchema)
-      },
-      {
-        name: "get_pull_request",
-        description: "Get details of a specific pull request",
-        inputSchema: zodToJsonSchema(pulls.GetPullRequestSchema),
-      },
-      {
-        name: "list_pull_requests",
-        description: "List and filter repository pull requests",
-        inputSchema: zodToJsonSchema(pulls.ListPullRequestsSchema),
-      },
-      {
-        name: "create_pull_request_review",
-        description: "Create a review on a pull request",
-        inputSchema: zodToJsonSchema(pulls.CreatePullRequestReviewSchema),
-      },
-      {
-        name: "merge_pull_request",
-        description: "Merge a pull request",
-        inputSchema: zodToJsonSchema(pulls.MergePullRequestSchema),
-      },
-      {
-        name: "get_pull_request_files",
-        description: "Get the list of files changed in a pull request",
-        inputSchema: zodToJsonSchema(pulls.GetPullRequestFilesSchema),
-      },
-      {
-        name: "get_pull_request_status",
-        description: "Get the combined status of all status checks for a pull request",
-        inputSchema: zodToJsonSchema(pulls.GetPullRequestStatusSchema),
-      },
-      {
-        name: "update_pull_request_branch",
-        description: "Update a pull request branch with the latest changes from the base branch",
-        inputSchema: zodToJsonSchema(pulls.UpdatePullRequestBranchSchema),
-      },
-      {
-        name: "get_pull_request_comments",
-        description: "Get the review comments on a pull request",
-        inputSchema: zodToJsonSchema(pulls.GetPullRequestCommentsSchema),
-      },
-      {
-        name: "get_pull_request_reviews",
-        description: "Get the reviews on a pull request",
-        inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema),
       }
     ],
   };
@@ -307,79 +307,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case "search_code": {
-        const args = search.SearchCodeSchema.parse(request.params.arguments);
-        const results = await search.searchCode(args);
-        return {
-          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
-        };
-      }
-
-      case "search_issues": {
-        const args = search.SearchIssuesSchema.parse(request.params.arguments);
-        const results = await search.searchIssues(args);
-        return {
-          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
-        };
-      }
-
-      case "search_users": {
-        const args = search.SearchUsersSchema.parse(request.params.arguments);
-        const results = await search.searchUsers(args);
-        return {
-          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
-        };
-      }
-
-      case "list_issues": {
-        const args = issues.ListIssuesOptionsSchema.parse(request.params.arguments);
-        const { owner, repo, ...options } = args;
-        const result = await issues.listIssues(owner, repo, options);
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      }
-
-      case "update_issue": {
-        const args = issues.UpdateIssueOptionsSchema.parse(request.params.arguments);
-        const { owner, repo, issue_number, ...options } = args;
-        const result = await issues.updateIssue(owner, repo, issue_number, options);
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      }
-
-      case "add_issue_comment": {
-        const args = issues.IssueCommentSchema.parse(request.params.arguments);
-        const { owner, repo, issue_number, body } = args;
-        const result = await issues.addIssueComment(owner, repo, issue_number, body);
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      }
-
-      case "list_commits": {
-        const args = commits.ListCommitsSchema.parse(request.params.arguments);
-        const results = await commits.listCommits(
-          args.owner,
-          args.repo,
-          args.page,
-          args.perPage,
-          args.sha
-        );
-        return {
-          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
-        };
-      }
-
-      case "get_issue": {
-        const args = issues.GetIssueSchema.parse(request.params.arguments);
-        const issue = await issues.getIssue(args.owner, args.repo, args.issue_number);
-        return {
-          content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
-        };
-      }
-
       case "get_pull_request": {
         const args = pulls.GetPullRequestSchema.parse(request.params.arguments);
         const pullRequest = await pulls.getPullRequest(args.owner, args.repo, args.pull_number);
@@ -457,6 +384,79 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const reviews = await pulls.getPullRequestReviews(args.owner, args.repo, args.pull_number);
         return {
           content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }],
+        };
+      }
+
+      case "search_code": {
+        const args = search.SearchCodeSchema.parse(request.params.arguments);
+        const results = await search.searchCode(args);
+        return {
+          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+        };
+      }
+
+      case "search_issues": {
+        const args = search.SearchIssuesSchema.parse(request.params.arguments);
+        const results = await search.searchIssues(args);
+        return {
+          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+        };
+      }
+
+      case "search_users": {
+        const args = search.SearchUsersSchema.parse(request.params.arguments);
+        const results = await search.searchUsers(args);
+        return {
+          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+        };
+      }
+
+      case "list_issues": {
+        const args = issues.ListIssuesOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const result = await issues.listIssues(owner, repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "update_issue": {
+        const args = issues.UpdateIssueOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number, ...options } = args;
+        const result = await issues.updateIssue(owner, repo, issue_number, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "add_issue_comment": {
+        const args = issues.IssueCommentSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number, body } = args;
+        const result = await issues.addIssueComment(owner, repo, issue_number, body);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "list_commits": {
+        const args = commits.ListCommitsSchema.parse(request.params.arguments);
+        const results = await commits.listCommits(
+          args.owner,
+          args.repo,
+          args.page,
+          args.perPage,
+          args.sha
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+        };
+      }
+
+      case "get_issue": {
+        const args = issues.GetIssueSchema.parse(request.params.arguments);
+        const issue = await issues.getIssue(args.owner, args.repo, args.issue_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
         };
       }
 
