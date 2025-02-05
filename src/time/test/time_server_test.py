@@ -1,8 +1,6 @@
-
+import pytest
 from freezegun import freeze_time
 from mcp.shared.exceptions import McpError
-import pytest
-
 from mcp_server_time.server import TimeServer
 
 
