@@ -1,10 +1,12 @@
+import { getUserAgent } from "universal-user-agent";
 import { createGitHubError } from "./errors.js";
+import { VERSION } from "./version.js";
 
 type RequestOptions = {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
-};
+}
 
 async function parseResponseBody(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type");
@@ -24,6 +26,8 @@ export function buildUrl(baseUrl: string, params: Record<string, string | number
   return url.toString();
 }
 
+const USER_AGENT = `modelcontextprotocol/servers/github/v${VERSION} ${getUserAgent()}`;
+
 export async function githubRequest(
   url: string,
   options: RequestOptions = {}
@@ -31,6 +35,7 @@ export async function githubRequest(
   const headers: Record<string, string> = {
     "Accept": "application/vnd.github.v3+json",
     "Content-Type": "application/json",
+    "User-Agent": USER_AGENT,
     ...options.headers,
   };
 
