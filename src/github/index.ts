@@ -25,11 +25,12 @@ import {
   GitHubConflictError,
   isGitHubError,
 } from './common/errors.js';
+import { VERSION } from "./common/version.js";
 
 const server = new Server(
   {
     name: "github-mcp-server",
-    version: "0.1.0",
+    version: VERSION,
   },
   {
     capabilities: {
