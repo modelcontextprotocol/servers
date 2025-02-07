@@ -2,19 +2,26 @@
 
 A Model Context Protocol server that provides web content fetching capabilities. This server enables LLMs to retrieve and process content from web pages, converting HTML to markdown for easier consumption.
 
-Presently the server only supports fetching HTML content.
+The fetch tool will truncate the response, but by using the `start_index` argument, you can specify where to start the content extraction. This lets models read a webpage in chunks, until they find the information they need.
 
 ### Available Tools
 
 - `fetch` - Fetches a URL from the internet and extracts its contents as markdown.
+    - `url` (string, required): URL to fetch
+    - `max_length` (integer, optional): Maximum number of characters to return (default: 5000)
+    - `start_index` (integer, optional): Start content from this character index (default: 0)
+    - `raw` (boolean, optional): Get raw content without markdown conversion (default: false)
 
 ### Prompts
 
 - **fetch**
   - Fetch a URL and extract its contents as markdown
-  - Argument: `url` (string, required): URL to fetch
+  - Arguments:
+    - `url` (string, required): URL to fetch
 
 ## Installation
+
+Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
 
 ### Using uv (recommended)
 
@@ -55,6 +62,19 @@ Add to your Claude settings:
 </details>
 
 <details>
+<summary>Using docker</summary>
+
+```json
+"mcpServers": {
+  "fetch": {
+    "command": "docker",
+    "args": ["run", "-i", "--rm", "mcp/fetch"]
+  }
+}
+```
+</details>
+
+<details>
 <summary>Using pip installation</summary>
 
 ```json
@@ -67,36 +87,6 @@ Add to your Claude settings:
 ```
 </details>
 
-### Configure for Zed
-
-Add to your Zed settings.json:
-
-<details>
-<summary>Using uvx</summary>
-
-```json
-"context_servers": [
-  "mcp-server-fetch": {
-    "command": "uvx",
-    "args": ["mcp-server-fetch"]
-  }
-],
-```
-</details>
-
-<details>
-<summary>Using pip installation</summary>
-
-```json
-"context_servers": {
-  "mcp-server-fetch": {
-    "command": "python",
-    "args": ["-m", "mcp_server_fetch"]
-  }
-},
-```
-</details>
-
 ### Customization - robots.txt
 
 By default, the server will obey a websites robots.txt file if the request came from the model (via a tool), but not if
@@ -105,7 +95,7 @@ the request was user initiated (via a prompt). This can be disabled by adding th
 
 ### Customization - User-agent
 
-By default, depending on if the request came from the model (via a tool), or was user initiated (via a prompt), the 
+By default, depending on if the request came from the model (via a tool), or was user initiated (via a prompt), the
 server will use either the user-agent
 ```
 ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)

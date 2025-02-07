@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-postgres",
-  "version": "0.5.1",
+  "version": "0.6.2",
   "description": "MCP server for interacting with PostgreSQL databases",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
@@ -19,7 +19,7 @@
     "watch": "tsc --watch"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.6.0",
+    "@modelcontextprotocol/sdk": "1.0.1",
     "pg": "^8.13.0"
   },
   "devDependencies": {

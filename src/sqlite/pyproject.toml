@@ -1,10 +1,10 @@
 [project]
 name = "mcp-server-sqlite"
-version = "0.5.1"
+version = "0.6.2"
 description = "A simple SQLite MCP server"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["mcp>=0.9.1"]
+dependencies = ["mcp>=1.0.0"]
 
 [build-system]
 requires = ["hatchling"]

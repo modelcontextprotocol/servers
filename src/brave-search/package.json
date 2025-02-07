@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-brave-search",
-  "version": "0.5.2",
+  "version": "0.6.2",
   "description": "MCP server for Brave Search API integration",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
@@ -19,10 +19,10 @@
     "watch": "tsc --watch"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.5.0"
+    "@modelcontextprotocol/sdk": "1.0.1"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
+    "@types/node": "^22",
     "shx": "^0.3.4",
     "typescript": "^5.6.2"
   }

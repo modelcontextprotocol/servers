@@ -141,7 +141,7 @@ function getApiKey(): string {
     }
     return apiKey;
   }
-  
+
 const GOOGLE_MAPS_API_KEY = getApiKey();
 
 // Tool definitions
@@ -151,28 +151,28 @@ const GEOCODE_TOOL: Tool = {
     inputSchema: {
       type: "object",
       properties: {
-        address: { 
-          type: "string", 
-          description: "The address to geocode" 
+        address: {
+          type: "string",
+          description: "The address to geocode"
         }
       },
       required: ["address"]
     }
   };
-  
+
 const REVERSE_GEOCODE_TOOL: Tool = {
   name: "maps_reverse_geocode",
   description: "Convert coordinates into an address",
   inputSchema: {
     type: "object",
     properties: {
-      latitude: { 
-        type: "number", 
-        description: "Latitude coordinate" 
+      latitude: {
+        type: "number",
+        description: "Latitude coordinate"
       },
-      longitude: { 
-        type: "number", 
-        description: "Longitude coordinate" 
+      longitude: {
+        type: "number",
+        description: "Longitude coordinate"
       }
     },
     required: ["latitude", "longitude"]
@@ -185,9 +185,9 @@ const SEARCH_PLACES_TOOL: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      query: { 
-        type: "string", 
-        description: "Search query" 
+      query: {
+        type: "string",
+        description: "Search query"
       },
       location: {
         type: "object",
@@ -225,7 +225,7 @@ const DISTANCE_MATRIX_TOOL: Tool = {
   name: "maps_distance_matrix",
   description: "Calculate travel distance and time for multiple origins and destinations",
   inputSchema: {
-    type: "object", 
+    type: "object",
     properties: {
       origins: {
         type: "array",
@@ -233,7 +233,7 @@ const DISTANCE_MATRIX_TOOL: Tool = {
         description: "Array of origin addresses or coordinates"
       },
       destinations: {
-        type: "array", 
+        type: "array",
         items: { type: "string" },
         description: "Array of destination addresses or coordinates"
       },
@@ -276,13 +276,13 @@ const DIRECTIONS_TOOL: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      origin: { 
-        type: "string", 
-        description: "Starting point address or coordinates" 
+      origin: {
+        type: "string",
+        description: "Starting point address or coordinates"
       },
-      destination: { 
-        type: "string", 
-        description: "Ending point address or coordinates" 
+      destination: {
+        type: "string",
+        description: "Ending point address or coordinates"
       },
       mode: {
         type: "string",
@@ -315,28 +315,24 @@ async function handleGeocode(address: string) {
 
   if (data.status !== "OK") {
     return {
-      toolResult: {
-        content: [{
-          type: "text",
-          text: `Geocoding failed: ${data.error_message || data.status}`
-        }],
-        isError: true
-      }
+      content: [{
+        type: "text",
+        text: `Geocoding failed: ${data.error_message || data.status}`
+      }],
+      isError: true
     };
   }
 
   return {
-    toolResult: {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          location: data.results[0].geometry.location,
-          formatted_address: data.results[0].formatted_address,
-          place_id: data.results[0].place_id
-        }, null, 2)
-      }],
-      isError: false
-    }
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        location: data.results[0].geometry.location,
+        formatted_address: data.results[0].formatted_address,
+        place_id: data.results[0].place_id
+      }, null, 2)
+    }],
+    isError: false
   };
 }
 
@@ -350,28 +346,24 @@ async function handleReverseGeocode(latitude: number, longitude: number) {
 
   if (data.status !== "OK") {
     return {
-      toolResult: {
-        content: [{
-          type: "text",
-          text: `Reverse geocoding failed: ${data.error_message || data.status}`
-        }],
-        isError: true
-      }
+      content: [{
+        type: "text",
+        text: `Reverse geocoding failed: ${data.error_message || data.status}`
+      }],
+      isError: true
     };
   }
 
   return {
-    toolResult: {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          formatted_address: data.results[0].formatted_address,
-          place_id: data.results[0].place_id,
-          address_components: data.results[0].address_components
-        }, null, 2)
-      }],
-      isError: false
-    }
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        formatted_address: data.results[0].formatted_address,
+        place_id: data.results[0].place_id,
+        address_components: data.results[0].address_components
+      }, null, 2)
+    }],
+    isError: false
   };
 }
 
@@ -396,33 +388,29 @@ async function handlePlaceSearch(
 
   if (data.status !== "OK") {
     return {
-      toolResult: {
-        content: [{
-          type: "text",
-          text: `Place search failed: ${data.error_message || data.status}`
-        }],
-        isError: true
-      }
+      content: [{
+        type: "text",
+        text: `Place search failed: ${data.error_message || data.status}`
+      }],
+      isError: true
     };
   }
 
   return {
-    toolResult: {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          places: data.results.map((place) => ({
-            name: place.name,
-            formatted_address: place.formatted_address,
-            location: place.geometry.location,
-            place_id: place.place_id,
-            rating: place.rating,
-            types: place.types
-          }))
-        }, null, 2)
-      }],
-      isError: false
-    }
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        places: data.results.map((place) => ({
+          name: place.name,
+          formatted_address: place.formatted_address,
+          location: place.geometry.location,
+          place_id: place.place_id,
+          rating: place.rating,
+          types: place.types
+        }))
+      }, null, 2)
+    }],
+    isError: false
   };
 }
 
@@ -436,33 +424,29 @@ async function handlePlaceDetails(place_id: string) {
 
   if (data.status !== "OK") {
     return {
-      toolResult: {
-        content: [{
-          type: "text",
-          text: `Place details request failed: ${data.error_message || data.status}`
-        }],
-        isError: true
-      }
+      content: [{
+        type: "text",
+        text: `Place details request failed: ${data.error_message || data.status}`
+      }],
+      isError: true
     };
   }
 
   return {
-    toolResult: {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          name: data.result.name,
-          formatted_address: data.result.formatted_address,
-          location: data.result.geometry.location,
-          formatted_phone_number: data.result.formatted_phone_number,
-          website: data.result.website,
-          rating: data.result.rating,
-          reviews: data.result.reviews,
-          opening_hours: data.result.opening_hours
-        }, null, 2)
-      }],
-      isError: false
-    }
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        name: data.result.name,
+        formatted_address: data.result.formatted_address,
+        location: data.result.geometry.location,
+        formatted_phone_number: data.result.formatted_phone_number,
+        website: data.result.website,
+        rating: data.result.rating,
+        reviews: data.result.reviews,
+        opening_hours: data.result.opening_hours
+      }, null, 2)
+    }],
+    isError: false
   };
 }
 async function handleDistanceMatrix(
@@ -481,34 +465,30 @@ async function handleDistanceMatrix(
 
   if (data.status !== "OK") {
     return {
-      toolResult: {
-        content: [{
-          type: "text",
-          text: `Distance matrix request failed: ${data.error_message || data.status}`
-        }],
-        isError: true
-      }
+      content: [{
+        type: "text",
+        text: `Distance matrix request failed: ${data.error_message || data.status}`
+      }],
+      isError: true
     };
   }
 
   return {
-    toolResult: {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          origin_addresses: data.origin_addresses,
-          destination_addresses: data.destination_addresses,
-          results: data.rows.map((row) => ({
-            elements: row.elements.map((element) => ({
-              status: element.status,
-              duration: element.duration,
-              distance: element.distance
-            }))
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        origin_addresses: data.origin_addresses,
+        destination_addresses: data.destination_addresses,
+        results: data.rows.map((row) => ({
+          elements: row.elements.map((element) => ({
+            status: element.status,
+            duration: element.duration,
+            distance: element.distance
           }))
-        }, null, 2)
-      }],
-      isError: false
-    }
+        }))
+      }, null, 2)
+    }],
+    isError: false
   };
 }
 
@@ -525,30 +505,26 @@ async function handleElevation(locations: Array<{ latitude: number; longitude: n
 
   if (data.status !== "OK") {
     return {
-      toolResult: {
-        content: [{
-          type: "text",
-          text: `Elevation request failed: ${data.error_message || data.status}`
-        }],
-        isError: true
-      }
+      content: [{
+        type: "text",
+        text: `Elevation request failed: ${data.error_message || data.status}`
+      }],
+      isError: true
     };
   }
 
   return {
-    toolResult: {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          results: data.results.map((result) => ({
-            elevation: result.elevation,
-            location: result.location,
-            resolution: result.resolution
-          }))
-        }, null, 2)
-      }],
-      isError: false
-    }
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        results: data.results.map((result) => ({
+          elevation: result.elevation,
+          location: result.location,
+          resolution: result.resolution
+        }))
+      }, null, 2)
+    }],
+    isError: false
   };
 }
 
@@ -568,36 +544,32 @@ async function handleDirections(
 
   if (data.status !== "OK") {
     return {
-      toolResult: {
-        content: [{
-          type: "text",
-          text: `Directions request failed: ${data.error_message || data.status}`
-        }],
-        isError: true
-      }
+      content: [{
+        type: "text",
+        text: `Directions request failed: ${data.error_message || data.status}`
+      }],
+      isError: true
     };
   }
 
   return {
-    toolResult: {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          routes: data.routes.map((route) => ({
-            summary: route.summary,
-            distance: route.legs[0].distance,
-            duration: route.legs[0].duration,
-            steps: route.legs[0].steps.map((step) => ({
-              instructions: step.html_instructions,
-              distance: step.distance,
-              duration: step.duration,
-              travel_mode: step.travel_mode
-            }))
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        routes: data.routes.map((route) => ({
+          summary: route.summary,
+          distance: route.legs[0].distance,
+          duration: route.legs[0].duration,
+          steps: route.legs[0].steps.map((step) => ({
+            instructions: step.html_instructions,
+            distance: step.distance,
+            duration: step.duration,
+            travel_mode: step.travel_mode
           }))
-        }, null, 2)
-      }],
-      isError: false
-    }
+        }))
+      }, null, 2)
+    }],
+    isError: false
   };
 }
 
@@ -626,7 +598,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { address } = request.params.arguments as { address: string };
         return await handleGeocode(address);
       }
-      
+
       case "maps_reverse_geocode": {
         const { latitude, longitude } = request.params.arguments as {
           latitude: number;
@@ -634,7 +606,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
         return await handleReverseGeocode(latitude, longitude);
       }
-      
+
       case "maps_search_places": {
         const { query, location, radius } = request.params.arguments as {
           query: string;
@@ -643,12 +615,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
         return await handlePlaceSearch(query, location, radius);
       }
-      
+
       case "maps_place_details": {
         const { place_id } = request.params.arguments as { place_id: string };
         return await handlePlaceDetails(place_id);
       }
-      
+
       case "maps_distance_matrix": {
         const { origins, destinations, mode } = request.params.arguments as {
           origins: string[];
@@ -657,14 +629,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
         return await handleDistanceMatrix(origins, destinations, mode);
       }
-      
+
       case "maps_elevation": {
         const { locations } = request.params.arguments as {
           locations: Array<{ latitude: number; longitude: number }>;
         };
         return await handleElevation(locations);
       }
-      
+
       case "maps_directions": {
         const { origin, destination, mode } = request.params.arguments as {
           origin: string;
@@ -673,27 +645,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
         return await handleDirections(origin, destination, mode);
       }
-      
+
       default:
         return {
-          toolResult: {
-            content: [{
-              type: "text",
-              text: `Unknown tool: ${request.params.name}`
-            }],
-            isError: true
-          }
+          content: [{
+            type: "text",
+            text: `Unknown tool: ${request.params.name}`
+          }],
+          isError: true
         };
     }
   } catch (error) {
     return {
-      toolResult: {
-        content: [{
-          type: "text",
-          text: `Error: ${error instanceof Error ? error.message : String(error)}`
-        }],
-        isError: true
-      }
+      content: [{
+        type: "text",
+        text: `Error: ${error instanceof Error ? error.message : String(error)}`
+      }],
+      isError: true
     };
   }
 });

@@ -1,0 +1,30 @@
+{
+  "name": "@modelcontextprotocol/server-aws-kb-retrieval",
+  "version": "0.6.2",
+  "description": "MCP server for AWS Knowledge Base retrieval using Bedrock Agent Runtime",
+  "license": "MIT",
+  "author": "Anthropic, PBC (https://anthropic.com)",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "type": "module",
+  "bin": {
+    "mcp-server-aws-kb-retrieval": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.5.0",
+    "@aws-sdk/client-bedrock-agent-runtime": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "shx": "^0.3.4",
+    "typescript": "^5.6.2"
+  }
+}

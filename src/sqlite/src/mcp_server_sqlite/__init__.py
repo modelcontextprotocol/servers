@@ -1,7 +1,6 @@
 from . import server
 import asyncio
 import argparse
-import os
 
 
 def main():
