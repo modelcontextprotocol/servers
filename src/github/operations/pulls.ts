@@ -328,5 +328,5 @@ export async function getPullRequestDiff(
   );
 
   // 'response' here should be the diff as raw text:
-  return response;
+  return response as string;
 }
