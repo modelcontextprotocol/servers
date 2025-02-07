@@ -130,7 +130,7 @@ export const MergePullRequestSchema = z.object({
 
 export const GetPullRequestFilesSchema = z.object({
   owner: z.string().describe("Repository owner (username or organization)"),
-  repo: z.string().describe("Repository name"), 
+  repo: z.string().describe("Repository name"),
   pull_number: z.number().describe("Pull request number")
 });
 
@@ -154,6 +154,13 @@ export const GetPullRequestCommentsSchema = z.object({
 });
 
 export const GetPullRequestReviewsSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number")
+});
+
+// 1. Define a schema for the new "get_pr_diff" tool
+export const GetPullRequestDiffSchema = z.object({
   owner: z.string().describe("Repository owner (username or organization)"),
   repo: z.string().describe("Repository name"),
   pull_number: z.number().describe("Pull request number")
@@ -193,7 +200,7 @@ export async function listPullRequests(
   options: Omit<z.infer<typeof ListPullRequestsSchema>, 'owner' | 'repo'>
 ): Promise<z.infer<typeof GitHubPullRequestSchema>[]> {
   const url = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
-  
+
   if (options.state) url.searchParams.append('state', options.state);
   if (options.head) url.searchParams.append('head', options.head);
   if (options.base) url.searchParams.append('base', options.base);
@@ -299,4 +306,27 @@ export async function getPullRequestStatus(
     `https://api.github.com/repos/${owner}/${repo}/commits/${sha}/status`
   );
   return CombinedStatusSchema.parse(response);
+}
+
+// 2. Define a function that fetches the pull request diff.
+export async function getPullRequestDiff(
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<string> {
+  // We request the PR in diff format by sending an Accept header
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'application/vnd.github.v3.diff'
+      }
+    },
+    // You might need to specify text parsing if your githubRequest
+    // function defaults to JSON, e.g. { parseAs: 'text' }
+  );
+
+  // 'response' here should be the diff as raw text:
+  return response;
 }

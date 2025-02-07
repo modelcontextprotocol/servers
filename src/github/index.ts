@@ -40,7 +40,7 @@ const server = new Server(
 
 function formatGitHubError(error: GitHubError): string {
   let message = `GitHub API Error: ${error.message}`;
-  
+
   if (error instanceof GitHubValidationError) {
     message = `Validation Error: ${error.message}`;
     if (error.response) {
@@ -148,6 +148,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_issue",
         description: "Get details of a specific issue in a GitHub repository.",
         inputSchema: zodToJsonSchema(issues.GetIssueSchema)
+      },
+      {
+        name: "get_pr_diff",
+        description: "Get the diff of a specific pull request",
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestDiffSchema),
       }
     ],
   };
@@ -331,6 +336,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const issue = await issues.getIssue(args.owner, args.repo, args.issue_number);
         return {
           content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
+        };
+      }
+
+      case "get_pr_diff": {
+        const args = pulls.GetPullRequestDiffSchema.parse(request.params.arguments);
+        const diff = await pulls.getPullRequestDiff(args.owner, args.repo, args.pull_number);
+        return {
+          content: [{ type: "text", text: diff }],
         };
       }
 
