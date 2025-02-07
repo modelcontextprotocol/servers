@@ -127,7 +127,23 @@ Example:
 # Usage with Claude Desktop
 
 ### Setup
+
 Add this to your claude_desktop_config.json:
+
+#### Docker
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "docker",
+      "args": ["run", "-i", "-v", "claude-memory:/app/dist", "--rm", "mcp/memory"]
+    }
+  }
+}
+```
+
+#### NPX
 ```json
 {
   "mcpServers": {
@@ -141,6 +157,29 @@ Add this to your claude_desktop_config.json:
   }
 }
 ```
+
+#### NPX with custom setting
+
+The server can be configured using the following environment variables:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "/path/to/custom/memory.json"
+      }
+    }
+  }
+}
+```
+
+- `MEMORY_FILE_PATH`: Path to the memory storage JSON file (default: `memory.json` in the server directory)
 
 ### System Prompt
 
@@ -172,6 +211,14 @@ Follow these steps for each interaction:
      a) Create entities for recurring organizations, people, and significant events
      b) Connect them to the current entities using relations
      b) Store facts about them as observations
+```
+
+## Building
+
+Docker:
+
+```sh
+docker build -t mcp/memory -f src/memory/Dockerfile . 
 ```
 
 ## License

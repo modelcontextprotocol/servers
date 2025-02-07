@@ -22,26 +22,26 @@ The server provides a demonstration prompt:
 The server offers six core tools:
 
 #### Query Tools
-- `read-query`
+- `read_query`
    - Execute SELECT queries to read data from the database
    - Input:
      - `query` (string): The SELECT SQL query to execute
    - Returns: Query results as array of objects
 
-- `write-query`
+- `write_query`
    - Execute INSERT, UPDATE, or DELETE queries
    - Input:
      - `query` (string): The SQL modification query
    - Returns: `{ affected_rows: number }`
 
-- `create-table`
+- `create_table`
    - Create new tables in the database
    - Input:
      - `query` (string): CREATE TABLE SQL statement
    - Returns: Confirmation of table creation
 
 #### Schema Tools
-- `list-tables`
+- `list_tables`
    - Get a list of all tables in the database
    - No input required
    - Returns: Array of table names
@@ -53,7 +53,7 @@ The server offers six core tools:
    - Returns: Array of column definitions with names and types
 
 #### Analysis Tools
-- `append-insight`
+- `append_insight`
    - Add new business insights to the memo resource
    - Input:
      - `insight` (string): Business insight discovered from data analysis
@@ -62,6 +62,8 @@ The server offers six core tools:
 
 
 ## Usage with Claude Desktop
+
+### uv
 
 ```bash
 # Add the server to your claude_desktop_config.json
@@ -78,6 +80,35 @@ The server offers six core tools:
     ]
   }
 }
+```
+
+### Docker
+
+```json
+# Add the server to your claude_desktop_config.json
+"mcpServers": {
+  "sqlite": {
+    "command": "docker",
+    "args": [
+      "run",
+      "--rm",
+      "-i",
+      "-v",
+      "mcp-test:/mcp",
+      "mcp/sqlite",
+      "--db-path",
+      "/mcp/test.db"
+    ]
+  }
+}
+```
+
+## Building
+
+Docker:
+
+```bash
+docker build -t mcp/sqlite .
 ```
 
 ## License

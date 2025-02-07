@@ -12,6 +12,7 @@ import {
 import fs from "fs";
 import { google } from "googleapis";
 import path from "path";
+import { fileURLToPath } from 'url';
 
 const drive = google.drive("v3");
 
@@ -152,13 +153,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const userQuery = request.params.arguments?.query as string;
     const escapedQuery = userQuery.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
     const formattedQuery = `fullText contains '${escapedQuery}'`;
-    
+
     const res = await drive.files.list({
       q: formattedQuery,
       pageSize: 10,
       fields: "files(id, name, mimeType, modifiedTime, size)",
     });
-    
+
     const fileList = res.data.files
       ?.map((file: any) => `${file.name} (${file.mimeType})`)
       .join("\n");
@@ -175,16 +176,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   throw new Error("Tool not found");
 });
 
-const credentialsPath = path.join(
-  path.dirname(new URL(import.meta.url).pathname),
+const credentialsPath = process.env.GDRIVE_CREDENTIALS_PATH || path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
   "../../../.gdrive-server-credentials.json",
 );
 
 async function authenticateAndSaveCredentials() {
   console.log("Launching auth flow…");
   const auth = await authenticate({
-    keyfilePath: path.join(
-      path.dirname(new URL(import.meta.url).pathname),
+    keyfilePath: process.env.GDRIVE_OAUTH_PATH || path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
       "../../../gcp-oauth.keys.json",
     ),
     scopes: ["https://www.googleapis.com/auth/drive.readonly"],
@@ -206,7 +207,7 @@ async function loadCredentialsAndRunServer() {
   auth.setCredentials(credentials);
   google.options({ auth });
 
-  console.log("Credentials loaded. Starting server.");
+  console.error("Credentials loaded. Starting server.");
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

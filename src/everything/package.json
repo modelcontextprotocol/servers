@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-everything",
-  "version": "0.5.1",
+  "version": "0.6.2",
   "description": "MCP server that exercises all the features of the MCP protocol",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
@@ -16,10 +16,12 @@
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "start:sse": "node dist/sse.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.5.0",
+    "@modelcontextprotocol/sdk": "1.0.1",
     "express": "^4.21.1",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.5"

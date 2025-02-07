@@ -10,10 +10,15 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// Define memory file path using environment variable with fallback
+const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
 
-// Define the path to the JSONL file, you can change this to your desired local path
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const MEMORY_FILE_PATH = path.join(__dirname, 'memory.json');
+// If MEMORY_FILE_PATH is just a filename, put it in the same directory as the script
+const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
+  ? path.isAbsolute(process.env.MEMORY_FILE_PATH)
+    ? process.env.MEMORY_FILE_PATH
+    : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH)
+  : defaultMemoryPath;
 
 // We are storing our memory using entities, relations, and observations in a graph structure
 interface Entity {
@@ -377,26 +382,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   switch (name) {
     case "create_entities":
-      return { toolResult: await knowledgeGraphManager.createEntities(args.entities as Entity[]) };
+      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.createEntities(args.entities as Entity[]), null, 2) }] };
     case "create_relations":
-      return { toolResult: await knowledgeGraphManager.createRelations(args.relations as Relation[]) };
+      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.createRelations(args.relations as Relation[]), null, 2) }] };
     case "add_observations":
-      return { toolResult: await knowledgeGraphManager.addObservations(args.observations as { entityName: string; contents: string[] }[]) };
+      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.addObservations(args.observations as { entityName: string; contents: string[] }[]), null, 2) }] };
     case "delete_entities":
       await knowledgeGraphManager.deleteEntities(args.entityNames as string[]);
-      return { toolResult: "Entities deleted successfully" };
+      return { content: [{ type: "text", text: "Entities deleted successfully" }] };
     case "delete_observations":
       await knowledgeGraphManager.deleteObservations(args.deletions as { entityName: string; observations: string[] }[]);
-      return { toolResult: "Observations deleted successfully" };
+      return { content: [{ type: "text", text: "Observations deleted successfully" }] };
     case "delete_relations":
       await knowledgeGraphManager.deleteRelations(args.relations as Relation[]);
-      return { toolResult: "Relations deleted successfully" };
+      return { content: [{ type: "text", text: "Relations deleted successfully" }] };
     case "read_graph":
-      return { toolResult: await knowledgeGraphManager.readGraph() };
+      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.readGraph(), null, 2) }] };
     case "search_nodes":
-      return { toolResult: await knowledgeGraphManager.searchNodes(args.query as string) };
+      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.searchNodes(args.query as string), null, 2) }] };
     case "open_nodes":
-      return { toolResult: await knowledgeGraphManager.openNodes(args.names as string[]) };
+      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.openNodes(args.names as string[]), null, 2) }] };
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

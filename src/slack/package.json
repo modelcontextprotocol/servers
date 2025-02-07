@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-slack",
-  "version": "0.5.1",
+  "version": "0.6.2",
   "description": "MCP server for interacting with Slack",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
@@ -19,10 +19,10 @@
     "watch": "tsc --watch"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.6.0"
+    "@modelcontextprotocol/sdk": "1.0.1"
   },
   "devDependencies": {
-    "@types/node": "^22.9.3",
+    "@types/node": "^22",
     "shx": "^0.3.4",
     "typescript": "^5.6.2"
   }

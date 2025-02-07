@@ -36,6 +36,30 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
     - `path` (string): File location
     - `content` (string): File content
 
+- **edit_file**
+  - Make selective edits using advanced pattern matching and formatting
+  - Features:
+    - Line-based and multi-line content matching
+    - Whitespace normalization with indentation preservation
+    - Fuzzy matching with confidence scoring
+    - Multiple simultaneous edits with correct positioning
+    - Indentation style detection and preservation
+    - Git-style diff output with context
+    - Preview changes with dry run mode
+    - Failed match debugging with confidence scores
+  - Inputs:
+    - `path` (string): File to edit
+    - `edits` (array): List of edit operations
+      - `oldText` (string): Text to search for (can be substring)
+      - `newText` (string): Text to replace with
+    - `dryRun` (boolean): Preview changes without applying (default: false)
+    - `options` (object): Optional formatting settings
+      - `preserveIndentation` (boolean): Keep existing indentation (default: true)
+      - `normalizeWhitespace` (boolean): Normalize spaces while preserving structure (default: true)
+      - `partialMatch` (boolean): Enable fuzzy matching (default: true)
+  - Returns detailed diff and match information for dry runs, otherwise applies changes
+  - Best Practice: Always use dryRun first to preview changes before applying them
+
 - **create_directory**
   - Create new directory or ensure it exists
   - Input: `path` (string)
@@ -58,6 +82,7 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - Inputs:
     - `path` (string): Starting directory
     - `pattern` (string): Search pattern
+    - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
   - Case-insensitive matching
   - Returns full paths to matches
 
@@ -80,6 +105,34 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
+
+Note: you can provide sandboxed directories to the server by mounting them to `/projects`. Adding the `ro` flag will make the directory readonly by the server.
+
+### Docker
+Note: all directories must be mounted to `/projects` by default.
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
+        "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
+        "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
+        "mcp/filesystem",
+        "/projects"
+      ]
+    }
+  }
+}
+```
+
+### NPX
+
 ```json
 {
   "mcpServers": {
@@ -94,6 +147,14 @@ Add this to your `claude_desktop_config.json`:
     }
   }
 }
+```
+
+## Build
+
+Docker build:
+
+```bash
+docker build -t mcp/filesystem -f src/filesystem/Dockerfile .
 ```
 
 ## License

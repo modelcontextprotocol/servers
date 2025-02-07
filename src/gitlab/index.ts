@@ -437,7 +437,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "fork_repository": {
         const args = ForkRepositorySchema.parse(request.params.arguments);
         const fork = await forkProject(args.project_id, args.namespace);
-        return { toolResult: fork };
+        return { content: [{ type: "text", text: JSON.stringify(fork, null, 2) }] };
       }
 
       case "create_branch": {
@@ -452,25 +452,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ref
         });
 
-        return { toolResult: branch };
+        return { content: [{ type: "text", text: JSON.stringify(branch, null, 2) }] };
       }
 
       case "search_repositories": {
         const args = SearchRepositoriesSchema.parse(request.params.arguments);
         const results = await searchProjects(args.search, args.page, args.per_page);
-        return { toolResult: results };
+        return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
       }
 
       case "create_repository": {
         const args = CreateRepositorySchema.parse(request.params.arguments);
         const repository = await createRepository(args);
-        return { toolResult: repository };
+        return { content: [{ type: "text", text: JSON.stringify(repository, null, 2) }] };
       }
 
       case "get_file_contents": {
         const args = GetFileContentsSchema.parse(request.params.arguments);
         const contents = await getFileContents(args.project_id, args.file_path, args.ref);
-        return { toolResult: contents };
+        return { content: [{ type: "text", text: JSON.stringify(contents, null, 2) }] };
       }
 
       case "create_or_update_file": {
@@ -483,7 +483,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args.branch,
           args.previous_path
         );
-        return { toolResult: result };
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
 
       case "push_files": {
@@ -494,21 +494,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args.branch,
           args.files.map(f => ({ path: f.file_path, content: f.content }))
         );
-        return { toolResult: result };
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
 
       case "create_issue": {
         const args = CreateIssueSchema.parse(request.params.arguments);
         const { project_id, ...options } = args;
         const issue = await createIssue(project_id, options);
-        return { toolResult: issue };
+        return { content: [{ type: "text", text: JSON.stringify(issue, null, 2) }] };
       }
 
       case "create_merge_request": {
         const args = CreateMergeRequestSchema.parse(request.params.arguments);
         const { project_id, ...options } = args;
         const mergeRequest = await createMergeRequest(project_id, options);
-        return { toolResult: mergeRequest };
+        return { content: [{ type: "text", text: JSON.stringify(mergeRequest, null, 2) }] };
       }
 
       default:

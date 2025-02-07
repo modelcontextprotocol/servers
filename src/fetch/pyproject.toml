@@ -1,6 +1,6 @@
 [project]
 name = "mcp-server-fetch"
-version = "0.6.1"
+version = "0.6.2"
 description = "A Model Context Protocol server providing tools to fetch and convert web content for usage by LLMs"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,7 +17,7 @@ classifiers = [
 ]
 dependencies = [
     "markdownify>=0.13.1",
-    "mcp>=1.0.0",
+    "mcp>=1.1.3",
     "protego>=0.3.1",
     "pydantic>=2.0.0",
     "readabilipy>=0.2.0",

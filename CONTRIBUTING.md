@@ -5,12 +5,18 @@ Thank you for your interest in contributing to the Model Context Protocol (MCP) 
 ## Types of Contributions
 
 ### 1. New Servers
-Adding a new server is a valuable way to contribute. Before creating a new server:
+
+The repository contains reference implementations, as well as a list of community servers.
+We generally don't accept new servers into the repository. We do accept pull requests to the [README.md](./README.md)
+adding a reference to your servers.
+
+Please keep lists in alphabetical order to minimize merge conflicts when adding new items.
 
 - Check the [modelcontextprotocol.io](https://modelcontextprotocol.io) documentation
 - Ensure your server doesn't duplicate existing functionality
 - Consider whether your server would be generally useful to others
 - Follow [security best practices](https://modelcontextprotocol.io/docs/concepts/transports#security-considerations) from the MCP documentation
+- Create a PR adding a link to your server to the [README.md](./README.md).
 
 ### 2. Improvements to Existing Servers
 Enhancements to existing servers are welcome! This includes:
