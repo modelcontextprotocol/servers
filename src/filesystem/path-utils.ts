@@ -48,9 +48,14 @@ export function normalizePath(p: string): string {
   // Use Node's path normalization, which handles . and .. segments
   const normalized = path.normalize(p);
   
-  // Only convert slashes to backslashes for Windows paths
+  // Handle Windows paths: convert slashes and ensure drive letter is capitalized
   if (normalized.match(/^[a-zA-Z]:|^\/mnt\/[a-z]\/|^\/[a-z]\//i)) {
-    return normalized.replace(/\//g, '\\');
+    let result = normalized.replace(/\//g, '\\');
+    // Capitalize drive letter if present
+    if (/^[a-z]:/.test(result)) {
+      result = result.charAt(0).toUpperCase() + result.slice(1);
+    }
+    return result;
   }
   
   // Leave Unix paths unchanged
