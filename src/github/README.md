@@ -304,7 +304,6 @@ For detailed search syntax, see [GitHub's searching documentation](https://docs.
 ## Setup
 
 ### Personal Access Token
-[Create a GitHub Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) with appropriate permissions:
    - Go to [Personal access tokens](https://github.com/settings/tokens) (in GitHub Settings > Developer settings)
    - Select which repositories you'd like this token to have access to (Public, All, or Select)
    - Create a token with the `repo` scope ("Full control of private repositories")
