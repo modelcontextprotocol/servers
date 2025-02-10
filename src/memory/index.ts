@@ -10,10 +10,15 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// Define memory file path using environment variable with fallback
+const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
 
-// Define the path to the JSONL file, you can change this to your desired local path
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const MEMORY_FILE_PATH = path.join(__dirname, 'memory.json');
+// If MEMORY_FILE_PATH is just a filename, put it in the same directory as the script
+const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
+  ? path.isAbsolute(process.env.MEMORY_FILE_PATH)
+    ? process.env.MEMORY_FILE_PATH
+    : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH)
+  : defaultMemoryPath;
 
 // We are storing our memory using entities, relations, and observations in a graph structure
 interface Entity {
