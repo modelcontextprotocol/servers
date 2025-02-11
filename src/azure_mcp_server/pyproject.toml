@@ -1,0 +1,19 @@
+[project]
+name = "mcp_server_azure"
+version = "0.1.0"
+description = "A Model Context Protocol server providing tools to read and manipulate Azure resources using an LLM"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "azure-cosmos>=4.9.0",
+    "azure-identity>=1.19.0",
+    "azure-storage-blob>=12.24.1",
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.2.1",
+]
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project.scripts]
+mcp_server_azure_cmd = "mcp_server_azure:main"
