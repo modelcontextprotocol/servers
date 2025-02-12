@@ -52,8 +52,24 @@ export const UpdateIssueOptionsSchema = z.object({
   state: z.enum(["open", "closed"]).optional(),
 });
 
+export const GetIssueCommentSchema = z.object({
+  owner: z.string().describe('Repository owner (username or organization)'),
+  repo: z.string().describe('Repository name'),
+  comment_id: z.number().describe('Comment ID'),
+});
+
 export async function getIssue(owner: string, repo: string, issue_number: number) {
   return githubRequest(`https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}`);
+}
+
+export async function getIssueComment(
+  owner: string,
+  repo: string,
+  comment_id: number
+) {
+  return githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/issues/comments/${comment_id}`
+  );
 }
 
 export async function addIssueComment(
