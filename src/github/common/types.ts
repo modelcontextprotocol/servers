@@ -256,4 +256,49 @@ export type GitHubMilestone = z.infer<typeof GitHubMilestoneSchema>;
 export type GitHubIssue = z.infer<typeof GitHubIssueSchema>;
 export type GitHubSearchResponse = z.infer<typeof GitHubSearchResponseSchema>;
 export type GitHubPullRequest = z.infer<typeof GitHubPullRequestSchema>;
+// Release schemas
+export const GitHubReleaseAssetSchema = z.object({
+  url: z.string(),
+  id: z.number(),
+  node_id: z.string(),
+  name: z.string(),
+  label: z.string().nullable(),
+  content_type: z.string(),
+  state: z.string(),
+  size: z.number(),
+  download_count: z.number(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  browser_download_url: z.string()
+});
+
+export const GitHubReleaseSchema = z.object({
+  url: z.string(),
+  assets_url: z.string(),
+  upload_url: z.string(),
+  html_url: z.string(),
+  id: z.number(),
+  node_id: z.string(),
+  tag_name: z.string(),
+  target_commitish: z.string(),
+  name: z.string().nullable(),
+  draft: z.boolean(),
+  prerelease: z.boolean(),
+  created_at: z.string(),
+  published_at: z.string().nullable(),
+  assets: z.array(GitHubReleaseAssetSchema).optional(),
+  tarball_url: z.string(),
+  zipball_url: z.string(),
+  body: z.string().nullable(),
+  author: GitHubOwnerSchema
+}).transform(data => {
+  // Ensure assets is always an array even if not included
+  return {
+    ...data,
+    assets: data.assets || []
+  };
+});
+
+export type GitHubRelease = z.infer<typeof GitHubReleaseSchema>;
+export type GitHubReleaseAsset = z.infer<typeof GitHubReleaseAssetSchema>;
 export type GitHubPullRequestRef = z.infer<typeof GitHubPullRequestRefSchema>;
