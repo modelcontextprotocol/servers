@@ -1,0 +1,32 @@
+{
+  "name": "@modelcontextprotocol/server-gitee",
+  "version": "0.1.0",
+  "description": "MCP Server for using the Gitee API",
+  "license": "MIT",
+  "author": "诺墨<normal@normalcoder.com>, Gitee(https://gitee.com)",
+  "homepage": "https://modelcontextprotocol.io",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mcp-server-gitee": "dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "watch": "tsc --watch",
+    "start": "node dist/bin.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "universal-user-agent": "^7.0.0",
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.22.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "shx": "^0.3.4",
+    "typescript": "^5.3.3"
+  }
+}
