@@ -14,6 +14,7 @@ from mcp.types import (
 from enum import Enum
 import git
 from pydantic import BaseModel
+import os
 
 class GitStatus(BaseModel):
     repo_path: str
@@ -147,12 +148,26 @@ def git_show(repo: git.Repo, revision: str) -> str:
         output.append(d.diff.decode('utf-8'))
     return "".join(output)
 
+def get_repo(repo_path: Path) -> git.Repo:
+    repo = git.Repo(repo_path)
+
+    git_user_name = os.environ.get("GIT_USER_NAME")
+    git_user_email = os.environ.get("GIT_USER_EMAIL")
+
+    with repo.config_writer() as config:
+        if git_user_name:
+            config.set_value("user", "name", git_user_name)
+        if git_user_email:
+            config.set_value("user", "email", git_user_email)
+
+    return repo
+
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
 
     if repository is not None:
         try:
-            git.Repo(repository)
+            get_repo(repo_path)
             logger.info(f"Using repository at {repository}")
         except git.InvalidGitRepositoryError:
             logger.error(f"{repository} is not a valid Git repository")
@@ -267,7 +282,7 @@ async def serve(repository: Path | None) -> None:
             )]
             
         # For all other commands, we need an existing repo
-        repo = git.Repo(repo_path)
+        repo = get_repo(repo_path)
 
         match name:
             case GitTools.STATUS:
