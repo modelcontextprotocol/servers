@@ -158,7 +158,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (request: z.infer<typeof CallToolRequestSchema>) => {
+server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
   try {
     if (!request.params.arguments) {
       throw new Error("Arguments are required");
