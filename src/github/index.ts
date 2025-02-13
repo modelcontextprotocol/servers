@@ -66,17 +66,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "create_or_update_file",
-        description: "Create or update a single file in a GitHub repository",
+        description: "Create a new file or update an existing file in a GitHub repository. Requires owner, repo, path, content, commit message. Optional: branch name and file SHA for updates.",
         inputSchema: zodToJsonSchema(files.CreateOrUpdateFileSchema),
       },
       {
         name: "search_repositories",
-        description: "Search for GitHub repositories",
+        description: "Search GitHub repositories using query parameters. Supports pagination with page and perPage options. Query supports qualifiers like language:javascript, stars:>1000, etc.",
         inputSchema: zodToJsonSchema(repository.SearchRepositoriesSchema),
       },
       {
         name: "create_repository",
-        description: "Create a new GitHub repository in your account",
+        description: "Create a new GitHub repository in your account. Specify name, visibility (public/private), description, and other repository settings.",
         inputSchema: zodToJsonSchema(repository.CreateRepositoryOptionsSchema),
       },
       {
@@ -150,15 +150,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(issues.GetIssueSchema)
       },
       {
-        name: "get_pr_diff",
-        description: "Get the diff of a specific pull request",
+        name: "get_pull_request_diff",
+        description: "Get the full diff content of a specific pull request. Returns the raw diff text showing all file changes. Requires owner, repo, and pull request number.",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestDiffSchema),
       }
     ],
   };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request: z.infer<typeof CallToolRequestSchema>) => {
   try {
     if (!request.params.arguments) {
       throw new Error("Arguments are required");
@@ -350,7 +350,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       default:
         throw new Error(`Unknown tool: ${request.params.name}`);
     }
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       throw new Error(`Invalid input: ${JSON.stringify(error.errors)}`);
     }
