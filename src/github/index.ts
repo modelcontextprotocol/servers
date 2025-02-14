@@ -339,7 +339,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
         };
       }
 
-      case "get_pr_diff": {
+      case "get_pull_request_diff": {
         const args = pulls.GetPullRequestDiffSchema.parse(request.params.arguments);
         const diff = await pulls.getPullRequestDiff(args.owner, args.repo, args.pull_number);
         return {
