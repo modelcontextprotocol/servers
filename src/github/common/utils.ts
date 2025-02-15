@@ -9,11 +9,22 @@ type RequestOptions = {
 }
 
 async function parseResponseBody(response: Response): Promise<unknown> {
-  const contentType = response.headers.get("content-type");
-  if (contentType?.includes("application/json")) {
-    return response.json();
+  try {
+    const contentType = response.headers.get("content-type");
+    if (contentType?.includes("application/json")) {
+      const text = await response.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        console.error('Failed to parse JSON response:', text);
+        throw e;
+      }
+    }
+    return response.text();
+  } catch (error) {
+    console.error('Error parsing response body:', error);
+    throw error;
   }
-  return response.text();
 }
 
 export function buildUrl(baseUrl: string, params: Record<string, string | number | undefined>): string {
@@ -32,6 +43,8 @@ export async function githubRequest(
   url: string,
   options: RequestOptions = {}
 ): Promise<unknown> {
+  console.log(`Making GitHub request to ${url}`);
+  console.log('Request options:', JSON.stringify(options, null, 2));
   const headers: Record<string, string> = {
     "Accept": "application/vnd.github.v3+json",
     "Content-Type": "application/json",
@@ -39,19 +52,33 @@ export async function githubRequest(
     ...options.headers,
   };
 
-  if (process.env.GITHUB_PERSONAL_ACCESS_TOKEN) {
-    headers["Authorization"] = `Bearer ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN}`;
+  const token = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+  if (!token) {
+    console.error('GITHUB_PERSONAL_ACCESS_TOKEN is not set');
+    throw new Error('GitHub token is required but not provided');
   }
+  headers["Authorization"] = `Bearer ${token}`;
 
+  console.log('Request headers:', JSON.stringify(headers, null, 2));
+  
   const response = await fetch(url, {
     method: options.method || "GET",
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
+  console.log(`Response status: ${response.status}`);
+  console.log('Response headers:', JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
+
   const responseBody = await parseResponseBody(response);
 
   if (!response.ok) {
+    console.error('GitHub API error:', responseBody);
+    if (response.status === 403) {
+      const resetTime = response.headers.get('x-ratelimit-reset');
+      console.error('Rate limit exceeded. Reset time:', resetTime);
+      throw new Error(`GitHub API rate limit exceeded. Reset at ${new Date(Number(resetTime) * 1000).toISOString()}`);
+    }
     throw createGitHubError(response.status, responseBody);
   }
 

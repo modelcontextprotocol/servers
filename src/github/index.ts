@@ -343,9 +343,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       throw new Error(`Invalid input: ${JSON.stringify(error.errors)}`);
     }
     if (isGitHubError(error)) {
-      throw new Error(formatGitHubError(error));
+      const errorMessage = formatGitHubError(error);
+      console.error('GitHub API Error:', errorMessage);
+      return {
+        content: [{ type: "error", text: errorMessage }],
+      };
     }
-    throw error;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Unexpected error:', error);
+    return {
+      content: [{ type: "error", text: `Unexpected error: ${errorMessage}` }],
+    };
   }
 });
 

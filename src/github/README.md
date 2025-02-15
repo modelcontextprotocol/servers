@@ -5,10 +5,72 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
 ### Features
 
 - **Automatic Branch Creation**: When creating/updating files or pushing changes, branches are automatically created if they don't exist
-- **Comprehensive Error Handling**: Clear error messages for common issues
+- **Comprehensive Error Handling**: Clear error messages for common issues with detailed logging
 - **Git History Preservation**: Operations maintain proper Git history without force pushing
 - **Batch Operations**: Support for both single-file and multi-file operations
 - **Advanced Search**: Support for searching code, issues/PRs, and users
+- **Rate Limit Handling**: Intelligent handling of GitHub API rate limits with clear reset time information
+- **Detailed Logging**: Comprehensive request and response logging for debugging
+
+### Error Handling
+
+The server implements comprehensive error handling for various GitHub API scenarios:
+
+1. **Authentication Errors** (`GitHubAuthenticationError`)
+   - Invalid or missing token
+   - Token scope issues
+   - Token expiration
+
+2. **Rate Limit Errors** (`GitHubRateLimitError`)
+   - Provides exact reset time
+   - Includes remaining request information
+   - Suggests retry strategies
+
+3. **Permission Errors** (`GitHubPermissionError`)
+   - Repository access issues
+   - Organization permission problems
+   - Branch protection violations
+
+4. **Resource Not Found** (`GitHubResourceNotFoundError`)
+   - Missing repositories
+   - Non-existent files
+   - Invalid references
+
+5. **Validation Errors** (`GitHubValidationError`)
+   - Invalid input parameters
+   - Malformed requests
+   - Schema violations
+
+6. **Conflict Errors** (`GitHubConflictError`)
+   - Branch conflicts
+   - File already exists
+   - Merge conflicts
+
+All errors include:
+- Detailed error messages
+- HTTP status codes
+- Original response data
+- Debugging information
+
+### Logging
+
+The server provides detailed logging for troubleshooting:
+
+```typescript
+// Request logging
+console.log(`Making GitHub request to ${url}`);
+console.log('Request options:', options);
+console.log('Request headers:', headers);
+
+// Response logging
+console.log(`Response status: ${response.status}`);
+console.log('Response headers:', headers);
+console.log('Response body:', body);
+
+// Error logging
+console.error('GitHub API error:', error);
+console.error('Rate limit exceeded. Reset time:', resetTime);
+```
 
 
 ## Tools
