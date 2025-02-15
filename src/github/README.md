@@ -299,7 +299,6 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
 - `location:London`: Search by location
 - Example: `q: "fullstack developer" location:London followers:>100`
 
-For detailed search syntax, see [GitHub's searching documentation](https://docs.github.com/en/search-github/searching-on-github).
 
 ## Setup
 
