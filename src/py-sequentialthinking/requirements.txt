@@ -1,0 +1,4 @@
+fastapi==0.95.1
+uvicorn==0.22.0
+pydantic==1.10.7
+pychalk @ git+https://github.com/anthonyalmarza/chalk.git@0f562c4
