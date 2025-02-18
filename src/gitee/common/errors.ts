@@ -5,6 +5,54 @@ export class GiteeError extends Error {
   }
 }
 
+export class GiteeValidationError extends GiteeError {
+  response?: unknown;
+
+  constructor(message: string, response?: unknown) {
+    super(message);
+    this.name = "GiteeValidationError";
+    this.response = response;
+  }
+}
+
+export class GiteeResourceNotFoundError extends GiteeError {
+  constructor(message: string) {
+    super(message);
+    this.name = "GiteeResourceNotFoundError";
+  }
+}
+
+export class GiteeAuthenticationError extends GiteeError {
+  constructor(message: string) {
+    super(message);
+    this.name = "GiteeAuthenticationError";
+  }
+}
+
+export class GiteePermissionError extends GiteeError {
+  constructor(message: string) {
+    super(message);
+    this.name = "GiteePermissionError";
+  }
+}
+
+export class GiteeRateLimitError extends GiteeError {
+  resetAt: Date;
+
+  constructor(message: string, resetAt: Date) {
+    super(message);
+    this.name = "GiteeRateLimitError";
+    this.resetAt = resetAt;
+  }
+}
+
+export class GiteeConflictError extends GiteeError {
+  constructor(message: string) {
+    super(message);
+    this.name = "GiteeConflictError";
+  }
+}
+
 export function isGiteeError(error: unknown): error is GiteeError {
   return error instanceof GiteeError;
 }
