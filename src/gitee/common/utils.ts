@@ -115,3 +115,14 @@ export function validateOwnerName(owner: string): string {
   }
   return sanitized;
 }
+export async function checkUserExists(username: string): Promise<boolean> {
+  try {
+    await giteeRequest(`https://gitee.com/api/v5/users/${username}`, "GET");
+    return true;
+  } catch (error) {
+    if (error && typeof error === "object" && "name" in error && error.name === "GiteeResourceNotFoundError") {
+      return false;
+    }
+    throw error;
+  }
+}
