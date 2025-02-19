@@ -117,6 +117,54 @@ GiteeRepositorySchema = z.object({
   }).optional(),
 });
 
+export const GiteeBranchSchema = z.object({
+  name: z.string(),
+  commit: z.object({
+    sha: z.string(),
+    url: z.string().url(),
+  }),
+  protected: z.boolean(),
+  protection_url: z.string().url().optional(),
+});
+
+export const GiteeCompleteBranchSchema = GiteeBranchSchema.extend({
+  _links: z.object({
+    self: z.string().url(),
+    html: z.string().url(),
+  }),
+});
+
+export const GiteeCommitSchema = z.object({
+  url: z.string().url(),
+  sha: z.string(),
+  html_url: z.string().url(),
+  comments_url: z.string().url(),
+  commit: z.object({
+    url: z.string().url(),
+    author: z.object({
+      name: z.string(),
+      email: z.string().email(),
+      date: z.string(),
+    }),
+    committer: z.object({
+      name: z.string(),
+      email: z.string().email(),
+      date: z.string(),
+    }),
+    message: z.string(),
+    tree: z.object({
+      url: z.string().url(),
+      sha: z.string(),
+    }),
+  }),
+  author: GiteeUserSchema.nullable(),
+  committer: GiteeUserSchema.nullable(),
+  parents: z.array(z.object({
+    url: z.string().url(),
+    sha: z.string(),
+  })),
+});
+
 // Type Exports
 export type GiteeUser = z.infer<typeof GiteeUserSchema>;
 export type GiteeRepository = z.infer<typeof GiteeRepositorySchema>;

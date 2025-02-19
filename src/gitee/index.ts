@@ -3,6 +3,7 @@ import { MCPServer } from "./common/server.js";
 import { VERSION } from "./common/version.js";
 
 // 导入操作模块
+import * as branchOperations from "./operations/branches.js";
 import * as repoOperations from "./operations/repos.js";
 import * as userOperations from "./operations/users.js";
 import { z } from 'zod';
@@ -61,6 +62,44 @@ export function createGiteeMCPServer() {
     handler: async (params: any) => {
       const { query, page, perPage } = params;
       return await repoOperations.searchRepositories(query, page, perPage);
+    },
+  });
+
+  // 注册分支操作工具
+  server.registerTool({
+    name: "create_branch",
+    description: "在 Gitee 仓库中创建一个新分支",
+    schema: branchOperations.CreateBranchSchema,
+    handler: async (params: any) => {
+      const { owner, repo, branch_name, refs } = params;
+      return await branchOperations.createBranchFromRef(owner, repo, branch_name, refs);
+    },
+  });
+
+  server.registerTool({
+    name: "list_branches",
+    description: "列出 Gitee 仓库中的分支",
+    schema: branchOperations.ListBranchesSchema,
+    handler: async (params: any) => {
+      const { owner, repo, sort, direction, page, per_page } = params;
+      return await branchOperations.listBranches(
+        owner,
+        repo,
+        sort,
+        direction,
+        page,
+        per_page
+      );
+    },
+  });
+
+  server.registerTool({
+    name: "get_branch",
+    description: "获取 Gitee 仓库中的特定分支信息",
+    schema: branchOperations.GetBranchSchema,
+    handler: async (params: any) => {
+      const { owner, repo, branch } = params;
+      return await branchOperations.getBranch(owner, repo, branch);
     },
   });
 
