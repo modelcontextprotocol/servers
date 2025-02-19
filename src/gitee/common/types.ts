@@ -168,3 +168,5 @@ export const GiteeCommitSchema = z.object({
 // Type Exports
 export type GiteeUser = z.infer<typeof GiteeUserSchema>;
 export type GiteeRepository = z.infer<typeof GiteeRepositorySchema>;
+export type GiteeBranch = z.infer<typeof GiteeBranchSchema>;
+export type GiteeCompleteBranch = z.infer<typeof GiteeCompleteBranchSchema>;
