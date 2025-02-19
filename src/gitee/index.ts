@@ -4,6 +4,7 @@ import { VERSION } from "./common/version.js";
 
 // 导入操作模块
 import * as branchOperations from "./operations/branches.js";
+import * as fileOperations from "./operations/files.js";
 import * as repoOperations from "./operations/repos.js";
 import * as userOperations from "./operations/users.js";
 import { z } from 'zod';
@@ -100,6 +101,45 @@ export function createGiteeMCPServer() {
     handler: async (params: any) => {
       const { owner, repo, branch } = params;
       return await branchOperations.getBranch(owner, repo, branch);
+    },
+  });
+
+  // 注册文件操作工具
+  server.registerTool({
+    name: "get_file_contents",
+    description: "获取 Gitee 仓库中文件或目录的内容",
+    schema: fileOperations.GetFileContentsSchema,
+    handler: async (params: any) => {
+      const { owner, repo, path, branch } = params;
+      return await fileOperations.getFileContents(owner, repo, path, branch);
+    },
+  });
+
+  server.registerTool({
+    name: "create_or_update_file",
+    description: "在 Gitee 仓库中创建或更新文件",
+    schema: fileOperations.CreateOrUpdateFileSchema,
+    handler: async (params: any) => {
+      const { owner, repo, path, content, message, branch, sha } = params;
+      return await fileOperations.createOrUpdateFile(
+        owner,
+        repo,
+        path,
+        content,
+        message,
+        branch,
+        sha
+      );
+    },
+  });
+
+  server.registerTool({
+    name: "push_files",
+    description: "向 Gitee 仓库提交多个文件",
+    schema: fileOperations.PushFilesSchema,
+    handler: async (params: any) => {
+      const { owner, repo, branch, message, files } = params;
+      return await fileOperations.pushFiles(owner, repo, branch, files, message);
     },
   });
 

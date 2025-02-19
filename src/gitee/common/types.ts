@@ -165,8 +165,74 @@ export const GiteeCommitSchema = z.object({
   })),
 });
 
+export const GiteeFileContentSchema = z.object({
+  type: z.string(),
+  encoding: z.string().optional(),
+  size: z.number(),
+  name: z.string(),
+  path: z.string(),
+  content: z.string().optional(),
+  sha: z.string(),
+  url: z.string().url(),
+  html_url: z.string().url().nullable(),
+  download_url: z.string().url().nullable(),
+  _links: z.object({
+    self: z.string().url(),
+    html: z.string().url().nullable(),
+  }),
+});
+
+export const GiteeDirectoryContentSchema = z.array(z.object({
+  type: z.string(),
+  size: z.number(),
+  name: z.string(),
+  path: z.string(),
+  sha: z.string(),
+  url: z.string().url(),
+  html_url: z.string().url().nullable(),
+  download_url: z.string().url().nullable(),
+  _links: z.object({
+    self: z.string().url(),
+    html: z.string().url().nullable(),
+  }),
+}));
+
+export const GiteeFileOperationResultSchema = z.object({
+  content: GiteeFileContentSchema.nullable(),
+  commit: z.object({
+    sha: z.string(),
+    author: z.object({
+      name: z.string(),
+      email: z.string().email(),
+      date: z.string(),
+    }),
+    committer: z.object({
+      name: z.string(),
+      email: z.string().email(),
+      date: z.string(),
+    }),
+    message: z.string(),
+    tree: z.object({
+      sha: z.string(),
+      url: z.string().url(),
+    }),
+    parents: z.array(z.object({
+      sha: z.string(),
+      url: z.string().url(),
+      html_url: z.string().url().optional(),
+    })),
+    url: z.string().url().optional(),
+    html_url: z.string().url().optional(),
+    comments_url: z.string().url().optional(),
+  }),
+});
+
 // Type Exports
 export type GiteeUser = z.infer<typeof GiteeUserSchema>;
 export type GiteeRepository = z.infer<typeof GiteeRepositorySchema>;
 export type GiteeBranch = z.infer<typeof GiteeBranchSchema>;
 export type GiteeCompleteBranch = z.infer<typeof GiteeCompleteBranchSchema>;
+export type GiteeCommit = z.infer<typeof GiteeCommitSchema>;
+export type GiteeFileContent = z.infer<typeof GiteeFileContentSchema>;
+export type GiteeDirectoryContent = z.infer<typeof GiteeDirectoryContentSchema>;
+export type GiteeFileOperationResult = z.infer<typeof GiteeFileOperationResultSchema>;
