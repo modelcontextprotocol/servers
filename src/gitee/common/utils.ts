@@ -28,6 +28,32 @@ export function buildUrl(baseUrl: string, params: Record<string, string | number
 
 const USER_AGENT = `modelcontextprotocol/servers/gitee/v${VERSION} ${getUserAgent()}`;
 
+// Generate the equivalent curl command for debugging.
+function generateCurlCommand(url: string, method: string, headers: Record<string, string>, body?: unknown): string {
+  let curl = `curl -X ${method} "${url}"`;
+
+  // Add request headers
+  Object.entries(headers).forEach(([key, value]) => {
+    curl += ` -H "${key}: ${value}"`;
+  });
+
+  // Add request body
+  if (body) {
+    curl += ` -d '${JSON.stringify(body)}'`;
+  }
+
+  return curl;
+}
+
+// debug utility function
+export function debug(message: string, data?: unknown): void {
+  if (data !== undefined) {
+    console.error(`[DEBUG] ${message}`, typeof data === 'object' ? JSON.stringify(data, null, 2) : data);
+  } else {
+    console.error(`[DEBUG] ${message}`);
+  }
+}
+
 export async function giteeRequest(
   url: string,
   method: string = "GET",
@@ -50,7 +76,22 @@ export async function giteeRequest(
 
     // Method 2: Add to Request Headers (Two methods are tried to increase success rate)
     requestHeaders["Authorization"] = `token ${process.env.GITEE_PERSONAL_ACCESS_TOKEN}`;
+
+    debug(`Using access token: ${process.env.GITEE_PERSONAL_ACCESS_TOKEN.substring(0, 4)}...`);
+  } else {
+    debug(`No access token found in environment variables`);
   }
+
+  // Print the request
+  debug(`Request: ${method} ${url}`);
+  debug(`Headers:`, requestHeaders);
+  if (body) {
+    debug(`Body:`, body);
+  }
+
+  // Print the equivalent curl command
+  const curlCommand = generateCurlCommand(url, method, requestHeaders, body);
+  debug(`cURL: ${curlCommand}\n`);
 
   const response = await fetch(url, {
     method,
@@ -59,6 +100,10 @@ export async function giteeRequest(
   });
 
   const responseBody = await parseResponseBody(response);
+
+  // Print the response
+  debug(`Response Status: ${response.status} ${response.statusText}`);
+  debug(`Response Body:`, responseBody);
 
   if (!response.ok) {
     throw createGiteeError(response.status, responseBody);
