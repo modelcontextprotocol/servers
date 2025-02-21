@@ -66,7 +66,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "create_or_update_file",
-        description: "Create a new file or update an existing file in a GitHub repository. Requires owner, repo, path, content, commit message. Optional: branch name and file SHA for updates.",
+        description: "Create a new file or update an existing file in a GitHub repository",
         inputSchema: zodToJsonSchema(files.CreateOrUpdateFileSchema),
       },
       {
