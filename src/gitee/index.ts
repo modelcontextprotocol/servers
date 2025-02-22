@@ -5,6 +5,7 @@ import { VERSION } from "./common/version.js";
 // 导入操作模块
 import * as branchOperations from "./operations/branches.js";
 import * as fileOperations from "./operations/files.js";
+import * as issueOperations from "./operations/issues.js";
 import * as repoOperations from "./operations/repos.js";
 import * as userOperations from "./operations/users.js";
 import { z } from 'zod';
@@ -140,6 +141,57 @@ export function createGiteeMCPServer() {
     handler: async (params: any) => {
       const { owner, repo, branch, message, files } = params;
       return await fileOperations.pushFiles(owner, repo, branch, files, message);
+    },
+  });
+
+  // 注册 Issue 操作工具
+  server.registerTool({
+    name: "create_issue",
+    description: "在 Gitee 仓库中创建 Issue",
+    schema: issueOperations.CreateIssueSchema,
+    handler: async (params: any) => {
+      const { owner, repo, ...options } = params;
+      return await issueOperations.createIssue(owner, repo, options);
+    },
+  });
+
+  server.registerTool({
+    name: "list_issues",
+    description: "列出 Gitee 仓库中的 Issues",
+    schema: issueOperations.ListIssuesOptionsSchema,
+    handler: async (params: any) => {
+      const { owner, repo, ...options } = params;
+      return await issueOperations.listIssues(owner, repo, options);
+    },
+  });
+
+  server.registerTool({
+    name: "get_issue",
+    description: "获取 Gitee 仓库中的特定 Issue",
+    schema: issueOperations.GetIssueSchema,
+    handler: async (params: any) => {
+      const { owner, repo, issue_number } = params;
+      return await issueOperations.getIssue(owner, repo, issue_number);
+    },
+  });
+
+  server.registerTool({
+    name: "update_issue",
+    description: "更新 Gitee 仓库中的 Issue",
+    schema: issueOperations.UpdateIssueOptionsSchema,
+    handler: async (params: any) => {
+      const { owner, repo, issue_number, ...options } = params;
+      return await issueOperations.updateIssue(owner, repo, issue_number, options);
+    },
+  });
+
+  server.registerTool({
+    name: "add_issue_comment",
+    description: "向 Gitee 仓库中的 Issue 添加评论",
+    schema: issueOperations.IssueCommentSchema,
+    handler: async (params: any) => {
+      const { owner, repo, issue_number, body } = params;
+      return await issueOperations.addIssueComment(owner, repo, issue_number, body);
     },
   });
 

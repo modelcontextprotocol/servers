@@ -227,6 +227,80 @@ export const GiteeFileOperationResultSchema = z.object({
   }),
 });
 
+export const GiteeIssueSchema = z.object({
+  id: z.number(),
+  url: z.string().url(),
+  repository_url: z.string().url(),
+  labels_url: z.string().url(),
+  comments_url: z.string().url(),
+  html_url: z.string().url(),
+  number: z.union([z.number(), z.string()]), // 支持数字或字符串
+  state: z.string(),
+  title: z.string(),
+  body: z.string().nullable(),
+  user: GiteeUserSchema,
+  labels: z.array(z.object({
+    id: z.number(),
+    name: z.string(),
+    color: z.string(),
+  })),
+  assignee: GiteeUserSchema.nullable(),
+  milestone: z.object({
+    id: z.number(),
+    number: z.number(),
+    state: z.string(),
+    title: z.string(),
+    description: z.string().nullable(),
+    creator: GiteeUserSchema,
+    open_issues: z.number(),
+    closed_issues: z.number(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    due_on: z.string().nullable(),
+  }).nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  closed_at: z.string().nullable().optional(),
+  finished_at: z.string().nullable().optional(),
+  plan_started_at: z.string().nullable().optional(),
+  deadline: z.string().nullable().optional(),
+  security_hole: z.boolean().optional(),
+  // 添加 Gitee API 响应中可能包含的其他字段
+  parent_url: z.string().nullable().optional(),
+  parent_id: z.number().optional(),
+  depth: z.number().optional(),
+  comments: z.number().optional(),
+  priority: z.number().optional(),
+  issue_type: z.string().optional(),
+  program: z.any().nullable().optional(),
+  issue_state: z.string().optional(),
+  branch: z.any().nullable().optional(),
+  scheduled_time: z.number().optional(),
+  collaborators: z.array(z.any()).optional(),
+  repository: z.any().optional(),
+  issue_type_detail: z.any().optional(),
+  issue_state_detail: z.any().optional(),
+  assignees: z.union([z.array(z.any()), z.string(), z.null()]).optional(),
+});
+
+export const GiteeIssueCommentSchema = z.object({
+  id: z.number(),
+  body: z.string(),
+  user: GiteeUserSchema,
+  created_at: z.string(),
+  updated_at: z.string(),
+  html_url: z.string().url().optional(), // 可能不存在
+  target: z.object({  // target 是一个对象，不是字符串
+    issue: z.object({
+      id: z.number(),
+      title: z.string(),
+      number: z.string(), // Gitee API 返回的 number 是字符串格式
+    }).optional(),
+    pull_request: z.any().nullable(),
+  }),
+  source: z.any().nullable(), // source 可能为 null
+});
+
 // Type Exports
 export type GiteeUser = z.infer<typeof GiteeUserSchema>;
 export type GiteeRepository = z.infer<typeof GiteeRepositorySchema>;
@@ -236,3 +310,5 @@ export type GiteeCommit = z.infer<typeof GiteeCommitSchema>;
 export type GiteeFileContent = z.infer<typeof GiteeFileContentSchema>;
 export type GiteeDirectoryContent = z.infer<typeof GiteeDirectoryContentSchema>;
 export type GiteeFileOperationResult = z.infer<typeof GiteeFileOperationResultSchema>;
+export type GiteeIssue = z.infer<typeof GiteeIssueSchema>;
+export type GiteeIssueComment = z.infer<typeof GiteeIssueCommentSchema>;
