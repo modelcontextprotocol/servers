@@ -149,10 +149,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_issue",
         description: "Get details of a specific issue in a GitHub repository.",
         inputSchema: zodToJsonSchema(issues.GetIssueSchema)
+      },
+      {
+        name: "get_issue_comment",
+        description: "Get a specific comment from an issue or pull request",
+        inputSchema: zodToJsonSchema(issues.GetIssueCommentSchema),
       }
     ],
   };
 });
+
+
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
@@ -335,6 +342,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "get_issue_comment": {
+        const args = issues.GetIssueCommentSchema.parse(request.params.arguments);
+        const comment = await issues.getIssueComment(
+          args.owner,
+          args.repo,
+          args.comment_id
+        );
+        return { toolResult: comment };
+      }
+      
       default:
         throw new Error(`Unknown tool: ${request.params.name}`);
     }
