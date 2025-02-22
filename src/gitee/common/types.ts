@@ -301,6 +301,86 @@ export const GiteeIssueCommentSchema = z.object({
   source: z.any().nullable(), // source 可能为 null
 });
 
+export const GiteePullRequestSchema = z.object({
+  id: z.number(),
+  url: z.string().url(),
+  html_url: z.string().url(),
+  diff_url: z.string().url().optional(),
+  patch_url: z.string().url().optional(),
+  issue_url: z.string().url().optional(),
+  commits_url: z.string().url().optional(),
+  review_comments_url: z.string().url().optional(),
+  review_comment_url: z.string().url().optional(),
+  comments_url: z.string().url().optional(),
+  statuses_url: z.string().url().optional(),
+  number: z.number(),
+  state: z.string(),
+  title: z.string(),
+  body: z.string().nullable(),
+  assignees: z.array(GiteeUserSchema).optional(),
+  milestone: z.object({
+    id: z.number(),
+    number: z.number(),
+    state: z.string(),
+    title: z.string(),
+    description: z.string().nullable(),
+    creator: GiteeUserSchema,
+    open_issues: z.number(),
+    closed_issues: z.number(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    due_on: z.string().nullable(),
+  }).nullable().optional(),
+  locked: z.boolean().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  closed_at: z.string().nullable().optional(),
+  merged_at: z.string().nullable().optional(),
+  head: z.object({
+    label: z.string(),
+    ref: z.string(),
+    sha: z.string(),
+    user: GiteeUserSchema,
+    repo: z.lazy(() => GiteeRepositorySchema).optional(),
+  }),
+  base: z.object({
+    label: z.string(),
+    ref: z.string(),
+    sha: z.string(),
+    user: GiteeUserSchema,
+    repo: z.lazy(() => GiteeRepositorySchema).optional(),
+  }),
+  _links: z.object({
+    self: z.object({
+      href: z.string().url(),
+    }).optional(),
+    html: z.object({
+      href: z.string().url(),
+    }).optional(),
+    issue: z.object({
+      href: z.string().url(),
+    }).optional(),
+    comments: z.object({
+      href: z.string().url(),
+    }).optional(),
+    review_comments: z.object({
+      href: z.string().url(),
+    }).optional(),
+    review_comment: z.object({
+      href: z.string().url(),
+    }).optional(),
+    commits: z.object({
+      href: z.string().url(),
+    }).optional(),
+    statuses: z.object({
+      href: z.string().url(),
+    }).optional(),
+  }).optional(),
+  user: GiteeUserSchema,
+  merge_commit_sha: z.string().nullable().optional(),
+  mergeable: z.boolean().nullable().optional(),
+});
+
 // Type Exports
 export type GiteeUser = z.infer<typeof GiteeUserSchema>;
 export type GiteeRepository = z.infer<typeof GiteeRepositorySchema>;
@@ -312,3 +392,4 @@ export type GiteeDirectoryContent = z.infer<typeof GiteeDirectoryContentSchema>;
 export type GiteeFileOperationResult = z.infer<typeof GiteeFileOperationResultSchema>;
 export type GiteeIssue = z.infer<typeof GiteeIssueSchema>;
 export type GiteeIssueComment = z.infer<typeof GiteeIssueCommentSchema>;
+export type GiteePullRequest = z.infer<typeof GiteePullRequestSchema>;

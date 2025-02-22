@@ -6,6 +6,7 @@ import { VERSION } from "./common/version.js";
 import * as branchOperations from "./operations/branches.js";
 import * as fileOperations from "./operations/files.js";
 import * as issueOperations from "./operations/issues.js";
+import * as pullOperations from "./operations/pulls.js";
 import * as repoOperations from "./operations/repos.js";
 import * as userOperations from "./operations/users.js";
 import { z } from 'zod';
@@ -192,6 +193,69 @@ export function createGiteeMCPServer() {
     handler: async (params: any) => {
       const { owner, repo, issue_number, body } = params;
       return await issueOperations.addIssueComment(owner, repo, issue_number, body);
+    },
+  });
+
+  // 注册 Pull Request 操作工具
+  server.registerTool({
+    name: "create_pull_request",
+    description: "在 Gitee 仓库中创建 Pull Request",
+    schema: pullOperations.CreatePullRequestSchema,
+    handler: async (params: any) => {
+      const { owner, repo, ...rest } = params;
+      // 确保 owner 和 repo 参数存在
+      if (!owner || !repo) {
+        throw new Error("owner 和 repo 参数是必需的");
+      }
+      return await pullOperations.createPullRequest({ owner, repo, ...rest });
+    },
+  });
+
+  server.registerTool({
+    name: "list_pull_requests",
+    description: "列出 Gitee 仓库中的 Pull Requests",
+    schema: pullOperations.ListPullRequestsSchema,
+    handler: async (params: any) => {
+      const { owner, repo, ...options } = params;
+      return await pullOperations.listPullRequests(owner, repo, options);
+    },
+  });
+
+  server.registerTool({
+    name: "get_pull_request",
+    description: "获取 Gitee 仓库中的特定 Pull Request",
+    schema: pullOperations.GetPullRequestSchema,
+    handler: async (params: any) => {
+      const { owner, repo, pull_number } = params;
+      return await pullOperations.getPullRequest(owner, repo, pull_number);
+    },
+  });
+
+  server.registerTool({
+    name: "update_pull_request",
+    description: "更新 Gitee 仓库中的 Pull Request",
+    schema: pullOperations.UpdatePullRequestSchema,
+    handler: async (params: any) => {
+      const { owner, repo, pull_number, ...options } = params;
+      // 确保必需参数存在
+      if (!owner || !repo || pull_number === undefined) {
+        throw new Error("owner, repo 和 pull_number 参数是必需的");
+      }
+      return await pullOperations.updatePullRequest(owner, repo, pull_number, options);
+    },
+  });
+
+  server.registerTool({
+    name: "merge_pull_request",
+    description: "合并 Gitee 仓库中的 Pull Request",
+    schema: pullOperations.MergePullRequestSchema,
+    handler: async (params: any) => {
+      const { owner, repo, pull_number, ...options } = params;
+      // 确保必需参数存在
+      if (!owner || !repo || pull_number === undefined) {
+        throw new Error("owner, repo 和 pull_number 参数是必需的");
+      }
+      return await pullOperations.mergePullRequest(owner, repo, pull_number, options);
     },
   });
 
