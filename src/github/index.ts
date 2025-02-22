@@ -149,6 +149,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_issue",
         description: "Get details of a specific issue in a GitHub repository.",
         inputSchema: zodToJsonSchema(issues.GetIssueSchema)
+      },
+      {
+        name: "list_pull_requests",
+        description: "List and filter pull requests in a GitHub repository",
+        inputSchema: zodToJsonSchema(pulls.ListPullRequestsSchema),
+      },
+      {
+        name: "get_pull_request",
+        description: "Get details of a specific pull request in a GitHub repository",
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestSchema),
+      },
+      {
+        name: "get_pull_request_status",
+        description: "Get the combined status of all status checks for a pull request in a GitHub repository",
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestStatusSchema),
+      },
+      {
+        name: "get_pull_request_files",
+        description: "Get the list of files changed in a pull request in a GitHub repository",
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestFilesSchema),
       }
     ],
   };
@@ -332,6 +352,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const issue = await issues.getIssue(args.owner, args.repo, args.issue_number);
         return {
           content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
+        };
+      }
+
+      case "list_pull_requests": {
+        const args = pulls.ListPullRequestsSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const result = await pulls.listPullRequests(owner, repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "get_pull_request": {
+        const args = pulls.GetPullRequestSchema.parse(request.params.arguments);
+        const { owner, repo, pull_number } = args;
+        const result = await pulls.getPullRequest(owner, repo, pull_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "get_pull_request_status": {
+        const args = pulls.GetPullRequestStatusSchema.parse(request.params.arguments);
+        const { owner, repo, pull_number } = args;
+        const result = await pulls.getPullRequestStatus(owner, repo, pull_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "get_pull_request_files": {
+        const args = pulls.GetPullRequestFilesSchema.parse(request.params.arguments);
+        const { owner, repo, pull_number } = args;
+        const result = await pulls.getPullRequestStatus(owner, repo, pull_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       }
 
