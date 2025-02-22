@@ -55,8 +55,9 @@ Add this to your `claude_desktop_config.json`:
         "@modelcontextprotocol/server-aws-kb-retrieval"
       ],
       "env": {
-        "AWS_ACCESS_KEY_ID": "YOUR_ACCESS_KEY_HERE",
-        "AWS_SECRET_ACCESS_KEY": "YOUR_SECRET_ACCESS_KEY_HERE",
+        "AWS_ACCESS_KEY_ID": "YOUR_ACCESS_KEY_HERE", // optional, if using AWS_PROFILE or run it on EC2 with IAM role
+        "AWS_SECRET_ACCESS_KEY": "YOUR_SECRET_ACCESS_KEY_HERE", // optional, if using AWS_PROFILE or run it on EC2 with IAM role
+        "AWS_PROFILE": "YOUR_AWS_PROFILE_HERE",  // optional, if running it on EC2 with IAM role
         "AWS_REGION": "YOUR_AWS_REGION_HERE"
       }
     }
