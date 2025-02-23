@@ -149,6 +149,64 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_issue",
         description: "Get details of a specific issue in a GitHub repository.",
         inputSchema: zodToJsonSchema(issues.GetIssueSchema)
+      },
+      {
+        name: "get_pull_request_files",
+        description: "Get the files of a pull request in a GitHub repository.",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string(),
+          repo: z.string(),
+          pull_number: z.number()
+        }))
+      },
+      {
+        name: "get_pull_request_status",
+        description: "Get the combined status of all status checks for a pull request",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string(),
+          repo: z.string(),
+          pull_number: z.number()
+        }))
+      },
+      {
+        name: "update_pull_request_branch",
+        description: "Update a pull request branch with the latest changes from the base branch",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string(),
+          repo: z.string(),
+          pull_number: z.number(),
+          expected_head_sha: z.string().optional()
+        }))
+      },
+      {
+        name: "get_pull_request_comments",
+        description: "Get the review comments on a pull request",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string(),
+          repo: z.string(),
+          pull_number: z.number()
+        }))
+      },
+      {
+        name: "get_pull_request_reviews",
+        description: "Get the reviews on a pull request",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string(),
+          repo: z.string(),
+          pull_number: z.number()
+        }))
+      },
+      {
+        name: "merge_pull_request",
+        description: "Merge a pull request",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string(),
+          repo: z.string(),
+          pull_number: z.number(),
+          commit_title: z.string().optional(),
+          commit_message: z.string().optional(),
+          merge_method: z.enum(['merge', 'squash', 'rebase']).optional()
+        }))
       }
     ],
   };
@@ -332,6 +390,82 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const issue = await issues.getIssue(args.owner, args.repo, args.issue_number);
         return {
           content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
+        };
+      }
+
+      case "get_pull_request_files": {
+        const args = z.object({
+          owner: z.string(),
+          repo: z.string(),
+          pull_number: z.number()
+        }).parse(request.params.arguments);
+        const files = await pulls.getPullRequestFiles(args.owner, args.repo, args.pull_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(files, null, 2) }],
+        };
+      }
+
+      case "get_pull_request_status": {
+        const args = z.object({
+          owner: z.string(),
+          repo: z.string(),
+          pull_number: z.number()
+        }).parse(request.params.arguments);
+        const status = await pulls.getPullRequestStatus(args.owner, args.repo, args.pull_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(status, null, 2) }],
+        };
+      }
+
+      case "update_pull_request_branch": {
+        const args = z.object({
+          owner: z.string(),
+          repo: z.string(),
+          pull_number: z.number(),
+          expected_head_sha: z.string().optional()
+        }).parse(request.params.arguments);
+        await pulls.updatePullRequestBranch(args.owner, args.repo, args.pull_number, args.expected_head_sha);
+        return {
+          content: [{ type: "text", text: "Branch updated successfully" }],
+        };
+      }
+
+      case "get_pull_request_comments": {
+        const args = z.object({
+          owner: z.string(),
+          repo: z.string(),
+          pull_number: z.number()
+        }).parse(request.params.arguments);
+        const comments = await pulls.getPullRequestComments(args.owner, args.repo, args.pull_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(comments, null, 2) }],
+        };
+      }
+
+      case "get_pull_request_reviews": {
+        const args = z.object({
+          owner: z.string(),
+          repo: z.string(),
+          pull_number: z.number()
+        }).parse(request.params.arguments);
+        const reviews = await pulls.getPullRequestReviews(args.owner, args.repo, args.pull_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }],
+        };
+      }
+
+      case "merge_pull_request": {
+        const args = z.object({
+          owner: z.string(),
+          repo: z.string(),
+          pull_number: z.number(),
+          commit_title: z.string().optional(),
+          commit_message: z.string().optional(),
+          merge_method: z.enum(['merge', 'squash', 'rebase']).optional()
+        }).parse(request.params.arguments);
+        const result = await pulls.mergePullRequest(args.owner, args.repo, args.pull_number, args);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       }
 
