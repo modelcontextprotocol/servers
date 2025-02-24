@@ -58,16 +58,6 @@ export function createGiteeMCPServer() {
     },
   });
 
-  server.registerTool({
-    name: "search_repositories",
-    description: "搜索 Gitee 仓库",
-    schema: repoOperations.SearchRepositoriesSchema,
-    handler: async (params: any) => {
-      const { query, page, perPage } = params;
-      return await repoOperations.searchRepositories(query, page, perPage);
-    },
-  });
-
   // 注册分支操作工具
   server.registerTool({
     name: "create_branch",
