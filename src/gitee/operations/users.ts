@@ -2,43 +2,49 @@ import { z } from "zod";
 import { giteeRequest, validateOwnerName } from "../common/utils.js";
 import { GiteeUserSchema } from "../common/types.js";
 
-// Schema 定义
+// Schema definitions
 export const GetUserSchema = z.object({
-  username: z.string().describe("用户名"),
+  // 用户名
+  username: z.string().describe("Username"),
 });
 
 export const SearchUsersSchema = z.object({
-  q: z.string().describe("搜索关键词"),
-  page: z.number().int().min(1).default(1).optional().describe("当前的页码"),
-  per_page: z.number().int().min(1).max(100).default(30).optional().describe("每页的数量，最大为 100"),
-  sort: z.enum(["followers", "repositories", "joined"]).default("followers").optional().describe("排序字段"),
-  order: z.enum(["desc", "asc"]).default("desc").optional().describe("排序方式"),
+  // 搜索关键词
+  q: z.string().describe("Search keyword"),
+  // 当前的页码
+  page: z.number().int().min(1).default(1).optional().describe("Page number"),
+  // 每页的数量，最大为 100
+  per_page: z.number().int().min(1).max(100).default(30).optional().describe("Number of items per page, maximum 100"),
+  // 排序字段
+  sort: z.enum(["followers", "repositories", "joined"]).default("followers").optional().describe("Sort field"),
+  // 排序方式
+  order: z.enum(["desc", "asc"]).default("desc").optional().describe("Sort direction"),
 });
 
-// 类型导出
+// Type exports
 export type GetUserOptions = z.infer<typeof GetUserSchema>;
 export type SearchUsersOptions = z.infer<typeof SearchUsersSchema>;
 
-// 函数实现
+// Function implementations
 export async function getUser(username: string) {
   username = validateOwnerName(username);
-  
+
   const url = `https://gitee.com/api/v5/users/${username}`;
   const response = await giteeRequest(url, "GET");
-  
+
   return GiteeUserSchema.parse(response);
 }
 
 export async function getCurrentUser() {
   const url = "https://gitee.com/api/v5/user";
   const response = await giteeRequest(url, "GET");
-  
+
   return GiteeUserSchema.parse(response);
 }
 
 export async function searchUsers(options: SearchUsersOptions) {
   const { q, page, per_page, sort, order } = options;
-  
+
   const url = new URL("https://gitee.com/api/v5/search/users");
   url.searchParams.append("q", q);
   if (page !== undefined) {
@@ -55,7 +61,7 @@ export async function searchUsers(options: SearchUsersOptions) {
   }
 
   const response = await giteeRequest(url.toString(), "GET");
-  
+
   return {
     total_count: (response as any).total_count || 0,
     items: z.array(GiteeUserSchema).parse((response as any).items || []),

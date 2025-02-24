@@ -2,41 +2,59 @@ import { z } from "zod";
 import { giteeRequest, validateOwnerName, validateRepositoryName } from "../common/utils.js";
 import { GiteeDirectoryContentSchema, GiteeFileContentSchema, GiteeFileOperationResultSchema } from "../common/types.js";
 
-// Schema 定义
+// Schema definitions
 export const GetFileContentsSchema = z.object({
-  owner: z.string().describe("仓库所属空间地址 (企业、组织或个人的地址 path)"),
-  repo: z.string().describe("仓库路径 (path)"),
-  path: z.string().describe("文件路径"),
-  branch: z.string().optional().describe("分支名称，默认为仓库的默认分支"),
+  // 仓库所属空间地址 (企业、组织或个人的地址 path)
+  owner: z.string().describe("Repository owner path (enterprise, organization, or personal path)"),
+  // 仓库路径 (path)
+  repo: z.string().describe("Repository path"),
+  // 文件路径
+  path: z.string().describe("File path"),
+  // 分支名称，默认为仓库的默认分支
+  branch: z.string().optional().describe("Branch name, defaults to the repository's default branch"),
 });
 
 export const CreateOrUpdateFileSchema = z.object({
-  owner: z.string().describe("仓库所属空间地址 (企业、组织或个人的地址 path)"),
-  repo: z.string().describe("仓库路径 (path)"),
-  path: z.string().describe("文件路径"),
-  content: z.string().describe("文件内容"),
-  message: z.string().describe("提交信息"),
-  branch: z.string().optional().describe("分支名称，默认为仓库的默认分支"),
-  sha: z.string().optional().describe("文件的 SHA，更新文件时必须提供"),
+  // 仓库所属空间地址 (企业、组织或个人的地址 path)
+  owner: z.string().describe("Repository owner path (enterprise, organization, or personal path)"),
+  // 仓库路径 (path)
+  repo: z.string().describe("Repository path"),
+  // 文件路径
+  path: z.string().describe("File path"),
+  // 文件内容
+  content: z.string().describe("File content"),
+  // 提交信息
+  message: z.string().describe("Commit message"),
+  // 分支名称，默认为仓库的默认分支
+  branch: z.string().optional().describe("Branch name, defaults to the repository's default branch"),
+  // 文件的 SHA，更新文件时必须提供
+  sha: z.string().optional().describe("File SHA, required when updating an existing file"),
 });
 
 export const PushFilesSchema = z.object({
-  owner: z.string().describe("仓库所属空间地址 (企业、组织或个人的地址 path)"),
-  repo: z.string().describe("仓库路径 (path)"),
-  branch: z.string().optional().describe("分支名称，默认为仓库的默认分支"),
-  message: z.string().describe("提交信息"),
+  // 仓库所属空间地址 (企业、组织或个人的地址 path)
+  owner: z.string().describe("Repository owner path (enterprise, organization, or personal path)"),
+  // 仓库路径 (path)
+  repo: z.string().describe("Repository path"),
+  // 分支名称，默认为仓库的默认分支
+  branch: z.string().optional().describe("Branch name, defaults to the repository's default branch"),
+  // 提交信息
+  message: z.string().describe("Commit message"),
+  // 要提交的文件列表
   files: z.array(z.object({
-    path: z.string().describe("文件路径"),
-    content: z.string().describe("文件内容"),
-  })).describe("要提交的文件列表"),
+    // 文件路径
+    path: z.string().describe("File path"),
+    // 文件内容
+    content: z.string().describe("File content"),
+  })).describe("List of files to commit"),
 });
 
-// 类型导出
+// Type exports
 export type GetFileContentsOptions = z.infer<typeof GetFileContentsSchema>;
 export type CreateOrUpdateFileOptions = z.infer<typeof CreateOrUpdateFileSchema>;
 export type PushFilesOptions = z.infer<typeof PushFilesSchema>;
 
-// 函数实现
+// Function implementations
 export async function getFileContents(
   owner: string,
   repo: string,
@@ -53,7 +71,7 @@ export async function getFileContents(
 
   const response = await giteeRequest(url.toString(), "GET");
 
-  // 根据返回类型判断是文件还是目录
+  // Determine whether it is a file or directory based on the return type.
   if (Array.isArray(response)) {
     return GiteeDirectoryContentSchema.parse(response);
   } else {
@@ -73,7 +91,7 @@ export async function createOrUpdateFile(
   owner = validateOwnerName(owner);
   repo = validateRepositoryName(repo);
 
-  // Base64 编码内容
+  // Base64 encode the content
   const contentBase64 = Buffer.from(content).toString("base64");
 
   const url = `https://gitee.com/api/v5/repos/${owner}/${repo}/contents/${path}`;
@@ -103,13 +121,13 @@ export async function pushFiles(
   files: { path: string; content: string }[],
   message: string
 ) {
-  // 由于 Gitee API 不支持一次提交多个文件，我们需要逐个提交
-  // 这里简化处理，实际上应该使用 Git Tree API 来实现批量提交
+  // Since the Gitee API does not support submitting multiple files in a single commit, we need to submit them one by one.
+  // This simplification assumes that Git Tree API is used to implement batch submission.
   const results = [];
 
   for (const file of files) {
     try {
-      // 先尝试获取文件，判断是创建还是更新
+      // Try to get the file contents, to determine whether it is created or updated
       let sha: string | undefined;
       try {
         const existingFile = await getFileContents(owner, repo, file.path, branch);
@@ -117,7 +135,7 @@ export async function pushFiles(
           sha = existingFile.sha;
         }
       } catch (error) {
-        // 文件不存在，创建新文件
+        // The file does not exist, creating a new file.
       }
 
       const result = await createOrUpdateFile(

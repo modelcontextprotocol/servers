@@ -53,7 +53,7 @@ export class MCPServer {
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       try {
         if (!request.params.arguments) {
-          throw new Error("Parameters are necessary.");
+          throw new Error("Parameters are required.");
         }
 
         const tool = this.tools.get(request.params.name);

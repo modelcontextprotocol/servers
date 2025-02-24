@@ -2,35 +2,48 @@ import { z } from "zod";
 import { giteeRequest, validateBranchName, validateOwnerName, validateRepositoryName } from "../common/utils.js";
 import { GiteeCompleteBranchSchema, GiteeBranchSchema } from "../common/types.js";
 
-// Schema 定义
+// Schema definitions
 export const CreateBranchSchema = z.object({
-  owner: z.string().describe("仓库所属空间地址 (企业、组织或个人的地址 path)"),
-  repo: z.string().describe("仓库路径 (path)"),
-  branch_name: z.string().describe("新创建的分支名称"),
-  refs: z.string().default("master").describe("起点名称，默认：master"),
+  // 仓库所属空间地址 (企业、组织或个人的地址 path)
+  owner: z.string().describe("Repository owner path (enterprise, organization, or personal path)"),
+  // 仓库路径 (path)
+  repo: z.string().describe("Repository path"),
+  // 新创建的分支名称
+  branch_name: z.string().describe("Name for the new branch"),
+  // 起点名称，默认：master
+  refs: z.string().default("master").describe("Source reference for the branch, default: master"),
 });
 
 export const ListBranchesSchema = z.object({
-  owner: z.string().describe("仓库所属空间地址 (企业、组织或个人的地址 path)"),
-  repo: z.string().describe("仓库路径 (path)"),
-  sort: z.enum(["name", "updated"]).default("name").optional().describe("排序字段"),
-  direction: z.enum(["asc", "desc"]).default("asc").optional().describe("排序方向"),
-  page: z.number().int().default(1).optional().describe("当前的页码"),
-  per_page: z.number().int().min(1).max(100).optional().describe("每页的数量，最大为 100"),
+  // 仓库所属空间地址 (企业、组织或个人的地址 path)
+  owner: z.string().describe("Repository owner path (enterprise, organization, or personal path)"),
+  // 仓库路径 (path)
+  repo: z.string().describe("Repository path"),
+  // 排序字段
+  sort: z.enum(["name", "updated"]).default("name").optional().describe("Sort field"),
+  // 排序方向
+  direction: z.enum(["asc", "desc"]).default("asc").optional().describe("Sort direction"),
+  // 当前的页码
+  page: z.number().int().default(1).optional().describe("Page number"),
+  // 每页的数量，最大为 100
+  per_page: z.number().int().min(1).max(100).optional().describe("Number of items per page, maximum 100"),
 });
 
 export const GetBranchSchema = z.object({
-  owner: z.string().describe("仓库所属空间地址 (企业、组织或个人的地址 path)"),
-  repo: z.string().describe("仓库路径 (path)"),
-  branch: z.string().describe("分支名称"),
+  // 仓库所属空间地址 (企业、组织或个人的地址 path)
+  owner: z.string().describe("Repository owner path (enterprise, organization, or personal path)"),
+  // 仓库路径 (path)
+  repo: z.string().describe("Repository path"),
+  // 分支名称
+  branch: z.string().describe("Branch name"),
 });
 
-// 类型导出
+// Type exports
 export type CreateBranchOptions = z.infer<typeof CreateBranchSchema>;
 export type ListBranchesOptions = z.infer<typeof ListBranchesSchema>;
 export type GetBranchOptions = z.infer<typeof GetBranchSchema>;
 
-// 函数实现
+// Function implementations
 export async function createBranchFromRef(
   owner: string,
   repo: string,

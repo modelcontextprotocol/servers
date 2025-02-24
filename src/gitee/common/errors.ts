@@ -58,7 +58,7 @@ export function isGiteeError(error: unknown): error is GiteeError {
 }
 
 export function createGiteeError(status: number, responseBody: unknown): GiteeError {
-  let message = "Gitee API 请求失败";
+  let message = "Gitee API request failed";
   let resetAt: Date | undefined;
 
   if (typeof responseBody === "object" && responseBody !== null) {
@@ -69,7 +69,7 @@ export function createGiteeError(status: number, responseBody: unknown): GiteeEr
     }
 
     if (body.documentation_url && typeof body.documentation_url === "string") {
-      message += ` - 文档: ${body.documentation_url}`;
+      message += ` - Documentation: ${body.documentation_url}`;
     }
   }
 
@@ -87,7 +87,7 @@ export function createGiteeError(status: number, responseBody: unknown): GiteeEr
     case 429:
       return new GiteeRateLimitError(
         message,
-        resetAt || new Date(Date.now() + 60 * 1000) // 默认 1 分钟后重置
+        resetAt || new Date(Date.now() + 60 * 1000) // Default: reset after 1 minute
       );
     default:
       return new GiteeError(message);
