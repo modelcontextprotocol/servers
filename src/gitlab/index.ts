@@ -20,6 +20,11 @@ import {
   GitLabSearchResponseSchema,
   GitLabTreeSchema,
   GitLabCommitSchema,
+  GitLabCommentSchema,
+  GitLabEpicSchema,
+  GitLabIssueDetailsSchema,
+  GitLabMergeRequestDetailsSchema,
+  GitLabEpicDetailsSchema,
   CreateRepositoryOptionsSchema,
   CreateIssueOptionsSchema,
   CreateMergeRequestOptionsSchema,
@@ -33,6 +38,9 @@ import {
   CreateMergeRequestSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
+  GetIssueDetailsSchema,
+  GetMergeRequestDetailsSchema,
+  GetEpicDetailsSchema,
   type GitLabFork,
   type GitLabReference,
   type GitLabRepository,
@@ -43,6 +51,11 @@ import {
   type GitLabSearchResponse,
   type GitLabTree,
   type GitLabCommit,
+  type GitLabComment,
+  type GitLabEpic,
+  type GitLabIssueDetails,
+  type GitLabMergeRequestDetails,
+  type GitLabEpicDetails,
   type FileOperation,
 } from './schemas.js';
 
@@ -126,6 +139,9 @@ async function getDefaultBranchRef(projectId: string): Promise<string> {
   }
 
   const project = GitLabRepositorySchema.parse(await response.json());
+  if (!project.default_branch) {
+    throw new Error(`Could not determine default branch for project ${projectId}`);
+  }
   return project.default_branch;
 }
 
@@ -351,6 +367,210 @@ async function searchProjects(
   });
 }
 
+async function getIssueComments(
+  projectId: string,
+  issueIid: number
+): Promise<GitLabComment[]> {
+  try {
+    const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/issues/${issueIid}/notes`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    const responseData = await response.json() as unknown[];
+    console.error('Raw GitLab comments response:', JSON.stringify(responseData.slice(0, 2), null, 2));
+    
+    return z.array(GitLabCommentSchema).parse(responseData);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('Comment schema validation error:', JSON.stringify(error.errors, null, 2));
+    }
+    throw error;
+  }
+}
+
+async function getMergeRequestComments(
+  projectId: string,
+  mergeRequestIid: number
+): Promise<GitLabComment[]> {
+  try {
+    const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/merge_requests/${mergeRequestIid}/notes`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    const responseData = await response.json() as unknown[];
+    console.error('Raw GitLab MR comments response:', JSON.stringify(responseData.slice(0, 2), null, 2));
+    
+    return z.array(GitLabCommentSchema).parse(responseData);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('Comment schema validation error:', JSON.stringify(error.errors, null, 2));
+    }
+    throw error;
+  }
+}
+
+async function getEpicComments(
+  groupId: string,
+  epicIid: number
+): Promise<GitLabComment[]> {
+  try {
+    const url = `${GITLAB_API_URL}/groups/${encodeURIComponent(groupId)}/epics/${epicIid}/notes`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    const responseData = await response.json() as unknown[];
+    console.error('Raw GitLab epic comments response:', JSON.stringify(responseData.slice(0, 2), null, 2));
+    
+    return z.array(GitLabCommentSchema).parse(responseData);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('Epic comment schema validation error:', JSON.stringify(error.errors, null, 2));
+    }
+    throw error;
+  }
+}
+
+async function getIssueDetails(
+  projectId: string,
+  issueIid: number
+): Promise<GitLabIssueDetails> {
+  try {
+    // First, get the issue details
+    const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/issues/${issueIid}`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    const responseData = await response.json() as Record<string, unknown>;
+    console.error('Raw GitLab issue response:', JSON.stringify(responseData, null, 2));
+    
+    const issue = GitLabIssueSchema.parse(responseData);
+    
+    // Then, get comments
+    try {
+      const comments = await getIssueComments(projectId, issueIid);
+      return { ...issue, comments };
+    } catch (error) {
+      // Return issue without comments if we can't fetch them
+      console.error(`Error fetching issue comments: ${error}`);
+      return issue;
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('Schema validation error:', JSON.stringify(error.errors, null, 2));
+      throw new Error(`Issue schema validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+    }
+    throw error;
+  }
+}
+
+async function getMergeRequestDetails(
+  projectId: string,
+  mergeRequestIid: number
+): Promise<GitLabMergeRequestDetails> {
+  try {
+    // First, get the merge request details
+    const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/merge_requests/${mergeRequestIid}`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    const responseData = await response.json() as Record<string, unknown>;
+    console.error('Raw GitLab merge request response:', JSON.stringify(responseData, null, 2));
+    
+    const mergeRequest = GitLabMergeRequestSchema.parse(responseData);
+    
+    // Then, get comments
+    try {
+      const comments = await getMergeRequestComments(projectId, mergeRequestIid);
+      return { ...mergeRequest, comments };
+    } catch (error) {
+      // Return MR without comments if we can't fetch them
+      console.error(`Error fetching merge request comments: ${error}`);
+      return mergeRequest;
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('Schema validation error:', JSON.stringify(error.errors, null, 2));
+      throw new Error(`Merge request schema validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+    }
+    throw error;
+  }
+}
+
+async function getEpicDetails(
+  groupId: string,
+  epicIid: number
+): Promise<GitLabEpicDetails> {
+  try {
+    // First, get the epic details
+    const url = `${GITLAB_API_URL}/groups/${encodeURIComponent(groupId)}/epics/${epicIid}`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    const responseData = await response.json() as Record<string, unknown>;
+    console.error('Raw GitLab epic response:', JSON.stringify(responseData, null, 2));
+    
+    const epic = GitLabEpicSchema.parse(responseData);
+    
+    // Then, get comments
+    try {
+      const comments = await getEpicComments(groupId, epicIid);
+      return { ...epic, comments };
+    } catch (error) {
+      // Return epic without comments if we can't fetch them
+      console.error(`Error fetching epic comments: ${error}`);
+      return epic;
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('Schema validation error:', JSON.stringify(error.errors, null, 2));
+      throw new Error(`Epic schema validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+    }
+    throw error;
+  }
+}
+
 async function createRepository(
   options: z.infer<typeof CreateRepositoryOptionsSchema>
 ): Promise<GitLabRepository> {
@@ -422,6 +642,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_branch",
         description: "Create a new branch in a GitLab project",
         inputSchema: zodToJsonSchema(CreateBranchSchema)
+      },
+      {
+        name: "get_issue_details",
+        description: "Get detailed information about an issue, including comments",
+        inputSchema: zodToJsonSchema(GetIssueDetailsSchema)
+      },
+      {
+        name: "get_merge_request_details",
+        description: "Get detailed information about a merge request, including comments",
+        inputSchema: zodToJsonSchema(GetMergeRequestDetailsSchema)
+      },
+      {
+        name: "get_epic_details",
+        description: "Get detailed information about an epic, including comments",
+        inputSchema: zodToJsonSchema(GetEpicDetailsSchema)
       }
     ]
   };
@@ -509,6 +744,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { project_id, ...options } = args;
         const mergeRequest = await createMergeRequest(project_id, options);
         return { content: [{ type: "text", text: JSON.stringify(mergeRequest, null, 2) }] };
+      }
+
+      case "get_issue_details": {
+        const args = GetIssueDetailsSchema.parse(request.params.arguments);
+        const issueDetails = await getIssueDetails(args.project_id, args.issue_iid);
+        return { content: [{ type: "text", text: JSON.stringify(issueDetails, null, 2) }] };
+      }
+
+      case "get_merge_request_details": {
+        const args = GetMergeRequestDetailsSchema.parse(request.params.arguments);
+        const mrDetails = await getMergeRequestDetails(args.project_id, args.merge_request_iid);
+        return { content: [{ type: "text", text: JSON.stringify(mrDetails, null, 2) }] };
+      }
+
+      case "get_epic_details": {
+        const args = GetEpicDetailsSchema.parse(request.params.arguments);
+        const epicDetails = await getEpicDetails(args.group_id, args.epic_iid);
+        return { content: [{ type: "text", text: JSON.stringify(epicDetails, null, 2) }] };
       }
 
       default:
