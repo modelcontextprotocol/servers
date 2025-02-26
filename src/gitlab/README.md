@@ -2,13 +2,14 @@
 
 MCP Server for the GitLab API, enabling project management, file operations, and more.
 
-### Features
+## Features
 
 - **Automatic Branch Creation**: When creating/updating files or pushing changes, branches are automatically created if they don't exist
 - **Comprehensive Error Handling**: Clear error messages for common issues
 - **Git History Preservation**: Operations maintain proper Git history without force pushing
 - **Batch Operations**: Support for both single-file and multi-file operations
-
+- **Detailed Information**: Enhanced support for detailed issue, merge request, and epic views with comments
+- **User Activity**: Get user activity events for specific users
 
 ## Tools
 
@@ -95,6 +96,35 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `ref` (optional string): Source branch/commit for new branch
    - Returns: Created branch reference
 
+10. `get_issue_details`
+    - Get detailed information about an issue, including comments
+    - Inputs:
+      - `project_id` (string): Project ID or URL-encoded path
+      - `issue_iid` (number): Issue IID
+    - Returns: Issue details including comments
+
+11. `get_merge_request_details`
+    - Get detailed information about a merge request, including comments
+    - Inputs:
+      - `project_id` (string): Project ID or URL-encoded path
+      - `merge_request_iid` (number): Merge Request IID
+    - Returns: Merge request details including comments
+
+12. `get_epic_details`
+    - Get detailed information about an epic, including comments
+    - Inputs:
+      - `group_id` (string): Group ID or URL-encoded path
+      - `epic_iid` (number): Epic IID
+    - Returns: Epic details including comments
+
+13. `get_user_activity`
+    - Get user activity events for a specific user
+    - Inputs:
+      - `user_id` (string): User ID or username
+      - `page` (optional number): Page number (default: 1)
+      - `per_page` (optional number): Items per page (default: 20)
+    - Returns: User activity events and basic user information
+
 ## Setup
 
 ### Personal Access Token
@@ -112,7 +142,7 @@ Add the following to your `claude_desktop_config.json`:
 #### Docker
 ```json
 {
-  "mcpServers": { 
+  "mcpServers": {
     "gitlab": {
       "command": "docker",
       "args": [
