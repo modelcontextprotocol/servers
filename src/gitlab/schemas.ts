@@ -324,7 +324,7 @@ export const GetEpicDetailsSchema = z.object({
 // Comment related schemas
 export const GitLabCommentSchema = z.object({
   id: z.number(),
-  note: z.string(),
+  content: z.string().optional(), // Field to consistently access comment content
   author: GitLabUserSchema.optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),

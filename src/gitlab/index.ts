@@ -390,9 +390,27 @@ async function getIssueComments(
     }
 
     const responseData = await response.json() as unknown[];
-    console.error('Raw GitLab comments response:', JSON.stringify(responseData.slice(0, 2), null, 2));
     
-    return z.array(GitLabCommentSchema).parse(responseData);
+    // Process response data to ensure comment text is included
+    const comments = (responseData as any[]).map(comment => {
+      // Determine the actual comment content from available fields
+      const content = comment.body || comment.note || '';
+      
+      return {
+        id: comment.id,
+        // Only include content field to avoid duplication
+        content,
+        author: comment.author,
+        created_at: comment.created_at,
+        updated_at: comment.updated_at,
+        system: comment.system,
+        noteable_id: comment.noteable_id,
+        noteable_type: comment.noteable_type,
+        web_url: comment.web_url
+      };
+    });
+    
+    return comments;
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error('Comment schema validation error:', JSON.stringify(error.errors, null, 2));
@@ -418,9 +436,35 @@ async function getMergeRequestComments(
     }
 
     const responseData = await response.json() as unknown[];
-    console.error('Raw GitLab MR comments response:', JSON.stringify(responseData.slice(0, 2), null, 2));
     
-    return z.array(GitLabCommentSchema).parse(responseData);
+    // Process response data to ensure comment text is included
+    const comments = (responseData as any[]).map(comment => {
+      // Determine the actual comment content from available fields
+      const content = comment.body || comment.note || '';
+      
+      return {
+        id: comment.id,
+        // Only include content field to avoid duplication
+        content,
+        author: comment.author,
+        created_at: comment.created_at,
+        updated_at: comment.updated_at,
+        system: comment.system,
+        noteable_id: comment.noteable_id,
+        noteable_type: comment.noteable_type,
+        web_url: comment.web_url,
+        // Include additional fields that might be useful
+        attachment: comment.attachment,
+        resolvable: comment.resolvable,
+        resolved: comment.resolved,
+        resolved_by: comment.resolved_by,
+        resolved_at: comment.resolved_at,
+        discussion_id: comment.discussion_id,
+        position: comment.position
+      };
+    });
+    
+    return comments;
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error('Comment schema validation error:', JSON.stringify(error.errors, null, 2));
@@ -446,9 +490,27 @@ async function getEpicComments(
     }
 
     const responseData = await response.json() as unknown[];
-    console.error('Raw GitLab epic comments response:', JSON.stringify(responseData.slice(0, 2), null, 2));
     
-    return z.array(GitLabCommentSchema).parse(responseData);
+    // Process response data to ensure comment text is included
+    const comments = (responseData as any[]).map(comment => {
+      // Determine the actual comment content from available fields
+      const content = comment.body || comment.note || '';
+      
+      return {
+        id: comment.id,
+        // Only include content field to avoid duplication
+        content,
+        author: comment.author,
+        created_at: comment.created_at,
+        updated_at: comment.updated_at,
+        system: comment.system,
+        noteable_id: comment.noteable_id,
+        noteable_type: comment.noteable_type,
+        web_url: comment.web_url
+      };
+    });
+    
+    return comments;
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error('Epic comment schema validation error:', JSON.stringify(error.errors, null, 2));
@@ -475,7 +537,6 @@ async function getIssueDetails(
     }
 
     const responseData = await response.json() as Record<string, unknown>;
-    console.error('Raw GitLab issue response:', JSON.stringify(responseData, null, 2));
     
     const issue = GitLabIssueSchema.parse(responseData);
     
@@ -515,7 +576,6 @@ async function getMergeRequestDetails(
     }
 
     const responseData = await response.json() as Record<string, unknown>;
-    console.error('Raw GitLab merge request response:', JSON.stringify(responseData, null, 2));
     
     const mergeRequest = GitLabMergeRequestSchema.parse(responseData);
     
@@ -581,7 +641,6 @@ async function getUserActivity(
     }
 
     const responseData = await response.json() as unknown[];
-    console.error('Raw GitLab user activity response:', JSON.stringify(responseData.slice(0, 2), null, 2));
     
     // Process response data with minimal validation
     // Skip schema validation which is causing issues
@@ -645,7 +704,6 @@ async function getEpicDetails(
     }
 
     const responseData = await response.json() as Record<string, unknown>;
-    console.error('Raw GitLab epic response:', JSON.stringify(responseData, null, 2));
     
     const epic = GitLabEpicSchema.parse(responseData);
     

@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-gitlab",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "MCP server for using the GitLab API",
   "license": "MIT",
   "author": "GitLab, PBC (https://gitlab.com)",
