@@ -19,6 +19,7 @@
     "link-all": "npm link --workspaces"
   },
   "dependencies": {
+    "@modelcontextprotocol/server-simple": "*",
     "@modelcontextprotocol/server-everything": "*",
     "@modelcontextprotocol/server-gdrive": "*",
     "@modelcontextprotocol/server-postgres": "*",
