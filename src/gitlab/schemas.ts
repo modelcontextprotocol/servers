@@ -351,6 +351,33 @@ export const GitLabEpicSchema = z.object({
   labels: z.array(GitLabLabelSchema).optional()
 }).partial(); // Make all fields optional to handle API variations
 
+// User activity related schemas
+export const GitLabEventSchema = z.object({
+  id: z.number(),
+  project_id: z.number().optional().nullable(),
+  action_name: z.string(),
+  target_id: z.number().optional().nullable(),
+  target_type: z.string().optional().nullable(),
+  author_id: z.number(),
+  target_title: z.string().optional().nullable(),
+  created_at: z.string(),
+  author: GitLabUserSchema.optional(),
+  push_data: z.record(z.string(), z.any()).optional(),
+  note: z.record(z.string(), z.any()).optional()
+}).partial();
+
+export const GitLabUserActivitySchema = z.object({
+  events: z.array(GitLabEventSchema),
+  user: GitLabUserSchema.optional()
+}).partial();
+
+export const GetUserActivitySchema = z.object({
+  user_id: z.string().describe("User ID or username"),
+  per_page: z.number().optional().describe("Number of items per page (default: 20)"),
+  page: z.number().optional().describe("Page number (default: 1)")
+});
+
+
 // Response schemas for detailed endpoints
 export const GitLabIssueDetailsSchema = GitLabIssueSchema.extend({
   comments: z.array(GitLabCommentSchema).optional()
@@ -388,3 +415,5 @@ export type GitLabEpic = z.infer<typeof GitLabEpicSchema>;
 export type GitLabIssueDetails = z.infer<typeof GitLabIssueDetailsSchema>;
 export type GitLabMergeRequestDetails = z.infer<typeof GitLabMergeRequestDetailsSchema>;
 export type GitLabEpicDetails = z.infer<typeof GitLabEpicDetailsSchema>;
+export type GitLabEvent = z.infer<typeof GitLabEventSchema>;
+export type GitLabUserActivity = z.infer<typeof GitLabUserActivitySchema>;
