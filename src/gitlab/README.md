@@ -95,6 +95,31 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `ref` (optional string): Source branch/commit for new branch
    - Returns: Created branch reference
 
+10. `comment_to_commit`
+   - Add a comment to a specific commit
+   - Inputs:
+     - `project_id` (string): Project ID or URL-encoded path
+     - `commit_sha` (string): SHA of the commit to comment on
+     - `note` (string): Content of the comment
+     - `path` (optional string): File path to comment on
+     - `line` (optional number): Line number in the file
+     - `line_type` (optional string): 'new' or 'old' for diff comments
+   - Returns: Created comment details
+
+11. `create_mr_thread`
+   - Create a new thread in a merge request
+   - Inputs:
+     - `project_id` (string): Project ID or URL-encoded path
+     - `merge_request_iid` (number): Internal ID of the merge request
+     - `body` (string): Content of the thread comment
+     - `position` (optional object): Position in the diff
+       - `position_type`: 'text' or 'image'
+       - `new_path`: Path to the file
+       - `new_line`: Line number in new version
+       - `old_path`: Path to the file in base
+       - `old_line`: Line number in base version
+   - Returns: Created thread details
+
 ## Setup
 
 ### Personal Access Token
