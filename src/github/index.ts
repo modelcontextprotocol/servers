@@ -149,6 +149,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_issue",
         description: "Get details of a specific issue in a GitHub repository.",
         inputSchema: zodToJsonSchema(issues.GetIssueSchema)
+      },
+      {
+        name: "get_pr_files",
+        description: "Get the list of files changed in a pull request with their relative paths",
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestFilesSchema)
+      },
+      {
+        name: "get_pr_diff",
+        description: "Get the diff content of a pull request, optionally filtered by a specific file",
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestDiffSchema)
       }
     ],
   };
@@ -332,6 +342,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const issue = await issues.getIssue(args.owner, args.repo, args.issue_number);
         return {
           content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
+        };
+      }
+
+      case "get_pr_files": {
+        const args = pulls.GetPullRequestFilesSchema.parse(request.params.arguments);
+        const files = await pulls.getPullRequestFiles(args.owner, args.repo, args.pull_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(files, null, 2) }],
+        };
+      }
+
+      case "get_pr_diff": {
+        const args = pulls.GetPullRequestDiffSchema.parse(request.params.arguments);
+        const diff = await pulls.getPullRequestDiff(args.owner, args.repo, args.pull_number, args.file);
+        return {
+          content: [{ type: "text", text: diff }],
         };
       }
 

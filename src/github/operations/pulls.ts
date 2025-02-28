@@ -300,3 +300,73 @@ export async function getPullRequestStatus(
   );
   return CombinedStatusSchema.parse(response);
 }
+
+// New schema for get_pr_diff
+export const GetPullRequestDiffSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number"),
+  file: z.string().optional().describe("Optional file path to filter the diff by")
+});
+
+// New function to get PR diff
+export async function getPullRequestDiff(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  file?: string
+): Promise<string> {
+  // Set Accept header to get diff format
+  const headers = {
+    Accept: "application/vnd.github.v3.diff"
+  };
+
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    { headers }
+  );
+
+  // If file is specified, filter the diff to only include that file
+  if (file) {
+    const diffContent = response as string;
+    const diffLines = diffContent.split('\n');
+    let result: string[] = [];
+    let inTargetFile = false;
+    let currentFileHeader: string[] = [];
+
+    for (const line of diffLines) {
+      // Check for diff file headers (start with "diff --git")
+      if (line.startsWith('diff --git')) {
+        // If we were in the target file, we're done with it now
+        if (inTargetFile) {
+          break;
+        }
+
+        // Reset for new file
+        currentFileHeader = [line];
+        inTargetFile = false;
+
+        // Check if this is our target file
+        if (line.includes(`/${file}`) || line.includes(` ${file}`)) {
+          inTargetFile = true;
+        }
+      }
+      // If we're in the file header section, keep collecting header lines
+      else if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) {
+        currentFileHeader.push(line);
+        // If we've found the complete header and this is our target file, add it to result
+        if (line.startsWith('@@') && inTargetFile) {
+          result.push(...currentFileHeader);
+        }
+      }
+      // If we're in the target file, add content lines
+      else if (inTargetFile) {
+        result.push(line);
+      }
+    }
+
+    return result.length > 0 ? result.join('\n') : `No changes found for file: ${file}`;
+  }
+
+  return response as string;
+}
