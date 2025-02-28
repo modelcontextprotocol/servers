@@ -341,16 +341,16 @@ export async function getPullRequestDiff(
         if (inTargetFile) {
           break;
         }
-        
+
         // Reset for new file
         currentFileHeader = [line];
         inTargetFile = false;
-        
+
         // Check if this is our target file
         if (line.includes(`/${file}`) || line.includes(` ${file}`)) {
           inTargetFile = true;
         }
-      } 
+      }
       // If we're in the file header section, keep collecting header lines
       else if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) {
         currentFileHeader.push(line);
