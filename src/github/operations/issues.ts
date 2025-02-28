@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { githubRequest, buildUrl } from "../common/utils.js";
+import { GITHUB_API_URL } from "../common/config.js";
 
 export const GetIssueSchema = z.object({
   owner: z.string(),
@@ -53,7 +54,7 @@ export const UpdateIssueOptionsSchema = z.object({
 });
 
 export async function getIssue(owner: string, repo: string, issue_number: number) {
-  return githubRequest(`https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}`);
+  return githubRequest(`${GITHUB_API_URL}/repos/${owner}/${repo}/issues/${issue_number}`);
 }
 
 export async function addIssueComment(
@@ -62,7 +63,7 @@ export async function addIssueComment(
   issue_number: number,
   body: string
 ) {
-  return githubRequest(`https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}/comments`, {
+  return githubRequest(`${GITHUB_API_URL}/repos/${owner}/${repo}/issues/${issue_number}/comments`, {
     method: "POST",
     body: { body },
   });
@@ -74,7 +75,7 @@ export async function createIssue(
   options: z.infer<typeof CreateIssueOptionsSchema>
 ) {
   return githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/issues`,
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/issues`,
     {
       method: "POST",
       body: options,
@@ -98,7 +99,7 @@ export async function listIssues(
   };
 
   return githubRequest(
-    buildUrl(`https://api.github.com/repos/${owner}/${repo}/issues`, urlParams)
+    buildUrl(`${GITHUB_API_URL}/repos/${owner}/${repo}/issues`, urlParams)
   );
 }
 
@@ -109,7 +110,7 @@ export async function updateIssue(
   options: Omit<z.infer<typeof UpdateIssueOptionsSchema>, "owner" | "repo" | "issue_number">
 ) {
   return githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}`,
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/issues/${issue_number}`,
     {
       method: "PATCH",
       body: options,

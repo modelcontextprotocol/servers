@@ -1,4 +1,5 @@
 import { getUserAgent } from "universal-user-agent";
+import { GITHUB_API_URL } from "./config.js";
 import { createGitHubError } from "./errors.js";
 import { VERSION } from "./version.js";
 
@@ -114,7 +115,7 @@ export async function checkBranchExists(
 ): Promise<boolean> {
   try {
     await githubRequest(
-      `https://api.github.com/repos/${owner}/${repo}/branches/${branch}`
+      `${GITHUB_API_URL}/repos/${owner}/${repo}/branches/${branch}`
     );
     return true;
   } catch (error) {
@@ -127,7 +128,7 @@ export async function checkBranchExists(
 
 export async function checkUserExists(username: string): Promise<boolean> {
   try {
-    await githubRequest(`https://api.github.com/users/${username}`);
+    await githubRequest(`${GITHUB_API_URL}/users/${username}`);
     return true;
   } catch (error) {
     if (error && typeof error === "object" && "status" in error && error.status === 404) {
