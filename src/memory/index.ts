@@ -9,6 +9,8 @@ import {
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { Entity, Relation, KnowledgeGraph } from './types.js';
+import { searchGraph } from './query-language.js';
 
 // Define memory file path using environment variable with fallback
 const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
@@ -19,24 +21,6 @@ const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
     ? process.env.MEMORY_FILE_PATH
     : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH)
   : defaultMemoryPath;
-
-// We are storing our memory using entities, relations, and observations in a graph structure
-interface Entity {
-  name: string;
-  entityType: string;
-  observations: string[];
-}
-
-interface Relation {
-  from: string;
-  to: string;
-  relationType: string;
-}
-
-interface KnowledgeGraph {
-  entities: Entity[];
-  relations: Relation[];
-}
 
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
 class KnowledgeGraphManager {
@@ -133,31 +117,29 @@ class KnowledgeGraphManager {
     return this.loadGraph();
   }
 
-  // Very basic search function
+  /**
+   * Searches the knowledge graph with a structured query language.
+   * 
+   * The query language supports:
+   * - type:value - Filter entities by type
+   * - name:value - Filter entities by name
+   * - +word - Require this term (AND logic)
+   * - -word - Exclude this term (NOT logic)
+   * - word1|word2|word3 - Match any of these terms (OR logic)
+   * - Any other text - Used for fuzzy matching
+   * 
+   * Example: "type:person +programmer -manager frontend|backend|fullstack" searches for
+   * entities of type "person" that contain "programmer", don't contain "manager",
+   * and contain at least one of "frontend", "backend", or "fullstack".
+   * 
+   * Results are sorted by relevance, with exact name matches ranked highest.
+   * 
+   * @param query The search query string
+   * @returns A filtered knowledge graph containing matching entities and their relations
+   */
   async searchNodes(query: string): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
-    
-    // Filter entities
-    const filteredEntities = graph.entities.filter(e => 
-      e.name.toLowerCase().includes(query.toLowerCase()) ||
-      e.entityType.toLowerCase().includes(query.toLowerCase()) ||
-      e.observations.some(o => o.toLowerCase().includes(query.toLowerCase()))
-    );
-  
-    // Create a Set of filtered entity names for quick lookup
-    const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
-  
-    // Filter relations to only include those between filtered entities
-    const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
-    );
-  
-    const filteredGraph: KnowledgeGraph = {
-      entities: filteredEntities,
-      relations: filteredRelations,
-    };
-  
-    return filteredGraph;
+    return searchGraph(query, graph);
   }
 
   async openNodes(names: string[]): Promise<KnowledgeGraph> {
@@ -349,7 +331,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {
-            query: { type: "string", description: "The search query to match against entity names, types, and observation content" },
+            query: { 
+              type: "string", 
+              description: "The search query to match against entity names, types, and observation content. Supports a query language with these operators: 'type:value' to filter by entity type, 'name:value' to filter by entity name, '+word' to require a term (AND logic), '-word' to exclude a term (NOT logic). Any remaining text is used for fuzzy matching. Example: 'type:person +programmer -manager frontend|backend|fullstack' searches for entities of type 'person' that contain 'programmer', don't contain 'manager', and contain at least one of 'frontend', 'backend', or 'fullstack'." 
+            },
           },
           required: ["query"],
         },

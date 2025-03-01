@@ -110,10 +110,7 @@ Example:
 - **search_nodes**
   - Search for nodes based on query
   - Input: `query` (string)
-  - Searches across:
-    - Entity names
-    - Entity types
-    - Observation content
+  - Uses advanced query language (see Query Language section below)
   - Returns matching entities and their relations
 
 - **open_nodes**
@@ -123,6 +120,73 @@ Example:
     - Requested entities
     - Relations between requested entities
   - Silently skips non-existent nodes
+
+## Query Language
+
+The memory server includes a powerful query language for searching the knowledge graph. This allows for complex and precise searches based on entity types, names, and content.
+
+### Query Syntax
+
+The query language supports:
+- `type:value` - Filter entities by type (e.g., `type:person`)
+- `name:value` - Filter entities by name (e.g., `name:john`)
+- `+word` - Require this term (AND logic)
+- `-word` - Exclude this term (NOT logic)
+- `word1|word2|word3` - Match any of these terms (OR logic)
+- Any other text - Used for fuzzy matching
+
+### Examples
+
+```
+# Find all people who are programmers
+type:person +programmer
+
+# Find all people who are programmers but not managers
+type:person +programmer -manager
+
+# Find all entities related to either frontend or backend development
+frontend|backend
+
+# Find all people named John who like either coffee or tea
+type:person name:john coffee|tea
+```
+
+### Result Ranking
+
+Search results are ranked by relevance:
+1. Exact name matches receive the highest score
+2. Partial name matches receive medium scores
+3. Content-only matches receive lower scores
+
+## CLI Tool
+
+A command-line interface tool called `memory-query` is included for directly querying the knowledge graph from the terminal.
+
+### Installation
+
+The CLI tool is included when you install the memory server package:
+
+```bash
+npm install -g @modelcontextprotocol/server-memory
+```
+
+### Usage
+
+```bash
+# Basic usage
+memory-query "type:person +programmer"
+
+# Output results as JSON
+memory-query --json "name:john"
+
+# Get help
+memory-query --help
+```
+
+### Options
+
+- `-h, --help`: Show help message and usage information
+- `-j, --json`: Output results in JSON format instead of human-readable text
 
 # Usage with Claude Desktop
 
