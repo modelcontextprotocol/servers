@@ -188,24 +188,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `issue_number` (number): Issue number to retrieve
    - Returns: Github Issue object & details
 
-18. `get_pr_files`
-   - Get the list of files changed in a pull request with their relative paths
-   - Inputs:
-     - `owner` (string): Repository owner
-     - `repo` (string): Repository name
-     - `pull_number` (number): Pull request number
-   - Returns: Array of changed files with details including filename, status, and patch information
-
-19. `get_pr_diff`
-   - Get the diff content of a pull request, optionally filtered by a specific file
-   - Inputs:
-     - `owner` (string): Repository owner
-     - `repo` (string): Repository name
-     - `pull_number` (number): Pull request number
-     - `file` (optional string): File path to filter the diff by
-   - Returns: Pull request diff in unified diff format
-
-20. `get_pull_request`
+18. `get_pull_request`
    - Get details of a specific pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -213,7 +196,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Pull request details including diff and review status
 
-21. `list_pull_requests`
+19. `list_pull_requests`
    - List and filter repository pull requests
    - Inputs:
      - `owner` (string): Repository owner
@@ -227,7 +210,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `page` (optional number): Page number
    - Returns: Array of pull request details
 
-22. `create_pull_request_review`
+20. `create_pull_request_review`
    - Create a review on a pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -242,7 +225,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
        - `body` (string): Comment text
    - Returns: Created review details
 
-23. `merge_pull_request`
+21. `merge_pull_request`
    - Merge a pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -253,7 +236,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `merge_method` (optional string): Merge method ('merge', 'squash', 'rebase')
    - Returns: Merge result details
 
-24. `get_pull_request_files`
+22. `get_pull_request_files`
    - Get the list of files changed in a pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -261,7 +244,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of changed files with patch and status details
 
-25. `get_pull_request_status`
+23. `get_pull_request_status`
    - Get the combined status of all status checks for a pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -269,7 +252,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Combined status check results and individual check details
 
-26. `update_pull_request_branch`
+24. `update_pull_request_branch`
    - Update a pull request branch with the latest changes from the base branch (equivalent to GitHub's "Update branch" button)
    - Inputs:
      - `owner` (string): Repository owner
@@ -278,7 +261,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `expected_head_sha` (optional string): The expected SHA of the pull request's HEAD ref
    - Returns: Success message when branch is updated
 
-27. `get_pull_request_comments`
+25. `get_pull_request_comments`
    - Get the review comments on a pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -286,13 +269,30 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request review comments with details like the comment text, author, and location in the diff
 
-28. `get_pull_request_reviews`
+26. `get_pull_request_reviews`
    - Get the reviews on a pull request
    - Inputs:
      - `owner` (string): Repository owner
      - `repo` (string): Repository name
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
+
+26. `get_pr_files`
+   - Get the list of files changed in a pull request with their relative paths
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `pull_number` (number): Pull request number
+   - Returns: Array of changed files with details including filename, status, and patch information
+
+27. `get_pr_diff`
+   - Get the diff content of a pull request, optionally filtered by a specific file
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `pull_number` (number): Pull request number
+     - `file` (optional string): File path to filter the diff by
+   - Returns: Pull request diff in unified diff format
 
 ## Search Query Syntax
 
