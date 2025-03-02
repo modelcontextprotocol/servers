@@ -195,6 +195,21 @@ async function createIssue(
   repo: string,
   options: z.infer<typeof CreateIssueOptionsSchema>
 ): Promise<GitHubIssue> {
+  console.error(`Creating issue in ${owner}/${repo} with options:`, JSON.stringify(options));
+  console.error(`Using token: ${GITHUB_PERSONAL_ACCESS_TOKEN ? GITHUB_PERSONAL_ACCESS_TOKEN.substring(0, 5) : 'undefined'}...`);
+  
+  // Process labels to ensure they're in the right format for GitHub API
+  let processedOptions = { ...options };
+  
+  if (processedOptions.labels && Array.isArray(processedOptions.labels)) {
+    processedOptions = {
+      ...processedOptions,
+      labels: processedOptions.labels.map(label => 
+        typeof label === 'string' ? label : label.name
+      ) as string[]
+    };
+  }
+  
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/issues`,
     {
@@ -205,15 +220,19 @@ async function createIssue(
         "User-Agent": "github-mcp-server",
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(options)
+      body: JSON.stringify(processedOptions)
     }
   );
 
   if (!response.ok) {
-    throw new Error(`GitHub API error: ${response.statusText}`);
+    const responseText = await response.text();
+    console.error(`GitHub API error: ${response.status} ${response.statusText}`);
+    console.error(`Response body: ${responseText}`);
+    throw new Error(`GitHub API error: ${response.status} ${response.statusText} - ${responseText}`);
   }
-
-  return GitHubIssueSchema.parse(await response.json());
+  
+  const data = await response.json();
+  return GitHubIssueSchema.parse(data);
 }
 
 async function createPullRequest(
@@ -628,8 +647,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error(`ZodError: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
       throw new Error(`Invalid arguments: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
     }
+    console.error(`Error in request handler: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`Error stack: ${error instanceof Error ? error.stack : 'No stack trace'}`);
     throw error;
   }
 });

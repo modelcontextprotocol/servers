@@ -135,7 +135,15 @@ export const CreateIssueOptionsSchema = z.object({
   body: z.string().optional(),
   assignees: z.array(z.string()).optional(),
   milestone: z.number().optional(),
-  labels: z.array(z.string()).optional()
+  labels: z.array(
+    z.union([
+      z.string(),
+      z.object({
+        name: z.string(),
+        description: z.string().optional()
+      })
+    ])
+  ).optional()
 });
 
 export const CreatePullRequestOptionsSchema = z.object({
@@ -333,7 +341,15 @@ export const CreateIssueSchema = RepoParamsSchema.extend({
   title: z.string().describe("Issue title"),
   body: z.string().optional().describe("Issue body/description"),
   assignees: z.array(z.string()).optional().describe("Array of usernames to assign"),
-  labels: z.array(z.string()).optional().describe("Array of label names"),
+  labels: z.array(
+    z.union([
+      z.string(),
+      z.object({
+        name: z.string(),
+        description: z.string().optional()
+      })
+    ])
+  ).optional().describe("Array of label names or label objects"),
   milestone: z.number().optional().describe("Milestone number to assign")
 });
 
