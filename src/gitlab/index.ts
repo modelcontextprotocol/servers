@@ -33,6 +33,12 @@ import {
   CreateMergeRequestSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
+  CommentToCommitSchema,
+  GitLabCommentSchema,
+  CreateMergeRequestThreadSchema,
+  GitLabDiscussion,
+  GitLabComment,
+  GitLabDiscussionSchema,
   type GitLabFork,
   type GitLabReference,
   type GitLabRepository,
@@ -216,6 +222,85 @@ async function createMergeRequest(
   }
 
   return GitLabMergeRequestSchema.parse(await response.json());
+}
+
+
+async function commentToCommit(
+  projectId: string,
+  sha: string,
+  note: string,
+  path?: string,
+  line?: number,
+  lineType?: "new" | "old"
+): Promise<GitLabComment> {
+  const formData = new FormData();
+  formData.append("note", note);
+  if (path) formData.append("path", path);
+  if (line) formData.append("line", line.toString());
+  if (lineType) formData.append("line_type", lineType);
+
+  const response = await fetch(
+    `${GITLAB_API_URL}/projects/${encodeURIComponent(
+      projectId
+    )}/repository/commits/${encodeURIComponent(sha)}/comments`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+      },
+      body: formData,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitLab API error: ${response.statusText}`);
+  }
+
+  return GitLabCommentSchema.parse(await response.json());
+}
+
+async function createMergeRequestThread(
+  projectId: string | number,
+  mergeRequestIid: number,
+  options: z.infer<typeof CreateMergeRequestThreadSchema>
+): Promise<GitLabDiscussion> {
+  const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(
+    projectId.toString()
+  )}/merge_requests/${mergeRequestIid}/discussions`;
+
+  const formData = new FormData();
+
+  // Add required and optional fields
+  formData.append("body", options.body);
+
+  if (options.commit_id) {
+    formData.append("commit_id", options.commit_id);
+  }
+
+  if (options.created_at) {
+    formData.append("created_at", options.created_at);
+  }
+
+  // Add all position-related parameters with their original keys
+  Object.entries(options).forEach(([key, value]) => {
+    if (value !== undefined && key.startsWith("position[")) {
+      formData.append(key, value.toString());
+    }
+  });
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitLab API error: ${response.statusText}`);
+  }
+
+  return GitLabDiscussionSchema.parse(await response.json());
 }
 
 async function createOrUpdateFile(
@@ -509,6 +594,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { project_id, ...options } = args;
         const mergeRequest = await createMergeRequest(project_id, options);
         return { content: [{ type: "text", text: JSON.stringify(mergeRequest, null, 2) }] };
+      }
+
+      case "comment_to_commit": {
+        const args = CommentToCommitSchema.parse(request.params.arguments);
+        const comment = await commentToCommit(
+          args.project_id,
+          args.sha,
+          args.note,
+          args.path,
+          args.line,
+          args.line_type
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(comment, null, 2) }],
+        };
+      }
+
+      case "create_mr_thread": {
+        const args = CreateMergeRequestThreadSchema.parse(
+          request.params.arguments
+        );
+        const thread = await createMergeRequestThread(
+          args.project_id,
+          args.merge_request_iid,
+          args
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(thread, null, 2) }],
+        };
       }
 
       default:
