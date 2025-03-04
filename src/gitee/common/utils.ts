@@ -2,6 +2,17 @@ import { getUserAgent } from "universal-user-agent";
 import { createGiteeError } from "./errors.js";
 import { VERSION } from "./version.js";
 
+// Default Gitee API base URL
+const DEFAULT_GITEE_API_BASE_URL = "https://gitee.com/api/v5";
+
+/**
+ * Get the Gitee API base URL from environment variables or use the default
+ * @returns The Gitee API base URL
+ */
+export function getGiteeApiBaseUrl(): string {
+  return process.env.GITEE_API_BASE_URL || DEFAULT_GITEE_API_BASE_URL;
+}
+
 type RequestOptions = {
   method?: string;
   body?: unknown;
@@ -55,11 +66,13 @@ export function debug(message: string, data?: unknown): void {
 }
 
 export async function giteeRequest(
-  url: string,
+  urlPath: string,
   method: string = "GET",
   body?: unknown,
   headers?: Record<string, string>
 ): Promise<unknown> {
+  // Check if the URL is already a full URL or a path
+  const url = urlPath.startsWith("http") ? urlPath : `${getGiteeApiBaseUrl()}${urlPath.startsWith("/") ? urlPath : `/${urlPath}`}`;
   const requestHeaders: Record<string, string> = {
     "Accept": "application/json",
     "Content-Type": "application/json",
@@ -167,7 +180,7 @@ export async function checkBranchExists(
   branch: string
 ): Promise<boolean> {
   try {
-    await giteeRequest(`https://gitee.com/api/v5/repos/${owner}/${repo}/branches/${branch}`, "GET");
+    await giteeRequest(`/repos/${owner}/${repo}/branches/${branch}`, "GET");
     return true;
   } catch (error) {
     if (error && typeof error === "object" && "name" in error && error.name === "GiteeResourceNotFoundError") {
@@ -179,7 +192,7 @@ export async function checkBranchExists(
 
 export async function checkUserExists(username: string): Promise<boolean> {
   try {
-    await giteeRequest(`https://gitee.com/api/v5/users/${username}`, "GET");
+    await giteeRequest(`/users/${username}`, "GET");
     return true;
   } catch (error) {
     if (error && typeof error === "object" && "name" in error && error.name === "GiteeResourceNotFoundError") {

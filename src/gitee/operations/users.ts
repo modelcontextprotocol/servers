@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { giteeRequest, validateOwnerName } from "../common/utils.js";
+import { giteeRequest, validateOwnerName, getGiteeApiBaseUrl } from "../common/utils.js";
 import { GiteeUserSchema } from "../common/types.js";
 
 // Schema definitions
@@ -29,14 +29,14 @@ export type SearchUsersOptions = z.infer<typeof SearchUsersSchema>;
 export async function getUser(username: string) {
   username = validateOwnerName(username);
 
-  const url = `https://gitee.com/api/v5/users/${username}`;
+  const url = `/users/${username}`;
   const response = await giteeRequest(url, "GET");
 
   return GiteeUserSchema.parse(response);
 }
 
 export async function getCurrentUser() {
-  const url = "https://gitee.com/api/v5/user";
+  const url = "/user";
   const response = await giteeRequest(url, "GET");
 
   return GiteeUserSchema.parse(response);
@@ -45,7 +45,7 @@ export async function getCurrentUser() {
 export async function searchUsers(options: SearchUsersOptions) {
   const { q, page, per_page, sort, order } = options;
 
-  const url = new URL("https://gitee.com/api/v5/search/users");
+  const url = new URL(`${getGiteeApiBaseUrl()}/search/users`);
   url.searchParams.append("q", q);
   if (page !== undefined) {
     url.searchParams.append("page", page.toString());

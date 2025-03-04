@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { giteeRequest, validateOwnerName, validateRepositoryName } from "../common/utils.js";
+import { giteeRequest, validateOwnerName, validateRepositoryName, getGiteeApiBaseUrl } from "../common/utils.js";
 import { GiteeIssueCommentSchema, GiteeIssueSchema } from "../common/types.js";
 
 // Schema definitions
@@ -128,7 +128,7 @@ export async function createIssue(
     delete body.labels;
   }
 
-  const url = `https://gitee.com/api/v5/repos/${owner}/${repo}/issues`;
+  const url = `/repos/${owner}/${repo}/issues`;
   const response = await giteeRequest(url, "POST", body);
 
   return GiteeIssueSchema.parse(response);
@@ -142,7 +142,7 @@ export async function listIssues(
   owner = validateOwnerName(owner);
   repo = validateRepositoryName(repo);
 
-  const url = new URL(`https://gitee.com/api/v5/repos/${owner}/${repo}/issues`);
+  const url = new URL(`${getGiteeApiBaseUrl()}/repos/${owner}/${repo}/issues`);
 
   // Add query parameters
   Object.entries(options).forEach(([key, value]) => {
@@ -164,7 +164,7 @@ export async function getIssue(
   owner = validateOwnerName(owner);
   repo = validateRepositoryName(repo);
 
-  const url = `https://gitee.com/api/v5/repos/${owner}/${repo}/issues/${issueNumber}`;
+  const url = `/repos/${owner}/${repo}/issues/${issueNumber}`;
   const response = await giteeRequest(url);
 
   return GiteeIssueSchema.parse(response);
@@ -202,7 +202,7 @@ export async function updateIssue(
   }
 
   // Note: In the Gitee API's update issue interface, `repo` is passed as a form parameter, not as a path parameter.
-  const url = `https://gitee.com/api/v5/repos/${owner}/issues/${issueNumber}`;
+  const url = `/repos/${owner}/issues/${issueNumber}`;
   const response = await giteeRequest(url, "PATCH", body);
 
   return GiteeIssueSchema.parse(response);
@@ -217,7 +217,7 @@ export async function addIssueComment(
   owner = validateOwnerName(owner);
   repo = validateRepositoryName(repo);
 
-  const url = `https://gitee.com/api/v5/repos/${owner}/${repo}/issues/${issueNumber}/comments`;
+  const url = `/repos/${owner}/${repo}/issues/${issueNumber}/comments`;
   const response = await giteeRequest(url, "POST", { body });
 
   return GiteeIssueCommentSchema.parse(response);

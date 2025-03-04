@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { giteeRequest, validateBranchName, validateOwnerName, validateRepositoryName } from "../common/utils.js";
+import { giteeRequest, validateBranchName, validateOwnerName, validateRepositoryName, getGiteeApiBaseUrl } from "../common/utils.js";
 import { GiteeCompleteBranchSchema, GiteeBranchSchema } from "../common/types.js";
 
 // Schema definitions
@@ -54,12 +54,12 @@ export async function createBranchFromRef(
   repo = validateRepositoryName(repo);
   branchName = validateBranchName(branchName);
 
-  const url = `https://gitee.com/api/v5/repos/${owner}/${repo}/branches`;
+  const url = `/repos/${owner}/${repo}/branches`;
   const body = {
     branch_name: branchName,
     refs: refs,
   };
-  
+
   const response = await giteeRequest(url, "POST", body);
   return GiteeBranchSchema.parse(response);
 }
@@ -75,8 +75,8 @@ export async function listBranches(
   owner = validateOwnerName(owner);
   repo = validateRepositoryName(repo);
 
-  const url = new URL(`https://gitee.com/api/v5/repos/${owner}/${repo}/branches`);
-  
+  const url = new URL(`${getGiteeApiBaseUrl()}/repos/${owner}/${repo}/branches`);
+
   if (sort) {
     url.searchParams.append("sort", sort);
   }
@@ -99,8 +99,8 @@ export async function getBranch(owner: string, repo: string, branch: string) {
   repo = validateRepositoryName(repo);
   branch = validateBranchName(branch);
 
-  const url = `https://gitee.com/api/v5/repos/${owner}/${repo}/branches/${branch}`;
+  const url = `/repos/${owner}/${repo}/branches/${branch}`;
   const response = await giteeRequest(url);
-  
+
   return GiteeCompleteBranchSchema.parse(response);
 }

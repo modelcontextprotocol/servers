@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { giteeRequest, validateOwnerName, validateRepositoryName } from "../common/utils.js";
+import { giteeRequest, validateOwnerName, validateRepositoryName, getGiteeApiBaseUrl } from "../common/utils.js";
 import { GiteeRepositorySchema } from "../common/types.js";
 
 // Schema definitions
@@ -43,7 +43,7 @@ export type ForkRepositoryOptions = z.infer<typeof ForkRepositorySchema>;
 export async function createRepository(options: CreateRepositoryOptions) {
   try {
     console.log('Creating repository parameters:', JSON.stringify(options));
-    const url = "https://gitee.com/api/v5/user/repos";
+    const url = "/user/repos";
     const response = await giteeRequest(url, "POST", options);
     console.log('Create repository response:', JSON.stringify(response));
 
@@ -69,7 +69,7 @@ export async function forkRepository(
   owner = validateOwnerName(owner);
   repo = validateRepositoryName(repo);
 
-  const url = `https://gitee.com/api/v5/repos/${owner}/${repo}/forks`;
+  const url = `/repos/${owner}/${repo}/forks`;
   const body: Record<string, string> = {};
 
   if (organization) {

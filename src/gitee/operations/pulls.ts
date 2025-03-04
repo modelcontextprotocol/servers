@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { giteeRequest, validateOwnerName, validateRepositoryName, validateBranchName } from "../common/utils.js";
+import { giteeRequest, validateOwnerName, validateRepositoryName, validateBranchName, getGiteeApiBaseUrl } from "../common/utils.js";
 import { GiteePullRequestSchema } from "../common/types.js";
 
 // Schema definitions
@@ -111,7 +111,7 @@ export async function createPullRequest(options: CreatePullRequestOptions) {
   const validatedHead = validateBranchName(rest.head);
   const validatedBase = validateBranchName(rest.base);
 
-  const url = `https://gitee.com/api/v5/repos/${validatedOwner}/${validatedRepo}/pulls`;
+  const url = `/repos/${validatedOwner}/${validatedRepo}/pulls`;
   const body = {
     ...rest,
     head: validatedHead,
@@ -131,7 +131,7 @@ export async function listPullRequests(
   owner = validateOwnerName(owner);
   repo = validateRepositoryName(repo);
 
-  const url = new URL(`https://gitee.com/api/v5/repos/${owner}/${repo}/pulls`);
+  const url = new URL(`${getGiteeApiBaseUrl()}/repos/${owner}/${repo}/pulls`);
 
   // Add query parameters
   Object.entries(options).forEach(([key, value]) => {
@@ -153,7 +153,7 @@ export async function getPullRequest(
   owner = validateOwnerName(owner);
   repo = validateRepositoryName(repo);
 
-  const url = `https://gitee.com/api/v5/repos/${owner}/${repo}/pulls/${pullNumber}`;
+  const url = `/repos/${owner}/${repo}/pulls/${pullNumber}`;
   const response = await giteeRequest(url, "GET");
 
   return GiteePullRequestSchema.parse(response);
@@ -168,7 +168,7 @@ export async function updatePullRequest(
   owner = validateOwnerName(owner);
   repo = validateRepositoryName(repo);
 
-  const url = `https://gitee.com/api/v5/repos/${owner}/${repo}/pulls/${pullNumber}`;
+  const url = `/repos/${owner}/${repo}/pulls/${pullNumber}`;
   const response = await giteeRequest(url, "PATCH", options);
 
   return GiteePullRequestSchema.parse(response);
@@ -183,7 +183,7 @@ export async function mergePullRequest(
   owner = validateOwnerName(owner);
   repo = validateRepositoryName(repo);
 
-  const url = `https://gitee.com/api/v5/repos/${owner}/${repo}/pulls/${pullNumber}/merge`;
+  const url = `/repos/${owner}/${repo}/pulls/${pullNumber}/merge`;
   const response = await giteeRequest(url, "PUT", options);
 
   return response;

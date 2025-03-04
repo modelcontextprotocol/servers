@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { giteeRequest, validateOwnerName, validateRepositoryName } from "../common/utils.js";
+import { giteeRequest, validateOwnerName, validateRepositoryName, getGiteeApiBaseUrl } from "../common/utils.js";
 import { GiteeDirectoryContentSchema, GiteeFileContentSchema, GiteeFileOperationResultSchema } from "../common/types.js";
 
 // Schema definitions
@@ -64,7 +64,7 @@ export async function getFileContents(
   owner = validateOwnerName(owner);
   repo = validateRepositoryName(repo);
 
-  const url = new URL(`https://gitee.com/api/v5/repos/${owner}/${repo}/contents/${path}`);
+  const url = new URL(`${getGiteeApiBaseUrl()}/repos/${owner}/${repo}/contents/${path}`);
   if (branch) {
     url.searchParams.append("ref", branch);
   }
@@ -94,7 +94,7 @@ export async function createOrUpdateFile(
   // Base64 encode the content
   const contentBase64 = Buffer.from(content).toString("base64");
 
-  const url = `https://gitee.com/api/v5/repos/${owner}/${repo}/contents/${path}`;
+  const url = `/repos/${owner}/${repo}/contents/${path}`;
   const body: Record<string, string> = {
     content: contentBase64,
     message,
