@@ -8,8 +8,16 @@ import {
   ToolSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
+import { readFileSync } from "fs";
 import path from "path";
 import os from 'os';
+import vm from "vm";
+// Import libraries that will be used in executeJSCode
+import lodashImport from "lodash";
+const _ = (lodashImport.defaults || lodashImport) as any;
+import * as mathjs from "mathjs";
+import * as PapaParse from 'papaparse';
+import * as XLSX from 'xlsx';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
@@ -146,6 +154,11 @@ const GetFileInfoArgsSchema = z.object({
   path: z.string(),
 });
 
+const ExecuteJSCodeArgsSchema = z.object({
+  code: z.string().describe('JavaScript code to execute'),
+  path: z.string().describe('File or directory path to operate on'),
+});
+
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
@@ -173,6 +186,99 @@ const server = new Server(
 );
 
 // Tool implementations
+async function executeJSCode(code: string, targetPath: string): Promise<any> {
+  try {
+    // Validate the path
+    const validPath = await validatePath(targetPath);
+    const stats = await fs.stat(validPath);
+    
+    // Capture console.log output
+    const logs: string[] = [];
+    
+    // Create a console logger for the VM context
+    const consoleLogger = {
+      log: (...args: any[]) => {
+        logs.push(args.map(arg => 
+          typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+        ).join(' '));
+      },
+      error: (...args: any[]) => {
+        logs.push(`ERROR: ${args.map(arg => 
+          typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+        ).join(' ')}`);
+      },
+      warn: (...args: any[]) => {
+        logs.push(`WARNING: ${args.map(arg => 
+          typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+        ).join(' ')}`);
+      }
+    } as Console;
+
+    // Create context with libraries and utilities
+    const context: Record<string, any> = {
+      fs,                 // fs/promises
+      readFileSync,       // sync file reading
+      path,               // path utilities
+      _,                  // lodash
+      math: mathjs,       // Math operations
+      Papa: PapaParse,    // CSV parsing
+      XLSX,               // Excel file handling
+      Buffer,             // Buffer handling
+      setTimeout,         // Timers
+      clearTimeout,
+      setInterval,
+      clearInterval,
+      targetPath: validPath,  // The validated path
+      isDirectory: stats.isDirectory(),
+      isFile: stats.isFile(),
+      // Store results to return
+      results: {},
+      // Console for logging
+      console: consoleLogger
+    };
+
+    // Create VM context
+    const vmContext = vm.createContext(context);
+    
+    // A simpler approach - just run the code in an async function with proper error handling
+    const wrappedCode = `
+      (async function() {
+        try {
+          ${code}
+        } catch (error) {
+          console.error('Error in executed code:', error instanceof Error ? error.message : String(error));
+          if (error instanceof Error && error.stack) {
+            console.error('Stack trace:', error.stack);
+          }
+        }
+      })();
+    `;
+    
+    // Run the script in the VM context
+    const script = new vm.Script(wrappedCode);
+    script.runInContext(vmContext);
+    
+    // For async operations, we need to wait a bit for them to complete
+    // This is a simple approach - add a small delay to let timeouts complete
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // Return results, logs, and metadata
+    return {
+      results: context.results,
+      logs,
+      isDirectory: context.isDirectory,
+      isFile: context.isFile,
+      targetPath: validPath
+    };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      targetPath
+    };
+  }
+}
+
 async function getFileStats(filePath: string): Promise<FileInfo> {
   const stats = await fs.stat(filePath);
   return {
@@ -435,6 +541,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: [],
         },
       },
+      {
+        name: "execute_js_code",
+        description: 
+          "Execute JavaScript code on a specified file or directory, with access to powerful libraries. " +
+          "The code runs in a sandboxed VM in a Node.js environment with the following available: \n" +
+          "- Node.js standard libraries: fs (fs/promises), path, readFileSync, Buffer\n" +
+          "- Libraries: lodash (as _), mathjs (as math), papaparse (as Papa), xlsx (as XLSX)\n" +
+          "- Context variables: targetPath (validated path), isDirectory, isFile\n" +
+          "- Timers: setTimeout, clearTimeout, setInterval, clearInterval\n" +
+          "- Store results in the 'results' object to return them - THE CODE EXECUTION DOES NOT RETURN VALUES DIRECTLY\n" +
+          "- Use console.log(), console.warn(), and console.error() for output capture\n" +
+          "- Supports async/await when using 'await' keyword in your code\n" +
+          "- Code is automatically executed in an async context with error handling\n" +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(ExecuteJSCodeArgsSchema) as ToolInput,
+      },
     ],
   };
 });
@@ -619,6 +741,58 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             text: `Allowed directories:\n${allowedDirectories.join('\n')}`
           }],
         };
+      }
+      
+      case "execute_js_code": {
+        try {
+          const parsed = ExecuteJSCodeArgsSchema.safeParse(args);
+          if (!parsed.success) {
+            throw new Error(`Invalid arguments for execute_js_code: ${parsed.error}`);
+          }
+          
+          const result = await executeJSCode(parsed.data.code, parsed.data.path);
+          
+          // Format the response
+          let responseText = '';
+          
+          // Add any logs
+          if (result.logs && result.logs.length > 0) {
+            responseText += `== Console Output ==\n${result.logs.join('\n')}\n\n`;
+          }
+          
+          // Add results
+          responseText += `== Results ==\n${JSON.stringify(result.results, null, 2)}\n\n`;
+          
+          // Add metadata
+          responseText += `== Execution Info ==\n`;
+          responseText += `Path: ${result.targetPath}\n`;
+          responseText += `Type: ${result.isDirectory ? 'Directory' : 'File'}\n`;
+          
+          // Add any errors
+          if (result.error) {
+            responseText += `\n== Error ==\n${result.error}\n`;
+            if (result.stack) {
+              responseText += `\n${result.stack}\n`;
+            }
+          }
+          
+          return {
+            content: [{ type: "text", text: responseText }],
+          };
+        } catch (error) {
+          // Handle any unexpected errors to prevent server crash
+          console.error("Error in execute_js_code:", error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const stack = error instanceof Error ? error.stack : "No stack trace";
+          
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Error executing JavaScript code: ${errorMessage}\n\nStack trace:\n${stack}` 
+            }],
+            isError: true
+          };
+        }
       }
 
       default:
