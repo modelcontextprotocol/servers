@@ -103,6 +103,149 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - Returns:
     - Directories that this server can read/write from
 
+- **execute_js_code**
+  - Execute JavaScript code on a specified file or directory
+  - Inputs:
+    - `code` (string): JavaScript code to execute
+    - `path` (string): File or directory path to operate on
+  - Features:
+    - Access to powerful libraries and Node.js standard modules:
+      - `fs` (fs/promises): File system operations
+      - `path`: Path utilities 
+      - `readFileSync`: Direct file reading
+      - `_`: Lodash library
+      - `math`: MathJS library
+      - `Papa`: PapaParse library for CSV processing (if available)
+      - `XLSX`: SheetJS library for Excel files (if available)
+    - Support for both synchronous and asynchronous code (async/await)
+    - Console output capture (log, error, warn)
+    - Structured results via the `results` object
+    - `catchAsync()` helper function for handling errors in asynchronous code
+  - Context variables:
+    - `targetPath`: The validated absolute path
+    - `isDirectory`: Boolean indicating if path is a directory
+    - `isFile`: Boolean indicating if path is a file
+    - `fs`: Node.js fs/promises module
+    - `readFileSync`: Synchronous file reading function
+    - `_`: Lodash library
+    - `math`: MathJS library
+    - `Papa`: PapaParse library (if available)
+    - `XLSX`: SheetJS library (if available)
+    - `Buffer`, `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`
+    - `catchAsync`: Helper function for safely handling async errors
+  - Returns:
+    - Console output from executed code
+    - Results object containing any data stored during execution
+    - Execution metadata (path info, errors if any)
+  - Example:
+    ```javascript
+    // Process a CSV file and calculate statistics
+    executeJSCode(`
+      // Read the CSV file
+      const content = await fs.readFile(targetPath, 'utf8');
+      
+      // Parse the CSV data
+      const parsed = Papa.parse(content, {header: true, dynamicTyping: true});
+      
+      // Calculate statistics using lodash
+      const data = parsed.data;
+      
+      // Store results for return
+      results.rowCount = data.length;
+      results.columnNames = Object.keys(data[0]);
+      
+      // Calculate numeric column statistics
+      const numericColumns = {};
+      
+      results.columnNames.forEach(col => {
+        if (typeof data[0][col] === 'number') {
+          numericColumns[col] = {
+            min: _.minBy(data, col)[col],
+            max: _.maxBy(data, col)[col],
+            avg: _.meanBy(data, row => row[col]),
+            sum: _.sumBy(data, row => row[col])
+          };
+        }
+      });
+      
+      results.statistics = numericColumns;
+      
+      console.log(\`Processed ${data.length} rows\`);
+    `, 'data.csv');
+    ```
+    
+    ```javascript
+    // Process all JavaScript files in a directory
+    executeJSCode(`
+      // Get all files in directory
+      const files = await fs.readdir(targetPath);
+      
+      // Filter for JavaScript files
+      const jsFiles = files.filter(file => file.endsWith('.js'));
+      
+      // Process each file
+      const fileStats = await Promise.all(jsFiles.map(async (file) => {
+        const filePath = path.join(targetPath, file);
+        const content = await fs.readFile(filePath, 'utf8');
+        
+        // Count lines and functions
+        const lines = content.split('\n');
+        const functionCount = (content.match(/function\s+\w+\s*\(/g) || []).length;
+        const arrowFunctionCount = (content.match(/(const|let|var)\s+\w+\s*=\s*\(.*\)\s*=>/g) || []).length;
+        
+        return {
+          file,
+          lineCount: lines.length,
+          functionCount: functionCount + arrowFunctionCount,
+          size: (await fs.stat(filePath)).size,
+          lastModified: (await fs.stat(filePath)).mtime
+        };
+      }));
+      
+      // Calculate total stats
+      results.totalFiles = fileStats.length;
+      results.totalLines = _.sumBy(fileStats, 'lineCount');
+      results.totalFunctions = _.sumBy(fileStats, 'functionCount');
+      results.largestFile = _.maxBy(fileStats, 'size');
+      results.fileDetails = fileStats;
+      
+      console.log(`Analyzed ${fileStats.length} JavaScript files`);
+    `, 'src');
+    ```
+    
+    ```javascript
+    // Example with catchAsync helper for error handling
+    executeJSCode(`
+      // Synchronous code
+      console.log("Starting execution...");
+      
+      // Async code with proper error handling
+      catchAsync(async () => {
+        // Simulated async operation that could fail
+        setTimeout(() => {
+          try {
+            // This would normally crash the VM
+            throw new Error("This error is safely caught!");
+          } catch (e) {
+            console.error("Caught timeout error:", e.message);
+          }
+        }, 100);
+        
+        // Process a file asynchronously
+        try {
+          const content = await fs.readFile(targetPath, 'utf8');
+          results.fileRead = true;
+          results.fileSize = content.length;
+        } catch (err) {
+          console.error("File read error:", err.message);
+          results.fileRead = false;
+        }
+      });
+      
+      console.log("Execution will continue even if async code fails");
+    `, '/some/file/path');
+    ```
+
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
 
