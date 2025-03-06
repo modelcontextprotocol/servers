@@ -155,7 +155,7 @@ describe('Query Language', () => {
   });
 
   describe('createFilteredGraph', () => {
-    it('should filter relations to only include those between filtered entities', () => {
+    it('should filter relations to include those where either entity is in the filtered set', () => {
       const entities: Entity[] = [
         { name: 'A', entityType: 'letter', observations: ['first letter'] },
         { name: 'B', entityType: 'letter', observations: ['second letter'] },
@@ -173,9 +173,8 @@ describe('Query Language', () => {
       const graph = createFilteredGraph(filteredEntities, relations);
       
       expect(graph.entities).toHaveLength(2);
-      expect(graph.relations).toHaveLength(1); // Only A->B should remain
-      expect(graph.relations[0].from).toBe('A');
-      expect(graph.relations[0].to).toBe('B');
+      // A->B, B->C, and A->C relations should all be included since they involve A or B
+      expect(graph.relations).toHaveLength(3);
     });
   });
 
@@ -206,8 +205,8 @@ describe('Query Language', () => {
       expect(result.entities).toHaveLength(1);
       expect(result.entities[0].name).toBe('John Smith');
       
-      // Should only include relations where both parties are in the result
-      expect(result.relations).toHaveLength(0);
+      // Should include relations where either entity is in the result
+      expect(result.relations).toHaveLength(2); // John Smith -> React and John Smith -> Node.js
     });
     
     it('should maintain relationships between matched entities', () => {
@@ -217,8 +216,8 @@ describe('Query Language', () => {
       expect(result.entities.map(e => e.name)).toContain('React');
       expect(result.entities.map(e => e.name)).toContain('Node.js');
       
-      // Should include the relation between React and Node.js if it existed
-      expect(result.relations).toHaveLength(0); // No direct relation between them
+      // Should include the relations involving React and Node.js
+      expect(result.relations).toHaveLength(3); // Should include John Smith and Jane Doe relations
     });
   });
 }); 

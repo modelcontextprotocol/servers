@@ -257,9 +257,9 @@ export function createFilteredGraph(
   // Create a Set of filtered entity names for quick lookup
   const filteredEntityNames = new Set(entities.map(e => e.name));
 
-  // Filter relations to only include those between filtered entities
+  // Filter relations to include those where either from or to entity is in the filtered set
   const filteredRelations = allRelations.filter(r => 
-    filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
+    filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
   );
 
   return {
