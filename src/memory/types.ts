@@ -5,6 +5,8 @@ export interface Entity {
   name: string;
   entityType: string;
   observations: string[];
+  lastRead?: string;    // Format: "YYYY-MM-DD"
+  lastWrite?: string;   // Format: "YYYY-MM-DD" - Combined creation and update date
 }
 
 /**

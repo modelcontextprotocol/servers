@@ -22,13 +22,18 @@ const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
     : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH)
   : defaultMemoryPath;
 
+// Helper function to format dates in YYYY-MM-DD format
+function formatDate(date: Date = new Date()): string {
+  return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD
+}
+
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
 class KnowledgeGraphManager {
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
       const data = await fs.readFile(MEMORY_FILE_PATH, "utf-8");
       const lines = data.split("\n").filter(line => line.trim() !== "");
-      return lines.reduce((graph: KnowledgeGraph, line) => {
+      const graph = lines.reduce((graph: KnowledgeGraph, line) => {
         try {
           const item = JSON.parse(line);
           if (item.type === "entity") graph.entities.push(item as Entity);
@@ -38,6 +43,16 @@ class KnowledgeGraphManager {
         }
         return graph;
       }, { entities: [], relations: [] });
+
+      // Ensure all entities have date fields
+      const todayFormatted = formatDate();
+      graph.entities.forEach(entity => {
+        // Ensure the fields exist
+        if (!entity.lastWrite) entity.lastWrite = todayFormatted;
+        if (!entity.lastRead) entity.lastRead = todayFormatted;
+      });
+
+      return graph;
     } catch (error) {
       if (error instanceof Error && 'code' in error && (error as any).code === "ENOENT") {
         return { entities: [], relations: [] };
@@ -56,7 +71,13 @@ class KnowledgeGraphManager {
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
     const graph = await this.loadGraph();
-    const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
+    const todayFormatted = formatDate();
+    const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name))
+      .map(entity => ({
+        ...entity,
+        lastRead: todayFormatted,
+        lastWrite: todayFormatted
+      }));
     graph.entities.push(...newEntities);
     await this.saveGraph(graph);
     return newEntities;
@@ -76,13 +97,17 @@ class KnowledgeGraphManager {
 
   async addObservations(observations: { entityName: string; contents: string[] }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
     const graph = await this.loadGraph();
+    const todayFormatted = formatDate();
     const results = observations.map(o => {
       const entity = graph.entities.find(e => e.name === o.entityName);
       if (!entity) {
         throw new Error(`Entity with name ${o.entityName} not found`);
       }
       const newObservations = o.contents.filter(content => !entity.observations.includes(content));
-      entity.observations.push(...newObservations);
+      if (newObservations.length > 0) {
+        entity.observations.push(...newObservations);
+        entity.lastWrite = todayFormatted;
+      }
       return { entityName: o.entityName, addedObservations: newObservations };
     });
     await this.saveGraph(graph);
@@ -98,10 +123,16 @@ class KnowledgeGraphManager {
 
   async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
     const graph = await this.loadGraph();
+    const todayFormatted = formatDate();
     deletions.forEach(d => {
       const entity = graph.entities.find(e => e.name === d.entityName);
       if (entity) {
+        const originalLength = entity.observations.length;
         entity.observations = entity.observations.filter(o => !d.observations.includes(o));
+        // Only update the date if observations were actually deleted
+        if (entity.observations.length < originalLength) {
+          entity.lastWrite = todayFormatted;
+        }
       }
     });
     await this.saveGraph(graph);
@@ -143,14 +174,40 @@ class KnowledgeGraphManager {
    */
   async searchNodes(query: string): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
-    return searchGraph(query, graph);
+    const result = searchGraph(query, graph);
+    
+    // Update access dates for found entities
+    const todayFormatted = formatDate();
+    result.entities.forEach(foundEntity => {
+      // Find the actual entity in the original graph and update its access date
+      const originalEntity = graph.entities.find(e => e.name === foundEntity.name);
+      if (originalEntity) {
+        originalEntity.lastRead = todayFormatted;
+      }
+    });
+    
+    // Save the updated access dates
+    await this.saveGraph(graph);
+    
+    return result;
   }
 
   async openNodes(names: string[]): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
+    const todayFormatted = formatDate();
     
-    // Filter entities
-    const filteredEntities = graph.entities.filter(e => names.includes(e.name));
+    // Filter entities and update read dates
+    const filteredEntities = graph.entities.filter(e => {
+      if (names.includes(e.name)) {
+        // Update the lastRead whenever an entity is opened
+        e.lastRead = todayFormatted;
+        return true;
+      }
+      return false;
+    });
+  
+    // Since we're modifying entities, we need to save the graph
+    await this.saveGraph(graph);
   
     // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
@@ -164,7 +221,7 @@ class KnowledgeGraphManager {
       entities: filteredEntities,
       relations: filteredRelations,
     };
-  
+
     return filteredGraph;
   }
 }
