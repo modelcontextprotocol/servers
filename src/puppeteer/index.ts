@@ -22,7 +22,8 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        url: { type: "string" },
+        url: { type: "string", description: "URL to navigate to" },
+        args: { type: "object", description: "Puppeteer launch options. Default null. If changed and not null, browser restarts. Example: { headless: true, args: ['--no-sandbox'] }" },
       },
       required: ["url"],
     },
@@ -105,12 +106,26 @@ let browser: Browser | undefined;
 let page: Page | undefined;
 const consoleLogs: string[] = [];
 const screenshots = new Map<string, string>();
+let prevArgs: any = null;
 
-async function ensureBrowser() {
+async function ensureBrowser(args: any) {
+  try {
+    if ((browser && !(await browser.isConnected())) ||
+      (args && (JSON.stringify(args) != JSON.stringify(prevArgs)))) {
+      await browser.close();
+      browser = null;
+    }
+  }
+  catch (error) {
+    browser = null;
+  }
+
+  prevArgs = args;
+
   if (!browser) {
     const npx_args = { headless: false }
     const docker_args = { headless: true, args: ["--no-sandbox", "--single-process", "--no-zygote"] }
-    browser = await puppeteer.launch(process.env.DOCKER_CONTAINER ? docker_args : npx_args);
+    browser = await puppeteer.launch(args || (process.env.DOCKER_CONTAINER ? docker_args : npx_args));
     const pages = await browser.pages();
     page = pages[0];
 
@@ -136,7 +151,7 @@ declare global {
 }
 
 async function handleToolCall(name: string, args: any): Promise<CallToolResult> {
-  const page = await ensureBrowser();
+  const page = await ensureBrowser(args.args);
 
   switch (name) {
     case "puppeteer_navigate":
@@ -285,15 +300,15 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
               window.mcpHelper.logs.push(`[${method}] ${args.join(' ')}`);
               (window.mcpHelper.originalConsole as any)[method](...args);
             };
-          } );
-        } );
+          });
+        });
 
-        const result = await page.evaluate( args.script );
+        const result = await page.evaluate(args.script);
 
         const logs = await page.evaluate(() => {
           Object.assign(console, window.mcpHelper.originalConsole);
           const logs = window.mcpHelper.logs;
-          delete ( window as any).mcpHelper;
+          delete (window as any).mcpHelper;
           return logs;
         });
 
