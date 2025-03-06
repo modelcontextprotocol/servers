@@ -29,9 +29,13 @@ class KnowledgeGraphManager {
       const data = await fs.readFile(MEMORY_FILE_PATH, "utf-8");
       const lines = data.split("\n").filter(line => line.trim() !== "");
       return lines.reduce((graph: KnowledgeGraph, line) => {
-        const item = JSON.parse(line);
-        if (item.type === "entity") graph.entities.push(item as Entity);
-        if (item.type === "relation") graph.relations.push(item as Relation);
+        try {
+          const item = JSON.parse(line);
+          if (item.type === "entity") graph.entities.push(item as Entity);
+          if (item.type === "relation") graph.relations.push(item as Relation);
+        } catch (error) {
+          console.error(`Error parsing line: ${line}`, error);
+        }
         return graph;
       }, { entities: [], relations: [] });
     } catch (error) {
