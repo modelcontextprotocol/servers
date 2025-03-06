@@ -192,10 +192,12 @@ MCP Server for the Gitee API, enabling file operations, repository management, i
 
 ## Installation
 
+1. Clone the repository
+2. Install dependencies
+3. Build the project
+
 ```bash
-# Clone the repository
-git clone https://gitee.com/your-username/mcp-server.git
-cd mcp-server/src/gitee
+cd src/gitee
 
 # Install dependencies
 npm install
@@ -235,22 +237,6 @@ docker build -t gitee-mcp-server -f Dockerfile .
 
 # Run the container
 docker run -e GITEE_PERSONAL_ACCESS_TOKEN=your_token gitee-mcp-server
-```
-
-## Build and Run
-
-### Build via npm
-
-```bash
-npm i
-npm run build
-# After the build is complete, you can use the files in the `dist` directory as the MCP Server for Gitee.
-```
-
-### Build via Docker:
-
-```bash
-docker build -t mcp/gitee -f src/gitee/Dockerfile .
 ```
 
 ## Dependencies

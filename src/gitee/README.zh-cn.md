@@ -1,6 +1,6 @@
 # Gitee MCP 服务器
 
-MCP 服务器用于 Gitee API，支持文件操作、仓库管理、问题管理、拉取请求管理等功能。
+Gitee 的 MCP 服务器，支持文件操作、仓库管理、问题管理、拉取请求管理等功能。
 
 ### 功能
 
@@ -116,86 +116,88 @@ MCP 服务器用于 Gitee API，支持文件操作、仓库管理、问题管理
    - 返回：创建的问题详情
 
 10. `get_issue`
-    - 获取 Gitee 仓库中特定问题的详情
-    - 输入：
-      - `owner`（字符串）：仓库所有者（用户名或组织）
-      - `repo`（字符串）：仓库名称
-      - `issue_number`（数字）：问题编号
-    - 返回：问题详情
+   - 获取 Gitee 仓库中特定问题的详情
+   - 输入：
+     - `owner`（字符串）：仓库所有者（用户名或组织）
+     - `repo`（字符串）：仓库名称
+     - `issue_number`（数字）：问题编号
+   - 返回：问题详情
 
 11. `update_issue`
-    - 更新 Gitee 仓库中的现有问题
-    - 输入：
-      - `owner`（字符串）：仓库所有者（用户名或组织）
-      - `repo`（字符串）：仓库名称
-      - `issue_number`（数字）：问题编号
-      - `title`（可选字符串）：问题标题
-      - `body`（可选字符串）：问题内容
-      - `assignees`（可选数组）：分配给问题的用户
-      - `milestone`（可选数字）：里程碑 ID
-      - `labels`（可选数组）：标签
-      - `state`（可选字符串）：问题状态（打开、关闭、进行中）
-    - 返回：更新的问题详情
+   - 更新 Gitee 仓库中的现有问题
+   - 输入：
+     - `owner`（字符串）：仓库所有者（用户名或组织）
+     - `repo`（字符串）：仓库名称
+     - `issue_number`（数字）：问题编号
+     - `title`（可选字符串）：问题标题
+     - `body`（可选字符串）：问题内容
+     - `assignees`（可选数组）：分配给问题的用户
+     - `milestone`（可选数字）：里程碑 ID
+     - `labels`（可选数组）：标签
+     - `state`（可选字符串）：问题状态（打开、关闭、进行中）
+   - 返回：更新的问题详情
 
 12. `add_issue_comment`
-    - 向现有问题添加评论
-    - 输入：
-      - `owner`（字符串）：仓库所有者（用户名或组织）
-      - `repo`（字符串）：仓库名称
-      - `issue_number`（数字）：问题编号
-      - `body`（字符串）：评论内容
-    - 返回：创建的评论详情
+   - 向现有问题添加评论
+   - 输入：
+     - `owner`（字符串）：仓库所有者（用户名或组织）
+     - `repo`（字符串）：仓库名称
+     - `issue_number`（数字）：问题编号
+     - `body`（字符串）：评论内容
+   - 返回：创建的评论详情
 
 13. `list_issues`
-    - 列出 Gitee 仓库中的问题，支持过滤选项
-    - 输入：
-      - `owner`（字符串）：仓库所有者（用户名或组织）
-      - `repo`（字符串）：仓库名称
-      - `state`（可选字符串）：问题状态（打开、关闭、所有）
-      - `sort`（可选字符串）：排序字段（创建、更新、评论）
-      - `direction`（可选字符串）：排序方向（升序、降序）
-      - `labels`（可选字符串）：标签，多个标签用逗号分隔
-      - `milestone`（可选数字）：里程碑 ID
-      - `assignee`（可选字符串）：过滤分配给特定用户的问题
-      - `creator`（可选字符串）：过滤由特定用户创建的问题
-      - `program`（可选字符串）：过滤特定程序的问题
-      - `page`（可选数字）：页码
-      - `per_page`（可选数字）：每页项目数，最大 100
-    - 返回：问题列表
+   - 列出 Gitee 仓库中的问题，支持过滤选项
+   - 输入：
+     - `owner`（字符串）：仓库所有者（用户名或组织）
+     - `repo`（字符串）：仓库名称
+     - `state`（可选字符串）：问题状态（打开、关闭、所有）
+     - `sort`（可选字符串）：排序字段（创建、更新、评论）
+     - `direction`（可选字符串）：排序方向（升序、降序）
+     - `labels`（可选字符串）：标签，多个标签用逗号分隔
+     - `milestone`（可选数字）：里程碑 ID
+     - `assignee`（可选字符串）：过滤分配给特定用户的问题
+     - `creator`（可选字符串）：过滤由特定用户创建的问题
+     - `program`（可选字符串）：过滤特定程序的问题
+     - `page`（可选数字）：页码
+     - `per_page`（可选数字）：每页项目数，最大 100
+   - 返回：问题列表
 
 ### 拉取请求操作
 
 14. `create_pull_request`
-    - 在 Gitee 仓库中创建一个新拉取请求
-    - 输入：
-      - `owner`（字符串）：仓库所有者（用户名或组织）
-      - `repo`（字符串）：仓库名称
-      - `title`（字符串）：拉取请求标题
-      - `head`（字符串）：源分支名称
-      - `base`（字符串）：目标分支名称
-      - `body`（可选字符串）：拉取请求内容
-      - `milestone_number`（可选数字）：里程碑编号
-      - `labels`（可选数组）：标签
-      - `issue`（可选字符串）：相关问题，格式：#xxx
-      - `assignees`（可选数组）：审阅者
-      - `testers`（可选数组）：测试人员
-      - `prune_source_branch`（可选布尔值）：合并后是否删除源分支
-    - 返回：创建的拉取请求详情
+   - 在 Gitee 仓库中创建一个新拉取请求
+   - 输入：
+     - `owner`（字符串）：仓库所有者（用户名或组织）
+     - `repo`（字符串）：仓库名称
+     - `title`（字符串）：拉取请求标题
+     - `head`（字符串）：源分支名称
+     - `base`（字符串）：目标分支名称
+     - `body`（可选字符串）：拉取请求内容
+     - `milestone_number`（可选数字）：里程碑编号
+     - `labels`（可选数组）：标签
+     - `issue`（可选字符串）：相关问题，格式：#xxx
+     - `assignees`（可选数组）：审阅者
+     - `testers`（可选数组）：测试人员
+     - `prune_source_branch`（可选布尔值）：合并后是否删除源分支
+   - 返回：创建的拉取请求详情
 
 ### 用户操作
 
 15. `get_user`
-    - 获取 Gitee 用户的详情
-    - 输入：
-      - `username`（字符串）：用户名
-    - 返回：用户详情
+   - 获取 Gitee 用户的详情
+   - 输入：
+     - `username`（字符串）：用户名
+   - 返回：用户详情
 
 ## 安装
 
+1. 克隆仓库
+2. 安装依赖
+3. 构建项目
+
 ```bash
-# 克隆仓库
-git clone https://gitee.com/your-username/mcp-server.git
-cd mcp-server/src/gitee
+cd src/gitee
 
 # 安装依赖
 npm install
@@ -219,38 +221,51 @@ GITEE_PERSONAL_ACCESS_TOKEN=put_your_gitee_personal_access_token_here
 ### 运行服务器
 
 ```bash
+# 启动服务器
 npm start
 ```
 
-### 使用 API
+服务器运行在 stdio 上，这使得它可以作为 MCP 客户端的子进程使用。
 
-您可以使用以下 API 来管理您的 Gitee 仓库：
+### Docker
 
-*   `GET /repos/{owner}/{repo}`：获取仓库详情
-*   `POST /repos/{owner}/{repo}/issues`：创建问题
-*   `GET /repos/{owner}/{repo}/issues/{issue_number}`：获取问题详情
-*   `PATCH /repos/{owner}/{repo}/issues/{issue_number}`：更新问题
-*   `POST /repos/{owner}/{repo}/pulls`：创建拉取请求
-*   `GET /repos/{owner}/{repo}/pulls/{pull_number}`：获取拉取请求详情
-*   `GET /users/{username}`：获取用户详情
-
-更多 API 请参考 [Gitee API 文档](https://gitee.com/api/v5/swagger)。
-
-### 例子
-
-以下是一个使用 `create_issue` API 创建问题的例子：
+您也可以使用 Docker 运行服务器：
 
 ```bash
-curl -X POST \
-  https://your-mcp-server.com/repos/your-username/your-repo/issues \
-  -H 'Content-Type: application/json' \
-  -d '{"title": "这是一个问题标题", "body": "这是一个问题内容"}'
+# 构建 Docker 镜像
+docker build -t gitee-mcp-server -f Dockerfile .
+
+# 运行容器
+docker run -e GITEE_PERSONAL_ACCESS_TOKEN=your_token gitee-mcp-server
 ```
 
-以下是一个使用 `create_pull_request` API 创建拉取请求的例子：
+## 依赖
 
-```bash
-curl -X POST \
-  https://your-mcp-server.com/repos/your-username/your-repo/pulls \
-  -H 'Content-Type: application/json' \
-  -d '{"title": "这是一个拉取请求标题", "head": "feature/new-feature", "base": "master"}'
+- `@modelcontextprotocol/sdk`：MCP SDK 用于服务器实现
+- `universal-user-agent`：用于生成用户代理字符串
+- `zod`：用于模式验证
+- `zod-to-json-schema`：用于将 Zod 模式转换为 JSON 模式
+
+## 调试工具
+
+服务器包括一个调试工具函数，可以用于记录调试信息：
+
+```typescript
+import { debug } from './common/utils.js';
+
+debug('要记录的消息');
+debug('带有数据的消息：', { key: 'value' });
+```
+
+## 许可
+
+本 MCP 服务器以 MIT 许可证授权。这意味着您可以自由使用、修改和分发软件，必须遵守 MIT 许可证的条款和条件。有关更多详细信息，请参阅项目仓库中的 LICENSE 文件。
+
+## 作者
+
+- 诺墨 <normal@normalcoder.com>
+- Gitee (https://gitee.com)
+
+## 链接
+
+- [Model Context Protocol](https://modelcontextprotocol.io)
