@@ -7,6 +7,7 @@ export interface Entity {
   observations: string[];
   lastRead?: string;    // Format: "YYYY-MM-DD"
   lastWrite?: string;   // Format: "YYYY-MM-DD" - Combined creation and update date
+  isImportant?: boolean; // Marker for important entities
 }
 
 /**

@@ -139,7 +139,7 @@ describe('Query Language', () => {
       const results = scoreAndSortEntities(filtered, parsedQuery);
       
       // 'java' should be scored highest as exact match
-      expect(results[0].name).toBe('java');
+      expect(results[0].entity.name).toBe('java');
     });
     
     it('should score partial name matches higher than content-only matches', () => {
@@ -148,9 +148,9 @@ describe('Query Language', () => {
       const results = scoreAndSortEntities(filtered, parsedQuery);
       
       // Order should be: 'javascript' (exact), 'typescript' (partial), 'others'
-      expect(results[0].name).toBe('javascript');
+      expect(results[0].entity.name).toBe('javascript');
       // typescript contains javascript in name, so should be second
-      expect(results[1].name).toBe('typescript');
+      expect(results[1].entity.name).toBe('typescript');
     });
   });
 
@@ -170,7 +170,9 @@ describe('Query Language', () => {
       
       // Only include A and B
       const filteredEntities = entities.filter(e => ['A', 'B'].includes(e.name));
-      const graph = createFilteredGraph(filteredEntities, relations);
+      // Convert to ScoredEntity format for createFilteredGraph
+      const scoredEntities = filteredEntities.map(entity => ({ entity, score: 1.0 }));
+      const graph = createFilteredGraph(scoredEntities, relations);
       
       expect(graph.entities).toHaveLength(2);
       // A->B, B->C, and A->C relations should all be included since they involve A or B

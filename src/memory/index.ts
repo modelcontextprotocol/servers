@@ -10,7 +10,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Entity, Relation, KnowledgeGraph } from './types.js';
-import { searchGraph } from './query-language.js';
+import { searchGraph, ScoredKnowledgeGraph } from './query-language.js';
 
 // Define memory file path using environment variable with fallback
 const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
@@ -76,7 +76,8 @@ class KnowledgeGraphManager {
       .map(entity => ({
         ...entity,
         lastRead: todayFormatted,
-        lastWrite: todayFormatted
+        lastWrite: todayFormatted,
+        isImportant: entity.isImportant || false // Default to false if not specified
       }));
     graph.entities.push(...newEntities);
     await this.saveGraph(graph);
@@ -174,7 +175,72 @@ class KnowledgeGraphManager {
    */
   async searchNodes(query: string): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
-    const result = searchGraph(query, graph);
+    
+    // Get the basic search results with scores
+    const searchResult = searchGraph(query, graph);
+    
+    // Create a map of entity name to search score for quick lookup
+    const searchScores = new Map<string, number>();
+    searchResult.scoredEntities.forEach(scored => {
+      searchScores.set(scored.entity.name, scored.score);
+    });
+    
+    // Find the maximum search score for normalization
+    const maxSearchScore = searchResult.scoredEntities.length > 0 
+      ? Math.max(...searchResult.scoredEntities.map(scored => scored.score))
+      : 1.0;
+    
+    // Get all entities sorted by lastRead date (most recent first)
+    const entitiesByRecency = [...graph.entities]
+      .filter(e => e.lastRead) // Filter out entities without lastRead
+      .sort((a, b) => {
+        // Sort in descending order (newest first)
+        return new Date(b.lastRead!).getTime() - new Date(a.lastRead!).getTime();
+      });
+    
+    // Get the 20 most recently accessed entities
+    const top20Recent = new Set(entitiesByRecency.slice(0, 20).map(e => e.name));
+    
+    // Get the 10 most recently accessed entities (subset of top20)
+    const top10Recent = new Set(entitiesByRecency.slice(0, 10).map(e => e.name));
+    
+    // Score the entities based on the criteria
+    const scoredEntities = searchResult.entities.map(entity => {
+      let score = 0;
+      
+      // Score based on recency
+      if (top20Recent.has(entity.name)) score += 1;
+      if (top10Recent.has(entity.name)) score += 1;
+      
+      // Score based on importance
+      if (entity.isImportant) {
+        score += 1;
+        score *= 2; // Double the score for important entities
+      }
+      
+      // Add normalized search score (0-1 range)
+      const searchScore = searchScores.get(entity.name) || 0;
+      score += searchScore / maxSearchScore;
+      
+      return { entity, score };
+    });
+    
+    // Sort by score (highest first) and take top 10
+    const topEntities = scoredEntities
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map(item => item.entity);
+    
+    // Create a filtered graph with only the top entities
+    const filteredEntityNames = new Set(topEntities.map(e => e.name));
+    const filteredRelations = graph.relations.filter(r => 
+      filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
+    );
+    
+    const result: KnowledgeGraph = {
+      entities: topEntities,
+      relations: filteredRelations
+    };
     
     // Update access dates for found entities
     const todayFormatted = formatDate();
@@ -223,6 +289,21 @@ class KnowledgeGraphManager {
     };
 
     return filteredGraph;
+  }
+
+  async setEntityImportance(entityNames: string[], isImportant: boolean): Promise<void> {
+    const graph = await this.loadGraph();
+    const todayFormatted = formatDate();
+    
+    entityNames.forEach(name => {
+      const entity = graph.entities.find(e => e.name === name);
+      if (entity) {
+        entity.isImportant = isImportant;
+        entity.lastWrite = todayFormatted; // Update lastWrite since we're modifying the entity
+      }
+    });
+    
+    await this.saveGraph(graph);
   }
 }
 

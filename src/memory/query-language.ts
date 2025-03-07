@@ -9,6 +9,14 @@ export interface EntitySearchItem {
 }
 
 /**
+ * Represents an entity with its search score
+ */
+export interface ScoredEntity {
+  entity: Entity;
+  score: number;
+}
+
+/**
  * Represents a parsed query with its components
  */
 export interface ParsedQuery {
@@ -18,6 +26,13 @@ export interface ParsedQuery {
   include: string[];
   exclude: string[];
   or: string[][];
+}
+
+/**
+ * Represents a knowledge graph with scored entities
+ */
+export interface ScoredKnowledgeGraph extends KnowledgeGraph {
+  scoredEntities: ScoredEntity[];
 }
 
 /**
@@ -212,12 +227,12 @@ export function filterEntitiesByQuery(
  * 
  * @param entitySearchItems The filtered entity search items to score
  * @param parsedQuery The parsed query used for scoring
- * @returns Entity search items sorted by relevance score
+ * @returns Object containing sorted entities and their scores
  */
 export function scoreAndSortEntities(
   entitySearchItems: EntitySearchItem[], 
   parsedQuery: ParsedQuery
-): Entity[] {
+): ScoredEntity[] {
   // Score entities based on relevance
   const scoredEntities = entitySearchItems.map(item => {
     let score = 1.0;
@@ -233,38 +248,85 @@ export function scoreAndSortEntities(
       score = 1.5;
     }
     
+    // Add scores for matching include terms
+    parsedQuery.include.forEach(term => {
+      if (item.searchText.includes(term.toLowerCase())) {
+        score += 0.5;
+      }
+    });
+    
+    // Add scores for matching OR terms
+    parsedQuery.or.forEach(orGroup => {
+      for (const term of orGroup) {
+        if (item.searchText.includes(term.toLowerCase())) {
+          score += 0.3;
+          break; // Only score once per OR group
+        }
+      }
+    });
+    
+    // Add scores for type or name matches if specified
+    if (parsedQuery.type && item.entity.entityType.toLowerCase().includes(parsedQuery.type.toLowerCase())) {
+      score += 0.5;
+    }
+    
+    if (parsedQuery.name && item.entity.name.toLowerCase().includes(parsedQuery.name.toLowerCase())) {
+      score += 0.7;
+    }
+    
+    // Calculate fuzzy match score if there's free text
+    if (parsedQuery.freeText) {
+      const queryLower = parsedQuery.freeText.toLowerCase();
+      // Calculate similarity ratio (simple implementation)
+      let matchingChars = 0;
+      let lastIndex = -1;
+      
+      for (const char of queryLower) {
+        const index = item.searchText.indexOf(char, lastIndex + 1);
+        if (index !== -1) {
+          matchingChars++;
+          lastIndex = index;
+        }
+      }
+      
+      // Add fuzzy score (0-1 range based on match quality)
+      const fuzzyScore = queryLower.length > 0 ? matchingChars / queryLower.length : 0;
+      score += fuzzyScore;
+    }
+    
     return {
-      item,
+      entity: item.entity,
       score
     };
-  }).sort((a, b) => b.score - a.score);
+  });
   
-  // Return sorted entities
-  return scoredEntities.map(result => result.item.entity);
+  // Sort by score in descending order
+  return scoredEntities.sort((a, b) => b.score - a.score);
 }
 
 /**
- * Creates a filtered knowledge graph from a list of entities
+ * Creates a filtered knowledge graph from a list of scored entities
  * 
- * @param entities The filtered entities to include in the graph
+ * @param scoredEntities The scored entities to include in the graph
  * @param allRelations All relations to filter
- * @returns A knowledge graph with only relevant entities and relations
+ * @returns A knowledge graph with only relevant entities and relations, plus scores
  */
 export function createFilteredGraph(
-  entities: Entity[], 
+  scoredEntities: ScoredEntity[], 
   allRelations: Relation[]
-): KnowledgeGraph {
+): ScoredKnowledgeGraph {
   // Create a Set of filtered entity names for quick lookup
-  const filteredEntityNames = new Set(entities.map(e => e.name));
-
+  const filteredEntityNames = new Set(scoredEntities.map(se => se.entity.name));
+  
   // Filter relations to include those where either from or to entity is in the filtered set
   const filteredRelations = allRelations.filter(r => 
     filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
   );
-
+  
   return {
-    entities,
-    relations: filteredRelations
+    entities: scoredEntities.map(se => se.entity),
+    relations: filteredRelations,
+    scoredEntities: scoredEntities
   };
 }
 
@@ -273,12 +335,18 @@ export function createFilteredGraph(
  * 
  * @param query The raw query string
  * @param graph The knowledge graph to search
- * @returns A filtered knowledge graph containing only matching entities and their relations
+ * @returns A filtered knowledge graph containing only matching entities and their relations, with scores
  */
-export function searchGraph(query: string, graph: KnowledgeGraph): KnowledgeGraph {
+export function searchGraph(query: string, graph: KnowledgeGraph): ScoredKnowledgeGraph {
   // Early return for empty query
   if (!query || query.trim() === '') {
-    return graph;
+    // Return all entities with a default score of 1.0
+    const scoredEntities = graph.entities.map(entity => ({ entity, score: 1.0 }));
+    return {
+      entities: graph.entities,
+      relations: graph.relations,
+      scoredEntities
+    };
   }
   
   // Parse the query
@@ -291,8 +359,8 @@ export function searchGraph(query: string, graph: KnowledgeGraph): KnowledgeGrap
   const matchingEntities = filterEntitiesByQuery(entitySearchItems, parsedQuery);
   
   // Score and sort by relevance
-  const sortedEntities = scoreAndSortEntities(matchingEntities, parsedQuery);
+  const scoredEntities = scoreAndSortEntities(matchingEntities, parsedQuery);
   
   // Create and return the filtered graph
-  return createFilteredGraph(sortedEntities, graph.relations);
+  return createFilteredGraph(scoredEntities, graph.relations);
 } 
