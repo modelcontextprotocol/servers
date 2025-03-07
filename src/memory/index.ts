@@ -180,10 +180,10 @@ class KnowledgeGraphManager {
     const searchResult = searchGraph(query, graph);
     
     // Create a map of entity name to search score for quick lookup
-    const searchScores = new Map<string, number>();
-    searchResult.scoredEntities.forEach(scored => {
-      searchScores.set(scored.entity.name, scored.score);
-    });
+    // const searchScores = new Map<string, number>();
+    // searchResult.scoredEntities.forEach(scored => {
+      // searchScores.set(scored.entity.name, scored.score);
+    // });
     
     // Find the maximum search score for normalization
     const maxSearchScore = searchResult.scoredEntities.length > 0 
@@ -205,24 +205,24 @@ class KnowledgeGraphManager {
     const top10Recent = new Set(entitiesByRecency.slice(0, 10).map(e => e.name));
     
     // Score the entities based on the criteria
-    const scoredEntities = searchResult.entities.map(entity => {
+    const scoredEntities = searchResult.scoredEntities.map(scoredEntity => {
       let score = 0;
       
       // Score based on recency
-      if (top20Recent.has(entity.name)) score += 1;
-      if (top10Recent.has(entity.name)) score += 1;
+      if (top20Recent.has(scoredEntity.entity.name)) score += 1;
+      if (top10Recent.has(scoredEntity.entity.name)) score += 1;
       
       // Score based on importance
-      if (entity.isImportant) {
+      if (scoredEntity.entity.isImportant) {
         score += 1;
         score *= 2; // Double the score for important entities
       }
       
       // Add normalized search score (0-1 range)
-      const searchScore = searchScores.get(entity.name) || 0;
+      const searchScore = scoredEntity.score || 0;
       score += searchScore / maxSearchScore;
       
-      return { entity, score };
+      return { entity: scoredEntity.entity, score };
     });
     
     // Sort by score (highest first) and take top 10

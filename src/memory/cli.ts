@@ -3,8 +3,8 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { searchGraph } from './query-language.js';
-import { KnowledgeGraph } from './types.js';
+import { ScoredKnowledgeGraph, searchGraph } from './query-language.js';
+import { KnowledgeGraph, Relation } from './types.js';
 
 // Define memory file path using environment variable with fallback
 const defaultMemoryPath = path.join(process.cwd(), 'memory.json');
@@ -63,14 +63,15 @@ async function loadGraph(): Promise<KnowledgeGraph> {
 /**
  * Formats and prints the search results
  */
-function printResults(graph: KnowledgeGraph): void {
+function printResults(graph: ScoredKnowledgeGraph, relations: Relation[]): void {
   // Format entities
   console.log("\n=== ENTITIES ===");
-  if (graph.entities.length === 0) {
+  if (graph.scoredEntities.length === 0) {
     console.log("No entities found matching the query.");
   } else {
-    graph.entities.forEach((entity, index) => {
-      console.log(`\n[${index + 1}] ${entity.name} (${entity.entityType})`);
+    graph.scoredEntities.forEach((scoredEntity, index) => {
+      const entity = scoredEntity.entity;
+      console.log(`\n[${index + 1}: @${Math.round(scoredEntity.score * 10) * 0.1}] ${entity.name} (${entity.entityType})`);
       if (entity.observations.length > 0) {
         console.log("  Observations:");
         entity.observations.forEach(obs => {
@@ -82,10 +83,10 @@ function printResults(graph: KnowledgeGraph): void {
 
   // Format relations
   console.log("\n=== RELATIONS ===");
-  if (graph.relations.length === 0) {
+  if (relations.length === 0) {
     console.log("No relations found between the matched entities.");
   } else {
-    graph.relations.forEach((relation, index) => {
+    relations.forEach((relation, index) => {
       console.log(`[${index + 1}] ${relation.from} ${relation.relationType} ${relation.to}`);
     });
   }
@@ -144,13 +145,18 @@ async function main(): Promise<void> {
   try {
     const graph = await loadGraph();
     const results = searchGraph(query, graph);
+    const names: { [name: string]: boolean } = results.scoredEntities.reduce((acc: { [name: string]: boolean }, se) => {
+      acc[se.entity.name] = true;
+      return acc;
+    }, {});
+    const relations = graph.relations.filter(r => names[r.from] && names[r.to]);
     
     if (jsonOutput) {
       // Output as JSON
       console.log(JSON.stringify(results, null, 2));
     } else {
       // Output in human-readable format
-      printResults(results);
+      printResults(results, relations);
     }
   } catch (error) {
     console.error("Error while searching the knowledge graph:", error);

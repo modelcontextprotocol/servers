@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseQuery, filterEntitiesByQuery, createEntitySearchItems, scoreAndSortEntities, createFilteredGraph, searchGraph } from './query-language.js';
-import { Entity, Relation, KnowledgeGraph } from './types.js';
+import { Entity, KnowledgeGraph } from './types.js';
 
 describe('Query Language', () => {
   describe('parseQuery', () => {
@@ -162,21 +162,13 @@ describe('Query Language', () => {
         { name: 'C', entityType: 'letter', observations: ['third letter'] },
       ];
       
-      const relations: Relation[] = [
-        { from: 'A', to: 'B', relationType: 'precedes' },
-        { from: 'B', to: 'C', relationType: 'precedes' },
-        { from: 'A', to: 'C', relationType: 'leads' },
-      ];
-      
       // Only include A and B
       const filteredEntities = entities.filter(e => ['A', 'B'].includes(e.name));
       // Convert to ScoredEntity format for createFilteredGraph
       const scoredEntities = filteredEntities.map(entity => ({ entity, score: 1.0 }));
-      const graph = createFilteredGraph(scoredEntities, relations);
+      const graph = createFilteredGraph(scoredEntities);
       
-      expect(graph.entities).toHaveLength(2);
-      // A->B, B->C, and A->C relations should all be included since they involve A or B
-      expect(graph.relations).toHaveLength(3);
+      expect(graph.scoredEntities).toHaveLength(2);
     });
   });
 
@@ -197,29 +189,22 @@ describe('Query Language', () => {
     
     it('should return the full graph for empty query', () => {
       const result = searchGraph('', testGraph);
-      expect(result.entities).toHaveLength(testGraph.entities.length);
-      expect(result.relations).toHaveLength(testGraph.relations.length);
+      expect(result.scoredEntities).toHaveLength(testGraph.entities.length);
     });
     
     it('should perform a full search with filtering and sorting', () => {
       const result = searchGraph('type:person +programmer', testGraph);
       
-      expect(result.entities).toHaveLength(1);
-      expect(result.entities[0].name).toBe('John Smith');
-      
-      // Should include relations where either entity is in the result
-      expect(result.relations).toHaveLength(2); // John Smith -> React and John Smith -> Node.js
+      expect(result.scoredEntities).toHaveLength(1);
+      expect(result.scoredEntities[0].entity.name).toBe('John Smith');
     });
     
     it('should maintain relationships between matched entities', () => {
       const result = searchGraph('+javascript', testGraph);
       
-      expect(result.entities).toHaveLength(2);
-      expect(result.entities.map(e => e.name)).toContain('React');
-      expect(result.entities.map(e => e.name)).toContain('Node.js');
-      
-      // Should include the relations involving React and Node.js
-      expect(result.relations).toHaveLength(3); // Should include John Smith and Jane Doe relations
+      expect(result.scoredEntities).toHaveLength(2);
+      expect(result.scoredEntities.map(e => e.entity.name)).toContain('React');
+      expect(result.scoredEntities.map(e => e.entity.name)).toContain('Node.js');
     });
   });
 }); 

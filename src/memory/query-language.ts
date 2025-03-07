@@ -31,7 +31,8 @@ export interface ParsedQuery {
 /**
  * Represents a knowledge graph with scored entities
  */
-export interface ScoredKnowledgeGraph extends KnowledgeGraph {
+export interface ScoredKnowledgeGraph {
+  // entities: Entity[];
   scoredEntities: ScoredEntity[];
 }
 
@@ -239,6 +240,10 @@ export function scoreAndSortEntities(
     
     // Exact match on name gives highest score
     if (parsedQuery.freeText && 
+        item.entity.name === parsedQuery.freeText) {
+      score = 3.0;
+    }
+    else if (parsedQuery.freeText && 
         item.entity.name.toLowerCase() === parsedQuery.freeText.toLowerCase()) {
       score = 2.0;
     }
@@ -252,6 +257,14 @@ export function scoreAndSortEntities(
     parsedQuery.include.forEach(term => {
       if (item.searchText.includes(term.toLowerCase())) {
         score += 0.5;
+      }
+    });
+
+    // Add scores for matching exact terms
+    parsedQuery.include.forEach(term => {
+      // regex match with separators on both sides
+      if (item.searchText.match(new RegExp(`\\b${term}\\b`))) {
+        score += 1.0;
       }
     });
     
@@ -308,24 +321,22 @@ export function scoreAndSortEntities(
  * Creates a filtered knowledge graph from a list of scored entities
  * 
  * @param scoredEntities The scored entities to include in the graph
- * @param allRelations All relations to filter
  * @returns A knowledge graph with only relevant entities and relations, plus scores
  */
 export function createFilteredGraph(
   scoredEntities: ScoredEntity[], 
-  allRelations: Relation[]
 ): ScoredKnowledgeGraph {
   // Create a Set of filtered entity names for quick lookup
-  const filteredEntityNames = new Set(scoredEntities.map(se => se.entity.name));
+  // const filteredEntityNames = new Set(scoredEntities.map(se => se.entity.name));
   
-  // Filter relations to include those where either from or to entity is in the filtered set
-  const filteredRelations = allRelations.filter(r => 
-    filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
-  );
+  // // Filter relations to include those where either from or to entity is in the filtered set
+  // const filteredRelations = allRelations.filter(r => 
+  //   filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
+  // );
   
   return {
-    entities: scoredEntities.map(se => se.entity),
-    relations: filteredRelations,
+    // entities: scoredEntities.map(se => se.entity),
+    // relations: filteredRelations,
     scoredEntities: scoredEntities
   };
 }
@@ -343,11 +354,13 @@ export function searchGraph(query: string, graph: KnowledgeGraph): ScoredKnowled
     // Return all entities with a default score of 1.0
     const scoredEntities = graph.entities.map(entity => ({ entity, score: 1.0 }));
     return {
-      entities: graph.entities,
-      relations: graph.relations,
+      // entities: graph.entities,
+      // relations: graph.relations,
       scoredEntities
     };
   }
+
+  query = query.replace(/ OR /g, '|');
   
   // Parse the query
   const parsedQuery = parseQuery(query);
@@ -362,5 +375,5 @@ export function searchGraph(query: string, graph: KnowledgeGraph): ScoredKnowled
   const scoredEntities = scoreAndSortEntities(matchingEntities, parsedQuery);
   
   // Create and return the filtered graph
-  return createFilteredGraph(scoredEntities, graph.relations);
+  return createFilteredGraph(scoredEntities);
 } 
