@@ -70,6 +70,8 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://www.tinybird.co/favicon.ico" alt="Tinybird Logo" /> **[Tinybird](https://github.com/tinybirdco/mcp-tinybird)** - Interact with Tinybird serverless ClickHouse platform
 - <img height="12" width="12" src="https://verodat.io/assets/favicon-16x16.png" alt="Verodat Logo" /> **[Verodat](https://github.com/Verodat/verodat-mcp-server)** - Interact with Verodat AI Ready Data platform
 - <img height="12" width="12" src="https://clickhouse.com/favicon.ico" alt="ClickHouse Logo" /> **[ClickHouse](https://github.com/ClickHouse/mcp-clickhouse)** - Query your [ClickHouse](https://clickhouse.com/) server.
+- <img height="12" width="12" src="https://zbd.gg/favicon.ico" alt="ZBD Logo" /> **[ZBD](https://github.com/zebedeeio/zbd-mcp-server)** - [ZBD](https://zbd.dev) MCP Server implementation for global instant payments with Bitcoin and Lightning Network.
+
 
 ### 🌎 Community Servers
 
