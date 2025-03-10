@@ -15,6 +15,7 @@ import * as pulls from './operations/pulls.js';
 import * as branches from './operations/branches.js';
 import * as search from './operations/search.js';
 import * as commits from './operations/commits.js';
+import * as actions from './operations/actions.js';
 import {
   GitHubError,
   GitHubValidationError,
@@ -62,9 +63,11 @@ function formatGitHubError(error: GitHubError): string {
   return message;
 }
 
+// Register all tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      // Original tools
       {
         name: "create_or_update_file",
         description: "Create or update a single file in a GitHub repository",
@@ -149,33 +152,229 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_issue",
         description: "Get details of a specific issue in a GitHub repository.",
         inputSchema: zodToJsonSchema(issues.GetIssueSchema)
+      },
+      
+      // GitHub Actions tools
+      {
+        name: "list_workflows",
+        description: "List GitHub Actions workflows in a repository",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string().describe("Repository owner (username or organization)"),
+          repo: z.string().describe("Repository name"),
+          page: z.number().optional().describe("Page number for pagination"),
+          per_page: z.number().optional().describe("Results per page (max 100)")
+        }))
+      },
+      {
+        name: "get_workflow",
+        description: "Get a specific GitHub Actions workflow",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string().describe("Repository owner (username or organization)"),
+          repo: z.string().describe("Repository name"),
+          workflow_id: z.union([z.string(), z.number()]).describe("Workflow ID or filename")
+        }))
+      },
+      
+      // Workflow run tools
+      {
+        name: "list_workflow_runs",
+        description: "List GitHub Actions workflow runs",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string().describe("Repository owner (username or organization)"),
+          repo: z.string().describe("Repository name"),
+          workflow_id: z.union([z.string(), z.number()]).optional().describe("Workflow ID or filename"),
+          actor: z.string().optional().describe("Filter by user who triggered the workflow"),
+          branch: z.string().optional().describe("Filter by branch"),
+          event: z.string().optional().describe("Filter by event type (push, pull_request, etc.)"),
+          status: z.enum(['completed', 'action_required', 'cancelled', 'failure', 'neutral', 'skipped', 'stale', 'success', 'timed_out', 'in_progress', 'queued', 'requested', 'waiting', 'pending']).optional().describe("Filter by status"),
+          per_page: z.number().optional().describe("Results per page (max 100)"),
+          page: z.number().optional().describe("Page number")
+        }))
+      },
+      {
+        name: "get_workflow_run",
+        description: "Get a specific GitHub Actions workflow run",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string().describe("Repository owner (username or organization)"),
+          repo: z.string().describe("Repository name"),
+          run_id: z.number().describe("Run ID")
+        }))
+      },
+      {
+        name: "list_workflow_jobs",
+        description: "List jobs for a workflow run",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string().describe("Repository owner (username or organization)"),
+          repo: z.string().describe("Repository name"),
+          run_id: z.number().describe("Run ID"),
+          filter: z.enum(['latest', 'all']).optional().describe("Filter jobs by their completion status"),
+          per_page: z.number().optional().describe("Results per page (max 100)"),
+          page: z.number().optional().describe("Page number")
+        }))
+      },
+      {
+        name: "get_workflow_job",
+        description: "Get a specific job from a workflow run",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string().describe("Repository owner (username or organization)"),
+          repo: z.string().describe("Repository name"),
+          job_id: z.number().describe("Job ID")
+        }))
+      },
+      
+      // Artifacts and logs
+      {
+        name: "list_workflow_run_artifacts",
+        description: "List artifacts for a workflow run",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string().describe("Repository owner (username or organization)"),
+          repo: z.string().describe("Repository name"),
+          run_id: z.number().describe("Run ID"),
+          per_page: z.number().optional().describe("Results per page (max 100)"),
+          page: z.number().optional().describe("Page number")
+        }))
+      },
+      {
+        name: "download_workflow_run_logs",
+        description: "Get download URL for workflow run logs",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string().describe("Repository owner (username or organization)"),
+          repo: z.string().describe("Repository name"),
+          run_id: z.number().describe("Run ID")
+        }))
+      },
+      {
+        name: "get_job_logs",
+        description: "Get download URL for job logs",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string().describe("Repository owner (username or organization)"),
+          repo: z.string().describe("Repository name"),
+          job_id: z.number().describe("Job ID")
+        }))
+      },
+      
+      // Advanced helper tools
+      {
+        name: "get_recent_failed_runs",
+        description: "Get details of recent failed workflow runs including the specific jobs and steps that failed",
+        inputSchema: zodToJsonSchema(z.object({
+          owner: z.string().describe("Repository owner (username or organization)"),
+          repo: z.string().describe("Repository name"),
+          limit: z.number().optional().describe("Maximum number of failed runs to return")
+        }))
       }
     ],
   };
 });
 
+// Handle tool execution
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     if (!request.params.arguments) {
       throw new Error("Arguments are required");
     }
 
-    switch (request.params.name) {
+    const name = request.params.name;
+    const args = request.params.arguments;
+
+    // GitHub Actions tools
+    if (name === "list_workflows") {
+      const { owner, repo, page, per_page } = args as any;
+      const result = await actions.listWorkflows(owner, repo, page, per_page);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+      };
+    }
+    
+    if (name === "get_workflow") {
+      const { owner, repo, workflow_id } = args as any;
+      const result = await actions.getWorkflow(owner, repo, workflow_id);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+      };
+    }
+    
+    if (name === "list_workflow_runs") {
+      const { owner, repo, ...options } = args as any;
+      const result = await actions.listWorkflowRuns(owner, repo, options);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+      };
+    }
+    
+    if (name === "get_workflow_run") {
+      const { owner, repo, run_id } = args as any;
+      const result = await actions.getWorkflowRun(owner, repo, run_id);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+      };
+    }
+    
+    if (name === "list_workflow_jobs") {
+      const { owner, repo, run_id, filter, page, per_page } = args as any;
+      const result = await actions.listWorkflowJobs(owner, repo, run_id, filter, page, per_page);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+      };
+    }
+    
+    if (name === "get_workflow_job") {
+      const { owner, repo, job_id } = args as any;
+      const result = await actions.getWorkflowJob(owner, repo, job_id);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+      };
+    }
+    
+    if (name === "list_workflow_run_artifacts") {
+      const { owner, repo, run_id, page, per_page } = args as any;
+      const result = await actions.listWorkflowRunArtifacts(owner, repo, run_id, page, per_page);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+      };
+    }
+    
+    if (name === "download_workflow_run_logs") {
+      const { owner, repo, run_id } = args as any;
+      const result = await actions.downloadWorkflowRunLogs(owner, repo, run_id);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+      };
+    }
+    
+    if (name === "get_job_logs") {
+      const { owner, repo, job_id } = args as any;
+      const result = await actions.getJobLogs(owner, repo, job_id);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+      };
+    }
+    
+    if (name === "get_recent_failed_runs") {
+      const { owner, repo, limit } = args as any;
+      const result = await actions.getRecentFailedRuns(owner, repo, limit);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
+      };
+    }
+
+    // Original tool handlers
+    switch (name) {
       case "fork_repository": {
-        const args = repository.ForkRepositorySchema.parse(request.params.arguments);
-        const fork = await repository.forkRepository(args.owner, args.repo, args.organization);
+        const parsedArgs = repository.ForkRepositorySchema.parse(args);
+        const fork = await repository.forkRepository(parsedArgs.owner, parsedArgs.repo, parsedArgs.organization);
         return {
           content: [{ type: "text", text: JSON.stringify(fork, null, 2) }],
         };
       }
 
       case "create_branch": {
-        const args = branches.CreateBranchSchema.parse(request.params.arguments);
+        const parsedArgs = branches.CreateBranchSchema.parse(args);
         const branch = await branches.createBranchFromRef(
-          args.owner,
-          args.repo,
-          args.branch,
-          args.from_branch
+          parsedArgs.owner,
+          parsedArgs.repo,
+          parsedArgs.branch,
+          parsedArgs.from_branch
         );
         return {
           content: [{ type: "text", text: JSON.stringify(branch, null, 2) }],
@@ -183,11 +382,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "search_repositories": {
-        const args = repository.SearchRepositoriesSchema.parse(request.params.arguments);
+        const parsedArgs = repository.SearchRepositoriesSchema.parse(args);
         const results = await repository.searchRepositories(
-          args.query,
-          args.page,
-          args.perPage
+          parsedArgs.query,
+          parsedArgs.page,
+          parsedArgs.perPage
         );
         return {
           content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
@@ -195,20 +394,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "create_repository": {
-        const args = repository.CreateRepositoryOptionsSchema.parse(request.params.arguments);
-        const result = await repository.createRepository(args);
+        const parsedArgs = repository.CreateRepositoryOptionsSchema.parse(args);
+        const result = await repository.createRepository(parsedArgs);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       }
 
       case "get_file_contents": {
-        const args = files.GetFileContentsSchema.parse(request.params.arguments);
+        const parsedArgs = files.GetFileContentsSchema.parse(args);
         const contents = await files.getFileContents(
-          args.owner,
-          args.repo,
-          args.path,
-          args.branch
+          parsedArgs.owner,
+          parsedArgs.repo,
+          parsedArgs.path,
+          parsedArgs.branch
         );
         return {
           content: [{ type: "text", text: JSON.stringify(contents, null, 2) }],
@@ -216,15 +415,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "create_or_update_file": {
-        const args = files.CreateOrUpdateFileSchema.parse(request.params.arguments);
+        const parsedArgs = files.CreateOrUpdateFileSchema.parse(args);
         const result = await files.createOrUpdateFile(
-          args.owner,
-          args.repo,
-          args.path,
-          args.content,
-          args.message,
-          args.branch,
-          args.sha
+          parsedArgs.owner,
+          parsedArgs.repo,
+          parsedArgs.path,
+          parsedArgs.content,
+          parsedArgs.message,
+          parsedArgs.branch,
+          parsedArgs.sha
         );
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -232,13 +431,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "push_files": {
-        const args = files.PushFilesSchema.parse(request.params.arguments);
+        const parsedArgs = files.PushFilesSchema.parse(args);
         const result = await files.pushFiles(
-          args.owner,
-          args.repo,
-          args.branch,
-          args.files,
-          args.message
+          parsedArgs.owner,
+          parsedArgs.repo,
+          parsedArgs.branch,
+          parsedArgs.files,
+          parsedArgs.message
         );
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -246,8 +445,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "create_issue": {
-        const args = issues.CreateIssueSchema.parse(request.params.arguments);
-        const { owner, repo, ...options } = args;
+        const parsedArgs = issues.CreateIssueSchema.parse(args);
+        const { owner, repo, ...options } = parsedArgs;
         const issue = await issues.createIssue(owner, repo, options);
         return {
           content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
@@ -255,40 +454,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "create_pull_request": {
-        const args = pulls.CreatePullRequestSchema.parse(request.params.arguments);
-        const pullRequest = await pulls.createPullRequest(args);
+        const parsedArgs = pulls.CreatePullRequestSchema.parse(args);
+        const pullRequest = await pulls.createPullRequest(parsedArgs);
         return {
           content: [{ type: "text", text: JSON.stringify(pullRequest, null, 2) }],
         };
       }
 
       case "search_code": {
-        const args = search.SearchCodeSchema.parse(request.params.arguments);
-        const results = await search.searchCode(args);
+        const parsedArgs = search.SearchCodeSchema.parse(args);
+        const results = await search.searchCode(parsedArgs);
         return {
           content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
         };
       }
 
       case "search_issues": {
-        const args = search.SearchIssuesSchema.parse(request.params.arguments);
-        const results = await search.searchIssues(args);
+        const parsedArgs = search.SearchIssuesSchema.parse(args);
+        const results = await search.searchIssues(parsedArgs);
         return {
           content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
         };
       }
 
       case "search_users": {
-        const args = search.SearchUsersSchema.parse(request.params.arguments);
-        const results = await search.searchUsers(args);
+        const parsedArgs = search.SearchUsersSchema.parse(args);
+        const results = await search.searchUsers(parsedArgs);
         return {
           content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
         };
       }
 
       case "list_issues": {
-        const args = issues.ListIssuesOptionsSchema.parse(request.params.arguments);
-        const { owner, repo, ...options } = args;
+        const parsedArgs = issues.ListIssuesOptionsSchema.parse(args);
+        const { owner, repo, ...options } = parsedArgs;
         const result = await issues.listIssues(owner, repo, options);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -296,8 +495,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "update_issue": {
-        const args = issues.UpdateIssueOptionsSchema.parse(request.params.arguments);
-        const { owner, repo, issue_number, ...options } = args;
+        const parsedArgs = issues.UpdateIssueOptionsSchema.parse(args);
+        const { owner, repo, issue_number, ...options } = parsedArgs;
         const result = await issues.updateIssue(owner, repo, issue_number, options);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -305,8 +504,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "add_issue_comment": {
-        const args = issues.IssueCommentSchema.parse(request.params.arguments);
-        const { owner, repo, issue_number, body } = args;
+        const parsedArgs = issues.IssueCommentSchema.parse(args);
+        const { owner, repo, issue_number, body } = parsedArgs;
         const result = await issues.addIssueComment(owner, repo, issue_number, body);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -314,13 +513,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "list_commits": {
-        const args = commits.ListCommitsSchema.parse(request.params.arguments);
+        const parsedArgs = commits.ListCommitsSchema.parse(args);
         const results = await commits.listCommits(
-          args.owner,
-          args.repo,
-          args.page,
-          args.perPage,
-          args.sha
+          parsedArgs.owner,
+          parsedArgs.repo,
+          parsedArgs.page,
+          parsedArgs.perPage,
+          parsedArgs.sha
         );
         return {
           content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
@@ -328,22 +527,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "get_issue": {
-        const args = issues.GetIssueSchema.parse(request.params.arguments);
-        const issue = await issues.getIssue(args.owner, args.repo, args.issue_number);
+        const parsedArgs = issues.GetIssueSchema.parse(args);
+        const issue = await issues.getIssue(parsedArgs.owner, parsedArgs.repo, parsedArgs.issue_number);
         return {
           content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
         };
       }
 
       default:
-        throw new Error(`Unknown tool: ${request.params.name}`);
+        throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
       throw new Error(`Invalid input: ${JSON.stringify(error.errors)}`);
     }
     if (isGitHubError(error)) {
-      throw new Error(formatGitHubError(error));
+      throw new Error(formatGitHubError(error as GitHubError));
     }
     throw error;
   }

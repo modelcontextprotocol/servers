@@ -1,0 +1,51 @@
+name: Sample Test Workflow
+
+# Controls when the workflow will run
+on:
+  # Run manually from the Actions tab
+  workflow_dispatch:
+  
+  # Run on push to main branch
+  push:
+    branches: [ main ]
+  
+  # Run on pull requests
+  pull_request:
+    branches: [ main ]
+
+# A workflow run is made up of one or more jobs
+jobs:
+  # Test job that can be used to verify the GitHub Actions MCP integration
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run tests
+        run: npm test
+        
+  # This job is designed to intentionally fail sometimes to test failure detection
+  random-failure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Random success or failure
+        run: |
+          # Generate a random number between 1 and 3
+          RANDOM_NUMBER=$(( $RANDOM % 3 + 1 ))
+          
+          # Fail 1/3 of the time
+          if [ $RANDOM_NUMBER -eq 1 ]; then
+            echo "Simulating a failure for testing purposes"
+            exit 1
+          else
+            echo "Simulating a success"
+          fi 

@@ -9,6 +9,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
 - **Git History Preservation**: Operations maintain proper Git history without force pushing
 - **Batch Operations**: Support for both single-file and multi-file operations
 - **Advanced Search**: Support for searching code, issues/PRs, and users
+- **GitHub Actions Integration**: Complete access to workflows, runs, jobs, and CI/CD status
 
 
 ## Tools
@@ -277,6 +278,144 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
 
+## GitHub Actions Integration
+
+The GitHub Actions integration enables access to workflow runs, jobs, and CI/CD status. This is especially valuable for troubleshooting CI failures and understanding build status.
+
+### GitHub Actions Tools
+
+27. `list_workflows`
+   - List GitHub Actions workflows in a repository
+   - Inputs:
+     - `owner` (string): Repository owner (username or organization)
+     - `repo` (string): Repository name
+     - `page` (optional number): Page number for pagination
+     - `per_page` (optional number): Results per page (max 100)
+   - Returns: List of workflows with details including ID, name, state, file path, etc.
+
+28. `get_workflow`
+   - Get a specific GitHub Actions workflow
+   - Inputs:
+     - `owner` (string): Repository owner (username or organization)
+     - `repo` (string): Repository name
+     - `workflow_id` (string|number): Workflow ID or filename
+   - Returns: Detailed workflow information
+
+29. `list_workflow_runs`
+   - List GitHub Actions workflow runs
+   - Inputs:
+     - `owner` (string): Repository owner (username or organization)
+     - `repo` (string): Repository name
+     - `workflow_id` (optional string|number): Filter by specific workflow ID or filename
+     - `actor` (optional string): Filter by user who triggered the workflow
+     - `branch` (optional string): Filter by branch name
+     - `event` (optional string): Filter by event type (push, pull_request, etc.)
+     - `status` (optional string): Filter by status
+     - `per_page` (optional number): Results per page (max 100)
+     - `page` (optional number): Page number
+   - Returns: List of workflow runs with status, conclusion, and related details
+
+30. `get_workflow_run`
+   - Get a specific GitHub Actions workflow run
+   - Inputs:
+     - `owner` (string): Repository owner (username or organization)
+     - `repo` (string): Repository name
+     - `run_id` (number): Run ID
+   - Returns: Detailed workflow run information
+
+31. `list_workflow_jobs`
+   - List jobs for a workflow run
+   - Inputs:
+     - `owner` (string): Repository owner (username or organization)
+     - `repo` (string): Repository name
+     - `run_id` (number): Run ID
+     - `filter` (optional string): Filter jobs by completion status ('latest', 'all')
+     - `per_page` (optional number): Results per page (max 100)
+     - `page` (optional number): Page number
+   - Returns: List of jobs with steps, status, and conclusion details
+
+32. `get_workflow_job`
+   - Get a specific job from a workflow run
+   - Inputs:
+     - `owner` (string): Repository owner (username or organization)
+     - `repo` (string): Repository name
+     - `job_id` (number): Job ID
+   - Returns: Detailed job information including steps and conclusion
+
+33. `list_workflow_run_artifacts`
+   - List artifacts for a workflow run
+   - Inputs:
+     - `owner` (string): Repository owner (username or organization)
+     - `repo` (string): Repository name
+     - `run_id` (number): Run ID
+     - `per_page` (optional number): Results per page (max 100)
+     - `page` (optional number): Page number
+   - Returns: List of available artifacts with download URLs and expiration details
+
+34. `download_workflow_run_logs`
+   - Get download URL for workflow run logs
+   - Inputs:
+     - `owner` (string): Repository owner (username or organization)
+     - `repo` (string): Repository name
+     - `run_id` (number): Run ID
+   - Returns: A download URL for the workflow run logs
+
+35. `get_job_logs`
+   - Get download URL for job logs
+   - Inputs:
+     - `owner` (string): Repository owner (username or organization)
+     - `repo` (string): Repository name
+     - `job_id` (number): Job ID
+   - Returns: A download URL for the job logs
+
+36. `get_recent_failed_runs`
+   - Get details of recent failed workflow runs with specific failed jobs and steps
+   - Inputs:
+     - `owner` (string): Repository owner (username or organization)
+     - `repo` (string): Repository name
+     - `limit` (optional number): Maximum number of failed runs to return
+   - Returns: Structured data about recent workflow failures with detailed information about what specifically failed
+
+### Accessing GitHub Actions Logs
+
+To access workflow and job logs, your GitHub Personal Access Token must have:
+
+- The `workflow` scope (as already mentioned)
+- The `repo` scope (for private repositories) or `repo:status` (for public repositories)
+- The `actions:read` permission (for specific log access)
+
+Without these permissions, log-related operations like `get_job_logs` and `download_workflow_run_logs` will return 401 Unauthorized errors.
+
+### Testing the GitHub Actions Integration
+
+To ensure the GitHub Actions integration works properly with your repositories, follow these steps:
+
+1. **Set up a Personal Access Token:**
+   - Create a [GitHub Personal Access Token](https://github.com/settings/tokens) with the `workflow` scope
+   - Set the token as the `GITHUB_PERSONAL_ACCESS_TOKEN` environment variable
+
+2. **Configure your test repository:**
+   - Copy `.env.example` to `.env` and fill in your values
+   - Use a repository with GitHub Actions workflows
+   - For testing failures, you can use the sample workflow in `examples/sample-workflow.yml`
+
+3. **Run the E2E tests:**
+   ```bash
+   npm run test:e2e
+   ```
+
+4. **Testing with Claude Desktop:**
+   - Ensure your Claude Desktop config includes the `workflow` scope in your GitHub token
+   - Try asking Claude to:
+     - "Show me recent workflow runs in my repository"
+     - "What workflows are failing in my repository?"
+     - "Help me debug the latest CI failure"
+
+5. **Troubleshooting Tips:**
+   - Verify your token has the correct permissions (needs `workflow` scope)
+   - Check that your repository has GitHub Actions enabled
+   - For private repositories, ensure your token has access to the repository
+
 ## Search Query Syntax
 
 ### Code Search
@@ -309,6 +448,7 @@ For detailed search syntax, see [GitHub's searching documentation](https://docs.
    - Select which repositories you'd like this token to have access to (Public, All, or Select)
    - Create a token with the `repo` scope ("Full control of private repositories")
      - Alternatively, if working only with public repositories, select only the `public_repo` scope
+     - If using GitHub Actions functionality, ensure you also select the `workflow` scope
    - Copy the generated token
 
 ### Usage with Claude Desktop
