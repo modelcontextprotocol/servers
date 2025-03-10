@@ -16,11 +16,14 @@
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:e2e": "vitest run actions.e2e.test.ts",
+    "demo": "node --import tsx examples/demo.ts",
+    "check-token": "node --import tsx examples/token-check.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.0.1",
-    "@types/node": "^22",
     "@types/node-fetch": "^2.6.12",
     "node-fetch": "^3.3.2",
     "universal-user-agent": "^7.0.2",
@@ -28,7 +31,13 @@
     "zod-to-json-schema": "^3.23.5"
   },
   "devDependencies": {
+    "@types/node": "^22.13.10",
+    "dotenv": "^16.4.1",
+    "jsdom": "^26.0.0",
     "shx": "^0.3.4",
-    "typescript": "^5.6.2"
+    "ts-node": "^10.9.2",
+    "tsx": "^4.7.0",
+    "typescript": "^5.6.2",
+    "vitest": "^3.0.8"
   }
 }
