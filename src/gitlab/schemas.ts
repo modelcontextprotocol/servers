@@ -348,7 +348,15 @@ export const GitLabEpicSchema = z.object({
   start_date: z.string().nullable().optional(),
   end_date: z.string().nullable().optional(),
   web_url: z.string().optional(),
-  labels: z.array(GitLabLabelSchema).optional()
+  labels: z.array(GitLabLabelSchema).optional(),
+  children: z.array(z.object({
+    id: z.number(),
+    iid: z.number(),
+    title: z.string(),
+    state: z.string(),
+    web_url: z.string().optional(),
+    type: z.string().optional() // 'epic' or 'issue'
+  })).optional()
 }).partial(); // Make all fields optional to handle API variations
 
 // User activity related schemas

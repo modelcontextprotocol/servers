@@ -687,42 +687,93 @@ async function getUserActivity(
 }
 
 async function getEpicDetails(
-  groupId: string,
-  epicIid: number
+    groupId: string,
+    epicIid: number
 ): Promise<GitLabEpicDetails> {
-  try {
-    // First, get the epic details
-    const url = `${GITLAB_API_URL}/groups/${encodeURIComponent(groupId)}/epics/${epicIid}`;
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`GitLab API error: ${response.statusText}`);
-    }
-
-    const responseData = await response.json() as Record<string, unknown>;
-    
-    const epic = GitLabEpicSchema.parse(responseData);
-    
-    // Then, get comments
     try {
-      const comments = await getEpicComments(groupId, epicIid);
-      return { ...epic, comments };
+        // First, get the epic details
+        const url = `${GITLAB_API_URL}/groups/${encodeURIComponent(groupId)}/epics/${epicIid}`;
+        const response = await fetch(url, {
+            headers: {
+                "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`GitLab API error: ${response.statusText}`);
+        }
+
+        const responseData = await response.json() as Record<string, unknown>;
+        const epic = GitLabEpicSchema.parse(responseData);
+
+        // Fetch child items (epics and issues)
+        try {
+            const childrenUrl = `${GITLAB_API_URL}/groups/${encodeURIComponent(groupId)}/epics/${epicIid}/issues`;
+            const childrenResponse = await fetch(childrenUrl, {
+                headers: {
+                    "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+                }
+            });
+
+            if (childrenResponse.ok) {
+                const childIssues = await childrenResponse.json() as any[];
+
+                // Also fetch child epics
+                const childEpicsUrl = `${GITLAB_API_URL}/groups/${encodeURIComponent(groupId)}/epics/${epicIid}/epics`;
+                const childEpicsResponse = await fetch(childEpicsUrl, {
+                    headers: {
+                        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+                    }
+                });
+
+                let childEpics = [];
+                if (childEpicsResponse.ok) {
+                    childEpics = await childEpicsResponse.json() as any[];
+                }
+
+                // Format child items
+                const children = [
+                    ...childIssues.map(issue => ({
+                        id: issue.id,
+                        iid: issue.iid,
+                        title: issue.title,
+                        state: issue.state,
+                        web_url: issue.web_url,
+                        type: 'issue'
+                    })),
+                    ...childEpics.map(childEpic => ({
+                        id: childEpic.id,
+                        iid: childEpic.iid,
+                        title: childEpic.title,
+                        state: childEpic.state,
+                        web_url: childEpic.web_url,
+                        type: 'epic'
+                    }))
+                ];
+
+                epic.children = children;
+            }
+        } catch (error) {
+            console.error(`Error fetching epic children: ${error}`);
+            // Continue without children if there's an error
+        }
+
+        // Then, get comments
+        try {
+            const comments = await getEpicComments(groupId, epicIid);
+            return { ...epic, comments };
+        } catch (error) {
+            // Return epic without comments if we can't fetch them
+            console.error(`Error fetching epic comments: ${error}`);
+            return epic;
+        }
     } catch (error) {
-      // Return epic without comments if we can't fetch them
-      console.error(`Error fetching epic comments: ${error}`);
-      return epic;
+        if (error instanceof z.ZodError) {
+            console.error('Schema validation error:', JSON.stringify(error.errors, null, 2));
+            throw new Error(`Epic schema validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+        }
+        throw error;
     }
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      console.error('Schema validation error:', JSON.stringify(error.errors, null, 2));
-      throw new Error(`Epic schema validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
-    }
-    throw error;
-  }
 }
 
 async function createRepository(
