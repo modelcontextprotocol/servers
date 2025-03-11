@@ -1,3 +1,5 @@
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import fetch, { type Response } from 'node-fetch';
 import { getUserAgent } from "universal-user-agent";
 import { createGitHubError } from "./errors.js";
 import { VERSION } from "./version.js";
@@ -6,6 +8,10 @@ type RequestOptions = {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
+}
+
+function isValidUrl(url: string): boolean {
+  return !!URL.parse(url);
 }
 
 async function parseResponseBody(response: Response): Promise<unknown> {
@@ -43,10 +49,16 @@ export async function githubRequest(
     headers["Authorization"] = `Bearer ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN}`;
   }
 
+  let agent: HttpsProxyAgent<string> | boolean = false;
+  if (process.env.PROXY && isValidUrl(process.env.PROXY)) {
+    agent = new HttpsProxyAgent(process.env.PROXY);
+  }
+
   const response = await fetch(url, {
     method: options.method || "GET",
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
+    agent,
   });
 
   const responseBody = await parseResponseBody(response);

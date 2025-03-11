@@ -326,10 +326,13 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
         "--rm",
         "-e",
         "GITHUB_PERSONAL_ACCESS_TOKEN",
+        // "-e", // OPTIONAL
+        // "PROXY",
         "mcp/github"
       ],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
+        "PROXY": "<IF_YOU_NEED_PROXY>"
       }
     }
   }
@@ -348,7 +351,8 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
         "@modelcontextprotocol/server-github"
       ],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
+        "PROXY": "<IF_YOU_NEED_PROXY>"
       }
     }
   }
