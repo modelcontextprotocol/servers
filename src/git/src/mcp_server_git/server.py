@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Sequence
+from typing import Sequence, Optional
 from mcp.server import Server
 from mcp.server.session import ServerSession
 from mcp.server.stdio import stdio_server
@@ -14,6 +14,7 @@ from mcp.types import (
 from enum import Enum
 import git
 from pydantic import BaseModel
+import os
 
 class GitStatus(BaseModel):
     repo_path: str
@@ -147,9 +148,21 @@ def git_show(repo: git.Repo, revision: str) -> str:
         output.append(d.diff.decode('utf-8'))
     return "".join(output)
 
-async def serve(repository: Path | None) -> None:
+# Function to find Git repositories in a directory
+def find_git_repos(directory: Path) -> list[str]:
+    """Find all Git repositories in the given directory and its subdirectories."""
+    repos = []
+    for root, dirs, _ in os.walk(directory):
+        # Check if the current directory is a Git repository
+        if '.git' in dirs:
+            repos.append(root)
+            dirs.remove('.git')  # No need to traverse into .git directories
+    return repos
+
+async def serve(repository: Path | None = None, directory: Path | None = None) -> None:
     logger = logging.getLogger(__name__)
 
+    # Validate repository if provided
     if repository is not None:
         try:
             git.Repo(repository)
@@ -157,6 +170,20 @@ async def serve(repository: Path | None) -> None:
         except git.InvalidGitRepositoryError:
             logger.error(f"{repository} is not a valid Git repository")
             return
+
+    # Validate directory if provided
+    if directory is not None:
+        if not directory.is_dir():
+            logger.error(f"{directory} is not a valid directory")
+            return
+        logger.info(f"Using directory at {directory} to discover Git repositories")
+        repos = find_git_repos(directory)
+        if not repos:
+            logger.warning(f"No Git repositories found in {directory}")
+        else:
+            logger.info(f"Found {len(repos)} Git repositories in {directory}")
+            for repo in repos:
+                logger.info(f"  - {repo}")
 
     server = Server("mcp-git")
 
@@ -248,7 +275,18 @@ async def serve(repository: Path | None) -> None:
             return repo_paths
 
         def by_commandline() -> Sequence[str]:
-            return [str(repository)] if repository is not None else []
+            repos = []
+            
+            # Add specific repository if provided
+            if repository is not None:
+                repos.append(str(repository))
+                
+            # Add repositories found in directory if provided
+            if directory is not None:
+                found_repos = find_git_repos(directory)
+                repos.extend(found_repos)
+                
+            return repos
 
         cmd_repos = by_commandline()
         root_repos = await by_roots()
