@@ -159,6 +159,56 @@ export const GetPullRequestReviewsSchema = z.object({
   pull_number: z.number().describe("Pull request number")
 });
 
+export const AddPullRequestIssueCommentSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number"),
+  body: z.string().describe("The text of the comment")
+});
+
+export const ResolvePullRequestConversationSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  comment_id: z.number().describe("The ID of the comment thread to resolve"),
+  thread_id: z.string().describe("The ID of the thread to resolve")
+});
+
+// Novas schemas adicionadas
+export const AddPullRequestCommentSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number"),
+  body: z.string().describe("The text of the comment"),
+  commit_id: z.string().describe("The SHA of the commit to comment on"),
+  path: z.string().describe("The relative path to the file that you want to comment on"),
+  position: z.number().describe("The position in the diff where you want to add a comment")
+});
+
+export const UpdatePullRequestSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number"),
+  title: z.string().optional().describe("The title of the pull request"),
+  body: z.string().optional().describe("The contents of the pull request"),
+  state: z.enum(['open', 'closed']).optional().describe("State of the pull request"),
+  base: z.string().optional().describe("The name of the branch you want the changes pulled into"),
+  maintainer_can_modify: z.boolean().optional().describe("Whether maintainers can modify the pull request")
+});
+
+export const ReplyToPullRequestCommentSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  comment_id: z.number().describe("The ID of the comment to reply to"),
+  body: z.string().describe("The text of the reply")
+});
+
+export const UpdatePullRequestCommentSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  comment_id: z.number().describe("The ID of the comment to update"),
+  body: z.string().describe("The new text of the comment")
+});
+
 // Function implementations
 export async function createPullRequest(
   params: z.infer<typeof CreatePullRequestSchema>
@@ -299,4 +349,125 @@ export async function getPullRequestStatus(
     `https://api.github.com/repos/${owner}/${repo}/commits/${sha}/status`
   );
   return CombinedStatusSchema.parse(response);
+}
+
+export async function addPullRequestIssueComment(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  body: string
+): Promise<any> {
+  // Os pull requests também são issues, então usamos a API de comentários de issues
+  return githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/issues/${pullNumber}/comments`,
+    {
+      method: "POST",
+      body: { body }
+    }
+  );
+}
+
+export async function resolvePullRequestConversation(
+  owner: string,
+  repo: string,
+  commentId: number,
+  threadId: string
+): Promise<void> {
+  await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/comments/${commentId}/threads/${threadId}/resolve`,
+    {
+      method: "PUT",
+      body: {}
+    }
+  );
+}
+
+// Novas funções implementadas
+
+/**
+ * Adiciona um comentário a uma linha específica em um pull request
+ */
+export async function addPullRequestComment(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  body: string,
+  commitId: string,
+  path: string,
+  position: number
+): Promise<z.infer<typeof PullRequestCommentSchema>> {
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/comments`,
+    {
+      method: "POST",
+      body: {
+        body,
+        commit_id: commitId,
+        path,
+        position
+      }
+    }
+  );
+  
+  return PullRequestCommentSchema.parse(response);
+}
+
+/**
+ * Atualiza um pull request existente (título, corpo, estado, etc.)
+ */
+export async function updatePullRequest(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  options: Omit<z.infer<typeof UpdatePullRequestSchema>, 'owner' | 'repo' | 'pull_number'>
+): Promise<z.infer<typeof GitHubPullRequestSchema>> {
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`,
+    {
+      method: "PATCH",
+      body: options
+    }
+  );
+  
+  return GitHubPullRequestSchema.parse(response);
+}
+
+/**
+ * Responde a um comentário existente em um pull request
+ */
+export async function replyToPullRequestComment(
+  owner: string,
+  repo: string,
+  commentId: number,
+  body: string
+): Promise<z.infer<typeof PullRequestCommentSchema>> {
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/comments/${commentId}/replies`,
+    {
+      method: "POST",
+      body: { body }
+    }
+  );
+  
+  return PullRequestCommentSchema.parse(response);
+}
+
+/**
+ * Atualiza um comentário existente em um pull request
+ */
+export async function updatePullRequestComment(
+  owner: string,
+  repo: string,
+  commentId: number,
+  body: string
+): Promise<z.infer<typeof PullRequestCommentSchema>> {
+  const response = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/comments/${commentId}`,
+    {
+      method: "PATCH",
+      body: { body }
+    }
+  );
+  
+  return PullRequestCommentSchema.parse(response);
 }

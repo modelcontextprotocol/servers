@@ -194,6 +194,36 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_reviews",
         description: "Get the reviews on a pull request",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema)
+      },
+      {
+        name: "add_pull_request_comment",
+        description: "Add a review comment to a specific line in a pull request",
+        inputSchema: zodToJsonSchema(pulls.AddPullRequestCommentSchema),
+      },
+      {
+        name: "update_pull_request",
+        description: "Update an existing pull request (title, body, state, etc.)",
+        inputSchema: zodToJsonSchema(pulls.UpdatePullRequestSchema),
+      },
+      {
+        name: "reply_to_pull_request_comment",
+        description: "Reply to an existing pull request comment",
+        inputSchema: zodToJsonSchema(pulls.ReplyToPullRequestCommentSchema),
+      },
+      {
+        name: "resolve_pull_request_conversation",
+        description: "Resolve a pull request comment thread/conversation",
+        inputSchema: zodToJsonSchema(pulls.ResolvePullRequestConversationSchema),
+      },
+      {
+        name: "add_pull_request_issue_comment",
+        description: "Add a general comment to a pull request (not on a specific line)",
+        inputSchema: zodToJsonSchema(pulls.AddPullRequestIssueCommentSchema),
+      },
+      {
+        name: "update_pull_request_comment",
+        description: "Edit an existing pull request comment",
+        inputSchema: zodToJsonSchema(pulls.UpdatePullRequestCommentSchema),
       }
     ],
   };
@@ -453,6 +483,83 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const reviews = await pulls.getPullRequestReviews(args.owner, args.repo, args.pull_number);
         return {
           content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }],
+        };
+      }
+
+      case "add_pull_request_comment": {
+        const args = pulls.AddPullRequestCommentSchema.parse(request.params.arguments);
+        const comment = await pulls.addPullRequestComment(
+          args.owner,
+          args.repo,
+          args.pull_number,
+          args.body,
+          args.commit_id,
+          args.path,
+          args.position
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(comment, null, 2) }],
+        };
+      }
+
+      case "update_pull_request": {
+        const args = pulls.UpdatePullRequestSchema.parse(request.params.arguments);
+        const { owner, repo, pull_number, ...options } = args;
+        const pr = await pulls.updatePullRequest(owner, repo, pull_number, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(pr, null, 2) }],
+        };
+      }
+
+      case "reply_to_pull_request_comment": {
+        const args = pulls.ReplyToPullRequestCommentSchema.parse(request.params.arguments);
+        const reply = await pulls.replyToPullRequestComment(
+          args.owner,
+          args.repo,
+          args.comment_id,
+          args.body
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(reply, null, 2) }],
+        };
+      }
+
+      case "resolve_pull_request_conversation": {
+        const args = pulls.ResolvePullRequestConversationSchema.parse(request.params.arguments);
+        await pulls.resolvePullRequestConversation(
+          args.owner,
+          args.repo,
+          args.comment_id,
+          args.thread_id
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: true }, null, 2) }],
+        };
+      }
+
+      case "add_pull_request_issue_comment": {
+        const args = pulls.AddPullRequestIssueCommentSchema.parse(request.params.arguments);
+        const comment = await pulls.addPullRequestIssueComment(
+          args.owner,
+          args.repo,
+          args.pull_number,
+          args.body
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(comment, null, 2) }],
+        };
+      }
+
+      case "update_pull_request_comment": {
+        const args = pulls.UpdatePullRequestCommentSchema.parse(request.params.arguments);
+        const comment = await pulls.updatePullRequestComment(
+          args.owner,
+          args.repo,
+          args.comment_id,
+          args.body
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(comment, null, 2) }],
         };
       }
 
