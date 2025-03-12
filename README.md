@@ -224,6 +224,7 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 * **[FastMCP](https://github.com/punkpeye/fastmcp)** (TypeScript)
 * **[Foxy Contexts](https://github.com/strowk/foxy-contexts)** – A library to build MCP servers in Golang by **[strowk](https://github.com/strowk)**
 * **[Quarkus MCP Server SDK](https://github.com/quarkiverse/quarkus-mcp-server)** (Java)
+* **[MCP-Framework](https:/mcp-framework.com)** Build MCP servers with elegance and speed. Get started with your first server in under 5 minutes (TypeScript)
 
 ### For clients
 
