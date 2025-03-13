@@ -59,6 +59,25 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 
+### BUN
+```json
+{
+  "mcpServers": {
+    "brave-search": {
+      "command": "bunx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "BSAUf*********************NC2g"
+      }
+    }
+  }
+}
+
+```
+
 ### NPX
 
 ```json
