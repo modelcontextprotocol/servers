@@ -99,10 +99,11 @@ export const createServer = () => {
   );
 
   let subscriptions: Set<string> = new Set();
-  let updateInterval: NodeJS.Timeout | undefined;
+  let subsUpdateInterval: NodeJS.Timeout | undefined;
+  let logsUpdateInterval: NodeJS.Timeout | undefined;
 
   // Set up update interval for subscribed resources
-  updateInterval = setInterval(() => {
+  subsUpdateInterval = setInterval(() => {
     for (const uri of subscriptions) {
       server.notification({
         method: "notifications/resources/updated",
@@ -110,6 +111,21 @@ export const createServer = () => {
       });
     }
   }, 5000);
+
+  // Set up update interval for random log messages
+  logsUpdateInterval = setInterval(() => {
+    const messages = [
+      {level: "info", data: "Information is good"},
+        {level: "warning", data: "Warning is scary"},
+        {level: "error", data: "Error is bad"},
+    ]
+    server.notification({
+      method: "notifications/message",
+      params: messages[Math.floor(Math.random()*3)],
+    });
+  }, 15000);
+
+
 
   // Helper method to request sampling from client
   const requestSampling = async (
@@ -451,7 +467,7 @@ export const createServer = () => {
 
     if (name === ToolName.ANNOTATED_MESSAGE) {
       const { messageType, includeImage } = AnnotatedMessageSchema.parse(args);
-      
+
       const content = [];
 
       // Main message with different priorities/audiences based on type
@@ -511,7 +527,7 @@ export const createServer = () => {
       if (!resourceId) return { completion: { values: [] } };
 
       // Filter resource IDs that start with the input value
-      const values = EXAMPLE_COMPLETIONS.resourceId.filter(id => 
+      const values = EXAMPLE_COMPLETIONS.resourceId.filter(id =>
         id.startsWith(argument.value)
       );
       return { completion: { values, hasMore: false, total: values.length } };
@@ -522,7 +538,7 @@ export const createServer = () => {
       const completions = EXAMPLE_COMPLETIONS[argument.name as keyof typeof EXAMPLE_COMPLETIONS];
       if (!completions) return { completion: { values: [] } };
 
-      const values = completions.filter(value => 
+      const values = completions.filter(value =>
         value.startsWith(argument.value)
       );
       return { completion: { values, hasMore: false, total: values.length } };
@@ -548,9 +564,8 @@ export const createServer = () => {
   });
 
   const cleanup = async () => {
-    if (updateInterval) {
-      clearInterval(updateInterval);
-    }
+    if (subsUpdateInterval) clearInterval(subsUpdateInterval);
+    if (logsUpdateInterval) clearInterval(logsUpdateInterval);
   };
 
   return { server, cleanup };
