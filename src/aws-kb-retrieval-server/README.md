@@ -6,6 +6,7 @@ An MCP server implementation for retrieving information from the AWS Knowledge B
 
 - **RAG (Retrieval-Augmented Generation)**: Retrieve context from the AWS Knowledge Base based on a query and a Knowledge Base ID.
 - **Supports multiple results retrieval**: Option to retrieve a customizable number of results.
+- **Flexible AWS authentication**: Support for AWS profiles, or explicit credentials.
 
 ## Tools
 
@@ -20,14 +21,44 @@ An MCP server implementation for retrieving information from the AWS Knowledge B
 
 ### Setting up AWS Credentials
 
-1. Obtain AWS access key ID, secret access key, and region from the AWS Management Console.
-2. Ensure these credentials have appropriate permissions for Bedrock Agent Runtime operations.
+This server supports multiple authentication methods:
+
+1. **AWS Profile** (recommended for development):
+   - Set the `AWS_PROFILE` environment variable to use a specific profile from your AWS config.
+   - Example: `AWS_PROFILE=my-profile`
+
+2. **Explicit Credentials**:
+   - Provide `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables.
+   - Obtain these from the AWS Management Console.
+
+3. **Default Credential Chain**:
+   - If neither AWS_PROFILE nor explicit credentials are provided, the AWS SDK's default credential provider chain will be used.
+   - This includes checking environment variables, shared credential file, and IAM roles for EC2/ECS.
+
+In all cases, ensure the credentials have appropriate permissions for Bedrock Agent Runtime operations.
 
 ### Usage with Claude Desktop
 
 Add this to your `claude_desktop_config.json`:
 
-#### Docker
+#### Docker with AWS Profile
+
+```json
+{
+  "mcpServers": {
+    "aws-kb-retrieval": {
+      "command": "docker",
+      "args": [ "run", "-i", "--rm", "-e", "AWS_PROFILE", "-e", "AWS_REGION", "-v", "${HOME}/.aws:/root/.aws", "mcp/aws-kb-retrieval-server" ],
+      "env": {
+        "AWS_PROFILE": "YOUR_PROFILE_NAME",
+        "AWS_REGION": "YOUR_AWS_REGION_HERE"
+      }
+    }
+  }
+}
+```
+
+#### Docker with Explicit Credentials
 
 ```json
 {
@@ -44,6 +75,8 @@ Add this to your `claude_desktop_config.json`:
   }
 }
 ```
+
+#### NPX
 
 ```json
 {
