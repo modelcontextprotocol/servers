@@ -26,6 +26,8 @@ interface RAGSource {
   fileName: string;
   snippet: string;
   score: number;
+  url?: string;
+  title?: string;
 }
 
 async function retrieveContext(
@@ -63,11 +65,23 @@ async function retrieveContext(
       .map((result, index) => {
         const uri = result?.location?.s3Location?.uri || "";
         const fileName = uri.split("/").pop() || `Source-${index}.txt`;
+        
+        // Extract Confluence URL if available
+        let url = "";
+        if (result?.location?.confluenceLocation?.url) {
+          url = result.location.confluenceLocation.url;
+        }
+        
+        // Get document title from metadata
+        const title = (result.metadata?.["x-amz-bedrock-kb-title"] as string) || "";
+        
         return {
           id: (result.metadata?.["x-amz-bedrock-kb-chunk-id"] as string) || `chunk-${index}`,
           fileName: fileName.replace(/_/g, " ").replace(".txt", ""),
           snippet: result.content?.text || "",
           score: (result.score as number) || 0,
+          url: url || undefined,
+          title: title || undefined,
         };
       })
       .slice(0, 3);
