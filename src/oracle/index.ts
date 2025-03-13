@@ -246,41 +246,22 @@ const PromptsListRequestSchema = z.object({
   params: z.object({}),
 });
 
-let inactivityTimer: NodeJS.Timeout | null = null;
-const INACTIVITY_TIMEOUT = 60000; // 1 minute
-
-function resetInactivityTimer() {
-  if (inactivityTimer) {
-    clearTimeout(inactivityTimer);
-  }
-  inactivityTimer = setTimeout(() => {
-    // console.log("No activity detected for 30 seconds. Shutting down server...");
-    process.exit(0);
-  }, INACTIVITY_TIMEOUT);
-}
-
 server.setRequestHandler(PromptsListRequestSchema, async () => {
-  resetInactivityTimer();
   return {
     prompts,
   };
-});
-
-process.on("SIGINT", async () => {
-  console.log("Received SIGINT. Shutting down server...");
-  process.exit(0);
-});
-
-process.on("SIGTERM", async () => {
-  console.log("Received SIGTERM. Shutting down server...");
-  process.exit(0);
 });
 
 async function runServer() {
   await initializePool(connectionString); // Initialize the pool before starting the server
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  resetInactivityTimer(); // Start the inactivity timer when the server starts
 }
 
 runServer().catch(console.error);
+
+process.stdin.on("close", () => {
+  console.error("Oracle MCP Server closed");
+  server.close();
+  process.exit(0);
+});
