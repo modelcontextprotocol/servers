@@ -11,6 +11,9 @@ from mcp.shared.exceptions import McpError
 
 from pydantic import BaseModel
 
+# Import the timezone resolver function
+from .timezone_utils import resolve_timezone_name
+
 
 class TimeTools(str, Enum):
     GET_CURRENT_TIME = "get_current_time"
@@ -36,21 +39,57 @@ class TimeConversionInput(BaseModel):
 
 
 def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
+    """
+    Get the local timezone.
+    
+    Args:
+        local_tz_override: Optional timezone string override
+        
+    Returns:
+        A ZoneInfo object representing the timezone
+        
+    Raises:
+        McpError: If unable to determine the timezone
+    """
     if local_tz_override:
-        return ZoneInfo(local_tz_override)
+        # Resolve any abbreviations to IANA identifiers
+        resolved_tz = resolve_timezone_name(local_tz_override)
+        try:
+            return ZoneInfo(resolved_tz)
+        except Exception as e:
+            raise McpError(f"Invalid timezone override '{local_tz_override}': {str(e)}")
 
     # Get local timezone from datetime.now()
     tzinfo = datetime.now().astimezone(tz=None).tzinfo
     if tzinfo is not None:
-        return ZoneInfo(str(tzinfo))
+        resolved_tz = resolve_timezone_name(str(tzinfo))
+        try:
+            return ZoneInfo(resolved_tz)
+        except Exception as e:
+            raise McpError(f"Could not determine local timezone '{resolved_tz}': {str(e)}")
     raise McpError("Could not determine local timezone - tzinfo is None")
 
 
 def get_zoneinfo(timezone_name: str) -> ZoneInfo:
+    """
+    Get a ZoneInfo object for the given timezone name.
+    
+    Args:
+        timezone_name: A timezone string which could be an abbreviation or IANA identifier
+        
+    Returns:
+        A ZoneInfo object for the specified timezone
+        
+    Raises:
+        McpError: If the timezone is invalid
+    """
+    # Resolve abbreviations to IANA identifiers
+    resolved_tz = resolve_timezone_name(timezone_name)
+    
     try:
-        return ZoneInfo(timezone_name)
+        return ZoneInfo(resolved_tz)
     except Exception as e:
-        raise McpError(f"Invalid timezone: {str(e)}")
+        raise McpError(f"Invalid timezone '{timezone_name}': {str(e)}")
 
 
 class TimeServer:
