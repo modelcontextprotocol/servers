@@ -1,61 +1,61 @@
-# Servidor MCP para GitHub Projects
+# MCP Server for GitHub Projects
 
-Um servidor MCP (Model Context Protocol) para interagir com a API GitHub Projects V2.
+An MCP (Model Context Protocol) server for interacting with the GitHub Projects V2 API.
 
-## Descrição
+## Description
 
-Este servidor MCP permite que modelos de linguagem interajam com os projetos GitHub V2 por meio de um conjunto de ferramentas que fornecem operações de criação, leitura, atualização e exclusão (CRUD) para projetos e seus recursos associados como itens, campos e visualizações.
+This MCP server allows language models to interact with GitHub Projects V2 through a set of tools that provide create, read, update, and delete (CRUD) operations for projects and their associated resources such as items, fields, and views.
 
-## Funcionalidades
+## Features
 
-### Operações de Projetos
-- Listar projetos para um usuário ou organização
-- Obter detalhes de um projeto específico
-- Criar um novo projeto
-- Atualizar um projeto existente
-- Excluir um projeto
+### Project Operations
+- List projects for a user or organization
+- Get details of a specific project
+- Create a new project
+- Update an existing project
+- Delete a project
 
-### Operações de Itens
-- Listar itens em um projeto
-- Adicionar um issue ou pull request a um projeto
-- Criar um item rascunho
-- Remover um item de um projeto
-- Obter detalhes de um item específico
+### Item Operations
+- List items in a project
+- Add an issue or pull request to a project
+- Create a draft item
+- Remove an item from a project
+- Get details of a specific item
 
-### Operações de Campos
-- Listar campos em um projeto
-- Criar um novo campo personalizado
-- Atualizar o valor de um campo para um item
-- Excluir um campo personalizado
+### Field Operations
+- List fields in a project
+- Create a new custom field
+- Update a field value for an item
+- Delete a custom field
 
-### Operações de Visualizações
-- Listar visualizações de um projeto
-- Criar uma nova visualização
-- Atualizar uma visualização existente
-- Excluir uma visualização
+### View Operations
+- List views of a project
+- Create a new view
+- Update an existing view
+- Delete a view
 
-## Pré-requisitos
+## Prerequisites
 
-- Node.js (versão 18 ou superior)
-- Token de acesso pessoal do GitHub com os escopos `repo` e `project`
+- Node.js (version 18 or higher)
+- GitHub personal access token with `repo` and `project` scopes
 
-## Instalação
+## Installation
 
 ```bash
 npm install @modelcontextprotocol/server-github-projects
 ```
 
-## Configuração
+## Configuration
 
-Defina a variável de ambiente `GITHUB_PERSONAL_ACCESS_TOKEN` com seu token de acesso pessoal do GitHub:
+Set the `GITHUB_PERSONAL_ACCESS_TOKEN` environment variable with your GitHub personal access token:
 
 ```bash
-export GITHUB_PERSONAL_ACCESS_TOKEN=seu_token_aqui
+export GITHUB_PERSONAL_ACCESS_TOKEN=your_token_here
 ```
 
-## Uso
+## Usage
 
-### Como um módulo
+### As a module
 
 ```javascript
 import { startServer } from '@modelcontextprotocol/server-github-projects';
@@ -63,44 +63,44 @@ import { startServer } from '@modelcontextprotocol/server-github-projects';
 startServer();
 ```
 
-### Como um executável
+### As an executable
 
 ```bash
 npx mcp-server-github-projects
 ```
 
-## Exemplo de Uso
+## Example Usage
 
-Aqui está um exemplo de como usar este servidor com uma plataforma de IA baseada em MCP:
+Here's an example of how to use this server with an MCP-based AI platform:
 
 ```
-# Listar projetos de um usuário
+# List projects for a user
 mcp__list_projects(owner="octocat", type="user")
 
-# Criar um novo projeto
-mcp__create_project(owner="minha-org", title="Meu Novo Projeto", type="organization", description="Um projeto para gerenciar tarefas")
+# Create a new project
+mcp__create_project(owner="my-org", title="My New Project", type="organization", description="A project to manage tasks")
 
-# Adicionar um item ao projeto
+# Add an item to the project
 mcp__add_project_item(project_id="PVT_kwHOA...", content_id="I_kwDOA...")
 
-# Criar um campo personalizado de seleção única
-mcp__create_project_field(project_id="PVT_kwHOA...", name="Status", dataType="SINGLE_SELECT", options=["Em progresso", "Concluído", "Bloqueado"])
+# Create a single select custom field
+mcp__create_project_field(project_id="PVT_kwHOA...", name="Status", dataType="SINGLE_SELECT", options=["In progress", "Completed", "Blocked"])
 
-# Atualizar o valor de um campo para um item
+# Update a field value for an item
 mcp__update_project_field_value(project_id="PVT_kwHOA...", item_id="PVTI_lADOA...", field_id="PVTF_lADOA...", value={optionId: "PVTFO_lADOA..."})
 ```
 
-## Limitações
+## Limitations
 
-- Este servidor utiliza a API GraphQL do GitHub para Projects V2, que requer um token de acesso pessoal com os escopos apropriados.
-- Algumas operações avançadas de customização de visualizações, como configuração de filtros complexos, podem não estar disponíveis nesta versão.
+- This server uses the GitHub GraphQL API for Projects V2, which requires a personal access token with appropriate scopes.
+- Some advanced view customization operations, such as complex filter configuration, may not be available in this version.
 
-## Recursos adicionais
+## Additional Resources
 
-- [Documentação do GitHub Projects V2](https://docs.github.com/en/issues/planning-and-tracking-with-projects)
-- [Documentação da API GraphQL do GitHub](https://docs.github.com/en/graphql)
-- [Documentação do MCP (Model Context Protocol)](https://modelcontextprotocol.ai)
+- [GitHub Projects V2 Documentation](https://docs.github.com/en/issues/planning-and-tracking-with-projects)
+- [GitHub GraphQL API Documentation](https://docs.github.com/en/graphql)
+- [MCP (Model Context Protocol) Documentation](https://modelcontextprotocol.ai)
 
-## Licença
+## License
 
 MIT 

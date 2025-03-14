@@ -254,7 +254,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
       
       default:
-        throw new Error(`Ferramenta desconhecida: ${name}`);
+        throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
     if (isGitHubError(error)) {
@@ -265,13 +265,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function runServer() {
-  console.error(`Iniciando Servidor MCP para GitHub Projects v${VERSION}...`);
+  console.error(`Starting GitHub Projects MCP Server v${VERSION}...`);
 
   if (!process.env.GITHUB_PERSONAL_ACCESS_TOKEN) {
-    console.error("Variável de ambiente GITHUB_PERSONAL_ACCESS_TOKEN não configurada.");
-    console.error("Isto é necessário para autenticar com o GitHub.");
-    console.error("Você pode criar um token de acesso pessoal em https://github.com/settings/tokens");
-    console.error("Certifique-se de dar a ele os escopos 'repo' e 'project'.");
+    console.error("GITHUB_PERSONAL_ACCESS_TOKEN environment variable is not set.");
+    console.error("This is required to authenticate with GitHub.");
+    console.error("You can create a personal access token at https://github.com/settings/tokens");
+    console.error("Make sure to give it the 'repo' and 'project' scopes.");
     process.exit(1);
   }
 
@@ -280,6 +280,6 @@ async function runServer() {
 }
 
 runServer().catch((err) => {
-  console.error("Erro fatal:", err);
+  console.error("Fatal error:", err);
   process.exit(1);
 }); 

@@ -2,23 +2,23 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Copiar arquivos de dependências
+# Copy dependency files
 COPY package*.json ./
 
-# Instalar dependências
+# Install dependencies
 RUN npm install
 
-# Copiar código fonte
+# Copy source code
 COPY . .
 
-# Compilar o projeto
+# Build the project
 RUN npm run build
 
-# Expor porta se necessário para alguma extensão futura
+# Expose port if needed for future extensions
 # EXPOSE 3000
 
-# Variáveis de ambiente
+# Environment variables
 ENV NODE_ENV=production
 
-# Executar o servidor
+# Run the server
 CMD ["node", "dist/index.js"] 
