@@ -1,0 +1,28 @@
+{
+  "name": "@modelcontextprotocol/server-github-projects",
+  "version": "0.1.0",
+  "description": "MCP server for GitHub Projects V2 API",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "mcp-server-github-projects": "dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.0.1",
+    "@types/node": "^22",
+    "node-fetch": "^3.3.2",
+    "universal-user-agent": "^7.0.2",
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.23.5"
+  },
+  "devDependencies": {
+    "shx": "^0.3.4",
+    "typescript": "^5.6.2"
+  }
+} 
