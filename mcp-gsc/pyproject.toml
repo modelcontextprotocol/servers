@@ -1,0 +1,37 @@
+[project]
+name = "mcp-gsc"
+version = "0.1.0"
+description = "Google Search Console integration for Model Context Protocol (MCP)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Amin Foroutan", email = "aio@aminforoutan.com"}
+]
+keywords = ["mcp", "google search console", "seo", "claude", "search analytics"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Software Development :: Libraries :: Python Modules"
+]
+dependencies = [
+    "google-api-python-client>=2.163.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-auth-oauthlib>=1.2.1",
+    "mcp[cli]>=1.3.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/aminfseo/mcp-gsc"
+"Bug Tracker" = "https://github.com/aminfseo/mcp-gsc/issues"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["mcp_gsc"]
