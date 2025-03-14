@@ -1,6 +1,6 @@
 # Oracle
 
-A Model Context Protocol server that provides read-only access to Oracle databases. This server enables LLMs to inspect database schemas and execute read-only queries.
+A Model Context Protocol server that provides read-only access to Oracle databases. This server enables LLMs to inspect database schemas, execute and explain read-only queries.
 
 ## Components
 
@@ -11,11 +11,16 @@ A Model Context Protocol server that provides read-only access to Oracle databas
   - Input: `sql` (string): The SQL query to execute
   - All queries are executed within a READ ONLY transaction
 
+- **explain**
+  - Explain plan SQL queries against the connected database
+  - Input: `sql` (string): The SQL query to execute
+  - Requires GRANT SELECT_CATALOG_ROLE TO your_user;
+
 ### Resources
 
-The server provides schema information for each table in the database:
+The server provides schema information for each table in the database current connected user:
 
-- **Table Schemas** (`oracle://<host>/<table>/schema`)
+- **Table Schemas** (`oracle://USER/<table>/schema`)
   - JSON schema information for each table
   - Includes column names and data types
   - Automatically discovered from database metadata
@@ -26,8 +31,8 @@ To use this server with the Claude Desktop app, add the following configuration 
 
 ### Docker
 
-* when running docker on macos, use host.docker.internal if the server is running on the host network (eg localhost)
-* username/password can be added to the oracle url with `oracle://host.docker.internal:1521/freepdb1`
+* when running docker on MacOS, use host.docker.internal if the server is running on the host network (eg localhost)
+* username/password must be passed as environment variable
 
 ```json
 {
@@ -39,9 +44,9 @@ To use this server with the Claude Desktop app, add the following configuration 
         "-i", 
         "--rm", 
         "-e",
-        "ORACLE_USER=hr",
+        "ORACLE_USER=scott",
         "-e",
-        "ORACLE_PASSWORD=hr_2025",
+        "ORACLE_PASSWORD=tiger",
         "mcp/oracle", 
         "host.docker.internal:1521/freepdb1"]
     }
@@ -67,6 +72,26 @@ To use this server with the Claude Desktop app, add the following configuration 
 ```
 
 Replace `/freepdb1` with your database name.
+
+### Demo Prompts
+
+Sample prompts using Oracle HR schema and 
+[OracleFree 23c embedded RDBMS - Faststart - Docker Desktop Extension](https://open.docker.com/extensions/marketplace?extensionId=mochoa/oraclefree-docker-extension) .
+
+- query SELECT COUNTRY_NAME, CITY, COUNT(DEPARTMENT_ID)
+FROM COUNTRIES JOIN LOCATIONS USING (COUNTRY_ID) JOIN DEPARTMENTS USING (LOCATION_ID) 
+WHERE DEPARTMENT_ID IN 
+    (SELECT DEPARTMENT_ID FROM EMPLOYEES 
+   GROUP BY DEPARTMENT_ID 
+   HAVING COUNT(DEPARTMENT_ID)>5)
+GROUP BY COUNTRY_NAME, CITY
+- explain the execution plan
+- visualize above execution plan
+- rewrite above query with a better execution plan
+
+See in action using Claude Desktop App
+
+![Oracle MCP Server demo](./demo-prompts.gif)
 
 ## Building
 
