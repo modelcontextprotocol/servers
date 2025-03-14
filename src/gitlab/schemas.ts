@@ -11,27 +11,27 @@ export const GitLabAuthorSchema = z.object({
 export const GitLabOwnerSchema = z.object({
   username: z.string(), // Changed from login to match GitLab API
   id: z.number(),
-  avatar_url: z.string(),
-  web_url: z.string(), // Changed from html_url to match GitLab API
-  name: z.string(), // Added as GitLab includes full name
-  state: z.string() // Added as GitLab includes user state
-});
+  avatar_url: z.string().optional(),
+  web_url: z.string().optional(), // Changed from html_url to match GitLab API
+  name: z.string().optional(), // Added as GitLab includes full name
+  state: z.string().optional() // Added as GitLab includes user state
+}).optional();
 
 export const GitLabRepositorySchema = z.object({
   id: z.number(),
   name: z.string(),
   path_with_namespace: z.string(), // Changed from full_name to match GitLab API
-  visibility: z.string(), // Changed from private to match GitLab API
+  visibility: z.string().optional(), // Changed from private to match GitLab API
   owner: GitLabOwnerSchema,
   web_url: z.string(), // Changed from html_url to match GitLab API
   description: z.string().nullable(),
-  fork: z.boolean(),
-  ssh_url_to_repo: z.string(), // Changed from ssh_url to match GitLab API
-  http_url_to_repo: z.string(), // Changed from clone_url to match GitLab API
-  created_at: z.string(),
-  last_activity_at: z.string(), // Changed from updated_at to match GitLab API
-  default_branch: z.string()
-});
+  fork: z.boolean().optional(),
+  ssh_url_to_repo: z.string().optional(), // Changed from ssh_url to match GitLab API
+  http_url_to_repo: z.string().optional(), // Changed from clone_url to match GitLab API
+  created_at: z.string().optional(),
+  last_activity_at: z.string().optional(), // Changed from updated_at to match GitLab API
+  default_branch: z.string().optional()
+}).partial(); // Make all fields optional to handle API variations
 
 // File content schemas
 export const GitLabFileContentSchema = z.object({
@@ -40,20 +40,20 @@ export const GitLabFileContentSchema = z.object({
   size: z.number(),
   encoding: z.string(),
   content: z.string(),
-  content_sha256: z.string(), // Changed from sha to match GitLab API
-  ref: z.string(), // Added as GitLab requires branch reference
-  blob_id: z.string(), // Added to match GitLab API
-  last_commit_id: z.string() // Added to match GitLab API
-});
+  content_sha256: z.string().optional(), // Changed from sha to match GitLab API
+  ref: z.string().optional(), // Added as GitLab requires branch reference
+  blob_id: z.string().optional(), // Added to match GitLab API
+  last_commit_id: z.string().optional() // Added to match GitLab API
+}).partial();
 
 export const GitLabDirectoryContentSchema = z.object({
   name: z.string(),
   path: z.string(),
   type: z.string(),
-  mode: z.string(),
-  id: z.string(), // Changed from sha to match GitLab API
-  web_url: z.string() // Changed from html_url to match GitLab API
-});
+  mode: z.string().optional(),
+  id: z.string().optional(), // Changed from sha to match GitLab API
+  web_url: z.string().optional() // Changed from html_url to match GitLab API
+}).partial();
 
 export const GitLabContentSchema = z.union([
   GitLabFileContentSchema,
@@ -163,74 +163,78 @@ export const GitLabForkSchema = GitLabRepositorySchema.extend({
 });
 
 // Issue related schemas
-export const GitLabLabelSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  color: z.string(),
-  description: z.string().optional()
-});
+// Make labels more flexible - GitLab API sometimes returns strings, sometimes objects
+export const GitLabLabelSchema = z.union([
+  z.string(),
+  z.object({
+    id: z.number(),
+    name: z.string(),
+    color: z.string(),
+    description: z.string().optional()
+  })
+]);
 
 export const GitLabUserSchema = z.object({
   username: z.string(), // Changed from login to match GitLab API
   id: z.number(),
-  name: z.string(),
-  avatar_url: z.string(),
-  web_url: z.string() // Changed from html_url to match GitLab API
-});
+  name: z.string().optional(),
+  avatar_url: z.string().optional(),
+  web_url: z.string().optional() // Changed from html_url to match GitLab API
+}).partial();
 
 export const GitLabMilestoneSchema = z.object({
   id: z.number(),
   iid: z.number(), // Added to match GitLab API
   title: z.string(),
-  description: z.string(),
+  description: z.string().optional().nullable(),
   state: z.string(),
-  web_url: z.string() // Changed from html_url to match GitLab API
-});
+  web_url: z.string().optional() // Changed from html_url to match GitLab API
+}).partial();
 
 export const GitLabIssueSchema = z.object({
   id: z.number(),
   iid: z.number(), // Added to match GitLab API
   project_id: z.number(), // Added to match GitLab API
   title: z.string(),
-  description: z.string(), // Changed from body to match GitLab API
+  description: z.string().optional().nullable(), // Changed from body to match GitLab API
   state: z.string(),
-  author: GitLabUserSchema,
-  assignees: z.array(GitLabUserSchema),
-  labels: z.array(GitLabLabelSchema),
-  milestone: GitLabMilestoneSchema.nullable(),
+  author: GitLabUserSchema.optional(),
+  assignees: z.array(GitLabUserSchema).optional(),
+  labels: z.array(GitLabLabelSchema).optional(),
+  milestone: GitLabMilestoneSchema.nullable().optional(),
   created_at: z.string(),
-  updated_at: z.string(),
-  closed_at: z.string().nullable(),
-  web_url: z.string() // Changed from html_url to match GitLab API
-});
+  updated_at: z.string().optional(),
+  closed_at: z.string().nullable().optional(),
+  web_url: z.string().optional() // Changed from html_url to match GitLab API
+}).partial(); // Make all fields optional to handle API variations
 
 // Merge Request related schemas (equivalent to Pull Request)
 export const GitLabMergeRequestDiffRefSchema = z.object({
   base_sha: z.string(),
   head_sha: z.string(),
   start_sha: z.string()
-});
+}).partial();
 
 export const GitLabMergeRequestSchema = z.object({
   id: z.number(),
   iid: z.number(), // Added to match GitLab API
   project_id: z.number(), // Added to match GitLab API
   title: z.string(),
-  description: z.string(), // Changed from body to match GitLab API
+  description: z.string().nullable().optional(), // Changed from body to match GitLab API
   state: z.string(),
-  merged: z.boolean(),
-  author: GitLabUserSchema,
-  assignees: z.array(GitLabUserSchema),
+  merged: z.boolean().optional(),
+  author: GitLabUserSchema.optional(),
+  assignees: z.array(GitLabUserSchema).optional(),
   source_branch: z.string(), // Changed from head to match GitLab API
   target_branch: z.string(), // Changed from base to match GitLab API
-  diff_refs: GitLabMergeRequestDiffRefSchema,
-  web_url: z.string(), // Changed from html_url to match GitLab API
-  created_at: z.string(),
-  updated_at: z.string(),
-  merged_at: z.string().nullable(),
-  closed_at: z.string().nullable(),
-  merge_commit_sha: z.string().nullable()
-});
+  diff_refs: GitLabMergeRequestDiffRefSchema.optional(),
+  web_url: z.string().optional(), // Changed from html_url to match GitLab API
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+  merged_at: z.string().nullable().optional(),
+  closed_at: z.string().nullable().optional(),
+  merge_commit_sha: z.string().nullable().optional()
+}).partial(); // Make all fields optional to handle API variations
 
 // API Operation Parameter Schemas
 const ProjectParamsSchema = z.object({
@@ -304,6 +308,97 @@ export const CreateBranchSchema = ProjectParamsSchema.extend({
     .describe("Source branch/commit for new branch")
 });
 
+export const GetIssueDetailsSchema = ProjectParamsSchema.extend({
+  issue_iid: z.number().describe("Issue IID")
+});
+
+export const GetMergeRequestDetailsSchema = ProjectParamsSchema.extend({
+  merge_request_iid: z.number().describe("Merge Request IID")
+});
+
+export const GetEpicDetailsSchema = z.object({
+  group_id: z.string().describe("Group ID or URL-encoded path"),
+  epic_iid: z.number().describe("Epic IID")
+});
+
+// Comment related schemas
+export const GitLabCommentSchema = z.object({
+  id: z.number(),
+  content: z.string().optional(), // Field to consistently access comment content
+  author: GitLabUserSchema.optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+  system: z.boolean().optional(),
+  noteable_id: z.number().optional(),
+  noteable_type: z.string().optional(),
+  web_url: z.string().optional()
+}).partial();
+
+// Epic related schemas (GitLab Premium/Ultimate feature)
+export const GitLabEpicSchema = z.object({
+  id: z.number(),
+  iid: z.number(),
+  group_id: z.number(),
+  title: z.string(),
+  description: z.string().nullable().optional(),
+  state: z.string(),
+  author: GitLabUserSchema.optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+  start_date: z.string().nullable().optional(),
+  end_date: z.string().nullable().optional(),
+  web_url: z.string().optional(),
+  labels: z.array(GitLabLabelSchema).optional(),
+  children: z.array(z.object({
+    id: z.number(),
+    iid: z.number(),
+    title: z.string(),
+    state: z.string(),
+    web_url: z.string().optional(),
+    type: z.string().optional() // 'epic' or 'issue'
+  })).optional()
+}).partial(); // Make all fields optional to handle API variations
+
+// User activity related schemas
+export const GitLabEventSchema = z.object({
+  id: z.number(),
+  project_id: z.number().optional().nullable(),
+  action_name: z.string(),
+  target_id: z.number().optional().nullable(),
+  target_type: z.string().optional().nullable(),
+  author_id: z.number(),
+  target_title: z.string().optional().nullable(),
+  created_at: z.string(),
+  author: GitLabUserSchema.optional(),
+  push_data: z.record(z.string(), z.any()).optional(),
+  note: z.record(z.string(), z.any()).optional()
+}).partial();
+
+export const GitLabUserActivitySchema = z.object({
+  events: z.array(GitLabEventSchema),
+  user: GitLabUserSchema.optional()
+}).partial();
+
+export const GetUserActivitySchema = z.object({
+  user_id: z.string().describe("User ID or username"),
+  per_page: z.number().optional().describe("Number of items per page (default: 20)"),
+  page: z.number().optional().describe("Page number (default: 1)")
+});
+
+
+// Response schemas for detailed endpoints
+export const GitLabIssueDetailsSchema = GitLabIssueSchema.extend({
+  comments: z.array(GitLabCommentSchema).optional()
+});
+
+export const GitLabMergeRequestDetailsSchema = GitLabMergeRequestSchema.extend({
+  comments: z.array(GitLabCommentSchema).optional()
+});
+
+export const GitLabEpicDetailsSchema = GitLabEpicSchema.extend({
+  comments: z.array(GitLabCommentSchema).optional()
+});
+
 // Export types
 export type GitLabAuthor = z.infer<typeof GitLabAuthorSchema>;
 export type GitLabFork = z.infer<typeof GitLabForkSchema>;
@@ -323,3 +418,10 @@ export type CreateMergeRequestOptions = z.infer<typeof CreateMergeRequestOptions
 export type CreateBranchOptions = z.infer<typeof CreateBranchOptionsSchema>;
 export type GitLabCreateUpdateFileResponse = z.infer<typeof GitLabCreateUpdateFileResponseSchema>;
 export type GitLabSearchResponse = z.infer<typeof GitLabSearchResponseSchema>;
+export type GitLabComment = z.infer<typeof GitLabCommentSchema>;
+export type GitLabEpic = z.infer<typeof GitLabEpicSchema>;
+export type GitLabIssueDetails = z.infer<typeof GitLabIssueDetailsSchema>;
+export type GitLabMergeRequestDetails = z.infer<typeof GitLabMergeRequestDetailsSchema>;
+export type GitLabEpicDetails = z.infer<typeof GitLabEpicDetailsSchema>;
+export type GitLabEvent = z.infer<typeof GitLabEventSchema>;
+export type GitLabUserActivity = z.infer<typeof GitLabUserActivitySchema>;
