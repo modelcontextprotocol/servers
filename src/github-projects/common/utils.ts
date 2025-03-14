@@ -22,7 +22,7 @@ export async function graphqlRequest(
     "Accept": "application/vnd.github.v4+json",
     "Content-Type": "application/json",
     "User-Agent": USER_AGENT,
-    "X-Github-Next-Global-ID": "1" // Necessário para Projects V2
+    "X-Github-Next-Global-ID": "1" // Required for Projects V2
   };
 
   if (process.env.GITHUB_PERSONAL_ACCESS_TOKEN) {

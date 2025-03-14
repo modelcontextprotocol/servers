@@ -157,7 +157,7 @@ export async function createProject(
   const safeTitle = escapeGraphQLString(title);
   const safeDescription = description ? escapeGraphQLString(description) : undefined;
   
-  // Primeiro, precisamos obter o ID do proprietário
+  // First, we need to get the owner ID
   const ownerQuery = type === "user" 
     ? `query { user(login: "${safeOwner}") { id } }`
     : `query { organization(login: "${safeOwner}") { id } }`;
@@ -167,7 +167,7 @@ export async function createProject(
     ? (ownerResponse as any).user.id 
     : (ownerResponse as any).organization.id;
 
-  // Agora criamos o projeto
+  // Now create the project
   const mutation = `
     mutation {
       createProjectV2(input: {
