@@ -1,10 +1,4 @@
-# Model Context Protocol servers
-
-This repository is a collection of *reference implementations* for the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), as well as references
-to community built servers and additional resources.
-
-[...existing content...]
-
+// ... existing code ...
 ### 🌎 Community Servers
 
 A growing set of community-developed and maintained servers demonstrates various applications of MCP across different domains.
@@ -28,5 +22,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[CFBD API](https://github.com/lenwood/cfbd-mcp-server)** - An MCP server for the [College Football Data API](https://collegefootballdata.com/).
 - **[ChatMCP](https://github.com/AI-QL/chat-mcp)** – An Open Source Cross-platform GUI Desktop application compatible with Linux, macOS, and Windows, enabling seamless interaction with MCP servers across dynamically selectable LLMs, by **[AIQL](https://github.com/AI-QL)**
 - **[ChatSum](https://github.com/mcpso/mcp-server-chatsum)** - Query and Summarize chat messages with LLM. by [mcpso](https://mcp.so)
-- **[ClickUp](https://github.com/TaazKareem/clickup-mcp-server)** - Integrate ClickUp task management with AI through Model Context Protocol, supporting task creation, updates, moves, and workspace organization.
 - **[Chroma](https://github.com/privetin/chroma)** - Vector database server for semantic document search and metadata filtering, built on Chroma
+- **[ClaudePost](https://github.com/ZilongXue/claude-post)** - ClaudePost enables seamless email management for Gmail, offering secure features like email search, reading, and sending.
+- **[ClickUp](https://github.com/TaazKareem/clickup-mcp-server)** - MCP server for ClickUp task management, supporting task creation, updates, bulk operations, and markdown descriptions.
+// ... existing code ...
