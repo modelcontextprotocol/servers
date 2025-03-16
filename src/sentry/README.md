@@ -144,6 +144,11 @@ cd path/to/servers/src/sentry
 npx @modelcontextprotocol/inspector uv run mcp-server-sentry --auth-token YOUR_SENTRY_TOKEN
 ```
 
+Or you can debug it with simple python command
+```
+SENTRY_API_BASE=https://sentry.io/ SENTRY_ORG=org_slug SENTRY_ISSUE=issue_id SENTRY_TOKEN=auth_token python -m mcp_server_sentry
+```
+
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
