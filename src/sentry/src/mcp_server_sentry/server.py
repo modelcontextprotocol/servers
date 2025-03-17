@@ -304,14 +304,16 @@ async def serve(auth_token: str, org_slug: str) -> Server:
 
     return server
 
-
-def main():
-    auth_token = os.environ.get("SENTRY_TOKEN")
+@click.command()
+@click.option(
+    "--auth-token",
+    envvar="SENTRY_TOKEN",
+    required=True,
+    help="Sentry authentication token",
+)
+def main(auth_token: str):
     org_slug = os.environ.get("SENTRY_ORG")
     issue_id_or_url = os.environ.get("SENTRY_ISSUE")
-
-    if not auth_token:
-        return
 
     async def _run():
         if issue_id_or_url:
