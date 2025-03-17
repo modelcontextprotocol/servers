@@ -9,6 +9,7 @@ import {
   ListResourcesRequestSchema,
   ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
+  LoggingLevel,
   ReadResourceRequestSchema,
   Resource,
   SetLevelRequestSchema,
@@ -99,10 +100,10 @@ export const createServer = () => {
   );
 
   let subscriptions: Set<string> = new Set();
-  let updateInterval: NodeJS.Timeout | undefined;
-
+  let subsUpdateInterval: NodeJS.Timeout | undefined;
   // Set up update interval for subscribed resources
-  updateInterval = setInterval(() => {
+
+  subsUpdateInterval = setInterval(() => {
     for (const uri of subscriptions) {
       server.notification({
         method: "notifications/resources/updated",
@@ -110,6 +111,34 @@ export const createServer = () => {
       });
     }
   }, 5000);
+
+  let logLevel: LoggingLevel = "debug";
+  let logsUpdateInterval: NodeJS.Timeout | undefined;
+  const messages = [
+    {level: "debug", data: "Debug-level message"},
+    {level: "info", data: "Info-level message"},
+    {level: "notice", data: "Notice-level message"},
+    {level: "warning", data: "Warning-level message"},
+    {level: "error", data: "Error-level message"},
+    {level: "critical", data: "Critical-level message"},
+    {level: "alert", data: "Alert level-message"},
+    {level: "emergency", data: "Emergency-level message"}
+  ]
+
+  const isMessageIgnored = (level:LoggingLevel):boolean => {
+    const currentLevel = messages.findIndex((msg) => logLevel === msg.level);
+    const messageLevel =  messages.findIndex((msg) => level === msg.level);
+    return messageLevel < currentLevel;
+  }
+
+  // Set up update interval for random log messages
+  logsUpdateInterval = setInterval(() => {
+    let message = {
+      method: "notifications/message",
+      params: messages[Math.floor(Math.random() * messages.length)],
+    }
+    if (!isMessageIgnored(message.params.level as LoggingLevel)) server.notification(message);
+  }, 15000);
 
   // Helper method to request sampling from client
   const requestSampling = async (
@@ -451,7 +480,7 @@ export const createServer = () => {
 
     if (name === ToolName.ANNOTATED_MESSAGE) {
       const { messageType, includeImage } = AnnotatedMessageSchema.parse(args);
-      
+
       const content = [];
 
       // Main message with different priorities/audiences based on type
@@ -511,7 +540,7 @@ export const createServer = () => {
       if (!resourceId) return { completion: { values: [] } };
 
       // Filter resource IDs that start with the input value
-      const values = EXAMPLE_COMPLETIONS.resourceId.filter(id => 
+      const values = EXAMPLE_COMPLETIONS.resourceId.filter(id =>
         id.startsWith(argument.value)
       );
       return { completion: { values, hasMore: false, total: values.length } };
@@ -522,7 +551,7 @@ export const createServer = () => {
       const completions = EXAMPLE_COMPLETIONS[argument.name as keyof typeof EXAMPLE_COMPLETIONS];
       if (!completions) return { completion: { values: [] } };
 
-      const values = completions.filter(value => 
+      const values = completions.filter(value =>
         value.startsWith(argument.value)
       );
       return { completion: { values, hasMore: false, total: values.length } };
@@ -533,6 +562,7 @@ export const createServer = () => {
 
   server.setRequestHandler(SetLevelRequestSchema, async (request) => {
     const { level } = request.params;
+    logLevel = level;
 
     // Demonstrate different log levels
     await server.notification({
@@ -540,7 +570,7 @@ export const createServer = () => {
       params: {
         level: "debug",
         logger: "test-server",
-        data: `Logging level set to: ${level}`,
+        data: `Logging level set to: ${logLevel}`,
       },
     });
 
@@ -548,9 +578,8 @@ export const createServer = () => {
   });
 
   const cleanup = async () => {
-    if (updateInterval) {
-      clearInterval(updateInterval);
-    }
+    if (subsUpdateInterval) clearInterval(subsUpdateInterval);
+    if (logsUpdateInterval) clearInterval(logsUpdateInterval);
   };
 
   return { server, cleanup };
