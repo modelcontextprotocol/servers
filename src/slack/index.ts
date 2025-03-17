@@ -34,6 +34,9 @@ interface AddReactionArgs {
 interface GetChannelHistoryArgs {
   channel_id: string;
   limit?: number;
+  cursor?: string;
+  latest?: string;
+  oldest?: string;
 }
 
 interface GetThreadRepliesArgs {
@@ -150,6 +153,18 @@ const getChannelHistoryTool: Tool = {
         type: "number",
         description: "Number of messages to retrieve (default 10)",
         default: 10,
+      },
+      cursor: {
+        type: "string",
+        description: "Pagination cursor for next page of results",
+      },
+      latest: {
+        type: "string",
+        description: "Only messages before this Unix timestamp will be included (format: 1234567890.123456). Timestamps in the format without the period can be converted by adding the period such that 6 numbers come after it.",
+      },
+      oldest: {
+        type: "string",
+        description: "Only messages after this Unix timestamp will be included (format: 1234567890.123456). Timestamps in the format without the period can be converted by adding the period such that 6 numbers come after it.",
       },
     },
     required: ["channel_id"],
@@ -292,11 +307,26 @@ class SlackClient {
   async getChannelHistory(
     channel_id: string,
     limit: number = 10,
+    cursor?: string,
+    latest?: string,
+    oldest?: string,
   ): Promise<any> {
     const params = new URLSearchParams({
       channel: channel_id,
       limit: limit.toString(),
     });
+
+    if (cursor) {
+      params.append("cursor", cursor);
+    }
+
+    if (latest) {
+      params.append("latest", latest);
+    }
+
+    if (oldest) {
+      params.append("oldest", oldest);
+    }
 
     const response = await fetch(
       `https://slack.com/api/conversations.history?${params}`,
@@ -460,6 +490,9 @@ async function main() {
             const response = await slackClient.getChannelHistory(
               args.channel_id,
               args.limit,
+              args.cursor,
+              args.latest,
+              args.oldest,
             );
             return {
               content: [{ type: "text", text: JSON.stringify(response) }],
