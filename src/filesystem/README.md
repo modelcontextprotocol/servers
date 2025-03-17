@@ -7,7 +7,8 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Read/write files
 - Create/list/delete directories
 - Move files/directories
-- Search files
+- Search for files by name
+- Search within file contents (grep-like functionality)
 - Get file metadata
 - Dynamic directory access control via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots)
 
@@ -144,14 +145,15 @@ The server's directory access control follows this flow:
     - `destination` (string)
   - Fails if destination exists
 
-- **search_files**
+- **search_files_by_name**
   - Recursively search for files/directories that match or do not match patterns
   - Inputs:
     - `path` (string): Starting directory
-    - `pattern` (string): Search pattern
+    - `pattern` (string): Name pattern to match
     - `excludePatterns` (string[]): Exclude any patterns.
   - Glob-style pattern matching
-  - Returns full paths to matches
+  - Case-insensitive matching
+  - Returns full paths to matching files/directories
 
 - **directory_tree**
   - Get recursive JSON tree structure of directory contents

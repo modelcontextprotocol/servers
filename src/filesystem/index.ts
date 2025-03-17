@@ -24,7 +24,7 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
-  searchFilesWithValidation,
+  searchFilesByName,
   applyFileEdits,
   tailFile,
   headFile,
@@ -105,7 +105,7 @@ const EditOperation = z.object({
 });
 
 const EditFileArgsSchema = z.object({
-  path: z.string(),
+  path: z.string().describe('File path to edit'),
   edits: z.array(EditOperation),
   dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format')
 });
@@ -133,10 +133,14 @@ const MoveFileArgsSchema = z.object({
   destination: z.string(),
 });
 
-const SearchFilesArgsSchema = z.object({
-  path: z.string(),
-  pattern: z.string(),
-  excludePatterns: z.array(z.string()).optional().default([])
+const SearchFilesByNameArgsSchema = z.object({
+  path: z.string().describe('The root directory path to start the search from'),
+  pattern: z.string().describe('Pattern to match within file/directory names. Supports glob patterns. ' +
+    'Case insensitive unless pattern contains uppercase characters'),
+  excludePatterns: z.array(z.string())
+    .optional()
+    .default([])
+    .describe('Glob patterns for paths to exclude from search (e.g., "node_modules/**")')
 });
 
 const GetFileInfoArgsSchema = z.object({
@@ -145,7 +149,6 @@ const GetFileInfoArgsSchema = z.object({
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
-
 // Server setup
 const server = new Server(
   {
@@ -277,14 +280,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(MoveFileArgsSchema) as ToolInput,
       },
       {
-        name: "search_files",
+        name: "search_files_by_name",
         description:
-          "Recursively search for files and directories matching a pattern. " +
-          "The patterns should be glob-style patterns that match paths relative to the working directory. " +
-          "Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
+          "Recursively search for files and directories by name matching a glob pattern. " +
+          "Supports glob-style patterns that match paths relative to the working directory. " +
+          "Use patterns like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
           "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
           "Only searches within allowed directories.",
-        inputSchema: zodToJsonSchema(SearchFilesArgsSchema) as ToolInput,
+        inputSchema: zodToJsonSchema(SearchFilesByNameArgsSchema) as ToolInput,
       },
       {
         name: "get_file_info",
@@ -593,13 +596,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case "search_files": {
-        const parsed = SearchFilesArgsSchema.safeParse(args);
+      case "search_files_by_name": {
+        const parsed = SearchFilesByNameArgsSchema.safeParse(args);
         if (!parsed.success) {
-          throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
+          throw new Error(`Invalid arguments for search_files_by_name: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const results = await searchFilesWithValidation(validPath, parsed.data.pattern, allowedDirectories, { excludePatterns: parsed.data.excludePatterns });
+        const results = await searchFilesByName(validPath, parsed.data.pattern, parsed.data.excludePatterns);
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };
@@ -613,9 +616,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validPath = await validatePath(parsed.data.path);
         const info = await getFileStats(validPath);
         return {
-          content: [{ type: "text", text: Object.entries(info)
-            .map(([key, value]) => `${key}: ${value}`)
-            .join("\n") }],
+          content: [{
+            type: "text", text: Object.entries(info)
+              .map(([key, value]) => `${key}: ${value}`)
+              .join("\n")
+          }],
         };
       }
 
