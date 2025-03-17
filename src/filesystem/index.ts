@@ -23,7 +23,8 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
-  searchFilesWithValidation,
+  searchFilesByName,
+  searchFileContents,
   applyFileEdits,
   tailFile,
   headFile,
@@ -101,7 +102,7 @@ const EditOperation = z.object({
 });
 
 const EditFileArgsSchema = z.object({
-  path: z.string(),
+  path: z.string().describe('File path to edit'),
   edits: z.array(EditOperation),
   dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format')
 });
@@ -128,10 +129,43 @@ const MoveFileArgsSchema = z.object({
   destination: z.string(),
 });
 
-const SearchFilesArgsSchema = z.object({
-  path: z.string(),
-  pattern: z.string(),
-  excludePatterns: z.array(z.string()).optional().default([])
+const SearchFilesByNameArgsSchema = z.object({
+  path: z.string().describe('The root directory path to start the search from'),
+  pattern: z.string().describe('Pattern to match within file/directory names. Supports glob patterns. ' +
+    'Case insensitive unless pattern contains uppercase characters'),
+  excludePatterns: z.array(z.string())
+    .optional()
+    .default([])
+    .describe('Glob patterns for paths to exclude from search (e.g., "node_modules/**")')
+});
+
+const SearchFilesContentArgsSchema = z.object({
+  path: z.string().describe('Path to search - can be a file path or a directory to search recursively'),
+  searchText: z.string().describe('Text to search for - supports plain text substring matching or regex if useRegex is true'),
+  useRegex: z.boolean()
+    .optional()
+    .default(false)
+    .describe('When false (default), performs simple text matching. When true, interprets searchText as a regular expression'),
+  caseSensitive: z.boolean()
+    .optional()
+    .default(false)
+    .describe('When true, perform case-sensitive matching'),
+  maxResults: z.number()
+    .optional()
+    .default(100)
+    .describe('Maximum number of matching results to return'),
+  contextLines: z.number()
+    .optional()
+    .default(2)
+    .describe('Number of lines to show before and after each match'),
+  includePatterns: z.array(z.string())
+    .optional()
+    .default([])
+    .describe('Glob patterns for paths to include in search (e.g., ["**/*.js", "**/*.ts"])'),
+  excludePatterns: z.array(z.string())
+    .optional()
+    .default([])
+    .describe('Glob patterns for paths to exclude from search (e.g., ["node_modules/**", "*.test.ts"])')
 });
 
 const GetFileInfoArgsSchema = z.object({
@@ -140,7 +174,6 @@ const GetFileInfoArgsSchema = z.object({
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
-
 // Server setup
 const server = new Server(
   {
@@ -272,14 +305,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(MoveFileArgsSchema) as ToolInput,
       },
       {
-        name: "search_files",
+        name: "search_files_by_name",
         description:
-          "Recursively search for files and directories matching a pattern. " +
-          "Searches through all subdirectories from the starting path. The search " +
-          "is case-insensitive and matches partial names. Returns full paths to all " +
-          "matching items. Great for finding files when you don't know their exact location. " +
+          "Find files and directories whose names match a pattern. Searches recursively " +
+          "through all subdirectories from the starting path. Supports glob patterns like '*.txt' " +
+          "or '**/*.js' as well as simple substring matching. The search is case-insensitive " +
+          "by default unless the pattern contains uppercase characters. Returns full paths to all items with " +
+          "matching names. Great for finding files when you don't know their exact location. " +
           "Only searches within allowed directories.",
-        inputSchema: zodToJsonSchema(SearchFilesArgsSchema) as ToolInput,
+        inputSchema: zodToJsonSchema(SearchFilesByNameArgsSchema) as ToolInput,
+      },
+      {
+        name: "search_file_contents",
+        description:
+          "Search for text patterns within file contents. Can search either a single file or " +
+          "recursively through a directory. Supports both plain text substring matching and regex patterns. " +
+          "The search can be case-sensitive or insensitive based on parameters. Returns matching " +
+          "file paths along with line numbers and context lines before/after the match. Only " +
+          "searches within allowed directories.",
+        inputSchema: zodToJsonSchema(SearchFilesContentArgsSchema) as ToolInput,
       },
       {
         name: "get_file_info",
@@ -573,15 +617,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case "search_files": {
-        const parsed = SearchFilesArgsSchema.safeParse(args);
+      case "search_files_by_name": {
+        const parsed = SearchFilesByNameArgsSchema.safeParse(args);
         if (!parsed.success) {
-          throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
+          throw new Error(`Invalid arguments for search_files_by_name: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const results = await searchFilesWithValidation(validPath, parsed.data.pattern, allowedDirectories, { excludePatterns: parsed.data.excludePatterns });
+        const results = await searchFilesByName(validPath, parsed.data.pattern, parsed.data.excludePatterns);
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
+        };
+      }
+
+      case "search_file_contents": {
+        const parsed = SearchFilesContentArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for search_file_contents: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const results = await searchFileContents(
+          validPath,
+          parsed.data.searchText,
+          parsed.data.useRegex,
+          parsed.data.caseSensitive,
+          parsed.data.maxResults,
+          parsed.data.contextLines,
+          parsed.data.includePatterns,
+          parsed.data.excludePatterns,
+        );
+        return {
+          content: [{ type: "text", text: results.length > 0 ? results.join("\n\n") : "No matches found" }],
         };
       }
 
@@ -593,9 +658,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validPath = await validatePath(parsed.data.path);
         const info = await getFileStats(validPath);
         return {
-          content: [{ type: "text", text: Object.entries(info)
-            .map(([key, value]) => `${key}: ${value}`)
-            .join("\n") }],
+          content: [{
+            type: "text", text: Object.entries(info)
+              .map(([key, value]) => `${key}: ${value}`)
+              .join("\n")
+          }],
         };
       }
 
