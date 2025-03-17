@@ -105,7 +105,7 @@ The server sends random-leveled log messages every 15 seconds, e.g.:
   "method": "notifications/message",
   "params": {
 	"level": "info",
-	"data": "Information is good"
+	"data": "Info-level message"
   }
 }
 ```
