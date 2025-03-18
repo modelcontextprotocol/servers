@@ -29,27 +29,35 @@ const server = new Server(
   },
 );
 
-server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
-  const pageSize = 10;
-  const params: any = {
-    pageSize,
-    fields: "nextPageToken, files(id, name, mimeType)",
-  };
-
-  if (request.params?.cursor) {
-    params.pageToken = request.params.cursor;
-  }
-
-  const res = await drive.files.list(params);
-  const files = res.data.files!;
-
+server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    resources: files.map((file) => ({
-      uri: `gdrive:///${file.id}`,
-      mimeType: file.mimeType,
-      name: file.name,
-    })),
-    nextCursor: res.data.nextPageToken,
+    tools: [
+      {
+        name: "search",
+        description: "Search for files in Google Drive. Supports search operators including parent:<folderID> to search within specific folders",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Search query. Supports operators like 'parent:folderID' for folder-specific searches",
+            },
+            corpora: {
+              type: "string",
+              description: "Which corpus to search: 'user', 'drive', or 'allDrives'",
+              enum: ["user", "drive", "allDrives"],
+              default: "user"
+            },
+            pageSize: {
+              type: "number",
+              description: "Maximum number of results to return",
+              default: 10
+            }
+          },
+          required: ["query"],
+        },
+      },
+    ],
   };
 });
 
@@ -127,42 +135,46 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   }
 });
 
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: "search",
-        description: "Search for files in Google Drive",
-        inputSchema: {
-          type: "object",
-          properties: {
-            query: {
-              type: "string",
-              description: "Search query",
-            },
-          },
-          required: ["query"],
-        },
-      },
-    ],
-  };
-});
-
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === "search") {
     const userQuery = request.params.arguments?.query as string;
-    const escapedQuery = userQuery.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-    const formattedQuery = `fullText contains '${escapedQuery}'`;
+    const pageSize = (request.params.arguments?.pageSize as number) || 10;
+    const corpora = (request.params.arguments?.corpora as string) || "user";
+
+    // Parse the query to handle special operators
+    let queryParts = [];
+    
+    // Split the query into parts, preserving quoted strings
+    const parts = userQuery.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+    
+    for (const part of parts) {
+      if (part.startsWith('parent:')) {
+        // Handle parent folder specification directly
+        queryParts.push(`'${part.substring(7)}' in parents`);
+      } else {
+        // Escape single quotes and handle other terms as fullText search
+        const escapedTerm = part.replace(/'/g, "\\'");
+        queryParts.push(`fullText contains '${escapedTerm}'`);
+      }
+    }
+
+    // Combine all query parts with AND
+    const formattedQuery = queryParts.join(' and ');
 
     const res = await drive.files.list({
       q: formattedQuery,
-      pageSize: 10,
-      fields: "files(id, name, mimeType, modifiedTime, size)",
+      pageSize: pageSize,
+      corpora: corpora,
+      fields: "files(id, name, mimeType, modifiedTime, size, webViewLink)",
+      includeItemsFromAllDrives: corpora !== "user",
+      supportsAllDrives: corpora !== "user"
     });
 
+    // Format the results to include more useful information
     const fileList = res.data.files
-      ?.map((file: any) => `${file.name} (${file.mimeType})`)
+      ?.map((file: any) => `${file.name} (${file.mimeType}) (uri: ${file.id})`)
       .join("\n");
+
     return {
       content: [
         {
