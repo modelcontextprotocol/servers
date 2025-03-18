@@ -159,6 +159,40 @@ export const GetPullRequestReviewsSchema = z.object({
   pull_number: z.number().describe("Pull request number")
 });
 
+export const GetAllPullRequestCommentsSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  pull_number: z.number().describe("Pull request number")
+});
+
+// Combined comment type that includes both issue and review comments
+export const CombinedCommentSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('issue_comment'),
+    id: z.number(),
+    user: GitHubIssueAssigneeSchema,
+    created_at: z.string(),
+    updated_at: z.string(),
+    body: z.string()
+  }),
+  z.object({
+    type: z.literal('review_comment'),
+    id: z.number(),
+    user: GitHubIssueAssigneeSchema,
+    created_at: z.string(),
+    updated_at: z.string(),
+    body: z.string(),
+    code_context: z.object({
+      file_path: z.string().nullable(),
+      line: z.number().nullable(),
+      diff_hunk: z.string(),
+      original_line: z.number().nullable(),
+      original_position: z.number().nullable(),
+      position: z.number().nullable()
+    })
+  })
+]);
+
 // Function implementations
 export async function createPullRequest(
   params: z.infer<typeof CreatePullRequestSchema>
@@ -283,6 +317,52 @@ export async function getPullRequestReviews(
     `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`
   );
   return z.array(PullRequestReviewSchema).parse(response);
+}
+
+export async function getAllPullRequestComments(
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<z.infer<typeof CombinedCommentSchema>[]> {
+  // Fetch both issue comments and review comments in parallel
+  const [issueComments, reviewComments] = await Promise.all([
+    githubRequest(`https://api.github.com/repos/${owner}/${repo}/issues/${pullNumber}/comments`),
+    githubRequest(`https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/comments`)
+  ]) as [any[], any[]]; // Type assertion since we know the response structure
+
+  // Format issue comments
+  const formattedIssueComments = issueComments.map((comment: any) => ({
+    type: 'issue_comment' as const,
+    id: comment.id,
+    user: comment.user,
+    created_at: comment.created_at,
+    updated_at: comment.updated_at,
+    body: comment.body
+  }));
+
+  // Format review comments
+  const formattedReviewComments = reviewComments.map((comment: any) => ({
+    type: 'review_comment' as const,
+    id: comment.id,
+    user: comment.user,
+    created_at: comment.created_at,
+    updated_at: comment.updated_at,
+    body: comment.body,
+    code_context: {
+      file_path: comment.path,
+      line: comment.line,
+      diff_hunk: comment.diff_hunk,
+      original_line: comment.original_line,
+      original_position: comment.original_position,
+      position: comment.position
+    }
+  }));
+
+  // Combine and sort all comments chronologically
+  const allComments = [...formattedIssueComments, ...formattedReviewComments]
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  return z.array(CombinedCommentSchema).parse(allComments);
 }
 
 export async function getPullRequestStatus(

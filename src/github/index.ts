@@ -194,8 +194,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_reviews",
         description: "Get the reviews on a pull request",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema)
+      },
+      {
+        name: "get_all_pull_request_comments",
+        description: "Get all comments (both issue and review comments) for a pull request with code context",
+        inputSchema: zodToJsonSchema(pulls.GetAllPullRequestCommentsSchema)
       }
-    ],
+    ]
   };
 });
 
@@ -452,7 +457,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const args = pulls.GetPullRequestReviewsSchema.parse(request.params.arguments);
         const reviews = await pulls.getPullRequestReviews(args.owner, args.repo, args.pull_number);
         return {
-          content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }]
+        };
+      }
+
+      case "get_all_pull_request_comments": {
+        const args = pulls.GetAllPullRequestCommentsSchema.parse(request.params.arguments);
+        const comments = await pulls.getAllPullRequestComments(args.owner, args.repo, args.pull_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(comments, null, 2) }]
         };
       }
 
