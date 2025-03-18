@@ -169,7 +169,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[OpenRPC](https://github.com/shanejonas/openrpc-mpc-server)** - Interact with and discover JSON-RPC APIs via [OpenRPC](https://open-rpc.org).
 - **[Open Strategy Partners Marketing Tools](https://github.com/open-strategy-partners/osp_marketing_tools)** - Content editing codes, value map, and positioning tools for product marketing.
 - **[Pandoc](https://github.com/vivekVells/mcp-pandoc)** - MCP server for seamless document format conversion using Pandoc, supporting Markdown, HTML, PDF, DOCX (.docx), csv and more.
-- **[USPTO]([https](https://github.com/riemannzeta/patent_mcp_server))** - MCP server for accessing United States Patent & Trademark Office data through its Open Data Protocol (ODP) API.
+- **[USPTO](https://github.com/riemannzeta/patent_mcp_server)** - MCP server for accessing United States Patent & Trademark Office data through its Open Data Protocol (ODP) API.
 - **[PIF](https://github.com/hungryrobot1/MCP-PIF)** - A Personal Intelligence Framework (PIF), providing tools for file operations, structured reasoning, and journal-based documentation to support continuity and evolving human-AI collaboration across sessions.
 - **[Pinecone](https://github.com/sirmews/mcp-pinecone)** - MCP server for searching and uploading records to Pinecone. Allows for simple RAG features, leveraging Pinecone's Inference API.
 - **[Placid.app](https://github.com/felores/placid-mcp-server)** - Generate image and video creatives using Placid.app templates
