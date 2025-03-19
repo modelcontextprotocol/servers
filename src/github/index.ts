@@ -199,7 +199,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "list_releases",
         description: "List releases of a repository",
-        inputSchema: zodToJsonSchema(release.GetReleaseSchema),
+        inputSchema: zodToJsonSchema(release.ListReleasesOptionsSchema),
       },
       {
         name: "get_latest_release",
@@ -464,6 +464,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const reviews = await pulls.getPullRequestReviews(args.owner, args.repo, args.pull_number);
         return {
           content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }],
+        };
+      }
+
+      case "list_releases": {
+        const args = release.ListReleasesOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const releases = await release.listReleases(args.owner, args.repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releases, null, 2) }],
         };
       }
 

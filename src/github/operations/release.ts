@@ -31,7 +31,6 @@ export async function listReleases(
   );
 }
 
-
 export async function getLatestRelease(
   owner: string, 
   repo: string ) {
