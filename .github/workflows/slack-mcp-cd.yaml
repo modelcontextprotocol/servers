@@ -1,0 +1,68 @@
+name: CD / Slack MCP
+
+on:
+  pull_request:
+    branches:
+      - "main"
+    paths:
+      - ".github/workflows/slack-mcp-cd.yaml"
+      - "src/slack/**"
+  push:
+    branches:
+      - "main"
+    paths:
+      - ".github/workflows/slack-mcp-cd.yaml"
+      - "src/slack/**"
+    tags:
+      - 'src/slack/v*.*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish-docker:
+    name: Build and push slack-mcp container
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: src/slack
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+      packages: 'write'
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 1
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/johnblackwell/servers/mcp-slack
+          tags: |
+            type=sha
+            type=ref,event=pr
+            type=ref,event=branch
+            type=match,pattern=src/slack/(v.*),group=1
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3.0.0
+      - uses: docker/build-push-action@v5.1.0
+        with:
+          context: "./src/slack"
+          file: "./src/slack/Dockerfile"
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.version }}
+
