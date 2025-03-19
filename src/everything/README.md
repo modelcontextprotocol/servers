@@ -45,6 +45,24 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
    - No inputs required
    - Returns: JSON string of all environment variables
 
+7. `annotatedMessage`
+   - Demonstrates how annotations can be used to provide metadata about content
+   - Inputs:
+     - `messageType` (enum: "error" | "success" | "debug"): Type of message to demonstrate different annotation patterns
+     - `includeImage` (boolean, default: false): Whether to include an example image
+   - Returns: Content with varying annotations:
+     - Error messages: High priority (1.0), visible to both user and assistant
+     - Success messages: Medium priority (0.7), user-focused
+     - Debug messages: Low priority (0.3), assistant-focused
+     - Optional image: Medium priority (0.5), user-focused
+   - Example annotations:
+     ```json
+     {
+       "priority": 1.0,
+       "audience": ["user", "assistant"]
+     }
+     ```
+
 ### Resources
 
 The server provides 100 test resources in two formats:
@@ -77,6 +95,20 @@ Resource features:
    - Optional arguments:
      - `style` (string): Output style preference
    - Returns: Multi-turn conversation with images
+
+### Logging
+
+The server sends random-leveled log messages every 15 seconds, e.g.:
+
+```json
+{
+  "method": "notifications/message",
+  "params": {
+	"level": "info",
+	"data": "Info-level message"
+  }
+}
+```
 
 ## Usage with Claude Desktop
 
