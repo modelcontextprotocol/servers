@@ -65,7 +65,11 @@ To use this server with the Claude Desktop app, add the following configuration 
         "-y",
         "@modelcontextprotocol/server-oracle",
         "host.docker.internal:1521/freepdb1"
-      ]
+      ],
+      "env": {
+        "ORACLE_USER": "scott",
+        "ORACLE_PASSWORD": "tiger"
+      }
     }
   }
 }
@@ -92,6 +96,60 @@ GROUP BY COUNTRY_NAME, CITY
 See in action using Claude Desktop App
 
 ![Oracle MCP Server demo](./demo-prompts.gif)
+
+### Using Docker AI
+
+[Ask Gordon](https://docs.docker.com/desktop/features/gordon/) is an AI assistant designed to streamline your Docker workflow by providing contextual assistance tailored to your local environment. Currently in Beta and available in Docker Desktop version 4.38.0 or later, Ask Gordon offers intelligent support for various Docker-related tasks.
+
+```sh
+% cd src/oracle
+% docker ai 'stats for table countries'    
+                                                    
+    • Calling stats ✔️                              
+                                                    
+  Here are the statistics for the COUNTRIES table:  
+                                                    
+  ### Table Statistics:                             
+                                                    
+    • Owner: HR                                     
+    • Table Name: COUNTRIES                         
+    • Number of Rows: 25                            
+    • Average Row Length: 16 bytes                  
+    • Last Analyzed: 2025-03-10 22:00:38            
+                                                    
+  ### Index Statistics:                             
+                                                    
+    • Index Name: COUNTRY_C_ID_PK                   
+        • B-Level: 0                                
+        • Leaf Blocks: 1                            
+        • Distinct Keys: 25                         
+        • Number of Rows: 25                        
+        • Clustering Factor: 0                      
+        • Last Analyzed: 2025-03-10 22:00:38        
+                                                    
+  ### Column Statistics:                            
+                                                    
+    1. COUNTRY_ID:                                  
+                                                    
+        • Number of Distinct Values: 25             
+        • Density: 0.04                             
+        • Histogram: NONE                           
+        • Last Analyzed: 2025-03-10 22:00:38        
+                                                    
+    2. COUNTRY_NAME:                                
+                                                    
+        • Number of Distinct Values: 25             
+        • Density: 0.04                             
+        • Histogram: NONE                           
+        • Last Analyzed: 2025-03-10 22:00:38        
+                                                    
+    3. REGION_ID:                                   
+                                                    
+        • Number of Distinct Values: 5              
+        • Density: 0.02                             
+        • Histogram: FREQUENCY                      
+        • Last Analyzed: 2025-03-10 22:00:38        
+```
 
 ## Building
 
