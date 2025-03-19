@@ -16,6 +16,11 @@ A Model Context Protocol server that provides read-only access to Oracle databas
   - Input: `sql` (string): The SQL query to execute
   - Requires GRANT SELECT_CATALOG_ROLE TO your_user;
 
+- **stats**
+  - Get statistics for a given table on current connected schema
+  - Input: `name` (string): The table name
+  - Table owner is eqeal to USSER SQL function returning value
+
 ### Resources
 
 The server provides schema information for each table in the database current connected user:
@@ -149,6 +154,20 @@ See in action using Claude Desktop App
         • Density: 0.02                             
         • Histogram: FREQUENCY                      
         • Last Analyzed: 2025-03-10 22:00:38        
+```
+
+Using this sample gordon-mcp.yml file in a current directory:
+
+```yml
+services:
+  time:
+    image: mcp/time
+  oracle:
+    image: mcp/oracle
+    command: ["host.docker.internal:1521/freepdb1"]
+    environment:
+      - ORACLE_USER=scott
+      - ORACLE_PASSWORD=tiger
 ```
 
 ## Building
