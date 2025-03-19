@@ -52,7 +52,17 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `autoInit` (optional boolean): Initialize with README
    - Returns: Created repository details
 
-5. `get_file_contents`
+5. `create_org_repository`
+   - Create a new GitHub repository in an organization
+   - Inputs:
+     - `organization` (string): Name of the organization where the repository should be created
+     - `name` (string): Repository name
+     - `description` (optional string): Repository description
+     - `private` (optional boolean): Whether repo should be private
+     - `autoInit` (optional boolean): Initialize with README
+   - Returns: Created repository details
+
+6. `get_file_contents`
    - Get contents of a file or directory
    - Inputs:
      - `owner` (string): Repository owner
@@ -61,7 +71,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `branch` (optional string): Branch to get contents from
    - Returns: File/directory contents
 
-6. `create_issue`
+7. `create_issue`
    - Create a new issue
    - Inputs:
      - `owner` (string): Repository owner
@@ -73,7 +83,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `milestone` (optional number): Milestone number
    - Returns: Created issue details
 
-7. `create_pull_request`
+8. `create_pull_request`
    - Create a new pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -86,7 +96,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `maintainer_can_modify` (optional boolean): Allow maintainer edits
    - Returns: Created pull request details
 
-8. `fork_repository`
+9. `fork_repository`
    - Fork a repository
    - Inputs:
      - `owner` (string): Repository owner
@@ -94,16 +104,16 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `organization` (optional string): Organization to fork to
    - Returns: Forked repository details
 
-9. `create_branch`
-   - Create a new branch
-   - Inputs:
-     - `owner` (string): Repository owner
-     - `repo` (string): Repository name
-     - `branch` (string): Name for new branch
-     - `from_branch` (optional string): Source branch (defaults to repo default)
-   - Returns: Created branch reference
+10. `create_branch`
+    - Create a new branch
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `branch` (string): Name for new branch
+      - `from_branch` (optional string): Source branch (defaults to repo default)
+    - Returns: Created branch reference
 
-10. `list_issues`
+11. `list_issues`
     - List and filter repository issues
     - Inputs:
       - `owner` (string): Repository owner
@@ -117,7 +127,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
       - `per_page` (optional number): Results per page
     - Returns: Array of issue details
 
-11. `update_issue`
+12. `update_issue`
     - Update an existing issue
     - Inputs:
       - `owner` (string): Repository owner
@@ -131,7 +141,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
       - `milestone` (optional number): New milestone number
     - Returns: Updated issue details
 
-12. `add_issue_comment`
+13. `add_issue_comment`
     - Add a comment to an issue
     - Inputs:
       - `owner` (string): Repository owner
@@ -140,7 +150,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
       - `body` (string): Comment text
     - Returns: Created comment details
 
-13. `search_code`
+14. `search_code`
     - Search for code across GitHub repositories
     - Inputs:
       - `q` (string): Search query using GitHub code search syntax
@@ -150,7 +160,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
       - `page` (optional number): Page number
     - Returns: Code search results with repository context
 
-14. `search_issues`
+15. `search_issues`
     - Search for issues and pull requests
     - Inputs:
       - `q` (string): Search query using GitHub issues search syntax
@@ -160,7 +170,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
       - `page` (optional number): Page number
     - Returns: Issue and pull request search results
 
-15. `search_users`
+16. `search_users`
     - Search for GitHub users
     - Inputs:
       - `q` (string): Search query using GitHub users search syntax
@@ -170,7 +180,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
       - `page` (optional number): Page number
     - Returns: User search results
 
-16. `list_commits`
+17. `list_commits`
    - Gets commits of a branch in a repository
    - Inputs:
      - `owner` (string): Repository owner
@@ -180,7 +190,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `sha` (optional string): branch name
    - Returns: List of commits
 
-17. `get_issue`
+18. `get_issue`
    - Gets the contents of an issue within a repository
    - Inputs:
      - `owner` (string): Repository owner
@@ -188,7 +198,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `issue_number` (number): Issue number to retrieve
    - Returns: Github Issue object & details
 
-18. `get_pull_request`
+19. `get_pull_request`
    - Get details of a specific pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -196,7 +206,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Pull request details including diff and review status
 
-19. `list_pull_requests`
+20. `list_pull_requests`
    - List and filter repository pull requests
    - Inputs:
      - `owner` (string): Repository owner
@@ -210,7 +220,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `page` (optional number): Page number
    - Returns: Array of pull request details
 
-20. `create_pull_request_review`
+21. `create_pull_request_review`
    - Create a review on a pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -225,7 +235,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
        - `body` (string): Comment text
    - Returns: Created review details
 
-21. `merge_pull_request`
+22. `merge_pull_request`
    - Merge a pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -236,7 +246,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `merge_method` (optional string): Merge method ('merge', 'squash', 'rebase')
    - Returns: Merge result details
 
-22. `get_pull_request_files`
+23. `get_pull_request_files`
    - Get the list of files changed in a pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -244,7 +254,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of changed files with patch and status details
 
-23. `get_pull_request_status`
+24. `get_pull_request_status`
    - Get the combined status of all status checks for a pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -252,7 +262,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Combined status check results and individual check details
 
-24. `update_pull_request_branch`
+25. `update_pull_request_branch`
    - Update a pull request branch with the latest changes from the base branch (equivalent to GitHub's "Update branch" button)
    - Inputs:
      - `owner` (string): Repository owner
@@ -261,7 +271,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `expected_head_sha` (optional string): The expected SHA of the pull request's HEAD ref
    - Returns: Success message when branch is updated
 
-25. `get_pull_request_comments`
+26. `get_pull_request_comments`
    - Get the review comments on a pull request
    - Inputs:
      - `owner` (string): Repository owner
@@ -269,7 +279,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request review comments with details like the comment text, author, and location in the diff
 
-26. `get_pull_request_reviews`
+27. `get_pull_request_reviews`
    - Get the reviews on a pull request
    - Inputs:
      - `owner` (string): Repository owner
