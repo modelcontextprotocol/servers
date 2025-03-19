@@ -15,10 +15,19 @@ import {
 // AWS client initialization
 const bedrockClient = new BedrockAgentRuntimeClient({
   region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
+  // If AWS_PROFILE is set, use the profile credentials
+  // Otherwise, use explicit credentials if provided
+  ...(process.env.AWS_PROFILE 
+    ? { profile: process.env.AWS_PROFILE }
+    : {
+        credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+          ? {
+              accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+              secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+            }
+          : undefined,
+      }
+  ),
 });
 
 interface RAGSource {
