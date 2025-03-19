@@ -69,6 +69,17 @@ Add this to your `claude_desktop_config.json`:
 </details>
 
 <details>
+<summary>Using uvx with on-premise Sentry</summary>
+
+```json
+"mcpServers": {
+  "sentry": {
+    "command": "uvx",
+    "args": ["mcp-server-sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-domain", "https://your-sentry-instance.example.com/api/0/"]
+  }
+}
+```
+</details>
 
 <details>
 <summary>Using docker</summary>
@@ -84,7 +95,19 @@ Add this to your `claude_desktop_config.json`:
 </details>
 
 <details>
+<summary>Using docker with on-premise Sentry</summary>
 
+```json
+"mcpServers": {
+  "sentry": {
+    "command": "docker",
+    "args": ["run", "-i", "--rm", "mcp/sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-domain", "https://your-sentry-instance.example.com/api/0/"]
+  }
+}
+```
+</details>
+
+<details>
 <summary>Using pip installation</summary>
 
 ```json
@@ -92,6 +115,19 @@ Add this to your `claude_desktop_config.json`:
   "sentry": {
     "command": "python",
     "args": ["-m", "mcp_server_sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using pip installation with on-premise Sentry</summary>
+
+```json
+"mcpServers": {
+  "sentry": {
+    "command": "python",
+    "args": ["-m", "mcp_server_sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-domain", "https://your-sentry-instance.example.com/api/0/"]
   }
 }
 ```
@@ -117,6 +153,21 @@ Add to your Zed settings.json:
 </details>
 
 <details>
+<summary>Using uvx with on-premise Sentry</summary>
+
+```json
+"context_servers": [
+  "mcp-server-sentry": {
+    "command": {
+      "path": "uvx",
+      "args": ["mcp-server-sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-domain", "https://your-sentry-instance.example.com/api/0/"]
+    }
+  }
+],
+```
+</details>
+
+<details>
 <summary>Using pip installation</summary>
 
 ```json
@@ -124,6 +175,19 @@ Add to your Zed settings.json:
   "mcp-server-sentry": {
     "command": "python",
     "args": ["-m", "mcp_server_sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+  }
+},
+```
+</details>
+
+<details>
+<summary>Using pip installation with on-premise Sentry</summary>
+
+```json
+"context_servers": {
+  "mcp-server-sentry": {
+    "command": "python",
+    "args": ["-m", "mcp_server_sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-domain", "https://your-sentry-instance.example.com/api/0/"]
   }
 },
 ```
@@ -137,11 +201,10 @@ You can use the MCP inspector to debug the server. For uvx installations:
 npx @modelcontextprotocol/inspector uvx mcp-server-sentry --auth-token YOUR_SENTRY_TOKEN
 ```
 
-Or if you've installed the package in a specific directory or are developing on it:
+For on-premise Sentry installations:
 
 ```
-cd path/to/servers/src/sentry
-npx @modelcontextprotocol/inspector uv run mcp-server-sentry --auth-token YOUR_SENTRY_TOKEN
+npx @modelcontextprotocol/inspector uvx mcp-server-sentry --auth-token YOUR_SENTRY_TOKEN --api-domain https://your-sentry-instance.example.com/api/0/
 ```
 
 ## License
