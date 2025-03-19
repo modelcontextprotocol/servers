@@ -96,7 +96,9 @@ WHERE DEPARTMENT_ID IN 
 GROUP BY COUNTRY_NAME, CITY
 - explain the execution plan
 - visualize above execution plan
-- rewrite above query with a better execution plan
+- get stats of COUNTRIES, LOCATIONS and DEPARTMENTS
+- based on above table and index stats rewrite above query with a better execution plan
+- visualize original and rewritten execution plan
 
 See in action using Claude Desktop App
 
