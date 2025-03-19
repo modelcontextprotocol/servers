@@ -277,6 +277,13 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
 
+27. `get_latest_release`
+   - Get the latest release in a repository
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+   - Returns: Latest release details
+
 ## Search Query Syntax
 
 ### Code Search

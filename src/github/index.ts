@@ -15,6 +15,7 @@ import * as pulls from './operations/pulls.js';
 import * as branches from './operations/branches.js';
 import * as search from './operations/search.js';
 import * as commits from './operations/commits.js';
+import * as release from './operations/release.js';
 import {
   GitHubError,
   GitHubValidationError,
@@ -194,6 +195,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_reviews",
         description: "Get the reviews on a pull request",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema)
+      },
+      {
+        name: "list_releases",
+        description: "List releases of a repository",
+        inputSchema: zodToJsonSchema(release.GetReleaseSchema),
+      },
+      {
+        name: "get_latest_release",
+        description: "Get the latest release of a repository",
+        inputSchema: zodToJsonSchema(release.GetReleaseSchema),
       }
     ],
   };
@@ -456,6 +467,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "get_latest_release": {
+        const args = release.GetReleaseSchema.parse(request.params.arguments);
+        const releaseInfo = await release.getLatestRelease(args.owner, args.repo);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releaseInfo, null, 2) }],
+        };
+      }
+
       default:
         throw new Error(`Unknown tool: ${request.params.name}`);
     }
@@ -473,7 +492,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("GitHub MCP Server running on stdio");
+  console.error("GitHub MCP Server running on stdio");1
 }
 
 runServer().catch((error) => {
