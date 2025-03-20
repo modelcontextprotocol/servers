@@ -30,11 +30,17 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - Input: `paths` (string[])
   - Failed reads won't stop the entire operation
 
-- **write_file**
-  - Create new file or overwrite existing (exercise caution with this)
-  - Inputs:
-    - `path` (string): File location
-    - `content` (string): File content
++ **create_file**
++   - Create a new file or completely overwrite an existing file with new content.
++   - Inputs:
++     - `path` (string): File location
++     - `content` (string): File content
++
++ **append_to_file**
++   - Append new content to the end of an existing file.
++   - Inputs:
++     - `path` (string): File location
++     - `content` (string): Content to append
 
 - **edit_file**
   - Make selective edits using advanced pattern matching and formatting
