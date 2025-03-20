@@ -41,12 +41,6 @@ jobs:
         with:
           python-version-file: "src/${{ matrix.package }}/.python-version"
 
-      - name: Remove old lock file (if present)
-        run: rm -f ./src/sqlite/uv.lock ./src/time/uv.lock ./src/fetch/uv.lock ./src/sentry/uv.lock ./src/git/uv.lock
-
-      - name: Compile fresh lock file
-        run: uv pip compile --all-extras --dev
-
       - name: Install dependencies
         working-directory: src/${{ matrix.package }}
         run: uv sync --frozen --all-extras --dev
