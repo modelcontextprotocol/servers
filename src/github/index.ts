@@ -15,6 +15,7 @@ import * as pulls from './operations/pulls.js';
 import * as branches from './operations/branches.js';
 import * as search from './operations/search.js';
 import * as commits from './operations/commits.js';
+import * as tag from './operations/tag.js';
 import {
   GitHubError,
   GitHubValidationError,
@@ -45,7 +46,7 @@ function formatGitHubError(error: GitHubError): string {
   if (error instanceof GitHubValidationError) {
     message = `Validation Error: ${error.message}`;
     if (error.response) {
-      message += `\nDetails: ${JSON.stringify(error.response)}`;
+ `\nDetails: ${JSON.stringify(error.response)}`;
     }
   } else if (error instanceof GitHubResourceNotFoundError) {
     message = `Not Found: ${error.message}`;
@@ -194,7 +195,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_reviews",
         description: "Get the reviews on a pull request",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema)
-      }
+      },
+      {
+        name: "list_tags",
+        description: "List repository tags",
+        inputSchema: zodToJsonSchema(tag.ListTagsOptionsSchema),
+      },
     ],
   };
 });
@@ -453,6 +459,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const reviews = await pulls.getPullRequestReviews(args.owner, args.repo, args.pull_number);
         return {
           content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }],
+        };
+      }
+
+      case "list_tags": {
+        const args = tag.ListTagsOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const tags = await tag.listTags(args.owner, args.repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(tags, null, 2) }],
         };
       }
 
