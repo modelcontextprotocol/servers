@@ -308,6 +308,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[xiyan_mcp_server](https://github.com/XGenerationLab/xiyan_mcp_server)** An MCP server that supports fetching data from a database using natural language queries, powered by XiyanSQL as the text-to-SQL LLM.
 - **[XMind](https://github.com/apeyroux/mcp-xmind)** - Read and search through your XMind directory containing XMind files.
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
+- <img height="12" width="12" src="https://github.com/jae-jae/fetcher-mcp/raw/main/icon.svg" alt="Fetcher Logo" /> **[Fetcher MCP](https://github.com/jae-jae/fetcher-mcp)** -  MCP server for fetching web page content using Playwright headless browser, supporting Javascript rendering and intelligent content extraction, and outputting Markdown or HTML format.
 
 ## 📚 Frameworks
 
