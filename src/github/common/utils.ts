@@ -58,9 +58,18 @@ export async function githubRequest(
     if (urlObj.pathname.startsWith('/search/')) {
       const searchParams = new URLSearchParams(urlObj.search);
       const query = searchParams.get('q') || '';
-      searchParams.set('q', `${query} org:${process.env.GITHUB_ORG}`.trim());
-      urlObj.search = searchParams.toString();
-      url = urlObj.toString();
+      const hasOrgFilter = /\borg:\S+/.test(query);
+      const hasCorrectOrg = query.toLowerCase().includes(`org:${process.env.GITHUB_ORG.toLowerCase()}`);
+      
+      if (hasOrgFilter && !hasCorrectOrg) {
+        throw new Error(`Operation not allowed: searches restricted to ${process.env.GITHUB_ORG} organization`);
+      }
+      
+      if (!hasOrgFilter) {
+        searchParams.set('q', `${query} org:${process.env.GITHUB_ORG}`.trim());
+        urlObj.search = searchParams.toString();
+        url = urlObj.toString();
+      }
     }
   }
 
