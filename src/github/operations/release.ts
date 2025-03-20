@@ -2,9 +2,15 @@ import { z } from "zod";
 import { githubRequest, buildUrl } from "../common/utils.js";
 
 
-export const GetReleaseSchema = z.object({
+export const GetLatestReleaseSchema = z.object({
     owner: z.string().describe("Repository owner (username or organization)"),
     repo: z.string().describe("The name of the repository")
+});
+
+export const GetReleaseSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("The name of the repository"),
+  release_id: z.number().describe("The ID of the release")
 });
 
 export const ListReleasesOptionsSchema = z.object({
@@ -35,4 +41,12 @@ export async function getLatestRelease(
   owner: string, 
   repo: string ) {
   return githubRequest(`https://api.github.com/repos/${owner}/${repo}/releases/latest`);
+}
+
+export async function getRelease(
+  owner: string, 
+  repo: string,
+  release_id: number
+) {
+  return githubRequest(`https://api.github.com/repos/${owner}/${repo}/releases/${release_id}`);
 }

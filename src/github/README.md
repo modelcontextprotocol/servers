@@ -293,6 +293,14 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `per_page` (optional number): Results per page (max 100)
    - Returns: Array of release details
 
+29. `get_release`
+   - Get details of a specific release
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `release_id` (number): Release ID or tag name
+   - Returns: Release details
+
 ## Search Query Syntax
 
 ### Code Search
