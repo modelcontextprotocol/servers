@@ -19,7 +19,7 @@ A Model Context Protocol server that provides read-only access to Oracle databas
 - **stats**
   - Get statistics for a given table on current connected schema
   - Input: `name` (string): The table name
-  - Table owner is eqeal to USSER SQL function returning value
+  - Table owner is equal to USER SQL function returning value
 
 ### Resources
 
@@ -69,7 +69,7 @@ To use this server with the Claude Desktop app, add the following configuration 
       "args": [
         "-y",
         "@modelcontextprotocol/server-oracle",
-        "host.docker.internal:1521/freepdb1"
+        "localhost:1521/freepdb1"
       ],
       "env": {
         "ORACLE_USER": "scott",
