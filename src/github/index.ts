@@ -210,6 +210,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_release",
         description: "Get a specific release of a repository",
         inputSchema: zodToJsonSchema(release.GetReleaseSchema),
+      },
+      {
+        name: "get_release_by_tag",
+        description: "Get a release by its tag",
+        inputSchema: zodToJsonSchema(release.GetReleaseByTagSchema),
       }
     ],
   };
@@ -492,6 +497,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "get_release": {
         const args = release.GetReleaseSchema.parse(request.params.arguments);
         const releaseInfo = await release.getRelease(args.owner, args.repo, args.release_id);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releaseInfo, null, 2) }],
+        };
+      }
+
+      case "get_release_by_tag": {
+        const args = release.GetReleaseByTagSchema.parse(request.params.arguments);
+        const releaseInfo = await release.getReleaseByTag(args.owner, args.repo, args.tag);
         return {
           content: [{ type: "text", text: JSON.stringify(releaseInfo, null, 2) }],
         };

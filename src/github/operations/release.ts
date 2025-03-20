@@ -13,6 +13,12 @@ export const GetReleaseSchema = z.object({
   release_id: z.number().describe("The ID of the release")
 });
 
+export const GetReleaseByTagSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("The name of the repository"),
+  tag: z.string().describe("The tag of the release")
+});
+
 export const ListReleasesOptionsSchema = z.object({
   owner: z.string().describe("Repository owner (username or organization)"),
   repo: z.string().describe("The name of the repository"),
@@ -49,4 +55,12 @@ export async function getRelease(
   release_id: number
 ) {
   return githubRequest(`https://api.github.com/repos/${owner}/${repo}/releases/${release_id}`);
+}
+
+export async function getReleaseByTag(
+  owner: string, 
+  repo: string,
+  tag: string
+) {
+  return githubRequest(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`);
 }

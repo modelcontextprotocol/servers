@@ -301,6 +301,14 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `release_id` (number): Release ID or tag name
    - Returns: Release details
 
+30. `get_release_by_tag_name`
+   - Get details of a specific release by tag name
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `tag` (string): Tag name of the release
+   - Returns: Release details
+
 ## Search Query Syntax
 
 ### Code Search
