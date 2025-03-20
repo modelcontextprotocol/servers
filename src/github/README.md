@@ -309,6 +309,22 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `tag` (string): Tag name of the release
    - Returns: Release details
 
+31. `create_release`
+   - Create a new release in a repository
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `tag_name` (string): The name of the tag
+     - `target_commitish` (optional string): Commitish value for tag (branch/commit SHA)
+     - `name` (optional string): The name of the release
+     - `body` (optional string): Text describing the contents of the release
+     - `draft` (optional boolean): Whether to create as draft release
+     - `prerelease` (optional boolean): Whether this is a prerelease
+     - `discussion_category_name` (optional string): Category for linked discussion
+     - `generate_release_notes` (optional boolean): Auto-generate release notes
+     - `make_latest` (optional string): Set as latest release ('true', 'false', 'legacy')
+   - Returns: Created release details
+
 ## Search Query Syntax
 
 ### Code Search

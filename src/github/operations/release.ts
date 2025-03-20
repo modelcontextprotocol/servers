@@ -2,6 +2,7 @@ import { z } from "zod";
 import { githubRequest, buildUrl } from "../common/utils.js";
 
 
+
 export const GetLatestReleaseSchema = z.object({
     owner: z.string().describe("Repository owner (username or organization)"),
     repo: z.string().describe("The name of the repository")
@@ -24,6 +25,24 @@ export const ListReleasesOptionsSchema = z.object({
   repo: z.string().describe("The name of the repository"),
   per_page: z.number().optional().describe("Results per page (max 100)"),
   page: z.number().optional().describe("Page number of the results")
+});
+
+export const CreateReleaseOptionsSchema = z.object({
+  target_commitish: z.string().optional().describe("Specifies the commitish value that determines where the Git tag is created from. Can be any branch or commit SHA."),
+  name: z.string().optional().describe("The name of the release"),
+  body: z.string().optional().describe("Text describing the contents of the tag"),
+  draft: z.boolean().optional().describe("true to create a draft (unpublished) release, false to create a published one"),
+  prerelease: z.boolean().optional().describe("true to identify the release as a prerelease, false to identify the release as a full release"),
+  discussion_category_name: z.string().optional().describe("If specified, a discussion of the specified category is created and linked to the release"),
+  generate_release_notes: z.boolean().optional().describe("Whether to automatically generate the name and body for this release"),
+  make_latest: z.enum(["true", "false", "legacy"]).optional().describe("Specifies whether this release should be set as the latest release for the repository")
+});
+
+export const CreateReleaseSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("The name of the repository"),
+  tag_name: z.string().describe("The name of the tag"),
+  ...CreateReleaseOptionsSchema.shape
 });
 
 export async function listReleases(
@@ -63,4 +82,20 @@ export async function getReleaseByTag(
   tag: string
 ) {
   return githubRequest(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`);
+}
+
+export async function createRelease(
+  owner: string,
+  repo: string,
+  releaseOptions: Omit<z.infer<typeof CreateReleaseOptionsSchema>, "owner" | "repo">
+) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/releases`;
+  
+  return githubRequest(
+    url, 
+    {
+      method: "POST",
+      body: releaseOptions
+    }
+  );
 }
