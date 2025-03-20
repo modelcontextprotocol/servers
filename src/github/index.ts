@@ -231,6 +231,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "Update a release in a GitHub repository",
         inputSchema: zodToJsonSchema(release.UpdateReleaseSchema),
       },
+      {
+        name: "generate_release_notes",
+        description: "Generate a name and body describing a release.",
+        inputSchema: zodToJsonSchema(release.GenerateReleaseNotesSchema),
+      },
   ],
   };
 });
@@ -549,6 +554,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const releaseInfo = await release.updateRelease(owner, repo, release_id, options);
         return {
           content: [{ type: "text", text: JSON.stringify(releaseInfo, null, 2) }],
+        };
+      }
+
+      case "generate_release_notes": {
+        const args = release.GenerateReleaseNotesSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const releaseNotes = await release.generateReleaseNotes(owner, repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releaseNotes, null, 2) }],
         };
       }
 

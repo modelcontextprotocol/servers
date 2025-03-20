@@ -69,6 +69,19 @@ export const UpdateReleaseSchema = z.object({
   ...UpdateReleaseOptionsSchema.shape
 });
 
+export const GenerateReleaseNotesOptionsSchema = z.object({
+  tag_name: z.string().describe("The tag name for the release. This can be an existing tag or a new one."),
+  target_commitish: z.string().optional().describe("Specifies the commitish value that will be the target for the release's tag."),
+  previous_tag_name: z.string().optional().describe("The name of the previous tag to use as the starting point for the release notes."),
+  configuration_file_path: z.string().optional().describe("Specifies a path to a file in the repository containing configuration settings used for generating the release notes.")
+});
+
+export const GenerateReleaseNotesSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("The name of the repository"),
+  ...GenerateReleaseNotesOptionsSchema.shape
+});
+
 export async function listReleases(
   owner: string, 
   repo: string,
@@ -150,6 +163,22 @@ export async function updateRelease(
     {
       method: "PATCH",
       body: updateOptions
+    }
+  );
+}
+
+export async function generateReleaseNotes(
+  owner: string,
+  repo: string,
+  options: z.infer<typeof GenerateReleaseNotesOptionsSchema>
+) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/releases/generate-notes`;
+  
+  return githubRequest(
+    url, 
+    {
+      method: "POST",
+      body: options
     }
   );
 }

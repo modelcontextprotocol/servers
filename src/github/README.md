@@ -349,6 +349,17 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
       - `discussion_category_name` (optional string): Category for linked discussion
     - Returns: Updated release details
 
+34. `generate_release_notes`
+    - Generate release notes content for a GitHub release
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `tag_name` (string): The tag name for the release (existing or new)
+      - `target_commitish` (optional string): Commitish value for the release's tag
+      - `previous_tag_name` (optional string): Previous tag to use as starting point
+      - `configuration_file_path` (optional string): Path to release notes config file
+    - Returns: Generated release notes content
+
 ## Search Query Syntax
 
 ### Code Search
