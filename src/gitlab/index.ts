@@ -20,6 +20,14 @@ import {
   GitLabSearchResponseSchema,
   GitLabTreeSchema,
   GitLabCommitSchema,
+  GitLabCommentSchema,
+  GitLabEpicSchema,
+  GitLabUserSchema,
+  GitLabIssueDetailsSchema,
+  GitLabMergeRequestDetailsSchema,
+  GitLabEpicDetailsSchema,
+  GitLabEventSchema,
+  GitLabUserActivitySchema,
   CreateRepositoryOptionsSchema,
   CreateIssueOptionsSchema,
   CreateMergeRequestOptionsSchema,
@@ -33,6 +41,10 @@ import {
   CreateMergeRequestSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
+  GetIssueDetailsSchema,
+  GetMergeRequestDetailsSchema,
+  GetEpicDetailsSchema,
+  GetUserActivitySchema,
   type GitLabFork,
   type GitLabReference,
   type GitLabRepository,
@@ -43,6 +55,13 @@ import {
   type GitLabSearchResponse,
   type GitLabTree,
   type GitLabCommit,
+  type GitLabComment,
+  type GitLabEpic,
+  type GitLabIssueDetails,
+  type GitLabMergeRequestDetails,
+  type GitLabEpicDetails,
+  type GitLabEvent,
+  type GitLabUserActivity,
   type FileOperation,
 } from './schemas.js';
 
@@ -126,6 +145,9 @@ async function getDefaultBranchRef(projectId: string): Promise<string> {
   }
 
   const project = GitLabRepositorySchema.parse(await response.json());
+  if (!project.default_branch) {
+    throw new Error(`Could not determine default branch for project ${projectId}`);
+  }
   return project.default_branch;
 }
 
@@ -351,6 +373,409 @@ async function searchProjects(
   });
 }
 
+async function getIssueComments(
+  projectId: string,
+  issueIid: number
+): Promise<GitLabComment[]> {
+  try {
+    const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/issues/${issueIid}/notes`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    const responseData = await response.json() as unknown[];
+    
+    // Process response data to ensure comment text is included
+    const comments = (responseData as any[]).map(comment => {
+      // Determine the actual comment content from available fields
+      const content = comment.body || comment.note || '';
+      
+      return {
+        id: comment.id,
+        // Only include content field to avoid duplication
+        content,
+        author: comment.author,
+        created_at: comment.created_at,
+        updated_at: comment.updated_at,
+        system: comment.system,
+        noteable_id: comment.noteable_id,
+        noteable_type: comment.noteable_type,
+        web_url: comment.web_url
+      };
+    });
+    
+    return comments;
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('Comment schema validation error:', JSON.stringify(error.errors, null, 2));
+    }
+    throw error;
+  }
+}
+
+async function getMergeRequestComments(
+  projectId: string,
+  mergeRequestIid: number
+): Promise<GitLabComment[]> {
+  try {
+    const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/merge_requests/${mergeRequestIid}/notes`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    const responseData = await response.json() as unknown[];
+    
+    // Process response data to ensure comment text is included
+    const comments = (responseData as any[]).map(comment => {
+      // Determine the actual comment content from available fields
+      const content = comment.body || comment.note || '';
+      
+      return {
+        id: comment.id,
+        // Only include content field to avoid duplication
+        content,
+        author: comment.author,
+        created_at: comment.created_at,
+        updated_at: comment.updated_at,
+        system: comment.system,
+        noteable_id: comment.noteable_id,
+        noteable_type: comment.noteable_type,
+        web_url: comment.web_url,
+        // Include additional fields that might be useful
+        attachment: comment.attachment,
+        resolvable: comment.resolvable,
+        resolved: comment.resolved,
+        resolved_by: comment.resolved_by,
+        resolved_at: comment.resolved_at,
+        discussion_id: comment.discussion_id,
+        position: comment.position
+      };
+    });
+    
+    return comments;
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('Comment schema validation error:', JSON.stringify(error.errors, null, 2));
+    }
+    throw error;
+  }
+}
+
+async function getEpicComments(
+  groupId: string,
+  epicIid: number
+): Promise<GitLabComment[]> {
+  try {
+    const url = `${GITLAB_API_URL}/groups/${encodeURIComponent(groupId)}/epics/${epicIid}/notes`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    const responseData = await response.json() as unknown[];
+    
+    // Process response data to ensure comment text is included
+    const comments = (responseData as any[]).map(comment => {
+      // Determine the actual comment content from available fields
+      const content = comment.body || comment.note || '';
+      
+      return {
+        id: comment.id,
+        // Only include content field to avoid duplication
+        content,
+        author: comment.author,
+        created_at: comment.created_at,
+        updated_at: comment.updated_at,
+        system: comment.system,
+        noteable_id: comment.noteable_id,
+        noteable_type: comment.noteable_type,
+        web_url: comment.web_url
+      };
+    });
+    
+    return comments;
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('Epic comment schema validation error:', JSON.stringify(error.errors, null, 2));
+    }
+    throw error;
+  }
+}
+
+async function getIssueDetails(
+  projectId: string,
+  issueIid: number
+): Promise<GitLabIssueDetails> {
+  try {
+    // First, get the issue details
+    const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/issues/${issueIid}`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    const responseData = await response.json() as Record<string, unknown>;
+    
+    const issue = GitLabIssueSchema.parse(responseData);
+    
+    // Then, get comments
+    try {
+      const comments = await getIssueComments(projectId, issueIid);
+      return { ...issue, comments };
+    } catch (error) {
+      // Return issue without comments if we can't fetch them
+      console.error(`Error fetching issue comments: ${error}`);
+      return issue;
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('Schema validation error:', JSON.stringify(error.errors, null, 2));
+      throw new Error(`Issue schema validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+    }
+    throw error;
+  }
+}
+
+async function getMergeRequestDetails(
+  projectId: string,
+  mergeRequestIid: number
+): Promise<GitLabMergeRequestDetails> {
+  try {
+    // First, get the merge request details
+    const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/merge_requests/${mergeRequestIid}`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    const responseData = await response.json() as Record<string, unknown>;
+    
+    const mergeRequest = GitLabMergeRequestSchema.parse(responseData);
+    
+    // Then, get comments
+    try {
+      const comments = await getMergeRequestComments(projectId, mergeRequestIid);
+      return { ...mergeRequest, comments };
+    } catch (error) {
+      // Return MR without comments if we can't fetch them
+      console.error(`Error fetching merge request comments: ${error}`);
+      return mergeRequest;
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('Schema validation error:', JSON.stringify(error.errors, null, 2));
+      throw new Error(`Merge request schema validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+    }
+    throw error;
+  }
+}
+
+async function getUserActivity(
+  userId: string,
+  page: number = 1,
+  perPage: number = 20
+): Promise<GitLabUserActivity> {
+  try {
+    // First, determine if userId is a numeric ID or a username
+    let userIdOrUsername = userId;
+    if (!isNaN(Number(userId))) {
+      // It's a numeric ID, use it directly
+      userIdOrUsername = userId;
+    } else {
+      // It's a username, need to get the user ID first
+      const userResponse = await fetch(`${GITLAB_API_URL}/users?username=${encodeURIComponent(userId)}`, {
+        headers: {
+          "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+        }
+      });
+
+      if (!userResponse.ok) {
+        throw new Error(`GitLab API error: ${userResponse.statusText}`);
+      }
+
+      const users = await userResponse.json() as any[];
+      if (users.length === 0) {
+        throw new Error(`User not found: ${userId}`);
+      }
+
+      userIdOrUsername = users[0].id.toString();
+    }
+
+    // Fetch user events
+    const url = `${GITLAB_API_URL}/users/${userIdOrUsername}/events?page=${page}&per_page=${perPage}`;
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    const responseData = await response.json() as unknown[];
+    
+    // Process response data with minimal validation
+    // Skip schema validation which is causing issues
+    // Return only the needed properties in a format that matches our schema
+    const events = responseData.map((rawEvent: any) => {
+      return {
+        id: rawEvent.id,
+        action_name: rawEvent.action_name,
+        author_id: rawEvent.author_id,
+        created_at: rawEvent.created_at,
+        // Only include non-null values for optional fields
+        ...(rawEvent.project_id !== null && { project_id: rawEvent.project_id }),
+        ...(rawEvent.target_id !== null && { target_id: rawEvent.target_id }),
+        ...(rawEvent.target_type !== null && { target_type: rawEvent.target_type }),
+        ...(rawEvent.target_title !== null && { target_title: rawEvent.target_title }),
+        ...(rawEvent.author && { author: rawEvent.author }),
+        ...(rawEvent.push_data && { push_data: rawEvent.push_data }),
+        ...(rawEvent.note && { note: rawEvent.note })
+      };
+    });
+    
+    // Get basic user info
+    const userInfoUrl = `${GITLAB_API_URL}/users/${userIdOrUsername}`;
+    const userInfoResponse = await fetch(userInfoUrl, {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    let user = undefined;
+    if (userInfoResponse.ok) {
+      const userInfoData = await userInfoResponse.json() as Record<string, unknown>;
+      user = GitLabUserSchema.parse(userInfoData);
+    }
+
+    return { events, user };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('User activity schema validation error:', JSON.stringify(error.errors, null, 2));
+      throw new Error(`User activity schema validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+    }
+    throw error;
+  }
+}
+
+async function getEpicDetails(
+    groupId: string,
+    epicIid: number
+): Promise<GitLabEpicDetails> {
+    try {
+        // First, get the epic details
+        const url = `${GITLAB_API_URL}/groups/${encodeURIComponent(groupId)}/epics/${epicIid}`;
+        const response = await fetch(url, {
+            headers: {
+                "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`GitLab API error: ${response.statusText}`);
+        }
+
+        const responseData = await response.json() as Record<string, unknown>;
+        const epic = GitLabEpicSchema.parse(responseData);
+
+        // Fetch child items (epics and issues)
+        try {
+            const childrenUrl = `${GITLAB_API_URL}/groups/${encodeURIComponent(groupId)}/epics/${epicIid}/issues`;
+            const childrenResponse = await fetch(childrenUrl, {
+                headers: {
+                    "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+                }
+            });
+
+            if (childrenResponse.ok) {
+                const childIssues = await childrenResponse.json() as any[];
+
+                // Also fetch child epics
+                const childEpicsUrl = `${GITLAB_API_URL}/groups/${encodeURIComponent(groupId)}/epics/${epicIid}/epics`;
+                const childEpicsResponse = await fetch(childEpicsUrl, {
+                    headers: {
+                        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+                    }
+                });
+
+                let childEpics = [];
+                if (childEpicsResponse.ok) {
+                    childEpics = await childEpicsResponse.json() as any[];
+                }
+
+                // Format child items
+                const children = [
+                    ...childIssues.map(issue => ({
+                        id: issue.id,
+                        iid: issue.iid,
+                        title: issue.title,
+                        state: issue.state,
+                        web_url: issue.web_url,
+                        type: 'issue'
+                    })),
+                    ...childEpics.map(childEpic => ({
+                        id: childEpic.id,
+                        iid: childEpic.iid,
+                        title: childEpic.title,
+                        state: childEpic.state,
+                        web_url: childEpic.web_url,
+                        type: 'epic'
+                    }))
+                ];
+
+                epic.children = children;
+            }
+        } catch (error) {
+            console.error(`Error fetching epic children: ${error}`);
+            // Continue without children if there's an error
+        }
+
+        // Then, get comments
+        try {
+            const comments = await getEpicComments(groupId, epicIid);
+            return { ...epic, comments };
+        } catch (error) {
+            // Return epic without comments if we can't fetch them
+            console.error(`Error fetching epic comments: ${error}`);
+            return epic;
+        }
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            console.error('Schema validation error:', JSON.stringify(error.errors, null, 2));
+            throw new Error(`Epic schema validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+        }
+        throw error;
+    }
+}
+
 async function createRepository(
   options: z.infer<typeof CreateRepositoryOptionsSchema>
 ): Promise<GitLabRepository> {
@@ -422,6 +847,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_branch",
         description: "Create a new branch in a GitLab project",
         inputSchema: zodToJsonSchema(CreateBranchSchema)
+      },
+      {
+        name: "get_issue_details",
+        description: "Get detailed information about an issue, including comments",
+        inputSchema: zodToJsonSchema(GetIssueDetailsSchema)
+      },
+      {
+        name: "get_merge_request_details",
+        description: "Get detailed information about a merge request, including comments",
+        inputSchema: zodToJsonSchema(GetMergeRequestDetailsSchema)
+      },
+      {
+        name: "get_epic_details",
+        description: "Get detailed information about an epic, including comments",
+        inputSchema: zodToJsonSchema(GetEpicDetailsSchema)
+      },
+      {
+        name: "get_user_activity",
+        description: "Get user activity events for a specific user",
+        inputSchema: zodToJsonSchema(GetUserActivitySchema)
       }
     ]
   };
@@ -509,6 +954,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { project_id, ...options } = args;
         const mergeRequest = await createMergeRequest(project_id, options);
         return { content: [{ type: "text", text: JSON.stringify(mergeRequest, null, 2) }] };
+      }
+
+      case "get_issue_details": {
+        const args = GetIssueDetailsSchema.parse(request.params.arguments);
+        const issueDetails = await getIssueDetails(args.project_id, args.issue_iid);
+        return { content: [{ type: "text", text: JSON.stringify(issueDetails, null, 2) }] };
+      }
+
+      case "get_merge_request_details": {
+        const args = GetMergeRequestDetailsSchema.parse(request.params.arguments);
+        const mrDetails = await getMergeRequestDetails(args.project_id, args.merge_request_iid);
+        return { content: [{ type: "text", text: JSON.stringify(mrDetails, null, 2) }] };
+      }
+
+      case "get_epic_details": {
+        const args = GetEpicDetailsSchema.parse(request.params.arguments);
+        const epicDetails = await getEpicDetails(args.group_id, args.epic_iid);
+        return { content: [{ type: "text", text: JSON.stringify(epicDetails, null, 2) }] };
+      }
+
+      case "get_user_activity": {
+        const args = GetUserActivitySchema.parse(request.params.arguments);
+        const userActivity = await getUserActivity(args.user_id, args.page, args.per_page);
+        return { content: [{ type: "text", text: JSON.stringify(userActivity, null, 2) }] };
       }
 
       default:
