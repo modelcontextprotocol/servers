@@ -45,6 +45,12 @@ export const CreateReleaseSchema = z.object({
   ...CreateReleaseOptionsSchema.shape
 });
 
+export const DeleteReleaseSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("The name of the repository"),
+  release_id: z.number().describe("The ID of the release")
+});
+
 export async function listReleases(
   owner: string, 
   repo: string,
@@ -96,6 +102,19 @@ export async function createRelease(
     {
       method: "POST",
       body: releaseOptions
+    }
+  );
+}
+
+export async function deleteRelease(
+  owner: string,
+  repo: string,
+  release_id: number
+) {
+  return githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/releases/${release_id}`, 
+    {
+      method: "DELETE"
     }
   );
 }

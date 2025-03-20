@@ -298,7 +298,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
    - Inputs:
      - `owner` (string): Repository owner
      - `repo` (string): Repository name
-     - `release_id` (number): Release ID or tag name
+     - `release_id` (number): The unique identifier of the release.
    - Returns: Release details
 
 30. `get_release_by_tag_name`
@@ -324,6 +324,14 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `generate_release_notes` (optional boolean): Auto-generate release notes
      - `make_latest` (optional string): Set as latest release ('true', 'false', 'legacy')
    - Returns: Created release details
+
+32. `delete_release`
+    - Delete a release from a repository
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `release_id` (number): The unique identifier of the release.
+    - Returns: Success message
 
 ## Search Query Syntax
 
