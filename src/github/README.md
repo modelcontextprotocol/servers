@@ -9,7 +9,12 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
 - **Git History Preservation**: Operations maintain proper Git history without force pushing
 - **Batch Operations**: Support for both single-file and multi-file operations
 - **Advanced Search**: Support for searching code, issues/PRs, and users
+- **Organization Restriction**: Optional restriction of operations to a specific organization using `GITHUB_ORG` environment variable
 
+## Environment Variables
+
+- `GITHUB_PERSONAL_ACCESS_TOKEN`: Your GitHub Personal Access Token
+- `GITHUB_ORG` (optional): If set, restricts all operations to the specified organization. Repository operations outside this organization will be rejected, and search results will be filtered to this organization.
 
 ## Tools
 
