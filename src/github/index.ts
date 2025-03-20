@@ -583,7 +583,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("GitHub MCP Server running on stdio");1
+  console.error("GitHub MCP Server running on stdio");
 }
 
 runServer().catch((error) => {
