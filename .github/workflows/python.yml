@@ -44,6 +44,9 @@ jobs:
         with:
           python-version-file: "src/${{ matrix.package }}/.python-version"
 
+      - name: Compile fresh lock file
+        run: uv pip compile --all-extras --dev
+
       - name: Install dependencies
         working-directory: src/${{ matrix.package }}
         run: uv sync --frozen --all-extras --dev
