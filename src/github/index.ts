@@ -46,7 +46,7 @@ function formatGitHubError(error: GitHubError): string {
   if (error instanceof GitHubValidationError) {
     message = `Validation Error: ${error.message}`;
     if (error.response) {
- `\nDetails: ${JSON.stringify(error.response)}`;
+      message += `\nDetails: ${JSON.stringify(error.response)}`;
     }
   } else if (error instanceof GitHubResourceNotFoundError) {
     message = `Not Found: ${error.message}`;
