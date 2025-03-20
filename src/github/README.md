@@ -333,6 +333,22 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
       - `release_id` (number): The unique identifier of the release.
     - Returns: Success message
 
+33. `update_release`
+    - Update an existing release in a repository
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `release_id` (number): The unique identifier of the release.
+      - `tag_name` (optional string): The name of the tag
+      - `target_commitish` (optional string): Commitish value for tag (branch/commit SHA)
+      - `name` (optional string): The name of the release
+      - `body` (optional string): Text describing the contents of the release
+      - `draft` (optional boolean): Whether to set as draft release
+      - `prerelease` (optional boolean): Whether to set as prerelease
+      - `make_latest` (optional string): Set as latest release ('true', 'false', 'legacy')
+      - `discussion_category_name` (optional string): Category for linked discussion
+    - Returns: Updated release details
+
 ## Search Query Syntax
 
 ### Code Search

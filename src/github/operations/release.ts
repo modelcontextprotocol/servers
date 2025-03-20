@@ -51,6 +51,24 @@ export const DeleteReleaseSchema = z.object({
   release_id: z.number().describe("The ID of the release")
 });
 
+export const UpdateReleaseOptionsSchema = z.object({
+  tag_name: z.string().optional().describe("The name of the tag"),
+  target_commitish: z.string().optional().describe("Specifies the commitish value that determines where the Git tag is created from. Can be any branch or commit SHA."),
+  name: z.string().optional().describe("The name of the release"),
+  body: z.string().optional().describe("Text describing the contents of the tag"),
+  draft: z.boolean().optional().describe("true makes the release a draft, and false publishes the release"),
+  prerelease: z.boolean().optional().describe("true to identify the release as a prerelease, false to identify the release as a full release"),
+  make_latest: z.enum(["true", "false", "legacy"]).optional().describe("Specifies whether this release should be set as the latest release for the repository"),
+  discussion_category_name: z.string().optional().describe("If specified, a discussion of the specified category is created and linked to the release")
+});
+
+export const UpdateReleaseSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("The name of the repository"),
+  release_id: z.number().describe("The unique identifier of the release"),
+  ...UpdateReleaseOptionsSchema.shape
+});
+
 export async function listReleases(
   owner: string, 
   repo: string,
@@ -115,6 +133,23 @@ export async function deleteRelease(
     `https://api.github.com/repos/${owner}/${repo}/releases/${release_id}`, 
     {
       method: "DELETE"
+    }
+  );
+}
+
+export async function updateRelease(
+  owner: string,
+  repo: string,
+  release_id: number,
+  updateOptions: Omit<z.infer<typeof UpdateReleaseOptionsSchema>, "owner" | "repo" | "release_id">
+) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/releases/${release_id}`;
+  
+  return githubRequest(
+    url, 
+    {
+      method: "PATCH",
+      body: updateOptions
     }
   );
 }

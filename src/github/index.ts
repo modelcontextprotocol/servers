@@ -226,6 +226,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "Delete a release from a GitHub repository",
         inputSchema: zodToJsonSchema(release.DeleteReleaseSchema),
       },
+      {
+        name: "update_release",
+        description: "Update a release in a GitHub repository",
+        inputSchema: zodToJsonSchema(release.UpdateReleaseSchema),
+      },
   ],
   };
 });
@@ -535,6 +540,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         await release.deleteRelease(owner, repo, release_id);
         return {
           content: [{ type: "text", text: JSON.stringify({ success: true }, null, 2) }],
+        };
+      }
+
+      case "update_release": {
+        const args = release.UpdateReleaseSchema.parse(request.params.arguments);
+        const { owner, repo, release_id, ...options } = args;
+        const releaseInfo = await release.updateRelease(owner, repo, release_id, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releaseInfo, null, 2) }],
         };
       }
 
