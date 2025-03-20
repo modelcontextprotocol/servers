@@ -10,7 +10,8 @@ from mcp.server.models import InitializationOptions
 from mcp.shared.exceptions import McpError
 import mcp.server.stdio
 
-SENTRY_API_BASE = "https://sentry.io/api/0/"
+# Default Sentry API base URL
+DEFAULT_SENTRY_API_BASE = "https://sentry.io/api/0/"
 MISSING_AUTH_TOKEN_MESSAGE = (
     """Sentry authentication token not found. Please specify your Sentry auth token."""
 )
@@ -64,15 +65,15 @@ def extract_issue_id(issue_id_or_url: str) -> str:
 
     This function validates the input and returns the numeric issue ID.
     It raises SentryError for invalid inputs, including empty strings,
-    non-Sentry URLs, malformed paths, and non-numeric IDs.
+    malformed paths, and non-numeric IDs.
     """
     if not issue_id_or_url:
         raise SentryError("Missing issue_id_or_url argument")
 
     if issue_id_or_url.startswith(("http://", "https://")):
         parsed_url = urlparse(issue_id_or_url)
-        if not parsed_url.hostname or not parsed_url.hostname.endswith(".sentry.io"):
-            raise SentryError("Invalid Sentry URL. Must be a URL ending with .sentry.io")
+        if not parsed_url.hostname:
+            raise SentryError("Invalid Sentry URL. Missing hostname")
 
         path_parts = parsed_url.path.strip("/").split("/")
         if len(path_parts) < 2 or path_parts[0] != "issues":
@@ -188,9 +189,9 @@ async def handle_sentry_issue(
         raise McpError(f"An error occurred: {str(e)}")
 
 
-async def serve(auth_token: str) -> Server:
+async def serve(auth_token: str, api_domain: str = DEFAULT_SENTRY_API_BASE) -> Server:
     server = Server("sentry")
-    http_client = httpx.AsyncClient(base_url=SENTRY_API_BASE)
+    http_client = httpx.AsyncClient(base_url=api_domain)
 
     @server.list_prompts()
     async def handle_list_prompts() -> list[types.Prompt]:
@@ -265,10 +266,16 @@ async def serve(auth_token: str) -> Server:
     required=True,
     help="Sentry authentication token",
 )
-def main(auth_token: str):
+@click.option(
+    "--api-domain",
+    envvar="SENTRY_API_DOMAIN",
+    default=DEFAULT_SENTRY_API_BASE,
+    help="Sentry API domain (default: https://sentry.io/api/0/)",
+)
+def main(auth_token: str, api_domain: str):
     async def _run():
         async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-            server = await serve(auth_token)
+            server = await serve(auth_token, api_domain)
             await server.run(
                 read_stream,
                 write_stream,
