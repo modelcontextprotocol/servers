@@ -277,6 +277,89 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
 
+27. `get_latest_release`
+   - Get the latest release in a repository
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+   - Returns: Latest release details
+
+28. `list_releases`
+   - List all releases in a repository
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `page` (optional number): Page number for pagination
+     - `per_page` (optional number): Results per page (max 100)
+   - Returns: Array of release details
+
+29. `get_release`
+   - Get details of a specific release
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `release_id` (number): The unique identifier of the release.
+   - Returns: Release details
+
+30. `get_release_by_tag_name`
+   - Get details of a specific release by tag name
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `tag` (string): Tag name of the release
+   - Returns: Release details
+
+31. `create_release`
+   - Create a new release in a repository
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `tag_name` (string): The name of the tag
+     - `target_commitish` (optional string): Commitish value for tag (branch/commit SHA)
+     - `name` (optional string): The name of the release
+     - `body` (optional string): Text describing the contents of the release
+     - `draft` (optional boolean): Whether to create as draft release
+     - `prerelease` (optional boolean): Whether this is a prerelease
+     - `discussion_category_name` (optional string): Category for linked discussion
+     - `generate_release_notes` (optional boolean): Auto-generate release notes
+     - `make_latest` (optional string): Set as latest release ('true', 'false', 'legacy')
+   - Returns: Created release details
+
+32. `delete_release`
+    - Delete a release from a repository
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `release_id` (number): The unique identifier of the release.
+    - Returns: Success message
+
+33. `update_release`
+    - Update an existing release in a repository
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `release_id` (number): The unique identifier of the release.
+      - `tag_name` (optional string): The name of the tag
+      - `target_commitish` (optional string): Commitish value for tag (branch/commit SHA)
+      - `name` (optional string): The name of the release
+      - `body` (optional string): Text describing the contents of the release
+      - `draft` (optional boolean): Whether to set as draft release
+      - `prerelease` (optional boolean): Whether to set as prerelease
+      - `make_latest` (optional string): Set as latest release ('true', 'false', 'legacy')
+      - `discussion_category_name` (optional string): Category for linked discussion
+    - Returns: Updated release details
+
+34. `generate_release_notes`
+    - Generate release notes content for a GitHub release
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `tag_name` (string): The tag name for the release (existing or new)
+      - `target_commitish` (optional string): Commitish value for the release's tag
+      - `previous_tag_name` (optional string): Previous tag to use as starting point
+      - `configuration_file_path` (optional string): Path to release notes config file
+    - Returns: Generated release notes content
+
 ## Search Query Syntax
 
 ### Code Search
