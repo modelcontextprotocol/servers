@@ -354,10 +354,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(ReadMultipleFilesArgsSchema) as ToolInput,
       },
       {
-        name: "create_file",
+        name: "write_file",
         description:
-          "Create a new file or completely overwrite an existing file with new content. " +
-          "Use with caution as it will overwrite existing files without warning. " +
+          "Create a new file with new content. " +
+          "Cannot write to existing files. Use append_to_file for that. " +
           "Handles text content with proper encoding. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(WriteFileArgsSchema) as ToolInput,
       },
@@ -486,12 +486,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case "create_file": {
+      case "write_file": {
         const parsed = WriteFileArgsSchema.safeParse(args);
         if (!parsed.success) {
-          throw new Error(`Invalid arguments for create_file: ${parsed.error}`);
+          throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
+        try {
+          await fs.stat(validPath);
+          return {
+            content: [
+              { type: "text", text: `Error: File already exists at ${parsed.data.path}. Overwriting is not allowed.` }
+            ],
+            isError: true,
+          };
+        } catch (err: any) {
+          if (err.code !== 'ENOENT') {
+            throw err;
+          }
+          // If error code is ENOENT, file does not exist – continue.
+        }
         await fs.writeFile(validPath, parsed.data.content, "utf-8");
         return {
           content: [{ type: "text", text: `Successfully created ${parsed.data.path}` }],
