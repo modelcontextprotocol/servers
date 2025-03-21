@@ -476,7 +476,4 @@ async function runServer() {
   console.error("GitHub MCP Server running on stdio");
 }
 
-runServer().catch((error) => {
-  console.error("Fatal error in main():", error);
-  process.exit(1);
-});
+export { server, runServer };
