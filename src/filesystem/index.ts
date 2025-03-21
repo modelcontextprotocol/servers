@@ -330,6 +330,24 @@ async function applyFileEdits(
   return formattedDiff;
 }
 
+// New function to read large files in chunks
+async function readLargeFile(filePath: string, chunkSize: number = 1024 * 1024): Promise<string> {
+  const fileHandle = await fs.open(filePath, 'r');
+  let fileContent = '';
+  const buffer = Buffer.alloc(chunkSize);
+
+  try {
+    let bytesRead;
+    while ((bytesRead = await fileHandle.read(buffer, 0, chunkSize, null)).bytesRead > 0) {
+      fileContent += buffer.slice(0, bytesRead).toString('utf-8');
+    }
+  } finally {
+    await fileHandle.close();
+  }
+
+  return fileContent;
+}
+
 // Tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -451,7 +469,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const content = await fs.readFile(validPath, "utf-8");
+        const fileStats = await getFileStats(validPath);
+        let content;
+        if (fileStats.size > 1024 * 1024) { // 1MB threshold for large files
+          content = await readLargeFile(validPath);
+        } else {
+          content = await fs.readFile(validPath, "utf-8");
+        }
         return {
           content: [{ type: "text", text: content }],
         };
