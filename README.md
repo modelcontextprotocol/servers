@@ -317,6 +317,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[World Bank data API](https://github.com/anshumax/world_bank_mcp_server)** - A server that fetches data indicators available with the World Bank as part of their data API
 - **[X (Twitter)](https://github.com/EnesCinr/twitter-mcp)** (by EnesCinr) - Interact with twitter API. Post tweets and search for tweets by query.
 - **[X (Twitter)](https://github.com/vidhupv/x-mcp)** (by vidhupv) - Create, manage and publish X/Twitter posts directly through Claude chat.
+- **[X (Twitter) No-Auth](https://github.com/baryhuang/mcp-twitter-noauth)** Remotely hostable server without local credential or token setup, offering core X (Twitter) operations including searching tweets, getting user tweets, posting tweets, and replying to tweets.
 - **[xcodebuild](https://github.com/ShenghaiWang/xcodebuild)**  - 🍎 Build iOS Xcode workspace/project and feed back errors to llm.
 - **[Xero-mcp-server](https://github.com/john-zhang-dev/xero-mcp)** - Enabling clients to interact with Xero system for streamlined accounting, invoicing, and business operations.
 - **[xiyan_mcp_server](https://github.com/XGenerationLab/xiyan_mcp_server)** An MCP server that supports fetching data from a database using natural language queries, powered by XiyanSQL as the text-to-SQL LLM.
