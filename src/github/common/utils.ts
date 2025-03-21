@@ -43,6 +43,36 @@ export async function githubRequest(
     headers["Authorization"] = `Bearer ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN}`;
   }
 
+  // Validate organization if GITHUB_ORG is set
+  if (process.env.GITHUB_ORG) {
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/');
+    // Check if this is a repo-specific request
+    if (pathParts.includes('repos') && pathParts.length > 2) {
+      const repoOwner = pathParts[pathParts.indexOf('repos') + 1];
+      if (repoOwner.toLowerCase() !== process.env.GITHUB_ORG.toLowerCase()) {
+        throw new Error(`Operation not allowed: restricted to ${process.env.GITHUB_ORG} organization`);
+      }
+    }
+    // For search endpoints, add org filter
+    if (urlObj.pathname.startsWith('/search/')) {
+      const searchParams = new URLSearchParams(urlObj.search);
+      const query = searchParams.get('q') || '';
+      const hasOrgFilter = /\borg:\S+/.test(query);
+      const hasCorrectOrg = query.toLowerCase().includes(`org:${process.env.GITHUB_ORG.toLowerCase()}`);
+      
+      if (hasOrgFilter && !hasCorrectOrg) {
+        throw new Error(`Operation not allowed: searches restricted to ${process.env.GITHUB_ORG} organization`);
+      }
+      
+      if (!hasOrgFilter) {
+        searchParams.set('q', `${query} org:${process.env.GITHUB_ORG}`.trim());
+        urlObj.search = searchParams.toString();
+        url = urlObj.toString();
+      }
+    }
+  }
+
   const response = await fetch(url, {
     method: options.method || "GET",
     headers,
