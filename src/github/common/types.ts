@@ -240,6 +240,51 @@ export const GitHubPullRequestSchema = z.object({
   base: GitHubPullRequestRefSchema,
 });
 
+export const GitHubDiffEntrySchema = z.object({
+  sha: z.string(),
+  filename: z.string(),
+  status: z.enum(["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]),
+  additions: z.number(),
+  deletions: z.number(),
+  changes: z.number(),
+  blob_url: z.string().url(),
+  raw_url: z.string().url(),
+  contents_url: z.string().url(),
+  patch: z.string(),
+})
+
+export const GitHubBaseCommitSchema = z.object({
+  url: z.string().url(),
+  sha: z.string(),
+  node_id: z.string(),
+  html_url: z.string().url(),
+  comments_url: z.string().url(),
+  parents: z.array(
+    z.object({
+      sha: z.string(),
+      url: z.string(),
+    })
+  ),
+});
+
+export const GitHubCommitComparisonSchema = z.object({
+  url: z.string().url(),
+  html_url: z.string().url(),
+  permalink_url: z.string().url(),
+  diff_url: z.string().url(),
+  patch_url: z.string().url(),
+  base_commit: GitHubBaseCommitSchema,
+  merge_base_commit: GitHubBaseCommitSchema,
+  status: z.string(),
+  ahead_by: z.number(),
+  behind_by: z.number(),
+  total_commits: z.number(),
+  commits: z.array(z.object({
+    sha: z.string(),
+  })),
+  files: z.array(GitHubDiffEntrySchema),
+});
+
 // Export types
 export type GitHubAuthor = z.infer<typeof GitHubAuthorSchema>;
 export type GitHubRepository = z.infer<typeof GitHubRepositorySchema>;
@@ -257,3 +302,6 @@ export type GitHubIssue = z.infer<typeof GitHubIssueSchema>;
 export type GitHubSearchResponse = z.infer<typeof GitHubSearchResponseSchema>;
 export type GitHubPullRequest = z.infer<typeof GitHubPullRequestSchema>;
 export type GitHubPullRequestRef = z.infer<typeof GitHubPullRequestRefSchema>;
+export type GitHubDiffEntry = z.infer<typeof GitHubDiffEntrySchema>;
+export type GitHubBaseCommit = z.infer<typeof GitHubBaseCommitSchema>;
+export type GitHubCommitComparison = z.infer<typeof GitHubCommitComparisonSchema>;
