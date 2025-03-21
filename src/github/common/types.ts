@@ -240,6 +240,17 @@ export const GitHubPullRequestSchema = z.object({
   base: GitHubPullRequestRefSchema,
 });
 
+export const GitHubTagSchema = z.object({
+  name: z.string(),
+  zipball_url: z.string(),
+  tarball_url: z.string(),
+  commit: z.object({
+    sha: z.string(),
+    url: z.string(),
+  }),
+  node_id: z.string(),
+});
+
 // Export types
 export type GitHubAuthor = z.infer<typeof GitHubAuthorSchema>;
 export type GitHubRepository = z.infer<typeof GitHubRepositorySchema>;
@@ -257,3 +268,4 @@ export type GitHubIssue = z.infer<typeof GitHubIssueSchema>;
 export type GitHubSearchResponse = z.infer<typeof GitHubSearchResponseSchema>;
 export type GitHubPullRequest = z.infer<typeof GitHubPullRequestSchema>;
 export type GitHubPullRequestRef = z.infer<typeof GitHubPullRequestRefSchema>;
+export type GitHubTag = z.infer<typeof GitHubTagSchema>;
