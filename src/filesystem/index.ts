@@ -124,7 +124,7 @@ function isPathExcluded(basePath: string, relativePath: string, exclusions: stri
     // Handle the path format exclusions (containing slashes)
     if (lowerExclusion.includes('/')) {
       // Check if the relative path matches or starts with the exclusion path
-      if (lowerRelativePath === lowerExclusion || 
+      if (lowerRelativePath === lowerExclusion ||
           lowerRelativePath.startsWith(lowerExclusion + '/')) {
         return true;
       }
@@ -865,9 +865,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         for (const config of allowedDirectoriesConfig) {
           lines.push(`- ${config.path}`);
           if (config.exclusions.length > 0) {
-            // Show all exclusions and their lowercase versions for debugging
-            const exclusionsDebug = config.exclusions.map(ex => `${ex} (${ex.toLowerCase()})`);
-            lines.push(`  Excluded patterns: ${exclusionsDebug.join(', ')}`);
+            lines.push(`  Excluded patterns: ${config.exclusions.join(', ')}`);
           }
         }
 
