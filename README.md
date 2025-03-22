@@ -1,4 +1,6 @@
 # Model Context Protocol servers
+# Gitlab Confluence Doc Generator
+This commit adds the Gitlab Confluence Doc Generator server to the Community Servers section of the README.md file.
 
 This repository is a collection of *reference implementations* for the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), as well as references
 to community built servers and additional resources.
@@ -352,7 +354,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[XiYan](https://github.com/XGenerationLab/xiyan_mcp_server)** - 🗄️ An MCP server that supports fetching data from a database using natural language queries, powered by XiyanSQL as the text-to-SQL LLM.
 - **[XMind](https://github.com/apeyroux/mcp-xmind)** - Read and search through your XMind directory containing XMind files.
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
-- **[Gitlab-Confluence-Doc-Generator](https://github.com/CodeByWaqas/MRConfluenceLinker/tree/main)** - Automatically generates Confluence documentation from GitLab merge requests using LLM analysis, streamlining the documentation process for code changes.
+- **[Gitlab-Confluence-Doc-Generator](https://github.com/CodeByWaqas/MRConfluenceLinker-mcp-server)** - Automatically generates Confluence documentation from GitLab merge requests using LLM analysis, streamlining the documentation process for code changes.
 
 ## 📚 Frameworks
 
