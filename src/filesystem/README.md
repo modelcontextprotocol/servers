@@ -10,7 +10,17 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Search files
 - Get file metadata
 
-**Note**: The server will only allow operations within directories specified via `args`.
+**Note**: The server will only allow operations within directories specified via `args`. 
+
+### Exclusion Patterns
+
+You can specify paths to exclude by adding an exclamation mark followed by comma-separated patterns:
+
+- **Basic exclusions**: `/path/to/allowed/dir!.env,dist` will exclude .env and dist
+- **Negating exclusions**: Adding a `!` before a pattern will explicitly include something that would otherwise be excluded: `/path/to/dir!.env,!.git` would exclude `.env` but override the default exclusion of `.git`
+- **Case-insensitivity**: All exclusions are case-insensitive for security on all operating systems (e.g., `.git` will also match `.GIT` or `Git`)
+
+**Default exclusions**: `.git` and `node_modules` are always excluded by default unless explicitly included with a negated pattern.
 
 ## API
 
@@ -124,12 +134,16 @@ Note: all directories must be mounted to `/projects` by default.
         "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
         "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
         "mcp/filesystem",
-        "/projects"
+        "/projects/Desktop",
+        "/projects/other/allowed/dir!.env,logs",
+        "/projects/path/to/file.txt"
       ]
     }
   }
 }
 ```
+
+In this example, `/projects/other/allowed/dir` will have `.env` and `logs` directories excluded (along with the default `.git` and `node_modules`).
 
 ### NPX
 
@@ -142,12 +156,14 @@ Note: all directories must be mounted to `/projects` by default.
         "-y",
         "@modelcontextprotocol/server-filesystem",
         "/Users/username/Desktop",
-        "/path/to/other/allowed/dir"
+        "/path/to/other/allowed/dir!.env,dist"
       ]
     }
   }
 }
 ```
+
+In this example, `.env` and `dist` directories will be excluded from access along with the default excluded paths (`.git` and `node_modules`).
 
 ## Build
 

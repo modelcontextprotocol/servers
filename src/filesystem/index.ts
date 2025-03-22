@@ -18,7 +18,18 @@ import { minimatch } from 'minimatch';
 // Command line argument parsing
 const args = process.argv.slice(2);
 if (args.length === 0) {
-  console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
+  console.error("Usage: mcp-server-filesystem <allowed-directory>[!excluded1,excluded2,...] [additional-directories...]");
+  console.error("");
+  console.error("Examples:");
+  console.error("  mcp-server-filesystem /path/to/dir                    # Allow access to /path/to/dir");
+  console.error("  mcp-server-filesystem /path/to/dir!.env,dist          # Allow access but exclude .env and dist");
+  console.error("  mcp-server-filesystem /path1 /path2!.env,logs /path3  # Multiple directories with exclusions");
+  console.error("  mcp-server-filesystem /path/to/dir!.env,!.git         # Exclude .env but override default .git exclusion");
+  console.error("");
+  console.error("Exclusion features:");
+  console.error("  - .git and node_modules are excluded by default");
+  console.error("  - Start a pattern with ! to explicitly include something that would otherwise be excluded");
+  console.error("  - All exclusions are case-insensitive for security (e.g., .git will also match .GIT)");
   process.exit(1);
 }
 
@@ -34,26 +45,117 @@ function expandHome(filepath: string): string {
   return filepath;
 }
 
-// Store allowed directories in normalized form
-const allowedDirectories = args.map(dir =>
-  normalizePath(path.resolve(expandHome(dir)))
-);
+// Default exclusion patterns that always apply
+const DEFAULT_EXCLUSIONS = ['.git', 'node_modules'];
+
+// Store allowed directories and their exclusions in normalized form
+const allowedDirectoriesConfig = args.map(dir => {
+  // Split on first ! only
+  const sepIndex = dir.indexOf('!');
+  const dirPath = sepIndex !== -1 ? dir.substring(0, sepIndex) : dir;
+  const exclusionsString = sepIndex !== -1 ? dir.substring(sepIndex + 1) : null;
+
+  let exclusions = [...DEFAULT_EXCLUSIONS];
+
+  if (exclusionsString) {
+    const patterns = exclusionsString.split(',');
+
+    // Process negation patterns first
+    for (const pattern of patterns) {
+      if (pattern.startsWith('!')) {
+        const includedPath = pattern.slice(1);
+
+        // Create a new array without the negated path (case-insensitive)
+        const lowerIncludedPath = includedPath.toLowerCase();
+        exclusions = exclusions.filter(item => {
+          return item.toLowerCase() !== lowerIncludedPath;
+        });
+      }
+    }
+
+    // Now add new exclusions
+    for (const pattern of patterns) {
+      if (!pattern.startsWith('!') && pattern.trim()) {
+        exclusions.push(pattern);
+      }
+    }
+  }
+
+  return {
+    path: normalizePath(path.resolve(expandHome(dirPath))),
+    exclusions
+  };
+});
+
+// Extract just the paths for backward compatibility
+const allowedDirectories = allowedDirectoriesConfig.map(config => config.path);
 
 // Validate that all directories exist and are accessible
-await Promise.all(args.map(async (dir) => {
+await Promise.all(allowedDirectoriesConfig.map(async (config) => {
   try {
-    const stats = await fs.stat(dir);
+    const stats = await fs.stat(config.path);
     if (!stats.isDirectory()) {
-      console.error(`Error: ${dir} is not a directory`);
+      console.error(`Error: ${config.path} is not a directory`);
       process.exit(1);
     }
   } catch (error) {
-    console.error(`Error accessing directory ${dir}:`, error);
+    console.error(`Error accessing directory ${config.path}:`, error);
     process.exit(1);
   }
 }));
 
-// Security utilities
+function isPathExcluded(basePath: string, relativePath: string, exclusions: string[]): boolean {
+  // Prevent the root directory itself from being excluded
+  if (!relativePath || relativePath === '') {
+    return false;
+  }
+
+  const fileName = path.basename(relativePath);
+  const lowerFileName = fileName.toLowerCase();
+  const lowerRelativePath = relativePath.toLowerCase();
+
+  for (const exclusion of exclusions) {
+    if (!exclusion || exclusion === '') {
+      continue;
+    }
+
+    const lowerExclusion = exclusion.toLowerCase();
+
+    // Handle the path format exclusions (containing slashes)
+    if (lowerExclusion.includes('/')) {
+      // Check if the relative path matches or starts with the exclusion path
+      if (lowerRelativePath === lowerExclusion || 
+          lowerRelativePath.startsWith(lowerExclusion + '/')) {
+        return true;
+      }
+      continue;
+    }
+
+    // Special matching for filenames (no slashes)
+    // This handles files like TSCONFIG.json matching tsconfig.json
+    if (lowerFileName === lowerExclusion) {
+      return true;
+    }
+
+    // 1. exact match (is exactly the excluded path)
+    const exactMatch = lowerExclusion === lowerRelativePath;
+
+    // 2. directory match (is the excluded directory or something inside it)
+    const directoryPrefix = lowerRelativePath === lowerExclusion ||
+                           lowerRelativePath.startsWith(lowerExclusion + '/');
+
+    // 3. path contains the excluded directory anywhere in the hierarchy
+    const pattern = '/' + lowerExclusion + '/';
+    const nestedMatch = ('/' + lowerRelativePath + '/').includes(pattern);
+
+    if (exactMatch || directoryPrefix || nestedMatch) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// For each validation case, add filename matching logic to handle case-insensitive matching
 async function validatePath(requestedPath: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
@@ -62,20 +164,88 @@ async function validatePath(requestedPath: string): Promise<string> {
 
   const normalizedRequested = normalizePath(absolute);
 
+  const requestedFilename = path.basename(normalizedRequested);
+
   // Check if path is within allowed directories
   const isAllowed = allowedDirectories.some(dir => normalizedRequested.startsWith(dir));
   if (!isAllowed) {
     throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
   }
 
+  // Check if path is in excluded patterns
+  for (const config of allowedDirectoriesConfig) {
+    if (normalizedRequested.startsWith(config.path)) {
+      // Find the relative path from the allowed directory
+      const relativePath = path.relative(config.path, normalizedRequested);
+
+      // Don't apply exclusions to the allowed directory itself
+      if (normalizedRequested === config.path) {
+        break;
+      }
+
+      // Direct filename comparison for case-insensitive matching
+      for (const exclusion of config.exclusions) {
+        // Skip directory exclusions for this check
+        if (!exclusion.includes('/') && !exclusion.includes('*')) {
+          // Compare filenames case-insensitively
+          if (requestedFilename.toLowerCase() === exclusion.toLowerCase()) {
+            throw new Error(`Access denied - path not accessible`);
+          }
+        }
+      }
+
+      // Check if the path matches any exclusion pattern
+      if (isPathExcluded(config.path, relativePath, config.exclusions)) {
+        // Use a generic message that doesn't reveal if the file exists
+        throw new Error(`Access denied - path not accessible`);
+      }
+      break;
+    }
+  }
+
   // Handle symlinks by checking their real path
   try {
     const realPath = await fs.realpath(absolute);
     const normalizedReal = normalizePath(realPath);
+
+    // Check if real path is allowed
     const isRealPathAllowed = allowedDirectories.some(dir => normalizedReal.startsWith(dir));
     if (!isRealPathAllowed) {
       throw new Error("Access denied - symlink target outside allowed directories");
     }
+
+    // Extract the filename for direct comparison in case of symlinks
+    const realFilename = path.basename(normalizedReal);
+
+    // Check if real path matches exclusions
+    for (const config of allowedDirectoriesConfig) {
+      if (normalizedReal.startsWith(config.path)) {
+        const relativePath = path.relative(config.path, normalizedReal);
+
+        // Don't apply exclusions to the allowed directory itself
+        if (normalizedReal === config.path) {
+          break;
+        }
+
+        // Direct filename comparison for case-insensitive matching (symlink target)
+        for (const exclusion of config.exclusions) {
+          // Skip directory exclusions for this check
+          if (!exclusion.includes('/') && !exclusion.includes('*')) {
+            // Compare filenames case-insensitively
+            if (realFilename.toLowerCase() === exclusion.toLowerCase()) {
+              throw new Error(`Access denied - path not accessible`);
+            }
+          }
+        }
+
+        if (isPathExcluded(config.path, relativePath, config.exclusions)) {
+          // Use a generic message that doesn't reveal if the file exists
+          throw new Error(`Access denied - path not accessible`);
+        }
+        break;
+      }
+    }
+
     return realPath;
   } catch (error) {
     // For new files that don't exist yet, verify parent directory
@@ -83,12 +253,47 @@ async function validatePath(requestedPath: string): Promise<string> {
     try {
       const realParentPath = await fs.realpath(parentDir);
       const normalizedParent = normalizePath(realParentPath);
+
+      // Check if parent path is allowed
       const isParentAllowed = allowedDirectories.some(dir => normalizedParent.startsWith(dir));
       if (!isParentAllowed) {
         throw new Error("Access denied - parent directory outside allowed directories");
       }
+
+      // Extract the parent directory name for direct comparison
+      const parentDirName = path.basename(normalizedParent);
+
+      // Check if parent path matches exclusions
+      for (const config of allowedDirectoriesConfig) {
+        if (normalizedParent.startsWith(config.path)) {
+          const relativePath = path.relative(config.path, normalizedParent);
+
+          // Don't apply exclusions to the allowed directory itself
+          if (normalizedParent === config.path) {
+            break;
+          }
+
+          // Direct dirname comparison for case-insensitive matching (parent directory)
+          for (const exclusion of config.exclusions) {
+            // Skip directory exclusions for this check
+            if (!exclusion.includes('/') && !exclusion.includes('*')) {
+              // Compare directory names case-insensitively
+              if (parentDirName.toLowerCase() === exclusion.toLowerCase()) {
+                throw new Error(`Access denied - path not accessible`);
+              }
+            }
+          }
+
+          if (isPathExcluded(config.path, relativePath, config.exclusions)) {
+            // Use a generic message that doesn't reveal if the directory exists
+            throw new Error(`Access denied - path not accessible`);
+          }
+          break;
+        }
+      }
+
       return absolute;
-    } catch {
+    } catch (err) {
       throw new Error(`Parent directory does not exist: ${parentDir}`);
     }
   }
@@ -200,10 +405,12 @@ async function searchFiles(
       const fullPath = path.join(currentPath, entry.name);
 
       try {
-        // Validate each path before processing
-        await validatePath(fullPath);
+        // Skip checking validatePath explicitly (it will throw if not valid)
+        // as it now checks for exclusions itself
+        // Instead, just try to access the path and catch any access errors
+        await fs.access(fullPath);
 
-        // Check if path matches any exclude pattern
+        // Check if path matches any exclude pattern from the function arguments
         const relativePath = path.relative(rootPath, fullPath);
         const shouldExclude = excludePatterns.some(pattern => {
           const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
@@ -211,6 +418,14 @@ async function searchFiles(
         });
 
         if (shouldExclude) {
+          continue;
+        }
+
+        // Try to validate the path - this will throw if path is in excluded patterns
+        try {
+          await validatePath(fullPath);
+        } catch (error) {
+          // Path is excluded by configuration, skip it
           continue;
         }
 
@@ -522,9 +737,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const validPath = await validatePath(parsed.data.path);
         const entries = await fs.readdir(validPath, { withFileTypes: true });
-        const formatted = entries
-          .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
+
+        // Filter out entries that match exclusion patterns
+        const filteredEntries = await Promise.all(entries.map(async (entry) => {
+          const entryPath = path.join(validPath, entry.name);
+          try {
+            // Try to validate the path - this will throw if excluded
+            await validatePath(entryPath);
+            // Entry is valid, include it
+            return { valid: true, entry };
+          } catch (error) {
+            // Entry is excluded, don't include it
+            return { valid: false, entry };
+          }
+        }));
+
+        const formatted = filteredEntries
+          .filter(result => result.valid) // Only keep valid entries
+          .map(result => `${result.entry.isDirectory() ? "[DIR]" : "[FILE]"} ${result.entry.name}`)
           .join("\n");
+
         return {
           content: [{ type: "text", text: formatted }],
         };
@@ -543,19 +775,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             async function buildTree(currentPath: string): Promise<TreeEntry[]> {
+                // This will throw if path is excluded
                 const validPath = await validatePath(currentPath);
                 const entries = await fs.readdir(validPath, {withFileTypes: true});
                 const result: TreeEntry[] = [];
 
                 for (const entry of entries) {
+                    const subPath = path.join(currentPath, entry.name);
+
+                    // Skip excluded paths
+                    try {
+                        await validatePath(subPath);
+                    } catch (error) {
+                        // Path is excluded, skip it
+                        continue;
+                    }
+
                     const entryData: TreeEntry = {
                         name: entry.name,
                         type: entry.isDirectory() ? 'directory' : 'file'
                     };
 
                     if (entry.isDirectory()) {
-                        const subPath = path.join(currentPath, entry.name);
-                        entryData.children = await buildTree(subPath);
+                        try {
+                            entryData.children = await buildTree(subPath);
+                        } catch (error) {
+                            // If we can't process this directory, still include it but with empty children
+                            entryData.children = [];
+                        }
                     }
 
                     result.push(entryData);
@@ -613,10 +860,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "list_allowed_directories": {
+        const lines: string[] = ['Allowed directories:'];
+
+        for (const config of allowedDirectoriesConfig) {
+          lines.push(`- ${config.path}`);
+          if (config.exclusions.length > 0) {
+            // Show all exclusions and their lowercase versions for debugging
+            const exclusionsDebug = config.exclusions.map(ex => `${ex} (${ex.toLowerCase()})`);
+            lines.push(`  Excluded patterns: ${exclusionsDebug.join(', ')}`);
+          }
+        }
+
         return {
           content: [{
             type: "text",
-            text: `Allowed directories:\n${allowedDirectories.join('\n')}`
+            text: lines.join('\n')
           }],
         };
       }
@@ -638,7 +896,13 @@ async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Secure MCP Filesystem Server running on stdio");
-  console.error("Allowed directories:", allowedDirectories);
+  console.error("Allowed directories:");
+  for (const config of allowedDirectoriesConfig) {
+    console.error(`- ${config.path}`);
+    if (config.exclusions.length > 0) {
+      console.error(`  Excluded patterns: ${config.exclusions.join(', ')}`);
+    }
+  }
 }
 
 runServer().catch((error) => {
