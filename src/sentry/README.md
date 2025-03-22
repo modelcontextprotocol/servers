@@ -91,7 +91,11 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "sentry": {
     "command": "python",
-    "args": ["-m", "mcp_server_sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+    "args": ["-m", "mcp_server_sentry", "--auth-token", "YOUR_SENTRY_TOKEN"],
+     "env": {
+          "SENTRY_API_BASE": "https://sentry.aaab.ru/",
+          "SENTRY_ORG": "YOUR_ORG",
+    }
   }
 }
 ```
@@ -142,6 +146,11 @@ Or if you've installed the package in a specific directory or are developing on 
 ```
 cd path/to/servers/src/sentry
 npx @modelcontextprotocol/inspector uv run mcp-server-sentry --auth-token YOUR_SENTRY_TOKEN
+```
+
+Or you can debug it with simple python command
+```
+SENTRY_API_BASE=https://sentry.io/ SENTRY_ORG=org_slug SENTRY_ISSUE=issue_id python -m mcp_server_sentry --auth-token=$SENTRY_TOKEN
 ```
 
 ## License
