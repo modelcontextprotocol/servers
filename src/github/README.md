@@ -303,7 +303,34 @@ For detailed search syntax, see [GitHub's searching documentation](https://docs.
 
 ## Setup
 
-### Personal Access Token
+### Authentication
+
+This server supports two authentication methods:
+
+#### 1. GitHub CLI Authentication (Recommended)
+
+The server will automatically use your GitHub CLI authentication if available:
+
+1. Install the GitHub CLI:
+   - MacOS: `brew install gh`
+   - Other platforms: [GitHub CLI installation instructions](https://github.com/cli/cli#installation)
+
+2. Authenticate with GitHub:
+   ```bash
+   gh auth login
+   ```
+
+3. Follow the prompts to authenticate. Make sure to select the HTTPS protocol.
+
+4. Verify your authentication:
+   ```bash
+   gh auth status
+   ```
+
+#### 2. Personal Access Token
+
+Alternatively, you can use a Personal Access Token:
+
 [Create a GitHub Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) with appropriate permissions:
    - Go to [Personal access tokens](https://github.com/settings/tokens) (in GitHub Settings > Developer settings)
    - Select which repositories you'd like this token to have access to (Public, All, or Select)
@@ -311,10 +338,12 @@ For detailed search syntax, see [GitHub's searching documentation](https://docs.
      - Alternatively, if working only with public repositories, select only the `public_repo` scope
    - Copy the generated token
 
+Then set the environment variable `GITHUB_PERSONAL_ACCESS_TOKEN` with your token.
+
 ### Usage with Claude Desktop
 To use this with Claude Desktop, add the following to your `claude_desktop_config.json`:
 
-#### Docker
+#### Docker with Personal Access Token
 ```json
 {
   "mcpServers": {
@@ -336,8 +365,28 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
 }
 ```
 
+#### Docker with GitHub CLI Auth
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "~/.config/gh:/root/.config/gh",
+        "mcp/github"
+      ]
+    }
+  }
+}
+```
+
 ### NPX
 
+#### NPX with Personal Access Token
 ```json
 {
   "mcpServers": {
@@ -350,6 +399,21 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
       }
+    }
+  }
+}
+```
+
+#### NPX with GitHub CLI Auth
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ]
     }
   }
 }
