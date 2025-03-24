@@ -2,6 +2,10 @@ import { getUserAgent } from "universal-user-agent";
 import { createGitHubError } from "./errors.js";
 import { VERSION } from "./version.js";
 
+export const getGitHubApiBaseUrl = (): string => {
+  return process.env.GITHUB_API_BASE_URL || 'https://api.github.com';
+};
+
 type RequestOptions = {
   method?: string;
   body?: unknown;
@@ -16,8 +20,10 @@ async function parseResponseBody(response: Response): Promise<unknown> {
   return response.text();
 }
 
-export function buildUrl(baseUrl: string, params: Record<string, string | number | undefined>): string {
+export function buildUrl(path: string, params: Record<string, string | number | undefined>): string {
+  const baseUrl = path.startsWith('/') ? `${getGitHubApiBaseUrl()}${path}` : path;
   const url = new URL(baseUrl);
+  
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined) {
       url.searchParams.append(key, value.toString());
@@ -29,9 +35,12 @@ export function buildUrl(baseUrl: string, params: Record<string, string | number
 const USER_AGENT = `modelcontextprotocol/servers/github/v${VERSION} ${getUserAgent()}`;
 
 export async function githubRequest(
-  url: string,
+  path: string,
   options: RequestOptions = {}
 ): Promise<unknown> {
+  const apiBaseUrl = getGitHubApiBaseUrl();
+  const normalizedPath = path.startsWith('http') ? path : path.startsWith('/') ? path : `/${path}`;
+  const url = path.startsWith('http') ? path : `${apiBaseUrl}${normalizedPath}`;
   const headers: Record<string, string> = {
     "Accept": "application/vnd.github.v3+json",
     "Content-Type": "application/json",
@@ -114,7 +123,7 @@ export async function checkBranchExists(
 ): Promise<boolean> {
   try {
     await githubRequest(
-      `https://api.github.com/repos/${owner}/${repo}/branches/${branch}`
+      `/repos/${owner}/${repo}/branches/${branch}`
     );
     return true;
   } catch (error) {
@@ -127,7 +136,7 @@ export async function checkBranchExists(
 
 export async function checkUserExists(username: string): Promise<boolean> {
   try {
-    await githubRequest(`https://api.github.com/users/${username}`);
+    await githubRequest(`/users/${username}`);
     return true;
   } catch (error) {
     if (error && typeof error === "object" && "status" in error && error.status === 404) {
