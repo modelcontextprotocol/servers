@@ -385,6 +385,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "get_issue_comment": {
+        const args = issues.GetIssueSchema.parse(request.params.arguments);
+        const comments = await issues.getIssueCopmment(args.owner, args.repo, args.issue_number);
+        return {
+          content: [{ type: "text", text: comments.map(x=>`${x.user.login}: ${x.body}`).join("\n")}],
+        };
+      }
+        
       case "get_pull_request": {
         const args = pulls.GetPullRequestSchema.parse(request.params.arguments);
         const pullRequest = await pulls.getPullRequest(args.owner, args.repo, args.pull_number);
