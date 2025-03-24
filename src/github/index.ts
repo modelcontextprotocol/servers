@@ -385,7 +385,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case "get_issue_comment": {
+      case "get_issue_comments": {
         const args = issues.GetIssueSchema.parse(request.params.arguments);
         const comments = await issues.getIssueCopmment(args.owner, args.repo, args.issue_number);
         return {
