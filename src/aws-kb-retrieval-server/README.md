@@ -64,6 +64,25 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 
+To use credentials from the [default provider chain](https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/setting-credentials-node.html), exclude `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from the configuration:
+
+```json
+{
+  "mcpServers": {
+    "aws-kb-retrieval": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-aws-kb-retrieval"
+      ],
+      "env": {
+        "AWS_REGION": "YOUR_AWS_REGION_HERE"
+      }
+    }
+  }
+}
+```
+
 ## Building
 
 Docker: 
