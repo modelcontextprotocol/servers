@@ -353,6 +353,7 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 ### For clients
 
 * **[codemirror-mcp](https://github.com/marimo-team/codemirror-mcp)** - CodeMirror extension that implements the Model Context Protocol (MCP) for resource mentions and prompt commands
+* **[MCP-Agent](https://github.com/lastmile-ai/mcp-agent)** - A simple, composable framework to build agents using Model Context Protocol by **[LastMile AI](https://www.lastmileai.dev)**
 
 ## 📚 Resources
 
