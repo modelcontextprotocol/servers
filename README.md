@@ -337,6 +337,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[xiyan_mcp_server](https://github.com/XGenerationLab/xiyan_mcp_server)** An MCP server that supports fetching data from a database using natural language queries, powered by XiyanSQL as the text-to-SQL LLM.
 - **[XMind](https://github.com/apeyroux/mcp-xmind)** - Read and search through your XMind directory containing XMind files.
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
+- **[PubChem](https://github.com/sssjiang/pubchem_mcp_server)** - extract drug information from pubchem API.
 
 ## 📚 Frameworks
 
