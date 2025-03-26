@@ -136,6 +136,17 @@ const MoveFileArgsSchema = z.object({
   destination: z.string(),
 });
 
+const MoveFilesArgsSchema = z.object({
+  moves: z.array(z.object({
+    source: z.string(),
+    destination: z.string(),
+  })),
+  options: z.object({
+    overwrite: z.boolean().default(false),
+    batchSize: z.number().default(10)
+  }).default({})
+});
+
 const SearchFilesArgsSchema = z.object({
   path: z.string(),
   pattern: z.string(),
@@ -330,6 +341,28 @@ async function applyFileEdits(
   return formattedDiff;
 }
 
+// Add this utility function before the server handlers
+async function moveFileWithFallback(source: string, destination: string, overwrite: boolean = false): Promise<void> {
+  try {
+    if (overwrite) {
+      try {
+        await fs.unlink(destination).catch(() => {});
+      } catch (error) {
+        // Ignore error if file doesn't exist
+      }
+    }
+    await fs.rename(source, destination);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EXDEV') {
+      // Cross-device move, fallback to copy + delete
+      await fs.copyFile(source, destination);
+      await fs.unlink(source);
+    } else {
+      throw error;
+    }
+  }
+}
+
 // Tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -404,6 +437,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "operation will fail. Works across different directories and can be used " +
           "for simple renaming within the same directory. Both source and destination must be within allowed directories.",
         inputSchema: zodToJsonSchema(MoveFileArgsSchema) as ToolInput,
+      },
+      {
+        name: "move_files",
+        description:
+          "Move or rename multiple files and directories in a single operation. " +
+          "Each move operation specifies a source and destination path. If any destination " +
+          "already exists, that specific move will fail but won't stop other moves. " +
+          "All paths must be within allowed directories. Returns a detailed report of " +
+          "successful and failed moves.",
+        inputSchema: zodToJsonSchema(MoveFilesArgsSchema) as ToolInput,
       },
       {
         name: "search_files",
@@ -583,6 +626,104 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         await fs.rename(validSourcePath, validDestPath);
         return {
           content: [{ type: "text", text: `Successfully moved ${parsed.data.source} to ${parsed.data.destination}` }],
+        };
+      }
+
+      case "move_files": {
+        const parsed = MoveFilesArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for move_files: ${parsed.error}`);
+        }
+
+        const { moves, options } = parsed.data;
+        const { overwrite, batchSize } = options;
+
+        // Batch validate paths first
+        const validationResults = await Promise.all(
+          moves.map(async (move) => {
+            try {
+              const [validSourcePath, validDestPath] = await Promise.all([
+                validatePath(move.source),
+                validatePath(move.destination)
+              ]);
+              return {
+                move,
+                validSourcePath,
+                validDestPath,
+                valid: true,
+                error: null
+              };
+            } catch (error) {
+              return {
+                move,
+                validSourcePath: null,
+                validDestPath: null,
+                valid: false,
+                error: error instanceof Error ? error.message : String(error)
+              };
+            }
+          })
+        );
+
+        // Process moves in batches
+        const results = [];
+        const validMoves = validationResults.filter(r => r.valid);
+        const invalidMoves = validationResults.filter(r => !r.valid);
+
+        // Add validation failures to results
+        results.push(...invalidMoves.map(result => ({
+          source: result.move.source,
+          destination: result.move.destination,
+          success: false,
+          message: `Validation failed: ${result.error}`
+        })));
+
+        // Process valid moves in batches
+        for (let i = 0; i < validMoves.length; i += batchSize) {
+          const batch = validMoves.slice(i, i + batchSize);
+          const batchResults = await Promise.all(
+            batch.map(async (validated) => {
+              try {
+                await moveFileWithFallback(
+                  validated.validSourcePath!,
+                  validated.validDestPath!,
+                  overwrite
+                );
+                return {
+                  source: validated.move.source,
+                  destination: validated.move.destination,
+                  success: true,
+                  message: `Successfully moved ${validated.move.source} to ${validated.move.destination}`
+                };
+              } catch (error) {
+                return {
+                  source: validated.move.source,
+                  destination: validated.move.destination,
+                  success: false,
+                  message: error instanceof Error ? error.message : String(error)
+                };
+              }
+            })
+          );
+          results.push(...batchResults);
+        }
+
+        // Generate summary with timing information
+        const summary = results.map(result => 
+          `${result.success ? '✓' : '✗'} ${result.source} → ${result.destination}\n  ${result.success ? '' : 'Error: '}${result.message}`
+        ).join('\n\n');
+
+        const stats = {
+          total: results.length,
+          successful: results.filter(r => r.success).length,
+          failed: results.filter(r => !r.success).length
+        };
+
+        return {
+          content: [{ 
+            type: "text", 
+            text: `${summary}\n\nSummary:\nTotal: ${stats.total}\nSuccessful: ${stats.successful}\nFailed: ${stats.failed}` 
+          }],
         };
       }
 
