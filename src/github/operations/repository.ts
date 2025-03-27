@@ -22,8 +22,17 @@ export const ForkRepositorySchema = z.object({
   organization: z.string().optional().describe("Optional: organization to fork to (defaults to your personal account)"),
 });
 
+export const CreateOrgRepositoryOptionsSchema = z.object({
+  organization: z.string().describe("Name of the organization where the repository should be created"),
+  name: z.string().describe("Repository name"),
+  description: z.string().optional().describe("Repository description"),
+  private: z.boolean().optional().describe("Whether the repository should be private"),
+  autoInit: z.boolean().optional().describe("Initialize with README.md"),
+});
+
 // Type exports
 export type CreateRepositoryOptions = z.infer<typeof CreateRepositoryOptionsSchema>;
+export type CreateOrgRepositoryOptions = z.infer<typeof CreateOrgRepositoryOptionsSchema>;
 
 // Function implementations
 export async function createRepository(options: CreateRepositoryOptions) {
@@ -62,4 +71,17 @@ export async function forkRepository(
     parent: GitHubRepositorySchema,
     source: GitHubRepositorySchema,
   }).parse(response);
+}
+
+export async function createOrgRepository(options: CreateOrgRepositoryOptions) {
+  const response = await githubRequest(`https://api.github.com/orgs/${options.organization}/repos`, {
+    method: "POST",
+    body: {
+      name: options.name,
+      description: options.description,
+      private: options.private,
+      auto_init: options.autoInit,
+    },
+  });
+  return GitHubRepositorySchema.parse(response);
 }
