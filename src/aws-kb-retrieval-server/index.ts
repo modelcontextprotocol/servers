@@ -13,13 +13,30 @@ import {
 } from "@aws-sdk/client-bedrock-agent-runtime";
 
 // AWS client initialization
-const bedrockClient = new BedrockAgentRuntimeClient({
+const clientConfig: Record<string, any> = {
   region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
+};
+
+// Only add explicit credentials if access keys are provided
+// Otherwise use the default credential provider chain (supports SSO)
+if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+  clientConfig.credentials = {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  };
+
+  // Add session token if provided (for temporary credentials)
+  if (process.env.AWS_SESSION_TOKEN) {
+    clientConfig.credentials.sessionToken = process.env.AWS_SESSION_TOKEN;
+  }
+}
+
+const bedrockClient = new BedrockAgentRuntimeClient(clientConfig);
+
+// Get configured knowledgebase IDs from environment variable
+const configuredKnowledgeBaseIds = process.env.AWS_KB_IDS ?
+  JSON.parse(process.env.AWS_KB_IDS) :
+  [];
 
 interface RAGSource {
   id: string;
@@ -96,10 +113,15 @@ const RETRIEVAL_TOOL: Tool = {
     type: "object",
     properties: {
       query: { type: "string", description: "The query to perform retrieval on" },
-      knowledgeBaseId: { type: "string", description: "The ID of the AWS Knowledge Base" },
+      knowledgeBaseId: {
+        type: "string",
+        description: configuredKnowledgeBaseIds.length > 0
+          ? "The ID of the AWS Knowledge Base (optional if configured via AWS_KB_IDS)"
+          : "The ID of the AWS Knowledge Base"
+      },
       n: { type: "number", default: 3, description: "Number of results to retrieve" },
     },
-    required: ["query", "knowledgeBaseId"],
+    required: configuredKnowledgeBaseIds.length > 0 ? ["query"] : ["query", "knowledgeBaseId"],
   },
 };
 
@@ -126,13 +148,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   if (name === "retrieve_from_aws_kb") {
     const { query, knowledgeBaseId, n = 3 } = args as Record<string, any>;
+
+    // Determine which knowledge base ID to use
+    let actualKnowledgeBaseId = knowledgeBaseId;
+
+    // If no ID provided but we have configured IDs, use the first one
+    if (!actualKnowledgeBaseId && configuredKnowledgeBaseIds.length > 0) {
+      actualKnowledgeBaseId = configuredKnowledgeBaseIds[0];
+      console.error(`Using configured knowledge base ID: ${actualKnowledgeBaseId}`);
+    }
+
+    // If still no ID available, return an error
+    if (!actualKnowledgeBaseId) {
+      return {
+        content: [{
+          type: "text",
+          text: "No knowledge base ID provided. Either include a knowledgeBaseId in your request or configure AWS_KB_IDS in the environment."
+        }],
+        isError: true,
+      };
+    }
+
     try {
-      const result = await retrieveContext(query, knowledgeBaseId, n);
+      const result = await retrieveContext(query, actualKnowledgeBaseId, n);
       if (result.isRagWorking) {
+        // Format RAG sources for readability
+        const formattedSources = result.ragSources.map((source, index) => {
+          return `Source ${index + 1}: ${source.fileName} (score: ${source.score.toFixed(3)})\n${source.snippet}`;
+        }).join('\n\n');
+
         return {
           content: [
-            { type: "text", text: `Context: ${result.context}` },
-            { type: "text", text: `RAG Sources: ${JSON.stringify(result.ragSources)}` },
+            {
+              type: "text",
+              text: result.context
+            },
+            {
+              type: "json",
+              json: {
+                ragSources: result.ragSources
+              }
+            }
           ],
         };
       } else {
