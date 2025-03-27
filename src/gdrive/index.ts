@@ -131,7 +131,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "search",
+        name: "gdrive_search",
         description: "Search for files in Google Drive",
         inputSchema: {
           type: "object",
@@ -144,12 +144,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["query"],
         },
       },
+      {
+        name: "gdrive_read_file",
+        description: "Read content of a Google Drive file",
+        inputSchema: {
+          type: "object",
+          properties: {
+            uri: {
+              type: "string",
+              description: "File URI (format: gdrive:///{fileId})",
+            },
+          },
+          required: ["uri"],
+        },
+      },
     ],
   };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "search") {
+  if (request.params.name === "gdrive_search") {
     const userQuery = request.params.arguments?.query as string;
     const escapedQuery = userQuery.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
     const formattedQuery = `fullText contains '${escapedQuery}'`;
@@ -161,17 +175,113 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     });
 
     const fileList = res.data.files
-      ?.map((file: any) => `${file.name} (${file.mimeType})`)
+      ?.map((file: any) => 
+        `File name: ${file.name}\n` +
+        `URI: gdrive:///${file.id}\n` +
+        `Type: ${file.mimeType}\n` +
+        `Modified: ${file.modifiedTime || 'N/A'}\n` +
+        `Size: ${file.size || 'N/A'} bytes\n` +
+        `-------------------`
+      )
       .join("\n");
+    
     return {
       content: [
         {
           type: "text",
-          text: `Found ${res.data.files?.length ?? 0} files:\n${fileList}`,
+          text: `Found ${res.data.files?.length ?? 0} files:\n\n${fileList}`,
         },
       ],
       isError: false,
     };
+  } else if (request.params.name === "gdrive_read_file") {
+    const uri = request.params.arguments?.uri as string;
+    if (!uri || !uri.startsWith("gdrive:///")) {
+      return {
+        content: [{ type: "text", text: "Error: Invalid file URI format, should be gdrive:///{fileId}" }],
+        isError: true,
+      };
+    }
+
+    const fileId = uri.replace("gdrive:///", "");
+
+    try {
+      // Get file metadata to check MIME type
+      const file = await drive.files.get({
+        fileId,
+        fields: "name,mimeType",
+      });
+
+      // For Google Docs/Sheets/etc we need to export
+      if (file.data.mimeType?.startsWith("application/vnd.google-apps")) {
+        let exportMimeType: string;
+        switch (file.data.mimeType) {
+          case "application/vnd.google-apps.document":
+            exportMimeType = "text/markdown";
+            break;
+          case "application/vnd.google-apps.spreadsheet":
+            exportMimeType = "text/csv";
+            break;
+          case "application/vnd.google-apps.presentation":
+            exportMimeType = "text/plain";
+            break;
+          case "application/vnd.google-apps.drawing":
+            exportMimeType = "image/png";
+            break;
+          default:
+            exportMimeType = "text/plain";
+        }
+
+        const res = await drive.files.export(
+          { fileId, mimeType: exportMimeType },
+          { responseType: "text" },
+        );
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `File name: ${file.data.name}\nType: ${file.data.mimeType}\nExport format: ${exportMimeType}\n\nContent:\n${res.data}`,
+            },
+          ],
+          isError: false,
+        };
+      }
+
+      // For regular files download content
+      const res = await drive.files.get(
+        { fileId, alt: "media" },
+        { responseType: "arraybuffer" },
+      );
+      const mimeType = file.data.mimeType || "application/octet-stream";
+      
+      if (mimeType.startsWith("text/") || mimeType === "application/json") {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `File name: ${file.data.name}\nType: ${mimeType}\n\nContent:\n${Buffer.from(res.data as ArrayBuffer).toString("utf-8")}`,
+            },
+          ],
+          isError: false,
+        };
+      } else {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `File name: ${file.data.name}\nType: ${mimeType}\n\nNote: This file is in binary format and cannot be displayed directly.`,
+            },
+          ],
+          isError: false,
+        };
+      }
+    } catch (error: any) {
+      return {
+        content: [{ type: "text", text: `Error reading file: ${error.message}` }],
+        isError: true,
+      };
+    }
   }
   throw new Error("Tool not found");
 });
