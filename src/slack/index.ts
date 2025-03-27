@@ -31,6 +31,14 @@ interface AddReactionArgs {
   reaction: string;
 }
 
+interface RemoveReactionArgs {
+  file_id?: string;
+  file_comment_id?: string;
+  channel_id?: string;
+  timestamp?: string;
+  reaction: string;
+}
+
 interface GetChannelHistoryArgs {
   channel_id: string;
   limit?: number;
@@ -136,6 +144,37 @@ const addReactionTool: Tool = {
       },
     },
     required: ["channel_id", "timestamp", "reaction"],
+  },
+};
+
+const removeReactionTool: Tool = {
+  name: "slack_remove_reaction",
+  description: "Remove a reaction emoji from a message",
+  inputSchema: {
+    type: "object",
+    properties: {
+      file_id: {
+        type: "string",
+        description: "The ID of the file containing the reaction",
+      },
+      file_comment_id: {
+        type: "string",
+        description: "The ID of the file comment containing the reaction",
+      },
+      channel_id: {
+        type: "string",
+        description: "The ID of the channel containing the reaction",
+      },
+      timestamp: {
+        type: "string",
+        description: "The timestamp of the message to react to",
+      },
+      reaction: {
+        type: "string",
+        description: "The name of the emoji reaction (without ::)",
+      },
+    },
+    required: ["reaction"],
   },
 };
 
@@ -298,6 +337,34 @@ class SlackClient {
         channel: channel_id,
         timestamp: timestamp,
         name: reaction,
+      }),
+    });
+
+    return response.json();
+  }
+
+  async removeReaction({
+    reaction,
+    file_id,
+    file_comment_id,
+    channel_id,
+    timestamp,
+  }: {
+    reaction: string,
+    file_id?: string,
+    file_comment_id?: string,
+    channel_id?: string,
+    timestamp?: string,
+  }): Promise<any> {
+    const response = await fetch("https://slack.com/api/reactions.remove", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify({
+        name: reaction,
+        ...(file_id ? { file: file_id } : {}),
+        ...(file_comment_id ? { file_comment: file_comment_id } : {}),
+        ...(channel_id ? { channel: channel_id } : {}),
+        ...(timestamp ? { timestamp: timestamp } : {}),
       }),
     });
 
@@ -481,6 +548,24 @@ async function main() {
             };
           }
 
+          case "slack_remove_reaction": {
+            const args = request.params.arguments as unknown as RemoveReactionArgs;
+            if (!args.reaction) {
+              throw new Error(
+                "Missing required arguments: reaction",
+              );
+            }
+            if (!args.file_id && !args.file_comment_id && !(args.channel_id && args.timestamp)) {
+              throw new Error(
+                "Must provide either file_id, file_comment_id, or both channel_id and timestamp"
+              );
+            }
+            const response = await slackClient.removeReaction(args);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
           case "slack_get_channel_history": {
             const args = request.params
               .arguments as unknown as GetChannelHistoryArgs;
@@ -566,6 +651,7 @@ async function main() {
         postMessageTool,
         replyToThreadTool,
         addReactionTool,
+        removeReactionTool,
         getChannelHistoryTool,
         getThreadRepliesTool,
         getUsersTool,
