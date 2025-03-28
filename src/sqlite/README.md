@@ -67,7 +67,8 @@ The server offers six core tools:
 
 ```bash
 # Add the server to your claude_desktop_config.json
-"mcpServers": {
+{
+  "mcpServers": {
   "sqlite": {
     "command": "uv",
     "args": [
@@ -79,6 +80,7 @@ The server offers six core tools:
       "~/test.db"
     ]
   }
+  }
 }
 ```
 
@@ -86,6 +88,7 @@ The server offers six core tools:
 
 ```json
 # Add the server to your claude_desktop_config.json
+{
 "mcpServers": {
   "sqlite": {
     "command": "docker",
@@ -100,6 +103,7 @@ The server offers six core tools:
       "/mcp/test.db"
     ]
   }
+}
 }
 ```
 
