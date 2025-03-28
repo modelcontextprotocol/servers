@@ -35,9 +35,37 @@ const resourceBaseUrl = new URL(databaseUrl);
 resourceBaseUrl.protocol = "postgres:";
 resourceBaseUrl.password = "";
 
-const pool = new pg.Pool({
+// Parse the connection string to get the components
+const parsedUrl = new URL(databaseUrl);
+
+// Check for SSL configuration in the connection string
+const sslMode = parsedUrl.searchParams.get("sslmode");
+const rejectUnauthorized = parsedUrl.searchParams.get("rejectUnauthorized");
+
+// Create pool configuration
+const poolConfig: pg.PoolConfig = {
   connectionString: databaseUrl,
-});
+};
+
+// Check if SSL is required based on the connection string
+const requiresSSL = sslMode === "require" || sslMode === "prefer" || sslMode === "verify-ca" || sslMode === "verify-full";
+
+// Apply SSL configuration only if SSL is required
+if (requiresSSL) {
+  // Configure SSL settings based on connection parameters
+  poolConfig.ssl = {
+    // Use rejectUnauthorized from connection string if provided, otherwise default to false for AWS RDS
+    rejectUnauthorized: rejectUnauthorized === "true"
+  };
+  
+  // Only disable certificate validation globally if explicitly requested
+  if (rejectUnauthorized === "false") {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  }
+}
+
+// Create the connection pool with the configured options
+const pool = new pg.Pool(poolConfig);
 
 const SCHEMA_PATH = "schema";
 
@@ -111,8 +139,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === "query") {
     const sql = request.params.arguments?.sql as string;
-
-    const client = await pool.connect();
+    
+    // Create client config with proper type annotation
+    const clientConfig: pg.ClientConfig = {
+      connectionString: databaseUrl
+    };
+    
+    // Apply SSL settings only if SSL is required
+    if (requiresSSL) {
+      clientConfig.ssl = {
+        rejectUnauthorized: rejectUnauthorized === "true"
+      };
+    }
+    
+    const client = new pg.Client(clientConfig);
+    await client.connect();
     try {
       await client.query("BEGIN TRANSACTION READ ONLY");
       const result = await client.query(sql);
@@ -129,7 +170,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           console.warn("Could not roll back transaction:", error),
         );
 
-      client.release();
+      // Close the client connection instead of using release() since we're using pg.Client directly
+      client.end();
     }
   }
   throw new Error(`Unknown tool: ${request.params.name}`);
