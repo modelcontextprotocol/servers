@@ -8,7 +8,7 @@
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
   "type": "module",
   "bin": {
-    "mcp-server-github": "dist/index.js"
+    "mcp-server-github": "dist/main.js"
   },
   "files": [
     "dist"
