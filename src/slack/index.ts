@@ -237,7 +237,20 @@ class SlackClient {
       { headers: this.botHeaders },
     );
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      return {
+        channels: data.channels.map((channel: any) => ({
+          id: channel.id,
+          name: channel.name,
+          topic: channel.topic.value || undefined,
+          purpose: channel.purpose.value || undefined,
+        }))
+      };
+    }
+
+    return data;
   }
 
   async postMessage(channel_id: string, text: string): Promise<any> {
