@@ -11,6 +11,10 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
 - **Advanced Search**: Support for searching code, issues/PRs, and users
 
 
+## Environment Variables
+
+- `GITHUB_API_URL`: GitHub API URL (default: 'https://api.github.com')
+
 ## Tools
 
 1. `create_or_update_file`
@@ -329,14 +333,13 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
         "mcp/github"
       ],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
+        // Optional:
+        // "GITHUB_API_URL": "https://api.github.com"
       }
     }
   }
 }
-```
-
-### NPX
 
 ```json
 {
@@ -348,7 +351,9 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
         "@modelcontextprotocol/server-github"
       ],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
+        // Optional:
+        // "GITHUB_API_URL": "https://api.github.com"
       }
     }
   }
