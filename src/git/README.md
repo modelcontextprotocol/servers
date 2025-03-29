@@ -239,12 +239,12 @@ If you are doing local development, there are two ways to test your changes:
 {
 "mcpServers": {
   "git": {
-    "command": "uv",
-    "args": [ 
-      "--directory",
-      "/<path to mcp-servers>/mcp-servers/src/git",
-      "run",
-      "mcp-server-git"
+    "command": "uvx",
+    "args": [
+      "mcp-server-git",
+      "--directory",    # Optional, Use this for a parent directory of multiple repos
+      "--repository",   # Optional, Use this for a specific repo
+      "/<path to repo or directory>",
     ]
   }
 }
