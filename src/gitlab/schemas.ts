@@ -218,12 +218,12 @@ export const GitLabMergeRequestSchema = z.object({
   title: z.string(),
   description: z.string(), // Changed from body to match GitLab API
   state: z.string(),
-  merged: z.boolean(),
+  merged: z.boolean().optional(),
   author: GitLabUserSchema,
   assignees: z.array(GitLabUserSchema),
   source_branch: z.string(), // Changed from head to match GitLab API
   target_branch: z.string(), // Changed from base to match GitLab API
-  diff_refs: GitLabMergeRequestDiffRefSchema,
+  diff_refs: GitLabMergeRequestDiffRefSchema.nullable(),
   web_url: z.string(), // Changed from html_url to match GitLab API
   created_at: z.string(),
   updated_at: z.string(),
