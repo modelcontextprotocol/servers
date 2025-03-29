@@ -13,7 +13,14 @@ async function parseResponseBody(response: Response): Promise<unknown> {
   if (contentType?.includes("application/json")) {
     return response.json();
   }
-  return response.text();
+  return {
+    content: [
+      {
+        type: "text",
+        text: await response.text(),
+      },
+    ],
+  };
 }
 
 export function buildUrl(baseUrl: string, params: Record<string, string | number | undefined>): string {
