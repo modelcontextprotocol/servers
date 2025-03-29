@@ -23,13 +23,19 @@ const server = new Server(
   },
 );
 
-const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error("Please provide a database URL as a command-line argument");
+function getPostgresConnectionUri(): string {
+  const args = process.argv.slice(2);
+  if (args.length !== 0) {
+    return args[0];
+  }
+  if (process.env.POSTGRES_URI) {
+    return process.env.POSTGRES_URI;
+  }
+  console.error("Please provide a database URL as a command-line argument or an environment variable");
   process.exit(1);
 }
 
-const databaseUrl = args[0];
+const databaseUrl = getPostgresConnectionUri();
 
 const resourceBaseUrl = new URL(databaseUrl);
 resourceBaseUrl.protocol = "postgres:";
