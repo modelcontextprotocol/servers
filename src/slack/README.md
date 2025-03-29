@@ -65,21 +65,69 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
 
 ## Setup
 
-1. Create a Slack App:
-   - Visit the [Slack Apps page](https://api.slack.com/apps)
-   - Click "Create New App"
-   - Choose "From scratch"
-   - Name your app and select your workspace
+You have two ways you could go here:
 
-2. Configure Bot Token Scopes:
-   Navigate to "OAuth & Permissions" and add these scopes:
-   - `channels:history` - View messages and other content in public channels
-   - `channels:read` - View basic channel information
-   - `chat:write` - Send messages as the app
-   - `reactions:write` - Add emoji reactions to messages
-   - `users:read` - View users and their basic information
+1. Manifest route
+   - copy the following json
+   - Go to the [Slack Apps page](https://api.slack.com/apps)
+   - Select "From Manifest"
+   - click "Create New App"
+   - Navigate to "OAuth & Permissions"
 
-4. Install App to Workspace:
+```json
+{
+    "display_information": {
+        "name": "My MCP",
+        "description": "doing things for me in slack",
+        "background_color": "#454d62"
+    },
+    "features": {
+        "bot_user": {
+            "display_name": "My MCP",
+            "always_online": false
+        }
+    },
+    "oauth_config": {
+        "scopes": {
+            "bot": [
+                "channels:history",
+                "channels:read",
+                "chat:write",
+                "reactions:write",
+                "users:read",
+                "users.profile:read",
+                "groups:read",
+                "groups:history"
+            ]
+        }
+    },
+    "settings": {
+        "org_deploy_enabled": false,
+        "socket_mode_enabled": false,
+        "token_rotation_enabled": false
+    }
+}
+```
+
+2. Manual route
+   1. Create a Slack App:
+      - Visit the [Slack Apps page](https://api.slack.com/apps)
+      - Click "Create New App"
+      - Choose "From scratch"
+      - Name your app and select your workspace
+   
+   2. Configure Bot Token Scopes:
+      Navigate to "OAuth & Permissions" and add these scopes:
+      - `channels:history` - View messages and other content in public channels
+      - `channels:read` - View basic channel information
+      - `chat:write` - Send messages as the app
+      - `reactions:write` - Add emoji reactions to messages
+      - `users:read` - View users and their basic information
+      - `users.profiles:read` - View the user's profile
+      - `groups:read` - View private channels that the app has been added to
+      - `groups:history` - View messages and other content in private channels that the app has been added tos
+
+3. Install App to Workspace:
    - Click "Install to Workspace" and authorize the app
    - Save the "Bot User OAuth Token" that starts with `xoxb-`
 
