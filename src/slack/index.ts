@@ -53,7 +53,7 @@ interface GetUserProfileArgs {
 // Tool definitions
 const listChannelsTool: Tool = {
   name: "slack_list_channels",
-  description: "List public channels in the workspace with pagination",
+  description: "List channels the app has access to with pagination",
   inputSchema: {
     type: "object",
     properties: {
@@ -222,7 +222,7 @@ class SlackClient {
 
   async getChannels(limit: number = 100, cursor?: string): Promise<any> {
     const params = new URLSearchParams({
-      types: "public_channel",
+      types: "public_channel,private_channel",
       exclude_archived: "true",
       limit: Math.min(limit, 200).toString(),
       team_id: process.env.SLACK_TEAM_ID!,
@@ -233,7 +233,7 @@ class SlackClient {
     }
 
     const response = await fetch(
-      `https://slack.com/api/conversations.list?${params}`,
+      `https://slack.com/api/users.conversations?${params}`,
       { headers: this.botHeaders },
     );
 
