@@ -401,7 +401,26 @@ class SlackClient {
       { headers: this.botHeaders },
     );
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      const fields: Record<string, string> = {};
+      for (const [id, field] of Object.entries(data.profile.fields || {})) {
+        fields[(field as any).label] = (field as any).value;
+      }
+
+      return {
+        display_name: data.profile.display_name || undefined,
+        real_name: data.profile.real_name,
+        pronouns: data.profile.pronouns || undefined,
+        title: data.profile.title || undefined,
+        fields,
+        start_date: data.profile.start_date || undefined,
+        avatar: data.profile.avatar,
+      };
+    }
+
+    return data;
   }
 }
 
