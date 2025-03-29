@@ -263,7 +263,16 @@ class SlackClient {
       }),
     });
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      return {
+        ts: data.ts,
+        channel: data.channel,
+      };
+    }
+
+    return data;
   }
 
   async postReply(
@@ -281,7 +290,15 @@ class SlackClient {
       }),
     });
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      return {
+        ok: true,
+      };
+    }
+
+    return data;
   }
 
   async addReaction(
