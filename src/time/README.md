@@ -61,7 +61,7 @@ Add to your Claude settings:
 "mcpServers": {
   "time": {
     "command": "docker",
-    "args": ["run", "-i", "--rm", "mcp/time"]
+    "args": ["run", "-i", "--rm", "-e", "LOCAL_TIMEZONE", "mcp/time"]
   }
 }
 ```
