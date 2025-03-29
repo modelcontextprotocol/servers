@@ -200,7 +200,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_reviews",
         description: "Get the reviews on a pull request",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema)
-      }
+      },
+      {
+        name: "add_sub_issues",
+        description: "Add existing work items as sub-issues to an issue.",
+        inputSchema: zodToJsonSchema(issues.AddSubIssuesSchema),
+      },
     ],
   };
 });
@@ -488,6 +493,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const reviews = await pulls.getPullRequestReviews(args.owner, args.repo, args.pull_number);
         return {
           content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }],
+        };
+      }
+
+      case "add_sub_issues": {
+        const args = issues.AddSubIssuesSchema.parse(request.params.arguments);
+        const result = await issues.addSubIssues(
+          args.owner,
+          args.repo,
+          args.issue_number,
+          args.sub_issues
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       }
 
