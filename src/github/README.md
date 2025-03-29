@@ -326,10 +326,13 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
         "--rm",
         "-e",
         "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "-e",
+        "GITHUB_API_BASE_URL",
         "mcp/github"
       ],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
+        "GITHUB_API_BASE_URL": "https://github.acme.com/api/v3"  // Optional: for GitHub Enterprise instances
       }
     }
   }
@@ -348,7 +351,8 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
         "@modelcontextprotocol/server-github"
       ],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
+        "GITHUB_API_BASE_URL": "https://github.acme.com/api/v3"  // Optional: for GitHub Enterprise instances
       }
     }
   }
