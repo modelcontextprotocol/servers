@@ -357,6 +357,10 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[XiYan](https://github.com/XGenerationLab/xiyan_mcp_server)** - 🗄️ An MCP server that supports fetching data from a database using natural language queries, powered by XiyanSQL as the text-to-SQL LLM.
 - **[XMind](https://github.com/apeyroux/mcp-xmind)** - Read and search through your XMind directory containing XMind files.
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
+- **[Google-Scholar](https://github.com/JackKuo666/Google-Scholar-MCP-Server)** - 🔍 Enable AI assistants to search and access Google Scholar papers through a simple MCP interface.
+- **[PubMed](https://github.com/JackKuo666/PubMed-MCP-Server)** - 🔍 Enable AI assistants to search, access, and analyze PubMed articles through a simple MCP interface.
+- **[medRxiv](https://github.com/JackKuo666/medRxiv-MCP-Server)** - 🔍 Enable AI assistants to search and access medRxiv papers through a simple MCP interface.
+- **[bioRxiv](https://github.com/JackKuo666/bioRxiv-MCP-Server)** - 🔍 Enable AI assistants to search and access bioRxiv papers through a simple MCP interface.
 
 ## 📚 Frameworks
 
