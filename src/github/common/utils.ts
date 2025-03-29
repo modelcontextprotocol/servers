@@ -28,6 +28,48 @@ export function buildUrl(baseUrl: string, params: Record<string, string | number
 
 const USER_AGENT = `modelcontextprotocol/servers/github/v${VERSION} ${getUserAgent()}`;
 
+// Cache the GitHub token to avoid frequent subprocess calls
+let cachedGitHubToken: string | null = null;
+let tokenExpiryTime: number = 0;
+const TOKEN_CACHE_DURATION = 3600000; // 1 hour in milliseconds
+
+async function getGitHubToken(): Promise<string | null> {
+  // Check if we have a valid cached token
+  const now = Date.now();
+  if (cachedGitHubToken && now < tokenExpiryTime) {
+    return cachedGitHubToken;
+  }
+
+  // Try to get token from environment variable first
+  if (process.env.GITHUB_PERSONAL_ACCESS_TOKEN) {
+    cachedGitHubToken = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+    tokenExpiryTime = now + TOKEN_CACHE_DURATION;
+    return cachedGitHubToken;
+  }
+
+  // Try to get token from gh CLI
+  try {
+    const { execSync } = await import('child_process');
+    const output = execSync('gh auth token').toString().trim();
+    
+    if (output) {
+      cachedGitHubToken = output;
+      tokenExpiryTime = now + TOKEN_CACHE_DURATION;
+      return cachedGitHubToken;
+    }
+  } catch (error) {
+    console.error("Failed to get GitHub token from gh CLI:", error);
+  }
+  
+  console.warn(
+    "No GitHub authentication found. Please either:\n" +
+    "1. Set GITHUB_PERSONAL_ACCESS_TOKEN environment variable, or\n" +
+    "2. Authenticate with GitHub CLI using 'gh auth login'"
+  );
+  
+  return null;
+}
+
 export async function githubRequest(
   url: string,
   options: RequestOptions = {}
@@ -39,8 +81,23 @@ export async function githubRequest(
     ...options.headers,
   };
 
-  if (process.env.GITHUB_PERSONAL_ACCESS_TOKEN) {
-    headers["Authorization"] = `Bearer ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN}`;
+  // Get token from gh CLI or environment variable
+  const token = await getGitHubToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  } else {
+    // For operations requiring authentication, it's better to fail early
+    // Public GitHub APIs will still work without a token
+    if (
+      url.includes('/repos/') && 
+      (options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH' || options.method === 'DELETE')
+    ) {
+      throw new Error(
+        "GitHub authentication required for this operation. Please either:\n" +
+        "1. Set the GITHUB_PERSONAL_ACCESS_TOKEN environment variable, or\n" +
+        "2. Authenticate with GitHub CLI using 'gh auth login'"
+      );
+    }
   }
 
   const response = await fetch(url, {
