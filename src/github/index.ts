@@ -16,6 +16,7 @@ import * as pulls from './operations/pulls.js';
 import * as branches from './operations/branches.js';
 import * as search from './operations/search.js';
 import * as commits from './operations/commits.js';
+import * as release from './operations/release.js';
 import {
   GitHubError,
   GitHubValidationError,
@@ -200,8 +201,48 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_reviews",
         description: "Get the reviews on a pull request",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema)
-      }
-    ],
+      },
+      {
+        name: "list_releases",
+        description: "List releases of a repository",
+        inputSchema: zodToJsonSchema(release.ListReleasesOptionsSchema),
+      },
+      {
+        name: "get_latest_release",
+        description: "Get the latest release of a repository",
+        inputSchema: zodToJsonSchema(release.GetLatestReleaseSchema),
+      },
+      {
+        name: "get_release",
+        description: "Get a specific release of a repository",
+        inputSchema: zodToJsonSchema(release.GetReleaseSchema),
+      },
+      {
+        name: "get_release_by_tag",
+        description: "Get a release by its tag",
+        inputSchema: zodToJsonSchema(release.GetReleaseByTagSchema),
+      },
+      {
+        name: "create_release",
+        description: "Create a new release in a GitHub repository",
+        inputSchema: zodToJsonSchema(release.CreateReleaseSchema),
+      },
+      {
+        name: "delete_release",
+        description: "Delete a release from a GitHub repository",
+        inputSchema: zodToJsonSchema(release.DeleteReleaseSchema),
+      },
+      {
+        name: "update_release",
+        description: "Update a release in a GitHub repository",
+        inputSchema: zodToJsonSchema(release.UpdateReleaseSchema),
+      },
+      {
+        name: "generate_release_notes",
+        description: "Generate a name and body describing a release.",
+        inputSchema: zodToJsonSchema(release.GenerateReleaseNotesSchema),
+      },
+  ],
   };
 });
 
@@ -488,6 +529,75 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const reviews = await pulls.getPullRequestReviews(args.owner, args.repo, args.pull_number);
         return {
           content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }],
+        };
+      }
+
+      case "list_releases": {
+        const args = release.ListReleasesOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const releases = await release.listReleases(args.owner, args.repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releases, null, 2) }],
+        };
+      }
+
+      case "get_latest_release": {
+        const args = release.GetLatestReleaseSchema.parse(request.params.arguments);
+        const releaseInfo = await release.getLatestRelease(args.owner, args.repo);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releaseInfo, null, 2) }],
+        };
+      }
+
+      case "get_release": {
+        const args = release.GetReleaseSchema.parse(request.params.arguments);
+        const releaseInfo = await release.getRelease(args.owner, args.repo, args.release_id);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releaseInfo, null, 2) }],
+        };
+      }
+
+      case "get_release_by_tag": {
+        const args = release.GetReleaseByTagSchema.parse(request.params.arguments);
+        const releaseInfo = await release.getReleaseByTag(args.owner, args.repo, args.tag);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releaseInfo, null, 2) }],
+        };
+      }
+
+      case "create_release": {
+        const args = release.CreateReleaseSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const releaseInfo = await release.createRelease(owner, repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releaseInfo, null, 2) }],
+        };
+      }
+
+      case "delete_release": {
+        const args = release.DeleteReleaseSchema.parse(request.params.arguments);
+        const { owner, repo, release_id } = args;
+        await release.deleteRelease(owner, repo, release_id);
+        return {
+          content: [{ type: "text", text: JSON.stringify({ success: true }, null, 2) }],
+        };
+      }
+
+      case "update_release": {
+        const args = release.UpdateReleaseSchema.parse(request.params.arguments);
+        const { owner, repo, release_id, ...options } = args;
+        const releaseInfo = await release.updateRelease(owner, repo, release_id, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releaseInfo, null, 2) }],
+        };
+      }
+
+      case "generate_release_notes": {
+        const args = release.GenerateReleaseNotesSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const releaseNotes = await release.generateReleaseNotes(owner, repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(releaseNotes, null, 2) }],
         };
       }
 
