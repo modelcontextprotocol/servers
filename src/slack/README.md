@@ -95,7 +95,8 @@ You have two ways you could go here:
                 "chat:write",
                 "reactions:write",
                 "users:read",
-                "users.profile:read"
+                "users.profile:read",
+                "groups:read",
             ]
         }
     },
