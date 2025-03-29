@@ -97,6 +97,7 @@ You have two ways you could go here:
                 "users:read",
                 "users.profile:read",
                 "groups:read",
+                "groups:history"
             ]
         }
     },
@@ -123,6 +124,8 @@ You have two ways you could go here:
       - `reactions:write` - Add emoji reactions to messages
       - `users:read` - View users and their basic information
       - `users.profiles:read` - View the user's profile
+      - `groups:read` - View private channels that the app has been added to
+      - `groups:history` - View messages and other content in private channels that the app has been added tos
 
 3. Install App to Workspace:
    - Click "Install to Workspace" and authorize the app
