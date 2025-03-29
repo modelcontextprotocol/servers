@@ -341,7 +341,24 @@ class SlackClient {
       { headers: this.botHeaders },
     );
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      return {
+        messages: data.messages
+          .filter((msg: any) => msg.type === 'message')
+          .map((msg: any) => ({
+            ts: msg.ts,
+            user: msg.user,
+            text: msg.text,
+            type: msg.type,
+            subtype: msg.subtype || undefined,
+            reactions: msg.reactions || undefined,
+          }))
+      };
+    }
+
+    return data;
   }
 
   async getThreadReplies(channel_id: string, thread_ts: string): Promise<any> {
@@ -355,7 +372,26 @@ class SlackClient {
       { headers: this.botHeaders },
     );
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      return {
+        replies: data.messages[0].reply_count,
+        reply_users: data.messages[0].reply_users_count,
+        messages: data.messages
+          .filter((msg: any) => msg.type === 'message')
+          .map((msg: any) => ({
+            ts: msg.ts,
+            user: msg.user,
+            text: msg.text,
+            type: msg.type,
+            subtype: msg.subtype || undefined,
+            reactions: msg.reactions || undefined,
+          }))
+      };
+    }
+
+    return data;
   }
 
   async getUsers(limit: number = 100, cursor?: string): Promise<any> {
