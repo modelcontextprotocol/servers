@@ -62,7 +62,7 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "sentry": {
     "command": "uvx",
-    "args": ["mcp-server-sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+    "args": ["mcp-server-sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-base", "YOUR_SENTRY_API_BASE"]
   }
 }
 ```
@@ -77,7 +77,7 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "sentry": {
     "command": "docker",
-    "args": ["run", "-i", "--rm", "mcp/sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+    "args": ["run", "-i", "--rm", "mcp/sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-base", "YOUR_SENTRY_API_BASE"]
   }
 }
 ```
@@ -91,7 +91,7 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "sentry": {
     "command": "python",
-    "args": ["-m", "mcp_server_sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+    "args": ["-m", "mcp_server_sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-base", "YOUR_SENTRY_API_BASE"]
   }
 }
 ```
@@ -109,7 +109,7 @@ Add to your Zed settings.json:
   "mcp-server-sentry": {
     "command": {
       "path": "uvx",
-      "args": ["mcp-server-sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+      "args": ["mcp-server-sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-base", "YOUR_SENTRY_API_BASE"]
     }
   }
 ],
@@ -123,7 +123,7 @@ Add to your Zed settings.json:
 "context_servers": {
   "mcp-server-sentry": {
     "command": "python",
-    "args": ["-m", "mcp_server_sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+    "args": ["-m", "mcp_server_sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-base", "YOUR_SENTRY_API_BASE"]
   }
 },
 ```
@@ -134,14 +134,14 @@ Add to your Zed settings.json:
 You can use the MCP inspector to debug the server. For uvx installations:
 
 ```
-npx @modelcontextprotocol/inspector uvx mcp-server-sentry --auth-token YOUR_SENTRY_TOKEN
+npx @modelcontextprotocol/inspector uvx mcp-server-sentry --auth-token YOUR_SENTRY_TOKEN --api-base YOUR_SENTRY_API_BASE
 ```
 
 Or if you've installed the package in a specific directory or are developing on it:
 
 ```
 cd path/to/servers/src/sentry
-npx @modelcontextprotocol/inspector uv run mcp-server-sentry --auth-token YOUR_SENTRY_TOKEN
+npx @modelcontextprotocol/inspector uv run mcp-server-sentry --auth-token YOUR_SENTRY_TOKEN --api-base YOUR_SENTRY_API_BASE
 ```
 
 ## License
