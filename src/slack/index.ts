@@ -347,7 +347,22 @@ class SlackClient {
       headers: this.botHeaders,
     });
 
-    return response.json();
+    const data = await response.json();
+    if (data.ok) {
+      return {
+        users: data.members
+          .filter((member: any) => !member.is_bot && !member.deleted)
+          .map((member: any) => ({
+            id: member.id,
+            real_name: member.real_name,
+            display_name: member.profile.display_name || undefined,
+            title: member.profile.title || undefined,
+            avatar: member.avatar,
+          }))
+      };
+    }
+
+    return data;
   }
 
   async getUserProfile(user_id: string): Promise<any> {
