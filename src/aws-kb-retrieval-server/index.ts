@@ -11,14 +11,39 @@ import {
   RetrieveCommand,
   RetrieveCommandInput,
 } from "@aws-sdk/client-bedrock-agent-runtime";
+import { NodeHttpHandler } from "@smithy/node-http-handler";
+import { fromNodeProviderChain, fromIni } from "@aws-sdk/credential-providers";
 
+const AWS_REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+const AWS_PROFILE = process.env.AWS_PROFILE || 'default';
 // AWS client initialization
 const bedrockClient = new BedrockAgentRuntimeClient({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  region: AWS_REGION,
+  maxAttempts: 3,
+  // Try explicit profile credentials first, then fall back to provider chain
+  credentials: async () => {
+    try {
+      // First try loading from profile
+      const profileCreds = await fromIni({ profile: AWS_PROFILE })();
+      console.error('Successfully loaded credentials from profile');
+      return profileCreds;
+    } catch (error) {
+      console.error('Failed to load profile credentials, falling back to provider chain:', error);
+      try {
+        // Fall back to provider chain
+        const chainCreds = await fromNodeProviderChain()();
+        console.error('Successfully loaded credentials from provider chain');
+        return chainCreds;
+      } catch (error) {
+        console.error('Failed to load credentials from provider chain:', error);
+        throw error;
+      }
+    }
   },
+  requestHandler: new NodeHttpHandler({
+    connectionTimeout: 10000, // 10 seconds connection timeout
+    requestTimeout: 300000, // 5 minutes request timeout
+  })
 });
 
 interface RAGSource {
