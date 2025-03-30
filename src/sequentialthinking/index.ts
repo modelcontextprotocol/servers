@@ -35,6 +35,7 @@ import {
   handleGetCoachingRequest,
   handleGetAIAdviceRequest
 } from './ai-tools.js';
+import { preprocessForGemini } from './geminiPreprocessing.js'; // Import the new function
 // Fixed chalk import for ESM
 import chalk from 'chalk';
 import fs from 'fs';
@@ -402,7 +403,11 @@ class SequentialThinkingServer {
 
   public processThought(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
     try {
-      const validatedInput = this.validateThoughtData(input);
+      let validatedInput = this.validateThoughtData(input);
+
+      // Preprocess the thought for Gemini
+      const originalThought = validatedInput.thought;
+      validatedInput.thought = preprocessForGemini(originalThought);
 
       if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
         validatedInput.totalThoughts = validatedInput.thoughtNumber;
