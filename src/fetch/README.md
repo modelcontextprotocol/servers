@@ -107,6 +107,10 @@ ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotoc
 
 This can be customized by adding the argument `--user-agent=YourUserAgent` to the `args` list in the configuration.
 
+### Customization - Proxy
+
+The server can be configured to use a proxy by using the `--proxy-url` argument.
+
 ## Debugging
 
 You can use the MCP inspector to debug the server. For uvx installations:
