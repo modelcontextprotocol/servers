@@ -11,10 +11,28 @@
  * @returns The preprocessed thought string.
  */
 export function preprocessForGemini(thought: string): string {
-  console.log('Preprocessing thought for Gemini Pro 2.5...');
-  // Placeholder: Implement actual preprocessing logic here.
-  // Examples: summarization, keyword extraction, removing redundancy, etc.
-  const preprocessedThought = thought.trim(); // Basic example: trim whitespace
+  console.log('Preprocessing thought for Gemini Pro 2.5 (Removing Redundancy)...');
+
+  // Basic list of common filler words/phrases (can be expanded)
+  const fillerWords = [
+    /\b(?:just|really|actually|basically|literally|like|you know|I mean|sort of|kind of)\b/gi,
+    /\b(?:in order to|due to the fact that|the point I am trying to make is|what I mean to say is)\b/gi,
+    /\s+/g // Replace multiple spaces with a single space
+  ];
+
+  let preprocessedThought = thought;
+
+  // Apply removals
+  fillerWords.forEach(pattern => {
+    if (pattern.source === '\\s+') {
+      preprocessedThought = preprocessedThought.replace(pattern, ' '); // Replace multiple spaces
+    } else {
+      preprocessedThought = preprocessedThought.replace(pattern, ''); // Remove filler words/phrases
+    }
+  });
+
+  // Trim leading/trailing whitespace potentially left after removals
+  preprocessedThought = preprocessedThought.trim();
 
   // Log the difference for debugging/evaluation
   if (preprocessedThought !== thought) {
