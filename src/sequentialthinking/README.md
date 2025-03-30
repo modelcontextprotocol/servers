@@ -1,12 +1,10 @@
-# Sequential Thinking Server with Enhanced Features
+# Sequential Thinking Server
 
 A Model Context Protocol (MCP) server that provides a tool for dynamic and reflective problem-solving through sequential thoughts and chain of thought reasoning.
 
 ## Overview
 
 The Sequential Thinking server helps analyze problems through a flexible thinking process that can adapt and evolve. Each thought can build on, question, or revise previous insights as understanding deepens.
-
-Version 0.7.0 introduces several powerful enhancements including persistence, multiple hypothesis support, confidence levels, branch merging, and Chain of Thought validation.
 
 ## Features
 
@@ -124,10 +122,6 @@ Version 0.7.0 introduces several powerful enhancements including persistence, mu
 | mergeBranchPoint | integer | Thought number where branches should be merged |
 | validationStatus | string | Validation status of a Chain of Thought step ('valid', 'invalid', or 'uncertain') |
 | validationReason | string | Reason for the validation status |
-
-## Example
-
-See the `example-usage.js` file for a complete example of how to use the Sequential Thinking server with Chain of Thought.
 
 ## License
 
