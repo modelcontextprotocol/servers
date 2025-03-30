@@ -173,7 +173,7 @@ class Fetch(BaseModel):
         bool,
         Field(
             default=False,
-            description="Get the actual HTML content if the requested page, without simplification.",
+            description="Get the actual HTML content of the requested page, without simplification.",
         ),
     ]
 
