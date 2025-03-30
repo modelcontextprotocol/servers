@@ -828,20 +828,31 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function runServer() {
-  // Load environment variables from .env file in the project root
-  // Resolve relative to the *project root*, assuming the script runs from there or similar context.
-  // If running via `npx` or similar, CWD might be different. A more robust solution might be needed.
-  // Let's try resolving from the CWD first.
-  const envPath = path.resolve(process.cwd(), '.env');
-  console.error(`Attempting to load .env from: ${envPath}`); // Log path for debugging
-  dotenv.config({ path: envPath });
+  try {
+    // Load environment variables from .env file in the project root
+    const envPath = path.resolve(process.cwd(), '.env');
+    console.error(`Attempting to load .env from: ${envPath}`);
+    if (fs.existsSync(envPath)) {
+        const result = dotenv.config({ path: envPath });
+        if (result.error) {
+            console.error(chalk.red(`Error loading .env file from ${envPath}:`), result.error);
+        } else {
+            console.error(chalk.blue(`.env file loaded successfully from ${envPath}.`));
+        }
+    } else {
+        console.warn(chalk.yellow(`.env file not found at ${envPath}.`));
+    }
 
-  // Check for API key
-  if (!process.env.OPENROUTER_API_KEY) {
-    console.error(chalk.yellow("OpenRouter API key not found in environment variables or .env file. Prompting may be required."));
-    // The actual prompting will be handled by the agent if needed.
-  } else {
-    console.error(chalk.green("OpenRouter API key loaded successfully from environment."));
+    // Check for API key
+    if (!process.env.OPENROUTER_API_KEY) {
+      console.error(chalk.yellow("OpenRouter API key not found in environment variables. Preprocessing requiring API calls will be skipped."));
+    } else {
+      console.error(chalk.green("OpenRouter API key found in environment."));
+    }
+  } catch (err) {
+      console.error(chalk.red("Critical error during environment setup:"), err);
+      // Decide if the server should exit or continue with limited functionality
+      // For now, let it continue but log the error prominently.
   }
 
   const transport = new StdioServerTransport();
