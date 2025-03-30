@@ -406,13 +406,13 @@ class SequentialThinkingServer {
 └${border}┘`;
   }
 
-  public async processThought(input: unknown): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> { // Make async and return Promise
+  public processThought(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } { // Reverted to synchronous
     try {
       let validatedInput = this.validateThoughtData(input);
 
-      // Preprocess the thought for Gemini (now async)
+      // Preprocess the thought (now synchronous again)
       const originalThought = validatedInput.thought;
-      validatedInput.thought = await preprocessForGemini(originalThought); // Await the result
+      validatedInput.thought = preprocessForGemini(originalThought); // Removed await
 
       if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
         validatedInput.totalThoughts = validatedInput.thoughtNumber;
@@ -710,8 +710,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "Missing arguments for sequentialthinking"
         );
       }
-      // Ensure processThought is awaited since it's now async
-      return await thinkingServer.processThought(request.params.arguments);
+      // processThought is synchronous again
+      return thinkingServer.processThought(request.params.arguments);
     }
     // --- Temporarily Commented Out for Debugging ---
     // else if (request.params.name === "visualize_thinking") {
