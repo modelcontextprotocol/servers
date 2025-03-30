@@ -1,15 +1,15 @@
 {
-  "name": "@modelcontextprotocol/servers",
+  "name": "@modelcontextprotocol/sequential-thinking",
   "private": true,
-  "version": "0.6.2",
-  "description": "Model Context Protocol servers",
+  "version": "0.1.0",
+  "description": "Sequential Thinking MCP Server - Dynamic problem-solving through thought sequences",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
   "homepage": "https://modelcontextprotocol.io",
-  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "bugs": "https://github.com/spotty118/servers/issues",
   "type": "module",
   "workspaces": [
-    "src/*"
+    "src/sequentialthinking"
   ],
   "files": [],
   "scripts": {
@@ -19,6 +19,6 @@
     "link-all": "npm link --workspaces"
   },
   "dependencies": {
-    "@modelcontextprotocol/server-sequential-thinking": "*"
+    "@modelcontextprotocol/sdk": "*"
   }
 }
