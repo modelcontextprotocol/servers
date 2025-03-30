@@ -402,13 +402,13 @@ class SequentialThinkingServer {
 └${border}┘`;
   }
 
-  public processThought(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+  public async processThought(input: unknown): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> { // Make async and return Promise
     try {
       let validatedInput = this.validateThoughtData(input);
 
-      // Preprocess the thought for Gemini
+      // Preprocess the thought for Gemini (now async)
       const originalThought = validatedInput.thought;
-      validatedInput.thought = preprocessForGemini(originalThought);
+      validatedInput.thought = await preprocessForGemini(originalThought); // Await the result
 
       if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
         validatedInput.totalThoughts = validatedInput.thoughtNumber;
