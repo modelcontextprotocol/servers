@@ -1,91 +1,134 @@
+# Sequential Thinking Server with Enhanced Features
 
-# Sequential Thinking MCP Server
+A Model Context Protocol (MCP) server that provides a tool for dynamic and reflective problem-solving through sequential thoughts and chain of thought reasoning.
 
-An MCP server implementation that provides a tool for dynamic and reflective problem-solving through a structured thinking process.
+## Overview
+
+The Sequential Thinking server helps analyze problems through a flexible thinking process that can adapt and evolve. Each thought can build on, question, or revise previous insights as understanding deepens.
+
+Version 0.7.0 introduces several powerful enhancements including persistence, multiple hypothesis support, confidence levels, branch merging, and Chain of Thought validation.
 
 ## Features
 
-- Break down complex problems into manageable steps
-- Revise and refine thoughts as understanding deepens
-- Branch into alternative paths of reasoning
-- Adjust the total number of thoughts dynamically
-- Generate and verify solution hypotheses
+- **Sequential Thinking**: Break down complex problems into manageable steps
+- **Flexible Thought Process**: Adjust the number of thoughts as needed, revise previous thoughts, and branch into new paths
+- **Chain of Thought Reasoning**: Explicitly mark thoughts as part of a Chain of Thought sequence
+- **Hypothesis Generation**: Create and test hypotheses as part of the reasoning process
+- **Verification**: Verify hypotheses through structured reasoning
+- **Persistence**: Save and load thought processes between sessions
+- **Multiple Hypotheses**: Support for multiple competing hypotheses with unique identifiers
+- **Confidence Levels**: Assign confidence levels (0-100) to hypotheses
+- **Branch Merging**: Merge different branches of thought at specific points
+- **Chain of Thought Validation**: Automatic validation of Chain of Thought reasoning
 
-## Tool
+## When to Use
 
-### sequential_thinking
-
-Facilitates a detailed, step-by-step thinking process for problem-solving and analysis.
-
-**Inputs:**
-- `thought` (string): The current thinking step
-- `nextThoughtNeeded` (boolean): Whether another thought step is needed
-- `thoughtNumber` (integer): Current thought number
-- `totalThoughts` (integer): Estimated total thoughts needed
-- `isRevision` (boolean, optional): Whether this revises previous thinking
-- `revisesThought` (integer, optional): Which thought is being reconsidered
-- `branchFromThought` (integer, optional): Branching point thought number
-- `branchId` (string, optional): Branch identifier
-- `needsMoreThoughts` (boolean, optional): If more thoughts are needed
-
-## Usage
-
-The Sequential Thinking tool is designed for:
 - Breaking down complex problems into steps
 - Planning and design with room for revision
 - Analysis that might need course correction
 - Problems where the full scope might not be clear initially
+- Problems that require a multi-step solution
 - Tasks that need to maintain context over multiple steps
 - Situations where irrelevant information needs to be filtered out
+- When explicit chain of thought reasoning would be beneficial
 
-## Configuration
+## Usage
 
-### Usage with Claude Desktop
+### Regular Sequential Thinking
 
-Add this to your `claude_desktop_config.json`:
-
-#### npx
-
-```json
+```javascript
 {
-  "mcpServers": {
-    "sequential-thinking": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-sequential-thinking"
-      ]
-    }
-  }
+  "thought": "This is a regular sequential thought that breaks down a problem.",
+  "thoughtNumber": 1,
+  "totalThoughts": 5,
+  "nextThoughtNeeded": true
 }
 ```
 
-#### docker
+### Chain of Thought Reasoning
 
-```json
+```javascript
 {
-  "mcpServers": {
-    "sequentialthinking": {
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "mcp/sequentialthinking"
-      ]
-    }
-  }
+  "thought": "This is a Chain of Thought reasoning step that explicitly follows a structured reasoning process.",
+  "thoughtNumber": 2,
+  "totalThoughts": 5,
+  "nextThoughtNeeded": true,
+  "isChainOfThought": true,
+  "chainOfThoughtStep": 1,
+  "totalChainOfThoughtSteps": 3
 }
 ```
 
-## Building
+### Hypothesis Generation
 
-Docker:
-
-```bash
-docker build -t mcp/sequentialthinking -f src/sequentialthinking/Dockerfile .
+```javascript
+{
+  "thought": "Based on the previous reasoning, I hypothesize that the solution is X because of Y and Z.",
+  "thoughtNumber": 3,
+  "totalThoughts": 5,
+  "nextThoughtNeeded": true,
+  "isChainOfThought": true,
+  "isHypothesis": true,
+  "chainOfThoughtStep": 2,
+  "totalChainOfThoughtSteps": 3
+}
 ```
+
+### Hypothesis Verification
+
+```javascript
+{
+  "thought": "To verify my hypothesis, I'll check if conditions A, B, and C are met. A is true because... B is true because... C is true because... Therefore, my hypothesis is correct.",
+  "thoughtNumber": 4,
+  "totalThoughts": 5,
+  "nextThoughtNeeded": true,
+  "isChainOfThought": true,
+  "isVerification": true,
+  "chainOfThoughtStep": 3,
+  "totalChainOfThoughtSteps": 3
+}
+```
+
+### Conclusion
+
+```javascript
+{
+  "thought": "After going through the Chain of Thought reasoning process, I can confidently conclude that the answer is X.",
+  "thoughtNumber": 5,
+  "totalThoughts": 5,
+  "nextThoughtNeeded": false
+}
+```
+
+## Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| thought | string | Your current thinking step |
+| nextThoughtNeeded | boolean | Whether another thought step is needed |
+| thoughtNumber | integer | Current thought number |
+| totalThoughts | integer | Estimated total thoughts needed |
+| isRevision | boolean | Whether this revises previous thinking |
+| revisesThought | integer | Which thought is being reconsidered |
+| branchFromThought | integer | Branching point thought number |
+| branchId | string | Branch identifier |
+| needsMoreThoughts | boolean | If more thoughts are needed |
+| isChainOfThought | boolean | Whether this thought is part of a Chain of Thought sequence |
+| isHypothesis | boolean | Whether this thought is a hypothesis in the Chain of Thought |
+| isVerification | boolean | Whether this thought is verifying a hypothesis in the Chain of Thought |
+| chainOfThoughtStep | integer | The step number in the Chain of Thought sequence |
+| totalChainOfThoughtSteps | integer | The total number of steps in the Chain of Thought sequence |
+| confidenceLevel | number | Confidence level for a hypothesis (0-100) |
+| hypothesisId | string | Identifier for a specific hypothesis when working with multiple hypotheses |
+| mergeBranchId | string | ID of a branch to merge with the current branch |
+| mergeBranchPoint | integer | Thought number where branches should be merged |
+| validationStatus | string | Validation status of a Chain of Thought step ('valid', 'invalid', or 'uncertain') |
+| validationReason | string | Reason for the validation status |
+
+## Example
+
+See the `example-usage.js` file for a complete example of how to use the Sequential Thinking server with Chain of Thought.
 
 ## License
 
-This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
+MIT

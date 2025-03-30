@@ -665,7 +665,22 @@ const server = new Server(
   },
   {
     capabilities: {
-      tools: {},
+      tools: {
+        sequentialthinking: SEQUENTIAL_THINKING_TOOL,
+        visualize_thinking: VISUALIZATION_TOOL,
+        // Template tools
+        list_templates: LIST_TEMPLATES_TOOL,
+        get_tags: GET_TAGS_TOOL,
+        get_template: GET_TEMPLATE_TOOL,
+        create_from_template: CREATE_FROM_TEMPLATE_TOOL,
+        save_template: SAVE_TEMPLATE_TOOL,
+        delete_template: DELETE_TEMPLATE_TOOL,
+        // AI tools
+        validate_thinking: VALIDATE_THINKING_TOOL,
+        generate_thought: GENERATE_THOUGHT_TOOL,
+        get_coaching: GET_COACHING_TOOL,
+        get_ai_advice: GET_AI_ADVICE_TOOL
+      },
     },
   }
 );
@@ -692,122 +707,111 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  try {
-    if (request.params.name === "sequentialthinking") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for sequentialthinking"
-        );
-      }
-      return thinkingServer.processThought(request.params.arguments);
-    } else if (request.params.name === "visualize_thinking") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for visualize_thinking"
-        );
-      }
-      return handleVisualizationRequest(
-        request.params.arguments,
-        SAVE_DIR,
-        thinkingServer.sessionId,
-        thinkingServer.thoughtHistory,
-        thinkingServer.branches
+  if (request.params.name === "sequentialthinking") {
+    if (!request.params.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "Missing arguments for sequentialthinking"
       );
-    } else if (request.params.name === "list_templates") {
-      return handleListTemplatesRequest(request.params.arguments || {});
-    } else if (request.params.name === "get_tags") {
-      return handleGetTagsRequest();
-    } else if (request.params.name === "get_template") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for get_template"
-        );
-      }
-      return handleGetTemplateRequest(request.params.arguments);
-    } else if (request.params.name === "create_from_template") {
-      // Special handling for create_from_template to initialize the session
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for create_from_template"
-        );
-      }
-      
-      const args = request.params.arguments as any;
-      const result = handleCreateFromTemplateRequest(args, thinkingServer);
-      
-      // Initialize the session from the template
-      if (args.templateId) {
-        thinkingServer.initializeFromTemplate(
-          args.templateId,
-          args.parameters || {}
-        );
-      }
-      
-      return result;
-    } else if (request.params.name === "save_template") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for save_template"
-        );
-      }
-      return handleSaveTemplateRequest(request.params.arguments);
-    } else if (request.params.name === "delete_template") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for delete_template"
-        );
-      }
-      return handleDeleteTemplateRequest(request.params.arguments);
-    } 
-    // AI tools
-    else if (request.params.name === "validate_thinking") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for validate_thinking"
-        );
-      }
-      return handleValidateThinkingRequest(request.params.arguments, thinkingServer);
-    } else if (request.params.name === "generate_thought") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for generate_thought"
-        );
-      }
-      return handleGenerateThoughtRequest(request.params.arguments, thinkingServer);
-    } else if (request.params.name === "get_coaching") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for get_coaching"
-        );
-      }
-      return handleGetCoachingRequest(request.params.arguments, thinkingServer);
-    } else if (request.params.name === "get_ai_advice") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for get_ai_advice"
-        );
-      }
-      return handleGetAIAdviceRequest(request.params.arguments, thinkingServer);
     }
-  } catch (error) {
-    console.error(`Error handling tool request for ${request.params.name}:`, error);
-    if (error instanceof McpError) {
-      throw error;
+    return thinkingServer.processThought(request.params.arguments);
+  } else if (request.params.name === "visualize_thinking") {
+    if (!request.params.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "Missing arguments for visualize_thinking"
+      );
     }
-    throw new McpError(
-      ErrorCode.InternalError,
-      `Error processing request: ${error instanceof Error ? error.message : String(error)}`
+    return handleVisualizationRequest(
+      request.params.arguments,
+      SAVE_DIR,
+      thinkingServer.sessionId,
+      thinkingServer.thoughtHistory,
+      thinkingServer.branches
     );
+  } else if (request.params.name === "list_templates") {
+    return handleListTemplatesRequest(request.params.arguments || {});
+  } else if (request.params.name === "get_tags") {
+    return handleGetTagsRequest();
+  } else if (request.params.name === "get_template") {
+    if (!request.params.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "Missing arguments for get_template"
+      );
+    }
+    return handleGetTemplateRequest(request.params.arguments);
+  } else if (request.params.name === "create_from_template") {
+    // Special handling for create_from_template to initialize the session
+    if (!request.params.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "Missing arguments for create_from_template"
+      );
+    }
+    
+    const args = request.params.arguments as any;
+    const result = handleCreateFromTemplateRequest(args, thinkingServer);
+    
+    // Initialize the session from the template
+    if (args.templateId) {
+      thinkingServer.initializeFromTemplate(
+        args.templateId,
+        args.parameters || {}
+      );
+    }
+    
+    return result;
+  } else if (request.params.name === "save_template") {
+    if (!request.params.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "Missing arguments for save_template"
+      );
+    }
+    return handleSaveTemplateRequest(request.params.arguments);
+  } else if (request.params.name === "delete_template") {
+    if (!request.params.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "Missing arguments for delete_template"
+      );
+    }
+    return handleDeleteTemplateRequest(request.params.arguments);
+  } 
+  // AI tools
+  else if (request.params.name === "validate_thinking") {
+    if (!request.params.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "Missing arguments for validate_thinking"
+      );
+    }
+    return handleValidateThinkingRequest(request.params.arguments, thinkingServer);
+  } else if (request.params.name === "generate_thought") {
+    if (!request.params.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "Missing arguments for generate_thought"
+      );
+    }
+    return handleGenerateThoughtRequest(request.params.arguments, thinkingServer);
+  } else if (request.params.name === "get_coaching") {
+    if (!request.params.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "Missing arguments for get_coaching"
+      );
+    }
+    return handleGetCoachingRequest(request.params.arguments, thinkingServer);
+  } else if (request.params.name === "get_ai_advice") {
+    if (!request.params.arguments) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "Missing arguments for get_ai_advice"
+      );
+    }
+    return handleGetAIAdviceRequest(request.params.arguments, thinkingServer);
   }
 
   throw new McpError(
