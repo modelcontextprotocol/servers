@@ -42,6 +42,10 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url'; // Needed for __dirname equivalent in ESM
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Define directories for saving thought processes and templates
 const SAVE_DIR = path.join(os.homedir(), '.sequential-thinking');
@@ -92,7 +96,7 @@ class SequentialThinkingServer {
   public thoughtHistory: ThoughtData[] = [];
   public branches: Record<string, ThoughtData[]> = {};
   public sessionId: string;
-  
+
   private sessionName: string;
   private templateManager: any;
 
@@ -111,19 +115,19 @@ class SequentialThinkingServer {
     try {
       // Get thoughts from the template
       const thoughts = this.templateManager.createSessionFromTemplate(templateId, parameters);
-      
+
       // Clear existing thoughts and branches
       this.thoughtHistory = [];
       this.branches = {};
-      
+
       // Add template thoughts to the session
       for (const thought of thoughts) {
         this.thoughtHistory.push(thought);
       }
-      
+
       // Save the session
       this.saveSession();
-      
+
       return true;
     } catch (error) {
       console.error(`Error initializing from template: ${error instanceof Error ? error.message : String(error)}`);
@@ -132,7 +136,7 @@ class SequentialThinkingServer {
   }
 
   private generateSessionId(): string {
-    return Math.random().toString(36).substring(2, 15) + 
+    return Math.random().toString(36).substring(2, 15) +
            Math.random().toString(36).substring(2, 15);
   }
 
@@ -153,15 +157,15 @@ class SequentialThinkingServer {
     }
 
     // Validate confidence level if provided
-    if (data.confidenceLevel !== undefined && 
-        (typeof data.confidenceLevel !== 'number' || 
-         data.confidenceLevel < 0 || 
+    if (data.confidenceLevel !== undefined &&
+        (typeof data.confidenceLevel !== 'number' ||
+         data.confidenceLevel < 0 ||
          data.confidenceLevel > 100)) {
       throw new Error('Invalid confidenceLevel: must be a number between 0 and 100');
     }
 
     // Validate validation status if provided
-    if (data.validationStatus !== undefined && 
+    if (data.validationStatus !== undefined &&
         !['valid', 'invalid', 'uncertain'].includes(data.validationStatus as string)) {
       throw new Error('Invalid validationStatus: must be "valid", "invalid", or "uncertain"');
     }
@@ -211,7 +215,7 @@ class SequentialThinkingServer {
   // Load a session from a file
   public loadSession(sessionId: string): boolean {
     const filePath = path.join(SAVE_DIR, `${sessionId}.json`);
-    
+
     if (!fs.existsSync(filePath)) {
       console.error(`Session file not found: ${filePath}`);
       return false;
@@ -234,7 +238,7 @@ class SequentialThinkingServer {
   // List all saved sessions
   public listSessions(): { id: string; name: string; createdAt: string }[] {
     const sessions: { id: string; name: string; createdAt: string }[] = [];
-    
+
     const files = fs.readdirSync(SAVE_DIR);
     for (const file of files) {
       if (file.endsWith('.json')) {
@@ -251,7 +255,7 @@ class SequentialThinkingServer {
         }
       }
     }
-    
+
     return sessions;
   }
 
@@ -308,13 +312,13 @@ class SequentialThinkingServer {
   }
 
   private formatThought(thoughtData: ThoughtData): string {
-    const { 
-      thoughtNumber, 
-      totalThoughts, 
-      thought, 
-      isRevision, 
-      revisesThought, 
-      branchFromThought, 
+    const {
+      thoughtNumber,
+      totalThoughts,
+      thought,
+      isRevision,
+      revisesThought,
+      branchFromThought,
       branchId,
       isChainOfThought,
       isHypothesis,
@@ -337,42 +341,42 @@ class SequentialThinkingServer {
     if (isChainOfThought) {
       if (isHypothesis) {
         prefix = chalk.magenta('🧠 Hypothesis');
-        context = chainOfThoughtStep && totalChainOfThoughtSteps 
-          ? ` (CoT step ${chainOfThoughtStep}/${totalChainOfThoughtSteps})` 
+        context = chainOfThoughtStep && totalChainOfThoughtSteps
+          ? ` (CoT step ${chainOfThoughtStep}/${totalChainOfThoughtSteps})`
           : '';
-        
+
         // Add confidence level for hypotheses
         if (confidenceLevel !== undefined) {
           additionalInfo += `\n│ Confidence: ${confidenceLevel}% │`;
         }
-        
+
         // Add hypothesis ID for multiple hypotheses
         if (hypothesisId) {
           additionalInfo += `\n│ Hypothesis ID: ${hypothesisId} │`;
         }
       } else if (isVerification) {
         prefix = chalk.cyan('✓ Verification');
-        context = chainOfThoughtStep && totalChainOfThoughtSteps 
-          ? ` (CoT step ${chainOfThoughtStep}/${totalChainOfThoughtSteps})` 
+        context = chainOfThoughtStep && totalChainOfThoughtSteps
+          ? ` (CoT step ${chainOfThoughtStep}/${totalChainOfThoughtSteps})`
           : '';
-        
+
         // Add validation status
         if (validationStatus) {
-          const statusColor = 
+          const statusColor =
             validationStatus === 'valid' ? chalk.green :
             validationStatus === 'invalid' ? chalk.red :
             chalk.yellow;
-          
+
           additionalInfo += `\n│ Status: ${statusColor(validationStatus)} │`;
-          
+
           if (validationReason) {
             additionalInfo += `\n│ Reason: ${validationReason} │`;
           }
         }
       } else {
         prefix = chalk.magenta('🔗 Chain of Thought');
-        context = chainOfThoughtStep && totalChainOfThoughtSteps 
-          ? ` (step ${chainOfThoughtStep}/${totalChainOfThoughtSteps})` 
+        context = chainOfThoughtStep && totalChainOfThoughtSteps
+          ? ` (step ${chainOfThoughtStep}/${totalChainOfThoughtSteps})`
           : '';
       }
     } else if (isRevision) {
@@ -381,7 +385,7 @@ class SequentialThinkingServer {
     } else if (branchFromThought) {
       prefix = chalk.green('🌿 Branch');
       context = ` (from thought ${branchFromThought}, ID: ${branchId})`;
-      
+
       // Add merge information
       if (mergeBranchId && mergeBranchPoint) {
         additionalInfo += `\n│ Merged with branch ${mergeBranchId} at point ${mergeBranchPoint} │`;
@@ -680,20 +684,20 @@ const thinkingServer = new SequentialThinkingServer();
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
-    SEQUENTIAL_THINKING_TOOL, 
-    VISUALIZATION_TOOL,
-    // Template tools
-    LIST_TEMPLATES_TOOL,
-    GET_TAGS_TOOL,
-    GET_TEMPLATE_TOOL,
-    CREATE_FROM_TEMPLATE_TOOL,
-    SAVE_TEMPLATE_TOOL,
-    DELETE_TEMPLATE_TOOL,
-    // AI tools
-    VALIDATE_THINKING_TOOL,
-    GENERATE_THOUGHT_TOOL,
-    GET_COACHING_TOOL,
-    GET_AI_ADVICE_TOOL
+    SEQUENTIAL_THINKING_TOOL,
+    // VISUALIZATION_TOOL, // DEBUG: Temporarily Commented Out
+    // // Template tools
+    // LIST_TEMPLATES_TOOL, // DEBUG: Temporarily Commented Out
+    // GET_TAGS_TOOL, // DEBUG: Temporarily Commented Out
+    // GET_TEMPLATE_TOOL, // DEBUG: Temporarily Commented Out
+    // CREATE_FROM_TEMPLATE_TOOL, // DEBUG: Temporarily Commented Out
+    // SAVE_TEMPLATE_TOOL, // DEBUG: Temporarily Commented Out
+    // DELETE_TEMPLATE_TOOL, // DEBUG: Temporarily Commented Out
+    // // AI tools
+    // VALIDATE_THINKING_TOOL, // DEBUG: Temporarily Commented Out
+    // GENERATE_THOUGHT_TOOL, // DEBUG: Temporarily Commented Out
+    // GET_COACHING_TOOL, // DEBUG: Temporarily Commented Out
+    // GET_AI_ADVICE_TOOL // DEBUG: Temporarily Commented Out
   ],
 }));
 
@@ -706,105 +710,109 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "Missing arguments for sequentialthinking"
         );
       }
-      return thinkingServer.processThought(request.params.arguments);
-    } else if (request.params.name === "visualize_thinking") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for visualize_thinking"
-        );
-      }
-      return handleVisualizationRequest(
-        request.params.arguments,
-        SAVE_DIR,
-        thinkingServer.sessionId,
-        thinkingServer.thoughtHistory,
-        thinkingServer.branches
-      );
-    } else if (request.params.name === "list_templates") {
-      return handleListTemplatesRequest(request.params.arguments || {});
-    } else if (request.params.name === "get_tags") {
-      return handleGetTagsRequest();
-    } else if (request.params.name === "get_template") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for get_template"
-        );
-      }
-      return handleGetTemplateRequest(request.params.arguments);
-    } else if (request.params.name === "create_from_template") {
-      // Special handling for create_from_template to initialize the session
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for create_from_template"
-        );
-      }
-      
-      const args = request.params.arguments as any;
-      const result = handleCreateFromTemplateRequest(args, thinkingServer);
-      
-      // Initialize the session from the template
-      if (args.templateId) {
-        thinkingServer.initializeFromTemplate(
-          args.templateId,
-          args.parameters || {}
-        );
-      }
-      
-      return result;
-    } else if (request.params.name === "save_template") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for save_template"
-        );
-      }
-      return handleSaveTemplateRequest(request.params.arguments);
-    } else if (request.params.name === "delete_template") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for delete_template"
-        );
-      }
-      return handleDeleteTemplateRequest(request.params.arguments);
-    } 
-    // AI tools
-    else if (request.params.name === "validate_thinking") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for validate_thinking"
-        );
-      }
-      return handleValidateThinkingRequest(request.params.arguments, thinkingServer);
-    } else if (request.params.name === "generate_thought") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for generate_thought"
-        );
-      }
-      return handleGenerateThoughtRequest(request.params.arguments, thinkingServer);
-    } else if (request.params.name === "get_coaching") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for get_coaching"
-        );
-      }
-      return handleGetCoachingRequest(request.params.arguments, thinkingServer);
-    } else if (request.params.name === "get_ai_advice") {
-      if (!request.params.arguments) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "Missing arguments for get_ai_advice"
-        );
-      }
-      return handleGetAIAdviceRequest(request.params.arguments, thinkingServer);
+      // Ensure processThought is awaited since it's now async
+      return await thinkingServer.processThought(request.params.arguments);
     }
+    // --- Temporarily Commented Out for Debugging ---
+    // else if (request.params.name === "visualize_thinking") {
+    //   if (!request.params.arguments) {
+    //     throw new McpError(
+    //       ErrorCode.InvalidParams,
+    //       "Missing arguments for visualize_thinking"
+    //     );
+    //   }
+    //   return handleVisualizationRequest(
+    //     request.params.arguments,
+    //     SAVE_DIR,
+    //     thinkingServer.sessionId,
+    //     thinkingServer.thoughtHistory,
+    //     thinkingServer.branches
+    //   );
+    // } else if (request.params.name === "list_templates") {
+    //   return handleListTemplatesRequest(request.params.arguments || {});
+    // } else if (request.params.name === "get_tags") {
+    //   return handleGetTagsRequest();
+    // } else if (request.params.name === "get_template") {
+    //   if (!request.params.arguments) {
+    //     throw new McpError(
+    //       ErrorCode.InvalidParams,
+    //       "Missing arguments for get_template"
+    //     );
+    //   }
+    //   return handleGetTemplateRequest(request.params.arguments);
+    // } else if (request.params.name === "create_from_template") {
+    //   // Special handling for create_from_template to initialize the session
+    //   if (!request.params.arguments) {
+    //     throw new McpError(
+    //       ErrorCode.InvalidParams,
+    //       "Missing arguments for create_from_template"
+    //     );
+    //   }
+    //
+    //   const args = request.params.arguments as any;
+    //   const result = handleCreateFromTemplateRequest(args, thinkingServer);
+    //
+    //   // Initialize the session from the template
+    //   if (args.templateId) {
+    //     thinkingServer.initializeFromTemplate(
+    //       args.templateId,
+    //       args.parameters || {}
+    //     );
+    //   }
+    //
+    //   return result;
+    // } else if (request.params.name === "save_template") {
+    //   if (!request.params.arguments) {
+    //     throw new McpError(
+    //       ErrorCode.InvalidParams,
+    //       "Missing arguments for save_template"
+    //     );
+    //   }
+    //   return handleSaveTemplateRequest(request.params.arguments);
+    // } else if (request.params.name === "delete_template") {
+    //   if (!request.params.arguments) {
+    //     throw new McpError(
+    //       ErrorCode.InvalidParams,
+    //       "Missing arguments for delete_template"
+    //     );
+    //   }
+    //   return handleDeleteTemplateRequest(request.params.arguments);
+    // }
+    // // AI tools
+    // else if (request.params.name === "validate_thinking") {
+    //   if (!request.params.arguments) {
+    //     throw new McpError(
+    //       ErrorCode.InvalidParams,
+    //       "Missing arguments for validate_thinking"
+    //     );
+    //   }
+    //   return handleValidateThinkingRequest(request.params.arguments, thinkingServer);
+    // } else if (request.params.name === "generate_thought") {
+    //   if (!request.params.arguments) {
+    //     throw new McpError(
+    //       ErrorCode.InvalidParams,
+    //       "Missing arguments for generate_thought"
+    //     );
+    //   }
+    //   return handleGenerateThoughtRequest(request.params.arguments, thinkingServer);
+    // } else if (request.params.name === "get_coaching") {
+    //   if (!request.params.arguments) {
+    //     throw new McpError(
+    //       ErrorCode.InvalidParams,
+    //       "Missing arguments for get_coaching"
+    //     );
+    //   }
+    //   return handleGetCoachingRequest(request.params.arguments, thinkingServer);
+    // } else if (request.params.name === "get_ai_advice") {
+    //   if (!request.params.arguments) {
+    //     throw new McpError(
+    //       ErrorCode.InvalidParams,
+    //       "Missing arguments for get_ai_advice"
+    //     );
+    //   }
+    //   return handleGetAIAdviceRequest(request.params.arguments, thinkingServer);
+    // }
+    // --- End Temporary Comment ---
   } catch (error) {
     console.error(`Error handling tool request for ${request.params.name}:`, error);
     if (error instanceof McpError) {
@@ -821,11 +829,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     `Unknown tool: ${request.params.name}`
   );
 });
-
-import { fileURLToPath } from 'url'; // Needed for __dirname equivalent in ESM
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function runServer() {
   try {
