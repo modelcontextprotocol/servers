@@ -186,7 +186,13 @@ function deepMerge(target: any, source: any): any {
     const targetVal = target[key];
     const sourceVal = source[key];
     if (Array.isArray(targetVal) && Array.isArray(sourceVal)) {
-      output[key] = [...targetVal, ...sourceVal];
+      // Deduplicate args/ignoreDefaultArgs, prefer source values
+      output[key] = [...new Set([
+        ...(key === 'args' || key === 'ignoreDefaultArgs' ?
+          targetVal.filter((arg: string) => !sourceVal.some((launchArg: string) => arg.startsWith('--') && launchArg.startsWith(arg.split('=')[0]))) :
+          targetVal),
+        ...sourceVal
+      ])];
     } else if (sourceVal instanceof Object && key in target) {
       output[key] = deepMerge(targetVal, sourceVal);
     } else {
