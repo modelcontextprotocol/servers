@@ -41,6 +41,7 @@ import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import dotenv from 'dotenv';
 
 // Define directories for saving thought processes and templates
 const SAVE_DIR = path.join(os.homedir(), '.sequential-thinking');
@@ -822,12 +823,57 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function runServer() {
+  // Load environment variables from .env file in the project root
+  // Note: This assumes the server is run from the project root or the .env file is accessible relative to CWD
+  // We go up two levels from src/sequentialthinking to reach the project root where .env should be.
+  const envPath = path.resolve(__dirname, '../../.env');
+  dotenv.config({ path: envPath });
+
+  // Check for API key
+  if (!process.env.OPENROUTER_API_KEY) {
+    console.error(chalk.yellow("OpenRouter API key not found in environment variables or .env file. Prompting may be required."));
+    // The actual prompting will be handled by the agent if needed.
+  } else {
+    console.error(chalk.green("OpenRouter API key loaded successfully from environment."));
+  }
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Sequential Thinking MCP Server running on stdio");
 }
 
-runServer().catch((error) => {
-  console.error("Fatal error running server:", error);
-  process.exit(1);
-});
+// Function to append API key to .env file (to be called by the agent if needed)
+// Note: This function runs in the server's process, not the agent's.
+// The agent would need to trigger this via a command or a dedicated tool if direct file access isn't possible.
+// For simplicity here, we assume the agent can trigger saving.
+export function saveApiKeyToEnv(apiKey: string): boolean {
+  // We go up two levels from src/sequentialthinking to reach the project root where .env should be.
+  const envFilePath = path.resolve(__dirname, '../../.env');
+  // Ensure the file exists, create if not
+  if (!fs.existsSync(envFilePath)) {
+    fs.writeFileSync(envFilePath, ''); // Create empty file
+    console.error(`Created .env file at: ${envFilePath}`);
+  }
+
+  // Check if key already exists
+  const envContent = fs.readFileSync(envFilePath, 'utf8');
+  if (envContent.includes('OPENROUTER_API_KEY=')) {
+     console.error('OPENROUTER_API_KEY already exists in .env file. Not appending.');
+     // Optionally, update the existing key here if needed
+     return false; // Indicate key was not appended (as it existed)
+  }
+
+  // Append the new key
+  const envLine = `\nOPENROUTER_API_KEY=${apiKey}`;
+  try {
+    fs.appendFileSync(envFilePath, envLine);
+    console.error(`API key appended to ${envFilePath}. Restart server for changes to take effect.`);
+    // Reload dotenv after appending - this affects the *current* server process
+    dotenv.config({ path: envFilePath, override: true });
+    console.error(`Current process OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'Set' : 'Not Set'}`);
+    return true;
+  } catch (error) {
+    console.error(`Error saving API key to ${envFilePath}:`, error);
+    return false;
+  }
+}
