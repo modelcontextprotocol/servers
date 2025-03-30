@@ -822,11 +822,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   );
 });
 
+import { fileURLToPath } from 'url'; // Needed for __dirname equivalent in ESM
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 async function runServer() {
   // Load environment variables from .env file in the project root
-  // Note: This assumes the server is run from the project root or the .env file is accessible relative to CWD
-  // We go up two levels from src/sequentialthinking to reach the project root where .env should be.
-  const envPath = path.resolve(__dirname, '../../.env');
+  // Resolve relative to the *project root*, assuming the script runs from there or similar context.
+  // If running via `npx` or similar, CWD might be different. A more robust solution might be needed.
+  // Let's try resolving from the CWD first.
+  const envPath = path.resolve(process.cwd(), '.env');
+  console.error(`Attempting to load .env from: ${envPath}`); // Log path for debugging
   dotenv.config({ path: envPath });
 
   // Check for API key
@@ -843,12 +850,11 @@ async function runServer() {
 }
 
 // Function to append API key to .env file (to be called by the agent if needed)
-// Note: This function runs in the server's process, not the agent's.
-// The agent would need to trigger this via a command or a dedicated tool if direct file access isn't possible.
-// For simplicity here, we assume the agent can trigger saving.
+// Note: This function runs in the server's process.
 export function saveApiKeyToEnv(apiKey: string): boolean {
-  // We go up two levels from src/sequentialthinking to reach the project root where .env should be.
-  const envFilePath = path.resolve(__dirname, '../../.env');
+  // Resolve relative to the project root (CWD)
+  const envFilePath = path.resolve(process.cwd(), '.env');
+  console.error(`Attempting to save API key to: ${envFilePath}`); // Log path for debugging
   // Ensure the file exists, create if not
   if (!fs.existsSync(envFilePath)) {
     fs.writeFileSync(envFilePath, ''); // Create empty file
