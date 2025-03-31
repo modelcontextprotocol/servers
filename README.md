@@ -22,6 +22,7 @@ A Model Context Protocol (MCP) server implementation that enables dynamic, self-
 - **Dynamic Problem Solving**: Break down complex problems into manageable thought sequences
 - **Chain of Thought Reasoning**: Support for explicit reasoning steps with validation
 - **Flexible Thinking Process**: Ability to revise, branch, and merge thought paths
+- **Improved Token Estimation and Compression Metrics**: Enhanced accuracy in token estimation and compression ratio calculations, providing more reliable metrics for prompt optimization.
 - **Visualization Support**: Generate visual representations of thinking processes
 - **Template System**: Pre-built thinking patterns for common problem types
 - **Confidence Scoring**: Evaluate hypotheses with confidence levels
