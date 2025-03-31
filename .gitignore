@@ -34,3 +34,4 @@ build-output-new/
 
 # Coverage directory
 coverage/
+.qodo

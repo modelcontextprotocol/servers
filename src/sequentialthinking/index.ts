@@ -3,12 +3,15 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
-  CallToolRequestSchema,
+  CallToolRequestSchema, 
   ListToolsRequestSchema,
   Tool,
   ErrorCode,
   McpError
 } from "@modelcontextprotocol/sdk/types.js";
+import { ThoughtData, ClaudeResponse, OptimizedPrompt } from './types.js';
+import { PromptOptimizer } from './prompt-optimizer.js';
+import fetch, { Response } from 'node-fetch';
 import { VISUALIZATION_TOOL, handleVisualizationRequest } from './visualization.js';
 import { setupTemplateManager } from './templates.js';
 import {
@@ -35,17 +38,11 @@ import {
   handleGetCoachingRequest,
   handleGetAIAdviceRequest
 } from './ai-tools.js';
-import { preprocessForGemini } from './geminiPreprocessing.js'; // Import the new function
 // Fixed chalk import for ESM
 import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url'; // Needed for __dirname equivalent in ESM
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Define directories for saving thought processes and templates
 const SAVE_DIR = path.join(os.homedir(), '.sequential-thinking');
@@ -56,30 +53,7 @@ if (!fs.existsSync(SAVE_DIR)) {
   fs.mkdirSync(SAVE_DIR, { recursive: true });
 }
 
-interface ThoughtData {
-  thought: string;
-  thoughtNumber: number;
-  totalThoughts: number;
-  isRevision?: boolean;
-  revisesThought?: number;
-  branchFromThought?: number;
-  branchId?: string;
-  needsMoreThoughts?: boolean;
-  nextThoughtNeeded: boolean;
-  // Chain of Thought specific fields
-  isChainOfThought?: boolean;
-  isHypothesis?: boolean;
-  isVerification?: boolean;
-  chainOfThoughtStep?: number;
-  totalChainOfThoughtSteps?: number;
-  // New fields for enhancements
-  confidenceLevel?: number; // 0-100 confidence level for hypotheses
-  hypothesisId?: string; // For multiple hypotheses support
-  mergeBranchId?: string; // For merging branches
-  mergeBranchPoint?: number; // The thought number where branches merge
-  validationStatus?: 'valid' | 'invalid' | 'uncertain'; // For Chain of Thought validation
-  validationReason?: string; // Reason for validation status
-}
+// ThoughtData interface is imported from types.ts
 
 // Interface for session data (for persistence)
 interface SessionData {
@@ -96,7 +70,7 @@ class SequentialThinkingServer {
   public thoughtHistory: ThoughtData[] = [];
   public branches: Record<string, ThoughtData[]> = {};
   public sessionId: string;
-
+  
   private sessionName: string;
   private templateManager: any;
 
@@ -115,19 +89,19 @@ class SequentialThinkingServer {
     try {
       // Get thoughts from the template
       const thoughts = this.templateManager.createSessionFromTemplate(templateId, parameters);
-
+      
       // Clear existing thoughts and branches
       this.thoughtHistory = [];
       this.branches = {};
-
+      
       // Add template thoughts to the session
       for (const thought of thoughts) {
         this.thoughtHistory.push(thought);
       }
-
+      
       // Save the session
       this.saveSession();
-
+      
       return true;
     } catch (error) {
       console.error(`Error initializing from template: ${error instanceof Error ? error.message : String(error)}`);
@@ -136,7 +110,7 @@ class SequentialThinkingServer {
   }
 
   private generateSessionId(): string {
-    return Math.random().toString(36).substring(2, 15) +
+    return Math.random().toString(36).substring(2, 15) + 
            Math.random().toString(36).substring(2, 15);
   }
 
@@ -157,15 +131,15 @@ class SequentialThinkingServer {
     }
 
     // Validate confidence level if provided
-    if (data.confidenceLevel !== undefined &&
-        (typeof data.confidenceLevel !== 'number' ||
-         data.confidenceLevel < 0 ||
+    if (data.confidenceLevel !== undefined && 
+        (typeof data.confidenceLevel !== 'number' || 
+         data.confidenceLevel < 0 || 
          data.confidenceLevel > 100)) {
       throw new Error('Invalid confidenceLevel: must be a number between 0 and 100');
     }
 
     // Validate validation status if provided
-    if (data.validationStatus !== undefined &&
+    if (data.validationStatus !== undefined && 
         !['valid', 'invalid', 'uncertain'].includes(data.validationStatus as string)) {
       throw new Error('Invalid validationStatus: must be "valid", "invalid", or "uncertain"');
     }
@@ -215,7 +189,7 @@ class SequentialThinkingServer {
   // Load a session from a file
   public loadSession(sessionId: string): boolean {
     const filePath = path.join(SAVE_DIR, `${sessionId}.json`);
-
+    
     if (!fs.existsSync(filePath)) {
       console.error(`Session file not found: ${filePath}`);
       return false;
@@ -238,7 +212,7 @@ class SequentialThinkingServer {
   // List all saved sessions
   public listSessions(): { id: string; name: string; createdAt: string }[] {
     const sessions: { id: string; name: string; createdAt: string }[] = [];
-
+    
     const files = fs.readdirSync(SAVE_DIR);
     for (const file of files) {
       if (file.endsWith('.json')) {
@@ -255,7 +229,7 @@ class SequentialThinkingServer {
         }
       }
     }
-
+    
     return sessions;
   }
 
@@ -312,13 +286,13 @@ class SequentialThinkingServer {
   }
 
   private formatThought(thoughtData: ThoughtData): string {
-    const {
-      thoughtNumber,
-      totalThoughts,
-      thought,
-      isRevision,
-      revisesThought,
-      branchFromThought,
+    const { 
+      thoughtNumber, 
+      totalThoughts, 
+      thought, 
+      isRevision, 
+      revisesThought, 
+      branchFromThought, 
       branchId,
       isChainOfThought,
       isHypothesis,
@@ -341,42 +315,42 @@ class SequentialThinkingServer {
     if (isChainOfThought) {
       if (isHypothesis) {
         prefix = chalk.magenta('🧠 Hypothesis');
-        context = chainOfThoughtStep && totalChainOfThoughtSteps
-          ? ` (CoT step ${chainOfThoughtStep}/${totalChainOfThoughtSteps})`
+        context = chainOfThoughtStep && totalChainOfThoughtSteps 
+          ? ` (CoT step ${chainOfThoughtStep}/${totalChainOfThoughtSteps})` 
           : '';
-
+        
         // Add confidence level for hypotheses
         if (confidenceLevel !== undefined) {
           additionalInfo += `\n│ Confidence: ${confidenceLevel}% │`;
         }
-
+        
         // Add hypothesis ID for multiple hypotheses
         if (hypothesisId) {
           additionalInfo += `\n│ Hypothesis ID: ${hypothesisId} │`;
         }
       } else if (isVerification) {
         prefix = chalk.cyan('✓ Verification');
-        context = chainOfThoughtStep && totalChainOfThoughtSteps
-          ? ` (CoT step ${chainOfThoughtStep}/${totalChainOfThoughtSteps})`
+        context = chainOfThoughtStep && totalChainOfThoughtSteps 
+          ? ` (CoT step ${chainOfThoughtStep}/${totalChainOfThoughtSteps})` 
           : '';
-
+        
         // Add validation status
         if (validationStatus) {
-          const statusColor =
+          const statusColor = 
             validationStatus === 'valid' ? chalk.green :
             validationStatus === 'invalid' ? chalk.red :
             chalk.yellow;
-
+          
           additionalInfo += `\n│ Status: ${statusColor(validationStatus)} │`;
-
+          
           if (validationReason) {
             additionalInfo += `\n│ Reason: ${validationReason} │`;
           }
         }
       } else {
         prefix = chalk.magenta('🔗 Chain of Thought');
-        context = chainOfThoughtStep && totalChainOfThoughtSteps
-          ? ` (step ${chainOfThoughtStep}/${totalChainOfThoughtSteps})`
+        context = chainOfThoughtStep && totalChainOfThoughtSteps 
+          ? ` (step ${chainOfThoughtStep}/${totalChainOfThoughtSteps})` 
           : '';
       }
     } else if (isRevision) {
@@ -385,7 +359,7 @@ class SequentialThinkingServer {
     } else if (branchFromThought) {
       prefix = chalk.green('🌿 Branch');
       context = ` (from thought ${branchFromThought}, ID: ${branchId})`;
-
+      
       // Add merge information
       if (mergeBranchId && mergeBranchPoint) {
         additionalInfo += `\n│ Merged with branch ${mergeBranchId} at point ${mergeBranchPoint} │`;
@@ -406,17 +380,72 @@ class SequentialThinkingServer {
 └${border}┘`;
   }
 
-  public processThought(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } { // Reverted to synchronous
-    try {
-      let validatedInput = this.validateThoughtData(input);
+  // Call Claude API via OpenRouter
+  private async callClaudeAPI(prompt: string): Promise<any> {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENROUTER_API_KEY environment variable is required');
+    }
 
-      // Preprocess the thought (now synchronous again)
-      const originalThought = validatedInput.thought;
-      validatedInput.thought = preprocessForGemini(originalThought); // Removed await
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          'model': 'anthropic/claude-3.7-sonnet', // Removed ':thinking' suffix, might be incorrect
+          'messages': [
+            { 'role': 'user', 'content': prompt }
+          ],
+          'max_tokens': 2000,
+        }),
+      });
+
+      const data = await response.json() as ClaudeResponse;
+      const text = data.choices[0]?.message?.content ?? 'No content in response';
+      return { analysis: text.trim() };
+    } catch (error) {
+      return { analysis: `Claude API call failed: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
+  // Generate structured analysis from Claude's response
+  private generateAnalysis(thought: ThoughtData, optimizedPrompt: OptimizedPrompt | undefined, claudeAnalysis: string): { keyPoints: string; claudeAnalysis: string; metrics: { originalTokens: number; optimizedTokens: number; compressionRatio: string; } } {
+    // Use the original thought for Key Points
+    const keyPoints = thought.thought; 
+    const originalTokens = optimizedPrompt ? optimizedPrompt.compressionStats.originalTokens : this.estimateTokens(thought.thought);
+    const optimizedTokens = optimizedPrompt ? optimizedPrompt.compressionStats.optimizedTokens : this.estimateTokens(thought.thought);
+    const compressionRatio = optimizedPrompt ? (optimizedPrompt.compressionStats.compressionRatio * 100).toFixed(1) : "0";
+
+    return {
+      keyPoints: keyPoints,
+      claudeAnalysis: claudeAnalysis, // Raw analysis from Claude
+      metrics: {
+        originalTokens: originalTokens,
+        optimizedTokens: optimizedTokens,
+        compressionRatio: `${compressionRatio}%`
+      }
+    };
+  }
+
+  private estimateTokens(text: string): number {
+    // Simple token estimation (words + punctuation)
+    return text.split(/[\s\p{P}]+/u).length;
+  }
+
+  public async processThought(input: unknown): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+    try {
+      const validatedInput = this.validateThoughtData(input);
 
       if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
         validatedInput.totalThoughts = validatedInput.thoughtNumber;
       }
+
+      // Process with PromptOptimizer and Claude
+      const optimizedPrompt = PromptOptimizer.optimizeThought(validatedInput);
+      const claudeResponse = await this.callClaudeAPI(optimizedPrompt.prompt);
 
       // Perform Chain of Thought validation if applicable
       if (validatedInput.isChainOfThought && !validatedInput.validationStatus) {
@@ -447,7 +476,10 @@ class SequentialThinkingServer {
       this.saveSession();
 
       const formattedThought = this.formatThought(validatedInput);
-      console.error(formattedThought);
+      console.error(formattedThought); // Ensure formattedThought is logged
+
+      // Create structured analysis from Claude's response
+      const analysisDetails = this.generateAnalysis(validatedInput, optimizedPrompt, claudeResponse.analysis);
 
       return {
         content: [{
@@ -472,11 +504,14 @@ class SequentialThinkingServer {
             validationStatus: validatedInput.validationStatus,
             validationReason: validatedInput.validationReason,
             mergeBranchId: validatedInput.mergeBranchId,
-            mergeBranchPoint: validatedInput.mergeBranchPoint
+            mergeBranchPoint: validatedInput.mergeBranchPoint,
+            // Structured Claude analysis
+            analysisDetails: analysisDetails 
           }, null, 2)
         }]
       };
     } catch (error) {
+      console.error('Error processing thought:', error);
       return {
         content: [{
           type: "text",
@@ -521,53 +556,7 @@ Key features:
 - Persists thought processes between sessions
 - Repeats the process until satisfied
 - Provides a correct answer
-- Supports explicit Chain of Thought reasoning with dedicated steps
-
-Parameters explained:
-- thought: Your current thinking step, which can include:
-* Regular analytical steps
-* Revisions of previous thoughts
-* Questions about previous decisions
-* Realizations about needing more analysis
-* Changes in approach
-* Hypothesis generation
-* Hypothesis verification
-* Chain of Thought reasoning steps
-- next_thought_needed: True if you need more thinking, even if at what seemed like the end
-- thought_number: Current number in sequence (can go beyond initial total if needed)
-- total_thoughts: Current estimate of thoughts needed (can be adjusted up/down)
-- is_revision: A boolean indicating if this thought revises previous thinking
-- revises_thought: If is_revision is true, which thought number is being reconsidered
-- branch_from_thought: If branching, which thought number is the branching point
-- branch_id: Identifier for the current branch (if any)
-- needs_more_thoughts: If reaching end but realizing more thoughts needed
-- is_chain_of_thought: A boolean indicating if this thought is part of a Chain of Thought sequence
-- is_hypothesis: A boolean indicating if this thought is a hypothesis in the Chain of Thought
-- is_verification: A boolean indicating if this thought is verifying a hypothesis in the Chain of Thought
-- chain_of_thought_step: The step number in the Chain of Thought sequence
-- total_chain_of_thought_steps: The total number of steps in the Chain of Thought sequence
-- confidence_level: A number between 0 and 100 indicating confidence in a hypothesis
-- hypothesis_id: An identifier for a specific hypothesis when working with multiple hypotheses
-- merge_branch_id: The ID of a branch to merge with the current branch
-- merge_branch_point: The thought number where branches should be merged
-- validation_status: The validation status of a Chain of Thought step ('valid', 'invalid', or 'uncertain')
-- validation_reason: The reason for the validation status
-
-You should:
-1. Start with an initial estimate of needed thoughts, but be ready to adjust
-2. Feel free to question or revise previous thoughts
-3. Don't hesitate to add more thoughts if needed, even at the "end"
-4. Express uncertainty when present
-5. Mark thoughts that revise previous thinking or branch into new paths
-6. Ignore information that is irrelevant to the current step
-7. Generate a solution hypothesis when appropriate, with a confidence level
-8. Consider multiple competing hypotheses for complex problems
-9. Verify the hypothesis based on the Chain of Thought steps
-10. Use explicit Chain of Thought reasoning for complex problems
-11. Merge branches when different lines of thinking converge
-12. Repeat the process until satisfied with the solution
-13. Provide a single, ideally correct answer as the final output
-14. Only set next_thought_needed to false when truly done and a satisfactory answer is reached`,
+- Supports explicit Chain of Thought reasoning with dedicated steps`,
   inputSchema: {
     type: "object",
     properties: {
@@ -684,21 +673,21 @@ const thinkingServer = new SequentialThinkingServer();
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
-    SEQUENTIAL_THINKING_TOOL,
-    // VISUALIZATION_TOOL, // DEBUG: Temporarily Commented Out
-    // // Template tools
-    // LIST_TEMPLATES_TOOL, // DEBUG: Temporarily Commented Out
-    // GET_TAGS_TOOL, // DEBUG: Temporarily Commented Out
-    // GET_TEMPLATE_TOOL, // DEBUG: Temporarily Commented Out
-    // CREATE_FROM_TEMPLATE_TOOL, // DEBUG: Temporarily Commented Out
-    // SAVE_TEMPLATE_TOOL, // DEBUG: Temporarily Commented Out
-    // DELETE_TEMPLATE_TOOL, // DEBUG: Temporarily Commented Out
-    // // AI tools
-    // VALIDATE_THINKING_TOOL, // DEBUG: Temporarily Commented Out
-    // GENERATE_THOUGHT_TOOL, // DEBUG: Temporarily Commented Out
-    // GET_COACHING_TOOL, // DEBUG: Temporarily Commented Out
-    // GET_AI_ADVICE_TOOL // DEBUG: Temporarily Commented Out
-  ],
+    SEQUENTIAL_THINKING_TOOL, 
+    VISUALIZATION_TOOL,
+    // Template tools
+    LIST_TEMPLATES_TOOL,
+    GET_TAGS_TOOL,
+    GET_TEMPLATE_TOOL,
+    CREATE_FROM_TEMPLATE_TOOL,
+    SAVE_TEMPLATE_TOOL,
+    DELETE_TEMPLATE_TOOL,
+    // AI tools
+    VALIDATE_THINKING_TOOL,
+    GENERATE_THOUGHT_TOOL,
+    GET_COACHING_TOOL,
+    GET_AI_ADVICE_TOOL
+  ]
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -710,109 +699,105 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "Missing arguments for sequentialthinking"
         );
       }
-      // processThought is synchronous again
       return thinkingServer.processThought(request.params.arguments);
+    } else if (request.params.name === "visualize_thinking") {
+      if (!request.params.arguments) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "Missing arguments for visualize_thinking"
+        );
+      }
+      return handleVisualizationRequest(
+        request.params.arguments,
+        SAVE_DIR,
+        thinkingServer.sessionId,
+        thinkingServer.thoughtHistory,
+        thinkingServer.branches
+      );
+    } else if (request.params.name === "list_templates") {
+      return handleListTemplatesRequest(request.params.arguments || {});
+    } else if (request.params.name === "get_tags") {
+      return handleGetTagsRequest();
+    } else if (request.params.name === "get_template") {
+      if (!request.params.arguments) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "Missing arguments for get_template"
+        );
+      }
+      return handleGetTemplateRequest(request.params.arguments);
+    } else if (request.params.name === "create_from_template") {
+      // Special handling for create_from_template to initialize the session
+      if (!request.params.arguments) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "Missing arguments for create_from_template"
+        );
+      }
+      
+      const args = request.params.arguments as any;
+      const result = handleCreateFromTemplateRequest(args, thinkingServer);
+      
+      // Initialize the session from the template
+      if (args.templateId) {
+        thinkingServer.initializeFromTemplate(
+          args.templateId,
+          args.parameters || {}
+        );
+      }
+      
+      return result;
+    } else if (request.params.name === "save_template") {
+      if (!request.params.arguments) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "Missing arguments for save_template"
+        );
+      }
+      return handleSaveTemplateRequest(request.params.arguments);
+    } else if (request.params.name === "delete_template") {
+      if (!request.params.arguments) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "Missing arguments for delete_template"
+        );
+      }
+      return handleDeleteTemplateRequest(request.params.arguments);
+    } 
+    // AI tools
+    else if (request.params.name === "validate_thinking") {
+      if (!request.params.arguments) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "Missing arguments for validate_thinking"
+        );
+      }
+      return handleValidateThinkingRequest(request.params.arguments, thinkingServer);
+    } else if (request.params.name === "generate_thought") {
+      if (!request.params.arguments) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "Missing arguments for generate_thought"
+        );
+      }
+      return handleGenerateThoughtRequest(request.params.arguments, thinkingServer);
+    } else if (request.params.name === "get_coaching") {
+      if (!request.params.arguments) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "Missing arguments for get_coaching"
+        );
+      }
+      return handleGetCoachingRequest(request.params.arguments, thinkingServer);
+    } else if (request.params.name === "get_ai_advice") {
+      if (!request.params.arguments) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "Missing arguments for get_ai_advice"
+        );
+      }
+      return handleGetAIAdviceRequest(request.params.arguments, thinkingServer);
     }
-    // --- Temporarily Commented Out for Debugging ---
-    // else if (request.params.name === "visualize_thinking") {
-    //   if (!request.params.arguments) {
-    //     throw new McpError(
-    //       ErrorCode.InvalidParams,
-    //       "Missing arguments for visualize_thinking"
-    //     );
-    //   }
-    //   return handleVisualizationRequest(
-    //     request.params.arguments,
-    //     SAVE_DIR,
-    //     thinkingServer.sessionId,
-    //     thinkingServer.thoughtHistory,
-    //     thinkingServer.branches
-    //   );
-    // } else if (request.params.name === "list_templates") {
-    //   return handleListTemplatesRequest(request.params.arguments || {});
-    // } else if (request.params.name === "get_tags") {
-    //   return handleGetTagsRequest();
-    // } else if (request.params.name === "get_template") {
-    //   if (!request.params.arguments) {
-    //     throw new McpError(
-    //       ErrorCode.InvalidParams,
-    //       "Missing arguments for get_template"
-    //     );
-    //   }
-    //   return handleGetTemplateRequest(request.params.arguments);
-    // } else if (request.params.name === "create_from_template") {
-    //   // Special handling for create_from_template to initialize the session
-    //   if (!request.params.arguments) {
-    //     throw new McpError(
-    //       ErrorCode.InvalidParams,
-    //       "Missing arguments for create_from_template"
-    //     );
-    //   }
-    //
-    //   const args = request.params.arguments as any;
-    //   const result = handleCreateFromTemplateRequest(args, thinkingServer);
-    //
-    //   // Initialize the session from the template
-    //   if (args.templateId) {
-    //     thinkingServer.initializeFromTemplate(
-    //       args.templateId,
-    //       args.parameters || {}
-    //     );
-    //   }
-    //
-    //   return result;
-    // } else if (request.params.name === "save_template") {
-    //   if (!request.params.arguments) {
-    //     throw new McpError(
-    //       ErrorCode.InvalidParams,
-    //       "Missing arguments for save_template"
-    //     );
-    //   }
-    //   return handleSaveTemplateRequest(request.params.arguments);
-    // } else if (request.params.name === "delete_template") {
-    //   if (!request.params.arguments) {
-    //     throw new McpError(
-    //       ErrorCode.InvalidParams,
-    //       "Missing arguments for delete_template"
-    //     );
-    //   }
-    //   return handleDeleteTemplateRequest(request.params.arguments);
-    // }
-    // // AI tools
-    // else if (request.params.name === "validate_thinking") {
-    //   if (!request.params.arguments) {
-    //     throw new McpError(
-    //       ErrorCode.InvalidParams,
-    //       "Missing arguments for validate_thinking"
-    //     );
-    //   }
-    //   return handleValidateThinkingRequest(request.params.arguments, thinkingServer);
-    // } else if (request.params.name === "generate_thought") {
-    //   if (!request.params.arguments) {
-    //     throw new McpError(
-    //       ErrorCode.InvalidParams,
-    //       "Missing arguments for generate_thought"
-    //     );
-    //   }
-    //   return handleGenerateThoughtRequest(request.params.arguments, thinkingServer);
-    // } else if (request.params.name === "get_coaching") {
-    //   if (!request.params.arguments) {
-    //     throw new McpError(
-    //       ErrorCode.InvalidParams,
-    //       "Missing arguments for get_coaching"
-    //     );
-    //   }
-    //   return handleGetCoachingRequest(request.params.arguments, thinkingServer);
-    // } else if (request.params.name === "get_ai_advice") {
-    //   if (!request.params.arguments) {
-    //     throw new McpError(
-    //       ErrorCode.InvalidParams,
-    //       "Missing arguments for get_ai_advice"
-    //     );
-    //   }
-    //   return handleGetAIAdviceRequest(request.params.arguments, thinkingServer);
-    // }
-    // --- End Temporary Comment ---
   } catch (error) {
     console.error(`Error handling tool request for ${request.params.name}:`, error);
     if (error instanceof McpError) {
@@ -831,69 +816,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function runServer() {
-  try {
-    // Load environment variables from .env file in the project root
-    const envPath = path.resolve(process.cwd(), '.env');
-    console.error(`Attempting to load .env from: ${envPath}`);
-    if (fs.existsSync(envPath)) {
-        const result = dotenv.config({ path: envPath });
-        if (result.error) {
-            console.error(chalk.red(`Error loading .env file from ${envPath}:`), result.error);
-        } else {
-            console.error(chalk.blue(`.env file loaded successfully from ${envPath}.`));
-        }
-    } else {
-        console.warn(chalk.yellow(`.env file not found at ${envPath}.`));
-    }
-
-    // Check for API key
-    if (!process.env.OPENROUTER_API_KEY) {
-      console.error(chalk.yellow("OpenRouter API key not found in environment variables. Preprocessing requiring API calls will be skipped."));
-    } else {
-      console.error(chalk.green("OpenRouter API key found in environment."));
-    }
-  } catch (err) {
-      console.error(chalk.red("Critical error during environment setup:"), err);
-      // Decide if the server should exit or continue with limited functionality
-      // For now, let it continue but log the error prominently.
-  }
-
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Sequential Thinking MCP Server running on stdio");
 }
 
-// Function to append API key to .env file (to be called by the agent if needed)
-// Note: This function runs in the server's process.
-export function saveApiKeyToEnv(apiKey: string): boolean {
-  // Resolve relative to the project root (CWD)
-  const envFilePath = path.resolve(process.cwd(), '.env');
-  console.error(`Attempting to save API key to: ${envFilePath}`); // Log path for debugging
-  // Ensure the file exists, create if not
-  if (!fs.existsSync(envFilePath)) {
-    fs.writeFileSync(envFilePath, ''); // Create empty file
-    console.error(`Created .env file at: ${envFilePath}`);
-  }
-
-  // Check if key already exists
-  const envContent = fs.readFileSync(envFilePath, 'utf8');
-  if (envContent.includes('OPENROUTER_API_KEY=')) {
-     console.error('OPENROUTER_API_KEY already exists in .env file. Not appending.');
-     // Optionally, update the existing key here if needed
-     return false; // Indicate key was not appended (as it existed)
-  }
-
-  // Append the new key
-  const envLine = `\nOPENROUTER_API_KEY=${apiKey}`;
-  try {
-    fs.appendFileSync(envFilePath, envLine);
-    console.error(`API key appended to ${envFilePath}. Restart server for changes to take effect.`);
-    // Reload dotenv after appending - this affects the *current* server process
-    dotenv.config({ path: envFilePath, override: true });
-    console.error(`Current process OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'Set' : 'Not Set'}`);
-    return true;
-  } catch (error) {
-    console.error(`Error saving API key to ${envFilePath}:`, error);
-    return false;
-  }
-}
+runServer().catch((error) => {
+  console.error("Fatal error running server:", error);
+  process.exit(1);
+});

@@ -307,10 +307,9 @@ export function handleGetAIAdviceRequest(args: any, thinkingServer: any) {
     // Get the session data
     const sessionData: SessionData = {
       id: thinkingServer.sessionId,
-      name: thinkingServer.sessionName,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      thoughtHistory: thinkingServer.thoughtHistory,
+      createdAt: new Date(), // corrected to new Date()
+      updatedAt: new Date(), // corrected to new Date()
+      thoughts: thinkingServer.thoughtHistory, // corrected to sessionData.thoughts
       branches: thinkingServer.branches
     };
     
@@ -322,16 +321,16 @@ export function handleGetAIAdviceRequest(args: any, thinkingServer: any) {
     if (args.focusArea) {
       switch (args.focusArea) {
         case "next_steps":
-          filteredAdvice = { recommendedNextSteps: advice.recommendedNextSteps };
+          filteredAdvice = { adviceText: advice.adviceText }; // updated property name
           break;
         case "issues":
-          filteredAdvice = { identifiedIssues: advice.identifiedIssues };
+          filteredAdvice = { relatedIssues: advice.relatedIssues }; // updated property name
           break;
         case "patterns":
-          filteredAdvice = { patterns: aiAdvisor.identifyPatterns(sessionData.thoughtHistory) };
+          filteredAdvice = { patterns: aiAdvisor.getPatternAnalyzer().identifyPatterns(sessionData.thoughts) }; // corrected to sessionData.thoughts
           break;
         case "overall":
-          filteredAdvice = { overallAssessment: advice.overallAssessment };
+          filteredAdvice = { adviceText: advice.adviceText }; // updated property name
           break;
       }
     }

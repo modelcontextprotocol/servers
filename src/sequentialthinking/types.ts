@@ -1,80 +1,112 @@
-/**
- * Type definitions for the Sequential Thinking tool
- */
+// Represents a single branch in the thinking process
+export interface ThoughtBranch {
+  id: string;
+  startThoughtNumber: number;
+  thoughts: ThoughtData[];
+}
 
-/**
- * Represents a single thought in the sequential thinking process
- */
+// Represents the overall session state
+export interface SessionData {
+  id: string;
+  thoughts: ThoughtData[]; // Main thought history
+  branches?: ThoughtBranch[]; // Optional branches
+  createdAt: Date;
+  updatedAt: Date;
+  metadata?: Record<string, unknown>;
+}
+
+// Represents a single thought step
 export interface ThoughtData {
   thought: string;
   thoughtNumber: number;
   totalThoughts: number;
   nextThoughtNeeded: boolean;
+  isChainOfThought?: boolean;
+  chainOfThoughtStep?: number;
+  totalChainOfThoughtSteps?: number;
+  confidenceLevel?: number;
+  isHypothesis?: boolean;
+  isVerification?: boolean;
+  // Optional fields based on errors
   isRevision?: boolean;
   revisesThought?: number;
   branchFromThought?: number;
   branchId?: string;
+  mergeBranchId?: string;
+  mergeBranchPoint?: number;
   needsMoreThoughts?: boolean;
-  // Chain of Thought specific fields
-  isChainOfThought?: boolean;
-  isHypothesis?: boolean;
-  isVerification?: boolean;
-  chainOfThoughtStep?: number;
-  totalChainOfThoughtSteps?: number;
-  // Enhanced fields
-  confidenceLevel?: number; // 0-100 confidence level for hypotheses
-  hypothesisId?: string; // For multiple hypotheses support
-  mergeBranchId?: string; // For merging branches
-  mergeBranchPoint?: number; // The thought number where branches merge
-  validationStatus?: 'valid' | 'invalid' | 'uncertain'; // For Chain of Thought validation
-  validationReason?: string; // Reason for validation status
+  hypothesisId?: string;
+  validationStatus?: 'valid' | 'invalid' | 'uncertain';
+  validationReason?: string;
 }
 
-/**
- * Represents a session of sequential thinking
- */
-export interface SessionData {
+// Represents an optimized prompt structure
+export interface OptimizedPrompt {
+  original: string;
+  optimized: string;
+  compressionStats: {
+    originalTokens: number;
+    optimizedTokens: number;
+    compressionRatio: number;
+  };
+  prompt: string; // Added prompt property
+}
+
+// Represents validation feedback
+export interface ValidationFeedback {
+  overallScore: number;
+  logicalStructureScore: number;
+  evidenceQualityScore: number;
+  assumptionValidityScore: number;
+  conclusionStrengthScore: number;
+  detectedFallacies: Array<{
+    type: string;
+    description: string;
+    thoughtNumbers: number[];
+    suggestionForImprovement: string;
+  }>;
+  gaps: Array<{
+    description: string;
+    betweenThoughts: [number, number];
+    suggestionForImprovement: string;
+  }>;
+  strengths: string[];
+  improvementAreas: string[];
+}
+
+
+// Represents identified patterns in thinking
+export interface ThinkingPattern {
   id: string;
   name: string;
-  createdAt: string;
-  updatedAt: string;
-  thoughtHistory: ThoughtData[];
-  branches: Record<string, ThoughtData[]>;
-}
-
-/**
- * Thinking pattern interface with enhanced ML capabilities
- */
-export interface ThinkingPattern {
-  type: string;
   description: string;
-  thoughtNumbers: number[];
-  significance: 'positive' | 'negative' | 'neutral';
-  confidence?: number; // ML confidence score for pattern detection
+  thoughts: ThoughtData[]; // Thoughts exhibiting the pattern
+  confidence: number; // Confidence in pattern identification
 }
 
-/**
- * Pattern scores interface for ML-based analysis
- */
-export interface PatternScores {
-  linearConfidence: number;
-  branchingConfidence: number;
-  branchingComplexity: number;
-  revisionConfidence: number;
-  revisionQuality: number;
-  cotConfidence: number;
-  cotQuality: number;
-  hypothesisVerificationConfidence: number;
-  hypothesisVerificationQuality: number;
-  repetitiveConfidence: number;
-}
-
-/**
- * Cognitive bias detection interface
- */
-export interface CognitiveBias {
-  type: string;
+// Represents potential issues detected in the thinking process
+export interface ThinkingIssue {
+  id: string;
+  type: 'logical_gap' | 'bias' | 'lack_of_depth' | 'premature_conclusion' | 'other';
   description: string;
-  thoughtNumbers: number[];
+  severity: 'low' | 'medium' | 'high';
+  relatedThoughts: number[]; // Thought numbers involved
+}
+
+// Represents AI-generated advice based on the session
+export interface AIAdvice {
+  focusArea: 'next_steps' | 'issues' | 'patterns' | 'overall';
+  adviceText: string;
   confidence: number;
+  supportingPatterns?: ThinkingPattern[];
+  relatedIssues?: ThinkingIssue[];
+}
+
+// Represents Claude API response
+export interface ClaudeResponse {
+  choices: [{
+    message: {
+      content: string;
+    };
+  }];
 }
