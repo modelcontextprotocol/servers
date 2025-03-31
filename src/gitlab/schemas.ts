@@ -304,6 +304,83 @@ export const CreateBranchSchema = ProjectParamsSchema.extend({
     .describe("Source branch/commit for new branch")
 });
 
+export const CommentToCommitSchema = z.object({
+  project_id: z.string().describe("Project ID or URL-encoded path"),
+  sha: z
+    .string()
+    .describe("The commit SHA or name of a repository branch or tag"),
+  note: z.string().describe("The text of the comment"),
+  path: z
+    .string()
+    .optional()
+    .describe("The file path relative to the repository"),
+  line: z
+    .number()
+    .optional()
+    .describe("The line number where the comment should be placed"),
+  line_type: z
+    .enum(["new", "old"])
+    .optional()
+    .describe("The line type. Takes new or old as arguments"),
+});
+
+export const GitLabCommentSchema = z.object({
+  author: z.object({
+    web_url: z.string(),
+    avatar_url: z.string(),
+    username: z.string(),
+    state: z.string(),
+    name: z.string(),
+    id: z.number(),
+  }),
+  created_at: z.string(),
+  line_type: z.string().nullable(),
+  path: z.string().nullable(),
+  line: z.number().nullable(),
+  note: z.string(),
+});
+
+
+export const CreateMergeRequestThreadSchema = z.object({
+  project_id: z.string().or(z.number()).describe('The ID or URL-encoded path of the project'),
+  merge_request_iid: z.number().describe('The IID of a merge request'),
+  body: z.string().describe('The content of the thread'),
+  'position[base_sha]': z.string().optional().describe('Base commit SHA in the source branch'),
+  'position[head_sha]': z.string().optional().describe('SHA referencing HEAD of this merge request'),
+  'position[start_sha]': z.string().optional().describe('SHA referencing commit in target branch'),
+  'position[new_path]': z.string().optional().describe('File path after change'),
+  'position[old_path]': z.string().optional().describe('File path before change'),
+  'position[position_type]': z.enum(["text", "image", "file"])
+    .optional()
+    .describe('Type of the position reference. Allowed values: text, image, or file'),
+  'position[new_line]': z.number().optional().describe('For text diff notes, the line number after change'),
+  'position[old_line]': z.number().optional().describe('For text diff notes, the line number before change'),
+  'position[width]': z.number().optional().describe('For image diff notes, width of the image'),
+  'position[height]': z.number().optional().describe('For image diff notes, height of the image'),
+  'position[x]': z.number().optional().describe('For image diff notes, X coordinate'),
+  'position[y]': z.number().optional().describe('For image diff notes, Y coordinate'),
+  commit_id: z.string().optional().describe('SHA referencing commit to start this thread on'),
+  created_at: z.string().optional().describe('Date time string, ISO 8601 formatted, such as 2016-03-11T03:45:40Z. Requires administrator or project/group owner rights'),
+});
+
+export const GitLabDiscussionSchema = z.object({
+  id: z.string(),
+  individual_note: z.boolean(),
+  notes: z.array(
+    z.object({
+      id: z.number(),
+      body: z.string(),
+      author: z.object({
+        id: z.number(),
+        username: z.string(),
+        name: z.string(),
+      }),
+      created_at: z.string(),
+      system: z.boolean(),
+    })
+  ),
+});
+
 // Export types
 export type GitLabAuthor = z.infer<typeof GitLabAuthorSchema>;
 export type GitLabFork = z.infer<typeof GitLabForkSchema>;
@@ -323,3 +400,6 @@ export type CreateMergeRequestOptions = z.infer<typeof CreateMergeRequestOptions
 export type CreateBranchOptions = z.infer<typeof CreateBranchOptionsSchema>;
 export type GitLabCreateUpdateFileResponse = z.infer<typeof GitLabCreateUpdateFileResponseSchema>;
 export type GitLabSearchResponse = z.infer<typeof GitLabSearchResponseSchema>;
+export type GitLabDiscussion = z.infer<typeof GitLabDiscussionSchema>;
+export type CreateMergeRequestThreadOptions = z.infer<typeof CreateMergeRequestThreadSchema>;
+export type GitLabComment = z.infer<typeof GitLabCommentSchema>;
