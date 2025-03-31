@@ -4,16 +4,27 @@ Daum 검색 API를 통합한 MCP 서버 구현체로, 웹, 동영상, 이미지,
 
 ## 설치 방법
 
-### NPM을 통한 설치
+### NPM 패키지로 설치
 
 ```bash
-npm install -g @modelcontextprotocol/server-daum-search
+npm install -g @ultra21c/mcp-server-daum-search
+```
+
+### 로컬 설치
+
+```bash
+# 저장소 클론
+git clone https://github.com/ultra21c/mcp-servers.git
+cd mcp-servers/src/daum-search
+
+# 의존성 설치
+npm install
 ```
 
 ### Docker를 통한 설치
 
 ```bash
-docker pull mcp/daum-search:latest
+docker pull ultra21c/mcp-server-daum-search:latest
 ```
 
 ## 사용 방법
@@ -26,27 +37,31 @@ docker pull mcp/daum-search:latest
 
 ### 2. 실행 방법
 
-#### NPM으로 설치한 경우:
+#### 로컬에서 실행:
 
 ```bash
 # 환경 변수 설정
 export KAKAO_API_KEY="your_kakao_api_key"
 
-# 서버 실행
-mcp-server-daum-search
+# 개발 모드로 실행
+npm run watch
+
+# 또는 빌드 후 실행
+npm run build
+npm start
 ```
 
 #### Docker로 설치한 경우:
 
 ```bash
-docker run -e KAKAO_API_KEY="your_kakao_api_key" mcp/daum-search
+docker run -e KAKAO_API_KEY="your_kakao_api_key" ultra21c/mcp-server-daum-search
 ```
 
 ### 3. Claude Desktop에서 사용하기
 
 `claude_desktop_config.json`에 다음 내용을 추가하세요:
 
-#### NPM 사용 시:
+#### NPM 패키지 사용 시:
 
 ```json
 {
@@ -55,7 +70,27 @@ docker run -e KAKAO_API_KEY="your_kakao_api_key" mcp/daum-search
       "command": "npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-daum-search"
+        "@ultra21c/mcp-server-daum-search"
+      ],
+      "env": {
+        "KAKAO_API_KEY": "YOUR_KAKAO_REST_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+#### 로컬 실행 시:
+
+```json
+{
+  "mcpServers": {
+    "daum-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "ts-node",
+        "./src/daum-search/index.ts"
       ],
       "env": {
         "KAKAO_API_KEY": "YOUR_KAKAO_REST_API_KEY_HERE"
@@ -78,7 +113,7 @@ docker run -e KAKAO_API_KEY="your_kakao_api_key" mcp/daum-search
         "--rm",
         "-e",
         "KAKAO_API_KEY",
-        "mcp/daum-search"
+        "ultra21c/mcp-server-daum-search"
       ],
       "env": {
         "KAKAO_API_KEY": "YOUR_KAKAO_REST_API_KEY_HERE"
@@ -156,8 +191,8 @@ docker run -e KAKAO_API_KEY="your_kakao_api_key" mcp/daum-search
 
 ```bash
 # 저장소 클론
-git clone https://github.com/your-repo/mcp-servers.git
-cd mcp-servers
+git clone https://github.com/ultra21c/mcp-servers.git
+cd mcp-servers/src/daum-search
 
 # 의존성 설치
 npm install
