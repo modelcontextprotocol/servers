@@ -1,6 +1,21 @@
 # Sequential Thinking MCP Server
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![npm version](https://badge.fury.io/js/%40modelcontextprotocol%2Fsequential-thinking.svg)](https://badge.fury.io/js/%40modelcontextprotocol%2Fsequential-thinking)
+
 A Model Context Protocol (MCP) server implementation that enables dynamic and reflective problem-solving through thought sequences, with enhanced visualization and templating capabilities.
+
+## Table of Contents
+- [Features](#features)
+- [Tools](#tools)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Examples](#examples)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
+- [Links](#links)
 
 ## Features
 
@@ -38,36 +53,65 @@ Access and utilize pre-built thinking templates for common problem patterns:
 - Create sessions from templates
 - Save custom templates
 
+## Requirements
+
+- Node.js 18.x or higher
+- npm 7.x or higher
+- An MCP-compatible client (e.g., Claude Desktop)
+
 ## Installation
 
 ```bash
-npm install @modelcontextprotocol/server-sequentialthinking
+npm install @modelcontextprotocol/sequential-thinking
 ```
 
-## Usage
+## Quick Start
 
-Start the server:
-
+1. Start the server:
 ```bash
-npx @modelcontextprotocol/server-sequentialthinking
+npx @modelcontextprotocol/sequential-thinking
 ```
 
-Configure in your MCP client (e.g., Claude Desktop):
-
+2. Configure in your MCP client (e.g., Claude Desktop):
 ```json
 {
   "mcpServers": {
     "sequentialthinking": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-sequentialthinking"]
+      "args": ["@modelcontextprotocol/sequential-thinking"]
     }
   }
 }
 ```
 
+3. The server is now ready to use with your MCP client!
+
+## Examples
+
+Here are some ways you can use the Sequential Thinking server:
+
+```javascript
+// Example 1: Break down a complex problem
+const result = await mcpClient.useTool('sequentialthinking', {
+  thought: "Let's break down the problem of optimizing a web application",
+  thoughtNumber: 1,
+  totalThoughts: 5
+});
+
+// Example 2: Generate a visualization
+const diagram = await mcpClient.useTool('visualize_thinking', {
+  format: 'mermaid'
+});
+
+// Example 3: Use a template for common patterns
+const session = await mcpClient.useTool('create_from_template', {
+  templateId: 'problem-analysis'
+});
+```
+
 ## Documentation
 
-For detailed documentation on using the sequential thinking server, please visit the `/src/sequentialthinking/README.md` file.
+For detailed documentation on using the sequential thinking server, please visit the [sequentialthinking documentation](src/sequentialthinking/README.md).
 
 ## Contributing
 
@@ -76,3 +120,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Links
+
+- [Homepage](https://modelcontextprotocol.io)
+- [Report Issues](https://github.com/spotty118/servers/issues)
+- [NPM Package](https://www.npmjs.com/package/@modelcontextprotocol/sequential-thinking)
