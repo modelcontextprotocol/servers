@@ -19,6 +19,8 @@
     "link-all": "npm link --workspaces"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "*"
+    "@modelcontextprotocol/sdk": "*",
+    "langchain": "^0.3.19",
+    "p-limit": "^6.2.0"
   }
 }

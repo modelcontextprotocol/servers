@@ -1,112 +1,142 @@
-// Represents a single branch in the thinking process
-export interface ThoughtBranch {
-  id: string;
-  startThoughtNumber: number;
-  thoughts: ThoughtData[];
-}
-
-// Represents the overall session state
-export interface SessionData {
-  id: string;
-  thoughts: ThoughtData[]; // Main thought history
-  branches?: ThoughtBranch[]; // Optional branches
-  createdAt: Date;
-  updatedAt: Date;
-  metadata?: Record<string, unknown>;
-}
-
-// Represents a single thought step
 export interface ThoughtData {
   thought: string;
   thoughtNumber: number;
   totalThoughts: number;
   nextThoughtNeeded: boolean;
-  isChainOfThought?: boolean;
-  chainOfThoughtStep?: number;
-  totalChainOfThoughtSteps?: number;
-  confidenceLevel?: number;
-  isHypothesis?: boolean;
-  isVerification?: boolean;
-  // Optional fields based on errors
   isRevision?: boolean;
   revisesThought?: number;
   branchFromThought?: number;
   branchId?: string;
+  needsMoreThoughts?: boolean;
+  isChainOfThought?: boolean;
+  isHypothesis?: boolean;
+  isVerification?: boolean;
+  chainOfThoughtStep?: number;
+  totalChainOfThoughtSteps?: number;
+  confidenceLevel?: number;
+  hypothesisId?: string;
   mergeBranchId?: string;
   mergeBranchPoint?: number;
-  needsMoreThoughts?: boolean;
-  hypothesisId?: string;
   validationStatus?: 'valid' | 'invalid' | 'uncertain';
   validationReason?: string;
 }
 
-// Represents an optimized prompt structure
+export interface ClaudeResponse {
+  choices: { message: { content: string } }[];
+}
+
 export interface OptimizedPrompt {
-  original: string;
-  optimized: string;
+  prompt: string;
   compressionStats: {
     originalTokens: number;
     optimizedTokens: number;
     compressionRatio: number;
   };
-  prompt: string; // Added prompt property
+  original: string;
+  optimized: string;
+  stats: any;
 }
 
-// Represents validation feedback
-export interface ValidationFeedback {
-  overallScore: number;
-  logicalStructureScore: number;
-  evidenceQualityScore: number;
-  assumptionValidityScore: number;
-  conclusionStrengthScore: number;
-  detectedFallacies: Array<{
-    type: string;
-    description: string;
-    thoughtNumbers: number[];
-    suggestionForImprovement: string;
-  }>;
-  gaps: Array<{
-    description: string;
-    betweenThoughts: [number, number];
-    suggestionForImprovement: string;
-  }>;
-  strengths: string[];
-  improvementAreas: string[];
+export interface WorkingMemoryItem {
+  id: string;
+  content: string;
+  compressedContent?: Buffer;
+  metadata: {
+    stage: ProcessingStage;
+    timestamp: number;
+    relevanceScore?: number;
+    connections: string[];
+    isCompressed?: boolean;
+  };
 }
 
+export enum ProcessingStage {
+  PREPARATION = 'preparation',
+  ANALYSIS = 'analysis',
+  SYNTHESIS = 'synthesis',
+  EVALUATION = 'evaluation'
+}
 
-// Represents identified patterns in thinking
+export interface ThoughtProcessingState {
+  stage: ProcessingStage;
+  workingMemory: WorkingMemoryItem[];
+  currentThoughtNumber: number;
+  sessionMetadata: Record<string, any>;
+}
+
 export interface ThinkingPattern {
   id: string;
   name: string;
   description: string;
-  thoughts: ThoughtData[]; // Thoughts exhibiting the pattern
-  confidence: number; // Confidence in pattern identification
+  detectedInThoughts: number[];
+  strength?: number;
+  confidence?: number;         // Added to match usage in pattern-analyzer.ts
+  thoughts?: ThoughtData[];
 }
 
-// Represents potential issues detected in the thinking process
+export type ThinkingIssueType = 
+  | 'logical_fallacy' 
+  | 'logical_gap'
+  | 'bias' 
+  | 'loop' 
+  | 'dead_end' 
+  | 'low_confidence'
+  | 'premature_conclusion'
+  | 'other';
+
 export interface ThinkingIssue {
   id: string;
-  type: 'logical_gap' | 'bias' | 'lack_of_depth' | 'premature_conclusion' | 'other';
+  type: ThinkingIssueType;
   description: string;
   severity: 'low' | 'medium' | 'high';
-  relatedThoughts: number[]; // Thought numbers involved
+  relatedThoughts: number[];
+  suggestion?: string;
 }
 
-// Represents AI-generated advice based on the session
 export interface AIAdvice {
   focusArea: 'next_steps' | 'issues' | 'patterns' | 'overall';
-  adviceText: string;
-  confidence: number;
-  supportingPatterns?: ThinkingPattern[];
+  advice: string;
+  confidence?: number;
+  relatedPatterns?: ThinkingPattern[];
   relatedIssues?: ThinkingIssue[];
+  adviceText?: string;
+  supportingPatterns?: ThinkingPattern[];  // Added to match usage
 }
 
-// Represents Claude API response
-export interface ClaudeResponse {
-  choices: [{
-    message: {
-      content: string;
-    };
-  }];
+export interface SessionData {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  thoughtHistory: ThoughtData[];
+  thoughts?: ThoughtData[];
+  branches: Record<string, ThoughtData[]>;
+}
+
+export interface ValidationFeedback {
+  isValid: boolean;
+  reason?: string;
+  suggestions?: string[];
+  overallScore?: number;
+  strengths?: string[];
+  improvementAreas?: string[];
+  logicalStructureScore?: number;  // Added to match usage
+}
+
+export interface ThoughtBranch {
+  branchId: string;
+  id: string;
+  startThoughtNumber: number;
+  thoughts: ThoughtData[];
+}
+
+// Added helper type for branch array reduction
+export type BranchRecord = Record<string, ThoughtData[]>;
+
+export interface ReasoningStep {
+  stage: string;       // Stage of reasoning (e.g., "patternRecognition", "logicalInference")
+  input: any;         // Input to the reasoning step
+  reasoning: string;    // Description of the reasoning process applied
+  output: any;        // Output of the reasoning step
+  confidence: number; // Confidence score (0-1) for the step's outcome
 }

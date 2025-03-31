@@ -1,9 +1,17 @@
 #!/usr/bin/env node
 
+import * as dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+
+// Get the directory path of the current module and load environment variables
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+
+import { getEmbeddings } from './embeddings.js';
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
-  CallToolRequestSchema, 
+  CallToolRequestSchema,
   ListToolsRequestSchema,
   Tool,
   ErrorCode,
@@ -39,10 +47,11 @@ import {
   handleGetAIAdviceRequest
 } from './ai-tools.js';
 // Fixed chalk import for ESM
+import { ChalkInstance } from 'chalk';
 import chalk from 'chalk';
 import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import * as os from 'os';
+import * as path from 'path';
 
 // Define directories for saving thought processes and templates
 const SAVE_DIR = path.join(os.homedir(), '.sequential-thinking');
@@ -417,7 +426,7 @@ class SequentialThinkingServer {
     const keyPoints = thought.thought; 
     const originalTokens = optimizedPrompt ? optimizedPrompt.compressionStats.originalTokens : this.estimateTokens(thought.thought);
     const optimizedTokens = optimizedPrompt ? optimizedPrompt.compressionStats.optimizedTokens : this.estimateTokens(thought.thought);
-    const compressionRatio = optimizedPrompt ? (optimizedPrompt.compressionStats.compressionRatio * 100).toFixed(1) : "0";
+    const compressionRatio = optimizedPrompt ? (optimizedPrompt.compressionStats.compressionRatio).toFixed(1) : "0";
 
     return {
       keyPoints: keyPoints,
@@ -431,11 +440,13 @@ class SequentialThinkingServer {
   }
 
   private estimateTokens(text: string): number {
-    // Simple token estimation (words + punctuation)
-    return text.split(/[\s\p{P}]+/u).length;
+    // Extremely simple token estimation: return character count divided by 4
+    const chars = text ? text.length : 0;
+    return Math.max(1, Math.ceil(chars / 4));
   }
 
-  public async processThought(input: unknown): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+  public async processThought(input: unknown, disableEmbeddings: boolean = false): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+    console.log("Entering processThought function"); // Added debug log
     try {
       const validatedInput = this.validateThoughtData(input);
 
@@ -443,9 +454,20 @@ class SequentialThinkingServer {
         validatedInput.totalThoughts = validatedInput.thoughtNumber;
       }
 
+      let embeddings: number[] | null = null;
+      if (disableEmbeddings) {
+        // Get embeddings for the thought
+        embeddings = await getEmbeddings(validatedInput.thought);
+        console.log("Generated embeddings:", embeddings);
+      }
+
       // Process with PromptOptimizer and Claude
-      const optimizedPrompt = PromptOptimizer.optimizeThought(validatedInput);
-      const claudeResponse = await this.callClaudeAPI(optimizedPrompt.prompt);
+      const optimizedPrompt = PromptOptimizer.optimizeThought(validatedInput, this.thoughtHistory);
+      let claudeResponse;
+      let claudePrompt = optimizedPrompt.prompt;
+      let claudeTokens = this.estimateTokens(claudePrompt);
+
+      claudeResponse = await this.callClaudeAPI(claudePrompt);
 
       // Perform Chain of Thought validation if applicable
       if (validatedInput.isChainOfThought && !validatedInput.validationStatus) {
@@ -506,12 +528,14 @@ class SequentialThinkingServer {
             mergeBranchId: validatedInput.mergeBranchId,
             mergeBranchPoint: validatedInput.mergeBranchPoint,
             // Structured Claude analysis
-            analysisDetails: analysisDetails 
+            analysisDetails: analysisDetails,
+            enhancementRatio: analysisDetails.metrics.compressionRatio,
+            claudeTokens: claudeTokens
           }, null, 2)
         }]
       };
     } catch (error) {
-      console.error('Error processing thought:', error);
+      console.error("Error processing thought:", error);
       return {
         content: [{
           type: "text",
@@ -664,7 +688,9 @@ const server = new Server(
   },
   {
     capabilities: {
-      tools: {},
+      tools: {
+        [SEQUENTIAL_THINKING_TOOL.name]: SEQUENTIAL_THINKING_TOOL
+      },
     },
   }
 );
@@ -691,15 +717,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  console.log("CallToolRequestSchema handler CALLED"); // Debug log - handler called
   try {
+    console.log(`Tool requested: ${request.params.name}`); // Log requested tool name
     if (request.params.name === "sequentialthinking") {
+      console.log("sequentialthinking tool handler logic START"); // Log before processThought call
       if (!request.params.arguments) {
         throw new McpError(
           ErrorCode.InvalidParams,
           "Missing arguments for sequentialthinking"
         );
       }
-      return thinkingServer.processThought(request.params.arguments);
+      const result = await thinkingServer.processThought(request.params.arguments);
+      console.log("sequentialthinking tool handler logic END"); // Log after processThought call
+      return result;
     } else if (request.params.name === "visualize_thinking") {
       if (!request.params.arguments) {
         throw new McpError(
@@ -799,7 +830,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleGetAIAdviceRequest(request.params.arguments, thinkingServer);
     }
   } catch (error) {
-    console.error(`Error handling tool request for ${request.params.name}:`, error);
+    console.error(`Error handling tool request for ${request.params.name}:`, error); // Error logging
     if (error instanceof McpError) {
       throw error;
     }

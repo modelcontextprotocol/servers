@@ -1,232 +1,343 @@
-/**
- * Pattern Analyzer for Sequential Thinking
- *
- * This module implements the PatternAnalyzer component that identifies patterns
- * in thinking sessions.
- */
-
 import { ThoughtData, ThinkingPattern } from './types.js';
-import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
+import { v4 as uuidv4 } from 'uuid';
 
- /**
-  * PatternAnalyzer class
-  */
- export class PatternAnalyzer {
+interface AnalysisState {
+  thoughtHistory: ThoughtData[];
+  detectedPatterns: ThinkingPattern[];
+  currentPhase: 'initial' | 'pattern_detection' | 'confidence_scoring' | 'complete';
+  workingSet: ThoughtData[];
+}
+
+export class PatternAnalyzer {
+  private patternWeights = {
+    linear: 0.8,
+    branching: 0.9,
+    revision: 0.85,
+    chainOfThought: 0.95,
+    hypothesis: 0.9,
+    repetitive: 0.7,
+    confirmationBias: 0.6,
+    anchoring: 0.65,
+    learning: 0.8,
+    adaptive: 0.85
+  };
+
   /**
-   * Identify patterns in the thinking
+   * Enhanced pattern detection using state machine approach
    */
-  public identifyPatterns(thoughtHistory: ThoughtData[]): ThinkingPattern[] {
+  public async analyzePatterns(thoughtHistory: ThoughtData[]): Promise<ThinkingPattern[]> {
+    let state: AnalysisState = {
+      thoughtHistory,
+      detectedPatterns: [],
+      currentPhase: 'initial',
+      workingSet: []
+    };
+
+    // Phase 1: Initialize
+    state = await this.initializeAnalysis(state);
+
+    // Phase 2: Detect Patterns
+    state = await this.detectPatterns(state);
+
+    // Phase 3: Score Confidence
+    state = await this.scoreConfidence(state);
+
+    return this.prioritizePatterns(state.detectedPatterns);
+  }
+
+  private async initializeAnalysis(state: AnalysisState): Promise<AnalysisState> {
+    return {
+      ...state,
+      currentPhase: 'pattern_detection',
+      workingSet: state.thoughtHistory
+    };
+  }
+
+  private async detectPatterns(state: AnalysisState): Promise<AnalysisState> {
+    const patterns = this.identifyPatterns(state.workingSet);
+    return {
+      ...state,
+      detectedPatterns: patterns,
+      currentPhase: 'confidence_scoring'
+    };
+  }
+
+  private async scoreConfidence(state: AnalysisState): Promise<AnalysisState> {
+    const scoredPatterns = state.detectedPatterns.map(pattern => ({
+      ...pattern,
+      confidence: this.calculateContextConfidence(pattern, state.thoughtHistory)
+    }));
+
+    return {
+      ...state,
+      detectedPatterns: scoredPatterns,
+      currentPhase: 'complete'
+    };
+  }
+
+  public identifyPatterns(thoughts: ThoughtData[]): ThinkingPattern[] {
     const patterns: ThinkingPattern[] = [];
 
-    // Identify linear thinking pattern
-    if (this.isLinearThinking(thoughtHistory)) {
-      patterns.push({
-        id: uuidv4(),
-        name: 'Linear Thinking',
-        description: 'Thoughts follow a single, sequential path without branching or revision.',
-        thoughts: thoughtHistory,
-        confidence: 0.8
-      });
+    // Linear progression pattern
+    const linearThoughts = this.getLinearProgression(thoughts);
+    if (linearThoughts.length > 0) {
+      patterns.push(this.createLinearProgressionPattern(linearThoughts));
     }
 
-    // Identify branching pattern
-    const branchingThoughts = thoughtHistory.filter(t => t.branchFromThought);
+    // Branching pattern detection
+    const branchingThoughts = this.getBranchingThoughts(thoughts);
     if (branchingThoughts.length > 0) {
-      patterns.push({
-        id: uuidv4(),
-        name: 'Branching',
-        description: 'Exploration of alternative paths or ideas.',
-        thoughts: branchingThoughts,
-        confidence: 0.9
-      });
+      patterns.push(this.createBranchingExplorationPattern(branchingThoughts, thoughts));
     }
 
-    // Identify revision pattern
-    const revisionThoughts = thoughtHistory.filter(t => t.isRevision);
-    if (revisionThoughts.length > 0) {
-      patterns.push({
-        id: uuidv4(),
-        name: 'Revision',
-        description: 'Revisiting and modifying previous thoughts.',
-        thoughts: revisionThoughts,
-        confidence: 0.85
-      });
-    }
-
-    // Identify Chain of Thought pattern
-    const cotThoughts = thoughtHistory.filter(t => t.isChainOfThought);
+    // Chain of thought pattern detection
+    const cotThoughts = this.getChainOfThoughtThoughts(thoughts);
     if (cotThoughts.length > 0) {
-      patterns.push({
-        id: uuidv4(),
-        name: 'Chain of Thought',
-        description: 'Explicit step-by-step reasoning process.',
-        thoughts: cotThoughts,
-        confidence: 0.95
-      });
+      patterns.push(this.createChainOfThoughtPattern(cotThoughts));
     }
 
-    // Identify Hypothesis-Verification pattern
-    const hypothesisThoughts = thoughtHistory.filter(t => t.isHypothesis);
-    const verificationThoughts = thoughtHistory.filter(t => t.isVerification);
+    // Iterative Refinement pattern detection
+    const revisionThoughts = this.getRevisionThoughts(thoughts);
+    if (revisionThoughts.length > 0) {
+      patterns.push(this.createIterativeRefinementPattern(revisionThoughts, thoughts));
+    }
+
+    // Hypothesis Testing pattern detection
+    const hypothesisThoughts = this.getHypothesisThoughts(thoughts);
+    const verificationThoughts = this.getVerificationThoughts(thoughts);
     if (hypothesisThoughts.length > 0 && verificationThoughts.length > 0) {
-      patterns.push({
-        id: uuidv4(),
-        name: 'Hypothesis-Verification',
-        description: 'Formulating and testing hypotheses.',
-        thoughts: [...hypothesisThoughts, ...verificationThoughts],
-        confidence: 0.9
-      });
+      patterns.push(this.createHypothesisTestingPattern(hypothesisThoughts, verificationThoughts));
     }
 
-    // Identify Repetitive Thinking pattern
-    if (this.hasRepetitiveThinking(thoughtHistory)) {
-      patterns.push({
-        id: uuidv4(),
-        name: 'Repetitive Thinking',
-        description: 'Circling back to the same ideas without progress.',
-        thoughts: this.getRepetitiveThoughts(thoughtHistory),
-        confidence: 0.7
-      });
-    }
-
-    // Identify Confirmation Bias pattern
-    if (this.hasConfirmationBias(thoughtHistory)) {
-      patterns.push({
-        id: uuidv4(),
-        name: 'Confirmation Bias',
-        description: 'Favoring information that confirms pre-existing beliefs.',
-        thoughts: this.getConfirmationBiasThoughts(thoughtHistory),
-        confidence: 0.6
-      });
-    }
-
-    // Identify Anchoring Bias pattern
-    if (this.hasAnchoringBias(thoughtHistory)) {
-      patterns.push({
-        id: uuidv4(),
-        name: 'Anchoring Bias',
-        description: 'Over-reliance on the first piece of information encountered.',
-        thoughts: this.getAnchoringBiasThoughts(thoughtHistory),
-        confidence: 0.65
-      });
-    }
-
-    // Identify Learning/Improvement pattern
-    if (this.showsLearningImprovement(thoughtHistory)) {
-      patterns.push({
-        id: uuidv4(),
-        name: 'Learning/Improvement',
-        description: 'Demonstrates learning from previous steps or feedback.',
-        thoughts: this.getLearningImprovementThoughts(thoughtHistory),
-        confidence: 0.8
-      });
-    }
-
-    // Identify Adaptive Thinking pattern
-    if (this.showsAdaptiveThinking(thoughtHistory)) {
-      patterns.push({
-        id: uuidv4(),
-        name: 'Adaptive Thinking',
-        description: 'Adjusts approach based on new information or changing context.',
-        thoughts: this.getAdaptiveThinkingThoughts(thoughtHistory),
-        confidence: 0.85
-      });
-    }
 
     return patterns;
   }
 
-  /**
-   * Check if the thinking process is primarily linear
-   */
-  private isLinearThinking(thoughts: ThoughtData[]): boolean {
-    // Simplified check: linear if no branching or revision
-    return !thoughts.some(t => t.branchFromThought || t.isRevision);
+  private createLinearProgressionPattern(linearThoughts: ThoughtData[]): ThinkingPattern {
+    const confidence = this.calculateLinearConfidence(linearThoughts);
+    return {
+      id: uuidv4(),
+      name: 'Linear Progression',
+      description: 'Thoughts show clear step-by-step progression',
+      thoughts: linearThoughts,
+      detectedInThoughts: linearThoughts.map(t => t.thoughtNumber),
+      confidence,
+      strength: confidence
+    };
   }
 
-  /**
-   * Check for repetitive thinking patterns
-   */
-  public hasRepetitiveThinking(thoughtHistory: ThoughtData[]): boolean { // Made public
-    // Simplified implementation: Check if the last few thoughts are very similar
-    if (thoughtHistory.length < 3) return false;
-    const lastThree = thoughtHistory.slice(-3);
-    const thoughtTexts = lastThree.map(t => t.thought.toLowerCase().trim());
-    return thoughtTexts[0] === thoughtTexts[1] || thoughtTexts[1] === thoughtTexts[2];
+  private createBranchingExplorationPattern(branchingThoughts: ThoughtData[], allThoughts: ThoughtData[]): ThinkingPattern {
+    const confidence = this.calculateBranchingConfidence(branchingThoughts, allThoughts);
+    return {
+      id: uuidv4(),
+      name: 'Branching Exploration',
+      description: 'Multiple alternative paths explored',
+      thoughts: branchingThoughts,
+      detectedInThoughts: branchingThoughts.map(t => t.thoughtNumber),
+      confidence,
+      strength: confidence
+    };
   }
 
-  /**
-   * Get thoughts involved in repetitive thinking
-   */
-  private getRepetitiveThoughts(thoughtHistory: ThoughtData[]): ThoughtData[] {
-    // Simplified implementation
-    if (this.hasRepetitiveThinking(thoughtHistory)) {
-      return thoughtHistory.slice(-3);
-    }
-    return [];
+  private createChainOfThoughtPattern(cotThoughts: ThoughtData[]): ThinkingPattern {
+    const confidence = this.calculateChainOfThoughtConfidence(cotThoughts);
+    return {
+      id: uuidv4(),
+      name: 'Chain of Thought',
+      description: 'Explicit step-by-step reasoning process',
+      thoughts: cotThoughts,
+      detectedInThoughts: cotThoughts.map(t => t.thoughtNumber),
+      confidence,
+      strength: confidence
+    };
   }
 
-  /**
-   * Check for confirmation bias
-   */
-  public hasConfirmationBias(thoughtHistory: ThoughtData[]): boolean { // Made public
-    // Simplified implementation
-    return false; // Placeholder
+  private createIterativeRefinementPattern(revisionThoughts: ThoughtData[], allThoughts: ThoughtData[]): ThinkingPattern {
+    const confidence = this.calculateRevisionConfidence(revisionThoughts, allThoughts);
+    return {
+      id: uuidv4(),
+      name: 'Iterative Refinement',
+      description: 'Ideas are actively revised and improved',
+      thoughts: revisionThoughts,
+      detectedInThoughts: revisionThoughts.map(t => t.thoughtNumber),
+      confidence,
+      strength: confidence
+    };
   }
 
-  /**
-   * Get thoughts potentially exhibiting confirmation bias
-   */
-  private getConfirmationBiasThoughts(thoughtHistory: ThoughtData[]): ThoughtData[] {
-    // Simplified implementation
-    return []; // Placeholder
+  private createHypothesisTestingPattern(hypothesisThoughts: ThoughtData[], verificationThoughts: ThoughtData[]): ThinkingPattern {
+    const confidence = this.calculateHypothesisConfidence(hypothesisThoughts, verificationThoughts);
+    return {
+      id: uuidv4(),
+      name: 'Hypothesis Testing',
+      description: 'Hypotheses are formed and verified',
+      thoughts: [...hypothesisThoughts, ...verificationThoughts],
+      detectedInThoughts: [...hypothesisThoughts, ...verificationThoughts].map(t => t.thoughtNumber),
+      confidence,
+      strength: confidence
+    };
   }
 
-  /**
-   * Check for anchoring bias
-   */
-  public hasAnchoringBias(thoughtHistory: ThoughtData[]): boolean { // Made public
-    // Simplified implementation
-    return false; // Placeholder
+
+  private calculateContextConfidence(pattern: ThinkingPattern, thoughts: ThoughtData[]): number {
+    if (!pattern.thoughts) return 0;
+
+    return Math.min(1,
+      (pattern.confidence ?? 0.5) *
+      (thoughts.length > 0 ? pattern.thoughts.length / thoughts.length : 0.5)
+    );
   }
 
-  /**
-   * Get thoughts potentially exhibiting anchoring bias
-   */
-  private getAnchoringBiasThoughts(thoughtHistory: ThoughtData[]): ThoughtData[] {
-    // Simplified implementation
-    return []; // Placeholder
+  private getRevisionThoughts(thoughts: ThoughtData[]): ThoughtData[] {
+    return thoughts.filter(t => t.isRevision);
   }
 
-  /**
-   * Check if the thinking process shows learning or improvement
-   */
-  private showsLearningImprovement(thoughts: ThoughtData[]): boolean {
-    // Simplified check: Look for revisions that increase confidence or resolve issues
-    return thoughts.some(t => t.isRevision && t.confidenceLevel && t.confidenceLevel > (thoughts.find(p => p.thoughtNumber === t.revisesThought)?.confidenceLevel || 0));
+  private getHypothesisThoughts(thoughts: ThoughtData[]): ThoughtData[] {
+    return thoughts.filter(t => t.isHypothesis);
   }
 
-  /**
-   * Get thoughts demonstrating learning or improvement
-   */
-  private getLearningImprovementThoughts(thoughts: ThoughtData[]): ThoughtData[] {
-    // Simplified implementation
-    return thoughts.filter(t => t.isRevision && t.confidenceLevel && t.confidenceLevel > (thoughts.find(p => p.thoughtNumber === t.revisesThought)?.confidenceLevel || 0));
+  private getVerificationThoughts(thoughts: ThoughtData[]): ThoughtData[] {
+    return thoughts.filter(t => t.isVerification);
   }
 
-  /**
-   * Check if the thinking process shows adaptation
-   */
-  private showsAdaptiveThinking(thoughts: ThoughtData[]): boolean {
-    // Simplified check: Look for branching or revision after low confidence or identified issues
-    return thoughts.some((t, i) => (t.branchFromThought || t.isRevision) && i > 0 && (thoughts[i-1].confidenceLevel || 100) < 50);
+  private getLinearProgression(thoughts: ThoughtData[]): ThoughtData[] {
+    return thoughts.filter((thought, i) => {
+      if (i === 0) return false;
+      const current = thought;
+      const previous = thoughts[i - 1];
+      return !current.branchFromThought &&
+        !current.isRevision &&
+        this.hasLogicalProgression(previous, current);
+    });
   }
 
-  /**
-   * Get thoughts demonstrating adaptive thinking
-   */
-  private getAdaptiveThinkingThoughts(thoughts: ThoughtData[]): ThoughtData[] {
-    // Simplified implementation
-    return thoughts.filter((t, i) => (t.branchFromThought || t.isRevision) && i > 0 && (thoughts[i-1].confidenceLevel || 100) < 50);
+  private getBranchingThoughts(thoughts: ThoughtData[]): ThoughtData[] {
+    return thoughts.filter(t => {
+      if (!t.branchFromThought) return false;
+      const parentThought = thoughts.find(pt => pt.thoughtNumber === t.branchFromThought);
+      return parentThought && this.isValidBranch(parentThought, t);
+    });
   }
- }
+
+  private getChainOfThoughtThoughts(thoughts: ThoughtData[]): ThoughtData[] {
+    return thoughts.filter((t, i) => {
+      if (!t.isChainOfThought) return false;
+      if (i === 0) return true;
+      return this.hasLogicalConnection(thoughts[i - 1], t);
+    });
+  }
+
+  private hasLogicalProgression(previous: ThoughtData, current: ThoughtData): boolean {
+    const overlap = this.getKeywordOverlap(previous.thought, current.thought);
+    return overlap > 0.3 && overlap < 0.8;
+  }
+
+  private isValidBranch(parent: ThoughtData, branch: ThoughtData): boolean {
+    const overlap = this.getKeywordOverlap(parent.thought, branch.thought);
+    return overlap > 0.2 && overlap < 0.6;
+  }
+
+  private hasLogicalConnection(previous: ThoughtData, current: ThoughtData): boolean {
+    if (!current.chainOfThoughtStep || !previous.chainOfThoughtStep) return false;
+    return current.chainOfThoughtStep === previous.chainOfThoughtStep + 1;
+  }
+
+  private getKeywordOverlap(thought1: string, thought2: string): number {
+    const keywords1 = this.extractKeywords(thought1);
+    const keywords2 = this.extractKeywords(thought2);
+    const commonKeywords = keywords1.filter(keyword => keywords2.includes(keyword));
+    return commonKeywords.length / Math.max(keywords1.length, keywords2.length);
+  }
+
+  private extractKeywords(text: string): string[] {
+    return text.toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(word => word.length > 3);
+  }
+
+  private calculateLinearConfidence(thoughts: ThoughtData[]): number {
+    if (thoughts.length < 2) return 0;
+
+    const progressionScore = thoughts.reduce((score, thought, i) => {
+      if (i === 0) return score;
+      const previous = thoughts[i - 1];
+      const connection = this.hasLogicalProgression(previous, thought) ? 1 : 0;
+      return score + connection;
+    }, 0) / (thoughts.length - 1);
+
+    return progressionScore * this.patternWeights.linear;
+  }
+
+  private calculateBranchingConfidence(branches: ThoughtData[], allThoughts: ThoughtData[]): number {
+    if (branches.length === 0) return 0;
+
+    const branchQuality = branches.reduce((score, branch) => {
+      const parent = allThoughts.find(t => t.thoughtNumber === branch.branchFromThought);
+      if (!parent) return score;
+      const relevance = 1 - this.getKeywordOverlap(parent.thought, branch.thought);
+      return score + relevance;
+    }, 0) / branches.length;
+
+    return branchQuality * this.patternWeights.branching;
+  }
+
+  private calculateChainOfThoughtConfidence(thoughts: ThoughtData[]): number {
+    if (thoughts.length < 2) return 0;
+
+    const chainQuality = thoughts.reduce((score, thought, i) => {
+      if (i === 0) return score;
+      const connection = this.hasLogicalConnection(thoughts[i - 1], thought) ? 1 : 0;
+      return score + connection;
+    }, 0) / (thoughts.length - 1);
+
+    return chainQuality * this.patternWeights.chainOfThought;
+  }
+
+  private calculateRevisionConfidence(revisions: ThoughtData[], allThoughts: ThoughtData[]): number {
+    if (revisions.length === 0) return 0;
+
+    const revisionQuality = revisions.reduce((score, revision) => {
+      const original = allThoughts.find(t => t.thoughtNumber === revision.revisesThought);
+      if (!original) return score;
+      const improvement = this.calculateRevisionImprovement(original, revision);
+      return score + improvement;
+    }, 0) / revisions.length;
+
+    return revisionQuality * this.patternWeights.revision;
+  }
+
+  private calculateHypothesisConfidence(hypothesisThoughts: ThoughtData[], verificationThoughts: ThoughtData[]): number {
+    if (hypothesisThoughts.length === 0) return 0;
+    if (verificationThoughts.length === 0) return 0;
+
+    const hypothesisQuality = hypothesisThoughts.reduce((score, hypothesis) => {
+      const relatedVerifications = verificationThoughts.filter(v => 
+        this.isRelatedVerification(hypothesis, v));
+      return score + (relatedVerifications.length > 0 ? 1 : 0);
+    }, 0) / hypothesisThoughts.length;
+
+    return hypothesisQuality * this.patternWeights.hypothesis;
+  }
+
+  private isRelatedVerification(hypothesis: ThoughtData, verification: ThoughtData): boolean {
+    return this.getKeywordOverlap(hypothesis.thought, verification.thought) > 0.4;
+  }
+
+  private calculateRevisionImprovement(original: ThoughtData, revision: ThoughtData): number {
+      const similarity = this.getKeywordOverlap(original.thought, revision.thought);
+      return 1 - Math.abs(0.5 - similarity); // Optimal at 0.5 similarity
+  }
+
+
+  private prioritizePatterns(patterns: ThinkingPattern[]): ThinkingPattern[] {
+    return [...patterns].sort((a, b) => {
+      const confidenceA = a.confidence ?? 0;
+      const confidenceB = b.confidence ?? 0;
+      if (confidenceB !== confidenceA) {
+        return confidenceB - confidenceA;
+      }
+      return b.detectedInThoughts.length - a.detectedInThoughts.length;
+    });
+  }
+}

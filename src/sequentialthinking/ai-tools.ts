@@ -305,11 +305,14 @@ export function handleGetAIAdviceRequest(args: any, thinkingServer: any) {
     }
     
     // Get the session data
+    // Construct session data with all required properties
     const sessionData: SessionData = {
       id: thinkingServer.sessionId,
-      createdAt: new Date(), // corrected to new Date()
-      updatedAt: new Date(), // corrected to new Date()
-      thoughts: thinkingServer.thoughtHistory, // corrected to sessionData.thoughts
+      name: `Session ${thinkingServer.sessionId}`,  // Added required name
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      thoughtHistory: thinkingServer.thoughtHistory, // Required property
+      thoughts: thinkingServer.thoughtHistory,      // Optional alias
       branches: thinkingServer.branches
     };
     
@@ -321,13 +324,14 @@ export function handleGetAIAdviceRequest(args: any, thinkingServer: any) {
     if (args.focusArea) {
       switch (args.focusArea) {
         case "next_steps":
-          filteredAdvice = { adviceText: advice.adviceText }; // updated property name
+          filteredAdvice = { adviceText: advice.adviceText };
           break;
         case "issues":
-          filteredAdvice = { relatedIssues: advice.relatedIssues }; // updated property name
+          filteredAdvice = { relatedIssues: advice.relatedIssues };
           break;
         case "patterns":
-          filteredAdvice = { patterns: aiAdvisor.getPatternAnalyzer().identifyPatterns(sessionData.thoughts) }; // corrected to sessionData.thoughts
+          // Use thoughtHistory (guaranteed to exist) instead of optional thoughts
+          filteredAdvice = { patterns: aiAdvisor.getPatternAnalyzer().identifyPatterns(sessionData.thoughtHistory) };
           break;
         case "overall":
           filteredAdvice = { adviceText: advice.adviceText }; // updated property name

@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![npm version](https://badge.fury.io/js/%40modelcontextprotocol%2Fsequential-thinking.svg)](https://badge.fury.io/js/%40modelcontextprotocol%2Fsequential-thinking)
 
-A Model Context Protocol (MCP) server implementation that enables dynamic and reflective problem-solving through thought sequences, with enhanced visualization and templating capabilities.
+A Model Context Protocol (MCP) server implementation that enables dynamic, self-aware problem-solving through adaptive thought sequences. The server continuously evolves its understanding while maintaining context awareness, enhanced by powerful visualization and templating capabilities.
 
 ## Table of Contents
 - [Features](#features)
@@ -41,12 +41,12 @@ A detailed tool for dynamic and reflective problem-solving that supports:
 - Tasks that need to maintain context over multiple steps
 - Situations where irrelevant information needs to be filtered out
 
-The server leverages multiple AI models for efficient processing:
+The server leverages a synergistic multi-model AI system for intelligent processing:
 
-- **Gemini**: Handles the main processing and cognitive tasks
-- **Claude**: Manages preprocessing and optimization tasks
+- **Gemini**: Powers the core cognitive engine, handling complex reasoning and dynamic thought adaptation
+- **Claude**: Orchestrates preprocessing and contextual optimization, ensuring optimal thought flow
 
-Along with specialized AI roles that enhance the thinking process:
+These models work with specialized AI roles that actively enhance the thinking process:
 
 - **AI Advisor**: Provides strategic guidance and next steps recommendations
 - **Pattern Analyzer**: Identifies patterns and trends in thinking sequences
