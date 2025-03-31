@@ -41,6 +41,18 @@ A detailed tool for dynamic and reflective problem-solving that supports:
 - Tasks that need to maintain context over multiple steps
 - Situations where irrelevant information needs to be filtered out
 
+The server leverages multiple AI models for efficient processing:
+
+- **Gemini**: Handles the main processing and cognitive tasks
+- **Claude**: Manages preprocessing and optimization tasks
+
+Along with specialized AI roles that enhance the thinking process:
+
+- **AI Advisor**: Provides strategic guidance and next steps recommendations
+- **Pattern Analyzer**: Identifies patterns and trends in thinking sequences
+- **Issue Detector**: Proactively identifies potential problems in reasoning
+- **Prompt Optimizer**: Refines and improves thinking prompts for better results
+
 ### Visualization
 Generate visual representations of sequential thinking processes in formats like:
 - Mermaid diagrams
