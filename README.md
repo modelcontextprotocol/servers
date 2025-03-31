@@ -1,13 +1,3 @@
-Admin/reviewer roles in Natoma?
-
-
-Download PDF -> P1?
-
-
-
-
-
-
 # Model Context Protocol servers
 
 This repository is a collection of *reference implementations* for the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), as well as references
