@@ -87,6 +87,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(repository.CreateRepositoryOptionsSchema),
       },
       {
+        name: "create_org_repository",
+        description: "Create a new GitHub organization repository",
+        inputSchema: zodToJsonSchema(repository.CreateOrgRepositoryOptionsSchema),
+      },
+      {
         name: "get_file_contents",
         description: "Get the contents of a file or directory from a GitHub repository",
         inputSchema: zodToJsonSchema(files.GetFileContentsSchema),
@@ -248,6 +253,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "create_repository": {
         const args = repository.CreateRepositoryOptionsSchema.parse(request.params.arguments);
         const result = await repository.createRepository(args);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "create_org_repository": {
+        const args = repository.CreateOrgRepositoryOptionsSchema.parse(request.params.arguments);
+        const result = await repository.createOrgRepository(args);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
