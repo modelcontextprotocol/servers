@@ -404,11 +404,11 @@ class SequentialThinkingServer {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          'model': 'anthropic/claude-3.7-sonnet', // Removed ':thinking' suffix, might be incorrect
+          'model': 'google/gemini-2.5-pro-exp-03-25:free', 
           'messages': [
             { 'role': 'user', 'content': prompt }
           ],
-          'max_tokens': 2000,
+          'max_tokens': 3000,
         }),
       });
 
@@ -769,7 +769,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleGetTemplateRequest(request.params.arguments);
     } else if (request.params.name === "create_from_template") {
       // Special handling for create_from_template to initialize the session
-      if (!request.params.arguments) {
+     if (!request.params.arguments) {
         throw new McpError(
           ErrorCode.InvalidParams,
           "Missing arguments for create_from_template"
