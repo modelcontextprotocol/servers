@@ -77,6 +77,21 @@ Access and utilize pre-built thinking templates for common problem patterns:
 - npm 7.x or higher
 - An MCP-compatible client (e.g., Claude Desktop)
 
+## Setup
+
+This server requires API keys to function correctly.
+
+1.  Create a `.env` file in the root directory of this project (`/Users/justincornelius/Downloads/servers`).
+2.  Add your API keys to the `.env` file like this:
+
+    ```
+    OPENROUTER_API_KEY=your_openrouter_api_key_here
+    OPENAI_API_KEY=your_openai_api_key_here
+    ```
+
+    *   `OPENROUTER_API_KEY`: Used for accessing Gemini and Claude models via OpenRouter for the core reasoning steps.
+    *   `OPENAI_API_KEY`: Used for generating text embeddings (via `text-embedding-3-small`) if the embeddings feature is utilized. If not provided, a basic fallback embedding method will be used.
+
 ## Installation
 
 ```bash
