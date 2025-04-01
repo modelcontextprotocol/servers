@@ -100,6 +100,24 @@ describe('Daum Search MCP Server Tools', () => {
         });
     };
 
+    test('daum_total_search should return valid response', async () => {
+        const response = await testTool('daum_total_search', {
+            query: '테스트',
+            size: 2
+        });
+        expect(response).toHaveProperty('result');
+        expect(response.result).toHaveProperty('content');
+        expect(Array.isArray(response.result.content)).toBe(true);
+        expect(response.result.content[0]).toHaveProperty('text');
+        expect(response.result.content[0].text).toContain('=== 웹문서 검색 결과 ===');
+        expect(response.result.content[0].text).toContain('=== 블로그 검색 결과 ===');
+        expect(response.result.content[0].text).toContain('=== 카페 검색 결과 ===');
+        expect(response.result.content[0].text).toContain('=== 동영상 검색 결과 ===');
+        expect(response.result.content[0].text).toContain('=== 이미지 검색 결과 ===');
+        expect(response.result.content[0].text).toContain('=== 책 검색 결과 ===');
+        expect(response.result.isError).toBe(false);
+    }, 15000);
+
     test('daum_web_search should return valid response', async () => {
         const response = await testTool('daum_web_search', { query: '테스트' });
         expect(response).toHaveProperty('result');

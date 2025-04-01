@@ -211,11 +211,34 @@ const CAFE_SEARCH_TOOL: Tool = {
   }
 };
 
+const TOTAL_SEARCH_TOOL: Tool = {
+  name: "daum_total_search",
+  description:
+    "다음 통합검색 서비스에서 질의어로 웹, 블로그, 카페, 동영상, 이미지, 책 정보를 동시에 검색합니다. " +
+    "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
+    "정확도순으로 정렬되며, 각 서비스별로 상위 결과를 제공합니다.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "검색을 원하는 질의어"
+      },
+      size: {
+        type: "number",
+        description: "각 검색 서비스별 결과 수 (1-10)",
+        default: 3
+      }
+    },
+    required: ["query"]
+  }
+};
+
 // Server implementation
 const server = new Server(
   {
-    name: "example-servers/daum-search",
-    version: "0.1.0",
+    name: "mcp-servers/daum-search",
+    version: "0.6.8",
   },
   {
     capabilities: {
@@ -258,30 +281,23 @@ function isDaumSearchArgs(args: unknown): args is {
 }
 
 // 검색 함수들
-async function performSearch(endpoint: string, params: Record<string, unknown>) {
-  const apiKey = process.env.KAKAO_API_KEY;
-  if (!apiKey) {
-    throw new Error("KAKAO_API_KEY environment variable is not set");
-  }
-
-  const searchParams = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null) {
-      searchParams.append(key, value.toString());
+async function performSearch(endpoint: string, params: any) {
+  const url = new URL(`https://dapi.kakao.com/v2/search/${endpoint}`);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) {
+      url.searchParams.set(key, String(value));
     }
-  }
+  });
 
-  const response = await fetch(
-    `https://dapi.kakao.com/v2/search/${endpoint}?${searchParams.toString()}`,
-    {
-      headers: {
-        Authorization: `KakaoAK ${apiKey}`,
-      },
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `KakaoAK ${KAKAO_API_KEY}`,
+      'Accept': 'application/json'
     }
-  );
+  });
 
   if (!response.ok) {
-    throw new Error(`Search request failed: ${response.statusText}`);
+    throw new Error(`Kakao API error: ${response.status} ${response.statusText}\n${await response.text()}`);
   }
 
   return await response.json() as DaumResponse;
@@ -348,9 +364,30 @@ async function performCafeSearch(query: string, sort?: string, page?: number, si
   ).join('\n\n');
 }
 
+async function performTotalSearch(query: string, size: number = 3) {
+  const results = await Promise.all([
+    performWebSearch(query, 'accuracy', 1, size),
+    performBlogSearch(query, 'accuracy', 1, size),
+    performCafeSearch(query, 'accuracy', 1, size),
+    performVclipSearch(query, 'accuracy', 1, size),
+    performImageSearch(query, 'accuracy', 1, size),
+    performBookSearch(query, 'accuracy', 'title', 1, size)
+  ]);
+
+  return [
+    "=== 웹문서 검색 결과 ===\n" + results[0],
+    "=== 블로그 검색 결과 ===\n" + results[1],
+    "=== 카페 검색 결과 ===\n" + results[2],
+    "=== 동영상 검색 결과 ===\n" + results[3],
+    "=== 이미지 검색 결과 ===\n" + results[4],
+    "=== 책 검색 결과 ===\n" + results[5]
+  ].join("\n\n");
+}
+
 // Tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
+    TOTAL_SEARCH_TOOL,
     WEB_SEARCH_TOOL,
     VCLIP_SEARCH_TOOL,
     IMAGE_SEARCH_TOOL,
@@ -371,6 +408,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { query, sort, page, size, target } = args;
 
     switch (name) {
+      case "daum_total_search": {
+        const results = await performTotalSearch(query, size);
+        return { content: [{ type: "text", text: results }], isError: false };
+      }
       case "daum_web_search": {
         const results = await performWebSearch(query, sort, page, size);
         return { content: [{ type: "text", text: results }], isError: false };

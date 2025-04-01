@@ -153,6 +153,12 @@ docker run -e KAKAO_API_KEY="your_kakao_api_key" ultra21c/mcp-server-daum-search
 
 ## 도구
 
+- **daum_total_search**
+  - 통합 검색 실행 (웹, 블로그, 카페, 동영상, 이미지, 책 검색을 동시에 수행)
+  - 입력:
+    - `query` (string): 검색어
+    - `size` (number, 선택): 각 검색 서비스별 결과 수 (1-10, 기본값: 3)
+
 - **daum_web_search**
   - 웹 문서 검색 실행
   - 입력:
@@ -240,10 +246,30 @@ npm test
 npm test -- --coverage
 
 # 특정 테스트만 실행
-npm test -- -t "daum_web_search"
+npm test -- -t "daum_total_search"  # 통합검색 테스트
+npm test -- -t "daum_web_search"    # 웹검색 테스트
+```
+
+### 수동 테스트
+
+각 도구는 JSON-RPC 형식의 명령어를 통해 직접 테스트할 수 있습니다:
+
+```bash
+# 통합검색 테스트
+echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"daum_total_search","arguments":{"query":"이효리"}},"id":1}' | node dist/index.js
+
+# 웹검색 테스트
+echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"daum_web_search","arguments":{"query":"이효리"}},"id":1}' | node dist/index.js
+
+# 블로그검색 테스트 (정렬 및 결과 수 지정)
+echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"daum_blog_search","arguments":{"query":"이효리","sort":"recency","size":5}},"id":1}' | node dist/index.js
+
+# 도구 목록 확인
+echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | node dist/index.js
 ```
 
 테스트는 다음 기능들을 검증합니다:
+- 통합 검색 기능
 - 웹 검색 기능
 - 동영상 검색 기능
 - 이미지 검색 기능
