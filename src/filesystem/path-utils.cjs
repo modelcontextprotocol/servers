@@ -1,12 +1,12 @@
-import path from "path";
-import os from 'os';
+const path = require("path");
+const os = require('os');
 
 /**
  * Converts WSL or Unix-style Windows paths to Windows format
  * @param p The path to convert
  * @returns Converted Windows path
  */
-export function convertToWindowsPath(p: string): string {
+function convertToWindowsPath(p) {
   // Handle WSL paths (/mnt/c/...)
   if (p.startsWith('/mnt/')) {
     const driveLetter = p.charAt(5).toUpperCase();
@@ -35,7 +35,7 @@ export function convertToWindowsPath(p: string): string {
  * @param p The path to normalize
  * @returns Normalized path
  */
-export function normalizePath(p: string): string {
+function normalizePath(p) {
   // Remove any surrounding quotes and whitespace
   p = p.trim().replace(/^["']|["']$/g, '');
   
@@ -78,9 +78,15 @@ export function normalizePath(p: string): string {
  * @param filepath The path to expand
  * @returns Expanded path
  */
-export function expandHome(filepath: string): string {
+function expandHome(filepath) {
   if (filepath.startsWith('~/') || filepath === '~') {
     return path.join(os.homedir(), filepath.slice(1));
   }
   return filepath;
 }
+
+module.exports = {
+  normalizePath,
+  expandHome,
+  convertToWindowsPath
+};
