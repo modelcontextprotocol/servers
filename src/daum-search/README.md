@@ -80,26 +80,6 @@ docker run -e KAKAO_API_KEY="your_kakao_api_key" ultra21c/mcp-server-daum-search
 }
 ```
 
-#### 로컬 실행 시:
-
-```json
-{
-  "mcpServers": {
-    "daum-search": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "ts-node",
-        "./src/daum-search/index.ts"
-      ],
-      "env": {
-        "KAKAO_API_KEY": "YOUR_KAKAO_REST_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
 #### Docker 사용 시:
 
 ```json

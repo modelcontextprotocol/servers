@@ -258,23 +258,30 @@ function isDaumSearchArgs(args: unknown): args is {
 }
 
 // 검색 함수들
-async function performSearch(endpoint: string, params: any) {
-  const url = new URL(`https://dapi.kakao.com/v2/search/${endpoint}`);
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined) {
-      url.searchParams.set(key, String(value));
-    }
-  });
+async function performSearch(endpoint: string, params: Record<string, unknown>) {
+  const apiKey = process.env.KAKAO_API_KEY;
+  if (!apiKey) {
+    throw new Error("KAKAO_API_KEY environment variable is not set");
+  }
 
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `KakaoAK ${KAKAO_API_KEY}`,
-      'Accept': 'application/json'
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null) {
+      searchParams.append(key, value.toString());
     }
-  });
+  }
+
+  const response = await fetch(
+    `https://dapi.kakao.com/v2/search/${endpoint}?${searchParams.toString()}`,
+    {
+      headers: {
+        Authorization: `KakaoAK ${apiKey}`,
+      },
+    }
+  );
 
   if (!response.ok) {
-    throw new Error(`Kakao API error: ${response.status} ${response.statusText}\n${await response.text()}`);
+    throw new Error(`Search request failed: ${response.statusText}`);
   }
 
   return await response.json() as DaumResponse;
