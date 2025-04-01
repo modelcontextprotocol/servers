@@ -10,7 +10,7 @@ MCP Server for the Google Maps API.
    - Returns: location, formatted_address, place_id
 
 2. `maps_reverse_geocode`
-   - Convert coordinates to address
+   - Convert coordinates into an address
    - Inputs:
      - `latitude` (number)
      - `longitude` (number)
@@ -27,14 +27,25 @@ MCP Server for the Google Maps API.
 4. `maps_place_details`
    - Get detailed information about a place
    - Input: `place_id` (string)
-   - Returns: name, address, contact info, ratings, reviews, opening hours
+   - Returns: comprehensive place details including:
+     - name, address, location coordinates
+     - contact information (phone, website)
+     - ratings and reviews
+     - opening hours and time zone
+     - photos
+     - price level and business status
+     - accessibility options
+     - payment options
+     - parking options
+     - attributes (takeout, delivery, etc.)
+     - and more data provided by the Places API (New)
 
 5. `maps_distance_matrix`
    - Calculate distances and times between points
    - Inputs:
      - `origins` (string[])
      - `destinations` (string[])
-     - `mode` (optional): "driving" | "walking" | "bicycling" | "transit"
+     - `mode` (optional): "driving" | "walking" | "bicycling" | "transit" | "two_wheeler"
    - Returns: distances and durations matrix
 
 6. `maps_elevation`
@@ -47,7 +58,7 @@ MCP Server for the Google Maps API.
    - Inputs:
      - `origin` (string)
      - `destination` (string)
-     - `mode` (optional): "driving" | "walking" | "bicycling" | "transit"
+     - `mode` (optional): "driving" | "walking" | "bicycling" | "transit" | "two_wheeler"
    - Returns: route details with steps, distance, duration
 
 ## Setup

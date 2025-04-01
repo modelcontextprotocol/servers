@@ -33,65 +33,191 @@ interface GeocodeResponse extends GoogleMapsResponse {
   }>;
 }
 
-interface PlacesSearchResponse extends GoogleMapsResponse {
-  results: Array<{
-    name: string;
-    place_id: string;
-    formatted_address: string;
-    geometry: {
-      location: {
-        lat: number;
-        lng: number;
-      }
+interface PlacesSearchResponse {
+  places: Array<{
+    id: string;
+    displayName: {
+      text: string;
+    };
+    formattedAddress: string;
+    location: {
+      latitude: number;
+      longitude: number;
     };
     rating?: number;
     types: string[];
   }>;
 }
 
-interface PlaceDetailsResponse extends GoogleMapsResponse {
-  result: {
+// Extended interface for the Places API (New) response
+interface PlaceDetailsResponse {
+  name: string;
+  id: string;
+  displayName: {
+    text: string;
+    languageCode?: string;
+  };
+  primaryType?: string;
+  types?: string[];
+  primaryTypeDisplayName?: {
+    text: string;
+    languageCode?: string;
+  };
+  formattedAddress: string;
+  shortFormattedAddress?: string;
+  addressComponents?: Array<{
+    longText: string;
+    shortText: string;
+    types: string[];
+    languageCode?: string;
+  }>;
+  plusCode?: {
+    globalCode: string;
+    compoundCode: string;
+  };
+  location: {
+    latitude: number;
+    longitude: number;
+  };
+  viewport?: {
+    low: {
+      latitude: number;
+      longitude: number;
+    };
+    high: {
+      latitude: number;
+      longitude: number;
+    };
+  };
+  rating?: number;
+  userRatingCount?: number;
+  googleMapsUri?: string;
+  websiteUri?: string;
+  nationalPhoneNumber?: string;
+  internationalPhoneNumber?: string;
+  reviews?: Array<{
     name: string;
-    place_id: string;
-    formatted_address: string;
-    formatted_phone_number?: string;
-    website?: string;
-    rating?: number;
-    reviews?: Array<{
-      author_name: string;
-      rating: number;
+    relativePublishTimeDescription?: string;
+    text: {
       text: string;
-      time: number;
+      languageCode?: string;
+    };
+    originalText?: {
+      text: string;
+      languageCode?: string;
+    };
+    rating: number;
+    authorAttribution: {
+      displayName: string;
+      uri?: string;
+      photoUri?: string;
+    };
+    publishTime: string;
+    flagContentUri?: string;
+    googleMapsUri?: string;
+  }>;
+  regularOpeningHours?: {
+    openNow: boolean;
+    periods?: Array<{
+      open?: {
+        day: number;
+        hour: number;
+        minute: number;
+      };
+      close?: {
+        day: number;
+        hour: number;
+        minute: number;
+      };
     }>;
-    opening_hours?: {
-      weekday_text: string[];
-      open_now: boolean;
-    };
-    geometry: {
-      location: {
-        lat: number;
-        lng: number;
-      }
-    };
+    weekdayDescriptions: string[];
+    secondaryHoursType?: string;
+    nextOpenTime?: string;
+    nextCloseTime?: string;
+  };
+  currentOpeningHours?: {
+    openNow: boolean;
+    periods?: Array<{
+      open?: {
+        day: number;
+        hour: number;
+        minute: number;
+      };
+      close?: {
+        day: number;
+        hour: number;
+        minute: number;
+      };
+    }>;
+    weekdayDescriptions: string[];
+    secondaryHoursType?: string;
+    nextOpenTime?: string;
+    nextCloseTime?: string;
+  };
+  photos?: Array<{
+    name: string;
+    widthPx: number;
+    heightPx: number;
+    authorAttributions: Array<{
+      displayName: string;
+      uri?: string;
+      photoUri?: string;
+    }>;
+    flagContentUri?: string;
+    googleMapsUri?: string;
+  }>;
+  editorialSummary?: {
+    text: string;
+    languageCode?: string;
+  };
+  businessStatus?: string;
+  priceLevel?: string;
+  iconMaskBaseUri?: string;
+  iconBackgroundColor?: string;
+  // Additional attributes
+  dineIn?: boolean;
+  takeout?: boolean;
+  delivery?: boolean;
+  reservable?: boolean;
+  curbsidePickup?: boolean;
+  servesBreakfast?: boolean;
+  servesLunch?: boolean;
+  servesDinner?: boolean;
+  servesBrunch?: boolean;
+  servesBeer?: boolean;
+  servesWine?: boolean;
+  servesCocktails?: boolean;
+  servesVegetarianFood?: boolean;
+  servesCoffee?: boolean;
+  servesDessert?: boolean;
+  outdoorSeating?: boolean;
+  liveMusic?: boolean;
+  menuForChildren?: boolean;
+  goodForChildren?: boolean;
+  allowsDogs?: boolean;
+  restroom?: boolean;
+  goodForGroups?: boolean;
+  goodForWatchingSports?: boolean;
+  paymentOptions?: {
+    acceptsCreditCards?: boolean;
+    acceptsDebitCards?: boolean;
+    acceptsCashOnly?: boolean;
+    acceptsNfc?: boolean;
+  };
+  accessibilityOptions?: {
+    wheelchairAccessibleEntrance?: boolean;
+    wheelchairAccessibleParking?: boolean;
+    wheelchairAccessibleRestroom?: boolean;
+    wheelchairAccessibleSeating?: boolean;
   };
 }
 
-interface DistanceMatrixResponse extends GoogleMapsResponse {
-  origin_addresses: string[];
-  destination_addresses: string[];
-  rows: Array<{
-    elements: Array<{
-      status: string;
-      duration: {
-        text: string;
-        value: number;
-      };
-      distance: {
-        text: string;
-        value: number;
-      };
-    }>;
-  }>;
+interface RouteMatrixResponse {
+  originIndex: number;
+  destinationIndex: number;
+  status: string;
+  distanceMeters: number;
+  duration: string;
 }
 
 interface ElevationResponse extends GoogleMapsResponse {
@@ -105,29 +231,24 @@ interface ElevationResponse extends GoogleMapsResponse {
   }>;
 }
 
-interface DirectionsResponse extends GoogleMapsResponse {
+interface DirectionsResponse {
   routes: Array<{
-    summary: string;
+    description?: string;
+    distanceMeters: number;
+    duration: string;
+    staticDuration: string;
     legs: Array<{
-      distance: {
-        text: string;
-        value: number;
-      };
-      duration: {
-        text: string;
-        value: number;
-      };
       steps: Array<{
-        html_instructions: string;
-        distance: {
-          text: string;
-          value: number;
+        distanceMeters: number;
+        staticDuration: string;
+        navigationInstruction?: {
+          instructions: string;
         };
-        duration: {
-          text: string;
-          value: number;
+        travelAdvisory?: {
+          text?: {
+            text: string;
+          };
         };
-        travel_mode: string;
       }>;
     }>;
   }>;
@@ -239,8 +360,8 @@ const DISTANCE_MATRIX_TOOL: Tool = {
       },
       mode: {
         type: "string",
-        description: "Travel mode (driving, walking, bicycling, transit)",
-        enum: ["driving", "walking", "bicycling", "transit"]
+        description: "Travel mode (driving, walking, bicycling, transit, two_wheeler)",
+        enum: ["driving", "walking", "bicycling", "transit", "two_wheeler"]
       }
     },
     required: ["origins", "destinations"]
@@ -286,8 +407,8 @@ const DIRECTIONS_TOOL: Tool = {
       },
       mode: {
         type: "string",
-        description: "Travel mode (driving, walking, bicycling, transit)",
-        enum: ["driving", "walking", "bicycling", "transit"]
+        description: "Travel mode (driving, walking, bicycling, transit, two_wheeler)",
+        enum: ["driving", "walking", "bicycling", "transit", "two_wheeler"]
       }
     },
     required: ["origin", "destination"]
@@ -303,6 +424,19 @@ const MAPS_TOOLS = [
   ELEVATION_TOOL,
   DIRECTIONS_TOOL,
 ] as const;
+
+// Helper function to convert price level string to numeric value
+function getPriceLevelValue(priceLevel: string): number {
+  const priceLevelMap: Record<string, number> = {
+    "PRICE_LEVEL_FREE": 0,
+    "PRICE_LEVEL_INEXPENSIVE": 1,
+    "PRICE_LEVEL_MODERATE": 2,
+    "PRICE_LEVEL_EXPENSIVE": 3,
+    "PRICE_LEVEL_VERY_EXPENSIVE": 4
+  };
+  
+  return priceLevelMap[priceLevel] ?? 0; // Use nullish coalescing for fallback
+}
 
 // API handlers
 async function handleGeocode(address: string) {
@@ -372,39 +506,63 @@ async function handlePlaceSearch(
   location?: { latitude: number; longitude: number },
   radius?: number
 ) {
-  const url = new URL("https://maps.googleapis.com/maps/api/place/textsearch/json");
-  url.searchParams.append("query", query);
-  url.searchParams.append("key", GOOGLE_MAPS_API_KEY);
-
-  if (location) {
-    url.searchParams.append("location", `${location.latitude},${location.longitude}`);
+  const url = new URL("https://places.googleapis.com/v1/places:searchText");
+  
+  // Build request body
+  const requestBody: any = {
+    textQuery: query
+  };
+  
+  // Add location bias if provided
+  if (location && radius) {
+    requestBody.locationBias = {
+      circle: {
+        center: {
+          latitude: location.latitude,
+          longitude: location.longitude
+        },
+        radius: radius
+      }
+    };
   }
-  if (radius) {
-    url.searchParams.append("radius", radius.toString());
-  }
-
-  const response = await fetch(url.toString());
-  const data = await response.json() as PlacesSearchResponse;
-
-  if (data.status !== "OK") {
+  
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+      'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.id,places.rating,places.types'
+    },
+    body: JSON.stringify(requestBody)
+  });
+  
+  const data = await response.json() as {
+    places?: Array<any>;
+    error?: { message?: string };
+  };
+  
+  if (!data.places) {
     return {
       content: [{
         type: "text",
-        text: `Place search failed: ${data.error_message || data.status}`
+        text: `Place search failed: ${data.error?.message || 'Unknown error'}`
       }],
       isError: true
     };
   }
-
+  
   return {
     content: [{
       type: "text",
       text: JSON.stringify({
-        places: data.results.map((place) => ({
-          name: place.name,
-          formatted_address: place.formatted_address,
-          location: place.geometry.location,
-          place_id: place.place_id,
+        places: data.places.map((place: any) => ({
+          name: place.displayName?.text,
+          formatted_address: place.formattedAddress,
+          location: {
+            lat: place.location?.latitude,
+            lng: place.location?.longitude
+          },
+          place_id: place.id,
           rating: place.rating,
           types: place.types
         }))
@@ -415,82 +573,315 @@ async function handlePlaceSearch(
 }
 
 async function handlePlaceDetails(place_id: string) {
-  const url = new URL("https://maps.googleapis.com/maps/api/place/details/json");
-  url.searchParams.append("place_id", place_id);
-  url.searchParams.append("key", GOOGLE_MAPS_API_KEY);
+  const url = new URL(`https://places.googleapis.com/v1/places/${place_id}`);
+  
+  // Extensive field mask to get all relevant place details
+  const fieldMask = [
+    'name', 'id', 'displayName', 'types', 'primaryType', 
+    'primaryTypeDisplayName', 'formattedAddress', 'shortFormattedAddress',
+    'addressComponents', 'nationalPhoneNumber', 'internationalPhoneNumber', 
+    'location', 'viewport', 'rating', 'userRatingCount', 'googleMapsUri', 
+    'websiteUri', 'regularOpeningHours', 'currentOpeningHours', 
+    'photos', 'businessStatus', 'priceLevel', 'reviews',
+    'paymentOptions', 'accessibilityOptions', 'reservable', 
+    'dineIn', 'takeout', 'delivery', 'servesBreakfast', 'servesLunch', 
+    'servesDinner', 'servesBrunch', 'editorialSummary', 'plusCode',
+    'iconMaskBaseUri', 'iconBackgroundColor'
+  ].join(',');
 
-  const response = await fetch(url.toString());
-  const data = await response.json() as PlaceDetailsResponse;
-
-  if (data.status !== "OK") {
+  try {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': fieldMask
+      }
+    });
+    
+    console.error(`Place details response status: ${response.status}`);
+    
+    if (!response.ok) {
+      // Try to get detailed error information
+      let errorDetails = "";
+      try {
+        const errorText = await response.text();
+        errorDetails = errorText.substring(0, 200);
+        console.error(`Error response body: ${errorText}`);
+      } catch (e) {
+        errorDetails = "Could not read error details";
+      }
+      
+      return {
+        content: [{
+          type: "text",
+          text: `Place details request failed: HTTP ${response.status} - ${response.statusText}\nDetails: ${errorDetails}`
+        }],
+        isError: true
+      };
+    }
+    
+    const placeData = await response.json() as any;
+    
+    // Transform the response to a structured format matching our expected client format
+    const formattedData = {
+      name: placeData.displayName?.text || '',
+      place_id: placeData.id,
+      formatted_address: placeData.formattedAddress || '',
+      formatted_phone_number: placeData.nationalPhoneNumber || '',
+      international_phone_number: placeData.internationalPhoneNumber || '',
+      website: placeData.websiteUri || '',
+      rating: placeData.rating || 0,
+      user_ratings_total: placeData.userRatingCount || 0,
+      url: placeData.googleMapsUri || '',
+      address_components: placeData.addressComponents || [],
+      geometry: {
+        location: placeData.location ? {
+          lat: placeData.location.latitude,
+          lng: placeData.location.longitude
+        } : null,
+        viewport: placeData.viewport ? {
+          northeast: {
+            lat: placeData.viewport.high.latitude,
+            lng: placeData.viewport.high.longitude
+          },
+          southwest: {
+            lat: placeData.viewport.low.latitude,
+            lng: placeData.viewport.low.longitude
+          }
+        } : null
+      },
+      types: placeData.types || [],
+      primary_type: placeData.primaryType || '',
+      editorial_summary: placeData.editorialSummary?.text || '',
+      icon: placeData.iconMaskBaseUri || '',
+      icon_background_color: placeData.iconBackgroundColor || '',
+      plus_code: placeData.plusCode ? {
+        global_code: placeData.plusCode.globalCode,
+        compound_code: placeData.plusCode.compoundCode
+      } : null,
+      business_status: placeData.businessStatus || '',
+      price_level: placeData.priceLevel ? getPriceLevelValue(placeData.priceLevel) : 0,
+      opening_hours: placeData.regularOpeningHours ? {
+        open_now: placeData.regularOpeningHours.openNow,
+        weekday_text: placeData.regularOpeningHours.weekdayDescriptions,
+        periods: placeData.regularOpeningHours.periods?.map((period: any) => ({
+          open: {
+            day: period.open?.day,
+            time: `${String(period.open?.hour).padStart(2, '0')}${String(period.open?.minute).padStart(2, '0')}`
+          },
+          close: period.close ? {
+            day: period.close.day,
+            time: `${String(period.close.hour).padStart(2, '0')}${String(period.close.minute).padStart(2, '0')}`
+          } : null
+        })) || []
+      } : null,
+      current_opening_hours: placeData.currentOpeningHours ? {
+        open_now: placeData.currentOpeningHours.openNow,
+        weekday_text: placeData.currentOpeningHours.weekdayDescriptions
+      } : null,
+      reviews: placeData.reviews?.map((review: any) => ({
+        author_name: review.authorAttribution?.displayName || '',
+        author_url: review.authorAttribution?.uri || '',
+        profile_photo_url: review.authorAttribution?.photoUri || '',
+        rating: review.rating || 0,
+        relative_time_description: review.relativePublishTimeDescription || '',
+        text: review.text?.text || '',
+        time: review.publishTime || '',
+        google_maps_uri: review.googleMapsUri || ''
+      })) || [],
+      photos: placeData.photos?.map((photo: any) => ({
+        photo_reference: photo.name.replace('places/', '').replace(/\/photos\/.*/, ''),
+        height: photo.heightPx,
+        width: photo.widthPx,
+        html_attributions: photo.authorAttributions?.map((attr: any) => 
+          `<a href="${attr.uri}">${attr.displayName}</a>`) || []
+      })) || [],
+      // Additional attributes
+      dine_in: placeData.dineIn || false,
+      takeout: placeData.takeout || false,
+      delivery: placeData.delivery || false,
+      reservable: placeData.reservable || false,
+      serves_breakfast: placeData.servesBreakfast || false,
+      serves_lunch: placeData.servesLunch || false,
+      serves_dinner: placeData.servesDinner || false,
+      serves_brunch: placeData.servesBrunch || false,
+      payment_options: placeData.paymentOptions ? {
+        accepts_credit_cards: placeData.paymentOptions.acceptsCreditCards || false,
+        accepts_debit_cards: placeData.paymentOptions.acceptsDebitCards || false,
+        accepts_cash_only: placeData.paymentOptions.acceptsCashOnly || false,
+        accepts_nfc: placeData.paymentOptions.acceptsNfc || false
+      } : {},
+      accessibility_options: placeData.accessibilityOptions ? {
+        wheelchair_accessible_entrance: placeData.accessibilityOptions.wheelchairAccessibleEntrance || false,
+        wheelchair_accessible_parking: placeData.accessibilityOptions.wheelchairAccessibleParking || false,
+        wheelchair_accessible_restroom: placeData.accessibilityOptions.wheelchairAccessibleRestroom || false,
+        wheelchair_accessible_seating: placeData.accessibilityOptions.wheelchairAccessibleSeating || false
+      } : {}
+    };
+    
+    // Return the formatted data
     return {
       content: [{
         type: "text",
-        text: `Place details request failed: ${data.error_message || data.status}`
+        text: JSON.stringify(formattedData, null, 2)
+      }],
+      isError: false
+    };
+  } catch (error) {
+    console.error('Place details error:', error);
+    return {
+      content: [{
+        type: "text",
+        text: `Place details request failed: ${error instanceof Error ? error.message : String(error)}`
       }],
       isError: true
     };
   }
-
-  return {
-    content: [{
-      type: "text",
-      text: JSON.stringify({
-        name: data.result.name,
-        formatted_address: data.result.formatted_address,
-        location: data.result.geometry.location,
-        formatted_phone_number: data.result.formatted_phone_number,
-        website: data.result.website,
-        rating: data.result.rating,
-        reviews: data.result.reviews,
-        opening_hours: data.result.opening_hours
-      }, null, 2)
-    }],
-    isError: false
-  };
 }
+
 async function handleDistanceMatrix(
   origins: string[],
   destinations: string[],
-  mode: "driving" | "walking" | "bicycling" | "transit" = "driving"
+  mode: "driving" | "walking" | "bicycling" | "transit" | "two_wheeler" = "driving"
 ) {
-  const url = new URL("https://maps.googleapis.com/maps/api/distancematrix/json");
-  url.searchParams.append("origins", origins.join("|"));
-  url.searchParams.append("destinations", destinations.join("|"));
-  url.searchParams.append("mode", mode);
-  url.searchParams.append("key", GOOGLE_MAPS_API_KEY);
-
-  const response = await fetch(url.toString());
-  const data = await response.json() as DistanceMatrixResponse;
-
-  if (data.status !== "OK") {
+  const url = new URL("https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix");
+  
+  // Map MCP travel modes to Google Routes API travel modes
+  const travelModeMap: Record<string, string> = {
+    "driving": "DRIVE",
+    "walking": "WALK",
+    "bicycling": "BICYCLE",
+    "transit": "TRANSIT",
+    "two_wheeler": "TWO_WHEELER" // Added TWO_WHEELER support
+  };
+  
+  const googleTravelMode = travelModeMap[mode] || "DRIVE";
+  
+  // Determine if inputs are coordinates or addresses
+  const coordRegex = /^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$/;
+  
+  const originInputs = origins.map(origin => {
+    if (coordRegex.test(origin)) {
+      const [lat, lng] = origin.split(',').map(Number);
+      return {
+        waypoint: {
+          location: {
+            latLng: {
+              latitude: lat,
+              longitude: lng
+            }
+          }
+        }
+      };
+    } else {
+      return {
+        waypoint: {
+          address: origin
+        }
+      };
+    }
+  });
+  
+  const destinationInputs = destinations.map(destination => {
+    if (coordRegex.test(destination)) {
+      const [lat, lng] = destination.split(',').map(Number);
+      return {
+        waypoint: {
+          location: {
+            latLng: {
+              latitude: lat,
+              longitude: lng
+            }
+          }
+        }
+      };
+    } else {
+      return {
+        waypoint: {
+          address: destination
+        }
+      };
+    }
+  });
+  
+  // Create base request body without routingPreference
+  const requestBody: any = {
+    origins: originInputs,
+    destinations: destinationInputs,
+    travelMode: googleTravelMode
+  };
+  
+  // Only include routingPreference for DRIVE or TWO_WHEELER modes
+  // According to Routes API documentation, routingPreference can only be used with these modes
+  if (googleTravelMode === "DRIVE" || googleTravelMode === "TWO_WHEELER") {
+    requestBody.routingPreference = "TRAFFIC_AWARE";
+  }
+  
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+      'X-Goog-FieldMask': 'originIndex,destinationIndex,status,distanceMeters,duration'
+    },
+    body: JSON.stringify(requestBody)
+  });
+  
+  // Add explicit type casting here
+  const data = await response.json() as Array<{
+    originIndex?: number;
+    destinationIndex?: number;
+    status?: string;
+    duration?: string;
+    distanceMeters?: number;
+    error?: { message?: string };
+  }>;
+  
+  if (response.status !== 200 || (data[0] && data[0].error)) {
     return {
       content: [{
         type: "text",
-        text: `Distance matrix request failed: ${data.error_message || data.status}`
+        text: `Distance matrix request failed: ${data[0]?.error?.message || response.statusText || 'Unknown error'}`
       }],
       isError: true
     };
   }
-
+  
+  // Reshape route matrix into legacy format
+  const resultMatrix = Array(origins.length).fill(null).map(() => ({
+    elements: Array(destinations.length).fill(null)
+  }));
+  
+  // Process each result in the matrix
+  data.forEach((item: any) => {
+    const originIdx = item.originIndex;
+    const destIdx = item.destinationIndex;
+    
+    resultMatrix[originIdx].elements[destIdx] = {
+      status: item.status || "OK",
+      duration: {
+        text: item.duration ? item.duration.replace('s', '') : 'Unknown',
+        value: item.distanceMeters ? parseInt(item.duration.replace('s', '')) : 0
+      },
+      distance: {
+        text: item.distanceMeters ? `${(item.distanceMeters / 1000).toFixed(1)} km` : 'Unknown',
+        value: item.distanceMeters
+      }
+    };
+  });
+  
   return {
     content: [{
       type: "text",
       text: JSON.stringify({
-        origin_addresses: data.origin_addresses,
-        destination_addresses: data.destination_addresses,
-        results: data.rows.map((row) => ({
-          elements: row.elements.map((element) => ({
-            status: element.status,
-            duration: element.duration,
-            distance: element.distance
-          }))
-        }))
+        origin_addresses: origins,
+        destination_addresses: destinations,
+        rows: resultMatrix
       }, null, 2)
     }],
     isError: false
   };
-}
+}  
 
 async function handleElevation(locations: Array<{ latitude: number; longitude: number }>) {
   const url = new URL("https://maps.googleapis.com/maps/api/elevation/json");
@@ -531,53 +922,140 @@ async function handleElevation(locations: Array<{ latitude: number; longitude: n
 async function handleDirections(
   origin: string,
   destination: string,
-  mode: "driving" | "walking" | "bicycling" | "transit" = "driving"
+  mode: "driving" | "walking" | "bicycling" | "transit" | "two_wheeler" = "driving"
 ) {
-  const url = new URL("https://maps.googleapis.com/maps/api/directions/json");
-  url.searchParams.append("origin", origin);
-  url.searchParams.append("destination", destination);
-  url.searchParams.append("mode", mode);
-  url.searchParams.append("key", GOOGLE_MAPS_API_KEY);
-
-  const response = await fetch(url.toString());
-  const data = await response.json() as DirectionsResponse;
-
-  if (data.status !== "OK") {
+  const url = new URL("https://routes.googleapis.com/directions/v2:computeRoutes");
+  
+  // Map MCP travel modes to Google Routes API travel modes
+  const travelModeMap: Record<string, string> = {
+    "driving": "DRIVE",
+    "walking": "WALK",
+    "bicycling": "BICYCLE",
+    "transit": "TRANSIT",
+    "two_wheeler": "TWO_WHEELER" // Added TWO_WHEELER support
+  };
+  
+  const googleTravelMode = travelModeMap[mode] || "DRIVE";
+  
+  // Determine if inputs are coordinates or addresses
+  let originInput: any = {};
+  let destinationInput: any = {};
+  
+  // Simple regex to detect if input might be coordinates
+  const coordRegex = /^[-+]?([1-8]?\d(\.\d+)?|90(\.0+)?),\s*[-+]?(180(\.0+)?|((1[0-7]\d)|([1-9]?\d))(\.\d+)?)$/;
+  
+  if (coordRegex.test(origin)) {
+    const [lat, lng] = origin.split(',').map(Number);
+    originInput = {
+      location: {
+        latLng: {
+          latitude: lat,
+          longitude: lng
+        }
+      }
+    };
+  } else {
+    originInput = { address: origin };
+  }
+  
+  if (coordRegex.test(destination)) {
+    const [lat, lng] = destination.split(',').map(Number);
+    destinationInput = {
+      location: {
+        latLng: {
+          latitude: lat,
+          longitude: lng
+        }
+      }
+    };
+  } else {
+    destinationInput = { address: destination };
+  }
+  
+  // Create base request body without routingPreference
+  const requestBody: any = {
+    origin: originInput,
+    destination: destinationInput,
+    travelMode: googleTravelMode,
+    computeAlternativeRoutes: false,
+    routeModifiers: {
+      avoidTolls: false,
+      avoidHighways: false,
+      avoidFerries: false
+    },
+    languageCode: "en-US"
+  };
+  
+  // Only include routingPreference for DRIVE or TWO_WHEELER modes
+  // According to Routes API documentation, routingPreference can only be used with these modes
+  if (googleTravelMode === "DRIVE" || googleTravelMode === "TWO_WHEELER") {
+    requestBody.routingPreference = "TRAFFIC_AWARE";
+  }
+  
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+      'X-Goog-FieldMask': 'routes.description,routes.distanceMeters,routes.duration,routes.staticDuration,routes.legs.steps.distanceMeters,routes.legs.steps.staticDuration,routes.legs.steps.navigationInstruction,routes.legs.steps.travelAdvisory'
+    },
+    body: JSON.stringify(requestBody)
+  });
+  
+  // Add explicit type casting here
+  const data = await response.json() as {
+    routes?: Array<any>;
+    error?: { message?: string };
+  };
+  
+  if (response.status !== 200 || data.error) {
     return {
       content: [{
         type: "text",
-        text: `Directions request failed: ${data.error_message || data.status}`
+        text: `Directions request failed: ${data.error?.message || response.statusText || 'No routes found'}`
       }],
       isError: true
     };
   }
-
+  
   return {
     content: [{
       type: "text",
       text: JSON.stringify({
-        routes: data.routes.map((route) => ({
-          summary: route.summary,
-          distance: route.legs[0].distance,
-          duration: route.legs[0].duration,
-          steps: route.legs[0].steps.map((step) => ({
-            instructions: step.html_instructions,
-            distance: step.distance,
-            duration: step.duration,
-            travel_mode: step.travel_mode
-          }))
-        }))
+        routes: data.routes?.map((route: any) => ({
+          summary: route.description || 'Route',
+          distance: {
+            text: route.distanceMeters ? `${(route.distanceMeters / 1000).toFixed(1)} km` : 'Unknown distance',
+            value: route.distanceMeters
+          },
+          duration: {
+            text: route.duration ? route.duration.replace('s', '') : 'Unknown duration',
+            value: route.staticDuration ? parseInt(route.staticDuration.replace('s', '')) : 0
+          },
+          steps: route.legs?.[0]?.steps?.map((step: any) => ({
+            instructions: step.navigationInstruction?.instructions || step.travelAdvisory?.text?.text || '',
+            distance: {
+              text: step.distanceMeters ? `${(step.distanceMeters / 1000).toFixed(1)} km` : 'Unknown distance',
+              value: step.distanceMeters
+            },
+            duration: {
+              text: step.staticDuration ? step.staticDuration.replace('s', '') : 'Unknown duration',
+              value: step.staticDuration ? parseInt(step.staticDuration.replace('s', '')) : 0
+            },
+            travel_mode: googleTravelMode
+          })) || []
+        })) || []
       }, null, 2)
     }],
     isError: false
   };
-}
+} 
 
 // Server setup
 const server = new Server(
   {
     name: "mcp-server/google-maps",
-    version: "0.1.0",
+    version: "0.1.0.leependu",
   },
   {
     capabilities: {
@@ -625,7 +1103,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { origins, destinations, mode } = request.params.arguments as {
           origins: string[];
           destinations: string[];
-          mode?: "driving" | "walking" | "bicycling" | "transit";
+          mode?: "driving" | "walking" | "bicycling" | "transit" | "two_wheeler";
         };
         return await handleDistanceMatrix(origins, destinations, mode);
       }
@@ -641,7 +1119,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { origin, destination, mode } = request.params.arguments as {
           origin: string;
           destination: string;
-          mode?: "driving" | "walking" | "bicycling" | "transit";
+          mode?: "driving" | "walking" | "bicycling" | "transit" | "two_wheeler";
         };
         return await handleDirections(origin, destination, mode);
       }
