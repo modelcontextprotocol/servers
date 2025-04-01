@@ -333,12 +333,19 @@ export class PromptOptimizer {
     if (this.patternWeights[key]) {
       this.patternWeights[key] += this.LEARNING_RATE * matchCount;
       this.patternWeights[key] = Math.max(0.1, Math.min(this.patternWeights[key], 5));
-    }
-  }
+     }
+   }
 
-  static optimizeThought(thought: ThoughtData, thoughtHistory: ThoughtData[], dynamicContextWindowSize?: number): OptimizedPrompt {
-    if (this.patterns.contextualPatterns.size === 0) {
-      this.initializeContextualPatterns();
+   static optimizeThought(
+     thought: ThoughtData, 
+     thoughtHistory: ThoughtData[], 
+     dynamicContextWindowSize?: number,
+     // Add IDE context parameters
+     fileStructure?: string, 
+     openFiles?: string[] 
+   ): OptimizedPrompt {
+     if (this.patterns.contextualPatterns.size === 0) {
+       this.initializeContextualPatterns();
     }
     
     this.updateSemanticMemory(thought);
@@ -348,15 +355,28 @@ export class PromptOptimizer {
     const contextEnhancedThought = this.applySessionContext(thought, sessionContext);
 
     if (thought.isChainOfThought && thought.chainOfThoughtStep && thought.chainOfThoughtStep > 1) {
-      this.trackThoughtRelationship(thought.thoughtNumber, thought.thoughtNumber - 1);
-    }
+       this.trackThoughtRelationship(thought.thoughtNumber, thought.thoughtNumber - 1);
+     }
 
-    const context = `
-    Thought ${thought.thoughtNumber}/${thought.totalThoughts}:
-    ${thought.thought}
-    
-    Stage: ${sessionContext.sessionStage}
-    Focus: ${sessionContext.recentContext || 'Chain-of-thought optimization'}
+     // Prepare IDE context string
+     let ideContextString = '';
+     if (fileStructure) {
+       ideContextString += `\n\nFile Structure:\n${fileStructure}\n`;
+     }
+     if (openFiles && openFiles.length > 0) {
+       ideContextString += `\n### Open Files:\n${openFiles.map(f => `- ${f}`).join('\n')}\n`;
+     }
+
+     const context = `
+### IDE Context:
+${ideContextString.trim() || 'No IDE context provided.'}
+
+### Current Thought (${thought.thoughtNumber}/${thought.totalThoughts}):
+${thought.thought}
+
+### Analysis Focus:
+Stage: ${sessionContext.sessionStage}
+Focus: ${sessionContext.recentContext || 'Pre-reason and Chain-of-thought optimization'}
     
     ${thought.isChainOfThought ? `CoT Step ${thought.chainOfThoughtStep}/${thought.totalChainOfThoughtSteps}` : ''}
     ${thought.isHypothesis ? 'Hypothesis' : ''}

@@ -387,12 +387,12 @@ class SequentialThinkingServer {
 ├${border}┤
 │ ${thought.padEnd(border.length - 2)} │${additionalInfo}
 └${border}┘`;
-  }
+   }
 
-  // Call Claude API via OpenRouter
-  private async callClaudeAPI(prompt: string): Promise<any> {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
+   // Call Gemini API via OpenRouter
+   private async callGeminiAPI(prompt: string): Promise<any> {
+     const apiKey = process.env.OPENROUTER_API_KEY;
+     if (!apiKey) {
       throw new Error('OPENROUTER_API_KEY environment variable is required');
     }
 
@@ -408,7 +408,7 @@ class SequentialThinkingServer {
           'messages': [
             { 'role': 'user', 'content': prompt }
           ],
-          'max_tokens': 3000,
+          'max_tokens': 5000,
         }),
       });
 
@@ -416,13 +416,44 @@ class SequentialThinkingServer {
       const text = data.choices[0]?.message?.content ?? 'No content in response';
       return { analysis: text.trim() };
     } catch (error) {
-      return { analysis: `Claude API call failed: ${error instanceof Error ? error.message : String(error)}` };
-    }
-  }
+       return { analysis: `Gemini API call failed: ${error instanceof Error ? error.message : String(error)}` };
+     }
+   }
 
-  // Generate structured analysis from Claude's response
-  private generateAnalysis(thought: ThoughtData, optimizedPrompt: OptimizedPrompt | undefined, claudeAnalysis: string): { keyPoints: string; claudeAnalysis: string; metrics: { originalTokens: number; optimizedTokens: number; compressionRatio: string; } } {
-    // Use the original thought for Key Points
+   // Call Claude API via OpenRouter
+   private async callClaudeAPI(prompt: string): Promise<any> {
+     const apiKey = process.env.OPENROUTER_API_KEY;
+     if (!apiKey) {
+       throw new Error('OPENROUTER_API_KEY environment variable is required');
+     }
+
+     try {
+       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+         method: 'POST',
+         headers: {
+           'Authorization': `Bearer ${apiKey}`,
+           'Content-Type': 'application/json'
+         },
+         body: JSON.stringify({
+           'model': 'anthropic/claude-3.7-sonnet', // Target Claude model
+           'messages': [
+             { 'role': 'user', 'content': prompt }
+           ],
+           'max_tokens': 3000, // Adjust as needed for Claude
+         }),
+       });
+
+       const data = await response.json() as ClaudeResponse;
+       const text = data.choices[0]?.message?.content ?? 'No content in response';
+       return { analysis: text.trim() };
+     } catch (error) {
+       return { analysis: `Claude API call failed: ${error instanceof Error ? error.message : String(error)}` };
+     }
+   }
+
+   // Generate structured analysis from Claude's response
+   private generateAnalysis(thought: ThoughtData, optimizedPrompt: OptimizedPrompt | undefined, claudeAnalysis: string): { keyPoints: string; claudeAnalysis: string; metrics: { originalTokens: number; optimizedTokens: number; compressionRatio: string; } } {
+     // Use the original thought for Key Points
     const keyPoints = thought.thought; 
     const originalTokens = optimizedPrompt ? optimizedPrompt.compressionStats.originalTokens : this.estimateTokens(thought.thought);
     const optimizedTokens = optimizedPrompt ? optimizedPrompt.compressionStats.optimizedTokens : this.estimateTokens(thought.thought);
@@ -442,13 +473,20 @@ class SequentialThinkingServer {
   private estimateTokens(text: string): number {
     // Extremely simple token estimation: return character count divided by 4
     const chars = text ? text.length : 0;
-    return Math.max(1, Math.ceil(chars / 4));
-  }
+     return Math.max(1, Math.ceil(chars / 4));
+   }
 
-  public async processThought(input: unknown, disableEmbeddings: boolean = false, dynamicContextWindowSize?: number): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
-    console.log("Entering processThought function"); // Added debug log
-    try {
-      const validatedInput = this.validateThoughtData(input);
+   public async processThought(
+     input: unknown, 
+     disableEmbeddings: boolean = false, 
+     dynamicContextWindowSize?: number,
+     // Add IDE context parameters
+     fileStructure?: string, 
+     openFiles?: string[] 
+   ): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+     console.log("Entering processThought function"); // Added debug log
+     try {
+       const validatedInput = this.validateThoughtData(input);
 
       if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
         validatedInput.totalThoughts = validatedInput.thoughtNumber;
@@ -459,18 +497,39 @@ class SequentialThinkingServer {
         // Get embeddings for the thought
         embeddings = await getEmbeddings(validatedInput.thought);
         console.log("Generated embeddings:", embeddings);
-      }
+       }
 
-      // Process with PromptOptimizer and Claude, passing dynamic context size
-      const optimizedPrompt = PromptOptimizer.optimizeThought(validatedInput, this.thoughtHistory, dynamicContextWindowSize);
-      let claudeResponse;
-      let claudePrompt = optimizedPrompt.prompt;
-      let claudeTokens = this.estimateTokens(claudePrompt);
+       // Process with PromptOptimizer, passing dynamic context size and IDE context
+       const optimizedPrompt = PromptOptimizer.optimizeThought(
+         validatedInput, 
+         this.thoughtHistory, 
+         dynamicContextWindowSize,
+         fileStructure, // Pass file structure
+          openFiles      // Pass open files
+        );
+       
+       // --- Stage 1: Call Gemini ---
+       let geminiPrompt = optimizedPrompt.prompt;
+       let geminiResponse = await this.callGeminiAPI(geminiPrompt);
+       let geminiAnalysis = geminiResponse.analysis;
 
-      claudeResponse = await this.callClaudeAPI(claudePrompt);
+       // --- Stage 2: Construct Prompt for Claude & Call Claude ---
+       // Combine original thought and Gemini's analysis for Claude's context
+       let claudePrompt = `
+Original Thought: ${validatedInput.thought}
 
-      // Perform Chain of Thought validation if applicable
-      if (validatedInput.isChainOfThought && !validatedInput.validationStatus) {
+Gemini's Initial Analysis:
+${geminiAnalysis}
+
+Based on the original thought and Gemini's analysis, provide a final, refined analysis or response. Focus on the core request and synthesize the information.
+       `.trim();
+       
+       let claudeResponse = await this.callClaudeAPI(claudePrompt);
+       let claudeAnalysis = claudeResponse.analysis;
+       let claudeTokens = this.estimateTokens(claudePrompt); // Estimate tokens for the Claude call
+
+       // Perform Chain of Thought validation if applicable
+       if (validatedInput.isChainOfThought && !validatedInput.validationStatus) {
         const validation = this.validateChainOfThought(validatedInput);
         validatedInput.validationStatus = validation.isValid ? 'valid' : 'invalid';
         validatedInput.validationReason = validation.reason;
@@ -498,12 +557,12 @@ class SequentialThinkingServer {
       this.saveSession();
 
       const formattedThought = this.formatThought(validatedInput);
-      console.error(formattedThought); // Ensure formattedThought is logged
+       console.error(formattedThought); // Ensure formattedThought is logged
 
-      // Create structured analysis from Claude's response
-      const analysisDetails = this.generateAnalysis(validatedInput, optimizedPrompt, claudeResponse.analysis);
+       // Create structured analysis using Claude's final response
+       const analysisDetails = this.generateAnalysis(validatedInput, optimizedPrompt, claudeAnalysis); // Use claudeAnalysis here
 
-      return {
+       return {
         content: [{
           type: "text",
           text: JSON.stringify({
@@ -526,12 +585,14 @@ class SequentialThinkingServer {
             validationStatus: validatedInput.validationStatus,
             validationReason: validatedInput.validationReason,
             mergeBranchId: validatedInput.mergeBranchId,
-            mergeBranchPoint: validatedInput.mergeBranchPoint,
-            // Structured Claude analysis
-            analysisDetails: analysisDetails,
-            enhancementRatio: analysisDetails.metrics.compressionRatio,
-            claudeTokens: claudeTokens
-          }, null, 2)
+             mergeBranchPoint: validatedInput.mergeBranchPoint,
+             // Include Gemini's intermediate analysis for verification
+             geminiAnalysis: geminiAnalysis, 
+             // Structured Claude analysis
+             analysisDetails: analysisDetails,
+             enhancementRatio: analysisDetails.metrics.compressionRatio,
+             claudeTokens: claudeTokens
+           }, null, 2)
         }]
       };
     } catch (error) {
@@ -681,6 +742,18 @@ Key features:
         type: "integer",
         description: "Optional dynamic context window size for analysis",
         minimum: 1
+      },
+      // Add IDE context parameters
+      fileStructure: {
+        type: "string",
+        description: "Optional JSON string representing the file structure of the relevant project directory."
+      },
+      openFiles: {
+        type: "array",
+        description: "Optional array of strings listing the paths of currently open files in the IDE.",
+        items: {
+          type: "string"
+        }
       }
     },
     required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"]
@@ -734,13 +807,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "Missing arguments for sequentialthinking"
         );
       }
-      // Extract dynamicContextWindowSize if provided
-      const args = request.params.arguments as any;
-      const dynamicContextWindowSize = args.dynamicContextWindowSize as number | undefined;
-      
-      const result = await thinkingServer.processThought(args, false, dynamicContextWindowSize); // Pass dynamic size
-      console.log("sequentialthinking tool handler logic END"); // Log after processThought call
-      return result;
+       // Extract dynamicContextWindowSize and IDE context if provided
+       const args = request.params.arguments as any;
+       const dynamicContextWindowSize = args.dynamicContextWindowSize as number | undefined;
+       const fileStructure = args.fileStructure as string | undefined;
+       const openFiles = args.openFiles as string[] | undefined;
+       
+       const result = await thinkingServer.processThought(
+         args, 
+         false, 
+         dynamicContextWindowSize, 
+         fileStructure, // Pass file structure
+         openFiles      // Pass open files
+       ); 
+       console.log("sequentialthinking tool handler logic END"); // Log after processThought call
+       return result;
     } else if (request.params.name === "visualize_thinking") {
       if (!request.params.arguments) {
         throw new McpError(

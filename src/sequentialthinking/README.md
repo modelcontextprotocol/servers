@@ -18,6 +18,8 @@ The Sequential Thinking server helps analyze problems through a flexible thinkin
 - **Confidence Levels**: Assign confidence levels (0-100) to hypotheses
 - **Branch Merging**: Merge different branches of thought at specific points
 - **Chain of Thought Validation**: Automatic validation of Chain of Thought reasoning
+- **IDE Context Awareness**: Can optionally receive file structure and open file information from the IDE to inform reasoning.
+- **Two-Stage Analysis**: Utilizes Gemini for initial context-aware analysis and pre-reasoning, followed by Claude for final response refinement.
 
 ## When to Use
 
@@ -122,6 +124,9 @@ The Sequential Thinking server helps analyze problems through a flexible thinkin
 | mergeBranchPoint | integer | Thought number where branches should be merged |
 | validationStatus | string | Validation status of a Chain of Thought step ('valid', 'invalid', or 'uncertain') |
 | validationReason | string | Reason for the validation status |
+| dynamicContextWindowSize | integer | Optional dynamic context window size for analysis |
+| fileStructure | string | Optional JSON string representing the file structure of the relevant project directory. |
+| openFiles | array | Optional array of strings listing the paths of currently open files in the IDE. |
 
 ## License
 
