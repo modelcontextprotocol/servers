@@ -238,7 +238,7 @@ const TOTAL_SEARCH_TOOL: Tool = {
 const server = new Server(
   {
     name: "mcp-servers/daum-search",
-    version: "0.6.8",
+    version: "0.6.9",
   },
   {
     capabilities: {
