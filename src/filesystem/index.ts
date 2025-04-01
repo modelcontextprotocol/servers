@@ -129,6 +129,7 @@ const ListDirectoryArgsSchema = z.object({
 
 const DirectoryTreeArgsSchema = z.object({
   path: z.string(),
+  excludePatterns: z.array(z.string()).optional().default([])
 });
 
 const MoveFileArgsSchema = z.object({
@@ -393,6 +394,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             "Get a recursive tree view of files and directories as a JSON structure. " +
             "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
             "Files have no children array, while directories always have a children array (which may be empty). " +
+            "Supports excluding files and directories using glob patterns. " +
             "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(DirectoryTreeArgsSchema) as ToolInput,
       },
@@ -542,12 +544,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 children?: TreeEntry[];
             }
 
-            async function buildTree(currentPath: string): Promise<TreeEntry[]> {
+            async function buildTree(rootPath: string, currentPath: string, excludePatterns: string[] = []): Promise<TreeEntry[]> {
                 const validPath = await validatePath(currentPath);
                 const entries = await fs.readdir(validPath, {withFileTypes: true});
                 const result: TreeEntry[] = [];
 
                 for (const entry of entries) {
+                    const fullPath = path.join(currentPath, entry.name);
+                    
+                    // Check if path matches any exclude pattern
+                    const relativePath = path.relative(rootPath, fullPath);
+                    const shouldExclude = excludePatterns.some(pattern => {
+                        const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
+                        return minimatch(relativePath, globPattern, { dot: true });
+                    });
+
+                    if (shouldExclude) {
+                        continue;
+                    }
+
                     const entryData: TreeEntry = {
                         name: entry.name,
                         type: entry.isDirectory() ? 'directory' : 'file'
@@ -555,7 +570,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
                     if (entry.isDirectory()) {
                         const subPath = path.join(currentPath, entry.name);
-                        entryData.children = await buildTree(subPath);
+                        entryData.children = await buildTree(rootPath, subPath, excludePatterns);
                     }
 
                     result.push(entryData);
@@ -564,7 +579,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return result;
             }
 
-            const treeData = await buildTree(parsed.data.path);
+            const validRootPath = await validatePath(parsed.data.path);
+            const treeData = await buildTree(validRootPath, validRootPath, parsed.data.excludePatterns);
             return {
                 content: [{
                     type: "text",
