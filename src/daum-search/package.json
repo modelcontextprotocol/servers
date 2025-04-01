@@ -1,6 +1,6 @@
 {
   "name": "@ultra21c/mcp-server-daum-search",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "description": "MCP server for Daum Search API integration",
   "license": "MIT",
   "author": "ultra21c",
@@ -11,11 +11,20 @@
   },
   "keywords": [
     "mcp",
+    "model-context-protocol",
     "daum",
     "kakao",
     "search",
     "api",
-    "server"
+    "server",
+    "claude",
+    "claude-desktop",
+    "search-api",
+    "web-search",
+    "ai-search",
+    "korean-search",
+    "daum-search",
+    "kakao-search"
   ],
   "bugs": "https://github.com/ultra21c/mcp-servers/issues",
   "type": "module",
