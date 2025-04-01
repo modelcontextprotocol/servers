@@ -7,7 +7,21 @@ Daum 검색 API를 통합한 MCP 서버 구현체로, 웹, 동영상, 이미지,
 ### NPM 패키지로 설치
 
 ```bash
+# 전역 설치
 npm install -g @ultra21c/mcp-server-daum-search
+
+# 프로젝트에 직접 설치
+npm install @ultra21c/mcp-server-daum-search
+```
+
+### npx로 직접 실행
+
+```bash
+# 환경 변수 설정
+export KAKAO_API_KEY="your_kakao_api_key"
+
+# npx로 실행
+npx @ultra21c/mcp-server-daum-search
 ```
 
 ### 로컬 설치
@@ -181,11 +195,40 @@ npm install
 npm run watch
 
 # 테스트 실행
+export KAKAO_API_KEY="your_kakao_api_key"
 npm test
 
 # 린트 검사
 npm run lint
 ```
+
+### 테스트
+
+테스트를 실행하기 전에 Kakao API 키가 필요합니다:
+
+```bash
+# 환경 변수 설정
+export KAKAO_API_KEY="your_kakao_api_key"
+
+# 테스트 실행
+npm test
+
+# 테스트 커버리지 확인
+npm test -- --coverage
+
+# 특정 테스트만 실행
+npm test -- -t "daum_web_search"
+```
+
+테스트는 다음 기능들을 검증합니다:
+- 웹 검색 기능
+- 동영상 검색 기능
+- 이미지 검색 기능
+- 블로그 검색 기능
+- 책 검색 기능
+- 카페 검색 기능
+
+각 테스트는 실제 API 호출을 통해 응답이 올바른 형식으로 반환되는지 확인합니다.
 
 ### 빌드하기
 
