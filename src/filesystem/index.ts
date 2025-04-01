@@ -38,8 +38,7 @@ console.error('[STARTUP] Normalized allowed directories:', allowedDirectories);
 // Validate that all directories exist and are accessible
 await Promise.all(allowedDirectories.map(async (dir) => {
   try {
-    console.error(`[STARTUP] Validating directory: ${dir}`);
-    const stats = await fs.stat(dir);
+    const stats = await fs.stat(expandHome(dir));
     if (!stats.isDirectory()) {
       console.error(`Error: ${dir} is not a directory`);
       process.exit(1);
