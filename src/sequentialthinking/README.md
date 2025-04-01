@@ -6,6 +6,17 @@ A Model Context Protocol (MCP) server that provides a tool for dynamic and refle
 
 The Sequential Thinking server helps analyze problems through a flexible thinking process that can adapt and evolve. Each thought can build on, question, or revise previous insights as understanding deepens.
 
+## Setup
+
+This server requires an API key from OpenRouter to function.
+
+1.  Create a `.env` file in the root directory of this project (where the main `package.json` for the `servers` repository resides).
+2.  Add your OpenRouter API key to the `.env` file like this:
+
+    ```
+    OPENROUTER_API_KEY=your_api_key_here
+    ```
+
 ## Features
 
 - **Sequential Thinking**: Break down complex problems into manageable steps
