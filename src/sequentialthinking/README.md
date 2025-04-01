@@ -14,8 +14,12 @@ This server requires an API key from OpenRouter to function.
 2.  Add your OpenRouter API key to the `.env` file like this:
 
     ```
-    OPENROUTER_API_KEY=your_api_key_here
+    OPENROUTER_API_KEY=your_openrouter_api_key_here
+    OPENAI_API_KEY=your_openai_api_key_here
     ```
+
+    *   `OPENROUTER_API_KEY`: Used for accessing Gemini and Claude models via OpenRouter for the core reasoning steps.
+    *   `OPENAI_API_KEY`: Used for generating text embeddings (via `text-embedding-3-small`) if the embeddings feature is utilized. If not provided, a basic fallback embedding method will be used.
 
 ## Features
 
