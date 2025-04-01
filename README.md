@@ -29,6 +29,11 @@ A Model Context Protocol (MCP) server implementation that enables dynamic, self-
 - **Thought Process Persistence**: Save and resume thinking sessions
 - **Branch Management**: Create and merge different lines of thinking
 - **Validation Framework**: Verify chain of thought reasoning steps
+- **Enhanced Context Awareness (New!)**:
+    - **Long-Term Memory**: Utilizes a persistent LanceDB vector store (`~/.sequential-thinking/vector_store`) to retain and retrieve relevant information across sessions, enabling the AI to build upon past knowledge.
+    - **Full Content Embeddings**: Generates semantic embeddings based on the full content of thoughts, rather than summaries, for more accurate relevance scoring and retrieval.
+    - **Richer Prompt Context**: Injects more comprehensive context (including decompressed full content from relevant memories) into prompts for the underlying LLMs, providing better grounding for reasoning.
+    - **Improved Retrieval Queries**: Uses the full text of the current thought/analysis/synthesis as the basis for querying both working memory and long-term memory, improving the relevance of retrieved context.
 
 ## Tools
 
