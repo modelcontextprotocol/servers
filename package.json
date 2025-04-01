@@ -21,6 +21,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "*",
     "langchain": "^0.3.19",
-    "p-limit": "^6.2.0"
+    "p-limit": "^6.2.0",
+    "tiktoken": "^1.0.20"
   }
 }

@@ -1,4 +1,5 @@
 import { ThoughtData, OptimizedPrompt } from './types.js';
+import { encoding_for_model } from "tiktoken";
 
 interface NeuralConnection {
   weight: number;
@@ -31,7 +32,7 @@ export class PromptOptimizer {
   private static readonly DECAY_FACTOR = 0.95;
   private static readonly MIN_WEIGHT = 0.1;
   private static readonly MAX_PATTERNS = 100;
-  private static readonly CONTEXT_WINDOW_SIZE = 3;
+  private static readonly CONTEXT_WINDOW_SIZE = 3; // Default context window size
   private static readonly DECAY_RATE = 0.8;
 
   private static patterns = {
@@ -217,8 +218,17 @@ export class PromptOptimizer {
   }
 
   private static estimateTokens(text: string): number {
-    // Basic word count token estimation
-    return text.split(/[\s\p{P}]+/u).filter(word => word).length;
+    // Use tiktoken for more accurate estimation (using gpt-4 encoding as approximation)
+    try {
+      const encoding = encoding_for_model("gpt-4");
+      const tokens = encoding.encode(text);
+      encoding.free(); // Free up memory used by the encoder
+      return tokens.length;
+    } catch (error) {
+      console.error("Tiktoken error, falling back to basic estimation:", error);
+      // Fallback to basic word count if tiktoken fails
+      return text.split(/[\s\p{P}]+/u).filter(word => word).length;
+    }
   }
 
   static validate(prompt: string): boolean {
@@ -272,6 +282,8 @@ export class PromptOptimizer {
 
   private static applyContextualPatterns(text: string): string {
     let enhancedText = text;
+    
+    // Apply existing contextual patterns
     this.patterns.contextualPatterns.forEach((pattern, key) => {
       const matches = text.match(pattern);
       if (matches?.length) {
@@ -280,6 +292,36 @@ export class PromptOptimizer {
         this.updatePatternWeight(key, matches.length); // Update pattern weight
       }
     });
+
+    // Simple dynamic pattern identification (log potential new patterns - n-grams)
+    const words = text.toLowerCase().match(/\b\w{3,}\b/g) || []; // Get words (3+ chars)
+    const ngrams: Record<string, number> = {};
+    const n = 3; // Example: look for trigrams
+
+    for (let i = 0; i <= words.length - n; i++) {
+      const ngram = words.slice(i, i + n).join(' ');
+      ngrams[ngram] = (ngrams[ngram] || 0) + 1;
+    }
+
+    // Log frequent n-grams as potential new patterns (e.g., appearing more than once)
+    Object.entries(ngrams).forEach(([ngram, count]) => {
+      if (count > 1) {
+        // Check if this pattern (or similar) already exists before logging
+        let exists = false;
+        this.patterns.contextualPatterns.forEach((pattern) => {
+            // Basic check if the regex source includes the ngram words
+            if (pattern.source.includes(ngram.split(' ')[0]) && pattern.source.includes(ngram.split(' ')[1]) && pattern.source.includes(ngram.split(' ')[2])) {
+                exists = true;
+            }
+        });
+        if (!exists) {
+             console.log(`Potential new pattern detected: "${ngram}" (count: ${count})`);
+             // In a more advanced implementation, we could add this ngram as a new RegExp 
+             // to this.patterns.contextualPatterns or a separate dynamic patterns map.
+        }
+      }
+    });
+
     return enhancedText;
   }
 
@@ -294,14 +336,15 @@ export class PromptOptimizer {
     }
   }
 
-  static optimizeThought(thought: ThoughtData, thoughtHistory: ThoughtData[]): OptimizedPrompt {
+  static optimizeThought(thought: ThoughtData, thoughtHistory: ThoughtData[], dynamicContextWindowSize?: number): OptimizedPrompt {
     if (this.patterns.contextualPatterns.size === 0) {
       this.initializeContextualPatterns();
     }
     
     this.updateSemanticMemory(thought);
     
-    const sessionContext = this.analyzeSessionContext(thoughtHistory);
+    // Use dynamic context window size if provided, otherwise default
+    const sessionContext = this.analyzeSessionContext(thoughtHistory, dynamicContextWindowSize);
     const contextEnhancedThought = this.applySessionContext(thought, sessionContext);
 
     if (thought.isChainOfThought && thought.chainOfThoughtStep && thought.chainOfThoughtStep > 1) {
@@ -331,7 +374,7 @@ export class PromptOptimizer {
     };
   }
 
-  private static analyzeSessionContext(thoughtHistory: ThoughtData[]): SessionContext {
+  private static analyzeSessionContext(thoughtHistory: ThoughtData[], contextWindowSize: number = this.CONTEXT_WINDOW_SIZE): SessionContext {
     if (!thoughtHistory || thoughtHistory.length === 0) {
       return {
         sessionStage: 'initial',
@@ -343,7 +386,7 @@ export class PromptOptimizer {
     }
 
     const lastThought = thoughtHistory[thoughtHistory.length - 1];
-    const recentThoughts = thoughtHistory.slice(-this.CONTEXT_WINDOW_SIZE);
+    const recentThoughts = thoughtHistory.slice(-contextWindowSize);
     
     const stageAnalysis = this.determineSessionStage(recentThoughts);
     const complexityAnalysis = this.analyzeComplexityProgression(thoughtHistory);

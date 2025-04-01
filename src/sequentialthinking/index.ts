@@ -445,7 +445,7 @@ class SequentialThinkingServer {
     return Math.max(1, Math.ceil(chars / 4));
   }
 
-  public async processThought(input: unknown, disableEmbeddings: boolean = false): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+  public async processThought(input: unknown, disableEmbeddings: boolean = false, dynamicContextWindowSize?: number): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
     console.log("Entering processThought function"); // Added debug log
     try {
       const validatedInput = this.validateThoughtData(input);
@@ -461,8 +461,8 @@ class SequentialThinkingServer {
         console.log("Generated embeddings:", embeddings);
       }
 
-      // Process with PromptOptimizer and Claude
-      const optimizedPrompt = PromptOptimizer.optimizeThought(validatedInput, this.thoughtHistory);
+      // Process with PromptOptimizer and Claude, passing dynamic context size
+      const optimizedPrompt = PromptOptimizer.optimizeThought(validatedInput, this.thoughtHistory, dynamicContextWindowSize);
       let claudeResponse;
       let claudePrompt = optimizedPrompt.prompt;
       let claudeTokens = this.estimateTokens(claudePrompt);
@@ -675,6 +675,12 @@ Key features:
       validationReason: {
         type: "string",
         description: "Reason for the validation status"
+      },
+      // Add dynamicContextWindowSize to the schema
+      dynamicContextWindowSize: {
+        type: "integer",
+        description: "Optional dynamic context window size for analysis",
+        minimum: 1
       }
     },
     required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"]
@@ -728,7 +734,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           "Missing arguments for sequentialthinking"
         );
       }
-      const result = await thinkingServer.processThought(request.params.arguments);
+      // Extract dynamicContextWindowSize if provided
+      const args = request.params.arguments as any;
+      const dynamicContextWindowSize = args.dynamicContextWindowSize as number | undefined;
+      
+      const result = await thinkingServer.processThought(args, false, dynamicContextWindowSize); // Pass dynamic size
       console.log("sequentialthinking tool handler logic END"); // Log after processThought call
       return result;
     } else if (request.params.name === "visualize_thinking") {
