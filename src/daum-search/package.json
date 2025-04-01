@@ -1,6 +1,6 @@
 {
   "name": "@ultra21c/mcp-server-daum-search",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "MCP server for Daum Search API integration",
   "license": "MIT",
   "author": "ultra21c",
