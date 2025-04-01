@@ -45,9 +45,32 @@ docker pull ultra21c/mcp-server-daum-search:latest
 
 ### 1. Kakao Developers 설정
 
-1. [Kakao Developers](https://developers.kakao.com) 계정 생성
-2. 애플리케이션 등록
-3. REST API 키 발급
+카카오 API 키 발급 절차:
+
+1. **카카오 개발자 센터 가입**
+   - [Kakao Developers](https://developers.kakao.com)에 접속
+   - 우측 상단의 '로그인' 버튼 클릭
+   - 카카오 계정으로 로그인 (계정이 없는 경우 회원가입)
+
+2. **애플리케이션 등록**
+   - 상단 메뉴에서 '내 애플리케이션' 클릭
+   - '애플리케이션 추가하기' 버튼 클릭
+   - 앱 정보 입력:
+     - 앱 아이콘 업로드 (선택사항)
+     - 앱 이름 입력
+     - 회사 이름 입력
+   - '저장' 버튼 클릭
+
+3. **REST API 키 확인**
+   - 생성된 애플리케이션 선택
+   - 좌측 메뉴에서 '요약 정보' 선택
+   - 'REST API 키' 확인 및 복사
+
+4. **API 키 적용**
+   ```bash
+   # 환경 변수로 설정
+   export KAKAO_API_KEY="복사한_REST_API_키"
+   ```
 
 ### 2. 실행 방법
 
