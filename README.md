@@ -1,7 +1,7 @@
 # Sequential Thinking MCP Server
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![npm version](https://badge.fury.io/js/%40modelcontextprotocol%2Fsequential-thinking.svg)](https://badge.fury.io/js/%40modelcontextprotocol%2Fsequential-thinking)
+[![npm version](https://badge.fury.io/js/server-sequential-thinking.svg)](https://www.npmjs.com/package/server-sequential-thinking)
 
 A Model Context Protocol (MCP) server implementation that enables dynamic, self-aware problem-solving through adaptive thought sequences. The server continuously evolves its understanding while maintaining context awareness, enhanced by powerful visualization and templating capabilities.
 
@@ -158,4 +158,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Homepage](https://modelcontextprotocol.io)
 - [Report Issues](https://github.com/spotty118/servers/issues)
-- [NPM Package](https://www.npmjs.com/package/@modelcontextprotocol/sequential-thinking)
+- [NPM Package](https://www.npmjs.com/package/server-sequential-thinking)
