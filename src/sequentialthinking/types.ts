@@ -39,8 +39,8 @@ export interface OptimizedPrompt {
 
 export interface WorkingMemoryItem {
   id: string;
-  content: string;
-  compressedContent?: Buffer;
+  content: string; // This is typically the summary for working memory items
+  compressedContent?: Buffer | null; // Allow null for items originating from LTM
   metadata: {
     stage: ProcessingStage;
     timestamp: number;

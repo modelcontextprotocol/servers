@@ -30,6 +30,7 @@
     "axios": "^1.6.8",
     "chalk": "^5.3.0",
     "dotenv": "^16.4.7",
+    "@lancedb/lancedb": "^0.5.0",
     "node-fetch": "^3.3.2",
     "yargs": "^17.7.2"
   },

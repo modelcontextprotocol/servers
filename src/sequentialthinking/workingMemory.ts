@@ -1,13 +1,14 @@
 import { getEmbeddings } from './embeddings.js';
-import { cosineSimilarity } from './utils.js';
+import { cosineSimilarity, decompressContent } from './utils.js';
 import { WorkingMemoryItem, ThoughtProcessingState, ProcessingStage } from './types.js';
+import { addOrUpdateMemoryItems, searchLongTermMemory, SearchResultItem as LtmSearchResultItem } from './vectorStore.js'; // Import vector store functions and type
 import { v4 as uuidv4 } from 'uuid';
 import zlib from 'zlib';
-import { promisify } from 'util';
+import { promisify } from 'util'; // Keep promisify for gzip
 
 // Promisify zlib methods
 const gzip = promisify(zlib.gzip);
-const gunzip = promisify(zlib.gunzip);
+// const gunzip = promisify(zlib.gunzip); // Removed, now in utils.ts
 
 // Text summarization threshold (characters)
 const SUMMARIZATION_THRESHOLD = 1000;
@@ -24,18 +25,23 @@ const PRUNING_RELEVANCE_THRESHOLD = parseFloat(process.env.PRUNING_RELEVANCE_THR
 const STOP_WORDS = new Set(['the', 'a', 'an', 'is', 'are', 'to', 'in', 'on', 'for', 'with', 'of', 'and', 'or', 'it', 'this', 'that', 'i', 'you', 'he', 'she', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'hers', 'its', 'our', 'their', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'shall', 'should', 'can', 'could', 'may', 'might', 'must', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'any', 'as', 'at', 'because', 'before', 'below', 'between', 'both', 'but', 'by', 'down', 'during', 'each', 'few', 'from', 'further', 'here', 'how', 'if', 'into', 'just', 'like', 'more', 'most', 'no', 'nor', 'not', 'now', 'only', 'other', 'out', 'over', 'own', 'same', 'so', 'some', 'such', 'than', 'then', 'there', 'these', 'those', 'through', 'under', 'until', 'up', 'very', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', '', 'input', 'output', 'thought', 'analysis', 'synthesis', 'evaluation', 'context', 'memory', 'task', 'results', 'scores', 'prompt', 'objective', 'provide', 'based', 'following', 'considering', 'none', 'available', 'stage', 'step', 'cycle', 'final', 'original', 'key', 'point', 'points', 'details', 'information']);
 
 /**
- * Extracts embeddings for text.
+ * Generates embeddings for text using the configured embedding service.
  * @param text The text to process.
  * @returns An embedding vector.
  */
-async function extractKeywordFrequencies(text: string): Promise<number[]> {
+async function generateEmbeddingsForText(text: string): Promise<number[]> {
+  if (!text || text.trim().length === 0) {
+    console.warn("Attempted to generate embeddings for empty text.");
+    return [];
+  }
   try {
-    console.log("Getting embeddings for:", text);
+    // Log only the beginning of potentially long text
+    console.log("Generating embeddings for text snippet:", text.substring(0, 100) + (text.length > 100 ? "..." : ""));
     const embeddings = await getEmbeddings(text);
     console.log("Embeddings vector length:", embeddings.length);
     return embeddings;
   } catch (error) {
-    console.error("Error getting embeddings:", error);
+    console.error("Error generating embeddings:", error);
     return [];
   }
 }
@@ -45,19 +51,8 @@ async function extractKeywordFrequencies(text: string): Promise<number[]> {
  */
 async function compressContent(content: string): Promise<Buffer> {
   return await gzip(Buffer.from(content, 'utf-8'));
-}
+} // <<< Added missing closing brace
 
-/**
- * Decompresses content using gunzip.
- */
-async function decompressContent(compressed: Buffer): Promise<string> {
-  const decompressed = await gunzip(compressed);
-  return decompressed.toString('utf-8');
-}
-
-/**
- * Summarizes text content if it exceeds the threshold.
- */
 function summarizeContent(content: string): { summary: string, isCompressed: boolean } {
   if (content.length <= SUMMARIZATION_THRESHOLD) {
     return { summary: content, isCompressed: false };
@@ -105,72 +100,216 @@ export async function addToWorkingMemory(
   const updatedWorkingMemory = [...state.workingMemory, newItem];
   console.info(`Added item ${newItem.id} to working memory. New size: ${updatedWorkingMemory.length}`);
 
+  // --- Add to Long-Term Memory (Vector Store) ---
+  try {
+    console.log(`Generating embedding for long-term storage of item ${newItem.id}...`);
+    const fullContentEmbedding = await generateEmbeddingsForText(trimmedContent);
+
+    if (fullContentEmbedding && fullContentEmbedding.length > 0) {
+      await addOrUpdateMemoryItems([{
+        id: newItem.id,
+        text: trimmedContent, // Store full original text
+        vector: fullContentEmbedding,
+        metadata_timestamp: new Date(newItem.metadata.timestamp), // Convert number to Date object
+        metadata_stage: newItem.metadata.stage,
+      }]);
+      console.log(`Successfully queued item ${newItem.id} for long-term memory.`);
+    } else {
+      console.warn(`Could not generate embedding for item ${newItem.id}. Skipping long-term memory storage.`);
+    }
+  } catch (vectorStoreError) {
+    console.error(`Error adding item ${newItem.id} to long-term memory:`, vectorStoreError);
+    // Do not block working memory update if vector store fails
+  }
+  // --- End Long-Term Memory Add ---
+
+
   return {
     ...state,
     workingMemory: updatedWorkingMemory,
   };
+} // <<< Added missing closing brace
+
+// Define a combined structure for ranking items from both sources
+interface RankedMemoryItem {
+    id: string;
+    content: string; // Can be summary or full text
+    compressedContent?: Buffer | null; // Only from working memory (make nullable)
+    metadata: WorkingMemoryItem['metadata'];
+    score: number;
+    source: 'working' | 'long-term';
 }
 
+
 /**
- * Retrieves relevant items using embedding similarity and recency bonus.
+ * Retrieves relevant items from both working memory and long-term memory (vector store).
+ * Combines results, deduplicates, and ranks them.
  */
 export async function retrieveRelevantMemory(
   state: ThoughtProcessingState,
   query: string,
-  topN: number = RETRIEVAL_TOP_N
+  topN: number = RETRIEVAL_TOP_N,
+  ltmTopN: number = RETRIEVAL_TOP_N // How many results to fetch from LTM initially
 ): Promise<WorkingMemoryItem[]> {
   if (!query || typeof query !== 'string' || query.trim().length === 0) {
-    console.warn("Empty query provided for memory retrieval. Returning most recent items.");
+    console.warn("Empty query provided for memory retrieval. Returning most recent working memory items.");
     return state.workingMemory
       .sort((a, b) => b.metadata.timestamp - a.metadata.timestamp)
       .slice(0, topN);
   }
 
-  console.log("\nProcessing query for relevant memory:", query);
-  const queryEmbedding = await extractKeywordFrequencies(query);
-  console.log("Query embedding vector length:", queryEmbedding.length);
+  console.log("\nProcessing query for relevant memory:", query.substring(0, 100) + (query.length > 100 ? "..." : ""));
+  const queryEmbedding = await generateEmbeddingsForText(query);
+  console.log("Query embedding vector length:", queryEmbedding?.length || 0);
 
-  if (state.workingMemory.length === 0 || !queryEmbedding || queryEmbedding.length === 0) {
-    console.warn("No memory or query embeddings to retrieve from.");
-    return []; // No memory or query embeddings to retrieve from
+  if (!queryEmbedding || queryEmbedding.length === 0) {
+      console.warn("Could not generate query embedding. Cannot retrieve memory.");
+      return [];
   }
 
-  // Calculate time range for recency bonus normalization
-  const timestamps = state.workingMemory.map(i => i.metadata.timestamp);
-  const minTimestamp = Math.min(...timestamps);
-  const maxTimestamp = Math.max(...timestamps);
-  const timeRange = Math.max(1, maxTimestamp - minTimestamp); // Avoid division by zero
+  // --- Retrieve from Working Memory ---
+  let workingMemoryResults: RankedMemoryItem[] = [];
+  if (state.workingMemory.length > 0) {
+      console.log("Retrieving from Working Memory...");
+      // Calculate time range for recency bonus normalization
+      const timestamps = state.workingMemory.map(i => i.metadata.timestamp);
+      const minTimestamp = Math.min(...timestamps);
+      const maxTimestamp = Math.max(...timestamps);
+      const timeRange = Math.max(1, maxTimestamp - minTimestamp); // Avoid division by zero
 
-  // Score each memory item based on embedding similarity and recency
-  const scoredItems = await Promise.all(
-    state.workingMemory.map(async (item) => {
-      console.log("\nProcessing memory item:", item.content);
-      const itemEmbedding = await extractKeywordFrequencies(item.content);
-      if (!itemEmbedding || itemEmbedding.length === 0) {
-        console.warn("No embeddings generated for item");
-        return { ...item, score: 0 }; // Skip scoring if item embedding is empty
+      // Score each working memory item
+      const scoredWorkingItems = await Promise.all(
+          state.workingMemory.map(async (item): Promise<RankedMemoryItem> => {
+              let contentToEmbed = item.content; // Default to summary
+              let fullContentFetched = false;
+              if (item.compressedContent) {
+                  try {
+                      // console.log(`Decompressing content for working memory item ${item.id}...`);
+                      contentToEmbed = await decompressContent(item.compressedContent);
+                      fullContentFetched = true;
+                  } catch (decompressionError) {
+                      console.error(`Error decompressing working memory item ${item.id}, falling back to summary:`, decompressionError);
+                  }
+              }
+
+              // console.log(`\nProcessing working memory item ${item.id} (using ${fullContentFetched ? 'full content' : 'summary'}).`);
+              const itemEmbedding = await generateEmbeddingsForText(contentToEmbed);
+              let finalScore = 0;
+
+              if (itemEmbedding && itemEmbedding.length > 0) {
+                  const similarity = cosineSimilarity(queryEmbedding, itemEmbedding);
+                  const normalizedTimestamp = (item.metadata.timestamp - minTimestamp) / timeRange;
+                  const recencyBonus = normalizedTimestamp * RECENCY_WEIGHT;
+                  finalScore = similarity + recencyBonus;
+                  // console.log(`WM Item ${item.id}: Similarity=${similarity.toFixed(3)}, RecencyBonus=${recencyBonus.toFixed(3)}, FinalScore=${finalScore.toFixed(3)}`);
+                  item.metadata.relevanceScore = finalScore; // Update relevance score in metadata
+              } else {
+                  console.warn(`No embeddings generated for working memory item ${item.id}`);
+              }
+
+              return {
+                  id: item.id,
+                  content: item.content, // Keep summary for working memory results initially
+                  compressedContent: item.compressedContent,
+                  metadata: item.metadata,
+                  score: finalScore,
+                  source: 'working'
+              };
+          })
+      );
+      workingMemoryResults = scoredWorkingItems.filter(item => item.score >= MIN_RELEVANCE_SCORE_THRESHOLD);
+      console.log(`Retrieved ${workingMemoryResults.length} relevant items from Working Memory (Threshold: ${MIN_RELEVANCE_SCORE_THRESHOLD}).`);
+  } else {
+       console.log("Working Memory is empty. Skipping retrieval.");
+  }
+
+
+  // --- Retrieve from Long-Term Memory (Vector Store) ---
+  console.log("Retrieving from Long-Term Memory (Vector Store)...");
+  const ltmResultsRaw = await searchLongTermMemory(queryEmbedding, ltmTopN);
+  // Map LTM results to RankedMemoryItem structure
+  const longTermMemoryResults: RankedMemoryItem[] = ltmResultsRaw
+      .map((ltmItem: LtmSearchResultItem): RankedMemoryItem => ({ // Explicitly type ltmItem and return type
+          id: ltmItem.id,
+          content: ltmItem.text, // LTM stores full text
+          compressedContent: null, // LTM results don't have compressed content
+          metadata: { // Reconstruct metadata structure
+              stage: ltmItem.metadata_stage as ProcessingStage, // Assuming stage is stored as string
+              timestamp: ltmItem.metadata_timestamp.getTime(), // Convert Date back to number
+              relevanceScore: ltmItem.score, // Use LTM score directly
+              connections: [], // LTM doesn't store connections in this schema
+              isCompressed: false, // LTM stores raw text
+          },
+          score: ltmItem.score, // LTM score is pure similarity
+          source: 'long-term'
+      }))
+      .filter(item => item.score >= MIN_RELEVANCE_SCORE_THRESHOLD); // Apply threshold also to LTM results
+  console.log(`Retrieved ${longTermMemoryResults.length} relevant items from Long-Term Memory (Threshold: ${MIN_RELEVANCE_SCORE_THRESHOLD}).`);
+
+
+  // --- Combine and Deduplicate Results ---
+  const combinedResults: { [id: string]: RankedMemoryItem } = {};
+
+  // Add working memory results first (potentially higher score due to recency)
+  for (const item of workingMemoryResults) {
+      combinedResults[item.id] = item;
+  }
+
+  // Add long-term memory results, replacing if score is higher (unlikely due to recency bonus in WM)
+  // or adding if not present
+  for (const item of longTermMemoryResults) {
+      if (!combinedResults[item.id] || item.score > combinedResults[item.id].score) {
+          // If adding LTM item, ensure we have full content if possible
+          // (It should already be full text from LTM search result)
+          combinedResults[item.id] = item;
       }
-      const similarity = cosineSimilarity(queryEmbedding, itemEmbedding);
-      console.log(`Cosine similarity between query and item: ${similarity}`);
-      const normalizedTimestamp = (item.metadata.timestamp - minTimestamp) / timeRange;
-      const recencyBonus = normalizedTimestamp * RECENCY_WEIGHT;
-      const finalScore = similarity + recencyBonus;
-      console.log("Recency bonus:", recencyBonus);
-      console.log("Final score:", finalScore);
-      item.metadata.relevanceScore = finalScore; // Update relevance score in metadata
-      return { ...item, score: finalScore };
-    })
-  );
+  }
 
-  const relevantItems = scoredItems
-    .filter(item => item.score >= MIN_RELEVANCE_SCORE_THRESHOLD)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topN);
+  const finalRankedList = Object.values(combinedResults)
+      .sort((a, b) => b.score - a.score) // Sort by final score descending
+      .slice(0, topN); // Take the overall top N
 
   console.info(
-    `Retrieved ${relevantItems.length} relevant items (Top ${topN}, Threshold ${MIN_RELEVANCE_SCORE_THRESHOLD}) for query: "${query.substring(0, 50)}..."`
+      `Combined Retrieval: ${finalRankedList.length} items (Top ${topN}). ` +
+      `Sources: ${finalRankedList.map(i => i.source).join(', ')}`
   );
-  return relevantItems;
+
+  // Map back to WorkingMemoryItem structure for compatibility with stage processors
+  // Prioritize full content if available (from LTM or decompressed WM)
+  const finalWorkingMemoryItems: WorkingMemoryItem[] = await Promise.all(finalRankedList.map(async rankedItem => {
+       let finalContent = rankedItem.content;
+       let finalCompressed = rankedItem.compressedContent; // Keep if from working memory
+       let isSummary = false; // Flag to check if content is summary
+
+       // Check if the content in rankedItem is the summary by comparing lengths or using the metadata flag
+       if (rankedItem.metadata.isCompressed && rankedItem.content.length < SUMMARIZATION_THRESHOLD + 100) { // Heuristic check
+            isSummary = true;
+       }
+
+       // If it came from working memory, is still a summary, and has compressed content, try decompressing
+       if (rankedItem.source === 'working' && rankedItem.compressedContent && isSummary) {
+            try {
+                 console.log(`Decompressing final item ${rankedItem.id} for output...`);
+                 finalContent = await decompressContent(rankedItem.compressedContent);
+                 console.log(`Successfully decompressed final item ${rankedItem.id}.`);
+            } catch (e) {
+                 console.error(`Error decompressing final item ${rankedItem.id}, keeping summary: ${e}`);
+            }
+       }
+
+       return {
+           id: rankedItem.id,
+           content: finalContent, // Use potentially decompressed/full content
+           compressedContent: finalCompressed, // May be undefined if from LTM
+           metadata: {
+                ...rankedItem.metadata,
+                relevanceScore: rankedItem.score // Ensure metadata score reflects final ranking score
+           }
+       };
+  }));
+
+
+  return finalWorkingMemoryItems;
 }
 
 /**

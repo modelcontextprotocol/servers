@@ -1,5 +1,6 @@
 import { ProcessingStage, ThoughtProcessingState, WorkingMemoryItem } from './types.js';
 import { retrieveRelevantMemory } from './workingMemory.js';
+import { decompressContent } from './utils.js'; // Import decompress
 
 // Simple stop words set (consider centralizing)
 const STOP_WORDS = new Set(['the', 'a', 'an', 'is', 'are', 'to', 'in', 'on', 'for', 'with', 'of', 'and', 'or', 'it', 'this', 'that', 'i', 'you', 'he', 'she', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'hers', 'its', 'our', 'their', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'shall', 'should', 'can', 'could', 'may', 'might', 'must', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'any', 'as', 'at', 'because', 'before', 'below', 'between', 'both', 'but', 'by', 'down', 'during', 'each', 'few', 'from', 'further', 'here', 'how', 'if', 'into', 'just', 'like', 'more', 'most', 'no', 'nor', 'not', 'now', 'only', 'other', 'out', 'over', 'own', 'same', 'so', 'some', 'such', 'than', 'then', 'there', 'these', 'those', 'through', 'under', 'until', 'up', 'very', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', '', 'input', 'output', 'thought', 'analysis', 'synthesis', 'evaluation', 'context', 'memory', 'task', 'results', 'scores', 'prompt', 'objective', 'provide', 'based', 'following', 'considering', 'none', 'available', 'stage', 'step', 'cycle', 'final', 'original', 'key', 'point', 'points', 'details', 'information']);
@@ -12,6 +13,39 @@ function extractKeywords(text: string, limit: number = 7): string {
     const keywords = words.filter(kw => !STOP_WORDS.has(kw)).slice(0, limit);
     return keywords.join(' ');
 }
+
+
+/**
+ * Helper function to format relevant memory items for inclusion in prompts.
+ * Attempts to decompress content, falling back to summary if needed.
+ */
+async function formatMemoryContext(relevantMemory: WorkingMemoryItem[]): Promise<string> {
+    if (!relevantMemory || relevantMemory.length === 0) {
+        return '  None available.';
+    }
+
+    const formattedItems = await Promise.all(
+        relevantMemory.map(async (item, idx) => {
+            let contentToShow = item.content; // Default to summary
+            let contentType = 'Summary';
+            if (item.compressedContent) {
+                try {
+                    contentToShow = await decompressContent(item.compressedContent);
+                    contentType = 'Full Content';
+                } catch (e) {
+                    console.error(`Failed to decompress memory item ${item.id} for prompt, using summary. Error: ${e}`);
+                    // Fallback to summary already set
+                }
+            }
+            // Basic truncation for prompt safety, but much larger than before
+            const truncatedContent = contentToShow.length > 1500 ? contentToShow.substring(0, 1500) + '... [truncated]' : contentToShow;
+            return `  [Memory ${idx + 1} - ${item.metadata.stage} (${contentType})]: ${truncatedContent}`;
+        })
+    );
+
+    return formattedItems.join('\n');
+}
+
 
 /**
  * Determines the current processing stage.
@@ -57,11 +91,11 @@ export async function processPreparationStage(
   state: ThoughtProcessingState
 ): Promise<string> {
   console.log(`Stage: ${ProcessingStage.PREPARATION} (Thought ${state.currentThoughtNumber})`);
-  const keywords = extractKeywords(input);
-  const relevantMemory = await retrieveRelevantMemory(state, keywords || input, 3);
-  const memoryContext = relevantMemory.length > 0
-    ? relevantMemory.map((item, idx) => `  [Memory ${idx + 1} - ${item.metadata.stage}]: ${item.content.substring(0, 150)}...`).join('\n')
-    : '  None available.';
+  // Use the full input thought as the query for retrieving relevant memory
+  const retrievalQuery = input;
+  console.log(`Retrieval Query (Preparation): "${retrievalQuery.substring(0, 100)}..."`);
+  const relevantMemory = await retrieveRelevantMemory(state, retrievalQuery, 3);
+  const memoryContext = await formatMemoryContext(relevantMemory); // Use helper
 
   const analysisPrompt = `
 Objective: Analyze the following input thoroughly, considering the provided context from previous thoughts.
@@ -93,14 +127,16 @@ export async function processAnalysisStage(
   state: ThoughtProcessingState
 ): Promise<string> {
   console.log(`Stage: ${ProcessingStage.ANALYSIS} (Thought ${state.currentThoughtNumber})`);
-  const keywords = extractKeywords(analysisOutput, 5);
-  const relevantMemory = await retrieveRelevantMemory(state, keywords || analysisOutput, 4);
-  const memoryContext = relevantMemory.length > 0
-    ? relevantMemory.map((item, idx) => `  [Memory ${idx + 1} - ${item.metadata.stage}]: ${item.content.substring(0, 150)}...`).join('\n')
-    : '  None available.';
-
-  // Clean up the analysis output for the next prompt if it contains the prefix
+  // Clean up the analysis output first
   const cleanedAnalysis = analysisOutput.replace(/^Analysis Results:\s*/i, '').trim();
+  // Use the cleaned analysis output as the query for retrieving relevant memory
+  const retrievalQuery = cleanedAnalysis;
+  console.log(`Retrieval Query (Analysis): "${retrievalQuery.substring(0, 100)}..."`);
+  const relevantMemory = await retrieveRelevantMemory(state, retrievalQuery, 4);
+  const memoryContext = await formatMemoryContext(relevantMemory); // Use helper
+
+  // Use the already cleaned analysis output for the prompt
+  // const cleanedAnalysis = analysisOutput.replace(/^Analysis Results:\s*/i, '').trim(); // Removed duplicate declaration
 
   const synthesisPrompt = `
 Objective: Synthesize the provided analysis results into a coherent next thought or conclusion, incorporating relevant context.
@@ -131,15 +167,15 @@ export async function processSynthesisStage(
   state: ThoughtProcessingState
 ): Promise<string> {
   console.log(`Stage: ${ProcessingStage.SYNTHESIS} (Thought ${state.currentThoughtNumber})`);
-  const keywords = extractKeywords(synthesizedThought, 3);
-  const relevantMemory = await retrieveRelevantMemory(state, keywords || synthesizedThought, 3);
-  const memoryContext = relevantMemory.length > 0
-    ? relevantMemory.map((item, idx) => `  [Memory ${idx + 1} - ${item.metadata.stage}]: ${item.content.substring(0, 150)}...`).join('\n')
-    : '  None available.';
-
-  // Clean up the synthesized thought if it contains the prefix
+  // Clean up the synthesized thought first
   const cleanedSynthesizedThought = synthesizedThought.replace(/^Synthesized Thought:\s*/i, '').trim();
+  // Use the cleaned synthesized thought as the query for retrieving relevant memory
+  const retrievalQuery = cleanedSynthesizedThought;
+   console.log(`Retrieval Query (Synthesis): "${retrievalQuery.substring(0, 100)}..."`);
+  const relevantMemory = await retrieveRelevantMemory(state, retrievalQuery, 3);
+  const memoryContext = await formatMemoryContext(relevantMemory); // Use helper
 
+  // Use the already cleaned synthesized thought for the prompt
   const evaluationPrompt = `
 Objective: Critically evaluate the provided synthesized thought for coherence, relevance, and potential impact, considering the context.
 
