@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRequest } from "../common/utils.js";
+import { githubRequest, getApiBaseUrl } from "../common/utils.js";
 import { GitHubReferenceSchema } from "../common/types.js";
 
 // Schema definitions
@@ -20,15 +20,16 @@ export type CreateBranchOptions = z.infer<typeof CreateBranchOptionsSchema>;
 
 // Function implementations
 export async function getDefaultBranchSHA(owner: string, repo: string): Promise<string> {
+  const baseUrl = getApiBaseUrl();
   try {
     const response = await githubRequest(
-      `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/main`
+      `${baseUrl}/repos/${owner}/${repo}/git/refs/heads/main`
     );
     const data = GitHubReferenceSchema.parse(response);
     return data.object.sha;
   } catch (error) {
     const masterResponse = await githubRequest(
-      `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/master`
+      `${baseUrl}/repos/${owner}/${repo}/git/refs/heads/master`
     );
     if (!masterResponse) {
       throw new Error("Could not find default branch (tried 'main' and 'master')");
@@ -43,10 +44,11 @@ export async function createBranch(
   repo: string,
   options: CreateBranchOptions
 ): Promise<z.infer<typeof GitHubReferenceSchema>> {
+  const baseUrl = getApiBaseUrl();
   const fullRef = `refs/heads/${options.ref}`;
 
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/refs`,
+    `${baseUrl}/repos/${owner}/${repo}/git/refs`,
     {
       method: "POST",
       body: {
@@ -64,8 +66,9 @@ export async function getBranchSHA(
   repo: string,
   branch: string
 ): Promise<string> {
+  const baseUrl = getApiBaseUrl();
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`
+    `${baseUrl}/repos/${owner}/${repo}/git/refs/heads/${branch}`
   );
 
   const data = GitHubReferenceSchema.parse(response);
@@ -97,8 +100,9 @@ export async function updateBranch(
   branch: string,
   sha: string
 ): Promise<z.infer<typeof GitHubReferenceSchema>> {
+  const baseUrl = getApiBaseUrl();
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`,
+    `${baseUrl}/repos/${owner}/${repo}/git/refs/heads/${branch}`,
     {
       method: "PATCH",
       body: {

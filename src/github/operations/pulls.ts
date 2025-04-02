@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRequest } from "../common/utils.js";
+import { githubRequest, getApiBaseUrl } from "../common/utils.js";
 import {
   GitHubPullRequestSchema,
   GitHubIssueAssigneeSchema,
@@ -163,10 +163,11 @@ export const GetPullRequestReviewsSchema = z.object({
 export async function createPullRequest(
   params: z.infer<typeof CreatePullRequestSchema>
 ): Promise<z.infer<typeof GitHubPullRequestSchema>> {
+  const baseUrl = getApiBaseUrl();
   const { owner, repo, ...options } = CreatePullRequestSchema.parse(params);
 
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls`,
+    `${baseUrl}/repos/${owner}/${repo}/pulls`,
     {
       method: "POST",
       body: options,
@@ -181,8 +182,9 @@ export async function getPullRequest(
   repo: string,
   pullNumber: number
 ): Promise<z.infer<typeof GitHubPullRequestSchema>> {
+  const baseUrl = getApiBaseUrl();
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`
+    `${baseUrl}/repos/${owner}/${repo}/pulls/${pullNumber}`
   );
   return GitHubPullRequestSchema.parse(response);
 }
@@ -192,7 +194,8 @@ export async function listPullRequests(
   repo: string,
   options: Omit<z.infer<typeof ListPullRequestsSchema>, 'owner' | 'repo'>
 ): Promise<z.infer<typeof GitHubPullRequestSchema>[]> {
-  const url = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
+  const baseUrl = getApiBaseUrl();
+  const url = new URL(`${baseUrl}/repos/${owner}/${repo}/pulls`);
   
   if (options.state) url.searchParams.append('state', options.state);
   if (options.head) url.searchParams.append('head', options.head);
@@ -212,8 +215,9 @@ export async function createPullRequestReview(
   pullNumber: number,
   options: Omit<z.infer<typeof CreatePullRequestReviewSchema>, 'owner' | 'repo' | 'pull_number'>
 ): Promise<z.infer<typeof PullRequestReviewSchema>> {
+  const baseUrl = getApiBaseUrl();
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`,
+    `${baseUrl}/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`,
     {
       method: 'POST',
       body: options,
@@ -228,8 +232,9 @@ export async function mergePullRequest(
   pullNumber: number,
   options: Omit<z.infer<typeof MergePullRequestSchema>, 'owner' | 'repo' | 'pull_number'>
 ): Promise<any> {
+  const baseUrl = getApiBaseUrl();
   return githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/merge`,
+    `${baseUrl}/repos/${owner}/${repo}/pulls/${pullNumber}/merge`,
     {
       method: 'PUT',
       body: options,
@@ -242,8 +247,9 @@ export async function getPullRequestFiles(
   repo: string,
   pullNumber: number
 ): Promise<z.infer<typeof PullRequestFileSchema>[]> {
+  const baseUrl = getApiBaseUrl();
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/files`
+    `${baseUrl}/repos/${owner}/${repo}/pulls/${pullNumber}/files`
   );
   return z.array(PullRequestFileSchema).parse(response);
 }
@@ -254,8 +260,9 @@ export async function updatePullRequestBranch(
   pullNumber: number,
   expectedHeadSha?: string
 ): Promise<void> {
+  const baseUrl = getApiBaseUrl();
   await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/update-branch`,
+    `${baseUrl}/repos/${owner}/${repo}/pulls/${pullNumber}/update-branch`,
     {
       method: "PUT",
       body: expectedHeadSha ? { expected_head_sha: expectedHeadSha } : undefined,
@@ -268,8 +275,9 @@ export async function getPullRequestComments(
   repo: string,
   pullNumber: number
 ): Promise<z.infer<typeof PullRequestCommentSchema>[]> {
+  const baseUrl = getApiBaseUrl();
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/comments`
+    `${baseUrl}/repos/${owner}/${repo}/pulls/${pullNumber}/comments`
   );
   return z.array(PullRequestCommentSchema).parse(response);
 }
@@ -279,8 +287,9 @@ export async function getPullRequestReviews(
   repo: string,
   pullNumber: number
 ): Promise<z.infer<typeof PullRequestReviewSchema>[]> {
+  const baseUrl = getApiBaseUrl();
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`
+    `${baseUrl}/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`
   );
   return z.array(PullRequestReviewSchema).parse(response);
 }
@@ -290,13 +299,14 @@ export async function getPullRequestStatus(
   repo: string,
   pullNumber: number
 ): Promise<z.infer<typeof CombinedStatusSchema>> {
+  const baseUrl = getApiBaseUrl();
   // First get the PR to get the head SHA
   const pr = await getPullRequest(owner, repo, pullNumber);
   const sha = pr.head.sha;
 
   // Then get the combined status for that SHA
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/commits/${sha}/status`
+    `${baseUrl}/repos/${owner}/${repo}/commits/${sha}/status`
   );
   return CombinedStatusSchema.parse(response);
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRequest, buildUrl } from "../common/utils.js";
+import { githubRequest, buildUrl, getApiBaseUrl } from "../common/utils.js";
 
 export const GetIssueSchema = z.object({
   owner: z.string(),
@@ -53,7 +53,8 @@ export const UpdateIssueOptionsSchema = z.object({
 });
 
 export async function getIssue(owner: string, repo: string, issue_number: number) {
-  return githubRequest(`https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}`);
+  const baseUrl = getApiBaseUrl();
+  return githubRequest(`${baseUrl}/repos/${owner}/${repo}/issues/${issue_number}`);
 }
 
 export async function addIssueComment(
@@ -62,7 +63,8 @@ export async function addIssueComment(
   issue_number: number,
   body: string
 ) {
-  return githubRequest(`https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}/comments`, {
+  const baseUrl = getApiBaseUrl();
+  return githubRequest(`${baseUrl}/repos/${owner}/${repo}/issues/${issue_number}/comments`, {
     method: "POST",
     body: { body },
   });
@@ -73,8 +75,9 @@ export async function createIssue(
   repo: string,
   options: z.infer<typeof CreateIssueOptionsSchema>
 ) {
+  const baseUrl = getApiBaseUrl();
   return githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/issues`,
+    `${baseUrl}/repos/${owner}/${repo}/issues`,
     {
       method: "POST",
       body: options,
@@ -87,6 +90,7 @@ export async function listIssues(
   repo: string,
   options: Omit<z.infer<typeof ListIssuesOptionsSchema>, "owner" | "repo">
 ) {
+  const baseUrl = getApiBaseUrl();
   const urlParams: Record<string, string | undefined> = {
     direction: options.direction,
     labels: options.labels?.join(","),
@@ -98,7 +102,7 @@ export async function listIssues(
   };
 
   return githubRequest(
-    buildUrl(`https://api.github.com/repos/${owner}/${repo}/issues`, urlParams)
+    buildUrl(`${baseUrl}/repos/${owner}/${repo}/issues`, urlParams)
   );
 }
 
@@ -108,8 +112,9 @@ export async function updateIssue(
   issue_number: number,
   options: Omit<z.infer<typeof UpdateIssueOptionsSchema>, "owner" | "repo" | "issue_number">
 ) {
+  const baseUrl = getApiBaseUrl();
   return githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}`,
+    `${baseUrl}/repos/${owner}/${repo}/issues/${issue_number}`,
     {
       method: "PATCH",
       body: options,

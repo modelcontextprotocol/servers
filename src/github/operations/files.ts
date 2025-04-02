@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRequest } from "../common/utils.js";
+import { githubRequest, getApiBaseUrl } from "../common/utils.js";
 import {
   GitHubContentSchema,
   GitHubAuthorSchema,
@@ -75,7 +75,8 @@ export async function getFileContents(
   path: string,
   branch?: string
 ) {
-  let url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const baseUrl = getApiBaseUrl();
+  let url = `${baseUrl}/repos/${owner}/${repo}/contents/${path}`;
   if (branch) {
     url += `?ref=${branch}`;
   }
@@ -114,7 +115,8 @@ export async function createOrUpdateFile(
     }
   }
 
-  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}/repos/${owner}/${repo}/contents/${path}`;
   const body = {
     message,
     content: encodedContent,
@@ -136,6 +138,7 @@ async function createTree(
   files: FileOperation[],
   baseTree?: string
 ) {
+  const baseUrl = getApiBaseUrl();
   const tree = files.map((file) => ({
     path: file.path,
     mode: "100644" as const,
@@ -144,7 +147,7 @@ async function createTree(
   }));
 
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/trees`,
+    `${baseUrl}/repos/${owner}/${repo}/git/trees`,
     {
       method: "POST",
       body: {
@@ -164,8 +167,9 @@ async function createCommit(
   tree: string,
   parents: string[]
 ) {
+  const baseUrl = getApiBaseUrl();
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/commits`,
+    `${baseUrl}/repos/${owner}/${repo}/git/commits`,
     {
       method: "POST",
       body: {
@@ -185,8 +189,9 @@ async function updateReference(
   ref: string,
   sha: string
 ) {
+  const baseUrl = getApiBaseUrl();
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/refs/${ref}`,
+    `${baseUrl}/repos/${owner}/${repo}/git/refs/${ref}`,
     {
       method: "PATCH",
       body: {
@@ -206,8 +211,9 @@ export async function pushFiles(
   files: FileOperation[],
   message: string
 ) {
+  const baseUrl = getApiBaseUrl();
   const refResponse = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`
+    `${baseUrl}/repos/${owner}/${repo}/git/refs/heads/${branch}`
   );
 
   const ref = GitHubReferenceSchema.parse(refResponse);

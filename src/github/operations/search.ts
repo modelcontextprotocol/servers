@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRequest, buildUrl } from "../common/utils.js";
+import { githubRequest, buildUrl, getApiBaseUrl } from "../common/utils.js";
 
 export const SearchOptions = z.object({
   q: z.string(),
@@ -33,13 +33,16 @@ export const SearchUsersSchema = SearchUsersOptions;
 export const SearchIssuesSchema = SearchIssuesOptions;
 
 export async function searchCode(params: z.infer<typeof SearchCodeSchema>) {
-  return githubRequest(buildUrl("https://api.github.com/search/code", params));
+  const baseUrl = getApiBaseUrl();
+  return githubRequest(buildUrl(`${baseUrl}/search/code`, params));
 }
 
 export async function searchIssues(params: z.infer<typeof SearchIssuesSchema>) {
-  return githubRequest(buildUrl("https://api.github.com/search/issues", params));
+  const baseUrl = getApiBaseUrl();
+  return githubRequest(buildUrl(`${baseUrl}/search/issues`, params));
 }
 
 export async function searchUsers(params: z.infer<typeof SearchUsersSchema>) {
-  return githubRequest(buildUrl("https://api.github.com/search/users", params));
+  const baseUrl = getApiBaseUrl();
+  return githubRequest(buildUrl(`${baseUrl}/search/users`, params));
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRequest, buildUrl } from "../common/utils.js";
+import { githubRequest, buildUrl, getApiBaseUrl } from "../common/utils.js";
 
 export const ListCommitsSchema = z.object({
   owner: z.string(),
@@ -16,8 +16,9 @@ export async function listCommits(
   perPage?: number,
   sha?: string
 ) {
+  const baseUrl = getApiBaseUrl();
   return githubRequest(
-    buildUrl(`https://api.github.com/repos/${owner}/${repo}/commits`, {
+    buildUrl(`${baseUrl}/repos/${owner}/${repo}/commits`, {
       page: page?.toString(),
       per_page: perPage?.toString(),
       sha

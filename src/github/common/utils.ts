@@ -28,6 +28,11 @@ export function buildUrl(baseUrl: string, params: Record<string, string | number
 
 const USER_AGENT = `modelcontextprotocol/servers/github/v${VERSION} ${getUserAgent()}`;
 
+export function getApiBaseUrl(): string {
+  const apiUrl = process.env.GITHUB_API_URL;
+  return (apiUrl || "https://api.github.com").replace(/\/+$/, "");
+}
+
 export async function githubRequest(
   url: string,
   options: RequestOptions = {}
@@ -113,8 +118,9 @@ export async function checkBranchExists(
   branch: string
 ): Promise<boolean> {
   try {
+    const baseUrl = getApiBaseUrl();
     await githubRequest(
-      `https://api.github.com/repos/${owner}/${repo}/branches/${branch}`
+      `${baseUrl}/repos/${owner}/${repo}/branches/${branch}`
     );
     return true;
   } catch (error) {
@@ -127,7 +133,8 @@ export async function checkBranchExists(
 
 export async function checkUserExists(username: string): Promise<boolean> {
   try {
-    await githubRequest(`https://api.github.com/users/${username}`);
+    const baseUrl = getApiBaseUrl();
+    await githubRequest(`${baseUrl}/users/${username}`);
     return true;
   } catch (error) {
     if (error && typeof error === "object" && "status" in error && error.status === 404) {
