@@ -97,6 +97,13 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - Returns:
     - Directories that this server can read/write from
 
+- **directory_tree**
+  - Get a recursive tree view of files and directories as a JSON structure upto default depth 3.
+  - `path` (string): Starting directory
+  - `depth` (int): Depth limit upto which it traverses directries. (optional)
+  - Returns:
+    - JSON Array with each entry including 'name', 'type' (file/directory), and 'children' for directories.
+
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
 
