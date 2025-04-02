@@ -21,6 +21,14 @@ A Model Context Protocol server that provides browser automation capabilities us
     - `width` (number, optional, default: 800): Screenshot width
     - `height` (number, optional, default: 600): Screenshot height
 
+- **puppeteer_screenshot_encoded**
+  - Captures a screenshot of the entire page or a specific element and return it as a base64-encoded data URI.
+  - Inputs:
+    - `name` (string, required): Name for the screenshot
+    - `selector` (string, optional): CSS selector for element to screenshot
+    - `width` (number, optional, default: 800): Screenshot width
+    - `height` (number, optional, default: 600): Screenshot height
+
 - **puppeteer_click**
   - Click elements on the page
   - Input: `selector` (string): CSS selector for element to click
