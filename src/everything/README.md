@@ -96,6 +96,20 @@ Resource features:
      - `style` (string): Output style preference
    - Returns: Multi-turn conversation with images
 
+### Logging
+
+The server sends random-leveled log messages every 15 seconds, e.g.:
+
+```json
+{
+  "method": "notifications/message",
+  "params": {
+	"level": "info",
+	"data": "Info-level message"
+  }
+}
+```
+
 ## Usage with Claude Desktop
 
 Add to your `claude_desktop_config.json`:
