@@ -2,7 +2,9 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "Node16",
-    "moduleResolution": "Node16",
+    // "moduleResolution": "Node", // Keep removed
+    // "baseUrl": ".", // Remove baseUrl
+    // "paths": {}, // Remove paths
     "outDir": "./dist",
     "rootDir": ".",
     "strict": true,
