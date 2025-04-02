@@ -101,7 +101,6 @@ export async function addOrUpdateMemoryItems(items: LongTermMemoryData[]): Promi
     if (!table) {
         console.error("Vector store table not available. Cannot add items.");
         return;
-        return;
     }
     if (!items || items.length === 0) {
         console.log("No items provided to add/update in vector store.");
@@ -115,10 +114,26 @@ export async function addOrUpdateMemoryItems(items: LongTermMemoryData[]): Promi
             metadata_timestamp: new Date(item.metadata_timestamp)
         }));
 
-        // Use add with append mode (Note: This doesn't handle updates/upserts correctly)
-        // TODO: Implement proper upsert logic if needed (e.g., delete then add)
-        await table.add(dataToInsert, { mode: 'append' });
-        console.log(`Appended ${items.length} items to vector store.`);
+        // Since LanceDB doesn't have a standard upsert operation that works with the version being used,
+        // we'll implement a simpler approach that's more reliable
+        
+        // For best compatibility with LanceDB, we'll use a simple append strategy
+        // This may result in duplicate entries, but will be handled during retrieval by using the most recent entry
+        if (table) {
+            // Add items with a timestamp to track the most recent version
+            const timestampedData = dataToInsert.map(item => ({
+                ...item,
+                // Add insertion timestamp to differentiate versions
+                insert_timestamp: new Date()
+            }));
+            
+            // Append the items to the table
+            await table.add(timestampedData);
+            console.log(`Added ${items.length} items to vector store with versioning information`);
+            
+            // Note: When querying, we'll need to handle potential duplicates by
+            // selecting the most recent version of each item based on insert_timestamp
+        }
     } catch (error) {
         console.error(`Error adding/updating items in vector store: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -168,12 +183,47 @@ export async function searchLongTermMemory(
 
         // Use .toArray() to get results directly as an array of objects
         const results = await query.toArray() as SearchResultItem[];
+        
+        // Post-process results to handle our timestamp-based versioning
+        // For items with the same ID, only keep the most recent version
+        const latestByIdMap = new Map<string, SearchResultItem>();
+        
+        for (const item of results) {
+            // If the item has an insert_timestamp field (our versioned items)
+            if (item.insert_timestamp) {
+                const existingItem = latestByIdMap.get(item.id);
+                // If we don't have this ID yet, or this item is newer than what we have
+                const itemTimestamp = item.insert_timestamp instanceof Date ? item.insert_timestamp : new Date(item.insert_timestamp as string);
+                
+                if (!existingItem || !existingItem.insert_timestamp) {
+                    latestByIdMap.set(item.id, item);
+                } else {
+                    const existingTimestamp = existingItem.insert_timestamp instanceof Date ? 
+                        existingItem.insert_timestamp : new Date(existingItem.insert_timestamp as string);
+                    
+                    if (itemTimestamp > existingTimestamp) {
+                        latestByIdMap.set(item.id, item);
+                    }
+                }
+            } else {
+                // For items without insert_timestamp (older entries), always include
+                // but don't override newer versioned entries
+                if (!latestByIdMap.has(item.id)) {
+                    latestByIdMap.set(item.id, item);
+                }
+            }
+        }
+        
+        // Convert map back to array and sort by original score
+        const dedupedResults = Array.from(latestByIdMap.values())
+            .sort((a, b) => (b.score || 0) - (a.score || 0))
+            .slice(0, topN);
 
-        console.log(`Vector store search found ${results.length} results (top ${topN}).`);
+        console.log(`Vector store search found ${results.length} results, filtered to ${dedupedResults.length} unique items (top ${topN}).`);
 
         // Optional: Convert Date objects back to numbers if needed downstream
-        // return results.map(r => ({ ...r, metadata_timestamp: r.metadata_timestamp.getTime() }));
-        return results;
+        // return dedupedResults.map(r => ({ ...r, metadata_timestamp: r.metadata_timestamp.getTime() }));
+        return dedupedResults; // Return the deduplicated results, not the raw results
     } catch (error) {
         console.error(`Error searching vector store: ${error instanceof Error ? error.message : String(error)}`);
         return [];

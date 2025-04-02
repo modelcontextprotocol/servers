@@ -33,7 +33,13 @@ export async function getOrInitProcessingState(
       const fileContent = await fs.promises.readFile(filePath, 'utf8');
       const state = JSON.parse(fileContent) as ThoughtProcessingState;
       console.log(`Processing state loaded for session: ${sessionId}`);
-      // TODO: Add validation logic for the loaded state structure
+      
+      // Validate the loaded state structure
+      if (!validateProcessingState(state)) {
+        console.warn(`Invalid state structure for session ${sessionId}, initializing new state`);
+        return initializeNewState(sessionId);
+      }
+      
       return state;
     }
   } catch (error) {
@@ -41,16 +47,48 @@ export async function getOrInitProcessingState(
     // Fall through to initialize if loading fails
   }
 
-  // If file doesn't exist or loading failed, initialize a new state
+  return initializeNewState(sessionId);
+}
+
+/**
+ * Validates a processing state to ensure it has the required structure.
+ * @param state The state to validate.
+ * @returns True if the state is valid, false otherwise.
+ */
+function validateProcessingState(state: any): boolean {
+  if (!state || typeof state !== 'object') return false;
+  
+  // Check required properties
+  if (typeof state.stage !== 'string') return false;
+  if (!Array.isArray(state.workingMemory)) return false;
+  if (typeof state.currentThoughtNumber !== 'number') return false;
+  if (!state.sessionMetadata || typeof state.sessionMetadata !== 'object') return false;
+  
+  // Validate stage is a valid enum value
+  const validStages = Object.values(ProcessingStage);
+  if (!validStages.includes(state.stage as ProcessingStage)) return false;
+  
+  return true;
+}
+
+/**
+ * Initializes a new processing state for a session.
+ * @param sessionId The ID of the session.
+ * @returns A new ThoughtProcessingState.
+ */
+function initializeNewState(sessionId: string): ThoughtProcessingState {
   console.warn(`Initializing new processing state for session: ${sessionId}`);
+  
   const initialState: ThoughtProcessingState = {
     stage: ProcessingStage.PREPARATION,
     workingMemory: [],
     currentThoughtNumber: 0, // Will be updated when a thought is processed
-    sessionMetadata: {},
+    sessionMetadata: {
+      createdAt: new Date().toISOString(),
+      sessionId: sessionId
+    },
   };
-  // Optionally save the initial state immediately
-  // await saveProcessingState(sessionId, initialState); 
+  
   return initialState;
 }
 

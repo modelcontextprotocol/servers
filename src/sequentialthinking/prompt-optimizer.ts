@@ -1,4 +1,12 @@
 import { ThoughtData, OptimizedPrompt } from './types.js';
+
+// Extended thought interface to include analysis props
+interface ExtendedThoughtData extends ThoughtData {
+  semanticAnalysisPrompt?: string;
+  memoryInsightsPrompt?: string;
+  analysis?: string;
+  fileContentPrompt?: string;
+}
 import { encoding_for_model } from "tiktoken";
 
 interface NeuralConnection {
@@ -358,27 +366,135 @@ export class PromptOptimizer {
        this.trackThoughtRelationship(thought.thoughtNumber, thought.thoughtNumber - 1);
      }
 
-     // Prepare IDE context string
+     // Prepare IDE context string with more emphasis on using it
      let ideContextString = '';
      if (fileStructure) {
-       ideContextString += `\n\nFile Structure:\n${fileStructure}\n`;
+       ideContextString += `\n\n## File Structure Analysis:\n${fileStructure}\n`;
      }
      if (openFiles && openFiles.length > 0) {
-       ideContextString += `\n### Open Files:\n${openFiles.map(f => `- ${f}`).join('\n')}\n`;
+       ideContextString += `\n## Open Files:\n${openFiles.map(f => `- ${f}`).join('\n')}\n`;
+     }
+     
+     // Add explicit instruction to incorporate file analysis in the response
+     if (fileStructure || (openFiles && openFiles.length > 0)) {
+       ideContextString += `\n\n## IMPORTANT: Your response MUST incorporate relevant insights from the above file structure analysis and open files. Reference specific elements from the analysis that are relevant to this thought process.\n`;
+     }
+
+     // Analyze current thought content for context-aware file inclusion
+     let fileContentSection = '';
+     // Define extendedThought before first use
+     const extendedThought = thought as ExtendedThoughtData;
+     
+     if (typeof extendedThought.fileContentPrompt === 'string' && extendedThought.fileContentPrompt.length > 0) {
+       // Extract key terms from the thought to improve contextual relevance of included files
+       const keyTerms = this.extractCodeEntitiesFromThought(thought.thought);
+       
+       // Log the key terms for debugging
+       if (keyTerms.length > 0) {
+         console.log(`[CONTEXT] Extracted ${keyTerms.length} key terms from thought #${thought.thoughtNumber}:`, keyTerms);
+       }
+       
+       // Add context info to the file content section
+       fileContentSection = `
+
+## Source Code From Open Files:
+${keyTerms.length > 0 ? `// Context-relevant files prioritized based on: ${keyTerms.join(', ')}\n` : ''}
+${extendedThought.fileContentPrompt}
+`;
+     }
+     
+     // Check if we have semantic analysis to include
+     let semanticAnalysisSection = '';
+     if (typeof extendedThought.semanticAnalysisPrompt === 'string' && extendedThought.semanticAnalysisPrompt.length > 0) {
+       semanticAnalysisSection = `
+
+## Semantic Code Analysis:
+${extendedThought.semanticAnalysisPrompt}
+`;
+       console.log("[DEBUG] Including semantic analysis in prompt");
+     } else {
+       console.log("[DEBUG] No semantic analysis available for prompt", 
+                 typeof extendedThought.semanticAnalysisPrompt, 
+                 extendedThought.semanticAnalysisPrompt ? extendedThought.semanticAnalysisPrompt.length : 'undefined');
+     }
+     
+     // Check if we have memory insights to include
+     let memoryInsightsSection = '';
+     // Use the already declared extendedThought variable
+     if (typeof extendedThought.memoryInsightsPrompt === 'string' && extendedThought.memoryInsightsPrompt.length > 0) {
+       memoryInsightsSection = `
+
+## Learning From Similar Problems:
+${extendedThought.memoryInsightsPrompt}
+`;
+       console.log("[DEBUG] Including memory insights in prompt");
+     } else {
+       console.log("[DEBUG] No memory insights available for prompt", 
+                 typeof extendedThought.memoryInsightsPrompt, 
+                 extendedThought.memoryInsightsPrompt ? extendedThought.memoryInsightsPrompt.length : 'undefined');
+     }
+     
+     // Add step history to maintain continuity across steps
+     let stepHistorySection = '';
+     if (thoughtHistory.length > 0) {
+       // Get the last 3 thoughts as history to maintain context
+       const recentThoughts = thoughtHistory.slice(-3);
+       const historyText = recentThoughts.map(t => {
+         // Format each thought as a summary
+         const stepNum = typeof t.thoughtNumber === 'number' ? 
+           (Math.floor(t.thoughtNumber) === t.thoughtNumber ? 
+             t.thoughtNumber.toString() : 
+             t.thoughtNumber.toFixed(1)) : 
+           '?';
+         
+         // Extract the first 150 chars of thought and analysis
+         const thoughtPreview = t.thought?.substring(0, 150) + '...';
+         // Handle analysis which may not be part of ThoughtData type
+         const analysisText = (t as any).analysis || '';
+         const analysisPreview = analysisText.substring(0, 150) + '...';
+         
+         return `Step ${stepNum}: ${thoughtPreview}\nKey insight: ${analysisPreview}\n`;
+       }).join('\n');
+       
+       stepHistorySection = `
+
+## Recent Analysis History:
+${historyText}
+`;
+       console.log("[DEBUG] Including history from previous steps");
+     } else {
+       console.log("[DEBUG] No step history available yet");
      }
 
      const context = `
-### IDE Context:
+## IDE Context and Codebase Information:
 ${ideContextString.trim() || 'No IDE context provided.'}
+${fileContentSection}
+${semanticAnalysisSection}
+${memoryInsightsSection}
+${stepHistorySection}
 
-### Current Thought (${thought.thoughtNumber}/${thought.totalThoughts}):
+## Current Thought (${thought.thoughtNumber}/${thought.totalThoughts}):
 ${thought.thought}
 
-### Analysis Focus:
+## Analysis Focus:
 Stage: ${sessionContext.sessionStage}
 Focus: ${sessionContext.recentContext || 'Pre-reason and Chain-of-thought optimization'}
     
     ${thought.isChainOfThought ? `CoT Step ${thought.chainOfThoughtStep}/${thought.totalChainOfThoughtSteps}` : ''}
+
+## RESPONSE FORMAT:
+1. Begin with a brief analysis of the current thought
+2. Relate the thought to relevant aspects of the codebase structure and source code (when available)
+3. Reference specific code sections from the provided files when applicable
+4. Continue the sequential thinking process with deep reasoning
+
+## STEP STRUCTURE GUIDELINES:
+- Identify this analysis as "Step X" or "Step X.Y" at the beginning of your response
+- For main points, use the format "Step 1:", "Step 2:", etc.
+- For detailed exploration of specific components, use substeps like "Step 1.1:", "Step 1.2:", etc.
+- Connect this step to previous steps by referencing their insights
+- Recommend the next logical step in the analysis sequence
     ${thought.isHypothesis ? 'Hypothesis' : ''}
     ${thought.isVerification ? 'Verification' : ''}
     ${sessionContext.dominantPatterns.length > 0 ? `Patterns: ${sessionContext.dominantPatterns.slice(0,2).map(p => p.word).join(', ')}` : ''}
@@ -646,6 +762,76 @@ Focus: ${sessionContext.recentContext || 'Pre-reason and Chain-of-thought optimi
     return Object.entries(wordCounts)
       .sort(([, countA], [, countB]) => countB - countA)
       .map(([word]) => word);
+  }
+  
+  /**
+   * Extracts code entities (function names, class names, variable names) from thought text
+   * to improve context-aware file relevance
+   * @param thoughtText The text content of the thought
+   * @returns Array of extracted code entity names
+   */
+  private static extractCodeEntitiesFromThought(thoughtText: string): string[] {
+    if (!thoughtText) return [];
+    
+    const entities: Set<string> = new Set();
+    
+    // Common code entity patterns
+    const patterns = [
+      // Function calls: functionName(...)
+      /\b([a-zA-Z][a-zA-Z0-9_]*)\s*\(/g,
+      
+      // Class names: often start with capital letters
+      /\b([A-Z][a-zA-Z0-9_]*)\b/g,
+      
+      // Variable names: often in camelCase or snake_case
+      /\b([a-z][a-zA-Z0-9]*)\b/g,
+      
+      // File references
+      /\b([\w-]+\.(js|ts|jsx|tsx|html|css|py|java|go|rb|php))\b/g,
+      
+      // Directory/path references
+      /['"`]([\w\-\.\/]+)['"`]/g,
+      
+      // Import/require statements
+      /(?:import|require)\s+['"`]([^'"`]+)['"`]/g
+    ];
+    
+    // Extract entities from thought text using regex patterns
+    for (const pattern of patterns) {
+      const matches = thoughtText.matchAll(pattern);
+      for (const match of matches) {
+        if (match[1] && match[1].length > 2) { // Skip very short matches
+          // Filter out common words and reserved keywords
+          if (!this.isCommonWordOrKeyword(match[1])) {
+            entities.add(match[1]);
+          }
+        }
+      }
+    }
+    
+    // Convert set to array and limit to most relevant terms
+    return Array.from(entities).slice(0, 10);
+  }
+  
+  /**
+   * Checks if a term is a common word or programming keyword
+   * @param term The term to check
+   * @returns True if the term is a common word or keyword
+   */
+  private static isCommonWordOrKeyword(term: string): boolean {
+    // Common programming keywords to filter out
+    const programmingKeywords = new Set([
+      'function', 'class', 'const', 'let', 'var', 'if', 'else', 'for', 'while',
+      'return', 'import', 'export', 'default', 'async', 'await', 'try', 'catch',
+      'new', 'this', 'super', 'extends', 'implements', 'interface', 'type',
+      'string', 'number', 'boolean', 'array', 'object', 'undefined', 'null',
+      'true', 'false', 'public', 'private', 'protected', 'static', 'void'
+    ]);
+    
+    // Check if the term is too short, a stop word, or a programming keyword
+    return term.length < 3 || 
+           this.stopWords.has(term.toLowerCase()) || 
+           programmingKeywords.has(term.toLowerCase());
   }
 
   private static applySessionContext(thought: ThoughtData, sessionContext: SessionContext): ThoughtData {

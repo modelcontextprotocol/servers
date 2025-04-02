@@ -221,7 +221,8 @@ export class IssueDetector {
       // Calculate coherence score
       const keywords1 = new Set(currentText.split(/\s+/));
       const keywords2 = new Set(nextText.split(/\s+/));
-      const commonKeywords = new Set([...keywords1].filter(x => keywords2.has(x)));
+      // Use Array.from instead of spread operator for Set iteration
+      const commonKeywords = new Set(Array.from(keywords1).filter(x => keywords2.has(x)));
       const overlapRatio = commonKeywords.size / Math.min(keywords1.size, keywords2.size);
 
       if (overlapRatio < 0.2) { // Less than 20% keyword overlap
@@ -314,13 +315,15 @@ export class IssueDetector {
       }
     });
 
-    return [...new Set(biasedThoughts)];
+    // Use Array.from instead of spread operator for Set iteration
+    return Array.from(new Set(biasedThoughts));
   }
 
   private hasTextOverlap(text1: string, text2: string): boolean {
     const words1 = new Set(text1.split(/\s+/));
     const words2 = new Set(text2.split(/\s+/));
-    const commonWords = new Set([...words1].filter(x => words2.has(x)));
+    // Use Array.from instead of spread operator for Set iteration
+    const commonWords = new Set(Array.from(words1).filter(x => words2.has(x)));
     return commonWords.size >= 2;
   }
 

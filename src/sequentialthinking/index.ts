@@ -18,6 +18,10 @@ import {
   McpError
 } from "@modelcontextprotocol/sdk/types.js";
 import { ThoughtData, ClaudeResponse, OptimizedPrompt } from './types.js';
+import { analyzeProject, formatProjectStructure } from './file-analyzer.js';
+import { readOpenFiles, prepareFileContentForPrompt, OpenFileInfo } from './file-content-reader.js';
+import { memorySystem } from './advanced-memory.js';
+import { semanticAnalyzer } from './semantic-analyzer.js';
 import { PromptOptimizer } from './prompt-optimizer.js';
 import fetch, { Response } from 'node-fetch';
 import { VISUALIZATION_TOOL, handleVisualizationRequest } from './visualization.js';
@@ -72,6 +76,58 @@ interface SessionData {
   updatedAt: string;
   thoughtHistory: ThoughtData[];
   branches: Record<string, ThoughtData[]>;
+}
+
+/**
+ * Extracts code entities and contextual terms from thought text to prioritize relevant files
+ * A simplified version of PromptOptimizer.extractCodeEntitiesFromThought
+ * @param thoughtText The text content of the thought
+ * @returns Array of extracted code entity names and relevant terms
+ */
+function extractContextualCodeEntities(thoughtText: string): string[] {
+  if (!thoughtText) return [];
+  
+  const entities: Set<string> = new Set();
+  
+  // Common code entity patterns
+  const patterns = [
+    // Function calls: functionName(...)
+    /\b([a-zA-Z][a-zA-Z0-9_]*)\s*\(/g,
+    
+    // Class names: often start with capital letters
+    /\b([A-Z][a-zA-Z0-9_]*)\b/g,
+    
+    // File references
+    /\b([\w-]+\.(js|ts|jsx|tsx|html|css|py|java|go|rb|php))\b/g,
+    
+    // Directory/path references
+    /['"`]([\w\-\.\/]+)['"`]/g,
+    
+    // Import/require statements
+    /(?:import|require)\s+['"`]([^'"`]+)['"`]/g
+  ];
+  
+  // Keywords to filter out
+  const keywords = new Set([
+    'function', 'class', 'const', 'let', 'var', 'if', 'else', 'for', 'while',
+    'return', 'import', 'export', 'default', 'async', 'await', 'try', 'catch'
+  ]);
+  
+  // Extract entities from thought text using regex patterns
+  for (const pattern of patterns) {
+    const matches = Array.from(thoughtText.matchAll(pattern));
+    for (const match of matches) {
+      if (match[1] && match[1].length > 2) { // Skip very short matches
+        // Filter out common keywords
+        if (!keywords.has(match[1].toLowerCase())) {
+          entities.add(match[1]);
+        }
+      }
+    }
+  }
+  
+  // Convert set to array and limit to most relevant terms
+  return Array.from(entities).slice(0, 10);
 }
 
 class SequentialThinkingServer {
@@ -485,12 +541,226 @@ class SequentialThinkingServer {
      openFiles?: string[] 
    ): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
      console.log("Entering processThought function"); // Added debug log
+
+     // Auto-analyze project structure if not provided
+     if (!fileStructure) {
+       try {
+         console.log("Project structure not provided - auto-analyzing...");
+         // Get the current working directory or use the directory where the server is running
+         const projectDir = process.cwd();
+         const projectAnalysis = await analyzeProject(projectDir, 3); // Limit depth to 3 for performance
+         fileStructure = formatProjectStructure(projectAnalysis);
+         console.log("Auto-analysis complete.");
+       } catch (error) {
+         console.error("Error auto-analyzing project structure:", error);
+       }
+     }
+
+     // Auto-analyze open files if not provided by the IDE integration
+     if (!openFiles || openFiles.length === 0) {
+       console.log("Open files not provided - using important files as fallback.");
+       try {
+         // As a fallback, we'll list all package.json, README.md, etc. as "open"
+         const projectDir = process.cwd();
+         const projectAnalysis = await analyzeProject(projectDir, 3);
+         openFiles = projectAnalysis.importantFiles.map(file => file.path);
+       } catch (error) {
+         console.error("Error creating fallback open files list:", error);
+       }
+     }
+     
+     // Read full file contents for open files
+     console.log("Reading full content of open files...");
+     let fileContentPrompt = "";
+     let fileData: OpenFileInfo[] = [];
+     try {
+       // Ensure openFiles is not undefined before passing it
+       const filesToRead = openFiles || [];
+       const readResult = await readOpenFiles(filesToRead, process.cwd());
+       fileData = readResult.fileData;
+       
+       // Get validated input first to determine step info
+       const validatedInput = this.validateThoughtData(input);
+       const stepNumber = validatedInput.thoughtNumber || 1;
+       
+       // Extract main step and sub-step for chunked processing
+       const mainStep = Math.floor(stepNumber);
+       const subStep = Math.round((stepNumber - mainStep) * 10);
+       const stepInfo = { mainStep, subStep };
+       
+       // Extract relevant code entities from the thought to prioritize related files
+       const thoughtText = validatedInput.thought || '';
+       // Use a simplified extraction function for context awareness
+       const contextFileNames = extractContextualCodeEntities(thoughtText);
+       
+       if (contextFileNames.length > 0) {
+         console.log(`[CONTEXT] Found ${contextFileNames.length} context-relevant terms for file prioritization:`, contextFileNames);
+       }
+       
+       // Pass step info and context file names to the file content reader
+       fileContentPrompt = prepareFileContentForPrompt(fileData, 4000, stepInfo, contextFileNames);
+       console.log(`Prepared file content prompt with context-aware prioritization. Step: ${mainStep}.${subStep} (${fileData.length} total files)`);
+     } catch (error) {
+       console.error("Error reading open file contents:", error);
+     }
+     
+     // Perform semantic analysis on code files based on step number
+     console.log("Performing semantic analysis on code files...");
+     let semanticAnalysisPrompt = "";
+     try {
+       // Only analyze .ts and .js files
+       const codeFiles = fileData.filter(file => 
+         file.path.endsWith('.ts') || 
+         file.path.endsWith('.js') || 
+         file.path.endsWith('.tsx') || 
+         file.path.endsWith('.jsx')
+       );
+       
+       console.log(`[DEBUG] Found ${codeFiles.length} code files for semantic analysis`);
+       
+       // Determine which files to analyze based on step number to chunk processing
+       const validatedInput = this.validateThoughtData(input);
+       const stepNumber = validatedInput.thoughtNumber || 1;
+       console.log(`[DEBUG] Current step number: ${stepNumber}`);
+       
+       // Decide how many files to process based on step number
+       let filesToProcess: string[] = [];
+       
+       if (typeof stepNumber === 'number') {
+         // Use the fractional part to determine which subset of files to analyze
+         const mainStep = Math.floor(stepNumber);
+         const subStep = Math.round((stepNumber - mainStep) * 10);
+         
+         if (codeFiles.length > 0) {
+           if (subStep === 0) {
+             // Main step - analyze the most important file
+             filesToProcess = [codeFiles[0].path];
+             console.log(`[DEBUG] Main step ${mainStep} - analyzing primary file: ${codeFiles[0].path}`);
+           } else {
+             // Sub-step - analyze specific files based on the substep
+             const startIdx = (subStep - 1) % codeFiles.length;
+             const fileIdx = Math.min(startIdx, codeFiles.length - 1);
+             filesToProcess = [codeFiles[fileIdx].path];
+             console.log(`[DEBUG] Sub-step ${mainStep}.${subStep} - analyzing file index ${fileIdx}: ${codeFiles[fileIdx].path}`);
+           }
+         }
+       } else {
+         // Fallback to analyzing just the first file
+         if (codeFiles.length > 0) {
+           filesToProcess = [codeFiles[0].path];
+         }
+       }
+       
+       // Process the selected files
+       if (filesToProcess.length > 0) {
+         const targetFile = filesToProcess[0];
+         console.log(`Analyzing target file: ${targetFile}`);
+         
+         try {
+           const analysis = await semanticAnalyzer.analyzeFile(targetFile);
+           semanticAnalysisPrompt = semanticAnalyzer.summarizeAnalysis(analysis);
+           console.log(`Completed semantic analysis of ${targetFile} (${semanticAnalysisPrompt.length} chars)`);
+           // Print a preview of the analysis
+           console.log(`[DEBUG] Analysis preview: ${semanticAnalysisPrompt.substring(0, 100)}...`);
+         } catch (innerError) {
+           console.error(`[DEBUG] Failed to analyze ${targetFile}:`, innerError);
+         }
+       } else {
+         console.log(`[DEBUG] No suitable code files found for semantic analysis.`);
+       }
+     } catch (error) {
+       console.error("Error performing semantic analysis:", error);
+     }
+     
+     // Check memory system for relevant insights
+     console.log("Querying memory system for relevant insights...");
+     let memoryInsightsPrompt = "";
+     try {
+       await memorySystem.loadMemories();
+       console.log("[DEBUG] Memory system initialized");
+       
+       // Create code context from file data
+       const codeContext = {
+         files: fileData.map(file => file.path),
+         symbols: [] // We could extract symbols from semantic analysis
+       };
+       console.log(`[DEBUG] Code context created with ${codeContext.files.length} files`);
+       
+       // We need to validate input first to avoid TypeScript errors
+       const validatedInput = this.validateThoughtData(input);
+       
+       // Get insights from memory system
+       const thoughtNumbers = [validatedInput.thoughtNumber || 1];
+       console.log(`[DEBUG] Getting insights for thought number ${thoughtNumbers[0]}`);
+       console.log(`[DEBUG] Current thought history length: ${this.thoughtHistory.length}`);
+       
+       const insights = await memorySystem.generateInsights(this.thoughtHistory, codeContext);
+       console.log(`[DEBUG] Memory system returned ${insights.length} insights`);
+       
+       if (insights.length > 0) {
+         memoryInsightsPrompt = "\n\n## Insights From Previous Similar Problems:\n" + 
+           insights.map(insight => `- ${insight}`).join("\n");
+         console.log(`Found ${insights.length} relevant insights from memory`);
+         console.log(`[DEBUG] First insight: ${insights[0].substring(0, 100)}...`);
+       } else {
+         console.log(`[DEBUG] No insights found in memory system for this thought`);
+       }
+       
+       // Store new insight from this thought
+       if (validatedInput.thought && validatedInput.thought.length > 0) {
+         console.log(`[DEBUG] Storing new insight for thought: "${validatedInput.thought.substring(0, 50)}..."`);
+         // Don't await this to avoid blocking
+         memorySystem.storeInsight(
+           validatedInput.thought, 
+           thoughtNumbers,
+           ["sequential-thinking", "reasoning"],
+           0.7,
+           codeContext
+         ).then(id => console.log(`Stored new memory with ID: ${id}`));
+       } else {
+         console.log(`[DEBUG] No valid thought content to store in memory`);
+       }
+     } catch (error) {
+       console.error("Error working with memory system:", error);
+     }
+     
      try {
        const validatedInput = this.validateThoughtData(input);
-
-      if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
-        validatedInput.totalThoughts = validatedInput.thoughtNumber;
-      }
+       
+       // Auto-increment thought number based on history
+       // This ensures sequential numbering regardless of client input
+       if (this.thoughtHistory.length > 0) {
+         // Find the highest thought number in history and increment by 1
+         const highestThoughtNumber = Math.max(
+           ...this.thoughtHistory.map(t => t.thoughtNumber || 0)
+         );
+         
+         // Check if this is a substep (e.g., "1.1" format) or a main step
+         const mainStepMatch = validatedInput.thought?.match(/^\s*Step\s+(\d+)\.(\d+):/i);
+         if (mainStepMatch) {
+           // This is a substep format like "Step 1.2:"
+           const mainStep = parseInt(mainStepMatch[1]);
+           const subStep = parseInt(mainStepMatch[2]);
+           
+           // Format as decimal for internal tracking (e.g., 1.2 becomes 1.2)
+           validatedInput.thoughtNumber = mainStep + (subStep / 10);
+           console.log(`[DEBUG] Detected substep format ${mainStep}.${subStep}, using thought number ${validatedInput.thoughtNumber}`);
+         } else {
+           // Standard incremental step
+           validatedInput.thoughtNumber = highestThoughtNumber + 1;
+         }
+       } else {
+         // First thought in sequence - always suggest a multi-step process
+         validatedInput.thoughtNumber = 1;
+         // Force totalThoughts to be at least 5 for initial thought to encourage multi-step thinking
+         validatedInput.totalThoughts = Math.max(validatedInput.totalThoughts || 0, 5);
+         console.log(`[DEBUG] Initial thought - setting up for multi-step process (${validatedInput.thoughtNumber}/${validatedInput.totalThoughts})`);
+       }
+       
+       // Ensure total thoughts is at least equal to current thought number
+       if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
+         validatedInput.totalThoughts = validatedInput.thoughtNumber;
+       }
 
       let embeddings: number[] | null = null;
       if (disableEmbeddings) {
@@ -499,13 +769,21 @@ class SequentialThinkingServer {
         console.log("Generated embeddings:", embeddings);
        }
 
-       // Process with PromptOptimizer, passing dynamic context size and IDE context
+       // Add file content, semantic analysis, and memory insights to the thought data for processing
+       const enhancedInput = {
+         ...validatedInput,
+         fileContentPrompt,          // Add the file content to the input
+         semanticAnalysisPrompt,     // Add semantic analysis
+         memoryInsightsPrompt        // Add memory insights
+       };
+       
+       // Process with PromptOptimizer, passing dynamic context size, IDE context, and file content
        const optimizedPrompt = PromptOptimizer.optimizeThought(
-         validatedInput, 
+         enhancedInput, 
          this.thoughtHistory, 
          dynamicContextWindowSize,
          fileStructure, // Pass file structure
-          openFiles      // Pass open files
+         openFiles      // Pass open files
         );
        
        // --- Stage 1: Call Gemini ---
@@ -800,6 +1078,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     console.log(`Tool requested: ${request.params.name}`); // Log requested tool name
     if (request.params.name === "sequentialthinking") {
+      console.log("Attempting to analyze current project structure...");
+      // Auto-analyze project structure
+      let autoFileStructure: string | undefined;
+      let autoOpenFiles: string[] | undefined;
+      
+      try {
+        // Get the current working directory
+        const projectDir = process.cwd();
+        console.log(`Analyzing project directory: ${projectDir}`);
+        const projectAnalysis = await analyzeProject(projectDir, 3);
+        autoFileStructure = formatProjectStructure(projectAnalysis);
+        // Use important files as proxy for "open files"
+        autoOpenFiles = projectAnalysis.importantFiles.map(file => file.path);
+        console.log(`Auto-analysis complete. Found ${projectAnalysis.fileCount} files.`);
+      } catch (error) {
+        console.error("Error during auto-analysis:", error);
+      }
       console.log("sequentialthinking tool handler logic START"); // Log before processThought call
       if (!request.params.arguments) {
         throw new McpError(
@@ -810,8 +1105,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
        // Extract dynamicContextWindowSize and IDE context if provided
        const args = request.params.arguments as any;
        const dynamicContextWindowSize = args.dynamicContextWindowSize as number | undefined;
-       const fileStructure = args.fileStructure as string | undefined;
-       const openFiles = args.openFiles as string[] | undefined;
+       // Use provided values or fall back to auto-analyzed ones
+       const fileStructure = (args.fileStructure as string | undefined) || autoFileStructure;
+       const openFiles = (args.openFiles as string[] | undefined) || autoOpenFiles;
        
        const result = await thinkingServer.processThought(
          args, 
