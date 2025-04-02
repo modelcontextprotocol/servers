@@ -301,3 +301,4 @@ cython_debug/
 
 # misc
 .specstory/
+.cursor/
