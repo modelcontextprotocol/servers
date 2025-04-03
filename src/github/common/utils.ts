@@ -1,6 +1,7 @@
 import { getUserAgent } from "universal-user-agent";
 import { createGitHubError } from "./errors.js";
 import { VERSION } from "./version.js";
+import { execSync } from "child_process";
 
 type RequestOptions = {
   method?: string;
@@ -28,6 +29,21 @@ export function buildUrl(baseUrl: string, params: Record<string, string | number
 
 const USER_AGENT = `modelcontextprotocol/servers/github/v${VERSION} ${getUserAgent()}`;
 
+export function getGitHubToken(): string {
+  try {
+    const token = execSync("gh auth token", { encoding: "utf-8" }).trim();
+    if (!token) {
+      throw new Error("Failed to retrieve GitHub token using gh CLI.");
+    }
+    return token;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Error retrieving GitHub token: ${error.message}`);
+    }
+    throw new Error("Error retrieving GitHub token: An unknown error occurred.");
+  }
+}
+
 export async function githubRequest(
   url: string,
   options: RequestOptions = {}
@@ -41,6 +57,11 @@ export async function githubRequest(
 
   if (process.env.GITHUB_PERSONAL_ACCESS_TOKEN) {
     headers["Authorization"] = `Bearer ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN}`;
+  }
+
+  if (process.env.GITHUB_PERSONAL_ACCESS_TOKEN_USE_GHCLI) {
+    const token = getGitHubToken();
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const response = await fetch(url, {
