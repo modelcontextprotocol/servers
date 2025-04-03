@@ -2,6 +2,31 @@
 
 A Model Context Protocol server that provides access to Redis databases. This server enables LLMs to interact with Redis key-value stores through a set of standardized tools.
 
+## Prerequisites
+
+1. Redis server must be installed and running
+   - [Download Redis](https://redis.io/download)
+   - For Windows users: Use [Windows Subsystem for Linux (WSL)](https://redis.io/docs/getting-started/installation/install-redis-on-windows/) or [Memurai](https://www.memurai.com/) (Redis-compatible Windows server)
+   - Default port: 6379
+
+## Common Issues & Solutions
+
+### Connection Errors
+
+**ECONNREFUSED**
+  - **Cause**: Redis server is not running or unreachable
+  - **Solution**: 
+    - Verify Redis is running: `redis-cli ping` should return "PONG"
+    - Check Redis service status: `systemctl status redis` (Linux) or `brew services list` (macOS)
+    - Ensure correct port (default 6379) is not blocked by firewall
+    - Verify Redis URL format: `redis://hostname:port`
+
+### Server Behavior
+
+- The server implements exponential backoff with a maximum of 5 retries
+- Initial retry delay: 1 second, maximum delay: 30 seconds
+- Server will exit after max retries to prevent infinite reconnection loops
+
 ## Components
 
 ### Tools
