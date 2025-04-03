@@ -311,6 +311,13 @@ For detailed search syntax, see [GitHub's searching documentation](https://docs.
      - Alternatively, if working only with public repositories, select only the `public_repo` scope
    - Copy the generated token
 
+### Authenticate using GitHub CLI
+Instead of storing a GitHub Personal Access token in the configuration or environment, you can instruct the MCP server to rely on the GitHub CLI for authentication. This is useful when you have the GitHub CLI installed and already authenticated.
+
+To use the GitHub CLI for authentication, follow the steps below:
+   - add `"GITHUB_PERSONAL_ACCESS_TOKEN_USE_GHCLI": "true"` to your environment variables.
+   - Ensure you have the GitHub CLI installed and authenticated by running `gh auth login`.
+
 ### Usage with Claude Desktop
 To use this with Claude Desktop, add the following to your `claude_desktop_config.json`:
 
@@ -348,7 +355,8 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
         "@modelcontextprotocol/server-github"
       ],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
+        "GITHUB_PERSONAL_ACCESS_TOKEN_USE_GHCLI": "true"
       }
     }
   }
