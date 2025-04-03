@@ -64,6 +64,15 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - List directory contents with [FILE] or [DIR] prefixes
   - Input: `path` (string)
 
+- **directory_tree**
+  - Get a recursive tree view of files and directories as a JSON structure
+  - Each entry includes 'name', 'type' (file/directory), and 'children' for directories
+  - Files have no children array, while directories always have a children array
+  - Inputs:
+    - `path` (string): Starting directory
+    - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
+  - Output is formatted with 2-space indentation for readability
+
 - **move_file**
   - Move or rename files and directories
   - Inputs:
