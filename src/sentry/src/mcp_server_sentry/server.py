@@ -10,7 +10,7 @@ from mcp.server.models import InitializationOptions
 from mcp.shared.exceptions import McpError
 import mcp.server.stdio
 
-SENTRY_API_BASE = "https://sentry.io/api/0/"
+DEFAULT_SENTRY_API_BASE = "https://sentry.io/api/0/"
 MISSING_AUTH_TOKEN_MESSAGE = (
     """Sentry authentication token not found. Please specify your Sentry auth token."""
 )
@@ -188,9 +188,9 @@ async def handle_sentry_issue(
         raise McpError(f"An error occurred: {str(e)}")
 
 
-async def serve(auth_token: str) -> Server:
+async def serve(auth_token: str, api_base: str) -> Server:
     server = Server("sentry")
-    http_client = httpx.AsyncClient(base_url=SENTRY_API_BASE)
+    http_client = httpx.AsyncClient(base_url=api_base)
 
     @server.list_prompts()
     async def handle_list_prompts() -> list[types.Prompt]:
@@ -265,10 +265,16 @@ async def serve(auth_token: str) -> Server:
     required=True,
     help="Sentry authentication token",
 )
-def main(auth_token: str):
+@click.option(
+    "--api-base",
+    envvar="SENTRY_API_BASE",
+    default=DEFAULT_SENTRY_API_BASE,
+    help="Sentry API base URL",
+)
+def main(auth_token: str, api_base: str):
     async def _run():
         async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-            server = await serve(auth_token)
+            server = await serve(auth_token, api_base)
             await server.run(
                 read_stream,
                 write_stream,
