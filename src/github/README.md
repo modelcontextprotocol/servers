@@ -400,7 +400,7 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
 Docker build:
 
 ```bash
-docker build -t mcp/github -f src/github/Dockerfile .
+docker build -t mcp/github -f src/github/Dockerfile ../..
 ```
 
 ## License
