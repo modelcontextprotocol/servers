@@ -378,7 +378,7 @@ async function tailFile(filePath: string, numLines: number): Promise<string> {
       const chunkText = readData + remainingText;
       
       // Split by newlines and count
-      const chunkLines = chunkText.split('\n');
+      const chunkLines = normalizeLineEndings(chunkText).split('\n');
       
       // If this isn't the end of the file, the first line is likely incomplete
       // Save it to prepend to the next chunk
