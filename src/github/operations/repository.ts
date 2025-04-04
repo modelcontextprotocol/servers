@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRequest } from "../common/utils.js";
+import { githubRequest, GITHUB_API_URL } from "../common/utils.js";
 import { GitHubRepositorySchema, GitHubSearchResponseSchema } from "../common/types.js";
 
 // Schema definitions
@@ -27,7 +27,7 @@ export type CreateRepositoryOptions = z.infer<typeof CreateRepositoryOptionsSche
 
 // Function implementations
 export async function createRepository(options: CreateRepositoryOptions) {
-  const response = await githubRequest("https://api.github.com/user/repos", {
+  const response = await githubRequest(`${GITHUB_API_URL}/user/repos`, {
     method: "POST",
     body: options,
   });
@@ -39,7 +39,7 @@ export async function searchRepositories(
   page: number = 1,
   perPage: number = 30
 ) {
-  const url = new URL("https://api.github.com/search/repositories");
+  const url = new URL(`${GITHUB_API_URL}/search/repositories`);
   url.searchParams.append("q", query);
   url.searchParams.append("page", page.toString());
   url.searchParams.append("per_page", perPage.toString());
@@ -54,8 +54,8 @@ export async function forkRepository(
   organization?: string
 ) {
   const url = organization
-    ? `https://api.github.com/repos/${owner}/${repo}/forks?organization=${organization}`
-    : `https://api.github.com/repos/${owner}/${repo}/forks`;
+    ? `${GITHUB_API_URL}/repos/${owner}/${repo}/forks?organization=${organization}`
+    : `${GITHUB_API_URL}/repos/${owner}/${repo}/forks`;
 
   const response = await githubRequest(url, { method: "POST" });
   return GitHubRepositorySchema.extend({
