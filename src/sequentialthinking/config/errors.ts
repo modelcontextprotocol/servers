@@ -5,8 +5,8 @@
  * throughout the application.
  */
 
-// @ts-ignore - Suppress persistent TS2307 error for SDK import
-import { McpError, ErrorCode } from '@modelcontextprotocol/sdk';
+// Import from MCP SDK types
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { get } from './config.js';
 
 // Custom error types
@@ -134,15 +134,18 @@ export class AppError extends Error {
         errorCode = ErrorCode.InternalError;
         break;
       case ErrorSeverity.CRITICAL:
-        errorCode = ErrorCode.ServerError;
+        errorCode = ErrorCode.InternalError; // Using InternalError instead of ServerError for critical errors
         break;
       default:
         errorCode = ErrorCode.InternalError;
     }
     
-    // Use custom code if provided
+    // Use custom code if provided and valid
     if (this.code) {
-      errorCode = this.code as ErrorCode;
+      const validatedCode = this.validateErrorCode(this.code);
+      if (validatedCode) {
+        errorCode = validatedCode;
+      }
     }
     
     return new McpError(
@@ -150,6 +153,16 @@ export class AppError extends Error {
       this.message,
       this.details
     );
+  }
+
+  /**
+   * Validate and convert a string to ErrorCode if valid
+   * @param code The code to validate
+   * @returns ErrorCode if valid, undefined otherwise
+   */
+  private validateErrorCode(code: string): ErrorCode | undefined {
+    const validCodes = Object.values(ErrorCode);
+    return validCodes.find(validCode => validCode === code) as ErrorCode | undefined;
   }
 }
 
