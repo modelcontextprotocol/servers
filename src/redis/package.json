@@ -1,28 +1,31 @@
 {
-  "name": "redis",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "@modelcontextprotocol/server-redis",
+  "version": "0.1.0",
+  "description": "MCP server for using Redis",
+  "license": "MIT",
+  "author": "Anthropic, PBC (https://anthropic.com)",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
   "type": "module",
   "bin": {
     "redis": "./build/index.js"
   },
-  "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\""
-  },
   "files": [
     "build"
   ],
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
-  "devDependencies": {
-    "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
+  "scripts": {
+    "build": "tsc && shx chmod +x build/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.4.0",
+    "@modelcontextprotocol/sdk": "^1.7.0",
+    "@types/node": "^22.10.2",
     "@types/redis": "^4.0.10",
     "redis": "^4.7.0"
+  },
+  "devDependencies": {
+    "shx": "^0.3.4",
+    "typescript": "^5.7.2"
   }
 }
