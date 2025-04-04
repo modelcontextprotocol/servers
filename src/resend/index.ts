@@ -8,7 +8,6 @@ import {
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import * as email from './operations/email.js';
-import * as templates from './operations/templates.js';
 import { isResendError } from './common/errors.js';
 import { VERSION } from "./common/version.js";
 
@@ -45,11 +44,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "Send an email using Resend API",
         inputSchema: zodToJsonSchema(email.SendEmailSchema),
       },
-      {
-        name: "send_email_with_template",
-        description: "Send an email using a Resend template",
-        inputSchema: zodToJsonSchema(templates.SendEmailWithTemplateSchema),
-      },
     ],
   };
 });
@@ -64,14 +58,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "send_email": {
         const args = email.SendEmailSchema.parse(request.params.arguments);
         const result = await email.sendEmail(args);
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      }
-
-      case "send_email_with_template": {
-        const args = templates.SendEmailWithTemplateSchema.parse(request.params.arguments);
-        const result = await templates.sendEmailWithTemplate(args);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
