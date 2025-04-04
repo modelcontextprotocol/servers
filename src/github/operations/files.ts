@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRequest } from "../common/utils.js";
+import { githubRequest, GITHUB_API_URL } from "../common/utils.js";
 import {
   GitHubContentSchema,
   GitHubAuthorSchema,
@@ -75,7 +75,7 @@ export async function getFileContents(
   path: string,
   branch?: string
 ) {
-  let url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  let url = `${GITHUB_API_URL}/repos/${owner}/${repo}/contents/${path}`;
   if (branch) {
     url += `?ref=${branch}`;
   }
@@ -114,7 +114,7 @@ export async function createOrUpdateFile(
     }
   }
 
-  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const url = `${GITHUB_API_URL}/repos/${owner}/${repo}/contents/${path}`;
   const body = {
     message,
     content: encodedContent,
@@ -144,7 +144,7 @@ async function createTree(
   }));
 
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/trees`,
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/git/trees`,
     {
       method: "POST",
       body: {
@@ -165,7 +165,7 @@ async function createCommit(
   parents: string[]
 ) {
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/commits`,
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/git/commits`,
     {
       method: "POST",
       body: {
@@ -186,7 +186,7 @@ async function updateReference(
   sha: string
 ) {
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/refs/${ref}`,
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/git/refs/${ref}`,
     {
       method: "PATCH",
       body: {
@@ -207,7 +207,7 @@ export async function pushFiles(
   message: string
 ) {
   const refResponse = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/git/refs/heads/${branch}`
   );
 
   const ref = GitHubReferenceSchema.parse(refResponse);

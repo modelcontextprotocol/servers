@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRequest } from "../common/utils.js";
+import { githubRequest, GITHUB_API_URL } from "../common/utils.js";
 import { GitHubReferenceSchema } from "../common/types.js";
 
 // Schema definitions
@@ -22,13 +22,13 @@ export type CreateBranchOptions = z.infer<typeof CreateBranchOptionsSchema>;
 export async function getDefaultBranchSHA(owner: string, repo: string): Promise<string> {
   try {
     const response = await githubRequest(
-      `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/main`
+      `${GITHUB_API_URL}/repos/${owner}/${repo}/git/refs/heads/main`
     );
     const data = GitHubReferenceSchema.parse(response);
     return data.object.sha;
   } catch (error) {
     const masterResponse = await githubRequest(
-      `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/master`
+      `${GITHUB_API_URL}/repos/${owner}/${repo}/git/refs/heads/master`
     );
     if (!masterResponse) {
       throw new Error("Could not find default branch (tried 'main' and 'master')");
@@ -46,7 +46,7 @@ export async function createBranch(
   const fullRef = `refs/heads/${options.ref}`;
 
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/refs`,
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/git/refs`,
     {
       method: "POST",
       body: {
@@ -65,7 +65,7 @@ export async function getBranchSHA(
   branch: string
 ): Promise<string> {
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/git/refs/heads/${branch}`
   );
 
   const data = GitHubReferenceSchema.parse(response);
@@ -98,7 +98,7 @@ export async function updateBranch(
   sha: string
 ): Promise<z.infer<typeof GitHubReferenceSchema>> {
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`,
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/git/refs/heads/${branch}`,
     {
       method: "PATCH",
       body: {

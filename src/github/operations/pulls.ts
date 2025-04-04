@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubRequest } from "../common/utils.js";
+import { githubRequest, GITHUB_API_URL } from "../common/utils.js";
 import {
   GitHubPullRequestSchema,
   GitHubIssueAssigneeSchema,
@@ -166,7 +166,7 @@ export async function createPullRequest(
   const { owner, repo, ...options } = CreatePullRequestSchema.parse(params);
 
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls`,
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/pulls`,
     {
       method: "POST",
       body: options,
@@ -182,7 +182,7 @@ export async function getPullRequest(
   pullNumber: number
 ): Promise<z.infer<typeof GitHubPullRequestSchema>> {
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/pulls/${pullNumber}`
   );
   return GitHubPullRequestSchema.parse(response);
 }
@@ -192,7 +192,7 @@ export async function listPullRequests(
   repo: string,
   options: Omit<z.infer<typeof ListPullRequestsSchema>, 'owner' | 'repo'>
 ): Promise<z.infer<typeof GitHubPullRequestSchema>[]> {
-  const url = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
+  const url = new URL(`${GITHUB_API_URL}/repos/${owner}/${repo}/pulls`);
   
   if (options.state) url.searchParams.append('state', options.state);
   if (options.head) url.searchParams.append('head', options.head);
@@ -213,7 +213,7 @@ export async function createPullRequestReview(
   options: Omit<z.infer<typeof CreatePullRequestReviewSchema>, 'owner' | 'repo' | 'pull_number'>
 ): Promise<z.infer<typeof PullRequestReviewSchema>> {
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`,
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`,
     {
       method: 'POST',
       body: options,
@@ -229,7 +229,7 @@ export async function mergePullRequest(
   options: Omit<z.infer<typeof MergePullRequestSchema>, 'owner' | 'repo' | 'pull_number'>
 ): Promise<any> {
   return githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/merge`,
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/pulls/${pullNumber}/merge`,
     {
       method: 'PUT',
       body: options,
@@ -243,7 +243,7 @@ export async function getPullRequestFiles(
   pullNumber: number
 ): Promise<z.infer<typeof PullRequestFileSchema>[]> {
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/files`
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/pulls/${pullNumber}/files`
   );
   return z.array(PullRequestFileSchema).parse(response);
 }
@@ -255,7 +255,7 @@ export async function updatePullRequestBranch(
   expectedHeadSha?: string
 ): Promise<void> {
   await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/update-branch`,
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/pulls/${pullNumber}/update-branch`,
     {
       method: "PUT",
       body: expectedHeadSha ? { expected_head_sha: expectedHeadSha } : undefined,
@@ -269,7 +269,7 @@ export async function getPullRequestComments(
   pullNumber: number
 ): Promise<z.infer<typeof PullRequestCommentSchema>[]> {
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/comments`
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/pulls/${pullNumber}/comments`
   );
   return z.array(PullRequestCommentSchema).parse(response);
 }
@@ -280,7 +280,7 @@ export async function getPullRequestReviews(
   pullNumber: number
 ): Promise<z.infer<typeof PullRequestReviewSchema>[]> {
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`
   );
   return z.array(PullRequestReviewSchema).parse(response);
 }
@@ -290,13 +290,10 @@ export async function getPullRequestStatus(
   repo: string,
   pullNumber: number
 ): Promise<z.infer<typeof CombinedStatusSchema>> {
-  // First get the PR to get the head SHA
-  const pr = await getPullRequest(owner, repo, pullNumber);
-  const sha = pr.head.sha;
-
-  // Then get the combined status for that SHA
+  const pullRequest = await getPullRequest(owner, repo, pullNumber);
+  const sha = pullRequest.head.sha;
   const response = await githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/commits/${sha}/status`
+    `${GITHUB_API_URL}/repos/${owner}/${repo}/commits/${sha}/status`
   );
   return CombinedStatusSchema.parse(response);
 }
