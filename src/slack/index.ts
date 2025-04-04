@@ -31,9 +31,20 @@ interface AddReactionArgs {
   reaction: string;
 }
 
+interface RemoveReactionArgs {
+  file_id?: string;
+  file_comment_id?: string;
+  channel_id?: string;
+  timestamp?: string;
+  reaction: string;
+}
+
 interface GetChannelHistoryArgs {
   channel_id: string;
   limit?: number;
+  cursor?: string;
+  latest?: string;
+  oldest?: string;
 }
 
 interface GetThreadRepliesArgs {
@@ -136,6 +147,37 @@ const addReactionTool: Tool = {
   },
 };
 
+const removeReactionTool: Tool = {
+  name: "slack_remove_reaction",
+  description: "Remove a reaction emoji from a message",
+  inputSchema: {
+    type: "object",
+    properties: {
+      file_id: {
+        type: "string",
+        description: "The ID of the file containing the reaction",
+      },
+      file_comment_id: {
+        type: "string",
+        description: "The ID of the file comment containing the reaction",
+      },
+      channel_id: {
+        type: "string",
+        description: "The ID of the channel containing the reaction",
+      },
+      timestamp: {
+        type: "string",
+        description: "The timestamp of the message to react to",
+      },
+      reaction: {
+        type: "string",
+        description: "The name of the emoji reaction (without ::)",
+      },
+    },
+    required: ["reaction"],
+  },
+};
+
 const getChannelHistoryTool: Tool = {
   name: "slack_get_channel_history",
   description: "Get recent messages from a channel",
@@ -150,6 +192,18 @@ const getChannelHistoryTool: Tool = {
         type: "number",
         description: "Number of messages to retrieve (default 10)",
         default: 10,
+      },
+      cursor: {
+        type: "string",
+        description: "Pagination cursor for next page of results",
+      },
+      latest: {
+        type: "string",
+        description: "Only messages before this Unix timestamp will be included (format: 1234567890.123456). Timestamps in the format without the period can be converted by adding the period such that 6 numbers come after it.",
+      },
+      oldest: {
+        type: "string",
+        description: "Only messages after this Unix timestamp will be included (format: 1234567890.123456). Timestamps in the format without the period can be converted by adding the period such that 6 numbers come after it.",
       },
     },
     required: ["channel_id"],
@@ -289,14 +343,57 @@ class SlackClient {
     return response.json();
   }
 
+  async removeReaction({
+    reaction,
+    file_id,
+    file_comment_id,
+    channel_id,
+    timestamp,
+  }: {
+    reaction: string,
+    file_id?: string,
+    file_comment_id?: string,
+    channel_id?: string,
+    timestamp?: string,
+  }): Promise<any> {
+    const response = await fetch("https://slack.com/api/reactions.remove", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify({
+        name: reaction,
+        ...(file_id ? { file: file_id } : {}),
+        ...(file_comment_id ? { file_comment: file_comment_id } : {}),
+        ...(channel_id ? { channel: channel_id } : {}),
+        ...(timestamp ? { timestamp: timestamp } : {}),
+      }),
+    });
+
+    return response.json();
+  }
+
   async getChannelHistory(
     channel_id: string,
     limit: number = 10,
+    cursor?: string,
+    latest?: string,
+    oldest?: string,
   ): Promise<any> {
     const params = new URLSearchParams({
       channel: channel_id,
       limit: limit.toString(),
     });
+
+    if (cursor) {
+      params.append("cursor", cursor);
+    }
+
+    if (latest) {
+      params.append("latest", latest);
+    }
+
+    if (oldest) {
+      params.append("oldest", oldest);
+    }
 
     const response = await fetch(
       `https://slack.com/api/conversations.history?${params}`,
@@ -451,6 +548,24 @@ async function main() {
             };
           }
 
+          case "slack_remove_reaction": {
+            const args = request.params.arguments as unknown as RemoveReactionArgs;
+            if (!args.reaction) {
+              throw new Error(
+                "Missing required arguments: reaction",
+              );
+            }
+            if (!args.file_id && !args.file_comment_id && !(args.channel_id && args.timestamp)) {
+              throw new Error(
+                "Must provide either file_id, file_comment_id, or both channel_id and timestamp"
+              );
+            }
+            const response = await slackClient.removeReaction(args);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
           case "slack_get_channel_history": {
             const args = request.params
               .arguments as unknown as GetChannelHistoryArgs;
@@ -460,6 +575,9 @@ async function main() {
             const response = await slackClient.getChannelHistory(
               args.channel_id,
               args.limit,
+              args.cursor,
+              args.latest,
+              args.oldest,
             );
             return {
               content: [{ type: "text", text: JSON.stringify(response) }],
@@ -533,6 +651,7 @@ async function main() {
         postMessageTool,
         replyToThreadTool,
         addReactionTool,
+        removeReactionTool,
         getChannelHistoryTool,
         getThreadRepliesTool,
         getUsersTool,
