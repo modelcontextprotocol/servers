@@ -21,7 +21,15 @@ export interface ThoughtData {
   validationReason?: string;
 }
 
-export interface ClaudeResponse {
+// Extended thought interface to include analysis props added during processing
+export interface ExtendedThoughtData extends ThoughtData {
+  semanticAnalysisPrompt?: string;
+  memoryInsightsPrompt?: string;
+  analysis?: string; // Added by LLM calls
+  fileContentPrompt?: string;
+}
+ 
+ export interface ClaudeResponse {
   choices: { message: { content: string } }[];
 }
 
@@ -103,13 +111,13 @@ export interface AIAdvice {
   supportingPatterns?: ThinkingPattern[];  // Added to match usage
 }
 
-export interface SessionData {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  thoughtHistory: ThoughtData[];
-  thoughts?: ThoughtData[];
+ export interface SessionData {
+   id: string;
+   name: string;
+   createdAt?: string; // Make optional as it's set on first save
+   updatedAt?: string; // Make optional as it's always set on save
+   thoughtHistory: ThoughtData[];
+   thoughts?: ThoughtData[];
   branches: Record<string, ThoughtData[]>;
 }
 

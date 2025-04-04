@@ -18,20 +18,23 @@ export interface ServerConfig {
     saveDir: string;
   };
   
-  // API settings
-  api: {
-    openai: {
-      apiKey: string;
-      defaultModel: string;
-      maxTokens: number;
+   // API settings
+   api: {
+     openai: {
+        apiKey: string;
+        defaultModel: string; 
+        // Removed geminiModel and claudeModel from openai interface
+        maxTokens: number;
       temperature: number;
       timeout: number;
-      retryAttempts: number;
-    };
-    openrouter: {
-      apiKey: string;
-      defaultModel: string;
-      maxTokens: number;
+       retryAttempts: number;
+     };
+     openrouter: {
+       apiKey: string;
+       defaultModel: string; // General default
+       geminiModel: string;  // Added geminiModel here
+       claudeModel: string;  // Added claudeModel here
+       maxTokens: number;
       temperature: number;
       timeout: number;
       retryAttempts: number;
@@ -60,12 +63,21 @@ export interface ServerConfig {
       preparation: number;
       analysis: number;
       synthesis: number;
-      evaluation: number;
-    };
-  };
-}
-
-// Default configuration
+       evaluation: number;
+     };
+     // Add complexity thresholds
+     complexityThresholds: {
+       cyclomaticReasonable: number;
+       cyclomaticModerate: number;
+       nestingReasonable: number;
+       nestingHigh: number;
+       cognitiveModerate: number;
+       cognitiveHigh: number;
+     };
+   };
+ }
+ 
+ // Default configuration
 const defaultConfig: ServerConfig = {
   server: {
     port: 3000,
@@ -79,13 +91,16 @@ const defaultConfig: ServerConfig = {
       defaultModel: 'gpt-4-turbo',
       maxTokens: 4096,
       temperature: 0.7,
-      timeout: 60000,
-      retryAttempts: 3,
-    },
-    openrouter: {
-      apiKey: '',
-      defaultModel: 'anthropic/claude-3-opus:beta',
-      maxTokens: 4096,
+       timeout: 60000,
+        retryAttempts: 3,
+        // Removed incorrect geminiModel and claudeModel placeholders from openai section
+      },
+       openrouter: {
+         apiKey: '',
+        defaultModel: 'anthropic/claude-3-opus:beta', // Keep a general default
+        geminiModel: 'google/gemini-2.5-pro-exp-03-25:free', // Default Gemini model via OpenRouter
+        claudeModel: 'anthropic/claude-3.7-sonnet', // Default Claude model via OpenRouter
+        maxTokens: 4096,
       temperature: 0.7,
       timeout: 60000,
       retryAttempts: 3,
@@ -111,11 +126,20 @@ const defaultConfig: ServerConfig = {
       analysis: 60000,
       synthesis: 45000,
       evaluation: 30000,
-    },
-  },
-};
-
-/**
+     },
+     // Add default complexity thresholds
+     complexityThresholds: {
+       cyclomaticReasonable: 10,
+       cyclomaticModerate: 20,
+       nestingReasonable: 3,
+       nestingHigh: 5,
+       cognitiveModerate: 15, // Example threshold
+       cognitiveHigh: 25      // Example threshold
+     },
+   },
+ };
+ 
+ /**
  * Configuration class that manages loading and accessing configuration values
  */
 class ConfigManager {
@@ -228,11 +252,22 @@ class ConfigManager {
     }
     if (process.env.OPENROUTER_API_KEY) {
       this.config.api.openrouter.apiKey = process.env.OPENROUTER_API_KEY;
-    }
-    if (process.env.OPENROUTER_MODEL) {
-      this.config.api.openrouter.defaultModel = process.env.OPENROUTER_MODEL;
-    }
-
+     }
+     if (process.env.OPENROUTER_MODEL) { // Keep loading for the general default
+       this.config.api.openrouter.defaultModel = process.env.OPENROUTER_MODEL;
+     }
+     // Add environment variable loading for specific models
+     if (process.env.OPENROUTER_GEMINI_MODEL) {
+       // Ensure this targets the correct nested object
+       if (!this.config.api.openrouter) this.config.api.openrouter = {} as any; 
+       this.config.api.openrouter.geminiModel = process.env.OPENROUTER_GEMINI_MODEL;
+     }
+     if (process.env.OPENROUTER_CLAUDE_MODEL) {
+       // Ensure this targets the correct nested object
+       if (!this.config.api.openrouter) this.config.api.openrouter = {} as any;
+       this.config.api.openrouter.claudeModel = process.env.OPENROUTER_CLAUDE_MODEL;
+     }
+ 
     // Memory settings
     if (process.env.WORKING_MEMORY_MAX_SIZE) {
       this.config.memory.workingMemory.maxSize = parseInt(process.env.WORKING_MEMORY_MAX_SIZE, 10);

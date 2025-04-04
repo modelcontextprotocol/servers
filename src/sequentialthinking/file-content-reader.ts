@@ -223,32 +223,62 @@ export function prepareFileContentForPrompt(
     }
   }
   
-  // Include most relevant parts of files with intelligent chunking
+  // Include most relevant parts of files, prioritizing summaries when tokens are limited
   for (const file of filesToProcess) {
-    const fileTokens = Math.ceil(file.content.length * tokenEstimatePerChar);
-    
-    // If adding this file would exceed token limit, use intelligent chunking
-    if (estimatedTokens + fileTokens > maxTotalTokens) {
-      // For large files, try to extract the most informative sections rather than skipping entirely
-      const chunks = intelligentlyChunkFileContent(file.content, maxTotalTokens - estimatedTokens, tokenEstimatePerChar);
-      
-      if (chunks.length > 0) {
-        // Include partial content with the most important sections
-        result += `\n\n## File: ${file.relativePath}\n${file.summary}\n\n\`\`\`${getLanguageFromExtension(file.extension)}\n${chunks.join('\n\n// [...code omitted for brevity...]\n\n')}\n\`\`\`\n`;
-        estimatedTokens += Math.ceil(chunks.join('\n').length * tokenEstimatePerChar) + 100; // Add extra for formatting
-      } else {
-        // If we can't even fit chunks, just include the summary
-        result += `\n\n## File: ${file.relativePath}\n${file.summary}\n(Content too large to include)\n`;
-        estimatedTokens += Math.ceil(file.summary.length * tokenEstimatePerChar) + 50;
-      }
-    } else {
-      // Include full content
-      result += `\n\n## File: ${file.relativePath}\n${file.summary}\n\n\`\`\`${getLanguageFromExtension(file.extension)}\n${file.content}\n\`\`\`\n`;
-      estimatedTokens += fileTokens;
+    const summaryTokens = Math.ceil(file.summary.length * tokenEstimatePerChar) + 50; // Estimate tokens for summary + header
+    const remainingTokens = maxTotalTokens - estimatedTokens;
+
+    // Can we even fit the summary?
+    if (remainingTokens < summaryTokens && estimatedTokens > 0) {
+      // Not enough space for even the summary of the next file
+      result += "\n\n(Some file summaries and content omitted due to token limits)\n";
+      break; 
     }
-    
-    // Stop if we're approaching the token limit
-    if (estimatedTokens > maxTotalTokens * 0.9) {
+
+    // Always try to include the summary first
+    let filePrompt = `\n\n## File: ${file.relativePath}\n${file.summary}\n`;
+    let addedTokens = summaryTokens;
+    let contentIncluded = false;
+
+    // Check if full content fits *after* the summary
+    const fullContentTokens = Math.ceil(file.content.length * tokenEstimatePerChar) + 50; // +50 for code block formatting
+    if (file.content && remainingTokens >= addedTokens + fullContentTokens) {
+      filePrompt += `\n\`\`\`${getLanguageFromExtension(file.extension)}\n${file.content}\n\`\`\`\n`;
+      addedTokens += fullContentTokens;
+      contentIncluded = true;
+    } 
+    // If full content doesn't fit, try intelligent chunking
+    else if (file.content) {
+      const availableTokensForChunks = remainingTokens - addedTokens - 50; // Reserve 50 for formatting
+      if (availableTokensForChunks > 100) { // Only chunk if we have a reasonable amount of space
+         const chunks = intelligentlyChunkFileContent(file.content, availableTokensForChunks, tokenEstimatePerChar);
+         if (chunks.length > 0) {
+           const chunkText = chunks.join('\n\n// [...code omitted for brevity...]\n\n');
+           const chunkTokens = Math.ceil(chunkText.length * tokenEstimatePerChar) + 50;
+           // Double-check if the generated chunks actually fit
+           if (remainingTokens >= addedTokens + chunkTokens) {
+              filePrompt += `\n\`\`\`${getLanguageFromExtension(file.extension)}\n${chunkText}\n\`\`\`\n`;
+              addedTokens += chunkTokens;
+              contentIncluded = true;
+           }
+         }
+      }
+    }
+
+    // If no content (full or chunked) was included, add a note
+    if (!contentIncluded && file.content) {
+       filePrompt += `\n(Full content omitted due to token limits)\n`;
+    } else if (!file.content && file.size > 0) {
+       // Handle cases where content wasn't read (e.g., too large initially)
+       filePrompt += `\n(Content not included: ${file.summary})\n`; // Use existing summary reason
+    }
+
+    // Add the constructed prompt for this file
+    result += filePrompt;
+    estimatedTokens += addedTokens;
+
+    // Stop if we've used most of the token budget
+    if (estimatedTokens >= maxTotalTokens * 0.95) { // Use a slightly higher threshold
       result += "\n\n(Some files omitted due to token limits)\n";
       break;
     }

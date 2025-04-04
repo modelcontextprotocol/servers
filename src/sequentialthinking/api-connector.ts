@@ -1,7 +1,8 @@
-import axios from 'axios';
-import * as dotenv from 'dotenv';
-
-// Load environment variables
+ import axios from 'axios';
+ import * as dotenv from 'dotenv';
+ import { get as getConfigValue } from './config/index.js'; // Import config getter
+ 
+ // Load environment variables
 dotenv.config();
 
 // Constants for API endpoints
@@ -327,5 +328,53 @@ export async function getFallbackCompletion(
   };
   
   console.log(`Falling back to ${fallbackProvider} with model ${fallbackModel.modelId}`);
-  return getCompletion(fallbackRequest);
-}
+   return getCompletion(fallbackRequest);
+ }
+ 
+ /**
+  * Calls the configured Gemini model via OpenRouter.
+  * @param prompt The user prompt.
+  * @param systemMessage Optional system message.
+  * @returns A promise resolving to the completion response.
+  */
+ export async function callOpenRouterGemini(prompt: string, systemMessage?: string): Promise<CompletionResponse> {
+   const modelId = getConfigValue<string>('api.openrouter.geminiModel', 'google/gemini-2.5-pro-exp-03-25:free');
+   const maxTokens = getConfigValue<number>('api.openrouter.maxTokens', 5000); // Use configured max tokens
+   const temperature = getConfigValue<number>('api.openrouter.temperature', 0.7);
+ 
+   const request: CompletionRequest = {
+     prompt,
+     model: {
+       provider: 'openrouter',
+       modelId: modelId,
+     },
+     maxTokens,
+     temperature,
+     systemMessage
+   };
+   return getCompletion(request);
+ }
+ 
+ /**
+  * Calls the configured Claude model via OpenRouter.
+  * @param prompt The user prompt.
+  * @param systemMessage Optional system message.
+  * @returns A promise resolving to the completion response.
+  */
+ export async function callOpenRouterClaude(prompt: string, systemMessage?: string): Promise<CompletionResponse> {
+   const modelId = getConfigValue<string>('api.openrouter.claudeModel', 'anthropic/claude-3.7-sonnet');
+   const maxTokens = getConfigValue<number>('api.openrouter.maxTokens', 3000); // Use configured max tokens
+   const temperature = getConfigValue<number>('api.openrouter.temperature', 0.7);
+ 
+   const request: CompletionRequest = {
+     prompt,
+     model: {
+       provider: 'openrouter',
+       modelId: modelId,
+     },
+     maxTokens,
+     temperature,
+     systemMessage
+   };
+   return getCompletion(request);
+ }

@@ -433,78 +433,94 @@ ${extendedThought.memoryInsightsPrompt}
                  typeof extendedThought.memoryInsightsPrompt, 
                  extendedThought.memoryInsightsPrompt ? extendedThought.memoryInsightsPrompt.length : 'undefined');
      }
-     
+
      // Add step history to maintain continuity across steps
      let stepHistorySection = '';
      if (thoughtHistory.length > 0) {
-       // Get the last 3 thoughts as history to maintain context
-       const recentThoughts = thoughtHistory.slice(-3);
+       const recentThoughts = thoughtHistory.slice(-3); // Keep history concise
        const historyText = recentThoughts.map(t => {
-         // Format each thought as a summary
-         const stepNum = typeof t.thoughtNumber === 'number' ? 
-           (Math.floor(t.thoughtNumber) === t.thoughtNumber ? 
-             t.thoughtNumber.toString() : 
-             t.thoughtNumber.toFixed(1)) : 
-           '?';
-         
-         // Extract the first 150 chars of thought and analysis
-         const thoughtPreview = t.thought?.substring(0, 150) + '...';
-         // Handle analysis which may not be part of ThoughtData type
-         const analysisText = (t as any).analysis || '';
-         const analysisPreview = analysisText.substring(0, 150) + '...';
-         
-         return `Step ${stepNum}: ${thoughtPreview}\nKey insight: ${analysisPreview}\n`;
+         const stepNum = typeof t.thoughtNumber === 'number' ? t.thoughtNumber.toFixed(1) : '?';
+         const thoughtPreview = t.thought?.substring(0, 100) + '...'; // Shorter preview
+         const analysisText = (t as ExtendedThoughtData).analysis || ''; // Use ExtendedThoughtData
+         const analysisPreview = analysisText.substring(0, 100) + '...'; // Shorter preview
+         return `*   **Step ${stepNum}:** ${thoughtPreview}\n    *   *Insight:* ${analysisPreview}`;
        }).join('\n');
-       
-       stepHistorySection = `
-
-## Recent Analysis History:
-${historyText}
-`;
+       stepHistorySection = `### Recent Analysis History\n${historyText}`;
        console.log("[DEBUG] Including history from previous steps");
      } else {
        console.log("[DEBUG] No step history available yet");
      }
 
-     const context = `
-## IDE Context and Codebase Information:
-${ideContextString.trim() || 'No IDE context provided.'}
-${fileContentSection}
-${semanticAnalysisSection}
-${memoryInsightsSection}
-${stepHistorySection}
+     // --- Construct the Structured Prompt ---
 
-## Current Thought (${thought.thoughtNumber}/${thought.totalThoughts}):
-${thought.thought}
+     // 1. Define the Role and Goal
+     let structuredPrompt = `**Role:** AI Assistant performing sequential thought analysis.\n`;
+     structuredPrompt += `**Goal:** Process the "Current Thought" using the provided context to generate the next step in the analysis.\n\n`;
 
-## Analysis Focus:
-Stage: ${sessionContext.sessionStage}
-Focus: ${sessionContext.recentContext || 'Pre-reason and Chain-of-thought optimization'}
-    
-    ${thought.isChainOfThought ? `CoT Step ${thought.chainOfThoughtStep}/${thought.totalChainOfThoughtSteps}` : ''}
+     // 2. Present the Core Task: The Current Thought
+     structuredPrompt += `## Current Thought (${thought.thoughtNumber}/${thought.totalThoughts})\n`;
+     // Use the original thought text, not the one modified by applySessionContext
+     structuredPrompt += `${thought.thought}\n\n`; 
+     // Add Chain of Thought info if applicable
+     if (thought.isChainOfThought) {
+        structuredPrompt += `*Status:* Chain of Thought Step ${thought.chainOfThoughtStep}/${thought.totalChainOfThoughtSteps}`;
+        if (thought.isHypothesis) structuredPrompt += ` (Hypothesis)`;
+        if (thought.isVerification) structuredPrompt += ` (Verification)`;
+        structuredPrompt += `\n\n`;
+     }
 
-## RESPONSE FORMAT:
-1. Begin with a brief analysis of the current thought
-2. Relate the thought to relevant aspects of the codebase structure and source code (when available)
-3. Reference specific code sections from the provided files when applicable
-4. Continue the sequential thinking process with deep reasoning
+     // 3. Provide Supporting Context Sections
+     structuredPrompt += `## Supporting Context\n`;
+     if (ideContextString.trim()) {
+        structuredPrompt += `### IDE Context and Codebase Information\n${ideContextString.trim()}\n`;
+     }
+     if (fileContentSection.trim()) {
+        structuredPrompt += `${fileContentSection.trim()}\n`; // Already has ## heading
+     }
+     if (semanticAnalysisSection.trim()) {
+        structuredPrompt += `${semanticAnalysisSection.trim()}\n`; // Already has ## heading
+     }
+     if (memoryInsightsSection.trim()) {
+        structuredPrompt += `${memoryInsightsSection.trim()}\n`; // Already has ## heading
+     }
+     if (stepHistorySection.trim()) {
+        structuredPrompt += `${stepHistorySection.trim()}\n`; // Already has ### heading
+     }
 
-## STEP STRUCTURE GUIDELINES:
-- Identify this analysis as "Step X" or "Step X.Y" at the beginning of your response
-- For main points, use the format "Step 1:", "Step 2:", etc.
-- For detailed exploration of specific components, use substeps like "Step 1.1:", "Step 1.2:", etc.
-- Connect this step to previous steps by referencing their insights
-- Recommend the next logical step in the analysis sequence
-    ${thought.isHypothesis ? 'Hypothesis' : ''}
-    ${thought.isVerification ? 'Verification' : ''}
-    ${sessionContext.dominantPatterns.length > 0 ? `Patterns: ${sessionContext.dominantPatterns.slice(0,2).map(p => p.word).join(', ')}` : ''}
-    `;
+     // 4. Add Session Analysis Metadata (moved from modifying the thought)
+     structuredPrompt += `\n### Session Analysis\n`;
+     structuredPrompt += `*   **Stage:** ${sessionContext.sessionStage} (${(sessionContext.stageConfidence * 100).toFixed(1)}% confidence)\n`;
+     if (sessionContext.recentContext) {
+        structuredPrompt += `*   **Recent Focus:** ${sessionContext.recentContext}\n`;
+     }
+     if (sessionContext.dominantPatterns.length > 0) {
+        const patterns = sessionContext.dominantPatterns
+          .map((p: DominantPattern) => `${p.word}(${(p.weight * 100).toFixed(1)}%)`)
+          .join(', ');
+        structuredPrompt += `*   **Dominant Patterns:** ${patterns}\n`;
+     }
+     if (sessionContext.trends.length > 0) {
+        const trendDescriptions = sessionContext.trends.map((trend: Trend) => 
+          `${trend.type} ${trend.direction} (${trend.value.toFixed(1)})`
+        ).join(', ');
+        structuredPrompt += `*   **Trends:** ${trendDescriptions}\n`;
+     }
 
-    const { prompt, compressionStats } = this.compress(context);
-    return {
-      prompt,
+     // 5. Specify Output Requirements
+     structuredPrompt += `\n## Task Requirements\n`;
+     structuredPrompt += `1.  **Analyze:** Briefly analyze the "Current Thought" in relation to the "Supporting Context".\n`;
+     structuredPrompt += `2.  **Synthesize:** Integrate relevant information from the codebase, history, and analysis.\n`;
+     structuredPrompt += `3.  **Reference:** Explicitly mention relevant file names or code snippets from the context when applicable.\n`;
+     structuredPrompt += `4.  **Progress:** Generate the next logical thought or analysis step.\n`;
+     structuredPrompt += `5.  **Format:** Start your response with "Step X.Y:" (e.g., "Step 1.1:", "Step 2:"). Use substeps (e.g., 1.1, 1.2) for detailed exploration within a main step.\n`;
+
+     // --- Compress and Return ---
+     // Use the newly constructed structuredPrompt for compression
+     const { prompt, compressionStats } = this.compress(structuredPrompt); 
+     return {
+       prompt, // The compressed prompt
       compressionStats,
-      original: context,
+      original: structuredPrompt, // Use the correct variable for the uncompressed prompt
       optimized: prompt,
       stats: compressionStats
     };
@@ -767,26 +783,27 @@ Focus: ${sessionContext.recentContext || 'Pre-reason and Chain-of-thought optimi
   /**
    * Extracts code entities (function names, class names, variable names) from thought text
    * to improve context-aware file relevance
-   * @param thoughtText The text content of the thought
-   * @returns Array of extracted code entity names
-   */
-  private static extractCodeEntitiesFromThought(thoughtText: string): string[] {
-    if (!thoughtText) return [];
-    
+    * @param thoughtText The text content of the thought
+    * @returns Array of extracted code entity names
+    */
+   public static extractCodeEntitiesFromThought(thoughtText: string): string[] { // Changed to public static
+     if (!thoughtText) return [];
+     
     const entities: Set<string> = new Set();
     
-    // Common code entity patterns
-    const patterns = [
-      // Function calls: functionName(...)
-      /\b([a-zA-Z][a-zA-Z0-9_]*)\s*\(/g,
-      
-      // Class names: often start with capital letters
-      /\b([A-Z][a-zA-Z0-9_]*)\b/g,
-      
-      // Variable names: often in camelCase or snake_case
-      /\b([a-z][a-zA-Z0-9]*)\b/g,
-      
-      // File references
+     // Common code entity patterns (refined)
+     const patterns = [
+       // Function/Method calls: functionName(...) or Class.method(...)
+       /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g, // Allow starting with _
+       /\b([A-Z][a-zA-Z0-9_]*\.[a-z][a-zA-Z0-9_]*)\s*\(/g, // Static method calls
+       
+       // Class/Interface/Type names: often start with capital letters (PascalCase)
+       /\b([A-Z][a-zA-Z0-9_]*)\b/g,
+       
+       // Variable/Property names: often camelCase or snake_case (more specific)
+       /\b([a-z_][a-zA-Z0-9_]+)\b/g, // Starts with lowercase or _, at least 2 chars
+       
+       // File references
       /\b([\w-]+\.(js|ts|jsx|tsx|html|css|py|java|go|rb|php))\b/g,
       
       // Directory/path references

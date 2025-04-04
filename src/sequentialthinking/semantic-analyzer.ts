@@ -7,9 +7,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as ts from 'typescript';
-
-// Interfaces for semantic analysis
+ import * as ts from 'typescript';
+ import { get as getConfigValue } from './config/index.js'; // Import config getter
+ 
+ // Interfaces for semantic analysis
 export interface SemanticModel {
   symbols: SymbolInfo[];
   dependencies: DependencyInfo[];
@@ -78,10 +79,12 @@ export interface ComplexityMetrics {
   nestingDepth: number;
   halsteadMetrics: {
     volume: number;
-    difficulty: number;
-    effort: number;
-  };
-}
+     difficulty: number;
+     effort: number;
+   };
+   linesOfCode: number; // Added LOC
+   commentDensity: number; // Added Comment Density (0-1)
+ }
 
 /**
  * Class for semantic code analysis
@@ -127,10 +130,12 @@ export class SemanticAnalyzer {
           halsteadMetrics: {
             volume: 0,
             difficulty: 0,
-            effort: 0
-          }
-        }
-      };
+             effort: 0
+           },
+           linesOfCode: 0, // Initialize new fields
+           commentDensity: 0 // Initialize new fields
+         }
+       };
       
       // Check if file exists and is a TypeScript/JavaScript file
       if (!fs.existsSync(filePath)) {
@@ -190,10 +195,12 @@ export class SemanticAnalyzer {
           halsteadMetrics: {
             volume: 0,
             difficulty: 0,
-            effort: 0
-          }
-        }
-      };
+             effort: 0
+           },
+           linesOfCode: 0, // Initialize new fields
+           commentDensity: 0 // Initialize new fields
+         }
+       };
     }
   }
   
@@ -652,10 +659,37 @@ export class SemanticAnalyzer {
     // Halstead metrics
     let operators = new Set<string>();
     let operands = new Set<string>();
-    let totalOperators = 0;
-    let totalOperands = 0;
-    
-    // Helper function to process node
+     let totalOperators = 0;
+     let totalOperands = 0;
+     let totalLines = 0;
+     let commentLines = 0;
+     
+     // Get raw text and split into lines
+     const fileText = sourceFile.getFullText();
+     const lines = fileText.split(/\r?\n/);
+     totalLines = lines.length;
+ 
+     // Count comment lines (simple check for // and /* ... */)
+     let inBlockComment = false;
+     lines.forEach(line => {
+         const trimmedLine = line.trim();
+         if (trimmedLine.startsWith('//')) {
+             commentLines++;
+         } else if (trimmedLine.startsWith('/*')) {
+             commentLines++;
+             if (!trimmedLine.endsWith('*/') || trimmedLine.length === 2) { // Handle single-line block comments like /* */
+                 inBlockComment = true;
+             }
+         } else if (inBlockComment) {
+             commentLines++;
+             if (trimmedLine.endsWith('*/')) {
+                 inBlockComment = false;
+             }
+         }
+     });
+     const commentDensity = totalLines > 0 ? commentLines / totalLines : 0;
+ 
+     // Helper function to process node for complexity metrics
     const visit = (node: ts.Node) => {
       // Track nesting for certain structures
       let increasedNesting = false;
@@ -741,11 +775,13 @@ export class SemanticAnalyzer {
       halsteadMetrics: {
         volume: Math.round(volume * 100) / 100,
         difficulty: Math.round(difficulty * 100) / 100,
-        effort: Math.round(effort * 100) / 100
-      }
-    };
-  }
-  
+         effort: Math.round(effort * 100) / 100
+       },
+       linesOfCode: totalLines, // Add LOC
+       commentDensity: Math.round(commentDensity * 100) / 100 // Add comment density (as percentage)
+     };
+   }
+   
   /**
    * Generate a summary of the semantic analysis
    */
@@ -801,42 +837,61 @@ export class SemanticAnalyzer {
     summary += `\n## Complexity Metrics\n`;
     summary += `- Cyclomatic Complexity: ${analysis.complexity.cyclomaticComplexity}\n`;
     summary += `- Cognitive Complexity: ${analysis.complexity.cognitiveComplexity}\n`;
-    summary += `- Halstead Volume: ${analysis.complexity.halsteadMetrics.volume}\n`;
-    summary += `- Halstead Difficulty: ${analysis.complexity.halsteadMetrics.difficulty}\n`;
-    
-    // Interpretation and recommendations
+     summary += `- Halstead Volume: ${analysis.complexity.halsteadMetrics.volume}\n`;
+     summary += `- Halstead Difficulty: ${analysis.complexity.halsteadMetrics.difficulty}\n`;
+     summary += `- Lines of Code: ${analysis.complexity.linesOfCode}\n`; // Add LOC to summary
+     summary += `- Comment Density: ${(analysis.complexity.commentDensity * 100).toFixed(1)}%\n`; // Add comment density
+     
+     // Interpretation and recommendations
     summary += `\n## Interpretation\n`;
-    
-    // Evaluate cyclomatic complexity
-    if (analysis.complexity.cyclomaticComplexity <= 10) {
-      summary += `- 👍 The code has reasonable cyclomatic complexity (${analysis.complexity.cyclomaticComplexity})\n`;
-    } else if (analysis.complexity.cyclomaticComplexity <= 20) {
-      summary += `- ⚠️ The code has moderate cyclomatic complexity (${analysis.complexity.cyclomaticComplexity}), consider refactoring complex methods\n`;
-    } else {
+     // Get thresholds from config
+     const reasonableCyclomatic = getConfigValue<number>('processing.complexityThresholds.cyclomaticReasonable', 10);
+     const moderateCyclomatic = getConfigValue<number>('processing.complexityThresholds.cyclomaticModerate', 20);
+     const reasonableNesting = getConfigValue<number>('processing.complexityThresholds.nestingReasonable', 3);
+     const highNesting = getConfigValue<number>('processing.complexityThresholds.nestingHigh', 5);
+     const moderateCognitive = getConfigValue<number>('processing.complexityThresholds.cognitiveModerate', 15);
+     const highCognitive = getConfigValue<number>('processing.complexityThresholds.cognitiveHigh', 25);
+ 
+     // Evaluate cyclomatic complexity
+     if (analysis.complexity.cyclomaticComplexity <= reasonableCyclomatic) {
+       summary += `- 👍 The code has reasonable cyclomatic complexity (${analysis.complexity.cyclomaticComplexity})\n`;
+     } else if (analysis.complexity.cyclomaticComplexity <= moderateCyclomatic) {
+       summary += `- ⚠️ The code has moderate cyclomatic complexity (${analysis.complexity.cyclomaticComplexity}), consider refactoring complex methods\n`;
+     } else {
       summary += `- ❌ The code has high cyclomatic complexity (${analysis.complexity.cyclomaticComplexity}), refactoring is strongly recommended\n`;
-    }
-    
-    // Evaluate nesting depth
-    if (maxNesting <= 3) {
-      summary += `- 👍 The nesting depth is reasonable (${maxNesting})\n`;
-    } else if (maxNesting <= 5) {
-      summary += `- ⚠️ The nesting depth is getting high (${maxNesting}), consider extracting methods\n`;
-    } else {
+     }
+     
+     // Evaluate nesting depth
+     if (maxNesting <= reasonableNesting) {
+       summary += `- 👍 The nesting depth is reasonable (${maxNesting})\n`;
+     } else if (maxNesting <= highNesting) {
+       summary += `- ⚠️ The nesting depth is getting high (${maxNesting}), consider extracting methods\n`;
+     } else {
       summary += `- ❌ The nesting depth is too high (${maxNesting}), code readability may be affected\n`;
     }
     
     // Overall complexity assessment
-    const overallComplexity = (
-      (analysis.complexity.cyclomaticComplexity / 10) +
-      (maxNesting / 3) +
-      (analysis.complexity.cognitiveComplexity / 15)
-    ) / 3;
-    
-    if (overallComplexity < 0.7) {
-      summary += `- 👍 Overall, the code is well-structured and maintainable\n`;
-    } else if (overallComplexity < 1.2) {
-      summary += `- ⚠️ The code is moderately complex, some parts may need refactoring\n`;
-    } else {
+     // Evaluate cognitive complexity
+     if (analysis.complexity.cognitiveComplexity <= moderateCognitive) {
+        summary += `- 👍 Cognitive complexity is manageable (${analysis.complexity.cognitiveComplexity})\n`;
+     } else if (analysis.complexity.cognitiveComplexity <= highCognitive) {
+        summary += `- ⚠️ Cognitive complexity is moderate (${analysis.complexity.cognitiveComplexity}), some parts might be hard to understand\n`;
+     } else {
+        summary += `- ❌ Cognitive complexity is high (${analysis.complexity.cognitiveComplexity}), consider simplifying logic\n`;
+     }
+     
+     // Overall complexity assessment (simplified heuristic)
+     const complexityScore = (
+       (analysis.complexity.cyclomaticComplexity / moderateCyclomatic) + // Normalize against moderate threshold
+       (maxNesting / highNesting) + // Normalize against high threshold
+       (analysis.complexity.cognitiveComplexity / highCognitive) // Normalize against high threshold
+     ) / 3; // Average the normalized scores
+     
+     if (complexityScore < 0.7) { // Adjusted threshold for normalized score
+       summary += `- 👍 Overall, the code appears well-structured and maintainable\n`;
+     } else if (complexityScore < 1.1) { // Adjusted threshold
+       summary += `- ⚠️ The code shows moderate overall complexity, some parts may benefit from refactoring\n`;
+     } else {
       summary += `- ❌ The code is highly complex, significant refactoring recommended\n`;
     }
     

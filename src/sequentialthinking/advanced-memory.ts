@@ -7,19 +7,49 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
-import * as os from 'os';
-import { ThoughtData } from './types.js';
-
-// Define the memory storage location
+ import * as crypto from 'crypto';
+ import * as os from 'os';
+ import { ThoughtData } from './types.js';
+ import { getEmbeddings } from './embeddings.js'; // Import embedding function
+ 
+ // Define the memory storage location
 const MEMORY_DIR = path.join(os.homedir(), '.sequential-thinking', 'memory');
 
 // Ensure memory directory exists
 if (!fs.existsSync(MEMORY_DIR)) {
   fs.mkdirSync(MEMORY_DIR, { recursive: true });
-}
-
-// Types for memory system
+ }
+ 
+ // Use fs.promises
+ import { promises as fsPromises } from 'fs';
+ 
+ // Helper function for cosine similarity
+ function cosineSimilarity(vecA: number[], vecB: number[]): number {
+   if (!vecA || !vecB || vecA.length !== vecB.length || vecA.length === 0) {
+     return 0; // Return 0 for invalid inputs or zero vectors
+   }
+ 
+   let dotProduct = 0;
+   let magnitudeA = 0;
+   let magnitudeB = 0;
+ 
+   for (let i = 0; i < vecA.length; i++) {
+     dotProduct += vecA[i] * vecB[i];
+     magnitudeA += vecA[i] * vecA[i];
+     magnitudeB += vecB[i] * vecB[i];
+   }
+ 
+   magnitudeA = Math.sqrt(magnitudeA);
+   magnitudeB = Math.sqrt(magnitudeB);
+ 
+   if (magnitudeA === 0 || magnitudeB === 0) {
+     return 0; // Avoid division by zero
+   }
+ 
+   return dotProduct / (magnitudeA * magnitudeB);
+ }
+ 
+ // Types for memory system
 export interface MemoryItem {
   id: string;
   type: 'insight' | 'pattern' | 'effectiveness' | 'knowledge';
@@ -35,10 +65,11 @@ export interface MemoryItem {
     projectContext?: string;
     codeContext?: {
       files: string[];
-      symbols: string[];
-    };
-  };
-}
+       symbols: string[];
+     };
+     embedding?: number[]; // Added optional embedding field
+   };
+ }
 
 export interface ReasoningPattern {
   id: string;
@@ -59,10 +90,12 @@ export interface MemoryQuery {
   tags?: string[];
   minConfidence?: number;
   minEffectiveness?: number;
-  contextFiles?: string[];
-  contextSymbols?: string[];
-  limit?: number;
-}
+   contextFiles?: string[];
+   contextSymbols?: string[];
+   queryText?: string; // Added for semantic search query
+   similarityThreshold?: number; // Optional threshold for semantic search
+   limit?: number;
+ }
 
 /**
  * Memory System class for storing and retrieving insights
@@ -79,22 +112,22 @@ export class AdvancedMemorySystem {
     if (this.loaded) return;
     
     try {
-      // Load memories
-      const memoriesPath = path.join(MEMORY_DIR, 'memories.json');
-      if (fs.existsSync(memoriesPath)) {
-        const memoriesData = fs.readFileSync(memoriesPath, 'utf8');
-        const memoriesArray = JSON.parse(memoriesData) as MemoryItem[];
-        memoriesArray.forEach(memory => {
+       // Load memories
+       const memoriesPath = path.join(MEMORY_DIR, 'memories.json');
+       if (fs.existsSync(memoriesPath)) { // Keep sync check for existence
+         const memoriesData = await fsPromises.readFile(memoriesPath, 'utf8'); // Use async read
+         const memoriesArray = JSON.parse(memoriesData) as MemoryItem[];
+         memoriesArray.forEach(memory => {
           this.memories.set(memory.id, memory);
         });
       }
       
-      // Load patterns
-      const patternsPath = path.join(MEMORY_DIR, 'patterns.json');
-      if (fs.existsSync(patternsPath)) {
-        const patternsData = fs.readFileSync(patternsPath, 'utf8');
-        const patternsArray = JSON.parse(patternsData) as ReasoningPattern[];
-        patternsArray.forEach(pattern => {
+       // Load patterns
+       const patternsPath = path.join(MEMORY_DIR, 'patterns.json');
+       if (fs.existsSync(patternsPath)) { // Keep sync check for existence
+         const patternsData = await fsPromises.readFile(patternsPath, 'utf8'); // Use async read
+         const patternsArray = JSON.parse(patternsData) as ReasoningPattern[];
+         patternsArray.forEach(pattern => {
           this.patterns.set(pattern.id, pattern);
         });
       }
@@ -115,16 +148,16 @@ export class AdvancedMemorySystem {
    */
   private async saveMemories(): Promise<void> {
     try {
-      // Save memories
-      const memoriesArray = Array.from(this.memories.values());
-      const memoriesPath = path.join(MEMORY_DIR, 'memories.json');
-      fs.writeFileSync(memoriesPath, JSON.stringify(memoriesArray, null, 2));
-      
-      // Save patterns
-      const patternsArray = Array.from(this.patterns.values());
-      const patternsPath = path.join(MEMORY_DIR, 'patterns.json');
-      fs.writeFileSync(patternsPath, JSON.stringify(patternsArray, null, 2));
-    } catch (error) {
+       // Save memories
+       const memoriesArray = Array.from(this.memories.values());
+       const memoriesPath = path.join(MEMORY_DIR, 'memories.json');
+       await fsPromises.writeFile(memoriesPath, JSON.stringify(memoriesArray, null, 2)); // Use async write
+       
+       // Save patterns
+       const patternsArray = Array.from(this.patterns.values());
+       const patternsPath = path.join(MEMORY_DIR, 'patterns.json');
+       await fsPromises.writeFile(patternsPath, JSON.stringify(patternsArray, null, 2)); // Use async write
+     } catch (error) {
       console.error('Error saving memories:', error);
     }
   }
@@ -154,12 +187,26 @@ export class AdvancedMemorySystem {
         associatedThoughts: thoughtNumbers,
         tags,
         confidence,
-        usageCount: 0,
-        codeContext
-      }
-    };
-    
-    this.memories.set(id, memory);
+         usageCount: 0,
+         codeContext,
+         embedding: undefined // Initialize embedding field
+       }
+     };
+ 
+     // Generate embedding for the content
+     try {
+       const embedding = await getEmbeddings(content);
+       if (embedding) {
+         memory.metadata.embedding = embedding;
+         console.log(`Generated embedding for memory item ${id}`);
+       } else {
+         console.warn(`Could not generate embedding for memory item ${id}`);
+       }
+     } catch (error) {
+       console.error(`Error generating embedding for memory item ${id}:`, error);
+     }
+     
+     this.memories.set(id, memory);
     await this.saveMemories();
     
     return id;
@@ -229,32 +276,43 @@ export class AdvancedMemorySystem {
   }
   
   /**
-   * Query memories based on criteria
+   * Query memories based on criteria, including semantic search.
    */
   public async queryMemories(query: MemoryQuery): Promise<MemoryItem[]> {
     await this.loadMemories();
     
     let results = Array.from(this.memories.values());
+    let queryEmbedding: number[] | null = null;
+
+    // Generate embedding for query text if provided
+    if (query.queryText) {
+      try {
+        queryEmbedding = await getEmbeddings(query.queryText);
+        if (!queryEmbedding) {
+          console.warn(`Could not generate embedding for query text: "${query.queryText.substring(0, 50)}..."`);
+        }
+      } catch (error) {
+        console.error(`Error generating embedding for query text:`, error);
+      }
+    }
     
+    // --- Standard Filtering ---
     // Filter by type
     if (query.type) {
       results = results.filter(memory => memory.type === query.type);
     }
-    
     // Filter by tags
     if (query.tags && query.tags.length > 0) {
       results = results.filter(memory => 
         query.tags!.some(tag => memory.metadata.tags.includes(tag))
       );
     }
-    
     // Filter by confidence
     if (query.minConfidence !== undefined) {
       results = results.filter(memory => 
         memory.metadata.confidence >= query.minConfidence!
       );
     }
-    
     // Filter by effectiveness
     if (query.minEffectiveness !== undefined) {
       results = results.filter(memory => 
@@ -262,8 +320,7 @@ export class AdvancedMemorySystem {
         memory.metadata.effectiveness >= query.minEffectiveness!
       );
     }
-    
-    // Filter by code context
+    // Filter by code context files
     if (query.contextFiles && query.contextFiles.length > 0) {
       results = results.filter(memory => 
         memory.metadata.codeContext?.files.some(file => 
@@ -271,26 +328,58 @@ export class AdvancedMemorySystem {
         )
       );
     }
-    
+    // Filter by code context symbols
     if (query.contextSymbols && query.contextSymbols.length > 0) {
       results = results.filter(memory => 
         memory.metadata.codeContext?.symbols.some(symbol => 
           query.contextSymbols!.includes(symbol)
-        )
+         )
+       );
+     }
+
+    // --- Semantic Search Filtering & Ranking ---
+    let scoredResults: Array<MemoryItem & { similarityScore?: number }> = results.map(r => ({...r})); // Clone results
+
+    if (queryEmbedding && query.queryText) {
+      const threshold = query.similarityThreshold ?? 0.7; // Default similarity threshold
+      console.log(`Performing semantic search with threshold ${threshold}`);
+
+      scoredResults = scoredResults
+        .map(memory => {
+          let similarityScore: number | undefined = undefined;
+          if (memory.metadata.embedding && queryEmbedding) {
+            similarityScore = cosineSimilarity(queryEmbedding, memory.metadata.embedding);
+          }
+          // Assign score even if undefined for consistent sorting/filtering
+          return { ...memory, similarityScore }; 
+        })
+        .filter(memory => 
+          memory.similarityScore !== undefined && memory.similarityScore >= threshold
+        );
+
+      // Sort primarily by similarity (desc), then by recency (desc) as a tie-breaker
+      scoredResults.sort((a, b) => {
+        const simDiff = (b.similarityScore ?? -1) - (a.similarityScore ?? -1); // Treat undefined as lowest score
+        if (simDiff !== 0) return simDiff;
+        return new Date(b.metadata.updatedAt).getTime() - new Date(a.metadata.updatedAt).getTime();
+      });
+      console.log(`Found ${scoredResults.length} memories above similarity threshold.`);
+
+    } else {
+      // If no semantic query, sort by recency only
+      scoredResults.sort((a, b) => 
+        new Date(b.metadata.updatedAt).getTime() - new Date(a.metadata.updatedAt).getTime()
       );
     }
     
-    // Sort by most recent first
-    results.sort((a, b) => 
-      new Date(b.metadata.updatedAt).getTime() - new Date(a.metadata.updatedAt).getTime()
-    );
-    
-    // Apply limit
+    // Apply limit to the potentially re-sorted results
     if (query.limit !== undefined) {
-      results = results.slice(0, query.limit);
+      scoredResults = scoredResults.slice(0, query.limit);
     }
     
-    return results;
+    // Return the final results (optionally removing the score)
+    // For now, keep the score as it might be useful context for the caller
+    return scoredResults; //.map(({ similarityScore, ...rest }) => rest); // Uncomment to remove score
   }
   
   /**
@@ -450,15 +539,20 @@ export class AdvancedMemorySystem {
       insights.push(`Your thought process shows ${patterns.map(p => p.name).join(', ')} patterns, which are effective for ${patterns.map(p => p.applicableContexts[0] || 'problem-solving').join(', ')}.`);
     }
     
-    // Look for similar past memories
+    // Look for similar past memories using semantic search if possible
+    const queryText = thoughts.length > 0 ? thoughts[thoughts.length - 1].thought : undefined; // Use last thought as query
     const similarMemories = await this.queryMemories({
       type: 'insight',
-      contextFiles: codeContext.files,
+      contextFiles: codeContext.files, // Keep context file filtering
+      queryText: queryText, // Add semantic query
+      similarityThreshold: 0.75, // Slightly higher threshold for insights
       limit: 3
     });
     
     if (similarMemories.length > 0) {
-      insights.push(`Based on past insights: ${similarMemories.map(m => m.content.substring(0, 100)).join(' | ')}`);
+      // Include similarity score in the insight text for debugging/transparency
+      // Explicitly cast to access similarityScore
+      insights.push(`Based on past insights (similarity score): ${similarMemories.map(m => `${m.content.substring(0, 80)}... (${((m as any).similarityScore! * 100).toFixed(1)}%)`).join(' | ')}`);
     }
     
     // Check for reasoning effectiveness
