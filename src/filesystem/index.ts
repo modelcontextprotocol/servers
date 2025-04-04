@@ -114,7 +114,7 @@ const EditOperation = z.object({
 });
 
 const EditFileArgsSchema = z.object({
-  path: z.string(),
+  path: z.string().describe('File path to edit'),
   edits: z.array(EditOperation),
   dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format')
 });
@@ -136,10 +136,42 @@ const MoveFileArgsSchema = z.object({
   destination: z.string(),
 });
 
-const SearchFilesArgsSchema = z.object({
-  path: z.string(),
-  pattern: z.string(),
-  excludePatterns: z.array(z.string()).optional().default([])
+const SearchFilesByNameArgsSchema = z.object({
+  path: z.string().describe('The root directory path to start the search from'),
+  pattern: z.string().describe('Substring to match within file/directory names.  Case insensitive unless pattern contains uppercase characters.'),
+  excludePatterns: z.array(z.string())
+    .optional()
+    .default([])
+    .describe('Glob patterns for paths to exclude from search (e.g., "node_modules/**")')
+});
+
+const SearchFilesContentArgsSchema = z.object({
+  path: z.string().describe('Path to search - can be either a file path or a directory to search recursively'),
+  pattern: z.string().describe('Text pattern to search for - supports plain text substring matching, not regex'),
+  caseSensitive: z.boolean()
+    .optional()
+    .default(false)
+    .describe('Whether to perform case-sensitive matching.'),
+  maxResults: z.number()
+    .optional()
+    .default(100)
+    .describe('Maximum number of matching results to return.'),
+  contextLines: z.number()
+    .optional()
+    .default(2)
+    .describe('Number of lines to show before and after each match.'),
+  excludePatterns: z.array(z.string())
+    .optional()
+    .default([])
+    .describe('Glob patterns for paths to exclude from search (e.g., "node_modules/**", "*.test.ts")'),
+  includeTypes: z.array(z.string())
+    .optional()
+    .default([])
+    .describe('File extensions to include (e.g., ["ts", "js", "tsx"]). If empty, includes all files'),
+  excludeTypes: z.array(z.string())
+    .optional()
+    .default([])
+    .describe('File extensions to exclude (e.g., ["jpg", "png"]). Ignored if includeTypes is not empty')
 });
 
 const GetFileInfoArgsSchema = z.object({
@@ -157,6 +189,175 @@ interface FileInfo {
   isDirectory: boolean;
   isFile: boolean;
   permissions: string;
+}
+
+async function searchFileContents(
+  rootPath: string,
+  pattern: string,
+  caseSensitive: boolean = false,
+  maxResults: number = 100,
+  contextLines: number = 2,
+  excludePatterns: string[] = [],
+  includeTypes: string[] = [],
+  excludeTypes: string[] = []
+): Promise<string[]> {
+  const results: string[] = [];
+  const resultCount = { value: 0 }; // Object to track count across recursive calls
+
+  // Prepare the search pattern
+  const searchPattern = caseSensitive ? pattern : pattern.toLowerCase();
+
+  // Pre-compile exclude patterns
+  const compiledExcludes = excludePatterns.map(pattern => {
+    const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
+    return (path: string) => minimatch(path, globPattern, { dot: true });
+  });
+
+  // Determine file extensions to include/exclude
+  const normalizedIncludeTypes = includeTypes.map(ext => ext.startsWith('.') ? ext.toLowerCase() : `.${ext.toLowerCase()}`);
+  const normalizedExcludeTypes = excludeTypes.map(ext => ext.startsWith('.') ? ext.toLowerCase() : `.${ext.toLowerCase()}`);
+
+  // Function to check if a file should be processed based on its extension
+  const shouldProcessFileType = (filePath: string): boolean => {
+    const ext = path.extname(filePath).toLowerCase();
+
+    // If include types are specified, only process those types
+    if (normalizedIncludeTypes.length > 0) {
+      return normalizedIncludeTypes.includes(ext);
+    }
+
+    // Otherwise, exclude specified types
+    if (normalizedExcludeTypes.length > 0) {
+      return !normalizedExcludeTypes.includes(ext);
+    }
+
+    return true;
+  };
+
+  // Function to check if a path should be excluded
+  const shouldExclude = (relativePath: string): boolean => {
+    return compiledExcludes.some(matchFn => matchFn(relativePath));
+  };
+
+  // Format search results with context lines
+  const formatSearchResult = (filePath: string, content: string, lineNumber: number, line: string): string => {
+    const lines = content.split('\n');
+    const startLine = Math.max(0, lineNumber - contextLines);
+    const endLine = Math.min(lines.length - 1, lineNumber + contextLines);
+
+    let result = `${filePath}:${lineNumber + 1}: ${line.trim()}`;
+
+    // Add context if requested
+    if (contextLines > 0) {
+      result += '\nContext:';
+      for (let i = startLine; i <= endLine; i++) {
+        const prefix = i === lineNumber ? '> ' : '  ';
+        result += `\n${prefix}${i + 1}: ${lines[i]}`;
+      }
+    }
+
+    return result;
+  };
+
+  // Safely read and search text file contents
+  const searchTextFile = async (filePath: string): Promise<string[]> => {
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const lines = content.split('\n');
+      const matchResults: string[] = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const lineToSearch = caseSensitive ? line : line.toLowerCase();
+
+        if (lineToSearch.includes(searchPattern)) {
+          matchResults.push(formatSearchResult(filePath, content, i, line));
+          resultCount.value++;
+
+          // Check if we've reached the maximum results limit
+          if (resultCount.value >= maxResults) {
+            matchResults.push(`\nReached maximum result limit (${maxResults}). Additional matches may exist.`);
+            break;
+          }
+        }
+      }
+
+      return matchResults;
+    } catch (error) {
+      // Skip files that can't be read as text
+      return [];
+    }
+  };
+
+  // First check if rootPath is a file
+  const stats = await fs.stat(rootPath);
+  if (stats.isFile()) {
+    // If it's a file, search it directly
+    if (shouldProcessFileType(rootPath)) {
+      const fileResults = await searchTextFile(rootPath);
+      return fileResults;
+    }
+    return [];
+  }
+  // Otherwise, it should be a directory
+  const queue: string[] = [rootPath];
+  const processedPaths = new Set<string>();
+
+  // Process directories breadth-first
+  while (queue.length > 0 && resultCount.value < maxResults) {
+    const currentBatch = [...queue];
+    queue.length = 0;
+
+    // Process batch in parallel
+    await Promise.all(
+      currentBatch.map(async (currentPath) => {
+        if (processedPaths.has(currentPath)) return;
+        processedPaths.add(currentPath);
+
+        try {
+          await validatePath(currentPath);
+          const entries = await fs.readdir(currentPath, { withFileTypes: true });
+
+          // Process entries
+          for (const entry of entries) {
+            const fullPath = path.join(currentPath, entry.name);
+            const relativePath = path.relative(rootPath, fullPath);
+
+            // Skip excluded paths
+            if (shouldExclude(relativePath)) continue;
+
+            try {
+              await validatePath(fullPath);
+
+              if (entry.isDirectory()) {
+                // Add directory to queue for next batch
+                queue.push(fullPath);
+              } else if (entry.isFile() && shouldProcessFileType(fullPath)) {
+                // Search file contents
+                const fileResults = await searchTextFile(fullPath);
+                if (fileResults.length > 0) {
+                  results.push(...fileResults);
+
+                  // Check if we've reached the limit
+                  if (resultCount.value >= maxResults) {
+                    return; // Exit early
+                  }
+                }
+              }
+            } catch (error) {
+              // Skip invalid paths
+              continue;
+            }
+          }
+        } catch (error) {
+          // Skip inaccessible directories
+          return;
+        }
+      })
+    );
+  }
+  return results;
+
 }
 
 // Server setup
@@ -186,49 +387,83 @@ async function getFileStats(filePath: string): Promise<FileInfo> {
   };
 }
 
-async function searchFiles(
+async function searchFilesByName(
   rootPath: string,
   pattern: string,
   excludePatterns: string[] = []
 ): Promise<string[]> {
   const results: string[] = [];
+  const queue: string[] = [rootPath];
+  const processedPaths = new Set<string>();
+  const caseSensitive = /[A-Z]/.test(pattern); // Check if pattern has uppercase characters
+  const searchPattern = caseSensitive ? pattern : pattern.toLowerCase();
 
-  async function search(currentPath: string) {
-    const entries = await fs.readdir(currentPath, { withFileTypes: true });
+  // Pre-compile exclude patterns to minimize repeated processing
+  const compiledExcludes = excludePatterns.map(pattern => {
+    const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
+    return (path: string) => minimatch(path, globPattern, { dot: true });
+  });
 
-    for (const entry of entries) {
-      const fullPath = path.join(currentPath, entry.name);
+  // Function to check if a path should be excluded
+  const shouldExclude = (relativePath: string): boolean => {
+    return compiledExcludes.some(matchFn => matchFn(relativePath));
+  };
 
-      try {
-        // Validate each path before processing
-        await validatePath(fullPath);
+  // Process directories in a breadth-first manner
+  while (queue.length > 0) {
+    const currentBatch = [...queue]; // Copy current queue for parallel processing
+    queue.length = 0; // Clear queue for next batch
 
-        // Check if path matches any exclude pattern
-        const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(pattern => {
-          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
-          return minimatch(relativePath, globPattern, { dot: true });
-        });
+    // Process current batch in parallel
+    const entriesBatches = await Promise.all(
+      currentBatch.map(async (currentPath) => {
+        if (processedPaths.has(currentPath)) return []; // Skip if already processed
+        processedPaths.add(currentPath);
 
-        if (shouldExclude) {
+        try {
+          await validatePath(currentPath);
+          return await fs.readdir(currentPath, { withFileTypes: true });
+        } catch (error) {
+          return []; // Return empty array on error
+        }
+      })
+    );
+
+    // Flatten and process entries
+    for (let i = 0; i < currentBatch.length; i++) {
+      const currentPath = currentBatch[i];
+      const entries = entriesBatches[i];
+
+      for (const entry of entries) {
+        const fullPath = path.join(currentPath, entry.name);
+        try {
+          // Validate path before processing
+          await validatePath(fullPath);
+
+          // Check exclude patterns (once per entry)
+          const relativePath = path.relative(rootPath, fullPath);
+          if (shouldExclude(relativePath)) {
+            continue;
+          }
+
+          // Match file/directory name using appropriate case sensitivity
+          const nameToMatch = caseSensitive ? entry.name : entry.name.toLowerCase();
+          if (nameToMatch.includes(searchPattern)) {
+            results.push(fullPath);
+          }
+
+          // Add directories to queue for next batch
+          if (entry.isDirectory()) {
+            queue.push(fullPath);
+          }
+        } catch (error) {
+          // Skip invalid paths
           continue;
         }
-
-        if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
-          results.push(fullPath);
-        }
-
-        if (entry.isDirectory()) {
-          await search(fullPath);
-        }
-      } catch (error) {
-        // Skip invalid paths during search
-        continue;
       }
     }
   }
 
-  await search(rootPath);
   return results;
 }
 
@@ -254,7 +489,7 @@ function createUnifiedDiff(originalContent: string, newContent: string, filepath
 
 async function applyFileEdits(
   filePath: string,
-  edits: Array<{oldText: string, newText: string}>,
+  edits: Array<{ oldText: string, newText: string }>,
   dryRun = false
 ): Promise<string> {
   // Read file content and normalize line endings
@@ -390,10 +625,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "directory_tree",
         description:
-            "Get a recursive tree view of files and directories as a JSON structure. " +
-            "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
-            "Files have no children array, while directories always have a children array (which may be empty). " +
-            "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
+          "Get a recursive tree view of files and directories as a JSON structure. " +
+          "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
+          "Files have no children array, while directories always have a children array (which may be empty). " +
+          "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(DirectoryTreeArgsSchema) as ToolInput,
       },
       {
@@ -406,14 +641,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(MoveFileArgsSchema) as ToolInput,
       },
       {
-        name: "search_files",
+        name: "search_files_by_name",
         description:
-          "Recursively search for files and directories matching a pattern. " +
-          "Searches through all subdirectories from the starting path. The search " +
-          "is case-insensitive and matches partial names. Returns full paths to all " +
-          "matching items. Great for finding files when you don't know their exact location. " +
+          "Find files and directories whose names match a pattern. Searches recursively " +
+          "through all subdirectories from the starting path. The search is case-insensitive " +
+          "and matches partial file or directory names. Returns full paths to all items with " +
+          "matching names. Great for finding files when you don't know their exact location. " +
           "Only searches within allowed directories.",
-        inputSchema: zodToJsonSchema(SearchFilesArgsSchema) as ToolInput,
+        inputSchema: zodToJsonSchema(SearchFilesByNameArgsSchema) as ToolInput,
+      },
+      {
+        name: "search_file_contents",
+        description:
+          "Search for text patterns within file contents. Can search either a single file or " +
+          "recursively through a directory. Uses plain text substring matching (not regex). " +
+          "The search can be case-sensitive or insensitive based on parameters. Returns matching " +
+          "file paths along with line numbers and context lines before/after the match. Only " +
+          "searches within allowed directories.",
+        inputSchema: zodToJsonSchema(SearchFilesContentArgsSchema) as ToolInput,
       },
       {
         name: "get_file_info",
@@ -530,48 +775,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-        case "directory_tree": {
-            const parsed = DirectoryTreeArgsSchema.safeParse(args);
-            if (!parsed.success) {
-                throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
-            }
-
-            interface TreeEntry {
-                name: string;
-                type: 'file' | 'directory';
-                children?: TreeEntry[];
-            }
-
-            async function buildTree(currentPath: string): Promise<TreeEntry[]> {
-                const validPath = await validatePath(currentPath);
-                const entries = await fs.readdir(validPath, {withFileTypes: true});
-                const result: TreeEntry[] = [];
-
-                for (const entry of entries) {
-                    const entryData: TreeEntry = {
-                        name: entry.name,
-                        type: entry.isDirectory() ? 'directory' : 'file'
-                    };
-
-                    if (entry.isDirectory()) {
-                        const subPath = path.join(currentPath, entry.name);
-                        entryData.children = await buildTree(subPath);
-                    }
-
-                    result.push(entryData);
-                }
-
-                return result;
-            }
-
-            const treeData = await buildTree(parsed.data.path);
-            return {
-                content: [{
-                    type: "text",
-                    text: JSON.stringify(treeData, null, 2)
-                }],
-            };
+      case "directory_tree": {
+        const parsed = DirectoryTreeArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
         }
+
+        interface TreeEntry {
+          name: string;
+          type: 'file' | 'directory';
+          children?: TreeEntry[];
+        }
+
+        async function buildTree(currentPath: string): Promise<TreeEntry[]> {
+          const validPath = await validatePath(currentPath);
+          const entries = await fs.readdir(validPath, { withFileTypes: true });
+          const result: TreeEntry[] = [];
+
+          for (const entry of entries) {
+            const entryData: TreeEntry = {
+              name: entry.name,
+              type: entry.isDirectory() ? 'directory' : 'file'
+            };
+
+            if (entry.isDirectory()) {
+              const subPath = path.join(currentPath, entry.name);
+              entryData.children = await buildTree(subPath);
+            }
+
+            result.push(entryData);
+          }
+
+          return result;
+        }
+
+        const treeData = await buildTree(parsed.data.path);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(treeData, null, 2)
+          }],
+        };
+      }
 
       case "move_file": {
         const parsed = MoveFileArgsSchema.safeParse(args);
@@ -586,15 +831,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case "search_files": {
-        const parsed = SearchFilesArgsSchema.safeParse(args);
+      case "search_files_by_name": {
+        const parsed = SearchFilesByNameArgsSchema.safeParse(args);
         if (!parsed.success) {
-          throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
+          throw new Error(`Invalid arguments for search_files_by_name: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
+        const results = await searchFilesByName(validPath, parsed.data.pattern, parsed.data.excludePatterns);
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
+        };
+      }
+
+      case "search_file_contents": {
+        const parsed = SearchFilesContentArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for search_file_contents: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const results = await searchFileContents(
+          validPath,
+          parsed.data.pattern,
+          parsed.data.caseSensitive,
+          parsed.data.maxResults,
+          parsed.data.contextLines,
+          parsed.data.excludePatterns,
+          parsed.data.includeTypes,
+          parsed.data.excludeTypes
+        );
+        return {
+          content: [{ type: "text", text: results.length > 0 ? results.join("\n\n") : "No matches found" }],
         };
       }
 
@@ -606,9 +872,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validPath = await validatePath(parsed.data.path);
         const info = await getFileStats(validPath);
         return {
-          content: [{ type: "text", text: Object.entries(info)
-            .map(([key, value]) => `${key}: ${value}`)
-            .join("\n") }],
+          content: [{
+            type: "text", text: Object.entries(info)
+              .map(([key, value]) => `${key}: ${value}`)
+              .join("\n")
+          }],
         };
       }
 
