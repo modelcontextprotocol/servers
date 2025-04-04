@@ -8,7 +8,10 @@ A Model Context Protocol server that provides browser automation capabilities us
 
 - **puppeteer_navigate**
   - Navigate to any URL in the browser
-  - Input: `url` (string)
+  - Inputs:
+    - `url` (string, required): URL to navigate to
+    - `launchOptions` (object, optional): PuppeteerJS LaunchOptions. Default null. If changed and not null, browser restarts. Example: `{ headless: true, args: ['--user-data-dir="C:/Data"'] }`
+    - `allowDangerous` (boolean, optional): Allow dangerous LaunchOptions that reduce security. When false, dangerous args like `--no-sandbox`, `--disable-web-security` will throw errors. Default false.
 
 - **puppeteer_screenshot**
   - Capture screenshots of the entire page or specific elements
@@ -61,6 +64,7 @@ The server provides access to two types of resources:
 - Screenshot capabilities
 - JavaScript execution
 - Basic web interaction (navigation, clicking, form filling)
+- Customizable Puppeteer launch options
 
 ## Configuration to use Puppeteer Server
 Here's the Claude Desktop configuration to use the Puppeter server:
@@ -92,6 +96,39 @@ Here's the Claude Desktop configuration to use the Puppeter server:
   }
 }
 ```
+
+### Launch Options
+
+You can customize Puppeteer's browser behavior in two ways:
+
+1. **Environment Variable**: Set `PUPPETEER_LAUNCH_OPTIONS` with a JSON-encoded string in the MCP configuration's `env` parameter:
+
+    ```json
+    {
+      "mcpServers": {
+        "mcp-puppeteer": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+          "env": {
+            "PUPPETEER_LAUNCH_OPTIONS": "{ \"headless\": false, \"executablePath\": \"C:/Program Files/Google/Chrome/Application/chrome.exe\", \"args\": [] }",
+            "ALLOW_DANGEROUS": "true"
+          }
+        }
+      }
+    }
+    ```
+
+2. **Tool Call Arguments**: Pass `launchOptions` and `allowDangerous` parameters to the `puppeteer_navigate` tool:
+
+   ```json
+   {
+     "url": "https://example.com",
+     "launchOptions": {
+       "headless": false,
+       "defaultViewport": {"width": 1280, "height": 720}
+     }
+   }
+   ```
 
 ## Build
 
