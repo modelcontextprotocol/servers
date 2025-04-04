@@ -4,12 +4,20 @@ An MCP server implementation that integrates the Brave Search API, providing bot
 
 ## Features
 
+- **Image Search**: Query Brave Search for various images.
 - **Web Search**: General queries, news, articles, with pagination and freshness controls
 - **Local Search**: Find businesses, restaurants, and services with detailed information
 - **Flexible Filtering**: Control result types, safety levels, and content freshness
 - **Smart Fallbacks**: Local search automatically falls back to web when no results are found
 
 ## Tools
+
+- **brave_image_search**
+  - Execute web searches with pagination and filtering
+  - Inputs:
+    - `query` (string): Search terms
+    - `count` (number, optional): Results per page (max 100)
+    - `safesearch` (string, optional): Filters results for sensitive content.
 
 - **brave_web_search**
   - Execute web searches with pagination and filtering
@@ -30,7 +38,7 @@ An MCP server implementation that integrates the Brave Search API, providing bot
 
 ### Getting an API Key
 1. Sign up for a [Brave Search API account](https://brave.com/search/api/)
-2. Choose a plan (Free tier available with 2,000 queries/month)
+2. Choose a _Data for AI_ plan (Free tier available with 1 query/second and 2,000 queries/month)
 3. Generate your API key [from the developer dashboard](https://api.search.brave.com/app/keys)
 
 ### Usage with Claude Desktop
