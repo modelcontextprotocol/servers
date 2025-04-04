@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getResendClient } from "../common/utils.js";
+import { getResendClient, validateScheduledTime } from "../common/utils.js";
 import { SendEmailResponseSchema } from "../common/types.js";
 
 // Schema definitions
@@ -24,6 +24,7 @@ export const SendEmailWithTemplateSchema = z.object({
       value: z.string(),
     })
   ).optional().describe("Tags for tracking emails"),
+  scheduled_at: z.string().optional().describe("ISO timestamp for scheduling the email delivery"),
 });
 
 // Function implementations
@@ -31,6 +32,9 @@ export async function sendEmailWithTemplate(params: z.infer<typeof SendEmailWith
   const resend = getResendClient();
 
   try {
+    // Validate scheduled_at timestamp if provided
+    const validatedScheduledAt = validateScheduledTime(params.scheduled_at);
+    
     // Prepare the API payload
     const emailOptions: any = {
       from: params.from,
@@ -41,6 +45,7 @@ export async function sendEmailWithTemplate(params: z.infer<typeof SendEmailWith
       bcc: params.bcc,
       attachments: params.attachments,
       tags: params.tags,
+      scheduled_at: validatedScheduledAt,
     };
 
     // Add template information - checking docs, Resend might use different fields

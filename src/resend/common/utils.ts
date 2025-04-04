@@ -33,4 +33,27 @@ export function validateAndFormatEmail(email: string, name?: string): string {
   }
   
   return email;
+}
+
+export function validateScheduledTime(timestamp: string | undefined): string | undefined {
+  if (!timestamp) {
+    return undefined;
+  }
+
+  const scheduledDate = new Date(timestamp);
+  
+  // Check if date is valid
+  if (isNaN(scheduledDate.getTime())) {
+    throw new Error(`Invalid scheduled_at timestamp: ${timestamp}. Use ISO 8601 format (e.g., "2023-12-31T23:59:59Z").`);
+  }
+  
+  // Check if date is in the future (with a small buffer for processing)
+  const now = new Date();
+  const minSchedulingTime = new Date(now.getTime() + 60000); // 1 minute in the future
+  
+  if (scheduledDate < minSchedulingTime) {
+    throw new Error(`Scheduled time must be at least 1 minute in the future.`);
+  }
+  
+  return timestamp;
 } 

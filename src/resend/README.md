@@ -8,6 +8,7 @@ A Model Context Protocol (MCP) server for interacting with the [Resend](https://
 - Send emails using Resend templates
 - Support for attachments, CC, BCC, and reply-to addresses
 - Email tagging for tracking
+- Schedule emails for future delivery
 
 ## Setup
 
@@ -43,6 +44,18 @@ const result = await sendEmail({
 });
 ```
 
+### Sending a scheduled email
+
+```typescript
+const result = await sendEmail({
+  from: "Your Name <you@example.com>",
+  to: "recipient@example.com",
+  subject: "Scheduled Email from Resend",
+  html: "<p>This email was scheduled to be sent at a future time.</p>",
+  scheduled_at: "2023-12-31T23:59:59Z" // ISO 8601 timestamp
+});
+```
+
 ### Sending an email with a template
 
 ```typescript
@@ -75,6 +88,7 @@ Parameters:
 - `reply_to`: Reply-to email address
 - `attachments`: Array of file attachments
 - `tags`: Array of tags for tracking emails
+- `scheduled_at`: ISO 8601 timestamp for scheduling the email delivery
 
 ### `send_email_with_template`
 
@@ -91,6 +105,7 @@ Parameters:
 - `reply_to`: Reply-to email address
 - `attachments`: Array of file attachments
 - `tags`: Array of tags for tracking emails
+- `scheduled_at`: ISO 8601 timestamp for scheduling the email delivery
 
 ## License
 

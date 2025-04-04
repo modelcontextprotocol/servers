@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getResendClient } from "../common/utils.js";
+import { getResendClient, validateScheduledTime } from "../common/utils.js";
 import {
   AttachmentSchema,
   ToRecipientsSchema,
@@ -25,6 +25,7 @@ export const SendEmailSchema = z.object({
       value: z.string(),
     })
   ).optional().describe("Tags for tracking emails"),
+  scheduled_at: z.string().optional().describe("ISO timestamp for scheduling the email delivery"),
 });
 
 // Function implementations
@@ -43,6 +44,9 @@ export async function sendEmail(params: z.infer<typeof SendEmailSchema>) {
   };
 
   try {
+    // Validate scheduled_at timestamp if provided
+    const validatedScheduledAt = validateScheduledTime(params.scheduled_at);
+    
     // Prepare email options based on content type
     const emailOptions: any = {
       from: params.from,
@@ -55,6 +59,7 @@ export async function sendEmail(params: z.infer<typeof SendEmailSchema>) {
       bcc: params.bcc?.map(formatRecipient),
       attachments: params.attachments,
       tags: params.tags,
+      scheduled_at: validatedScheduledAt,
     };
     
     // Add content (html or text)
