@@ -307,6 +307,14 @@ For detailed search syntax, see [GitHub's searching documentation](https://docs.
 
 ## Setup
 
+### Github.com SaaS
+
+* Default support for API calls going to https://api.github.com
+
+### Github Enterprise Server
+
+* Support using an Enterprise version of Github, users can specify the API server; i.g.: https://github.company.com/api/v3
+
 ### Personal Access Token
 [Create a GitHub Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) with appropriate permissions:
    - Go to [Personal access tokens](https://github.com/settings/tokens) (in GitHub Settings > Developer settings)
@@ -315,10 +323,16 @@ For detailed search syntax, see [GitHub's searching documentation](https://docs.
      - Alternatively, if working only with public repositories, select only the `public_repo` scope
    - Copy the generated token
 
+> [!TIP]
+> * When using a Github Enterprise Server, make sure to create a PAT on the same way.
+
 ### Usage with Claude Desktop
 To use this with Claude Desktop, add the following to your `claude_desktop_config.json`:
 
 #### Docker
+
+* For github.com
+
 ```json
 {
   "mcpServers": {
@@ -333,6 +347,32 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
         "mcp/github"
       ],
       "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+      }
+    }
+  }
+}
+```
+
+* Github Enterprise Server
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "-e",
+        "GITHUB_SERVER_API_URL",
+        "mcp/github"
+      ],
+      "env": {
+        "GITHUB_SERVER_API_URL": "<GITHUB_SERVER_API_URL>",
         "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
       }
     }
@@ -364,7 +404,7 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
 Docker build:
 
 ```bash
-docker build -t mcp/github -f src/github/Dockerfile .
+docker compose build
 ```
 
 ## License
