@@ -189,12 +189,33 @@ export const GitHubIssueSchema = z.object({
   locked: z.boolean(),
   assignee: GitHubIssueAssigneeSchema.nullable(),
   assignees: z.array(GitHubIssueAssigneeSchema),
+  type: z.object({
+    id: z.number(),
+    node_id: z.string(),
+    name: z.string(),
+    description: z.string(),
+    color: z.string(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    is_enabled: z.boolean()
+  }).optional(),
   milestone: GitHubMilestoneSchema.nullable(),
   comments: z.number(),
   created_at: z.string(),
   updated_at: z.string(),
   closed_at: z.string().nullable(),
   body: z.string().nullable(),
+});
+
+export const AddSubIssuesSchema = z.object({
+  owner: z.string(),
+  repo: z.string(),
+  issue_number: z.number(),
+  sub_issues: z.array(z.object({
+    owner: z.string(),
+    repo: z.string(),
+    issue_number: z.number()
+  })).describe("List of sub-issues to add")
 });
 
 // Search-related schemas
