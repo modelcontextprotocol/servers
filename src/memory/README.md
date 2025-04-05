@@ -221,6 +221,8 @@ Docker:
 docker build -t mcp/memory -f src/memory/Dockerfile . 
 ```
 
+Note: when upgrading a combination of docker usage and a docker volume for storage, delete the previous index.js file from the old docker volume before starting the new container so this new index.js is not overwritten.
+
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
