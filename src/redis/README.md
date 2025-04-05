@@ -50,6 +50,68 @@ A Model Context Protocol server that provides access to Redis databases. This se
   - List Redis keys matching a pattern
   - Input: `pattern` (string, optional): Pattern to match keys (default: *)
 
+## Usage with VS Code
+
+For quick installation, use one of the one-click install buttons below...
+
+[![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-NPM-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=redis&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22redis_url%22%2C%22description%22%3A%22Redis%20URL%20(e.g.%20redis%3A%2F%2Flocalhost%3A6379)%22%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-redis%22%5D%2C%22env%22%3A%7B%22REDIS_URL%22%3A%22%24%7Binput%3Aredis_url%7D%22%7D%7D) [![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-NPM-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=redis&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22redis_url%22%2C%22description%22%3A%22Redis%20URL%20(e.g.%20redis%3A%2F%2Flocalhost%3A6379)%22%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-redis%22%5D%2C%22env%22%3A%7B%22REDIS_URL%22%3A%22%24%7Binput%3Aredis_url%7D%22%7D%7D&quality=insiders)
+
+[![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=redis&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22redis_url%22%2C%22description%22%3A%22Redis%20URL%20(e.g.%20redis%3A%2F%2Fhost.docker.internal%3A6379)%22%7D%5D&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22mcp%2Fredis%22%5D%2C%22env%22%3A%7B%22REDIS_URL%22%3A%22%24%7Binput%3Aredis_url%7D%22%7D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=redis&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22redis_url%22%2C%22description%22%3A%22Redis%20URL%20(e.g.%20redis%3A%2F%2Fhost.docker.internal%3A6379)%22%7D%5D&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22mcp%2Fredis%22%5D%2C%22env%22%3A%7B%22REDIS_URL%22%3A%22%24%7Binput%3Aredis_url%7D%22%7D%7D&quality=insiders)
+
+For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open User Settings (JSON)`.
+
+Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+
+> Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
+
+```json
+{
+  "mcp": {
+    "inputs": [
+      {
+        "type": "promptString",
+        "id": "redis_url",
+        "description": "Redis URL (e.g. redis://localhost:6379)"
+      }
+    ],
+    "servers": {
+      "redis": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-redis"],
+        "env": {
+          "REDIS_URL": "${input:redis_url}"
+        }
+      }
+    }
+  }
+}
+```
+
+For Docker installation:
+
+```json
+{
+  "mcp": {
+    "inputs": [
+      {
+        "type": "promptString",
+        "id": "redis_url",
+        "description": "Redis URL (e.g. redis://host.docker.internal:6379)"
+      }
+    ],
+    "servers": {
+      "redis": {
+        "command": "docker",
+        "args": ["run", "-i", "--rm", "mcp/redis"],
+        "env": {
+          "REDIS_URL": "${input:redis_url}"
+        }
+      }
+    }
+  }
+}
+```
+
 ## Usage with Claude Desktop
 
 To use this server with the Claude Desktop app, add the following configuration to the "mcpServers" section of your `claude_desktop_config.json`:
