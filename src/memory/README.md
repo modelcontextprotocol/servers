@@ -221,7 +221,7 @@ Docker:
 docker build -t mcp/memory -f src/memory/Dockerfile . 
 ```
 
-Note: when upgrading a combination of docker usage and a docker volume for storage, delete the previous index.js file from the old docker volume before starting the new container so this new index.js is not overwritten.
+For Awareness: a prior mcp/memory volume contains an index.js file that could be overwritten by the new container. If you are using a docker volume for storage, delete the old docker volume's `index.js` file before starting the new container.
 
 ## License
 
