@@ -42,7 +42,33 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     # Get local timezone from datetime.now()
     tzinfo = datetime.now().astimezone(tz=None).tzinfo
     if tzinfo is not None:
-        return ZoneInfo(str(tzinfo))
+        try:
+            # Try to directly use the tzinfo string representation
+            return ZoneInfo(str(tzinfo))
+        except Exception:
+            # If it fails (e.g., when tzinfo is just an offset like '-03'),
+            # find a matching IANA timezone based on offset
+            try:
+                from zoneinfo import available_timezones
+                
+                # Get the current UTC offset in seconds
+                offset_seconds = datetime.now().astimezone().utcoffset().total_seconds()
+                
+                # Find the first timezone that matches our offset
+                for tz_name in available_timezones():
+                    try:
+                        tz = ZoneInfo(tz_name)
+                        dt = datetime.now(tz)
+                        if dt.utcoffset().total_seconds() == offset_seconds:
+                            return ZoneInfo(tz_name)
+                    except Exception:
+                        continue
+                        
+                # If we get here, no matching timezone was found
+                raise McpError(f"Could not find a matching IANA timezone for offset {offset_seconds/3600} hours")
+            except Exception as e:
+                raise McpError(f"Failed to determine IANA timezone: {str(e)}")
+    
     raise McpError("Could not determine local timezone - tzinfo is None")
 
 
