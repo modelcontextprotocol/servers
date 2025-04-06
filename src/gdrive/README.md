@@ -6,10 +6,23 @@ This MCP server integrates with Google Drive to allow listing, reading, and sear
 
 ### Tools
 
-- **search**
+- **gdrive_list_all**
+  - List all files and folders in Google Drive
+  - Input: 
+    - `cursor` (string, optional): Cursor for pagination
+  - Returns file names, MIME types, and parent folder IDs of all files and folders
+
+- **gdrive_search**
   - Search for files in Google Drive
-  - Input: `query` (string): Search query
-  - Returns file names and MIME types of matching files
+  - Input: 
+    - `query` (string): Search query
+  - Returns file names, MIME types, and parent folder IDs of matching files
+
+- **gdrive_read_file**
+  - Read content of a Google Drive file
+  - Input: 
+    - `uri` (string): File URI (format: `gdrive:///{fileId}`)
+  - Returns either the file content (in text or binary format) for Google Workspace and text files, or the path to the downloaded file for other file types.
 
 ### Resources
 
@@ -33,6 +46,8 @@ The server provides access to Google Drive files:
 5. [Create an OAuth Client ID](https://console.cloud.google.com/apis/credentials/oauthclient) for application type "Desktop App"
 6. Download the JSON file of your client's OAuth keys
 7. Rename the key file to `gcp-oauth.keys.json` and place into the root of this repo (i.e. `servers/gcp-oauth.keys.json`)
+8. Modify the path to your `.env` file in `dotenv.config()`
+9. Add `GDRIVE_DOWNLOAD_DIRECTORY` path to your `.env` file, or replace `/default/output/directory` in the code, as the path to store downloaded files from GDrive.
 
 Make sure to build the server with either `npm run build` or `npm run watch`.
 
