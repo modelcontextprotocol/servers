@@ -95,6 +95,7 @@ export const createServer = () => {
         resources: { subscribe: true },
         tools: {},
         logging: {},
+        completions: {},
       },
     },
   );
