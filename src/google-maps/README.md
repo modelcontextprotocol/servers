@@ -87,15 +87,13 @@ Add the following to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "google-maps": {
+    "google-map": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-google-maps"
-      ],
+      "args": ["-y", "@cablate/mcp-google-map"],
       "env": {
-        "GOOGLE_MAPS_API_KEY": "<YOUR_API_KEY>"
-      }
+        "GOOGLE_MAPS_API_KEY": "your_api_key"
+      },
+      "enabled": true
     }
   }
 }
