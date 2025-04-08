@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+import os
 from typing import Sequence
 from mcp.server import Server
 from mcp.server.session import ServerSession
@@ -73,17 +74,28 @@ class GitTools(str, Enum):
     SHOW = "git_show"
     INIT = "git_init"
 
+# Default number of context lines if not specified in environment
+DEFAULT_CONTEXT_LINES = 3
+
+def get_context_lines() -> str:
+    """Get the number of context lines from environment variable or use default"""
+    try:
+        context_lines = int(os.environ.get('GIT_DIFF_CONTEXT_LINES', DEFAULT_CONTEXT_LINES))
+        return f"--unified={context_lines}"
+    except ValueError:
+        return f"--unified={DEFAULT_CONTEXT_LINES}"
+
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
 
 def git_diff_unstaged(repo: git.Repo) -> str:
-    return repo.git.diff()
+    return repo.git.diff(get_context_lines())
 
 def git_diff_staged(repo: git.Repo) -> str:
-    return repo.git.diff("--cached")
+    return repo.git.diff(get_context_lines(), "--cached")
 
 def git_diff(repo: git.Repo, target: str) -> str:
-    return repo.git.diff(target)
+    return repo.git.diff(get_context_lines(), target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
     commit = repo.index.commit(message)

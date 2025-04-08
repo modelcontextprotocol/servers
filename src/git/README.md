@@ -6,6 +6,12 @@ A Model Context Protocol server for Git repository interaction and automation. T
 
 Please note that mcp-server-git is currently in early development. The functionality and available tools are subject to change and expansion as we continue to develop and improve the server.
 
+### Environment Variables
+
+- `GIT_DIFF_CONTEXT_LINES`: Number of context lines to show in git diff output (default: 3). Increasing this value shows more surrounding code in diffs.
+
+> **⚠️ Warning:** Large context line values will consume more tokens and may reduce response relevance. Set this value carefully to balance context needs with token limits.
+
 ### Tools
 
 1. `git_status`
@@ -119,7 +125,10 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "git": {
     "command": "uvx",
-    "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
+    "args": ["mcp-server-git", "--repository", "path/to/git/repo"],
+    "env": {
+      "GIT_DIFF_CONTEXT_LINES": "10"
+    }
   }
 }
 ```
