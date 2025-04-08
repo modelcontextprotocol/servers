@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 import json
 from typing import Sequence
-
+from tzlocal import get_localzone
 from zoneinfo import ZoneInfo
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -39,10 +39,18 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     if local_tz_override:
         return ZoneInfo(local_tz_override)
 
-    # Get local timezone from datetime.now()
+    # First, try to get local timezone from tzlocal
+    try:
+        local_tz = get_localzone()
+        return ZoneInfo(str(local_tz))
+    except Exception as e:
+        pass
+
+    # If that fails, try getting local timezone from datetime.now()
     tzinfo = datetime.now().astimezone(tz=None).tzinfo
     if tzinfo is not None:
         return ZoneInfo(str(tzinfo))
+
     raise McpError("Could not determine local timezone - tzinfo is None")
 
 

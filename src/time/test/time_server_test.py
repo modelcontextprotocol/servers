@@ -1,4 +1,3 @@
-
 from freezegun import freeze_time
 from mcp.shared.exceptions import McpError
 import pytest
