@@ -1,0 +1,12 @@
+services:
+  mcp-tools-fetch:
+    build:
+      context: .
+    container_name: mcp-tools-fetch
+    ports:
+      - "8383:8383"
+    working_dir: /app
+    restart: always
+    stdin_open: true  # Pozwala na interaktywne korzystanie z kontenera
+    tty: true  # Włącza terminal (dla Basha)
+    command: ["mcp-proxy", "--sse-port=8383", "uvx", "mcp-server-fetch"]
