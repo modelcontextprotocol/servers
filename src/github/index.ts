@@ -200,6 +200,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_reviews",
         description: "Get the reviews on a pull request",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema)
+      },
+      {
+        name: "list_repository_labels",
+        description: "List all labels in a GitHub repository",
+        inputSchema: zodToJsonSchema(repository.ListRepositoryLabelsSchema),
       }
     ],
   };
@@ -488,6 +493,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const reviews = await pulls.getPullRequestReviews(args.owner, args.repo, args.pull_number);
         return {
           content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }],
+        };
+      }
+      
+      case "list_repository_labels": {
+        const args = repository.ListRepositoryLabelsSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const labels = await repository.listRepositoryLabels(owner, repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(labels, null, 2) }],
         };
       }
 

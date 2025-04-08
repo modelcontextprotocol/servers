@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { githubRequest } from "../common/utils.js";
-import { GitHubRepositorySchema, GitHubSearchResponseSchema } from "../common/types.js";
+import { githubRequest, buildUrl } from "../common/utils.js";
+import { GitHubRepositorySchema, GitHubSearchResponseSchema, GitHubLabelSchema } from "../common/types.js";
 
 // Schema definitions
 export const CreateRepositoryOptionsSchema = z.object({
@@ -20,6 +20,13 @@ export const ForkRepositorySchema = z.object({
   owner: z.string().describe("Repository owner (username or organization)"),
   repo: z.string().describe("Repository name"),
   organization: z.string().optional().describe("Optional: organization to fork to (defaults to your personal account)"),
+});
+
+export const ListRepositoryLabelsSchema = z.object({
+  owner: z.string().describe("Repository owner (username or organization)"),
+  repo: z.string().describe("Repository name"),
+  page: z.number().optional().describe("Page number for pagination (default: 1)"),
+  perPage: z.number().optional().describe("Number of results per page (default: 30, max: 100)"),
 });
 
 // Type exports
@@ -62,4 +69,21 @@ export async function forkRepository(
     parent: GitHubRepositorySchema,
     source: GitHubRepositorySchema,
   }).parse(response);
+}
+
+export async function listRepositoryLabels(
+  owner: string,
+  repo: string,
+  options: Omit<z.infer<typeof ListRepositoryLabelsSchema>, "owner" | "repo"> = {}
+) {
+  const urlParams: Record<string, string | undefined> = {
+    page: options.page?.toString(),
+    per_page: options.perPage?.toString(),
+  };
+
+  const response = await githubRequest(
+    buildUrl(`https://api.github.com/repos/${owner}/${repo}/labels`, urlParams)
+  );
+  
+  return z.array(GitHubLabelSchema).parse(response);
 }
