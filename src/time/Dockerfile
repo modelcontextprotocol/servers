@@ -33,4 +33,4 @@ COPY --from=uv --chown=app:app /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
 # when running the container, add --db-path and a bind mount to the host's db file
-ENTRYPOINT ["mcp-server-time"]
+ENTRYPOINT ["mcp-server-time", "--local-timezone=Europe/Warsaw"]

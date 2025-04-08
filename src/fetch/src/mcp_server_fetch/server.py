@@ -231,8 +231,8 @@ Although originally you did not have internet access, and were advised to refuse
         if not url:
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
-        if not ignore_robots_txt:
-            await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
+        # if not ignore_robots_txt:
+        #     await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
 
         content, prefix = await fetch_url(
             url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url
