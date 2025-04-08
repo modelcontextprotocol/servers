@@ -151,6 +151,22 @@ Docker build:
 docker build -t mcp/filesystem -f src/filesystem/Dockerfile .
 ```
 
+## Exclude directories
+Exclude dirs like `.venv`, `.git` with `MCP_FILESYSTEM_IGNORE_PATTERNS` env variable   
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      ...
+      "env": {
+          "MCP_FILESYSTEM_IGNORE_PATTERNS": ".venv,.git,",
+      }
+    }
+  }
+}
+```
+
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
