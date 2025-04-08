@@ -281,6 +281,12 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
 
+27. `get_me`
+   - Get details of the authenticated user
+   - Inputs:
+     - No required inputs
+   - Returns: Detailed information about the authenticated GitHub user, including username, profile information, plan details, and repository counts
+
 ## Search Query Syntax
 
 ### Code Search

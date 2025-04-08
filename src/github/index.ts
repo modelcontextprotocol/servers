@@ -16,6 +16,7 @@ import * as pulls from './operations/pulls.js';
 import * as branches from './operations/branches.js';
 import * as search from './operations/search.js';
 import * as commits from './operations/commits.js';
+import * as users from './operations/users.js';
 import {
   GitHubError,
   GitHubValidationError,
@@ -47,7 +48,7 @@ const server = new Server(
 
 function formatGitHubError(error: GitHubError): string {
   let message = `GitHub API Error: ${error.message}`;
-  
+
   if (error instanceof GitHubValidationError) {
     message = `Validation Error: ${error.message}`;
     if (error.response) {
@@ -200,6 +201,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_reviews",
         description: "Get the reviews on a pull request",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema)
+      },
+      {
+        name: "get_me",
+        description: "Get details of the authenticated user",
+        inputSchema: zodToJsonSchema(z.object({})),
       }
     ],
   };
@@ -299,13 +305,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "create_issue": {
         const args = issues.CreateIssueSchema.parse(request.params.arguments);
         const { owner, repo, ...options } = args;
-        
+
         try {
           console.error(`[DEBUG] Attempting to create issue in ${owner}/${repo}`);
           console.error(`[DEBUG] Issue options:`, JSON.stringify(options, null, 2));
-          
+
           const issue = await issues.createIssue(owner, repo, options);
-          
+
           console.error(`[DEBUG] Issue created successfully`);
           return {
             content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
@@ -313,9 +319,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         } catch (err) {
           // Type guard for Error objects
           const error = err instanceof Error ? err : new Error(String(err));
-          
+
           console.error(`[ERROR] Failed to create issue:`, error);
-          
+
           if (error instanceof GitHubResourceNotFoundError) {
             throw new Error(
               `Repository '${owner}/${repo}' not found. Please verify:\n` +
@@ -324,7 +330,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               `3. The owner and repository names are spelled correctly`
             );
           }
-          
+
           // Safely access error properties
           throw new Error(
             `Failed to create issue: ${error.message}${
@@ -488,6 +494,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const reviews = await pulls.getPullRequestReviews(args.owner, args.repo, args.pull_number);
         return {
           content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }],
+        };
+      }
+
+      case "get_me": {
+        const user = await users.getMe();
+        return {
+          content: [{ type: "text", text: JSON.stringify(user, null, 2) }],
         };
       }
 
