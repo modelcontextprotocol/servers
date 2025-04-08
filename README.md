@@ -130,6 +130,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://www.xero.com/favicon.ico" alt="Xero Logo" /> **[Xero](https://github.com/XeroAPI/xero-mcp-server)** - Interact with the accounting data in your business using our official MCP server
 - <img height="12" width="12" src="https://cdn.zapier.com/zapier/images/favicon.ico" alt="Zapier Logo" /> **[Zapier](https://zapier.com/mcp)** - Connect your AI Agents to 8,000 apps instantly.
 - **[ZenML](https://github.com/zenml-io/mcp-zenml)** - Interact with your MLOps and LLMOps pipelines through your [ZenML](https://www.zenml.io) MCP server
+- <img height="12" width="12" src="https://speedmedia.jfrog.com/08612fe1-9391-4cf3-ac1a-6dd49c36b276/media.jfrog.com/wp-content/uploads/2019/04/20131046/Jfrog16-1.png" alt="JFrog Logo" /> **[JFrog](https://github.com/jfrog/mcp-jfrog)** - Model Context Protocol (MCP) Server for the [JFrog](https://jfrog.com/) Platform API, enabling repository management, build tracking, release lifecycle management, and more.
 
 ### 🌎 Community Servers
 
@@ -379,7 +380,6 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[XiYan](https://github.com/XGenerationLab/xiyan_mcp_server)** - 🗄️ An MCP server that supports fetching data from a database using natural language queries, powered by XiyanSQL as the text-to-SQL LLM.
 - **[XMind](https://github.com/apeyroux/mcp-xmind)** - Read and search through your XMind directory containing XMind files.
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
-
 ## 📚 Frameworks
 
 These are high-level frameworks that make it easier to build MCP servers or clients.
