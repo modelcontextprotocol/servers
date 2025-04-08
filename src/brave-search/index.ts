@@ -367,7 +367,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Brave Search MCP Server running on stdio");
+  console.info("Brave Search MCP Server running on stdio");
 }
 
 runServer().catch((error) => {
