@@ -62,10 +62,21 @@ const EXAMPLE_COMPLETIONS = {
 const GetTinyImageSchema = z.object({});
 
 const AnnotatedMessageSchema = z.object({
-  messageType: z.enum(["error", "success", "debug"])
+  messageType: z
+    .enum(["error", "success", "debug"])
     .describe("Type of message to demonstrate different annotation patterns"),
-  includeImage: z.boolean().default(false)
-    .describe("Whether to include an example image")
+  includeImage: z
+    .boolean()
+    .default(false)
+    .describe("Whether to include an example image"),
+});
+
+const GetResourceReferenceSchema = z.object({
+  resourceId: z
+    .number()
+    .min(1)
+    .max(100)
+    .describe("ID of the resource to reference (1-100)"),
 });
 
 enum ToolName {
@@ -76,11 +87,13 @@ enum ToolName {
   SAMPLE_LLM = "sampleLLM",
   GET_TINY_IMAGE = "getTinyImage",
   ANNOTATED_MESSAGE = "annotatedMessage",
+  GET_RESOURCE_REFERENCE = "getResourceReference",
 }
 
 enum PromptName {
   SIMPLE = "simple_prompt",
   COMPLEX = "complex_prompt",
+  RESOURCE = "resource_prompt",
 }
 
 export const createServer = () => {
@@ -96,7 +109,7 @@ export const createServer = () => {
         tools: {},
         logging: {},
       },
-    },
+    }
   );
 
   let subscriptions: Set<string> = new Set();
@@ -115,36 +128,37 @@ export const createServer = () => {
   let logLevel: LoggingLevel = "debug";
   let logsUpdateInterval: NodeJS.Timeout | undefined;
   const messages = [
-    {level: "debug", data: "Debug-level message"},
-    {level: "info", data: "Info-level message"},
-    {level: "notice", data: "Notice-level message"},
-    {level: "warning", data: "Warning-level message"},
-    {level: "error", data: "Error-level message"},
-    {level: "critical", data: "Critical-level message"},
-    {level: "alert", data: "Alert level-message"},
-    {level: "emergency", data: "Emergency-level message"}
-  ]
+    { level: "debug", data: "Debug-level message" },
+    { level: "info", data: "Info-level message" },
+    { level: "notice", data: "Notice-level message" },
+    { level: "warning", data: "Warning-level message" },
+    { level: "error", data: "Error-level message" },
+    { level: "critical", data: "Critical-level message" },
+    { level: "alert", data: "Alert level-message" },
+    { level: "emergency", data: "Emergency-level message" },
+  ];
 
-  const isMessageIgnored = (level:LoggingLevel):boolean => {
+  const isMessageIgnored = (level: LoggingLevel): boolean => {
     const currentLevel = messages.findIndex((msg) => logLevel === msg.level);
-    const messageLevel =  messages.findIndex((msg) => level === msg.level);
+    const messageLevel = messages.findIndex((msg) => level === msg.level);
     return messageLevel < currentLevel;
-  }
+  };
 
   // Set up update interval for random log messages
   logsUpdateInterval = setInterval(() => {
     let message = {
       method: "notifications/message",
       params: messages[Math.floor(Math.random() * messages.length)],
-    }
-    if (!isMessageIgnored(message.params.level as LoggingLevel)) server.notification(message);
+    };
+    if (!isMessageIgnored(message.params.level as LoggingLevel))
+      server.notification(message);
   }, 15000);
 
   // Helper method to request sampling from client
   const requestSampling = async (
     context: string,
     uri: string,
-    maxTokens: number = 100,
+    maxTokens: number = 100
   ) => {
     const request: CreateMessageRequest = {
       method: "sampling/createMessage",
@@ -280,6 +294,17 @@ export const createServer = () => {
             },
           ],
         },
+        {
+          name: PromptName.RESOURCE,
+          description: "A prompt that includes an embedded resource reference",
+          arguments: [
+            {
+              name: "resourceId",
+              description: "Resource ID to include (1-100)",
+              required: true,
+            },
+          ],
+        },
       ],
     };
   });
@@ -330,6 +355,37 @@ export const createServer = () => {
       };
     }
 
+    if (name === PromptName.RESOURCE) {
+      const resourceId = parseInt(args?.resourceId as string, 10);
+      if (isNaN(resourceId) || resourceId < 1 || resourceId > 100) {
+        throw new Error(
+          `Invalid resourceId: ${args?.resourceId}. Must be a number between 1 and 100.`
+        );
+      }
+
+      const resourceIndex = resourceId - 1;
+      const resource = ALL_RESOURCES[resourceIndex];
+
+      return {
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `This prompt includes Resource ${resourceId}. Please analyze the following resource:`,
+            },
+          },
+          {
+            role: "user",
+            content: {
+              type: "resource",
+              resource: resource,
+            },
+          },
+        ],
+      };
+    }
+
     throw new Error(`Unknown prompt: ${name}`);
   });
 
@@ -347,7 +403,8 @@ export const createServer = () => {
       },
       {
         name: ToolName.PRINT_ENV,
-        description: "Prints all environment variables, helpful for debugging MCP server configuration",
+        description:
+          "Prints all environment variables, helpful for debugging MCP server configuration",
         inputSchema: zodToJsonSchema(PrintEnvSchema) as ToolInput,
       },
       {
@@ -368,8 +425,15 @@ export const createServer = () => {
       },
       {
         name: ToolName.ANNOTATED_MESSAGE,
-        description: "Demonstrates how annotations can be used to provide metadata about content",
+        description:
+          "Demonstrates how annotations can be used to provide metadata about content",
         inputSchema: zodToJsonSchema(AnnotatedMessageSchema) as ToolInput,
+      },
+      {
+        name: ToolName.GET_RESOURCE_REFERENCE,
+        description:
+          "Returns a resource reference that can be used by MCP clients",
+        inputSchema: zodToJsonSchema(GetResourceReferenceSchema) as ToolInput,
       },
     ];
 
@@ -407,7 +471,7 @@ export const createServer = () => {
 
       for (let i = 1; i < steps + 1; i++) {
         await new Promise((resolve) =>
-          setTimeout(resolve, stepDuration * 1000),
+          setTimeout(resolve, stepDuration * 1000)
         );
 
         if (progressToken !== undefined) {
@@ -450,10 +514,12 @@ export const createServer = () => {
       const result = await requestSampling(
         prompt,
         ToolName.SAMPLE_LLM,
-        maxTokens,
+        maxTokens
       );
       return {
-        content: [{ type: "text", text: `LLM sampling result: ${result.content.text}` }],
+        content: [
+          { type: "text", text: `LLM sampling result: ${result.content.text}` },
+        ],
       };
     }
 
@@ -478,6 +544,35 @@ export const createServer = () => {
       };
     }
 
+    if (name === ToolName.GET_RESOURCE_REFERENCE) {
+      const validatedArgs = GetResourceReferenceSchema.parse(args);
+      const resourceId = validatedArgs.resourceId;
+
+      const resourceIndex = resourceId - 1;
+      if (resourceIndex < 0 || resourceIndex >= ALL_RESOURCES.length) {
+        throw new Error(`Resource with ID ${resourceId} does not exist`);
+      }
+
+      const resource = ALL_RESOURCES[resourceIndex];
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Returning resource reference for Resource ${resourceId}:`,
+          },
+          {
+            type: "resource",
+            resource: resource,
+          },
+          {
+            type: "text",
+            text: `You can access this resource using the URI: ${resource.uri}`,
+          },
+        ],
+      };
+    }
+
     if (name === ToolName.ANNOTATED_MESSAGE) {
       const { messageType, includeImage } = AnnotatedMessageSchema.parse(args);
 
@@ -490,8 +585,8 @@ export const createServer = () => {
           text: "Error: Operation failed",
           annotations: {
             priority: 1.0, // Errors are highest priority
-            audience: ["user", "assistant"] // Both need to know about errors
-          }
+            audience: ["user", "assistant"], // Both need to know about errors
+          },
         });
       } else if (messageType === "success") {
         content.push({
@@ -499,8 +594,8 @@ export const createServer = () => {
           text: "Operation completed successfully",
           annotations: {
             priority: 0.7, // Success messages are important but not critical
-            audience: ["user"] // Success mainly for user consumption
-          }
+            audience: ["user"], // Success mainly for user consumption
+          },
         });
       } else if (messageType === "debug") {
         content.push({
@@ -508,8 +603,8 @@ export const createServer = () => {
           text: "Debug: Cache hit ratio 0.95, latency 150ms",
           annotations: {
             priority: 0.3, // Debug info is low priority
-            audience: ["assistant"] // Technical details for assistant
-          }
+            audience: ["assistant"], // Technical details for assistant
+          },
         });
       }
 
@@ -521,8 +616,8 @@ export const createServer = () => {
           mimeType: "image/png",
           annotations: {
             priority: 0.5,
-            audience: ["user"] // Images primarily for user visualization
-          }
+            audience: ["user"], // Images primarily for user visualization
+          },
         });
       }
 
@@ -540,7 +635,7 @@ export const createServer = () => {
       if (!resourceId) return { completion: { values: [] } };
 
       // Filter resource IDs that start with the input value
-      const values = EXAMPLE_COMPLETIONS.resourceId.filter(id =>
+      const values = EXAMPLE_COMPLETIONS.resourceId.filter((id) =>
         id.startsWith(argument.value)
       );
       return { completion: { values, hasMore: false, total: values.length } };
@@ -548,10 +643,11 @@ export const createServer = () => {
 
     if (ref.type === "ref/prompt") {
       // Handle completion for prompt arguments
-      const completions = EXAMPLE_COMPLETIONS[argument.name as keyof typeof EXAMPLE_COMPLETIONS];
+      const completions =
+        EXAMPLE_COMPLETIONS[argument.name as keyof typeof EXAMPLE_COMPLETIONS];
       if (!completions) return { completion: { values: [] } };
 
-      const values = completions.filter(value =>
+      const values = completions.filter((value) =>
         value.startsWith(argument.value)
       );
       return { completion: { values, hasMore: false, total: values.length } };
