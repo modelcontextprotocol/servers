@@ -133,6 +133,7 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
       - `labels` (optional string[]): New labels
       - `assignees` (optional string[]): New assignees
       - `milestone` (optional number): New milestone number
+      - `type` (optional string): New issue type (e.g., 'Bug', 'Feature', 'Task')
     - Returns: Updated issue details
 
 12. `add_issue_comment`
@@ -280,6 +281,26 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `repo` (string): Repository name
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
+
+27. `add_sub_issues`
+  - Add existing work items as sub-issues to an issue.
+  - Inputs:
+    - `owner` (string): Repository owner
+    - `repo` (string): Repository name
+    - `issue_number` (number): Parent issue number
+    - `sub_issues` (array): List of sub-issues, each with:
+      - `owner` (string): Repository owner of the sub-issue
+      - `repo` (string): Repository name of the sub-issue
+      - `issue_number` (number): Sub-issue number
+  - Returns: Updated issue details
+  - Falls back to task list implementation if API unavailable for your repository
+  - Usage examples:
+    ```
+    #add_sub_issues add issue 56 to parent issue 54 from repo my-repo of github org my-org
+    ```
+    ```
+    #add_sub_issues add issue 23, 24 to parent issue 20 from repo my-repo of github org my-org
+    ```
 
 ## Search Query Syntax
 
