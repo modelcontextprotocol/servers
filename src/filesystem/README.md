@@ -7,7 +7,8 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Read/write files
 - Create/list/delete directories
 - Move files/directories
-- Search files
+- Search for files by name
+- Search within file contents (grep-like functionality)
 - Get file metadata
 
 **Note**: The server will only allow operations within directories specified via `args`.
@@ -71,14 +72,27 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
     - `destination` (string)
   - Fails if destination exists
 
-- **search_files**
-  - Recursively search for files/directories
+- **search_files_by_name**
+  - Find files and directories whose names match a pattern
   - Inputs:
     - `path` (string): Starting directory
-    - `pattern` (string): Search pattern
+    - `pattern` (string): Name pattern to match
     - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
   - Case-insensitive matching
-  - Returns full paths to matches
+  - Returns full paths to matching files/directories
+
+- **search_file_contents**
+  - Search for text patterns within file contents (similar to grep)
+  - Inputs:
+    - `path` (string): Starting directory
+    - `pattern` (string): Text pattern to search for
+    - `caseSensitive` (boolean): Enable case-sensitive search (default: false)
+    - `maxResults` (number): Maximum number of results to return (default: 100)
+    - `contextLines` (number): Number of context lines to show around matches (default: 2)
+    - `excludePatterns` (string[]): Paths to exclude from search. Glob formats are supported.
+    - `includeTypes` (string[]): Only search files with these extensions (e.g., ['js', 'ts'])
+    - `excludeTypes` (string[]): Skip files with these extensions (e.g., ['jpg', 'png'])
+  - Returns matching files with line numbers, matched text, and context
 
 - **get_file_info**
   - Get detailed file/directory metadata
