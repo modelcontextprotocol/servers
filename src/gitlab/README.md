@@ -38,7 +38,7 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `search` (string): Search query
      - `page` (optional number): Page number for pagination
      - `per_page` (optional number): Results per page (default 20)
-   - Returns: Project search results
+   - Returns: Project search results with total count
 
 4. `create_repository`
    - Create a new GitLab project
@@ -49,15 +49,27 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `initialize_with_readme` (optional boolean): Initialize with README
    - Returns: Created project details
 
-5. `get_file_contents`
+5. `list_repository_tree`
+   - List files and directories in a repository
+   - Inputs:
+     - `project_id` (string): Project ID or URL-encoded path
+     - `path` (optional string): Path to list contents from
+     - `ref` (optional string): Branch/tag/commit to list from
+     - `recursive` (optional boolean): List recursively
+     - `per_page` (optional number): Results per page
+     - `page_token` (optional string): Token for pagination
+     - `pagination` (optional string): Pagination type
+   - Returns: List of files and directories with their metadata
+
+6. `get_file_contents`
    - Get contents of a file or directory
    - Inputs:
      - `project_id` (string): Project ID or URL-encoded path
      - `file_path` (string): Path to file/directory
      - `ref` (optional string): Branch/tag/commit to get contents from
-   - Returns: File/directory contents
+   - Returns: File/directory contents with metadata
 
-6. `create_issue`
+7. `create_issue`
    - Create a new issue
    - Inputs:
      - `project_id` (string): Project ID or URL-encoded path
@@ -68,7 +80,7 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `milestone_id` (optional number): Milestone ID
    - Returns: Created issue details
 
-7. `create_merge_request`
+8. `create_merge_request`
    - Create a new merge request
    - Inputs:
      - `project_id` (string): Project ID or URL-encoded path
@@ -80,14 +92,14 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `allow_collaboration` (optional boolean): Allow commits from upstream members
    - Returns: Created merge request details
 
-8. `fork_repository`
+9. `fork_repository`
    - Fork a project
    - Inputs:
      - `project_id` (string): Project ID or URL-encoded path
      - `namespace` (optional string): Namespace to fork to
    - Returns: Forked project details
 
-9. `create_branch`
+10. `create_branch`
    - Create a new branch
    - Inputs:
      - `project_id` (string): Project ID or URL-encoded path
