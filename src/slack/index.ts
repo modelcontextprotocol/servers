@@ -53,7 +53,7 @@ interface GetUserProfileArgs {
 // Tool definitions
 const listChannelsTool: Tool = {
   name: "slack_list_channels",
-  description: "List public channels in the workspace with pagination",
+  description: "List channels the app has access to with pagination",
   inputSchema: {
     type: "object",
     properties: {
@@ -222,7 +222,7 @@ class SlackClient {
 
   async getChannels(limit: number = 100, cursor?: string): Promise<any> {
     const params = new URLSearchParams({
-      types: "public_channel",
+      types: "public_channel,private_channel",
       exclude_archived: "true",
       limit: Math.min(limit, 200).toString(),
       team_id: process.env.SLACK_TEAM_ID!,
@@ -233,11 +233,24 @@ class SlackClient {
     }
 
     const response = await fetch(
-      `https://slack.com/api/conversations.list?${params}`,
+      `https://slack.com/api/users.conversations?${params}`,
       { headers: this.botHeaders },
     );
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      return {
+        channels: data.channels.map((channel: any) => ({
+          id: channel.id,
+          name: channel.name,
+          topic: channel.topic.value || undefined,
+          purpose: channel.purpose.value || undefined,
+        }))
+      };
+    }
+
+    return data;
   }
 
   async postMessage(channel_id: string, text: string): Promise<any> {
@@ -250,7 +263,16 @@ class SlackClient {
       }),
     });
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      return {
+        ts: data.ts,
+        channel: data.channel,
+      };
+    }
+
+    return data;
   }
 
   async postReply(
@@ -268,7 +290,15 @@ class SlackClient {
       }),
     });
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      return {
+        ok: true,
+      };
+    }
+
+    return data;
   }
 
   async addReaction(
@@ -286,7 +316,15 @@ class SlackClient {
       }),
     });
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      return {
+        ok: true,
+      };
+    }
+
+    return data
   }
 
   async getChannelHistory(
@@ -303,7 +341,24 @@ class SlackClient {
       { headers: this.botHeaders },
     );
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      return {
+        messages: data.messages
+          .filter((msg: any) => msg.type === 'message')
+          .map((msg: any) => ({
+            ts: msg.ts,
+            user: msg.user,
+            text: msg.text,
+            type: msg.type,
+            subtype: msg.subtype || undefined,
+            reactions: msg.reactions || undefined,
+          }))
+      };
+    }
+
+    return data;
   }
 
   async getThreadReplies(channel_id: string, thread_ts: string): Promise<any> {
@@ -317,7 +372,26 @@ class SlackClient {
       { headers: this.botHeaders },
     );
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      return {
+        replies: data.messages[0].reply_count,
+        reply_users: data.messages[0].reply_users_count,
+        messages: data.messages
+          .filter((msg: any) => msg.type === 'message')
+          .map((msg: any) => ({
+            ts: msg.ts,
+            user: msg.user,
+            text: msg.text,
+            type: msg.type,
+            subtype: msg.subtype || undefined,
+            reactions: msg.reactions || undefined,
+          }))
+      };
+    }
+
+    return data;
   }
 
   async getUsers(limit: number = 100, cursor?: string): Promise<any> {
@@ -334,7 +408,22 @@ class SlackClient {
       headers: this.botHeaders,
     });
 
-    return response.json();
+    const data = await response.json();
+    if (data.ok) {
+      return {
+        users: data.members
+          .filter((member: any) => !member.is_bot && !member.deleted)
+          .map((member: any) => ({
+            id: member.id,
+            real_name: member.real_name,
+            display_name: member.profile.display_name || undefined,
+            title: member.profile.title || undefined,
+            avatar: member.avatar,
+          }))
+      };
+    }
+
+    return data;
   }
 
   async getUserProfile(user_id: string): Promise<any> {
@@ -348,7 +437,26 @@ class SlackClient {
       { headers: this.botHeaders },
     );
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.ok) {
+      const fields: Record<string, string> = {};
+      for (const [id, field] of Object.entries(data.profile.fields || {})) {
+        fields[(field as any).label] = (field as any).value;
+      }
+
+      return {
+        display_name: data.profile.display_name || undefined,
+        real_name: data.profile.real_name,
+        pronouns: data.profile.pronouns || undefined,
+        title: data.profile.title || undefined,
+        fields,
+        start_date: data.profile.start_date || undefined,
+        avatar: data.profile.avatar,
+      };
+    }
+
+    return data;
   }
 }
 
