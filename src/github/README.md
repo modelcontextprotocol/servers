@@ -281,6 +281,15 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
 
+27. `list_tags`
+    - Get the tags in a repository
+    - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `page` (optional number): Page number for pagination
+      - `per_page` (optional number): Results per page (max 100)
+    - Returns: Array of tag details
+
 ## Search Query Syntax
 
 ### Code Search
