@@ -80,6 +80,25 @@ export const GitLabTreeSchema = z.object({
   tree: z.array(GitLabTreeEntrySchema)
 });
 
+// Repository tree schemas
+export const GitLabTreeItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum(['tree', 'blob']),
+  path: z.string(),
+  mode: z.string()
+});
+
+export const GetRepositoryTreeSchema = z.object({
+  project_id: z.string().describe("The ID or URL-encoded path of the project"),
+  path: z.string().optional().describe("The path inside the repository"),
+  ref: z.string().optional().describe("The name of a repository branch or tag. Defaults to the default branch."),
+  recursive: z.boolean().optional().describe("Boolean value to get a recursive tree"),
+  per_page: z.number().optional().describe("Number of results to show per page"),
+  page_token: z.string().optional().describe("The tree record ID for pagination"),
+  pagination: z.string().optional().describe("Pagination method (keyset)")
+});
+
 export const GitLabCommitSchema = z.object({
   id: z.string(), // Changed from sha to match GitLab API
   short_id: z.string(), // Added to match GitLab API
@@ -263,7 +282,7 @@ export const CreateRepositorySchema = z.object({
 
 export const GetFileContentsSchema = ProjectParamsSchema.extend({
   file_path: z.string().describe("Path to the file or directory"),
-  ref: z.string().optional().describe("Branch/tag/commit to get contents from")
+  ref: z.string().optional().describe("Branch/tag/commit to get contents from. Defaults to the default branch.")
 });
 
 export const PushFilesSchema = ProjectParamsSchema.extend({
@@ -301,7 +320,7 @@ export const ForkRepositorySchema = ProjectParamsSchema.extend({
 export const CreateBranchSchema = ProjectParamsSchema.extend({
   branch: z.string().describe("Name for the new branch"),
   ref: z.string().optional()
-    .describe("Source branch/commit for new branch")
+    .describe("Source branch/commit for new branch. Defaults to the default branch.")
 });
 
 // Export types
@@ -323,3 +342,4 @@ export type CreateMergeRequestOptions = z.infer<typeof CreateMergeRequestOptions
 export type CreateBranchOptions = z.infer<typeof CreateBranchOptionsSchema>;
 export type GitLabCreateUpdateFileResponse = z.infer<typeof GitLabCreateUpdateFileResponseSchema>;
 export type GitLabSearchResponse = z.infer<typeof GitLabSearchResponseSchema>;
+export type GitLabTreeItem = z.infer<typeof GitLabTreeItemSchema>;
