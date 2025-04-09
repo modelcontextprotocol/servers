@@ -157,6 +157,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(issues.GetIssueSchema)
       },
       {
+        name: "get_issue_comments",
+        description: "Get all the comments of a specific issue in a GitHub repository.",
+        inputSchema: zodToJsonSchema(issues.GetIssueSchema)
+      },
+      {
         name: "get_pull_request",
         description: "Get details of a specific pull request",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestSchema)
@@ -415,6 +420,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "get_issue_comments": {
+        const args = issues.GetIssueSchema.parse(request.params.arguments);
+        const comments = await issues.getIssueComments(args.owner, args.repo, args.issue_number);
+        return {
+          content: [{ type: "text", text: comments.map(x=>`${x.user.login}: ${x.body}`).join("\n")}],
+        };
+      }
+        
       case "get_pull_request": {
         const args = pulls.GetPullRequestSchema.parse(request.params.arguments);
         const pullRequest = await pulls.getPullRequest(args.owner, args.repo, args.pull_number);

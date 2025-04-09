@@ -56,6 +56,10 @@ export async function getIssue(owner: string, repo: string, issue_number: number
   return githubRequest(`https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}`);
 }
 
+export async function getIssueComments(owner: string, repo: string, issue_number: number) {
+  return githubRequest(`https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}/comments`);
+}
+
 export async function addIssueComment(
   owner: string,
   repo: string,
