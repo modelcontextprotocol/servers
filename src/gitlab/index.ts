@@ -18,6 +18,7 @@ import {
   GitLabContentSchema,
   GitLabCreateUpdateFileResponseSchema,
   GitLabSearchResponseSchema,
+  GitLabTreeItemSchema,
   GitLabTreeSchema,
   GitLabCommitSchema,
   CreateRepositoryOptionsSchema,
@@ -27,6 +28,7 @@ import {
   CreateOrUpdateFileSchema,
   SearchRepositoriesSchema,
   CreateRepositorySchema,
+  GetRepositoryTreeSchema,
   GetFileContentsSchema,
   PushFilesSchema,
   CreateIssueSchema,
@@ -43,6 +45,7 @@ import {
   type GitLabSearchResponse,
   type GitLabTree,
   type GitLabCommit,
+  type GitLabTreeItem,
   type FileOperation,
 } from './schemas.js';
 
@@ -109,6 +112,40 @@ async function createBranch(
   }
 
   return GitLabReferenceSchema.parse(await response.json());
+}
+
+async function getRepositoryTree(
+  projectId: string,
+  options: z.infer<typeof GetRepositoryTreeSchema>
+): Promise<GitLabTreeItem[]> {
+  const queryParams = new URLSearchParams();
+  if (options.path) queryParams.append('path', options.path);
+  if (options.ref) queryParams.append('ref', options.ref);
+  if (options.recursive) queryParams.append('recursive', 'true');
+  if (options.per_page) queryParams.append('per_page', options.per_page.toString());
+  if (options.page_token) queryParams.append('page_token', options.page_token);
+  if (options.pagination) queryParams.append('pagination', options.pagination);
+
+  const response = await fetch(
+    `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/repository/tree?${queryParams.toString()}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  if (response.status === 404) {
+    throw new Error('Repository or path not found');
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to get repository tree: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return z.array(GitLabTreeItemSchema).parse(data);
 }
 
 async function getFileContents(
@@ -378,6 +415,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(CreateRepositorySchema)
       },
       {
+        name: "list_repository_tree",
+        description: "Get the tree of a GitLab project at a specific path",
+        inputSchema: zodToJsonSchema(GetRepositoryTreeSchema)
+      },
+      {
         name: "get_file_contents",
         description: "Get the contents of a file or directory from a GitLab project",
         inputSchema: zodToJsonSchema(GetFileContentsSchema)
@@ -449,6 +491,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const args = CreateRepositorySchema.parse(request.params.arguments);
         const repository = await createRepository(args);
         return { content: [{ type: "text", text: JSON.stringify(repository, null, 2) }] };
+      }
+
+      case "list_repository_tree": {
+        const args = GetRepositoryTreeSchema.parse(request.params.arguments);
+        const tree = await getRepositoryTree(args.project_id, args);
+        return { content: [{ type: "text", text: JSON.stringify(tree, null, 2) }] };
       }
 
       case "get_file_contents": {
