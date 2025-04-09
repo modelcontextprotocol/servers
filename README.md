@@ -32,6 +32,8 @@ These servers aim to demonstrate MCP features and the TypeScript and Python SDKs
 - **[Slack](src/slack)** - Channel management and messaging capabilities
 - **[Sqlite](src/sqlite)** - Database interaction and business intelligence capabilities
 - **[Time](src/time)** - Time and timezone conversion capabilities
+- **[Open Database Connectivity](https://github.com/OpenLinkSoftware/mcp-odbc-server)** -- Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers)
+- **[SQLAlchemy Object-Relational Database Connectivity](https://github.com/OpenLinkSoftware/mcp-sqlalchemy-server)** -- Generic Database Management System (DBMS) access via SQLAlchemy (pyodbc) Connectors (Drivers)
 
 ## 🤝 Third-Party Servers
 
