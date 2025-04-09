@@ -112,11 +112,20 @@ export const CreatePullRequestReviewSchema = z.object({
   commit_id: z.string().optional().describe("The SHA of the commit that needs a review"),
   body: z.string().describe("The body text of the review"),
   event: z.enum(['APPROVE', 'REQUEST_CHANGES', 'COMMENT']).describe("The review action to perform"),
-  comments: z.array(z.object({
-    path: z.string().describe("The relative path to the file being commented on"),
-    position: z.number().describe("The position in the diff where you want to add a review comment"),
-    body: z.string().describe("Text of the review comment")
-  })).optional().describe("Comments to post as part of the review")
+  comments: z.array(
+    z.union([
+      z.object({
+        path: z.string().describe("The relative path to the file being commented on"),
+        position: z.number().describe("The position in the diff where you want to add a review comment"),
+        body: z.string().describe("Text of the review comment")
+      }),
+      z.object({
+        path: z.string().describe("The relative path to the file being commented on"),
+        line: z.number().describe("The line number in the file where you want to add a review comment"),
+        body: z.string().describe("Text of the review comment")
+      })
+    ])
+  ).optional().describe("Comments to post as part of the review (specify either position or line, not both)")
 });
 
 export const MergePullRequestSchema = z.object({
