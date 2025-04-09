@@ -347,8 +347,10 @@ async def main(db_path: str):
                 return [types.TextContent(type="text", text=str(results))]
 
             elif name == "write_query":
-                if arguments["query"].strip().upper().startswith("SELECT"):
-                    raise ValueError("SELECT queries are not allowed for write_query")
+                query_upper = arguments["query"].strip().upper()
+                allowed_prefixes = ("INSERT", "UPDATE", "DELETE")
+                if not query_upper.startswith(allowed_prefixes):
+                    raise ValueError("Only INSERT, UPDATE, or DELETE queries are allowed for write_query")
                 results = db._execute_query(arguments["query"])
                 return [types.TextContent(type="text", text=str(results))]
 
