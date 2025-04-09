@@ -281,6 +281,17 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
 
+27. `compare_refs`
+   - Compare two refs in a GitHub repository
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `base` (string): Base ref (local branch, forked branch, tag, or commit SHA)
+     - `head` (string): Head ref (local branch, forked branch, tag, or commit SHA)
+     - `page` (optional number): Page number for pagination
+     - `perPage` (optional number): Results per page (max 100)
+   - Returns: Comparison details between the two refs
+
 ## Search Query Syntax
 
 ### Code Search

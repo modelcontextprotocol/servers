@@ -16,6 +16,7 @@ import * as pulls from './operations/pulls.js';
 import * as branches from './operations/branches.js';
 import * as search from './operations/search.js';
 import * as commits from './operations/commits.js';
+import * as compare from './operations/compare.js';
 import {
   GitHubError,
   GitHubValidationError,
@@ -200,6 +201,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_reviews",
         description: "Get the reviews on a pull request",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema)
+      },
+      {
+        name: "compare_refs",
+        description: "Compare two refs in a GitHub repository",
+        inputSchema: zodToJsonSchema(compare.CompareRefsOptionsSchema)
       }
     ],
   };
@@ -488,6 +494,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const reviews = await pulls.getPullRequestReviews(args.owner, args.repo, args.pull_number);
         return {
           content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }],
+        };
+      }
+
+      case "compare_refs": {
+        const args = compare.CompareRefsOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const tags = await compare.compareRefs(args.owner, args.repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(tags, null, 2) }],
         };
       }
 
