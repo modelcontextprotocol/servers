@@ -16,18 +16,24 @@ from enum import Enum
 import git
 from pydantic import BaseModel
 
+# Default number of context lines to show in diff output
+DEFAULT_CONTEXT_LINES = 3
+
 class GitStatus(BaseModel):
     repo_path: str
 
 class GitDiffUnstaged(BaseModel):
     repo_path: str
+    context_lines: int = DEFAULT_CONTEXT_LINES
 
 class GitDiffStaged(BaseModel):
     repo_path: str
+    context_lines: int = DEFAULT_CONTEXT_LINES
 
 class GitDiff(BaseModel):
     repo_path: str
     target: str
+    context_lines: int = DEFAULT_CONTEXT_LINES
 
 class GitCommit(BaseModel):
     repo_path: str
@@ -74,28 +80,17 @@ class GitTools(str, Enum):
     SHOW = "git_show"
     INIT = "git_init"
 
-# Default number of context lines if not specified in environment
-DEFAULT_CONTEXT_LINES = 3
-
-def get_context_lines() -> str:
-    """Get the number of context lines from environment variable or use default"""
-    try:
-        context_lines = int(os.environ.get('GIT_DIFF_CONTEXT_LINES', DEFAULT_CONTEXT_LINES))
-        return f"--unified={context_lines}"
-    except ValueError:
-        return f"--unified={DEFAULT_CONTEXT_LINES}"
-
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
 
-def git_diff_unstaged(repo: git.Repo) -> str:
-    return repo.git.diff(get_context_lines())
+def git_diff_unstaged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+    return repo.git.diff(f"--unified={context_lines}")
 
-def git_diff_staged(repo: git.Repo) -> str:
-    return repo.git.diff(get_context_lines(), "--cached")
+def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+    return repo.git.diff(f"--unified={context_lines}", "--cached")
 
-def git_diff(repo: git.Repo, target: str) -> str:
-    return repo.git.diff(get_context_lines(), target)
+def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+    return repo.git.diff(f"--unified={context_lines}", target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
     commit = repo.index.commit(message)
@@ -290,21 +285,21 @@ async def serve(repository: Path | None) -> None:
                 )]
 
             case GitTools.DIFF_UNSTAGED:
-                diff = git_diff_unstaged(repo)
+                diff = git_diff_unstaged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
                 return [TextContent(
                     type="text",
                     text=f"Unstaged changes:\n{diff}"
                 )]
 
             case GitTools.DIFF_STAGED:
-                diff = git_diff_staged(repo)
+                diff = git_diff_staged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
                 return [TextContent(
                     type="text",
                     text=f"Staged changes:\n{diff}"
                 )]
 
             case GitTools.DIFF:
-                diff = git_diff(repo, arguments["target"])
+                diff = git_diff(repo, arguments["target"], arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
                 return [TextContent(
                     type="text",
                     text=f"Diff with {arguments['target']}:\n{diff}"

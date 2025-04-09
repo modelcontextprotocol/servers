@@ -6,12 +6,6 @@ A Model Context Protocol server for Git repository interaction and automation. T
 
 Please note that mcp-server-git is currently in early development. The functionality and available tools are subject to change and expansion as we continue to develop and improve the server.
 
-### Environment Variables
-
-- `GIT_DIFF_CONTEXT_LINES`: Number of context lines to show in git diff output (default: 3). Increasing this value shows more surrounding code in diffs.
-
-> **⚠️ Warning:** Large context line values will consume more tokens and may reduce response relevance. Set this value carefully to balance context needs with token limits.
-
 ### Tools
 
 1. `git_status`
@@ -22,14 +16,16 @@ Please note that mcp-server-git is currently in early development. The functiona
 
 2. `git_diff_unstaged`
    - Shows changes in working directory not yet staged
-   - Input:
+   - Inputs:
      - `repo_path` (string): Path to Git repository
+     - `context_lines` (number, optional): Number of context lines to show (default: 3)
    - Returns: Diff output of unstaged changes
 
 3. `git_diff_staged`
    - Shows changes that are staged for commit
-   - Input:
+   - Inputs:
      - `repo_path` (string): Path to Git repository
+     - `context_lines` (number, optional): Number of context lines to show (default: 3)
    - Returns: Diff output of staged changes
 
 4. `git_diff`
@@ -37,6 +33,7 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `target` (string): Target branch or commit to compare with
+     - `context_lines` (number, optional): Number of context lines to show (default: 3)
    - Returns: Diff output comparing current state with target
 
 5. `git_commit`
@@ -125,10 +122,7 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "git": {
     "command": "uvx",
-    "args": ["mcp-server-git", "--repository", "path/to/git/repo"],
-    "env": {
-      "GIT_DIFF_CONTEXT_LINES": "10"
-    }
+    "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
   }
 }
 ```
