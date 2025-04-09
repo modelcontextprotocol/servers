@@ -1,0 +1,7 @@
+services:
+
+  server:
+    image: marcellodesales/mcp-github-server
+    build:
+      context: ../..
+      dockerfile: src/github//Dockerfile

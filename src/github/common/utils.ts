@@ -43,6 +43,11 @@ export async function githubRequest(
     headers["Authorization"] = `Bearer ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN}`;
   }
 
+  // Support Github Enterprise Server for all HTTP requests
+  if (process.env.GITHUB_SERVER_API_URL) {
+    url = url.replace("https://api.github.com", process.env.GITHUB_SERVER_API_URL);
+  }
+
   const response = await fetch(url, {
     method: options.method || "GET",
     headers,
