@@ -1,6 +1,6 @@
 {
   "name": "@ultra21c/mcp-server-daum-search",
-  "version": "0.6.8",
+  "version": "0.6.11",
   "description": "MCP server for Daum Search API integration",
   "license": "MIT",
   "author": "ultra21c",
@@ -24,7 +24,14 @@
     "ai-search",
     "korean-search",
     "daum-search",
-    "kakao-search"
+    "kakao-search",
+    "mcp-kakao-server",
+    "mcp-kakao-search-server",
+    "kakaosearch",
+    "daumsearch",
+    "daumkakao-search",
+    "dakaosearch",
+    "mcp-server-kakao"
   ],
   "bugs": "https://github.com/ultra21c/mcp-servers/issues",
   "type": "module",
@@ -46,7 +53,8 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.0.1"
+    "@modelcontextprotocol/sdk": "1.0.1",
+    "node-fetch": "^2.6.9"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

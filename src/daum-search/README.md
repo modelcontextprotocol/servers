@@ -35,12 +35,6 @@ cd mcp-servers/src/daum-search
 npm install
 ```
 
-### Docker를 통한 설치
-
-```bash
-docker pull ultra21c/mcp-server-daum-search:latest
-```
-
 ## 사용 방법
 
 ### 1. Kakao Developers 설정
@@ -117,28 +111,6 @@ docker run -e KAKAO_API_KEY="your_kakao_api_key" ultra21c/mcp-server-daum-search
 }
 ```
 
-#### Docker 사용 시:
-
-```json
-{
-  "mcpServers": {
-    "daum-search": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "-e",
-        "KAKAO_API_KEY",
-        "ultra21c/mcp-server-daum-search"
-      ],
-      "env": {
-        "KAKAO_API_KEY": "YOUR_KAKAO_REST_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
 
 ## 제공되는 검색 기능
 

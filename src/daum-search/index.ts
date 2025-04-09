@@ -7,13 +7,37 @@ import {
   ListToolsRequestSchema,
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
+import fetch from 'node-fetch';
+
+const TOTAL_SEARCH_TOOL: Tool = {
+  name: "daum_total_search",
+  description:
+    "다음 통합검색 서비스에서 질의어로 웹, 블로그, 카페, 동영상, 이미지, 책 정보를 동시에 검색합니다. " +
+    "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
+    "정확도순으로 정렬되며, 각 서비스별로 상위 결과를 제공합니다.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "검색을 원하는 질의어"
+      },
+      size: {
+        type: "number",
+        description: "각 검색 서비스별 결과 수 (1-10)",
+        default: 10
+      }
+    },
+    required: ["query"]
+  }
+};
 
 const WEB_SEARCH_TOOL: Tool = {
   name: "daum_web_search",
-  description:
-    "다음 검색 서비스에서 질의어로 웹 문서를 검색합니다. " +
-    "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
-    "정확도순 또는 최신순으로 정렬이 가능하며, 페이지당 최대 50개의 결과를 제공합니다.",
+  description: "다음 통합검색을 사용 합니다.",
+    // "다음 검색 서비스에서 질의어로 웹 문서를 검색합니다. " +
+    // "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
+    // "정확도순 또는 최신순으로 정렬이 가능하며, 페이지당 최대 50개의 결과를 제공합니다.",
   inputSchema: {
     type: "object",
     properties: {
@@ -43,10 +67,10 @@ const WEB_SEARCH_TOOL: Tool = {
 
 const VCLIP_SEARCH_TOOL: Tool = {
   name: "daum_vclip_search",
-  description:
-    "카카오 TV, 유투브 등 서비스에서 질의어로 동영상을 검색합니다. " +
-    "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
-    "정확도순 또는 최신순으로 정렬이 가능하며, 페이지당 최대 30개의 결과를 제공합니다.",
+  description: "다음 통합검색을 사용 합니다.",
+    // "카카오 TV, 유투브 등 서비스에서 질의어로 동영상을 검색합니다. " +
+    // "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
+    // "정확도순 또는 최신순으로 정렬이 가능하며, 페이지당 최대 30개의 결과를 제공합니다.",
   inputSchema: {
     type: "object",
     properties: {
@@ -76,10 +100,10 @@ const VCLIP_SEARCH_TOOL: Tool = {
 
 const IMAGE_SEARCH_TOOL: Tool = {
   name: "daum_image_search",
-  description:
-    "다음 검색 서비스에서 질의어로 이미지를 검색합니다. " +
-    "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
-    "정확도순 또는 최신순으로 정렬이 가능하며, 페이지당 최대 80개의 결과를 제공합니다.",
+  description: "다음 통합검색을 사용 합니다.",
+    // "다음 검색 서비스에서 질의어로 이미지를 검색합니다. " +
+    // "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
+    // "정확도순 또는 최신순으로 정렬이 가능하며, 페이지당 최대 80개의 결과를 제공합니다.",
   inputSchema: {
     type: "object",
     properties: {
@@ -109,10 +133,10 @@ const IMAGE_SEARCH_TOOL: Tool = {
 
 const BLOG_SEARCH_TOOL: Tool = {
   name: "daum_blog_search",
-  description:
-    "다음 블로그 서비스에서 질의어로 게시물을 검색합니다. " +
-    "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
-    "정확도순 또는 최신순으로 정렬이 가능하며, 페이지당 최대 50개의 결과를 제공합니다.",
+  description: "다음 통합검색을 사용 합니다.",
+    // "다음 블로그 서비스에서 질의어로 게시물을 검색합니다. " +
+    // "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
+    // "정확도순 또는 최신순으로 정렬이 가능하며, 페이지당 최대 50개의 결과를 제공합니다.",
   inputSchema: {
     type: "object",
     properties: {
@@ -142,10 +166,10 @@ const BLOG_SEARCH_TOOL: Tool = {
 
 const BOOK_SEARCH_TOOL: Tool = {
   name: "daum_book_search",
-  description:
-    "다음 책 서비스에서 질의어로 도서 정보를 검색합니다. " +
-    "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
-    "정확도순 또는 발간일순으로 정렬이 가능하며, 페이지당 최대 50개의 결과를 제공합니다.",
+  description: "다음 통합검색을 사용 합니다.",
+    // "다음 책 서비스에서 질의어로 도서 정보를 검색합니다. " +
+    // "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
+    // "정확도순 또는 발간일순으로 정렬이 가능하며, 페이지당 최대 50개의 결과를 제공합니다.",
   inputSchema: {
     type: "object",
     properties: {
@@ -180,10 +204,10 @@ const BOOK_SEARCH_TOOL: Tool = {
 
 const CAFE_SEARCH_TOOL: Tool = {
   name: "daum_cafe_search",
-  description:
-    "다음 카페 서비스에서 질의어로 게시물을 검색합니다. " +
-    "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
-    "정확도순 또는 최신순으로 정렬이 가능하며, 페이지당 최대 50개의 결과를 제공합니다.",
+  description: "다음 통합검색을 사용 합니다.",
+    // "다음 카페 서비스에서 질의어로 게시물을 검색합니다. " +
+    // "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
+    // "정확도순 또는 최신순으로 정렬이 가능하며, 페이지당 최대 50개의 결과를 제공합니다.",
   inputSchema: {
     type: "object",
     properties: {
@@ -205,29 +229,6 @@ const CAFE_SEARCH_TOOL: Tool = {
         type: "number",
         description: "한 페이지에 보여질 문서 수 (1-50)",
         default: 10
-      }
-    },
-    required: ["query"]
-  }
-};
-
-const TOTAL_SEARCH_TOOL: Tool = {
-  name: "daum_total_search",
-  description:
-    "다음 통합검색 서비스에서 질의어로 웹, 블로그, 카페, 동영상, 이미지, 책 정보를 동시에 검색합니다. " +
-    "검색어와 함께 결과 형식 파라미터를 선택적으로 추가할 수 있습니다. " +
-    "정확도순으로 정렬되며, 각 서비스별로 상위 결과를 제공합니다.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      query: {
-        type: "string",
-        description: "검색을 원하는 질의어"
-      },
-      size: {
-        type: "number",
-        description: "각 검색 서비스별 결과 수 (1-10)",
-        default: 3
       }
     },
     required: ["query"]
@@ -364,7 +365,7 @@ async function performCafeSearch(query: string, sort?: string, page?: number, si
   ).join('\n\n');
 }
 
-async function performTotalSearch(query: string, size: number = 3) {
+async function performTotalSearch(query: string, size: number = 10) {
   const results = await Promise.all([
     performWebSearch(query, 'accuracy', 1, size),
     performBlogSearch(query, 'accuracy', 1, size),
