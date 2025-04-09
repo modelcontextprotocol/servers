@@ -1,0 +1,13 @@
+[project]
+name = "mcp-aws-incident-response"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain-aws>=0.2.16",
+    "langchain-mcp-adapters>=0.0.5",
+    "langgraph>=0.3.18",
+    "mcp>=1.4.1",
+    "zmq>=0.0.0",
+]
