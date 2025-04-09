@@ -6,6 +6,11 @@
 
 MCP Server for the GitHub API, enabling file operations, repository management, search functionality, and more.
 
+## Environment Variables
+
+- `GITHUB_PERSONAL_ACCESS_TOKEN` (Optional): A GitHub Personal Access Token (PAT) with necessary scopes for accessing private repositories or performing write operations (e.g., `repo`, `write:discussion`). If not provided, the server operates with unauthenticated access, limited to public resources and lower rate limits.
+- `GITHUB_API_URL` (Optional): The base URL for the GitHub API. Defaults to `https://api.github.com`. Set this to use the server with GitHub Enterprise installations (e.g., `https://github.yourcompany.com/api/v3`).
+
 ### Features
 
 - **Automatic Branch Creation**: When creating/updating files or pushing changes, branches are automatically created if they don't exist

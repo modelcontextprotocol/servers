@@ -27,16 +27,40 @@ import {
   isGitHubError,
 } from './common/errors.js';
 import { VERSION } from "./common/version.js";
+import { GITHUB_API_URL } from "./common/utils.js";
 
 // If fetch doesn't exist in global scope, add it
 if (!globalThis.fetch) {
   globalThis.fetch = fetch as unknown as typeof global.fetch;
 }
 
+// Determine server name and description based on API URL
+const DEFAULT_API_URL = "https://api.github.com";
+const isDefaultApiUrl = GITHUB_API_URL === DEFAULT_API_URL;
+let serverName = "github-mcp-server"; // Default name
+let serverDescription = ""; // Default description
+
+if (!isDefaultApiUrl) {
+  try {
+    // Attempt to parse the custom URL to extract the hostname
+    const apiUrlObject = new URL(GITHUB_API_URL);
+    // Use hostname for a more user-friendly name, fallback to full URL if needed
+    const identifier = apiUrlObject.hostname || GITHUB_API_URL;
+    serverName = `GitHub (${identifier})`;
+    serverDescription += ` This server targets the GitHub instance at ${GITHUB_API_URL}.`;
+  } catch (e) {
+    // Log error if URL is invalid, but continue with a modified default name
+    console.error(`Invalid GITHUB_API_URL format ('${GITHUB_API_URL}'). Using a generic name.`, e);
+    serverName = `GitHub (Custom: ${GITHUB_API_URL})`; // Indicate custom URL even if unparsable
+     serverDescription += ` This server targets a custom GitHub instance at ${GITHUB_API_URL}.`;
+  }
+}
+
 const server = new Server(
   {
-    name: "github-mcp-server",
+    name: serverName,
     version: VERSION,
+    description: serverDescription,
   },
   {
     capabilities: {

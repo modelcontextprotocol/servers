@@ -19,15 +19,19 @@
     "link-all": "npm link --workspaces"
   },
   "dependencies": {
+    "@modelcontextprotocol/server-brave-search": "*",
+    "@modelcontextprotocol/server-everart": "*",
     "@modelcontextprotocol/server-everything": "*",
+    "@modelcontextprotocol/server-filesystem": "*",
     "@modelcontextprotocol/server-gdrive": "*",
+    "@modelcontextprotocol/server-memory": "*",
     "@modelcontextprotocol/server-postgres": "*",
     "@modelcontextprotocol/server-puppeteer": "*",
+    "@modelcontextprotocol/server-sequential-thinking": "*",
     "@modelcontextprotocol/server-slack": "*",
-    "@modelcontextprotocol/server-brave-search": "*",
-    "@modelcontextprotocol/server-memory": "*",
-    "@modelcontextprotocol/server-filesystem": "*",
-    "@modelcontextprotocol/server-everart": "*",
-    "@modelcontextprotocol/server-sequential-thinking": "*"
+    "universal-user-agent": "^7.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0"
   }
 }
