@@ -1,0 +1,32 @@
+{
+  "name": "mcp-repl",
+  "version": "2.0.5",
+  "description": "Direct Node.js executor with ESM import support for MCP",
+  "main": "direct-node-executor.js",
+  "type": "module",
+  "bin": {
+    "mcp-repl": "./direct-node-executor.js"
+  },
+  "scripts": {
+    "start": "node direct-node-executor.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "repl",
+    "javascript",
+    "mcp",
+    "node",
+    "esm",
+    "import",
+    "modules",
+    "execution"
+  ],
+  "author": "Model Context Protocol Team",
+  "license": "MIT"
+}
