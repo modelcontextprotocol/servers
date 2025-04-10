@@ -157,25 +157,10 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 > Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
 
-```json
-{
-  "mcp": {
-    "servers": {
-      "filesystem": {
-        "command": "npx",
-        "args": [
-          "-y",
-          "@modelcontextprotocol/server-filesystem",
-          "${workspaceFolder}"
-        ]
-      }
-    }
-  }
-}
-```
+You can provide sandboxed directories to the server by mounting them to `/projects`. Adding the `ro` flag will make the directory readonly by the server.
 
-For Docker installation:
-Note: all directories must be mounted to `/projects` by default.
+### Docker
+Note: all directories must be mounted to `/projects` by default. 
 
 ```json
 {
@@ -195,8 +180,25 @@ Note: all directories must be mounted to `/projects` by default.
     }
   }
 }
+```
 
-You can provide sandboxed directories to the server by mounting them to `/projects`. Adding the `ro` flag will make the directory readonly by the server.
+### NPX
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "filesystem": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-filesystem",
+          "${workspaceFolder}"
+        ]
+      }
+    }
+  }
+}
 ```
 
 ## Build

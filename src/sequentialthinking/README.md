@@ -39,6 +39,44 @@ The Sequential Thinking tool is designed for:
 
 ## Configuration
 
+### Usage with Claude Desktop
+
+Add this to your `claude_desktop_config.json`:
+
+#### npx
+
+```json
+{
+  "mcpServers": {
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  }
+}
+```
+
+#### docker
+
+```json
+{
+  "mcpServers": {
+    "sequentialthinking": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "mcp/sequentialthinking"
+      ]
+    }
+  }
+}
+```
+
 ### Usage with VS Code
 
 For quick installation, click one of the installation buttons below...
@@ -86,44 +124,6 @@ For Docker installation:
           "mcp/sequentialthinking"
         ]
       }
-    }
-  }
-}
-```
-
-### Usage with Claude Desktop
-
-Add this to your `claude_desktop_config.json`:
-
-#### npx
-
-```json
-{
-  "mcpServers": {
-    "sequential-thinking": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-sequential-thinking"
-      ]
-    }
-  }
-}
-```
-
-#### docker
-
-```json
-{
-  "mcpServers": {
-    "sequentialthinking": {
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "mcp/sequentialthinking"
-      ]
     }
   }
 }

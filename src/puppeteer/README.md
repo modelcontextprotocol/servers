@@ -7,6 +7,7 @@ A Model Context Protocol server that provides browser automation capabilities us
 ### Tools
 
 - **puppeteer_navigate**
+
   - Navigate to any URL in the browser
   - Inputs:
     - `url` (string, required): URL to navigate to
@@ -14,6 +15,7 @@ A Model Context Protocol server that provides browser automation capabilities us
     - `allowDangerous` (boolean, optional): Allow dangerous LaunchOptions that reduce security. When false, dangerous args like `--no-sandbox`, `--disable-web-security` will throw errors. Default false.
 
 - **puppeteer_screenshot**
+
   - Capture screenshots of the entire page or specific elements
   - Inputs:
     - `name` (string, required): Name for the screenshot
@@ -22,20 +24,24 @@ A Model Context Protocol server that provides browser automation capabilities us
     - `height` (number, optional, default: 600): Screenshot height
 
 - **puppeteer_click**
+
   - Click elements on the page
   - Input: `selector` (string): CSS selector for element to click
 
 - **puppeteer_hover**
+
   - Hover elements on the page
   - Input: `selector` (string): CSS selector for element to hover
 
 - **puppeteer_fill**
+
   - Fill out input fields
   - Inputs:
     - `selector` (string): CSS selector for input field
     - `value` (string): Value to fill
 
 - **puppeteer_select**
+
   - Select an element with SELECT tag
   - Inputs:
     - `selector` (string): CSS selector for element to select
@@ -50,6 +56,7 @@ A Model Context Protocol server that provides browser automation capabilities us
 The server provides access to two types of resources:
 
 1. **Console Logs** (`console://logs`)
+
    - Browser console output in text format
    - Includes all console messages from the browser
 
@@ -67,6 +74,46 @@ The server provides access to two types of resources:
 - Customizable Puppeteer launch options
 
 ## Configuration to use Puppeteer Server
+
+### Usage with Claude Desktop
+
+Here's the Claude Desktop configuration to use the Puppeter server:
+
+### Docker
+
+**NOTE** The docker implementation will use headless chromium, where as the NPX version will open a browser window.
+
+```json
+{
+  "mcpServers": {
+    "puppeteer": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--init",
+        "-e",
+        "DOCKER_CONTAINER=true",
+        "mcp/puppeteer"
+      ]
+    }
+  }
+}
+```
+
+### NPX
+
+```json
+{
+  "mcpServers": {
+    "puppeteer": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"]
+    }
+  }
+}
+```
 
 ### Usage with VS Code
 
@@ -120,58 +167,26 @@ For Docker installation (uses headless chromium):
 }
 ```
 
-### Usage with Claude Desktop
-
-Here's the Claude Desktop configuration to use the Puppeter server:
-
-### Docker
-
-**NOTE** The docker implementation will use headless chromium, where as the NPX version will open a browser window.
-
-```json
-{
-  "mcpServers": {
-    "puppeteer": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "--init", "-e", "DOCKER_CONTAINER=true", "mcp/puppeteer"]
-    }
-  }
-}
-```
-
-### NPX
-
-```json
-{
-  "mcpServers": {
-    "puppeteer": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-puppeteer"]
-    }
-  }
-}
-```
-
 ### Launch Options
 
 You can customize Puppeteer's browser behavior in two ways:
 
 1. **Environment Variable**: Set `PUPPETEER_LAUNCH_OPTIONS` with a JSON-encoded string in the MCP configuration's `env` parameter:
 
-    ```json
-    {
-      "mcpServers": {
-        "mcp-puppeteer": {
-          "command": "npx",
-          "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
-          "env": {
-            "PUPPETEER_LAUNCH_OPTIONS": "{ \"headless\": false, \"executablePath\": \"C:/Program Files/Google/Chrome/Application/chrome.exe\", \"args\": [] }",
-            "ALLOW_DANGEROUS": "true"
-          }
-        }
-      }
-    }
-    ```
+   ```json
+   {
+     "mcpServers": {
+       "mcp-puppeteer": {
+         "command": "npx",
+         "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+         "env": {
+           "PUPPETEER_LAUNCH_OPTIONS": "{ \"headless\": false, \"executablePath\": \"C:/Program Files/Google/Chrome/Application/chrome.exe\", \"args\": [] }",
+           "ALLOW_DANGEROUS": "true"
+         }
+       }
+     }
+   }
+   ```
 
 2. **Tool Call Arguments**: Pass `launchOptions` and `allowDangerous` parameters to the `puppeteer_navigate` tool:
 
@@ -180,7 +195,7 @@ You can customize Puppeteer's browser behavior in two ways:
      "url": "https://example.com",
      "launchOptions": {
        "headless": false,
-       "defaultViewport": {"width": 1280, "height": 720}
+       "defaultViewport": { "width": 1280, "height": 720 }
      }
    }
    ```

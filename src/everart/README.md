@@ -11,6 +11,42 @@ export EVERART_API_KEY=your_key_here
 
 ## Config
 
+### Usage with Claude Desktop
+
+Add to Claude Desktop config:
+
+#### Docker
+
+```json
+{
+  "mcpServers": {
+    "everart": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "EVERART_API_KEY", "mcp/everart"],
+      "env": {
+        "EVERART_API_KEY": "your_key_here"
+      }
+    }
+  }
+}
+```
+
+#### NPX
+
+```json
+{
+  "mcpServers": {
+    "everart": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everart"],
+      "env": {
+        "EVERART_API_KEY": "your_key_here"
+      }
+    }
+  }
+}
+```
+
 ### Usage with VS Code
 
 For quick installation, use the one-click installation buttons below...
@@ -24,32 +60,6 @@ For manual installation, add the following JSON block to your User Settings (JSO
 Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
 
 > Note that the `mcp` key is needed when using the `mcp.json` file.
-
-#### NPX
-
-```json
-{
-  "mcp": {
-    "inputs": [
-      {
-        "type": "promptString",
-        "id": "everart_api_key",
-        "description": "EverArt API Key",
-        "password": true
-      }
-    ],
-    "servers": {
-      "everart": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-everart"],
-        "env": {
-          "EVERART_API_KEY": "${input:everart_api_key}"
-        }
-      }
-    }
-  }
-}
-```
 
 #### Docker
 
@@ -77,36 +87,26 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 }
 ```
 
-### Usage with Claude Desktop
-
-Add to Claude Desktop config:
-
-### Docker
+#### NPX
 
 ```json
 {
-  "mcpServers": {
-    "everart": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "-e", "EVERART_API_KEY", "mcp/everart"],
-      "env": {
-        "EVERART_API_KEY": "your_key_here"
+  "mcp": {
+    "inputs": [
+      {
+        "type": "promptString",
+        "id": "everart_api_key",
+        "description": "EverArt API Key",
+        "password": true
       }
-    }
-  }
-}
-```
-
-### NPX
-
-```json
-{
-  "mcpServers": {
-    "everart": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-everart"],
-      "env": {
-        "EVERART_API_KEY": "your_key_here"
+    ],
+    "servers": {
+      "everart": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-everart"],
+        "env": {
+          "EVERART_API_KEY": "${input:everart_api_key}"
+        }
       }
     }
   }
@@ -161,7 +161,7 @@ The image has been opened in your default browser.
 Generation details:
 - Model: 7000
 - Prompt: "A cat sitting elegantly"
-- Image URL: https://storage.googleapis.com/...
+- Image URL: https://storage.googleapis.com/... 
 
 You can also click the URL above to view the image again.
 ```

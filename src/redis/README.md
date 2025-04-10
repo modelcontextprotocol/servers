@@ -50,6 +50,48 @@ A Model Context Protocol server that provides access to Redis databases. This se
   - List Redis keys matching a pattern
   - Input: `pattern` (string, optional): Pattern to match keys (default: *)
 
+## Usage with Claude Desktop
+
+To use this server with the Claude Desktop app, add the following configuration to the "mcpServers" section of your `claude_desktop_config.json`:
+
+### Docker
+
+* when running docker on macos, use host.docker.internal if the server is running on the host network (eg localhost)
+* Redis URL can be specified as an argument, defaults to "redis://localhost:6379"
+
+```json
+{
+  "mcpServers": {
+    "redis": {
+      "command": "docker",
+      "args": [
+        "run", 
+        "-i", 
+        "--rm", 
+        "mcp/redis", 
+        "redis://host.docker.internal:6379"]
+    }
+  }
+}
+```
+
+### NPX
+
+```json
+{
+  "mcpServers": {
+    "redis": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-redis",
+        "redis://localhost:6379"
+      ]
+    }
+  }
+}
+```
+
 ## Usage with VS Code
 
 For quick installation, use one of the one-click install buttons below...
@@ -110,56 +152,6 @@ For Docker installation:
     }
   }
 }
-```
-
-## Usage with Claude Desktop
-
-To use this server with the Claude Desktop app, add the following configuration to the "mcpServers" section of your `claude_desktop_config.json`:
-
-### Docker
-
-* when running docker on macos, use host.docker.internal if the server is running on the host network (eg localhost)
-* Redis URL can be specified as an argument, defaults to "redis://localhost:6379"
-
-```json
-{
-  "mcpServers": {
-    "redis": {
-      "command": "docker",
-      "args": [
-        "run", 
-        "-i", 
-        "--rm", 
-        "mcp/redis", 
-        "redis://host.docker.internal:6379"]
-    }
-  }
-}
-```
-
-### NPX
-
-```json
-{
-  "mcpServers": {
-    "redis": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-redis",
-        "redis://localhost:6379"
-      ]
-    }
-  }
-}
-```
-
-## Building
-
-Docker:
-
-```sh
-docker build -t mcp/redis -f src/redis/Dockerfile . 
 ```
 
 ## License

@@ -197,6 +197,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 > Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
 
 #### NPX
+
 ```json
 {
   "mcp": {
@@ -214,6 +215,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 ```
 
 #### Docker
+
 ```json
 {
   "mcp": {

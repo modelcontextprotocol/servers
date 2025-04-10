@@ -106,6 +106,54 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `read_repository` and `write_repository` for repository operations
    - Create the token and save it securely
 
+### Usage with Claude Desktop
+Add the following to your `claude_desktop_config.json`:
+
+#### Docker
+```json
+{
+  "mcpServers": { 
+    "gitlab": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-e",
+        "GITLAB_PERSONAL_ACCESS_TOKEN",
+        "-e",
+        "GITLAB_API_URL",
+        "mcp/gitlab"
+      ],
+      "env": {
+        "GITLAB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
+        "GITLAB_API_URL": "https://gitlab.com/api/v4" // Optional, for self-hosted instances
+      }
+    }
+  }
+}
+```
+
+#### NPX
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-gitlab"
+      ],
+      "env": {
+        "GITLAB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
+        "GITLAB_API_URL": "https://gitlab.com/api/v4" // Optional, for self-hosted instances
+      }
+    }
+  }
+}
+```
+
 ### Usage with VS Code
 
 For quick installation, use one of the one-click installation buttons below...
@@ -120,43 +168,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 > Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
 
-For NPX installation:
-
-```json
-{
-  "mcp": {
-    "inputs": [
-      {
-        "type": "promptString",
-        "id": "gitlab_token",
-        "description": "GitLab Personal Access Token",
-        "password": true
-      },
-      {
-        "type": "promptString",
-        "id": "gitlab_url",
-        "description": "GitLab API URL (optional)",
-        "default": "https://gitlab.com/api/v4"
-      }
-    ],
-    "servers": {
-      "gitlab": {
-        "command": "npx",
-        "args": [
-          "-y",
-          "@modelcontextprotocol/server-gitlab"
-        ],
-        "env": {
-          "GITLAB_PERSONAL_ACCESS_TOKEN": "${input:gitlab_token}",
-          "GITLAB_API_URL": "${input:gitlab_url}"
-        }
-      }
-    }
-  }
-}
-```
-
-For Docker installation:
+#### Docker
 
 ```json
 {
@@ -194,48 +206,36 @@ For Docker installation:
 }
 ```
 
-### Usage with Claude Desktop
-Add the following to your `claude_desktop_config.json`:
+#### NPX
 
-#### Docker
 ```json
 {
-  "mcpServers": { 
-    "gitlab": {
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "-e",
-        "GITLAB_PERSONAL_ACCESS_TOKEN",
-        "-e",
-        "GITLAB_API_URL",
-        "mcp/gitlab"
-      ],
-      "env": {
-        "GITLAB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
-        "GITLAB_API_URL": "https://gitlab.com/api/v4" // Optional, for self-hosted instances
+  "mcp": {
+    "inputs": [
+      {
+        "type": "promptString",
+        "id": "gitlab_token",
+        "description": "GitLab Personal Access Token",
+        "password": true
+      },
+      {
+        "type": "promptString",
+        "id": "gitlab_url",
+        "description": "GitLab API URL (optional)",
+        "default": "https://gitlab.com/api/v4"
       }
-    }
-  }
-}
-```
-
-### NPX
-
-```json
-{
-  "mcpServers": {
-    "gitlab": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-gitlab"
-      ],
-      "env": {
-        "GITLAB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
-        "GITLAB_API_URL": "https://gitlab.com/api/v4" // Optional, for self-hosted instances
+    ],
+    "servers": {
+      "gitlab": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-gitlab"
+        ],
+        "env": {
+          "GITLAB_PERSONAL_ACCESS_TOKEN": "${input:gitlab_token}",
+          "GITLAB_API_URL": "${input:gitlab_url}"
+        }
       }
     }
   }

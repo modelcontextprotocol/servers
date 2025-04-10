@@ -111,6 +111,9 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 > Note that the `mcp` key is needed when using the `mcp.json` file.
 
+<details>
+<summary>Using uvx</summary>
+
 ```json
 {
   "mcp": {
@@ -134,8 +137,10 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   }
 }
 ```
+</details>
 
-For Docker installation:
+<details>
+<summary>Using docker</summary>
 
 ```json
 {
@@ -160,6 +165,7 @@ For Docker installation:
   }
 }
 ```
+</details>
 
 ### Usage with [Zed](https://github.com/zed-industries/zed)
 

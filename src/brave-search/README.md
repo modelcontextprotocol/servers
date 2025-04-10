@@ -80,7 +80,7 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 
-### VS Code
+### Usage with VS Code
 
 For quick installation, use the one-click installation buttons below...
 
@@ -93,32 +93,6 @@ For manual installation, add the following JSON block to your User Settings (JSO
 Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
 
 > Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
-
-#### NPX
-
-```json
-{
-  "mcp": {
-    "inputs": [
-      {
-        "type": "promptString",
-        "id": "brave_api_key",
-        "description": "Brave Search API Key",
-        "password": true
-      }
-    ],
-    "servers": {
-      "brave-search": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-brave-search"],
-        "env": {
-          "BRAVE_API_KEY": "${input:brave_api_key}"
-        }
-      }
-    }
-  }
-}
-```
 
 #### Docker
 
@@ -144,6 +118,32 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
           "BRAVE_API_KEY",
           "mcp/brave-search"
         ],
+        "env": {
+          "BRAVE_API_KEY": "${input:brave_api_key}"
+        }
+      }
+    }
+  }
+}
+```
+
+#### NPX
+
+```json
+{
+  "mcp": {
+    "inputs": [
+      {
+        "type": "promptString",
+        "id": "brave_api_key",
+        "description": "Brave Search API Key",
+        "password": true
+      }
+    ],
+    "servers": {
+      "brave-search": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-brave-search"],
         "env": {
           "BRAVE_API_KEY": "${input:brave_api_key}"
         }

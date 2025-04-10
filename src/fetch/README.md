@@ -44,7 +44,50 @@ python -m mcp_server_fetch
 
 ## Configuration
 
-### Usage with VS Code
+### Configure for Claude.app
+
+Add to your Claude settings:
+
+<details>
+<summary>Using uvx</summary>
+
+```json
+"mcpServers": {
+  "fetch": {
+    "command": "uvx",
+    "args": ["mcp-server-fetch"]
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using docker</summary>
+
+```json
+"mcpServers": {
+  "fetch": {
+    "command": "docker",
+    "args": ["run", "-i", "--rm", "mcp/fetch"]
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using pip installation</summary>
+
+```json
+"mcpServers": {
+  "fetch": {
+    "command": "python",
+    "args": ["-m", "mcp_server_fetch"]
+  }
+}
+```
+</details>
+
+### Configure for VS Code
 
 For quick installation, use one of the one-click install buttons below...
 
@@ -87,49 +130,6 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
         "args": ["run", "-i", "--rm", "mcp/fetch"]
       }
     }
-  }
-}
-```
-</details>
-
-### Configure for Claude.app
-
-Add to your Claude settings:
-
-<details>
-<summary>Using uvx</summary>
-
-```json
-"mcpServers": {
-  "fetch": {
-    "command": "uvx",
-    "args": ["mcp-server-fetch"]
-  }
-}
-```
-</details>
-
-<details>
-<summary>Using docker</summary>
-
-```json
-"mcpServers": {
-  "fetch": {
-    "command": "docker",
-    "args": ["run", "-i", "--rm", "mcp/fetch"]
-  }
-}
-```
-</details>
-
-<details>
-<summary>Using pip installation</summary>
-
-```json
-"mcpServers": {
-  "fetch": {
-    "command": "python",
-    "args": ["-m", "mcp_server_fetch"]
   }
 }
 ```

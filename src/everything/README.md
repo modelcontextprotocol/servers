@@ -126,6 +126,24 @@ The server sends random-leveled log messages every 15 seconds, e.g.:
 }
 ```
 
+## Usage with Claude Desktop
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "everything": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-everything"
+      ]
+    }
+  }
+}
+```
+
 ## Usage with VS Code
 
 For quick installation, use of of the one-click install buttons below...
@@ -150,24 +168,6 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-everything"]
       }
-    }
-  }
-}
-```
-
-## Usage with Claude Desktop
-
-Add to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "everything": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-everything"
-      ]
     }
   }
 }
