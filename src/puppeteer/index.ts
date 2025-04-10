@@ -173,6 +173,65 @@ async function ensureBrowser({ launchOptions, allowDangerous }: any) {
         params: { uri: "console://logs" },
       });
     });
+
+    // Create CDP session for DevTools Recorder visibility
+    const client = await page.target().createCDPSession();
+    
+    // Add function to get element coordinates
+    async function getElementCoordinates(selector: string) {
+      // Get the bounding box of the element
+      const boundingBox = await page!.evaluate((sel) => {
+        const element = document.querySelector(sel);
+        if (!element) return null;
+        
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
+      }, selector);
+      
+      if (!boundingBox) {
+        throw new Error(`Element with selector "${selector}" not found`);
+      }
+      
+      // Calculate center coordinates of the element
+      const x = boundingBox.x + boundingBox.width / 2;
+      const y = boundingBox.y + boundingBox.height / 2;
+      
+      return { x, y };
+    }
+
+    // Override the click method to make it visible to DevTools Recorder
+    const originalClick = page.click.bind(page);
+    page.click = async (selector: string, options?: puppeteer.ClickOptions): Promise<void> => {
+      try {
+        // Get element coordinates
+        const { x, y } = await getElementCoordinates(selector);
+        
+        // Send mousePressed event via CDP
+        await client.send('Input.dispatchMouseEvent', {
+          type: 'mousePressed',
+          x, 
+          y,
+          button: 'left',
+          clickCount: 1
+        });
+        
+        // Perform the actual click
+        await originalClick(selector, options);
+        
+        // Send mouseReleased event via CDP
+        await client.send('Input.dispatchMouseEvent', {
+          type: 'mouseReleased',
+          x, 
+          y,
+          button: 'left',
+          clickCount: 1
+        });
+      } catch (error) {
+        console.error(`Enhanced click failed: ${(error as Error).message}`);
+        // Fall back to original click if enhanced click fails
+        await originalClick(selector, options);
+      }
+    };
   }
   return page!;
 }
