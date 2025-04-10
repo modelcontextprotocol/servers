@@ -22,10 +22,10 @@ export const GitLabRepositorySchema = z.object({
   name: z.string(),
   path_with_namespace: z.string(), // Changed from full_name to match GitLab API
   visibility: z.string(), // Changed from private to match GitLab API
-  owner: GitLabOwnerSchema,
+  owner: GitLabOwnerSchema.optional(),
   web_url: z.string(), // Changed from html_url to match GitLab API
   description: z.string().nullable(),
-  fork: z.boolean(),
+  fork: z.boolean().optional(),
   ssh_url_to_repo: z.string(), // Changed from ssh_url to match GitLab API
   http_url_to_repo: z.string(), // Changed from clone_url to match GitLab API
   created_at: z.string(),
@@ -218,12 +218,12 @@ export const GitLabMergeRequestSchema = z.object({
   title: z.string(),
   description: z.string(), // Changed from body to match GitLab API
   state: z.string(),
-  merged: z.boolean(),
+  merged: z.boolean().optional(),
   author: GitLabUserSchema,
   assignees: z.array(GitLabUserSchema),
   source_branch: z.string(), // Changed from head to match GitLab API
   target_branch: z.string(), // Changed from base to match GitLab API
-  diff_refs: GitLabMergeRequestDiffRefSchema,
+  diff_refs: GitLabMergeRequestDiffRefSchema.nullable(),
   web_url: z.string(), // Changed from html_url to match GitLab API
   created_at: z.string(),
   updated_at: z.string(),
