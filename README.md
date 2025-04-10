@@ -27,6 +27,7 @@ These servers aim to demonstrate MCP features and the TypeScript and Python SDKs
 - **[PostgreSQL](src/postgres)** - Read-only database access with schema inspection
 - **[Puppeteer](src/puppeteer)** - Browser automation and web scraping
 - **[Redis](src/redis)** - Interact with Redis key-value stores
+- **[REPL](src/repl)** - Run node.js repl code in a directory
 - **[Sentry](src/sentry)** - Retrieving and analyzing issues from Sentry.io
 - **[Sequential Thinking](src/sequentialthinking)** - Dynamic and reflective problem-solving through thought sequences
 - **[Slack](src/slack)** - Channel management and messaging capabilities
