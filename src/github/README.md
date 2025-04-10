@@ -307,7 +307,17 @@ For detailed search syntax, see [GitHub's searching documentation](https://docs.
 
 ## Setup
 
-### Personal Access Token
+### Options for Token Generation
+
+#### Github CLI Token
+The Github CLI can generate a token scoped to your user and is more streamlined
+   - [Install the Github CLI tool](https://github.com/cli/cli#installation)
+   - `gh auth login --web -p https`
+   - Copy the code and press enter to authenticate in the browser.
+   - `gh auth token`
+   - Copy the generated token
+
+#### Personal Access Token
 [Create a GitHub Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) with appropriate permissions:
    - Go to [Personal access tokens](https://github.com/settings/tokens) (in GitHub Settings > Developer settings)
    - Select which repositories you'd like this token to have access to (Public, All, or Select)
