@@ -94,6 +94,26 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `branch` (string): Name for new branch
      - `ref` (optional string): Source branch/commit for new branch
    - Returns: Created branch reference
+  
+10. `get_merge_requests`
+    - Get merge requests from a project
+    - Inputs:
+      - `project_id` (string): Project ID or URL-encoded path
+      - `state` (optional string): Filter by state ('opened', 'closed', 'locked', 'merged')
+      - `page` (optional number): Page number for pagination (default: 1)
+      - `per_page` (optional number): Number of items per page (default: 20)
+    - Returns: List of merge requests matching criteria
+
+11. `get_issues`
+    - Get issues from a project
+    - Inputs:
+      - `project_id` (string): Project ID or URL-encoded path
+      - `state` (optional string): Filter by state ('opened', 'closed')
+      - `labels` (optional string[]): Filter by labels
+      - `page` (optional number): Page number for pagination (default: 1)
+      - `per_page` (optional number): Number of items per page (default: 20)
+    - Returns: List of issues matching criteria (descriptions limited to 300 chars)
+
 
 ## Setup
 
