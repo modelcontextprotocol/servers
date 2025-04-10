@@ -196,7 +196,24 @@ export const GitLabIssueSchema = z.object({
   state: z.string(),
   author: GitLabUserSchema,
   assignees: z.array(GitLabUserSchema),
-  labels: z.array(GitLabLabelSchema),
+  labels: z.array(GitLabLabelSchema), 
+  milestone: GitLabMilestoneSchema.nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  closed_at: z.string().nullable(),
+  web_url: z.string() // Changed from html_url to match GitLab API
+});
+
+export const GitLabListIssueSchema = z.object({
+  id: z.number(),
+  iid: z.number(), // Added to match GitLab API
+  project_id: z.number(), // Added to match GitLab API
+  title: z.string(),
+  description: z.string(), // Changed from body to match GitLab API
+  state: z.string(),
+  author: GitLabUserSchema,
+  assignees: z.array(GitLabUserSchema),
+  labels: z.array(z.string()), 
   milestone: GitLabMilestoneSchema.nullable(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -223,7 +240,7 @@ export const GitLabMergeRequestSchema = z.object({
   assignees: z.array(GitLabUserSchema),
   source_branch: z.string(), // Changed from head to match GitLab API
   target_branch: z.string(), // Changed from base to match GitLab API
-  diff_refs: GitLabMergeRequestDiffRefSchema.nullable(),
+  diff_refs: GitLabMergeRequestDiffRefSchema.optional(),
   web_url: z.string(), // Changed from html_url to match GitLab API
   created_at: z.string(),
   updated_at: z.string(),
@@ -304,6 +321,19 @@ export const CreateBranchSchema = ProjectParamsSchema.extend({
     .describe("Source branch/commit for new branch")
 });
 
+export const GetMergeRequestsSchema = ProjectParamsSchema.extend({
+  state: z.string().optional().describe("Filter by state (opened, closed, merged, all)"),
+  page: z.number().optional().describe("Page number for pagination (default: 1)"),
+  per_page: z.number().optional().describe("Number of results per page (default: 20)")
+});
+
+export const GetIssuesSchema = ProjectParamsSchema.extend({
+  state: z.string().optional().describe("Filter by state (opened, closed, all)"),
+  labels: z.array(z.string()).optional().describe("Filter by labels"),
+  page: z.number().optional().describe("Page number for pagination (default: 1)"),
+  per_page: z.number().optional().describe("Number of results per page (default: 20)")
+});
+
 // Export types
 export type GitLabAuthor = z.infer<typeof GitLabAuthorSchema>;
 export type GitLabFork = z.infer<typeof GitLabForkSchema>;
@@ -323,3 +353,4 @@ export type CreateMergeRequestOptions = z.infer<typeof CreateMergeRequestOptions
 export type CreateBranchOptions = z.infer<typeof CreateBranchOptionsSchema>;
 export type GitLabCreateUpdateFileResponse = z.infer<typeof GitLabCreateUpdateFileResponseSchema>;
 export type GitLabSearchResponse = z.infer<typeof GitLabSearchResponseSchema>;
+export type GitLabListIssue = z.infer<typeof GitLabListIssueSchema>;
