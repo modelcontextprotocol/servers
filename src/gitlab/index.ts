@@ -33,6 +33,9 @@ import {
   CreateMergeRequestSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
+  GetMergeRequestsSchema,
+  GetIssuesSchema,
+  GitLabListIssueSchema,
   type GitLabFork,
   type GitLabReference,
   type GitLabRepository,
@@ -44,6 +47,7 @@ import {
   type GitLabTree,
   type GitLabCommit,
   type FileOperation,
+  type GitLabListIssue,
 } from './schemas.js';
 
 const server = new Server({
@@ -375,6 +379,70 @@ async function createRepository(
   return GitLabRepositorySchema.parse(await response.json());
 }
 
+async function getMergeRequests(
+  projectId: string,
+  state?: string,
+  page: number = 1,
+  perPage: number = 20
+): Promise<GitLabMergeRequest[]> {
+  const url = new URL(`${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/merge_requests`);
+  url.searchParams.append("page", page.toString());
+  url.searchParams.append("per_page", perPage.toString());
+  if (state) {
+    url.searchParams.append("state", state);
+  }
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitLab API error: ${response.statusText}`);
+  }
+
+  const mergeRequests = await response.json() as unknown[];
+  return mergeRequests.map((mr) => GitLabMergeRequestSchema.parse(mr));
+}
+
+async function getIssues(
+  projectId: string,
+  state?: string,
+  labels?: string[],
+  page: number = 1,
+  perPage: number = 20
+): Promise<GitLabListIssue[]> {
+  const url = new URL(`${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/issues`);
+  url.searchParams.append("page", page.toString());
+  url.searchParams.append("per_page", perPage.toString());
+  if (state) {
+    url.searchParams.append("state", state);
+  }
+  if (labels && labels.length > 0) {
+    url.searchParams.append("labels", labels.join(","));
+  }
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitLab API error: ${response.statusText}`);
+  }
+
+  const issues = await response.json() as unknown[];
+  const parsed_issues = issues.map((issue) => GitLabListIssueSchema.parse(issue));
+  // Limit issue descriptions to 300 characters to avoid bombarding the context window
+  const limited_parsed_issues = parsed_issues.map(issue => ({
+    ...issue,
+    description: issue.description?.slice(0, 300) || null
+  } as GitLabListIssue));
+  return limited_parsed_issues;
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -422,6 +490,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_branch",
         description: "Create a new branch in a GitLab project",
         inputSchema: zodToJsonSchema(CreateBranchSchema)
+      },
+      {
+        name: "get_merge_requests",
+        description: "Get merge requests from a GitLab project",
+        inputSchema: zodToJsonSchema(GetMergeRequestsSchema)
+      },
+      {
+        name: "get_issues",
+        description: "Get issues from a GitLab project",
+        inputSchema: zodToJsonSchema(GetIssuesSchema)
       }
     ]
   };
@@ -509,6 +587,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { project_id, ...options } = args;
         const mergeRequest = await createMergeRequest(project_id, options);
         return { content: [{ type: "text", text: JSON.stringify(mergeRequest, null, 2) }] };
+      }
+
+      case "get_merge_requests": {
+        const args = GetMergeRequestsSchema.parse(request.params.arguments);
+        const mergeRequests = await getMergeRequests(
+          args.project_id,
+          args.state,
+          args.page,
+          args.per_page
+        );
+        return { content: [{ type: "text", text: JSON.stringify(mergeRequests, null, 2) }] };
+      }
+
+      case "get_issues": {
+        const args = GetIssuesSchema.parse(request.params.arguments);
+        const issues = await getIssues(
+          args.project_id,
+          args.state,
+          args.labels,
+          args.page,
+          args.per_page
+        );
+        return { content: [{ type: "text", text: JSON.stringify(issues, null, 2) }] };
       }
 
       default:
