@@ -44,6 +44,20 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "puppeteer_screenshot_encoded",
+    description: "Take a screenshot of the current page or a specific element and return it as a base64-encoded data URI",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Name for the screenshot" },
+        selector: { type: "string", description: "CSS selector for element to screenshot" },
+        width: { type: "number", description: "Width in pixels (default: 800)" },
+        height: { type: "number", description: "Height in pixels (default: 600)" },
+      },
+      required: ["name"],
+    },
+  },
+  {
     name: "puppeteer_click",
     description: "Click an element on the page",
     inputSchema: {
@@ -260,6 +274,47 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
             data: screenshot,
             mimeType: "image/png",
           } as ImageContent,
+        ],
+        isError: false,
+      };
+    }
+
+    case "puppeteer_screenshot_encoded": {
+      const width = args.width ?? 800;
+      const height = args.height ?? 600;
+      await page.setViewport({ width, height });
+
+      const screenshot = await (args.selector
+        ? (await page.$(args.selector))?.screenshot({ encoding: "base64" })
+        : page.screenshot({ encoding: "base64", fullPage: false }));
+
+      if (!screenshot) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: args.selector ? `Element not found: ${args.selector}` : "Screenshot failed",
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      screenshots.set(args.name, screenshot as string);
+      server.notification({
+        method: "notifications/resources/list_changed",
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Screenshot '${args.name}' taken at ${width}x${height}`,
+          } as TextContent,
+          {
+            type: "text",
+            text: `data:image/png;base64,${screenshot}`,
+          } as TextContent,
         ],
         isError: false,
       };
