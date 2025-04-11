@@ -1,26 +1,20 @@
+# ruff: noqa: S101
 import os
 import pytest
-import sqlite3
 import tempfile
-from contextlib import closing, asynccontextmanager
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from mcp.server import Server, NotificationOptions
-from mcp.server.models import InitializationOptions, ServerCapabilities
+from mcp.server import NotificationOptions
+from mcp.server.models import ServerCapabilities
 from mcp.types import (
     AnyUrl,
     TextContent,
     Resource,
-    Prompt,
-    PromptArgument,
     Tool,
-    GetPromptResult,
-    PromptMessage,
 )
-from pydantic import ValidationError
 
-from mcp_server_sqlite.server import SqliteDatabase, main
+from mcp_server_sqlite.server import SqliteDatabase
 
 
 class TestSqliteDatabase:
