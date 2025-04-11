@@ -39,6 +39,7 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
    - Required inputs:
      - `channel_id` (string): The channel ID
    - Optional inputs:
+     - `cursor` (string): Pagination cursor for next page
      - `limit` (number, default: 10): Number of messages to retrieve
    - Returns: List of messages with their content and metadata
 
