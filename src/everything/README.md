@@ -45,6 +45,33 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
    - No inputs required
    - Returns: JSON string of all environment variables
 
+7. `annotatedMessage`
+   - Demonstrates how annotations can be used to provide metadata about content
+   - Inputs:
+     - `messageType` (enum: "error" | "success" | "debug"): Type of message to demonstrate different annotation patterns
+     - `includeImage` (boolean, default: false): Whether to include an example image
+   - Returns: Content with varying annotations:
+     - Error messages: High priority (1.0), visible to both user and assistant
+     - Success messages: Medium priority (0.7), user-focused
+     - Debug messages: Low priority (0.3), assistant-focused
+     - Optional image: Medium priority (0.5), user-focused
+   - Example annotations:
+     ```json
+     {
+       "priority": 1.0,
+       "audience": ["user", "assistant"]
+     }
+     ```
+
+8. `getResourceReference`
+   - Returns a resource reference that can be used by MCP clients
+   - Inputs:
+     - `resourceId` (number, 1-100): ID of the resource to reference
+   - Returns: A resource reference with:
+     - Text introduction
+     - Embedded resource with `type: "resource"`
+     - Text instruction for using the resource URI
+
 ### Resources
 
 The server provides 100 test resources in two formats:
@@ -77,6 +104,27 @@ Resource features:
    - Optional arguments:
      - `style` (string): Output style preference
    - Returns: Multi-turn conversation with images
+
+3. `resource_prompt`
+   - Demonstrates embedding resource references in prompts
+   - Required arguments:
+     - `resourceId` (number): ID of the resource to embed (1-100)
+   - Returns: Multi-turn conversation with an embedded resource reference
+   - Shows how to include resources directly in prompt messages
+
+### Logging
+
+The server sends random-leveled log messages every 15 seconds, e.g.:
+
+```json
+{
+  "method": "notifications/message",
+  "params": {
+	"level": "info",
+	"data": "Info-level message"
+  }
+}
+```
 
 ## Usage with Claude Desktop
 

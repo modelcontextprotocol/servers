@@ -41,22 +41,16 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - Features:
     - Line-based and multi-line content matching
     - Whitespace normalization with indentation preservation
-    - Fuzzy matching with confidence scoring
     - Multiple simultaneous edits with correct positioning
     - Indentation style detection and preservation
     - Git-style diff output with context
     - Preview changes with dry run mode
-    - Failed match debugging with confidence scores
   - Inputs:
     - `path` (string): File to edit
     - `edits` (array): List of edit operations
       - `oldText` (string): Text to search for (can be substring)
       - `newText` (string): Text to replace with
     - `dryRun` (boolean): Preview changes without applying (default: false)
-    - `options` (object): Optional formatting settings
-      - `preserveIndentation` (boolean): Keep existing indentation (default: true)
-      - `normalizeWhitespace` (boolean): Normalize spaces while preserving structure (default: true)
-      - `partialMatch` (boolean): Enable fuzzy matching (default: true)
   - Returns detailed diff and match information for dry runs, otherwise applies changes
   - Best Practice: Always use dryRun first to preview changes before applying them
 
@@ -124,7 +118,7 @@ Note: all directories must be mounted to `/projects` by default.
         "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
         "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
         "mcp/filesystem",
-        "/projects",
+        "/projects"
       ]
     }
   }

@@ -67,18 +67,23 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `branch_name` (string): Name of the new branch
      - `start_point` (string, optional): Starting point for the new branch
    - Returns: Confirmation of branch creation
-8. `git_checkout`
+10. `git_checkout`
    - Switches branches
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of branch to checkout
    - Returns: Confirmation of branch switch
-9. `git_show`
+11. `git_show`
    - Shows the contents of a commit
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `revision` (string): The revision (commit hash, branch name, tag) to show
    - Returns: Contents of the specified commit
+12. `git_init`
+   - Initializes a Git repository
+   - Inputs:
+     - `repo_path` (string): Path to directory to initialize git repo
+   - Returns: Confirmation of repository initialization
 
 ## Installation
 
@@ -213,7 +218,7 @@ If you are doing local development, there are two ways to test your changes:
 ```json
 {
   "mcpServers": {
-    "brave-search": {
+    "git": {
       "command": "docker",
       "args": [
         "run",

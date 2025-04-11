@@ -1,3 +1,5 @@
+import os
+import sys
 import sqlite3
 import logging
 from contextlib import closing
@@ -8,6 +10,12 @@ from mcp.server import NotificationOptions, Server
 import mcp.server.stdio
 from pydantic import AnyUrl
 from typing import Any
+
+# reconfigure UnicodeEncodeError prone default (i.e. windows-1252) to utf-8
+if sys.platform == "win32" and os.environ.get('PYTHONIOENCODING') is None:
+    sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
 logger = logging.getLogger('mcp_sqlite_server')
 logger.info("Starting MCP SQLite Server")

@@ -106,7 +106,7 @@ Add the following to your `claude_desktop_config.json`:
 Docker build:
 
 ```bash
-docker build -t vonwig/google-maps:mcp -f src/google-maps/Dockerfile .
+docker build -t mcp/google-maps -f src/google-maps/Dockerfile .
 ```
 
 ## License

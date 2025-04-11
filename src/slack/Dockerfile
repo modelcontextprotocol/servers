@@ -1,4 +1,4 @@
-FROM node:22.12-alpine as builder
+FROM node:22.12-alpine AS builder
 
 # Must be entire project because `prepare` script is run during `npm install` and requires all files.
 COPY src/slack /app
