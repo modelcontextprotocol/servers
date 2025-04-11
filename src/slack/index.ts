@@ -147,6 +147,10 @@ const getChannelHistoryTool: Tool = {
         type: "string",
         description: "The ID of the channel",
       },
+      cursor: {
+        type: "string",
+        description: "Pagination cursor for next page of results",
+      },
       limit: {
         type: "number",
         description: "Number of messages to retrieve (default 10)",
