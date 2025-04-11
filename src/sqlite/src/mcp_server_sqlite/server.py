@@ -134,7 +134,7 @@ class SqliteDatabase:
         logger.debug("Generated basic memo format")
         return memo
 
-    def _execute_query(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def _execute_query(self, query: str, params: dict[str, Any] | tuple[Any] | None = None) -> list[dict[str, Any]]:
         """Execute a SQL query and return results as a list of dictionaries"""
         logger.debug(f"Executing query: {query}")
         try:
