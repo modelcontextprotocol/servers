@@ -134,7 +134,7 @@ class SqliteDatabase:
         logger.debug("Generated basic memo format")
         return memo
 
-    def _execute_query(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def _execute_query(self, query: str, params: dict[str, Any] | tuple[Any] | None = None) -> list[dict[str, Any]]:
         """Execute a SQL query and return results as a list of dictionaries"""
         logger.debug(f"Executing query: {query}")
         try:
@@ -320,9 +320,8 @@ async def main(db_path: str):
             elif name == "describe_table":
                 if not arguments or "table_name" not in arguments:
                     raise ValueError("Missing table_name argument")
-                results = db._execute_query(
-                    f"PRAGMA table_info({arguments['table_name']})"
-                )
+                # SQLite doesn't support parameterized queries for PRAGMA statements: https://sqlite.org/pragma.html
+                results = db._execute_query("SELECT * FROM pragma_table_info(?)", (arguments['table_name'],))
                 return [types.TextContent(type="text", text=str(results))]
 
             elif name == "append_insight":
