@@ -1,0 +1,40 @@
+case: Initialize
+
+# Client requesting initialization
+in_request_to_initialize:
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params":
+      {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": { "name": "ExampleClient", "version": "1.0.0" },
+      },
+  }
+
+# Server responding to initialization
+out:
+  {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result":
+      {
+        "capabilities":
+          {
+            "experimental": {},
+            "prompts": { "listChanged": false },
+            "resources": { "listChanged": false, "subscribe": false },
+            "tools": { "listChanged": false },
+          },
+        "protocolVersion": "2024-11-05",
+        "serverInfo": { "name": "sqlite", "version": "0.1.0" },
+      },
+  }
+
+---
+
+# Finish initialization
+in_finished:
+  { "jsonrpc": "2.0", "method": "notifications/initialized", "params": {} }

@@ -1,0 +1,137 @@
+case: Initialize
+
+# Client requesting initialization
+in_request_to_initialize:
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params":
+      {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": { "name": "ExampleClient", "version": "1.0.0" },
+      },
+  }
+
+# Server responding to initialization, ignore this, since we are not testing it
+out: {}
+
+---
+
+case: Finish initialization
+
+# Finish initialization
+in_finished:
+  { "jsonrpc": "2.0", "method": "notifications/initialized", "params": {} }
+
+---
+
+case: List tools
+
+# Client requesting list of tools
+in: { "jsonrpc": "2.0", "method": "tools/list", "params": {}, "id": 2 }
+
+# Server responding with list of tools
+out:
+  {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result":
+      {
+        "tools":
+          [
+            {
+              "name": "read_query",
+              "description": "Execute a SELECT query on the SQLite database",
+              "inputSchema":
+                {
+                  "type": "object",
+                  "properties":
+                    {
+                      "query":
+                        {
+                          "type": "string",
+                          "description": "SELECT SQL query to execute",
+                        },
+                    },
+                  "required": ["query"],
+                },
+            },
+            {
+              "name": "write_query",
+              "description": "Execute an INSERT, UPDATE, or DELETE query on the SQLite database",
+              "inputSchema":
+                {
+                  "type": "object",
+                  "properties":
+                    {
+                      "query":
+                        {
+                          "type": "string",
+                          "description": "SQL query to execute",
+                        },
+                    },
+                  "required": ["query"],
+                },
+            },
+            {
+              "name": "create_table",
+              "description": "Create a new table in the SQLite database",
+              "inputSchema":
+                {
+                  "type": "object",
+                  "properties":
+                    {
+                      "query":
+                        {
+                          "type": "string",
+                          "description": "CREATE TABLE SQL statement",
+                        },
+                    },
+                  "required": ["query"],
+                },
+            },
+            {
+              "name": "list_tables",
+              "description": "List all tables in the SQLite database",
+              "inputSchema": { "type": "object", "properties": {} },
+            },
+            {
+              "name": "describe_table",
+              "description": "Get the schema information for a specific table",
+              "inputSchema":
+                {
+                  "type": "object",
+                  "properties":
+                    {
+                      "table_name":
+                        {
+                          "type": "string",
+                          "description": "Name of the table to describe",
+                        },
+                    },
+                  "required": ["table_name"],
+                },
+            },
+            {
+              "name": "append_insight",
+              "description": "Add a business insight to the memo",
+              "inputSchema":
+                {
+                  "type": "object",
+                  "properties":
+                    {
+                      "insight":
+                        {
+                          "type": "string",
+                          "description": "Business insight discovered from data analysis",
+                        },
+                    },
+                  "required": ["insight"],
+                },
+            },
+          ],
+      },
+  }
+

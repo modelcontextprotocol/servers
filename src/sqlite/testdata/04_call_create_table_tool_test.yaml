@@ -1,0 +1,96 @@
+case: Initialize
+
+# Client requesting initialization
+in_request_to_initialize:
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params":
+      {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": { "name": "ExampleClient", "version": "1.0.0" },
+      },
+  }
+
+# Server responding to initialization, ignore this, since we are not testing it
+out: {}
+
+---
+case: Finish initialization
+
+# Finish initialization
+in_finished:
+  { "jsonrpc": "2.0", "method": "notifications/initialized", "params": {} }
+
+---
+case: Fail calling create_table tool
+
+in: { "jsonrpc": "2.0", "method": "tools/call", "params": {
+        "name": "create_table",
+        "arguments": {},
+      }, "id": 2 } # query argument is missing
+
+out:
+  {
+    "id": 2,
+    "jsonrpc": "2.0",
+    "result":
+      {
+        "content": [{ "text": "Error: Missing arguments", "type": "text" }],
+        "isError": false,
+      },
+  }
+
+---
+
+case: Success call create_table tool
+
+in:
+  {
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params":
+      {
+        "name": "create_table",
+        "arguments": { "query": "CREATE TABLE t1(x INT CHECK( x>3 ))" },
+      },
+    "id": 2,
+  }
+
+out:
+  {
+    "id": 2,
+    "jsonrpc": "2.0",
+    "result":
+      {
+        "content": [{ "text": "Table created successfully", "type": "text" }],
+        "isError": false,
+      },
+  }
+
+---
+
+# Now confirm that created table is visible for list_tables tool
+
+case: Call list_table tool to confirm table creation
+
+in:
+  {
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": { "name": "list_tables", "args": {} },
+    "id": 2,
+  }
+
+out:
+  {
+    "id": 2,
+    "jsonrpc": "2.0",
+    "result":
+      {
+        "content": [{ "text": "[{'name': 't1'}]", "type": "text" }],
+        "isError": false,
+      },
+  }

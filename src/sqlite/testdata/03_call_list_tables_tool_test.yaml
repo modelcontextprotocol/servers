@@ -1,0 +1,46 @@
+case: Initialize
+
+# Client requesting initialization
+in_request_to_initialize:
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params":
+      {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": { "name": "ExampleClient", "version": "1.0.0" },
+      },
+  }
+
+# Server responding to initialization, ignore this, since we are not testing it
+out: {}
+
+---
+
+case: Finish initialization
+
+# Finish initialization
+in_finished:
+  { "jsonrpc": "2.0", "method": "notifications/initialized", "params": {} }
+
+---
+
+case: Call list_table tool
+
+in:
+  {
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": { "name": "list_tables", "args": {} },
+    "id": 2,
+  }
+
+out:
+  {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result":
+      { "content": [{ "type": "text", "text": "[]" }], "isError": false },
+  }

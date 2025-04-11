@@ -405,6 +405,11 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 
 * **[codemirror-mcp](https://github.com/marimo-team/codemirror-mcp)** - CodeMirror extension that implements the Model Context Protocol (MCP) for resource mentions and prompt commands
 
+## Tooling
+
+* **[mcp-autotest](https://github.com/strowk/mcp-autotest)** - Autotest MCP servers in a language-agnostic way by **[strowk](https://github.com/strowk)**
+  * check example tests for [SQLite MCP Server](https://github.com/modelcontextprotocol/servers/tree/main/src/sqlite/testdata)
+
 ## 📚 Resources
 
 Additional resources on MCP.

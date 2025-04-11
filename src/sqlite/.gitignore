@@ -1,0 +1,2 @@
+# ignore database file created during tests
+sqlite_mcp_server.db
