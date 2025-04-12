@@ -108,7 +108,7 @@ You can customize Puppeteer's browser behavior in two ways:
       "mcpServers": {
         "mcp-puppeteer": {
           "command": "npx",
-          "args": ["-y", "@modelcontextprotocol/server-puppeteer"]
+          "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
           "env": {
             "PUPPETEER_LAUNCH_OPTIONS": "{ \"headless\": false, \"executablePath\": \"C:/Program Files/Google/Chrome/Application/chrome.exe\", \"args\": [] }",
             "ALLOW_DANGEROUS": "true"
