@@ -33,6 +33,7 @@ import {
   CreateMergeRequestSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
+  CreateGetJobLogsSchema,
   type GitLabFork,
   type GitLabReference,
   type GitLabRepository,
@@ -44,6 +45,7 @@ import {
   type GitLabTree,
   type GitLabCommit,
   type FileOperation,
+  GetMergeRequestRawDiffSchema,
 } from './schemas.js';
 
 const server = new Server({
@@ -218,6 +220,25 @@ async function createMergeRequest(
   return GitLabMergeRequestSchema.parse(await response.json());
 }
 
+async function getMergeRequestRawDiff(
+  projectId: string,
+  mergeRequestId: string
+): Promise<string> {
+  const url = new URL(`${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/merge_requests/${encodeURIComponent(mergeRequestId)}/raw_diffs`);
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gitlab API error: ${response.statusText}`)
+  }
+
+  return await response.text();
+}
+
 async function createOrUpdateFile(
   projectId: string,
   filePath: string,
@@ -375,6 +396,25 @@ async function createRepository(
   return GitLabRepositorySchema.parse(await response.json());
 }
 
+async function getJobLogs(
+  projectId: string,
+  jobId: string
+): Promise<string> {
+  const url = new URL(`${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/jobs/${encodeURIComponent(jobId)}/trace`);
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gitlab API error: ${response.statusText}`)
+  }
+
+  return await response.text();
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -414,6 +454,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(CreateMergeRequestSchema)
       },
       {
+        name: "get_merge_request_raw_diff",
+        description: "Get a merge request raw difference",
+        inputSchema: zodToJsonSchema(GetMergeRequestRawDiffSchema)
+      },
+      {
         name: "fork_repository",
         description: "Fork a GitLab project to your account or specified namespace",
         inputSchema: zodToJsonSchema(ForkRepositorySchema)
@@ -422,6 +467,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_branch",
         description: "Create a new branch in a GitLab project",
         inputSchema: zodToJsonSchema(CreateBranchSchema)
+      },
+      {
+        name: "get_job_logs",
+        description: "Retrieves the logs from a job in a Gitlab project",
+        inputSchema: zodToJsonSchema(CreateGetJobLogsSchema)
       }
     ]
   };
@@ -509,6 +559,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { project_id, ...options } = args;
         const mergeRequest = await createMergeRequest(project_id, options);
         return { content: [{ type: "text", text: JSON.stringify(mergeRequest, null, 2) }] };
+      }
+
+      case "get_merge_request_raw_diff": {
+        const args = GetMergeRequestRawDiffSchema.parse(request.params.arguments);
+        const mergeRequestsRawDiff = await getMergeRequestRawDiff(
+          args.project_id,
+          args.merge_request_id
+        );
+        return { content: [{ type: "text", text: JSON.stringify(mergeRequestsRawDiff, null, 2) }] };
+      }
+
+      case "get_job_logs": {
+        const args = CreateGetJobLogsSchema.parse(request.params.arguments);
+        const logs = await getJobLogs(
+          args.project_id,
+          args.job_id
+        );
+        return { content: [{ type: "text", text: JSON.stringify(logs, null, 2) }] };
       }
 
       default:

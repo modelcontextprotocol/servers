@@ -293,6 +293,11 @@ export const CreateMergeRequestSchema = ProjectParamsSchema.extend({
     .describe("Allow commits from upstream members")
 });
 
+export const GetMergeRequestRawDiffSchema = ProjectParamsSchema.extend({
+  project_id: z.string().describe("Project ID or URL-encoded path"),
+  merge_request_id: z.string().describe("The ID of a merge request")
+});
+
 export const ForkRepositorySchema = ProjectParamsSchema.extend({
   namespace: z.string().optional()
     .describe("Namespace to fork to (full path)")
@@ -303,6 +308,11 @@ export const CreateBranchSchema = ProjectParamsSchema.extend({
   ref: z.string().optional()
     .describe("Source branch/commit for new branch")
 });
+
+export const CreateGetJobLogsSchema = ProjectParamsSchema.extend({
+  project_id: z.string().describe("Project ID or URL-encoded path"),
+  job_id: z.string().describe("ID of a job")
+})
 
 // Export types
 export type GitLabAuthor = z.infer<typeof GitLabAuthorSchema>;
