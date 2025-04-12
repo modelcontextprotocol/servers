@@ -8,15 +8,14 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import * as fs from 'fs';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
 
 // Get the working directory from command line or use current directory
-const defaultWorkingDir = process.argv[2] 
+const workingDir = process.argv[2] 
     ? path.resolve(process.argv[2]) 
     : process.cwd();
 
-console.log(`Starting direct executor with working directory: ${defaultWorkingDir}`);
+console.log(`Starting direct executor with working directory: ${workingDir}`);
 
 // Initialize the MCP server
 const server = new McpServer(
@@ -61,33 +60,19 @@ const listToolsHandler = async () => {
   };
 };
 
-// Execute code function - simplified to just execute and capture stdout/stderr
-const executeCode = async (code, timeout = 5000, workingDir = defaultWorkingDir) => {
+// Execute code function - simplified to pipe code into Node instead of using temp files
+const executeCode = async (code, timeout = 5000, customWorkingDir = null) => {
   const startTime = Date.now();
-  
-  // Create a temporary directory for execution
-  const tempDir = path.join(workingDir, 'temp');
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-  }
-  
-  // Create a unique temporary file for execution
-  const tempFile = path.join(tempDir, `node-exec-${Date.now()}-${Math.random().toString(36).substring(2)}.mjs`);
+  const executionWorkingDir = customWorkingDir || workingDir;
   
   try {
-    // Write the code directly to the file - no wrapping
-    fs.writeFileSync(tempFile, code, 'utf8');
-    
     return new Promise((resolve) => {
-      // Execute with Node.js and capture all output
-      const nodeProcess = exec(
-        `node --experimental-modules --no-warnings ${tempFile}`,
-        { 
-          cwd: workingDir,
-          timeout,
-          env: process.env
-        }
-      );
+      // Spawn Node.js process with stdin piping instead of a temp file
+      const nodeProcess = spawn('node', ['--input-type=module'], { 
+        cwd: executionWorkingDir,
+        timeout,
+        env: process.env
+      });
       
       let stdout = '';
       let stderr = '';
@@ -104,13 +89,6 @@ const executeCode = async (code, timeout = 5000, workingDir = defaultWorkingDir)
         // Calculate execution time
         const executionTimeMs = Date.now() - startTime;
         
-        // Clean up temporary file
-        try {
-          fs.unlinkSync(tempFile);
-        } catch (err) {
-          console.error(`Failed to clean up temporary file: ${err.message}`);
-        }
-        
         resolve({
           success: code === 0,
           stdout,
@@ -121,19 +99,16 @@ const executeCode = async (code, timeout = 5000, workingDir = defaultWorkingDir)
       });
       
       nodeProcess.on('error', (err) => {
-        // Clean up temporary file
-        try {
-          fs.unlinkSync(tempFile);
-        } catch (cleanupErr) {
-          console.error(`Failed to clean up temporary file: ${cleanupErr.message}`);
-        }
-        
         resolve({
           success: false,
           error: err.message,
           executionTimeMs: Date.now() - startTime
         });
       });
+      
+      // Write code to stdin and close
+      nodeProcess.stdin.write(code);
+      nodeProcess.stdin.end();
     });
   } catch (err) {
     return {
@@ -149,14 +124,14 @@ const callToolHandler = async (request) => {
     const { name, arguments: args = {} } = request.params;
     
     if (name === 'execute' || name === 'mcp_mcp_repl_execute') {
-      const { code, timeout = 5000, workingDir = defaultWorkingDir } = args;
+      const { code, timeout = 5000, workingDir: customWorkingDir = null } = args;
       
       if (!code) {
         throw new Error("Missing code argument for execute tool");
       }
       
       // Execute the code with Node.js
-      const result = await executeCode(code, timeout, workingDir);
+      const result = await executeCode(code, timeout, customWorkingDir);
       
       // Create content array with output
       const outputLines = [];
