@@ -162,7 +162,8 @@ export const createServer = () => {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
-    });    server.notification({
+    });
+    server.notification({
       method: "notifications/stderr",
       params: { content: `${shortTimestamp}: A stderr message` },
     });
