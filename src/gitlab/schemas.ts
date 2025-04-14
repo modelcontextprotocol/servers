@@ -232,6 +232,22 @@ export const GitLabMergeRequestSchema = z.object({
   merge_commit_sha: z.string().nullable()
 });
 
+// Note related schemas
+export const GitLabNoteSchema = z.object({
+  id: z.number(),
+  body: z.string(),
+  author: GitLabUserSchema,
+  created_at: z.string(),
+  updated_at: z.string(),
+  system: z.boolean(),
+  noteable_id: z.number(),
+  noteable_type: z.string(),
+  noteable_iid: z.number().nullable(),
+  resolvable: z.boolean().optional(),
+  resolved: z.boolean().optional(),
+  resolved_by: z.any().nullable().optional()
+});
+
 // API Operation Parameter Schemas
 const ProjectParamsSchema = z.object({
   project_id: z.string().describe("Project ID or URL-encoded path") // Changed from owner/repo to match GitLab API
@@ -304,6 +320,12 @@ export const CreateBranchSchema = ProjectParamsSchema.extend({
     .describe("Source branch/commit for new branch")
 });
 
+export const CreateMergeRequestCommentSchema = ProjectParamsSchema.extend({
+  merge_request_iid: z.number().describe("The IID of the merge request"),
+  body: z.string().describe("The content of the comment"),
+  created_at: z.string().optional().describe("Date time string, ISO 8601 formatted")
+});
+
 // Export types
 export type GitLabAuthor = z.infer<typeof GitLabAuthorSchema>;
 export type GitLabFork = z.infer<typeof GitLabForkSchema>;
@@ -317,6 +339,7 @@ export type FileOperation = z.infer<typeof FileOperationSchema>;
 export type GitLabTree = z.infer<typeof GitLabTreeSchema>;
 export type GitLabCommit = z.infer<typeof GitLabCommitSchema>;
 export type GitLabReference = z.infer<typeof GitLabReferenceSchema>;
+export type GitLabNote = z.infer<typeof GitLabNoteSchema>;
 export type CreateRepositoryOptions = z.infer<typeof CreateRepositoryOptionsSchema>;
 export type CreateIssueOptions = z.infer<typeof CreateIssueOptionsSchema>;
 export type CreateMergeRequestOptions = z.infer<typeof CreateMergeRequestOptionsSchema>;
