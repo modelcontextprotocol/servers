@@ -95,6 +95,15 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `ref` (optional string): Source branch/commit for new branch
    - Returns: Created branch reference
 
+10. `create_merge_request_comment`
+   - Create a new comment on a merge request
+   - Inputs:
+     - `project_id` (string): Project ID or URL-encoded path
+     - `merge_request_iid` (number): The IID of the merge request
+     - `body` (string): The content of the comment
+     - `created_at` (optional string): Date time string, ISO 8601 formatted
+   - Returns: Created comment details
+
 ## Setup
 
 ### Personal Access Token
@@ -112,7 +121,7 @@ Add the following to your `claude_desktop_config.json`:
 #### Docker
 ```json
 {
-  "mcpServers": { 
+  "mcpServers": {
     "gitlab": {
       "command": "docker",
       "args": [

@@ -20,6 +20,7 @@ import {
   GitLabSearchResponseSchema,
   GitLabTreeSchema,
   GitLabCommitSchema,
+  GitLabNoteSchema,
   CreateRepositoryOptionsSchema,
   CreateIssueOptionsSchema,
   CreateMergeRequestOptionsSchema,
@@ -31,6 +32,7 @@ import {
   PushFilesSchema,
   CreateIssueSchema,
   CreateMergeRequestSchema,
+  CreateMergeRequestCommentSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
   type GitLabFork,
@@ -43,6 +45,7 @@ import {
   type GitLabSearchResponse,
   type GitLabTree,
   type GitLabCommit,
+  type GitLabNote,
   type FileOperation,
 } from './schemas.js';
 
@@ -151,7 +154,7 @@ async function getFileContents(
   }
 
   const data = GitLabContentSchema.parse(await response.json());
-  
+
   if (!Array.isArray(data) && data.content) {
     data.content = Buffer.from(data.content, 'base64').toString('utf8');
   }
@@ -216,6 +219,35 @@ async function createMergeRequest(
   }
 
   return GitLabMergeRequestSchema.parse(await response.json());
+}
+
+async function createMergeRequestComment(
+  projectId: string,
+  mergeRequestIid: number,
+  body: string,
+  createdAt?: string
+): Promise<GitLabNote> {
+  const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/merge_requests/${mergeRequestIid}/notes`;
+
+  const requestBody: Record<string, any> = { body };
+  if (createdAt) {
+    requestBody.created_at = createdAt;
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(requestBody)
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitLab API error: ${response.statusText}`);
+  }
+
+  return GitLabNoteSchema.parse(await response.json());
 }
 
 async function createOrUpdateFile(
@@ -414,6 +446,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(CreateMergeRequestSchema)
       },
       {
+        name: "create_merge_request_comment",
+        description: "Create a new comment on a merge request in a GitLab project",
+        inputSchema: zodToJsonSchema(CreateMergeRequestCommentSchema)
+      },
+      {
         name: "fork_repository",
         description: "Fork a GitLab project to your account or specified namespace",
         inputSchema: zodToJsonSchema(ForkRepositorySchema)
@@ -509,6 +546,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { project_id, ...options } = args;
         const mergeRequest = await createMergeRequest(project_id, options);
         return { content: [{ type: "text", text: JSON.stringify(mergeRequest, null, 2) }] };
+      }
+
+      case "create_merge_request_comment": {
+        const args = CreateMergeRequestCommentSchema.parse(request.params.arguments);
+        const comment = await createMergeRequestComment(
+          args.project_id,
+          args.merge_request_iid,
+          args.body,
+          args.created_at
+        );
+        return { content: [{ type: "text", text: JSON.stringify(comment, null, 2) }] };
       }
 
       default:
