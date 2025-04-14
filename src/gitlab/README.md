@@ -104,6 +104,17 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `created_at` (optional string): Date time string, ISO 8601 formatted
    - Returns: Created comment details
 
+11. `get_merge_request_changes`
+   - Get the changes (diffs) of a merge request
+   - Implementation:
+     - First tries to get the latest version of the merge request using the versions API
+     - Then gets the detailed diff for that version
+     - Falls back to the direct changes API if the versions approach fails
+   - Inputs:
+     - `project_id` (string): Project ID or URL-encoded path
+     - `merge_request_iid` (number): The IID of the merge request
+   - Returns: Merge request changes including diffs and merge request details
+
 ## Setup
 
 ### Personal Access Token

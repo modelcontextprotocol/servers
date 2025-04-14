@@ -21,6 +21,9 @@ import {
   GitLabTreeSchema,
   GitLabCommitSchema,
   GitLabNoteSchema,
+  GitLabMergeRequestChangesSchema,
+  GitLabMergeRequestVersionSchema,
+  GitLabMergeRequestVersionDetailSchema,
   CreateRepositoryOptionsSchema,
   CreateIssueOptionsSchema,
   CreateMergeRequestOptionsSchema,
@@ -33,6 +36,7 @@ import {
   CreateIssueSchema,
   CreateMergeRequestSchema,
   CreateMergeRequestCommentSchema,
+  GetMergeRequestChangesSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
   type GitLabFork,
@@ -46,6 +50,9 @@ import {
   type GitLabTree,
   type GitLabCommit,
   type GitLabNote,
+  type GitLabMergeRequestChanges,
+  type GitLabMergeRequestVersion,
+  type GitLabMergeRequestVersionDetail,
   type FileOperation,
 } from './schemas.js';
 
@@ -250,6 +257,94 @@ async function createMergeRequestComment(
   return GitLabNoteSchema.parse(await response.json());
 }
 
+async function getMergeRequestVersions(
+  projectId: string,
+  mergeRequestIid: number
+): Promise<GitLabMergeRequestVersion[]> {
+  const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/merge_requests/${mergeRequestIid}/versions`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitLab API error: ${response.statusText}`);
+  }
+
+  return z.array(GitLabMergeRequestVersionSchema).parse(await response.json());
+}
+
+async function getMergeRequestVersionDetail(
+  projectId: string,
+  mergeRequestIid: number,
+  versionId: number
+): Promise<GitLabMergeRequestVersionDetail> {
+  const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/merge_requests/${mergeRequestIid}/versions/${versionId}`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitLab API error: ${response.statusText}`);
+  }
+
+  return GitLabMergeRequestVersionDetailSchema.parse(await response.json());
+}
+
+async function getMergeRequestChanges(
+  projectId: string,
+  mergeRequestIid: number
+): Promise<GitLabMergeRequestChanges> {
+  try {
+    // 首先获取合并请求的版本列表
+    const versions = await getMergeRequestVersions(projectId, mergeRequestIid);
+
+    if (versions.length === 0) {
+      throw new Error(`No versions found for merge request ${mergeRequestIid}`);
+    }
+
+    // 获取最新版本的详细信息
+    const latestVersion = versions[0]; // 版本按时间降序排列，第一个是最新的
+    const versionDetail = await getMergeRequestVersionDetail(projectId, mergeRequestIid, latestVersion.id);
+
+    // 构建返回结果
+    const changes = versionDetail.diffs || [];
+
+    return {
+      changes
+    };
+  } catch (error) {
+    // 如果上述方法失败，回退到直接获取变更的方法
+    console.error("Error getting merge request changes using versions API:", error);
+    console.log("Falling back to direct changes API...");
+
+    const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/merge_requests/${mergeRequestIid}/changes`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitLab API error: ${response.statusText}`);
+    }
+
+    return GitLabMergeRequestChangesSchema.parse(await response.json());
+  }
+}
+
 async function createOrUpdateFile(
   projectId: string,
   filePath: string,
@@ -451,6 +546,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(CreateMergeRequestCommentSchema)
       },
       {
+        name: "get_merge_request_changes",
+        description: "Get the changes (diffs) of a merge request in a GitLab project",
+        inputSchema: zodToJsonSchema(GetMergeRequestChangesSchema)
+      },
+      {
         name: "fork_repository",
         description: "Fork a GitLab project to your account or specified namespace",
         inputSchema: zodToJsonSchema(ForkRepositorySchema)
@@ -557,6 +657,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args.created_at
         );
         return { content: [{ type: "text", text: JSON.stringify(comment, null, 2) }] };
+      }
+
+      case "get_merge_request_changes": {
+        const args = GetMergeRequestChangesSchema.parse(request.params.arguments);
+        const changes = await getMergeRequestChanges(
+          args.project_id,
+          args.merge_request_iid
+        );
+        return { content: [{ type: "text", text: JSON.stringify(changes, null, 2) }] };
       }
 
       default:
