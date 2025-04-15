@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -233,26 +235,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 });
 
-// Start the server
-async function main() {
+// Set up Redis event handlers
+redisClient.on('error', (err: Error) => {
+    console.error('Redis Client Error:', err);
+});
+
+redisClient.on('connect', () => {
+    console.error(`Connected to Redis at ${REDIS_URL}`);
+});
+
+redisClient.on('reconnecting', () => {
+    console.error('Attempting to reconnect to Redis...');
+});
+
+redisClient.on('end', () => {
+    console.error('Redis connection closed');
+});
+
+async function runServer() {
     try {
-        // Set up Redis event handlers
-        redisClient.on('error', (err: Error) => {
-            console.error('Redis Client Error:', err);
-        });
-
-        redisClient.on('connect', () => {
-            console.error(`Connected to Redis at ${REDIS_URL}`);
-        });
-
-        redisClient.on('reconnecting', () => {
-            console.error('Attempting to reconnect to Redis...');
-        });
-
-        redisClient.on('end', () => {
-            console.error('Redis connection closed');
-        });
-
         // Connect to Redis
         await redisClient.connect();
 
@@ -261,26 +262,21 @@ async function main() {
         await server.connect(transport);
         console.error("Redis MCP Server running on stdio");
     } catch (error) {
-        console.error("Error during startup:", error);
-        await cleanup();
+        console.error("Fatal error running server:", error);
+        await redisClient.quit().catch(() => {});
+        process.exit(1);
     }
-}
-
-// Cleanup function
-async function cleanup() {
-    try {
-        await redisClient.quit();
-    } catch (error) {
-        console.error("Error during cleanup:", error);
-    }
-    process.exit(1);
 }
 
 // Handle process termination
-process.on('SIGINT', cleanup);
-process.on('SIGTERM', cleanup);
-
-main().catch((error) => {
-    console.error("Fatal error in main():", error);
-    cleanup();
+process.on('SIGINT', async () => {
+    await redisClient.quit().catch(() => {});
+    process.exit(0);
 });
+
+process.on('SIGTERM', async () => {
+    await redisClient.quit().catch(() => {});
+    process.exit(0);
+});
+
+runServer();
