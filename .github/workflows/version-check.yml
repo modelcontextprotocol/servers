@@ -1,0 +1,30 @@
+name: Version Consistency Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  release:
+    types: [published]
+
+jobs:
+  github:
+    name: Check GitHub server version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version consistency
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./src/github/package.json').version")
+          TS_VERSION=$(grep -o '".*"' ./src/github/common/version.ts | tr -d '"')
+
+          if [ "$PACKAGE_VERSION" != "$TS_VERSION" ]; then
+            echo "::error::Version mismatch detected!"
+            echo "::error::package.json version: $PACKAGE_VERSION"
+            echo "::error::version.ts version: $TS_VERSION"
+            exit 1
+          else
+            echo "✅ Versions match: $PACKAGE_VERSION"
+          fi

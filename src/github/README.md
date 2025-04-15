@@ -1,5 +1,9 @@
 # GitHub MCP Server
 
+**Deprecation Notice:** Development for this project has been moved to GitHub in the http://github.com/github/github-mcp-server repo.
+
+---
+
 MCP Server for the GitHub API, enabling file operations, repository management, search functionality, and more.
 
 ### Features
