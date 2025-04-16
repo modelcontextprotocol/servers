@@ -368,7 +368,7 @@ async def main(db_path: str):
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error: {str(e)}")]
 
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+    async with stdio_server() as (read_stream, write_stream):
         logger.info("Server running with stdio transport")
         await server.run(
             read_stream,
@@ -384,10 +384,10 @@ async def main(db_path: str):
         )
 
 class ServerWrapper():
-    
-    async def run(self):
+    """A wrapper to compat with mcp[cli]"""
+    def run(self):
         import asyncio
         asyncio.run(main("test.db"))
 
 
-server = ServerWrapper()
+wrapper = ServerWrapper()

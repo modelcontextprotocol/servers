@@ -114,7 +114,8 @@ docker build -t mcp/sqlite .
 ## Test with MCP inspector
 
 ```bash
-mcp dev main.py:server 
+uv add "mcp[cli]"
+mcp dev src/mcp_server_sqlite/server.py:wrapper  
 ```
 
 ## License
