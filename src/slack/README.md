@@ -217,6 +217,12 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 }
 ```
 
+### Environment Variables
+
+1. `SLACK_BOT_TOKEN`: Required. The Bot User OAuth Token starting with `xoxb-`.
+2. `SLACK_TEAM_ID`: Required. Your Slack workspace ID starting with `T`.
+3. `SLACK_CHANNEL_IDS`: Optional. Comma-separated list of channel IDs to limit channel access (e.g., "C01234567, C76543210"). If not set, all public channels will be listed.
+
 ### Troubleshooting
 
 If you encounter permission errors, verify that:
