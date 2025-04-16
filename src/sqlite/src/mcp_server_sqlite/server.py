@@ -12,6 +12,7 @@ from mcp.server.lowlevel import Server, NotificationOptions
 from mcp.server.stdio import stdio_server
 import mcp.types as types
 
+
 # reconfigure UnicodeEncodeError prone default (i.e. windows-1252) to utf-8
 if sys.platform == "win32" and os.environ.get('PYTHONIOENCODING') is None:
     sys.stdin.reconfigure(encoding="utf-8")
@@ -102,7 +103,6 @@ The provided XML tags are for the assistants understanding. Implore to make all 
 Start your first message fully in character with something like "Oh, Hey there! I see you've chosen the topic {topic}. Let's get started! 🚀"
 """
 
-
 class SqliteDatabase:
     def __init__(self, db_path: str):
         self.db_path = str(Path(db_path).expanduser())
@@ -161,7 +161,6 @@ class SqliteDatabase:
             logger.error(f"Database error executing query: {e}")
             raise
 
-
 async def main(db_path: str):
     logger.info(f"Starting SQLite MCP Server with DB path: {db_path}")
 
@@ -216,8 +215,7 @@ async def main(db_path: str):
 
     @server.get_prompt()
     async def handle_get_prompt(name: str, arguments: dict[str, str] | None) -> types.GetPromptResult:
-        logger.debug(
-            f"Handling get_prompt request for {name} with args {arguments}")
+        logger.debug(f"Handling get_prompt request for {name} with args {arguments}")
         if name != "mcp-demo":
             logger.error(f"Unknown prompt: {name}")
             raise ValueError(f"Unknown prompt: {name}")
@@ -235,8 +233,7 @@ async def main(db_path: str):
             messages=[
                 types.PromptMessage(
                     role="user",
-                    content=types.TextContent(
-                        type="text", text=prompt.strip()),
+                    content=types.TextContent(type="text", text=prompt.strip()),
                 )
             ],
         )
@@ -347,22 +344,19 @@ async def main(db_path: str):
 
             if name == "read_query":
                 if not arguments["query"].strip().upper().startswith("SELECT"):
-                    raise ValueError(
-                        "Only SELECT queries are allowed for read_query")
+                    raise ValueError("Only SELECT queries are allowed for read_query")
                 results = db._execute_query(arguments["query"])
                 return [types.TextContent(type="text", text=str(results))]
 
             elif name == "write_query":
                 if arguments["query"].strip().upper().startswith("SELECT"):
-                    raise ValueError(
-                        "SELECT queries are not allowed for write_query")
+                    raise ValueError("SELECT queries are not allowed for write_query")
                 results = db._execute_query(arguments["query"])
                 return [types.TextContent(type="text", text=str(results))]
 
             elif name == "create_table":
                 if not arguments["query"].strip().upper().startswith("CREATE TABLE"):
-                    raise ValueError(
-                        "Only CREATE TABLE statements are allowed")
+                    raise ValueError("Only CREATE TABLE statements are allowed")
                 db._execute_query(arguments["query"])
                 return [types.TextContent(type="text", text="Table created successfully")]
 
@@ -374,7 +368,7 @@ async def main(db_path: str):
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error: {str(e)}")]
 
-    async with stdio_server() as (read_stream, write_stream):
+    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         logger.info("Server running with stdio transport")
         await server.run(
             read_stream,
@@ -389,10 +383,8 @@ async def main(db_path: str):
             ),
         )
 
-
 class ServerWrapper():
-    """A helper class which allows you to go with `mcp run` or `mcp dev`"""
-
+    
     async def run(self):
         import asyncio
         asyncio.run(main("test.db"))
