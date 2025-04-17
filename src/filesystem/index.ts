@@ -14,6 +14,7 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
+import { validateBitcoinFile } from '@anya-core/security';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -645,3 +646,13 @@ runServer().catch((error) => {
   console.error("Fatal error running server:", error);
   process.exit(1);
 });
+
+// Add Bitcoin-specific file validation
+const BITCOIN_DATA_DIR = process.env.BITCOIN_DATA_DIR || '/var/bitcoin';
+
+async function validateBitcoinFile(filePath: string) {
+  if (!filePath.startsWith(BITCOIN_DATA_DIR)) {
+    throw new Error('Unauthorized Bitcoin data access');
+  }
+  // Existing validation logic
+}
