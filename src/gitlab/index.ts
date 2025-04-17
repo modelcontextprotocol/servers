@@ -761,24 +761,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: JSON.stringify(changes, null, 2) }] };
       }
 
-        case "get_project_id_from_mr_url": {
-            const args = GetProjectIdFromMrUrlInputSchema.parse(request.params.arguments);
-            const projectId = await getProjectIdFromMrUrl(args.mr_url);
-            const result: GetProjectIdFromMrUrlOutput = { project_id: projectId };
-            return { content: [{ type: "json", json: result }] }; // Return JSON directly
-        }
+      case "get_project_id_from_mr_url": {
+        const args = GetProjectIdFromMrUrlInputSchema.parse(request.params.arguments);
+        const projectId = await getProjectIdFromMrUrl(args.mr_url);
+        const result: GetProjectIdFromMrUrlOutput = { project_id: projectId };
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }; // Return stringified JSON as text
+      }
 
-        case "create_merge_request_diff_thread": {
-            const args = CreateMergeRequestDiffThreadSchema.parse(request.params.arguments);
-            const discussion = await createMergeRequestDiffThread(
-                args.project_id,
-                args.merge_request_iid,
-                args.body,
-                args.position,
-                args.commit_id // Pass commit_id although the function might not use it directly yet
-            );
-            return { content: [{ type: "text", text: JSON.stringify(discussion, null, 2) }] };
-        }
+      case "create_merge_request_diff_thread": {
+        const args = CreateMergeRequestDiffThreadSchema.parse(request.params.arguments);
+        const discussion = await createMergeRequestDiffThread(
+          args.project_id,
+          args.merge_request_iid,
+          args.body,
+          args.position,
+          args.commit_id // Pass commit_id although the function might not use it directly yet
+        );
+        return { content: [{ type: "text", text: JSON.stringify(discussion, null, 2) }] };
+      }
 
       default:
         throw new Error(`Unknown tool: ${request.params.name}`);
