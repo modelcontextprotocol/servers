@@ -281,6 +281,48 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
 
+27. `list_sub_issues`
+   - Get a list of sub-issues of a given issue
+   - Inputs:
+      - `owner` (string): Repository owner
+      - `repo` (string): Repository name
+      - `issue_number` (number) number of the issue
+      - `page` (optional number): Page number
+      - `per_page` (optional number): Results per page
+   - Returns: Array of issue details
+
+26. `reprioritize_sub_issue`
+   - Reorder sub_issue
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `pull_number` (number): Pull request number
+     - `issue_number` (number) number of the issue
+     - `sub_issue_id` (number) The id of the sub-issue to reprioritize
+     - `after_id` (number) The id of the sub-issue to be prioritized after (either positional argument after OR before should be specified).
+     - `before_id` (number) The id of the sub-issue to be prioritized before (either positional argument after OR before should be specified).
+   - Returns: sub-issue details
+
+26. `remove_sub_issue`
+   - Remove sub_issue from issue
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `pull_number` (number): Pull request number
+     - `issue_number` (number) number of the issue
+     - `sub_issue_id` (number) The id of the sub-issue to be removed
+   - Returns: sub-issue details
+
+26. `add_sub_issue`
+   - Get the reviews on a pull request
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `pull_number` (number): Pull request number
+     - `issue_number` (number) number of the issue
+     - `sub_issue_id` (number) The id of the issue to be added as sub-issue
+   - Returns: sub-issue details
+
 ## Search Query Syntax
 
 ### Code Search

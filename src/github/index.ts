@@ -200,6 +200,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_pull_request_reviews",
         description: "Get the reviews on a pull request",
         inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema)
+      },
+      {
+        name: "list_sub_issues",
+        description: "List sub issues of an issue",
+        inputSchema: zodToJsonSchema(issues.ListSubIssuesOptionsSchema)
+      },
+      {
+        name: "reprioritize_sub_issue",
+        description: "Reprioritize a sub issue of an issue, make sure to specify either after_id or before_id, not both",
+        inputSchema: zodToJsonSchema(issues.ReprioritizeSubIssueOptionsSchema)
+      },
+      {
+        name: "remove_sub_issue",
+        description: "Remove a sub issue of an issue, sub_issue_id is the id of the issue to be removed not the issue number",
+        inputSchema: zodToJsonSchema(issues.RemoveSubIssueOptionsSchema)
+      },
+      {
+        name: "add_sub_issue",
+        description: "Add a sub issue to an issue, sub_issue_id is the id of the issue to be added as sub-issue not the issue number",
+        inputSchema: zodToJsonSchema(issues.AddSubIssueOptionsSchema)
       }
     ],
   };
@@ -488,6 +508,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const reviews = await pulls.getPullRequestReviews(args.owner, args.repo, args.pull_number);
         return {
           content: [{ type: "text", text: JSON.stringify(reviews, null, 2) }],
+        };
+      }
+
+      case "list_sub_issues": {
+        const args = issues.ListSubIssuesOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number, ...options } = args;
+        const result = await issues.listSubIssues(owner, repo, issue_number, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "reprioritize_sub_issue": {
+        const args = issues.ReprioritizeSubIssueOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number, ...options } = args;
+        const result = await issues.reprioritizeSubIssue(owner, repo, issue_number, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "remove_sub_issue": {
+        const args = issues.RemoveSubIssueOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number,  ...options  } = args;
+        const result = await issues.removeSubIssue(owner, repo, issue_number, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "add_sub_issue": {
+        const args = issues.AddSubIssueOptionsSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number, ...options } = args;
+        const result = await issues.addSubIssue(owner, repo, issue_number, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       }
 
