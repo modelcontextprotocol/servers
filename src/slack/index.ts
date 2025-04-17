@@ -583,6 +583,21 @@ async function main() {
             };
           }
 
+          case "slack_search_messages": {
+            const args = request.params.arguments as unknown as SearchMessagesArgs;
+            if (!args.query) {
+              throw new Error("Missing required argument: query");
+            }
+            const response = await slackClient.searchMessages(
+              args.query,
+              args.count,
+              args.cursor
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
           default:
             throw new Error(`Unknown tool: ${request.params.name}`);
         }
