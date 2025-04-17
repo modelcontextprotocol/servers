@@ -42,6 +42,27 @@ After installation, you can run it as a script using:
 python -m mcp_server_fetch
 ```
 
+### Using ToolHive
+
+Alternatively you can run the `fetch` MCP using [ToolHive](https://github.com/StacklokLabs/toolhive).
+
+```
+thv run fetch
+```
+
+After the server has started, ToolHive will automatically configure supported Clients (that support SSE) with the relevant MCP Server information.
+
+Cursor MCP Settings Example:
+```json
+{
+	"mcpServers": {
+		"fetch": {
+			"url": "http://localhost:45643/sse#fetch"
+		}
+	}
+}
+```
+
 ## Configuration
 
 ### Configure for Claude.app
