@@ -39,6 +39,9 @@ import {
   GetMergeRequestChangesSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
+  GetProjectIdFromMrUrlInputSchema,
+  GetProjectIdFromMrUrlOutputSchema,
+  CreateMergeRequestDiffThreadSchema,
   type GitLabFork,
   type GitLabReference,
   type GitLabRepository,
@@ -54,6 +57,9 @@ import {
   type GitLabMergeRequestVersion,
   type GitLabMergeRequestVersionDetail,
   type FileOperation,
+  type GetProjectIdFromMrUrlInput,
+  type GetProjectIdFromMrUrlOutput,
+  type CreateMergeRequestDiffThreadInput,
 } from './schemas.js';
 
 const server = new Server({
@@ -486,6 +492,98 @@ async function createRepository(
   return GitLabRepositorySchema.parse(await response.json());
 }
 
+// Helper function to parse MR URL and get project ID
+async function getProjectIdFromMrUrl(mrUrl: string): Promise<number> {
+  let url: URL;
+  try {
+    url = new URL(mrUrl);
+  } catch (e) {
+    throw new Error(`Invalid MR URL format: ${mrUrl}`);
+  }
+
+  const pathParts = url.pathname.split('/').filter(part => part && part !== '-');
+
+  if (pathParts.length < 4 || pathParts[pathParts.length - 2] !== 'merge_requests') {
+    throw new Error(`Could not parse namespace and project path from MR URL: ${mrUrl}`);
+  }
+
+  // Find the index of 'merge_requests'
+  const mrIndex = pathParts.lastIndexOf('merge_requests');
+  if (mrIndex < 2) { // Need at least namespace and project before 'merge_requests'
+      throw new Error(`Could not parse namespace and project path from MR URL: ${mrUrl}`);
+  }
+
+  // Join parts before 'merge_requests' to get the full path with namespace
+  const projectPathWithNamespace = pathParts.slice(0, mrIndex).join('/');
+  const encodedProjectPath = encodeURIComponent(projectPathWithNamespace);
+
+  const apiUrl = `${GITLAB_API_URL}/projects/${encodedProjectPath}`;
+
+  const response = await fetch(apiUrl, {
+    headers: {
+      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+    }
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error(`Project not found for path: ${projectPathWithNamespace}`);
+    }
+    throw new Error(`GitLab API error (${response.status}): ${response.statusText}`);
+  }
+
+  const project = GitLabRepositorySchema.parse(await response.json());
+  return project.id;
+}
+
+// Function to create a diff thread on an MR
+async function createMergeRequestDiffThread(
+  projectId: string,
+  mergeRequestIid: number,
+  body: string,
+  position: CreateMergeRequestDiffThreadInput['position'], // Use the inferred type
+  commitId?: string // Optional commit ID
+): Promise<any> { // Define a proper response schema if available, using 'any' for now
+  const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/merge_requests/${mergeRequestIid}/discussions`;
+
+  const requestBody: any = {
+    body,
+    position: {
+      position_type: position.position_type,
+      base_sha: position.base_sha,
+      start_sha: position.start_sha,
+      head_sha: position.head_sha,
+      old_path: position.old_path,
+      new_path: position.new_path,
+      new_line: position.new_line,
+      ...(position.old_line !== undefined && { old_line: position.old_line }), // Include old_line only if present
+    }
+  };
+
+  // Note: GitLab API for creating discussion with position usually infers context from SHAs.
+  // Explicit commit_id might be handled differently or might not be needed if position SHAs are correct.
+  // Sticking to the documented 'position' object structure for now.
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(requestBody)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("GitLab API Error Response:", errorText);
+    throw new Error(`GitLab API error (${response.status}): ${response.statusText}. Details: ${errorText}`);
+  }
+
+  // Assuming the response is the created discussion object
+  return await response.json();
+}
+
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -543,6 +641,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_branch",
         description: "Create a new branch in a GitLab project",
         inputSchema: zodToJsonSchema(CreateBranchSchema)
+      },
+      {
+        name: "get_project_id_from_mr_url",
+        description: "Parses a GitLab Merge Request URL to find and return the corresponding project ID",
+        inputSchema: zodToJsonSchema(GetProjectIdFromMrUrlInputSchema),
+        outputSchema: zodToJsonSchema(GetProjectIdFromMrUrlOutputSchema)
+      },
+      {
+        name: "create_merge_request_diff_thread",
+        description: "Create a new diff thread (comment) on a GitLab Merge Request",
+        inputSchema: zodToJsonSchema(CreateMergeRequestDiffThreadSchema)
       }
     ]
   };
@@ -651,6 +760,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
         return { content: [{ type: "text", text: JSON.stringify(changes, null, 2) }] };
       }
+
+        case "get_project_id_from_mr_url": {
+            const args = GetProjectIdFromMrUrlInputSchema.parse(request.params.arguments);
+            const projectId = await getProjectIdFromMrUrl(args.mr_url);
+            const result: GetProjectIdFromMrUrlOutput = { project_id: projectId };
+            return { content: [{ type: "json", json: result }] }; // Return JSON directly
+        }
+
+        case "create_merge_request_diff_thread": {
+            const args = CreateMergeRequestDiffThreadSchema.parse(request.params.arguments);
+            const discussion = await createMergeRequestDiffThread(
+                args.project_id,
+                args.merge_request_iid,
+                args.body,
+                args.position,
+                args.commit_id // Pass commit_id although the function might not use it directly yet
+            );
+            return { content: [{ type: "text", text: JSON.stringify(discussion, null, 2) }] };
+        }
 
       default:
         throw new Error(`Unknown tool: ${request.params.name}`);
