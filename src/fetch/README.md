@@ -44,7 +44,7 @@ python -m mcp_server_fetch
 
 ### Using ToolHive
 
-Alternatively you can run the `fetch` MCP using [ToolHive](https://github.com/StacklokLabs/toolhive).
+Alternatively you can run the `fetch` MCP using [ToolHive](https://github.com/StacklokLabs/toolhive) which utilises a container runtime (Docker, Podman)
 
 ```
 thv run fetch
