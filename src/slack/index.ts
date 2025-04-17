@@ -56,6 +56,13 @@ interface SearchMessagesArgs {
   cursor?: string;
 }
 
+interface SearchContextArgs {
+  token?: string;
+  text: string;
+  cursor?: string;
+  limit?: number;
+}
+
 // Tool definitions
 const listChannelsTool: Tool = {
   name: "slack_list_channels",
@@ -237,6 +244,30 @@ const searchMessagesTool: Tool = {
       }
     },
     required: ["query"]
+  }
+};
+
+const searchContextTool: Tool = {
+  name: "slack_search_context",
+  description: "Search for contextual information to assist with Slack workspace queries",
+  inputSchema: {
+    type: "object",
+    properties: {
+      text: {
+        type: "string",
+        description: "The text to search for context"
+      },
+      limit: {
+        type: "number",
+        description: "Maximum number of results to return (default 20)",
+        default: 20
+      },
+      cursor: {
+        type: "string",
+        description: "Pagination cursor for next page of results"
+      }
+    },
+    required: ["text"]
   }
 };
 
@@ -427,6 +458,24 @@ async searchMessages(query: string, count: number = 20, cursor?: string): Promis
 
   return response.json();
 }
+
+async searchContext(text: string, limit: number = 20, cursor?: string): Promise<any> {
+  const params = new URLSearchParams({
+    text: text,
+    limit: limit.toString()
+  });
+
+  if (cursor) {
+    params.append("cursor", cursor);
+  }
+
+  const response = await fetch(
+    `https://slack.com/api/assistant.search.context?${params}`,
+    { headers: this.botHeaders }
+  );
+
+  return response.json();
+}
 }
 
 async function main() {
@@ -598,6 +647,21 @@ async function main() {
             };
           }
 
+          case "slack_search_context": {
+            const args = request.params.arguments as unknown as SearchContextArgs;
+            if (!args.text) {
+              throw new Error("Missing required argument: text");
+            }
+            const response = await slackClient.searchContext(
+              args.text,
+              args.limit,
+              args.cursor
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
           default:
             throw new Error(`Unknown tool: ${request.params.name}`);
         }
@@ -629,7 +693,8 @@ async function main() {
         getThreadRepliesTool,
         getUsersTool,
         getUserProfileTool,
-        searchMessagesTool,  // Add this line
+        searchMessagesTool,
+        searchContextTool,
       ],
     };
   });
