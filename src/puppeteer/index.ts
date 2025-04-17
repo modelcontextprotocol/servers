@@ -351,17 +351,19 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
     case "puppeteer_evaluate":
       try {
         await page.evaluate(() => {
-          window.mcpHelper = {
-            logs: [],
-            originalConsole: { ...console },
-          };
-
-          ['log', 'info', 'warn', 'error'].forEach(method => {
-            (console as any)[method] = (...args: any[]) => {
-              window.mcpHelper.logs.push(`[${method}] ${args.join(' ')}`);
-              (window.mcpHelper.originalConsole as any)[method](...args);
+          if (!window.mcpHelper) {
+            window.mcpHelper = {
+              logs: [],
+              originalConsole: { ...console },
             };
-          });
+  
+            ['log', 'info', 'warn', 'error'].forEach(method => {
+              (console as any)[method] = (...args: any[]) => {
+                window.mcpHelper.logs.push(`[${method}] ${args.join(' ')}`);
+                (window.mcpHelper.originalConsole as any)[method](...args);
+              };
+            });
+          }
         });
 
         const result = await page.evaluate(args.script);
