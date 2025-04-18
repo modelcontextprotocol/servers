@@ -21,11 +21,14 @@ const redisClient = createClient({
     socket: {
         reconnectStrategy: (retries) => {
             if (retries >= MAX_RETRIES) {
-                console.error(`Maximum retries (${MAX_RETRIES}) reached. Giving up.`);
+                console.error(`[Redis Error] Maximum retries (${MAX_RETRIES}) reached. Giving up.`);
+                console.error(`[Redis Error] Connection: ${REDIS_URL}`);
                 return new Error('Max retries reached');
             }
             const delay = Math.min(Math.pow(2, retries) * MIN_RETRY_DELAY, MAX_RETRY_DELAY);
-            console.error(`Reconnection attempt ${retries + 1}/${MAX_RETRIES} in ${delay}ms`);
+            console.error(`[Redis Retry] Attempt ${retries + 1}/${MAX_RETRIES} failed`);
+            console.error(`[Redis Retry] Next attempt in ${delay}ms`);
+            console.error(`[Redis Retry] Connection: ${REDIS_URL}`);
             return delay;
         }
     }
@@ -237,19 +240,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // Set up Redis event handlers
 redisClient.on('error', (err: Error) => {
-    console.error('Redis Client Error:', err);
+    console.error(`[Redis Error] ${err.name}: ${err.message}`);
+    console.error(`[Redis Error] Connection: ${REDIS_URL}`);
+    console.error(`[Redis Error] Stack: ${err.stack}`);
 });
 
 redisClient.on('connect', () => {
-    console.error(`Connected to Redis at ${REDIS_URL}`);
+    console.error(`[Redis Connected] Successfully connected to ${REDIS_URL}`);
 });
 
 redisClient.on('reconnecting', () => {
-    console.error('Attempting to reconnect to Redis...');
+    console.error('[Redis Reconnecting] Connection lost, attempting to reconnect...');
 });
 
 redisClient.on('end', () => {
-    console.error('Redis connection closed');
+    console.error('[Redis Disconnected] Connection closed');
 });
 
 async function runServer() {
@@ -262,7 +267,11 @@ async function runServer() {
         await server.connect(transport);
         console.error("Redis MCP Server running on stdio");
     } catch (error) {
-        console.error("Fatal error running server:", error);
+        const err = error as Error;
+        console.error("[Redis Fatal] Server initialization failed");
+        console.error(`[Redis Fatal] Error: ${err.name}: ${err.message}`);
+        console.error(`[Redis Fatal] Connection: ${REDIS_URL}`);
+        console.error(`[Redis Fatal] Stack: ${err.stack}`);
         await redisClient.quit().catch(() => {});
         process.exit(1);
     }
