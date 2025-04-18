@@ -19,7 +19,12 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
    - Returns: Message posting confirmation and timestamp
 
 3. `slack_update_message`
-(placeholder for now)
+   - Update the text of an existing message in a Slack channel
+   - Required inputs:
+     - `channel_id` (string): The channel containing the message
+     - `timestamp` (string): Message timestamp to update in format '1234567890.123456'
+     - `text` (string): The new text for the message
+   - Returns: Message update confirmation and timestamp
 
 4. `slack_delete_message`
    - Delete a message from a Slack channel
