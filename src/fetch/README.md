@@ -52,10 +52,12 @@ Add to your Claude settings:
 <summary>Using uvx</summary>
 
 ```json
-"mcpServers": {
-  "fetch": {
-    "command": "uvx",
-    "args": ["mcp-server-fetch"]
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    }
   }
 }
 ```
@@ -65,10 +67,12 @@ Add to your Claude settings:
 <summary>Using docker</summary>
 
 ```json
-"mcpServers": {
-  "fetch": {
-    "command": "docker",
-    "args": ["run", "-i", "--rm", "mcp/fetch"]
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "mcp/fetch"]
+    }
   }
 }
 ```
@@ -78,10 +82,12 @@ Add to your Claude settings:
 <summary>Using pip installation</summary>
 
 ```json
-"mcpServers": {
-  "fetch": {
-    "command": "python",
-    "args": ["-m", "mcp_server_fetch"]
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "python",
+      "args": ["-m", "mcp_server_fetch"]
+    }
   }
 }
 ```
