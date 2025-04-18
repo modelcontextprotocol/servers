@@ -5,14 +5,16 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
+  ListResourcesRequestSchema,
   ListToolsRequestSchema,
+  ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs";
 import { google } from "googleapis";
 import path from "path";
 import { fileURLToPath } from 'url';
 import dotenv from "dotenv";
-dotenv.config({path:'Path to your .env file'});
+dotenv.config();
 
 const drive = google.drive("v3");
 
@@ -28,6 +30,106 @@ const server = new Server(
     },
   },
 );
+
+
+server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
+  const pageSize = 10;
+  const params: any = {
+    pageSize,
+    fields: "nextPageToken, files(id, name, mimeType)",
+  };
+
+  if (request.params?.cursor) {
+    params.pageToken = request.params.cursor;
+  }
+
+  const res = await drive.files.list(params);
+  const files = res.data.files!;
+
+  return {
+    resources: files.map((file) => ({
+      uri: `gdrive:///${file.id}`,
+      mimeType: file.mimeType,
+      name: file.name,
+    })),
+    nextCursor: res.data.nextPageToken,
+  };
+});
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const fileId = request.params.uri.replace("gdrive:///", "");
+
+  // First get file metadata to check mime type
+  const file = await drive.files.get({
+    fileId,
+    fields: "mimeType",
+  });
+
+  // For Google Docs/Sheets/etc we need to export
+  if (file.data.mimeType?.startsWith("application/vnd.google-apps")) {
+    let exportMimeType: string;
+    switch (file.data.mimeType) {
+      case "application/vnd.google-apps.document":
+        exportMimeType = "text/markdown";
+        break;
+      case "application/vnd.google-apps.spreadsheet":
+        exportMimeType = "text/csv";
+        break;
+      case "application/vnd.google-apps.presentation":
+        exportMimeType = "text/plain";
+        break;
+      case "application/vnd.google-apps.drawing":
+        exportMimeType = "image/png";
+        break;
+      default:
+        exportMimeType = "text/plain";
+    }
+
+    const res = await drive.files.export(
+      { fileId, mimeType: exportMimeType },
+      { responseType: "text" },
+    );
+
+    return {
+      contents: [
+        {
+          uri: request.params.uri,
+          mimeType: exportMimeType,
+          text: res.data,
+        },
+      ],
+    };
+  }
+
+  // For regular files download content
+  const res = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "arraybuffer" },
+  );
+  const mimeType = file.data.mimeType || "application/octet-stream";
+  if (mimeType.startsWith("text/") || mimeType === "application/json") {
+    return {
+      contents: [
+        {
+          uri: request.params.uri,
+          mimeType: mimeType,
+          text: Buffer.from(res.data as ArrayBuffer).toString("utf-8"),
+        },
+      ],
+    };
+  } else {
+    return {
+      contents: [
+        {
+          uri: request.params.uri,
+          mimeType: mimeType,
+          blob: Buffer.from(res.data as ArrayBuffer).toString("base64"),
+        },
+      ],
+    };
+  }
+});
+
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -47,7 +149,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
-        name: "gdrive_search",
+        name: "search",
         description: "Search for files in Google Drive",
         inputSchema: {
           type: "object",
@@ -137,7 +239,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
     }
-    else if (request.params.name === "gdrive_search") {
+    else if (request.params.name === "search") {
       const userQuery = request.params.arguments?.query as string;
       if (!userQuery) {
         return {

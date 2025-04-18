@@ -46,7 +46,7 @@ The server provides access to Google Drive files:
 5. [Create an OAuth Client ID](https://console.cloud.google.com/apis/credentials/oauthclient) for application type "Desktop App"
 6. Download the JSON file of your client's OAuth keys
 7. Rename the key file to `gcp-oauth.keys.json` and place into the root of this repo (i.e. `servers/gcp-oauth.keys.json`)
-8. Modify the path to your `.env` file in `dotenv.config()`
+8. Modify the path to your `.env` file in `dotenv.config({path:'Path to your .env file'})`
 9. Add `GDRIVE_DOWNLOAD_DIRECTORY` path to your `.env` file, or replace `/default/output/directory` in the code, as the path to store downloaded files from GDrive.
 
 Make sure to build the server with either `npm run build` or `npm run watch`.
