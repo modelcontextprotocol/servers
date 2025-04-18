@@ -57,10 +57,9 @@ interface SearchMessagesArgs {
 }
 
 interface SearchContextArgs {
-  token?: string;
-  text: string;
-  cursor?: string;
-  limit?: number;
+    query: string;
+    limit?: number;
+    cursor?: string;
 }
 
 // Tool definitions
@@ -249,13 +248,13 @@ const searchMessagesTool: Tool = {
 
 const searchContextTool: Tool = {
   name: "slack_search_context",
-  description: "Search for contextual information to assist with Slack workspace queries",
+  description: "Search for messages",
   inputSchema: {
     type: "object",
     properties: {
-      text: {
+      query: {
         type: "string",
-        description: "The text to search for context"
+        description: "The text to search for in messages"
       },
       limit: {
         type: "number",
@@ -267,7 +266,7 @@ const searchContextTool: Tool = {
         description: "Pagination cursor for next page of results"
       }
     },
-    required: ["text"]
+    required: ["query"]
   }
 };
 
@@ -459,23 +458,23 @@ async searchMessages(query: string, count: number = 20, cursor?: string): Promis
   return response.json();
 }
 
-async searchContext(text: string, limit: number = 20, cursor?: string): Promise<any> {
-  const params = new URLSearchParams({
-    text: text,
-    limit: limit.toString()
-  });
+    async searchContext(query: string, limit: number = 20, cursor?: string): Promise<any> {
+        const params = new URLSearchParams({
+            query: query,
+            limit: limit.toString()
+        });
 
-  if (cursor) {
-    params.append("cursor", cursor);
-  }
+        if (cursor) {
+            params.append("cursor", cursor);
+        }
 
-  const response = await fetch(
-    `https://slack.com/api/assistant.search.context?${params}`,
-    { headers: this.botHeaders }
-  );
+        const response = await fetch(
+            `https://slack.com/api/assistant.search.context?${params}`,
+            { headers: this.botHeaders }
+        );
 
-  return response.json();
-}
+        return response.json();
+    }
 }
 
 async function main() {
@@ -647,20 +646,20 @@ async function main() {
             };
           }
 
-          case "slack_search_context": {
-            const args = request.params.arguments as unknown as SearchContextArgs;
-            if (!args.text) {
-              throw new Error("Missing required argument: text");
+            case "slack_search_context": {
+                const args = request.params.arguments as unknown as SearchContextArgs;
+                if (!args.query) {
+                    throw new Error("Missing required argument: query");
+                }
+                const response = await slackClient.searchContext(
+                    args.query,
+                    args.limit,
+                    args.cursor
+                );
+                return {
+                    content: [{ type: "text", text: JSON.stringify(response) }],
+                };
             }
-            const response = await slackClient.searchContext(
-              args.text,
-              args.limit,
-              args.cursor
-            );
-            return {
-              content: [{ type: "text", text: JSON.stringify(response) }],
-            };
-          }
 
           default:
             throw new Error(`Unknown tool: ${request.params.name}`);

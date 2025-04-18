@@ -63,6 +63,24 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
      - `user_id` (string): The user's ID
    - Returns: Detailed user profile information
 
+9. `slack_search_messages`
+    - Search for messages in Slack
+    - Required inputs:
+        - `query` (string): The search query
+    - Optional inputs:
+        - `count` (number, default: 20): Maximum number of results to return
+        - `cursor` (string): Pagination cursor for the next page
+    - Returns: Search results with message details
+
+10. `slack_assistant_search_context`
+    - Search for context in Slack using an assistant query
+    - Required inputs:
+        - `query` (string): The search query
+    - Optional inputs:
+        - `cursor` (string): Pagination cursor for the next page
+        - `limit` (number, default: 20): Maximum number of results to return
+    - Returns: Search results with context information
+
 ## Setup
 
 1. Create a Slack App:
