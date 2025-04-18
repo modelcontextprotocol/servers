@@ -60,6 +60,11 @@ import {
   type GetProjectIdFromMrUrlInput,
   type GetProjectIdFromMrUrlOutput,
   type CreateMergeRequestDiffThreadInput,
+  type GetLatestMergeRequestVersionInput,
+} from './schemas.js';
+
+import {
+  GetLatestMergeRequestVersionInputSchema,
 } from './schemas.js';
 
 const server = new Server({
@@ -583,6 +588,24 @@ async function createMergeRequestDiffThread(
   return await response.json();
 }
 
+// Function to get the latest merge request version
+async function getLatestMergeRequestVersion(
+  projectId: string,
+  mergeRequestIid: number
+): Promise<GitLabMergeRequestVersion> {
+  const versions = await getMergeRequestVersions(projectId, mergeRequestIid);
+
+  if (versions.length === 0) {
+    throw new Error(`No versions found for merge request ${mergeRequestIid} in project ${projectId}`);
+  }
+
+  // Versions are typically returned in descending order (newest first)
+  const latestVersion = versions[0];
+
+  // Validate the latest version against its schema (already done in getMergeRequestVersions)
+  return latestVersion;
+}
+
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -652,6 +675,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_merge_request_diff_thread",
         description: "Create a new diff thread (comment) on a GitLab Merge Request",
         inputSchema: zodToJsonSchema(CreateMergeRequestDiffThreadSchema)
+      },
+      {
+        name: "get_latest_merge_request_version",
+        description: "Get the latest version details of a specific merge request (includes head/base/start SHAs)",
+        inputSchema: zodToJsonSchema(GetLatestMergeRequestVersionInputSchema)
       }
     ]
   };
@@ -778,6 +806,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args.commit_id // Pass commit_id although the function might not use it directly yet
         );
         return { content: [{ type: "text", text: JSON.stringify(discussion, null, 2) }] };
+      }
+
+      case "get_latest_merge_request_version": {
+        const args = GetLatestMergeRequestVersionInputSchema.parse(request.params.arguments);
+        const latestVersion = await getLatestMergeRequestVersion(
+          args.project_id,
+          args.merge_request_iid
+        );
+        return { content: [{ type: "text", text: JSON.stringify(latestVersion, null, 2) }] };
       }
 
       default:

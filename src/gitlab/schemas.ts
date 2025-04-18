@@ -262,7 +262,7 @@ export const GitLabMergeRequestSchema = z.object({
   iid: z.number(), // Added to match GitLab API
   project_id: z.number(), // Added to match GitLab API
   title: z.string(),
-  description: z.string(), // Changed from body to match GitLab API
+  description: z.string().nullable(), // Changed from body to match GitLab API, allow null
   state: z.string(),
   merged: z.boolean().optional(),
   author: GitLabUserSchema,
@@ -380,6 +380,10 @@ export const GetMergeRequestChangesSchema = ProjectParamsSchema.extend({
   merge_request_iid: z.number().describe("The IID of the merge request")
 });
 
+export const GetLatestMergeRequestVersionInputSchema = ProjectParamsSchema.extend({
+  merge_request_iid: z.number().describe("The IID of the merge request")
+});
+
 export const GetProjectIdFromMrUrlInputSchema = z.object({
     mr_url: z.string().url().describe("The full URL of the GitLab Merge Request (e.g., https://gitlab.example.com/namespace/project/-/merge_requests/123)")
 });
@@ -435,3 +439,4 @@ export type GitLabSearchResponse = z.infer<typeof GitLabSearchResponseSchema>;
 export type GetProjectIdFromMrUrlInput = z.infer<typeof GetProjectIdFromMrUrlInputSchema>;
 export type GetProjectIdFromMrUrlOutput = z.infer<typeof GetProjectIdFromMrUrlOutputSchema>;
 export type CreateMergeRequestDiffThreadInput = z.infer<typeof CreateMergeRequestDiffThreadSchema>;
+export type GetLatestMergeRequestVersionInput = z.infer<typeof GetLatestMergeRequestVersionInputSchema>;
