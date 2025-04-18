@@ -5,7 +5,7 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
 ## Tools
 
 1. `slack_list_channels`
-   - List public channels in the workspace
+   - List public or pre-defined channels in the workspace
    - Optional inputs:
      - `limit` (number, default: 100, max: 200): Maximum number of channels to return
      - `cursor` (string): Pagination cursor for next page
@@ -78,6 +78,7 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
    - `chat:write` - Send messages as the app
    - `reactions:write` - Add emoji reactions to messages
    - `users:read` - View users and their basic information
+   - `users.profile:read` - View detailed profiles about users
 
 4. Install App to Workspace:
    - Click "Install to Workspace" and authorize the app
@@ -102,7 +103,8 @@ Add the following to your `claude_desktop_config.json`:
       ],
       "env": {
         "SLACK_BOT_TOKEN": "xoxb-your-bot-token",
-        "SLACK_TEAM_ID": "T01234567"
+        "SLACK_TEAM_ID": "T01234567",
+        "SLACK_CHANNEL_IDS": "C01234567, C76543210"
       }
     }
   }
@@ -124,16 +126,25 @@ Add the following to your `claude_desktop_config.json`:
         "SLACK_BOT_TOKEN",
         "-e",
         "SLACK_TEAM_ID",
+        "-e",
+        "SLACK_CHANNEL_IDS",
         "mcp/slack"
       ],
       "env": {
         "SLACK_BOT_TOKEN": "xoxb-your-bot-token",
-        "SLACK_TEAM_ID": "T01234567"
+        "SLACK_TEAM_ID": "T01234567",
+        "SLACK_CHANNEL_IDS": "C01234567, C76543210"
       }
     }
   }
 }
 ```
+
+### Environment Variables
+
+1. `SLACK_BOT_TOKEN`: Required. The Bot User OAuth Token starting with `xoxb-`.
+2. `SLACK_TEAM_ID`: Required. Your Slack workspace ID starting with `T`.
+3. `SLACK_CHANNEL_IDS`: Optional. Comma-separated list of channel IDs to limit channel access (e.g., "C01234567, C76543210"). If not set, all public channels will be listed.
 
 ### Troubleshooting
 
