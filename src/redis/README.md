@@ -75,7 +75,7 @@ To use this server with the Claude Desktop app, add the following configuration 
         "-i", 
         "--rm", 
         "mcp/redis", 
-        "redis://host.docker.internal:6379"] // For macOS/Windows, or use "redis://127.0.0.1:6379" for direct connection
+        "redis://host.docker.internal:6379"]
     }
   }
 }
@@ -91,7 +91,7 @@ To use this server with the Claude Desktop app, add the following configuration 
       "args": [
         "-y",
         "@modelcontextprotocol/server-redis",
-        "redis://localhost:6379" // or "redis://127.0.0.1:6379" if localhost fails
+        "redis://localhost:6379"
       ]
     }
   }
