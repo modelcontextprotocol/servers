@@ -396,6 +396,9 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[XiYan](https://github.com/XGenerationLab/xiyan_mcp_server)** - 🗄️ An MCP server that supports fetching data from a database using natural language queries, powered by XiyanSQL as the text-to-SQL LLM.
 - **[XMind](https://github.com/apeyroux/mcp-xmind)** - Read and search through your XMind directory containing XMind files.
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
+- **[Backlinks MCP](https://github.com/cnych/backlinks-mcp)** - A MCP server for retrieving backlink information for any domain by [claudemcp](https://www.claudemcp.com/servers/backlinks-mcp).
+
+
 
 ## 📚 Frameworks
 
