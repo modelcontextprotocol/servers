@@ -18,7 +18,18 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
      - `text` (string): The message text to post
    - Returns: Message posting confirmation and timestamp
 
-3. `slack_reply_to_thread`
+3. `slack_update_message`
+(placeholder for now)
+
+4. `slack_delete_message`
+   - Delete a message from a Slack channel
+   - Required inputs:
+     - `channel_id` (string): The channel containing the message
+     - `timestamp` (string): Message timestamp to delete in format '1234567890.123456'
+   - Returns: Message deletion confirmation and timestamp
+
+
+5. `slack_reply_to_thread`
    - Reply to a specific message thread
    - Required inputs:
      - `channel_id` (string): The channel containing the thread
@@ -26,7 +37,7 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
      - `text` (string): The reply text
    - Returns: Reply confirmation and timestamp
 
-4. `slack_add_reaction`
+6. `slack_add_reaction`
    - Add an emoji reaction to a message
    - Required inputs:
      - `channel_id` (string): The channel containing the message
@@ -34,7 +45,7 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
      - `reaction` (string): Emoji name without colons
    - Returns: Reaction confirmation
 
-5. `slack_get_channel_history`
+7. `slack_get_channel_history`
    - Get recent messages from a channel
    - Required inputs:
      - `channel_id` (string): The channel ID
@@ -42,7 +53,7 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
      - `limit` (number, default: 10): Number of messages to retrieve
    - Returns: List of messages with their content and metadata
 
-6. `slack_get_thread_replies`
+8. `slack_get_thread_replies`
    - Get all replies in a message thread
    - Required inputs:
      - `channel_id` (string): The channel containing the thread
@@ -50,14 +61,14 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
    - Returns: List of replies with their content and metadata
 
 
-7. `slack_get_users`
+9. `slack_get_users`
    - Get list of workspace users with basic profile information
    - Optional inputs:
      - `cursor` (string): Pagination cursor for next page
      - `limit` (number, default: 100, max: 200): Maximum users to return
    - Returns: List of users with their basic profiles
 
-8. `slack_get_user_profile`
+10. `slack_get_user_profile`
    - Get detailed profile information for a specific user
    - Required inputs:
      - `user_id` (string): The user's ID
