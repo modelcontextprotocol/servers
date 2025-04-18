@@ -4,7 +4,9 @@ version = "0.6.2"
 description = "A simple SQLite MCP server"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["mcp>=1.0.0"]
+dependencies = [
+    "mcp[cli]>=1.6.0",
+]
 
 [build-system]
 requires = ["hatchling"]

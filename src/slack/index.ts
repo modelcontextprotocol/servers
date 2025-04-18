@@ -53,7 +53,7 @@ interface GetUserProfileArgs {
 // Tool definitions
 const listChannelsTool: Tool = {
   name: "slack_list_channels",
-  description: "List public channels in the workspace with pagination",
+  description: "List public or pre-defined channels in the workspace with pagination",
   inputSchema: {
     type: "object",
     properties: {
@@ -221,23 +221,51 @@ class SlackClient {
   }
 
   async getChannels(limit: number = 100, cursor?: string): Promise<any> {
-    const params = new URLSearchParams({
-      types: "public_channel",
-      exclude_archived: "true",
-      limit: Math.min(limit, 200).toString(),
-      team_id: process.env.SLACK_TEAM_ID!,
-    });
-
-    if (cursor) {
-      params.append("cursor", cursor);
+    const predefinedChannelIds = process.env.SLACK_CHANNEL_IDS;
+    if (!predefinedChannelIds) {
+      const params = new URLSearchParams({
+        types: "public_channel",
+        exclude_archived: "true",
+        limit: Math.min(limit, 200).toString(),
+        team_id: process.env.SLACK_TEAM_ID!,
+      });
+  
+      if (cursor) {
+        params.append("cursor", cursor);
+      }
+  
+      const response = await fetch(
+        `https://slack.com/api/conversations.list?${params}`,
+        { headers: this.botHeaders },
+      );
+  
+      return response.json();
     }
 
-    const response = await fetch(
-      `https://slack.com/api/conversations.list?${params}`,
-      { headers: this.botHeaders },
-    );
+    const predefinedChannelIdsArray = predefinedChannelIds.split(",").map((id: string) => id.trim());
+    const channels = [];
 
-    return response.json();
+    for (const channelId of predefinedChannelIdsArray) {
+      const params = new URLSearchParams({
+        channel: channelId,
+      });
+
+      const response = await fetch(
+        `https://slack.com/api/conversations.info?${params}`,
+        { headers: this.botHeaders }
+      );
+      const data = await response.json();
+
+      if (data.ok && data.channel && !data.channel.is_archived) {
+        channels.push(data.channel);
+      }
+    }
+
+    return {
+      ok: true,
+      channels: channels,
+      response_metadata: { next_cursor: "" },
+    };
   }
 
   async postMessage(channel_id: string, text: string): Promise<any> {
