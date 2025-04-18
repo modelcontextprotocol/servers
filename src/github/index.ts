@@ -16,6 +16,7 @@ import * as pulls from './operations/pulls.js';
 import * as branches from './operations/branches.js';
 import * as search from './operations/search.js';
 import * as commits from './operations/commits.js';
+import * as milestones from './operations/milestones.js';
 import {
   GitHubError,
   GitHubValidationError,
@@ -220,6 +221,86 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "add_sub_issue",
         description: "Add a sub issue to an issue, sub_issue_id is the id of the issue to be added as sub-issue not the issue number",
         inputSchema: zodToJsonSchema(issues.AddSubIssueOptionsSchema)
+      },
+      {
+        name: "list_labels_for_issue",
+        description: "List all labels for an issue",
+        inputSchema: zodToJsonSchema(issues.ListLabelsForIssueSchema),
+      },
+      {
+        name: "add_labels_to_issue",
+        description: "Adds labels to an issue",
+        inputSchema: zodToJsonSchema(issues.AddLabelsToIssueSchema),
+      },
+      {
+        name: "set_labels_for_issue",
+        description: "Sets the labels for an issue, replacing any existing labels",
+        inputSchema: zodToJsonSchema(issues.SetLabelsForIssueSchema),
+      },
+      {
+        name: "remove_label_from_issue",
+        description: "Remove a label from an issue",
+        inputSchema: zodToJsonSchema(issues.RemoveLabelFromIssueSchema),
+      },
+      {
+        name: "remove_all_labels_from_issue",
+        description: "Remove all labels from an issue",
+        inputSchema: zodToJsonSchema(issues.RemoveAllLabelsFromIssueSchema),
+      },
+      {
+        name: "list_labels_for_repo",
+        description: "List all labels for a repository",
+        inputSchema: zodToJsonSchema(issues.ListLabelsForRepoSchema),
+      },
+      {
+        name: "create_label",
+        description: "Create a label for a repository",
+        inputSchema: zodToJsonSchema(issues.CreateLabelSchema),
+      },
+      {
+        name: "get_label",
+        description: "Get a single label for a repository",
+        inputSchema: zodToJsonSchema(issues.GetLabelSchema),
+      },
+      {
+        name: "update_label",
+        description: "Update an existing label for a repository",
+        inputSchema: zodToJsonSchema(issues.UpdateLabelSchema),
+      },
+      {
+        name: "delete_label",
+        description: "Delete a label from a repository",
+        inputSchema: zodToJsonSchema(issues.DeleteLabelSchema),
+      },
+      {
+        name: "list_labels_for_milestone",
+        description: "List labels for issues in a milestone",
+        inputSchema: zodToJsonSchema(issues.ListLabelsForMilestoneSchema),
+      },
+      {
+        name: "list_milestones",
+        description: "List milestones for a repository",
+        inputSchema: zodToJsonSchema(milestones.ListMilestonesSchema),
+      },
+      {
+        name: "create_milestone",
+        description: "Create a milestone for a repository",
+        inputSchema: zodToJsonSchema(milestones.CreateMilestoneSchema),
+      },
+      {
+        name: "get_milestone",
+        description: "Get a single milestone for a repository",
+        inputSchema: zodToJsonSchema(milestones.GetMilestoneSchema),
+      },
+      {
+        name: "update_milestone",
+        description: "Update an existing milestone for a repository",
+        inputSchema: zodToJsonSchema(milestones.UpdateMilestoneSchema),
+      },
+      {
+        name: "delete_milestone",
+        description: "Delete a milestone from a repository",
+        inputSchema: zodToJsonSchema(milestones.DeleteMilestoneSchema),
       }
     ],
   };
@@ -544,6 +625,150 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await issues.addSubIssue(owner, repo, issue_number, options);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "list_labels_for_issue": {
+        const args = issues.ListLabelsForIssueSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number, ...options } = args;
+        const result = await issues.listLabelsForIssue(owner, repo, issue_number, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "add_labels_to_issue": {
+        const args = issues.AddLabelsToIssueSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number, labels } = args;
+        const result = await issues.addLabelsToIssue(owner, repo, issue_number, labels);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "set_labels_for_issue": {
+        const args = issues.SetLabelsForIssueSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number, labels } = args;
+        const result = await issues.setLabelsForIssue(owner, repo, issue_number, labels);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "remove_label_from_issue": {
+        const args = issues.RemoveLabelFromIssueSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number, name } = args;
+        const result = await issues.removeLabelFromIssue(owner, repo, issue_number, name);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result ?? { success: true }, null, 2) }], 
+        };
+      }
+
+      case "remove_all_labels_from_issue": {
+        const args = issues.RemoveAllLabelsFromIssueSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number } = args;
+        const result = await issues.removeAllLabelsFromIssue(owner, repo, issue_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result ?? { success: true }, null, 2) }], 
+        };
+      }
+
+      case "list_labels_for_repo": {
+        const args = issues.ListLabelsForRepoSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const result = await issues.listLabelsForRepo(owner, repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "create_label": {
+        const args = issues.CreateLabelSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const result = await issues.createLabel(owner, repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "get_label": {
+        const args = issues.GetLabelSchema.parse(request.params.arguments);
+        const { owner, repo, name } = args;
+        const result = await issues.getLabel(owner, repo, name);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "update_label": {
+        const args = issues.UpdateLabelSchema.parse(request.params.arguments);
+        const { owner, repo, name, ...options } = args;
+        const result = await issues.updateLabel(owner, repo, name, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "delete_label": {
+        const args = issues.DeleteLabelSchema.parse(request.params.arguments);
+        const { owner, repo, name } = args;
+        const result = await issues.deleteLabel(owner, repo, name);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result ?? { success: true }, null, 2) }], 
+        };
+      }
+
+      case "list_labels_for_milestone": {
+        const args = issues.ListLabelsForMilestoneSchema.parse(request.params.arguments);
+        const { owner, repo, milestone_number, ...options } = args;
+        const result = await issues.listLabelsForMilestone(owner, repo, milestone_number, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "list_milestones": {
+        const args = milestones.ListMilestonesSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const result = await milestones.listMilestones(owner, repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "create_milestone": {
+        const args = milestones.CreateMilestoneSchema.parse(request.params.arguments);
+        const { owner, repo, ...options } = args;
+        const result = await milestones.createMilestone(owner, repo, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "get_milestone": {
+        const args = milestones.GetMilestoneSchema.parse(request.params.arguments);
+        const { owner, repo, milestone_number } = args;
+        const result = await milestones.getMilestone(owner, repo, milestone_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "update_milestone": {
+        const args = milestones.UpdateMilestoneSchema.parse(request.params.arguments);
+        const { owner, repo, milestone_number, ...options } = args;
+        const result = await milestones.updateMilestone(owner, repo, milestone_number, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "delete_milestone": {
+        const args = milestones.DeleteMilestoneSchema.parse(request.params.arguments);
+        const { owner, repo, milestone_number } = args;
+        const result = await milestones.deleteMilestone(owner, repo, milestone_number);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result ?? { success: true }, null, 2) }],
         };
       }
 
