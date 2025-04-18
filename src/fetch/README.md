@@ -42,7 +42,7 @@ After installation, you can run it as a script using:
 python -m mcp_server_fetch
 ```
 
-### Using ToolHive
+### Using With SSE Transport Through ToolHive
 
 Alternatively you can run the `fetch` MCP using [ToolHive](https://github.com/StacklokLabs/toolhive) which utilises a container runtime (Docker, Podman)
 
