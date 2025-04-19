@@ -29,7 +29,7 @@ if (!process.env.EVERART_API_KEY) {
   process.exit(1);
 }
 
-const client = new EverArt.default(process.env.EVERART_API_KEY);
+const client = new EverArt(process.env.EVERART_API_KEY);
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [

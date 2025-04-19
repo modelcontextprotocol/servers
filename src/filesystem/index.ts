@@ -254,7 +254,7 @@ function createUnifiedDiff(originalContent: string, newContent: string, filepath
 
 async function applyFileEdits(
   filePath: string,
-  edits: Array<{oldText: string, newText: string}>,
+  edits: Array<{oldText?: string, newText?: string}>,
   dryRun = false
 ): Promise<string> {
   // Read file content and normalize line endings
@@ -263,6 +263,10 @@ async function applyFileEdits(
   // Apply edits sequentially
   let modifiedContent = content;
   for (const edit of edits) {
+    if (!edit.oldText || !edit.newText) {
+      throw new Error('Edit is missing oldText or newText property');
+    }
+
     const normalizedOld = normalizeLineEndings(edit.oldText);
     const normalizedNew = normalizeLineEndings(edit.newText);
 
