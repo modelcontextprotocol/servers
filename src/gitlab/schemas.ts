@@ -262,7 +262,6 @@ export const CreateRepositorySchema = z.object({
 });
 
 export const GetFileContentsSchema = ProjectParamsSchema.extend({
-  project_id: z.string().describe("Project ID or URL-encoded path"),
   file_path: z.string().describe("Path to the file or directory"),
   ref: z.string().optional().describe("Branch/tag/commit to get contents from")
 });
