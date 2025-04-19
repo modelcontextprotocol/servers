@@ -50,7 +50,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
       // so responses can flow back through the same transport
       await server.connect(transport);
 
-      await transport.handleRequest(req, res, req.body);
+      await transport.handleRequest(req, res);
       return; // Already handled
     } else {
       // Invalid request - no session ID or not initialization request
@@ -67,7 +67,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
 
     // Handle the request with existing transport - no need to reconnect
     // The existing transport is already connected to the server
-    await transport.handleRequest(req, res, req.body);
+    await transport.handleRequest(req, res);
   } catch (error) {
     console.error('Error handling MCP request:', error);
     if (!res.headersSent) {
@@ -87,7 +87,14 @@ app.post('/mcp', async (req: Request, res: Response) => {
 app.get('/mcp', async (req: Request, res: Response) => {
   const sessionId = req.headers['mcp-session-id'] as string | undefined;
   if (!sessionId || !transports[sessionId]) {
-    res.status(400).send('Invalid or missing session ID');
+    res.status(400).json({
+      jsonrpc: '2.0',
+      error: {
+        code: -32000,
+        message: 'Bad Request: No valid session ID provided',
+      },
+      id: null,
+    });
     return;
   }
 
@@ -107,7 +114,14 @@ app.get('/mcp', async (req: Request, res: Response) => {
 app.delete('/mcp', async (req: Request, res: Response) => {
   const sessionId = req.headers['mcp-session-id'] as string | undefined;
   if (!sessionId || !transports[sessionId]) {
-    res.status(400).send('Invalid or missing session ID');
+    res.status(400).json({
+      jsonrpc: '2.0',
+      error: {
+        code: -32000,
+        message: 'Bad Request: No valid session ID provided',
+      },
+      id: null,
+    });
     return;
   }
 
@@ -119,7 +133,14 @@ app.delete('/mcp', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error handling session termination:', error);
     if (!res.headersSent) {
-      res.status(500).send('Error processing session termination');
+      res.status(500).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32603,
+          message: 'Error handling session termination',
+        },
+        id: null,
+      });
     }
   }
 });
