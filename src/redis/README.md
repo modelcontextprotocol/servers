@@ -14,12 +14,18 @@ A Model Context Protocol server that provides access to Redis databases. This se
 ### Connection Errors
 
 **ECONNREFUSED**
-  - **Cause**: Redis server is not running or unreachable
+  - **Cause**: Redis/Memurai server is not running or unreachable
   - **Solution**: 
-    - Verify Redis is running: `redis-cli ping` should return "PONG"
-    - Check Redis service status: `systemctl status redis` (Linux) or `brew services list` (macOS)
+    - Verify server is running:
+      - Redis: `redis-cli ping` should return "PONG"
+      - Memurai (Windows): `memurai-cli ping` should return "PONG"
+    - Check service status:
+      - Linux: `systemctl status redis`
+      - macOS: `brew services list`
+      - Windows: Check Memurai in Services (services.msc)
     - Ensure correct port (default 6379) is not blocked by firewall
     - Verify Redis URL format: `redis://hostname:port`
+    - If `redis://localhost:6379` fails with ECONNREFUSED, try using the explicit IP: `redis://127.0.0.1:6379`
 
 ### Server Behavior
 
@@ -57,7 +63,7 @@ To use this server with the Claude Desktop app, add the following configuration 
 ### Docker
 
 * when running docker on macos, use host.docker.internal if the server is running on the host network (eg localhost)
-* Redis URL can be specified as an argument, defaults to "redis://localhost:6379"
+* Redis URL can be specified as an argument, defaults to "redis://localhost:6379" (use "redis://127.0.0.1:6379" if localhost fails)
 
 ```json
 {
