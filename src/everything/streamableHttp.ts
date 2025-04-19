@@ -50,7 +50,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
       // so responses can flow back through the same transport
       await server.connect(transport);
 
-      await transport.handleRequest(req, res);
+      await transport.handleRequest(req, res, req.body);
       return; // Already handled
     } else {
       // Invalid request - no session ID or not initialization request
@@ -60,14 +60,14 @@ app.post('/mcp', async (req: Request, res: Response) => {
           code: -32000,
           message: 'Bad Request: No valid session ID provided',
         },
-        id: null,
+        id: req?.body?.id,
       });
       return;
     }
 
     // Handle the request with existing transport - no need to reconnect
     // The existing transport is already connected to the server
-    await transport.handleRequest(req, res);
+    await transport.handleRequest(req, res, req.body);
   } catch (error) {
     console.error('Error handling MCP request:', error);
     if (!res.headersSent) {
@@ -77,8 +77,9 @@ app.post('/mcp', async (req: Request, res: Response) => {
           code: -32603,
           message: 'Internal server error',
         },
-        id: null,
+        id: req?.body?.id,
       });
+      return;
     }
   }
 });
@@ -93,7 +94,7 @@ app.get('/mcp', async (req: Request, res: Response) => {
         code: -32000,
         message: 'Bad Request: No valid session ID provided',
       },
-      id: null,
+      id: req?.body?.id,
     });
     return;
   }
@@ -120,7 +121,7 @@ app.delete('/mcp', async (req: Request, res: Response) => {
         code: -32000,
         message: 'Bad Request: No valid session ID provided',
       },
-      id: null,
+      id: req?.body?.id,
     });
     return;
   }
@@ -139,8 +140,9 @@ app.delete('/mcp', async (req: Request, res: Response) => {
           code: -32603,
           message: 'Error handling session termination',
         },
-        id: null,
+        id: req?.body?.id,
       });
+      return;
     }
   }
 });
