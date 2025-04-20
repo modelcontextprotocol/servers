@@ -408,7 +408,6 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
 - **[mcp_weather](https://github.com/isdaniel/mcp_weather_server)** - Get weather information from https://api.open-meteo.com API.
 
-
 ## 📚 Frameworks
 
 These are high-level frameworks that make it easier to build MCP servers or clients.
