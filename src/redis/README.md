@@ -2,6 +2,37 @@
 
 A Model Context Protocol server that provides access to Redis databases. This server enables LLMs to interact with Redis key-value stores through a set of standardized tools.
 
+## Prerequisites
+
+1. Redis server must be installed and running
+   - [Download Redis](https://redis.io/download)
+   - For Windows users: Use [Windows Subsystem for Linux (WSL)](https://redis.io/docs/getting-started/installation/install-redis-on-windows/) or [Memurai](https://www.memurai.com/) (Redis-compatible Windows server)
+   - Default port: 6379
+
+## Common Issues & Solutions
+
+### Connection Errors
+
+**ECONNREFUSED**
+  - **Cause**: Redis/Memurai server is not running or unreachable
+  - **Solution**: 
+    - Verify server is running:
+      - Redis: `redis-cli ping` should return "PONG"
+      - Memurai (Windows): `memurai-cli ping` should return "PONG"
+    - Check service status:
+      - Linux: `systemctl status redis`
+      - macOS: `brew services list`
+      - Windows: Check Memurai in Services (services.msc)
+    - Ensure correct port (default 6379) is not blocked by firewall
+    - Verify Redis URL format: `redis://hostname:port`
+    - If `redis://localhost:6379` fails with ECONNREFUSED, try using the explicit IP: `redis://127.0.0.1:6379`
+
+### Server Behavior
+
+- The server implements exponential backoff with a maximum of 5 retries
+- Initial retry delay: 1 second, maximum delay: 30 seconds
+- Server will exit after max retries to prevent infinite reconnection loops
+
 ## Components
 
 ### Tools
@@ -32,7 +63,7 @@ To use this server with the Claude Desktop app, add the following configuration 
 ### Docker
 
 * when running docker on macos, use host.docker.internal if the server is running on the host network (eg localhost)
-* Redis URL can be specified as an argument, defaults to "redis://localhost:6379"
+* Redis URL can be specified as an argument, defaults to "redis://localhost:6379" (use "redis://127.0.0.1:6379" if localhost fails)
 
 ```json
 {

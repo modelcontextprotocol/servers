@@ -63,6 +63,15 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
      }
      ```
 
+8. `getResourceReference`
+   - Returns a resource reference that can be used by MCP clients
+   - Inputs:
+     - `resourceId` (number, 1-100): ID of the resource to reference
+   - Returns: A resource reference with:
+     - Text introduction
+     - Embedded resource with `type: "resource"`
+     - Text instruction for using the resource URI
+
 ### Resources
 
 The server provides 100 test resources in two formats:
@@ -95,6 +104,27 @@ Resource features:
    - Optional arguments:
      - `style` (string): Output style preference
    - Returns: Multi-turn conversation with images
+
+3. `resource_prompt`
+   - Demonstrates embedding resource references in prompts
+   - Required arguments:
+     - `resourceId` (number): ID of the resource to embed (1-100)
+   - Returns: Multi-turn conversation with an embedded resource reference
+   - Shows how to include resources directly in prompt messages
+
+### Logging
+
+The server sends random-leveled log messages every 15 seconds, e.g.:
+
+```json
+{
+  "method": "notifications/message",
+  "params": {
+	"level": "info",
+	"data": "Info-level message"
+  }
+}
+```
 
 ## Usage with Claude Desktop
 

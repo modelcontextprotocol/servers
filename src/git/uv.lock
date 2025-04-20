@@ -165,9 +165,9 @@ dependencies = [
     { name = "sse-starlette" },
     { name = "starlette" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/97/de/a9ec0a1b6439f90ea59f89004bb2e7ec6890dfaeef809751d9e6577dca7e/mcp-1.0.0.tar.gz", hash = "sha256:dba51ce0b5c6a80e25576f606760c49a91ee90210fed805b530ca165d3bbc9b7", size = 82891 }
+sdist = { url = "https://files.pythonhosted.org/packages/77/f2/067b1fc114e8d3ae4af02fc4f4ed8971a2c4900362d976fabe0f4e9a3418/mcp-1.1.0.tar.gz", hash = "sha256:e3c8d6df93a4de90230ea944dd667730744a3cd91a4cc0ee66a5acd53419e100", size = 83802 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/56/89/900c0c8445ec001d3725e475fc553b0feb2e8a51be018f3bb7de51e683db/mcp-1.0.0-py3-none-any.whl", hash = "sha256:bbe70ffa3341cd4da78b5eb504958355c68381fb29971471cea1e642a2af5b8a", size = 36361 },
+    { url = "https://files.pythonhosted.org/packages/b9/3e/aef19ac08a6f9a347c086c4e628c2f7329659828cbe92ffd524ec2aac833/mcp-1.1.0-py3-none-any.whl", hash = "sha256:44aa4d2e541f0924d6c344aa7f96b427a6ee1df2fab70b5f9ae2f8777b3f05f2", size = 36576 },
 ]
 
 [[package]]
