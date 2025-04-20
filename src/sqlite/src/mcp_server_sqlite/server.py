@@ -4,12 +4,14 @@ import sqlite3
 import logging
 from contextlib import closing
 from pathlib import Path
-from mcp.server.models import InitializationOptions
-import mcp.types as types
-from mcp.server import NotificationOptions, Server
-import mcp.server.stdio
 from pydantic import AnyUrl
 from typing import Any
+
+from mcp.server import InitializationOptions
+from mcp.server.lowlevel import Server, NotificationOptions
+from mcp.server.stdio import stdio_server
+import mcp.types as types
+
 
 # reconfigure UnicodeEncodeError prone default (i.e. windows-1252) to utf-8
 if sys.platform == "win32" and os.environ.get('PYTHONIOENCODING') is None:
@@ -366,7 +368,7 @@ async def main(db_path: str):
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error: {str(e)}")]
 
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+    async with stdio_server() as (read_stream, write_stream):
         logger.info("Server running with stdio transport")
         await server.run(
             read_stream,
@@ -380,3 +382,12 @@ async def main(db_path: str):
                 ),
             ),
         )
+
+class ServerWrapper():
+    """A wrapper to compat with mcp[cli]"""
+    def run(self):
+        import asyncio
+        asyncio.run(main("test.db"))
+
+
+wrapper = ServerWrapper()
