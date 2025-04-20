@@ -31,7 +31,7 @@ An MCP server implementation that integrates the Brave Search API, providing bot
 ### Getting an API Key
 1. Sign up for a [Brave Search API account](https://brave.com/search/api/)
 2. Choose a plan (Free tier available with 2,000 queries/month)
-3. Generate your API key [from the developer dashboard](https://api.search.brave.com/app/keys)
+3. Generate your API key [from the developer dashboard](https://api-dashboard.search.brave.com/app/keys)
 
 ### Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
