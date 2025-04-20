@@ -5,13 +5,29 @@ import { randomUUID } from 'node:crypto';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { InMemoryEventStore } from "@modelcontextprotocol/sdk/examples/shared/inMemoryEventStore.js";
 
+const BIND_ADDRESS = 'localhost';
+const PORT = 3001;  
+
 const app = express();
+
 app.use(express.json());
 
 // Map to store transports by session ID
 const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
 const { server, cleanup } = createServer();
+
+const allowedOrigins = new Set([`http://${BIND_ADDRESS}:${PORT}`]);
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && !allowedOrigins.has(origin)) {
+    res.status(403).json({ error: 'Forbidden: Invalid Origin' });
+    return;
+  }
+  next();
+});
+
 
 app.post('/mcp', async (req: Request, res: Response) => {
     console.log('Received MCP request:', req.body);
@@ -58,6 +74,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
   
       // Handle the request with existing transport - no need to reconnect
       await transport.handleRequest(req, res, req.body);
+
     } catch (error) {
       console.error('Error handling MCP request:', error);
       if (!res.headersSent) {
@@ -92,9 +109,8 @@ app.get('/mcp', handleSessionRequest);
 app.delete('/mcp', handleSessionRequest);
 
 // Start the server
-const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`MCP Streamable HTTP Server listening on port ${PORT}`);
+app.listen(PORT, BIND_ADDRESS, () => {
+  console.log(`Server is running at http://${BIND_ADDRESS}:${PORT}`);
 });
 
 // Handle server shutdown
