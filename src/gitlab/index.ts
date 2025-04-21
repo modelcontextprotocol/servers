@@ -20,10 +20,12 @@ import {
   GitLabSearchResponseSchema,
   GitLabTreeSchema,
   GitLabCommitSchema,
+  GitLabMilestoneSchema,
   CreateRepositoryOptionsSchema,
   CreateIssueOptionsSchema,
   CreateMergeRequestOptionsSchema,
   CreateBranchOptionsSchema,
+  CreateMilestoneOptionsSchema,
   CreateOrUpdateFileSchema,
   SearchRepositoriesSchema,
   CreateRepositorySchema,
@@ -33,6 +35,7 @@ import {
   CreateMergeRequestSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
+  CreateMilestoneSchema,
   type GitLabFork,
   type GitLabReference,
   type GitLabRepository,
@@ -43,6 +46,7 @@ import {
   type GitLabSearchResponse,
   type GitLabTree,
   type GitLabCommit,
+  type GitLabMilestone,
   type FileOperation,
 } from './schemas.js';
 
@@ -359,6 +363,34 @@ async function createRepository(
   return GitLabRepositorySchema.parse(await response.json());
 }
 
+async function createMilestone(
+  projectId: string,
+  options: z.infer<typeof CreateMilestoneOptionsSchema>
+): Promise<GitLabMilestone> {
+  const response = await fetch(
+    `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/milestones`,
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: options.title,
+        description: options.description,
+        due_date: options.due_date,
+        start_date: options.start_date
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`GitLab API error: ${response.statusText}`);
+  }
+
+  return GitLabMilestoneSchema.parse(await response.json());
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -406,6 +438,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_branch",
         description: "Create a new branch in a GitLab project",
         inputSchema: zodToJsonSchema(CreateBranchSchema)
+      },
+      {
+        name: "create_milestone",
+        description: "Create a new milestone in a GitLab project",
+        inputSchema: zodToJsonSchema(CreateMilestoneSchema)
       }
     ]
   };
@@ -493,6 +530,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { project_id, ...options } = args;
         const mergeRequest = await createMergeRequest(project_id, options);
         return { content: [{ type: "text", text: JSON.stringify(mergeRequest, null, 2) }] };
+      }
+
+      case "create_milestone": {
+        const args = CreateMilestoneSchema.parse(request.params.arguments);
+        const { project_id, ...options } = args;
+        const milestone = await createMilestone(project_id, options);
+        return { content: [{ type: "text", text: JSON.stringify(milestone, null, 2) }] };
       }
 
       default:

@@ -133,6 +133,13 @@ export const CreateBranchOptionsSchema = z.object({
   ref: z.string() // The source branch/commit for the new branch
 });
 
+export const CreateMilestoneOptionsSchema = z.object({
+  title: z.string(),
+  description: z.string().optional(),
+  due_date: z.string().optional(), // Format: YYYY-MM-DD
+  start_date: z.string().optional() // Format: YYYY-MM-DD
+});
+
 // Response schemas for operations
 export const GitLabCreateUpdateFileResponseSchema = z.object({
   file_path: z.string(),
@@ -304,6 +311,13 @@ export const CreateBranchSchema = ProjectParamsSchema.extend({
     .describe("Source branch/commit for new branch")
 });
 
+export const CreateMilestoneSchema = ProjectParamsSchema.extend({
+  title: z.string().describe("Milestone title"),
+  description: z.string().optional().describe("Milestone description"),
+  due_date: z.string().optional().describe("Due date in YYYY-MM-DD format"),
+  start_date: z.string().optional().describe("Start date in YYYY-MM-DD format")
+});
+
 // Export types
 export type GitLabAuthor = z.infer<typeof GitLabAuthorSchema>;
 export type GitLabFork = z.infer<typeof GitLabForkSchema>;
@@ -316,10 +330,12 @@ export type GitLabContent = z.infer<typeof GitLabContentSchema>;
 export type FileOperation = z.infer<typeof FileOperationSchema>;
 export type GitLabTree = z.infer<typeof GitLabTreeSchema>;
 export type GitLabCommit = z.infer<typeof GitLabCommitSchema>;
+export type GitLabMilestone = z.infer<typeof GitLabMilestoneSchema>;
 export type GitLabReference = z.infer<typeof GitLabReferenceSchema>;
 export type CreateRepositoryOptions = z.infer<typeof CreateRepositoryOptionsSchema>;
 export type CreateIssueOptions = z.infer<typeof CreateIssueOptionsSchema>;
 export type CreateMergeRequestOptions = z.infer<typeof CreateMergeRequestOptionsSchema>;
 export type CreateBranchOptions = z.infer<typeof CreateBranchOptionsSchema>;
+export type CreateMilestoneOptions = z.infer<typeof CreateMilestoneOptionsSchema>;
 export type GitLabCreateUpdateFileResponse = z.infer<typeof GitLabCreateUpdateFileResponseSchema>;
 export type GitLabSearchResponse = z.infer<typeof GitLabSearchResponseSchema>;

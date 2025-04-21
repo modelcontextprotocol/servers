@@ -95,6 +95,16 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `ref` (optional string): Source branch/commit for new branch
    - Returns: Created branch reference
 
+10. `create_milestone`
+   - Create a new milestone in a project
+   - Inputs:
+     - `project_id` (string): Project ID or URL-encoded path
+     - `title` (string): Milestone title
+     - `description` (optional string): Milestone description
+     - `due_date` (optional string): Due date in YYYY-MM-DD format
+     - `start_date` (optional string): Start date in YYYY-MM-DD format
+   - Returns: Created milestone details
+
 ## Setup
 
 ### Personal Access Token
