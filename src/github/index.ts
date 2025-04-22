@@ -7,6 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+import fetch, { Request, Response } from 'node-fetch';
 
 import * as repository from './operations/repository.js';
 import * as files from './operations/files.js';
@@ -26,6 +27,11 @@ import {
   isGitHubError,
 } from './common/errors.js';
 import { VERSION } from "./common/version.js";
+
+// If fetch doesn't exist in global scope, add it
+if (!globalThis.fetch) {
+  globalThis.fetch = fetch as unknown as typeof global.fetch;
+}
 
 const server = new Server(
   {
@@ -293,10 +299,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "create_issue": {
         const args = issues.CreateIssueSchema.parse(request.params.arguments);
         const { owner, repo, ...options } = args;
-        const issue = await issues.createIssue(owner, repo, options);
-        return {
-          content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
-        };
+        
+        try {
+          console.error(`[DEBUG] Attempting to create issue in ${owner}/${repo}`);
+          console.error(`[DEBUG] Issue options:`, JSON.stringify(options, null, 2));
+          
+          const issue = await issues.createIssue(owner, repo, options);
+          
+          console.error(`[DEBUG] Issue created successfully`);
+          return {
+            content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
+          };
+        } catch (err) {
+          // Type guard for Error objects
+          const error = err instanceof Error ? err : new Error(String(err));
+          
+          console.error(`[ERROR] Failed to create issue:`, error);
+          
+          if (error instanceof GitHubResourceNotFoundError) {
+            throw new Error(
+              `Repository '${owner}/${repo}' not found. Please verify:\n` +
+              `1. The repository exists\n` +
+              `2. You have correct access permissions\n` +
+              `3. The owner and repository names are spelled correctly`
+            );
+          }
+          
+          // Safely access error properties
+          throw new Error(
+            `Failed to create issue: ${error.message}${
+              error.stack ? `\nStack: ${error.stack}` : ''
+            }`
+          );
+        }
       }
 
       case "create_pull_request": {
