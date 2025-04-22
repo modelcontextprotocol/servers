@@ -137,6 +137,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(issues.IssueCommentSchema)
       },
       {
+        name: "get_issue_comments",
+        description: "Get comments from a GitHub issue",
+        inputSchema: zodToJsonSchema(issues.GetIssueCommentsSchema)
+      },
+      {
         name: "search_code",
         description: "Search for code across GitHub repositories",
         inputSchema: zodToJsonSchema(search.SearchCodeSchema),
@@ -390,6 +395,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await issues.addIssueComment(owner, repo, issue_number, body);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "get_issue_comments": {
+        const args = issues.GetIssueCommentsSchema.parse(request.params.arguments);
+        const { owner, repo, issue_number, page, per_page, since } = args;
+        const options = { page, per_page, since };
+        const comments = await issues.getIssueComments(owner, repo, issue_number, options);
+        return {
+          content: [{ type: "text", text: JSON.stringify(comments, null, 2) }],
         };
       }
 
