@@ -281,6 +281,14 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
 
+27. `get_issue_comments`
+   - Get comments on a specific issue in a GitHub repository
+   - Inputs:
+     - `owner` (string): Repository owner
+     - `repo` (string): Repository name
+     - `issue_number` (number): Issue number to retrieve comments for
+   - Returns: Array of comments on the issue with details like the comment text, author, and creation time
+
 ## Search Query Syntax
 
 ### Code Search
@@ -344,7 +352,7 @@ To use this with Claude Desktop, add the following to your `claude_desktop_confi
 
 ```json
 {
-  "mcpServers": {
+  "mcpServers": 
     "github": {
       "command": "npx",
       "args": [
