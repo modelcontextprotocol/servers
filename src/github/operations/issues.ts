@@ -14,6 +14,15 @@ export const IssueCommentSchema = z.object({
   body: z.string(),
 });
 
+export const GetIssueCommentsSchema = z.object({
+  owner: z.string(),
+  repo: z.string(),
+  issue_number: z.number(),
+  page: z.number().optional(),
+  per_page: z.number().optional(),
+  since: z.string().optional(),
+});
+
 export const CreateIssueOptionsSchema = z.object({
   title: z.string(),
   body: z.string().optional(),
@@ -54,6 +63,27 @@ export const UpdateIssueOptionsSchema = z.object({
 
 export async function getIssue(owner: string, repo: string, issue_number: number) {
   return githubRequest(`https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}`);
+}
+
+export async function getIssueComments(
+  owner: string, 
+  repo: string, 
+  issue_number: number,
+  options: { 
+    page?: number; 
+    per_page?: number; 
+    since?: string;
+  } = {}
+) {
+  const urlParams: Record<string, string | undefined> = {
+    page: options.page?.toString(),
+    per_page: options.per_page?.toString(),
+    since: options.since
+  };
+
+  return githubRequest(
+    buildUrl(`https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}/comments`, urlParams)
+  );
 }
 
 export async function addIssueComment(
