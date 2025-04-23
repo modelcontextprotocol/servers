@@ -1,5 +1,4 @@
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { InMemoryEventStore } from '@modelcontextprotocol/sdk/examples/shared/inMemoryEventStore.js';
 import express, { Request, Response } from "express";
 import { createServer } from "./everything.js";
@@ -7,14 +6,12 @@ import { randomUUID } from 'node:crypto';
 
 const app = express();
 
-app.use(express.json());
-
 const { server, cleanup } = createServer();
 
 const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
 app.post('/mcp', async (req: Request, res: Response) => {
-  console.log('Received MCP request:', req.body);
+  console.log('Received MCP POST request');
   try {
     // Check for existing session ID
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
@@ -23,7 +20,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
     if (sessionId && transports[sessionId]) {
       // Reuse existing transport
       transport = transports[sessionId];
-    } else if (!sessionId && isInitializeRequest(req.body)) {
+    } else if (!sessionId) {
       // New initialization request
       const eventStore = new InMemoryEventStore();
       transport = new StreamableHTTPServerTransport({
@@ -50,7 +47,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
       // so responses can flow back through the same transport
       await server.connect(transport);
 
-      await transport.handleRequest(req, res, req.body);
+      await transport.handleRequest(req, res);
       return; // Already handled
     } else {
       // Invalid request - no session ID or not initialization request
@@ -67,7 +64,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
 
     // Handle the request with existing transport - no need to reconnect
     // The existing transport is already connected to the server
-    await transport.handleRequest(req, res, req.body);
+    await transport.handleRequest(req, res);
   } catch (error) {
     console.error('Error handling MCP request:', error);
     if (!res.headersSent) {
@@ -86,6 +83,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
 
 // Handle GET requests for SSE streams (using built-in support from StreamableHTTP)
 app.get('/mcp', async (req: Request, res: Response) => {
+  console.log('Received MCP GET request');
   const sessionId = req.headers['mcp-session-id'] as string | undefined;
   if (!sessionId || !transports[sessionId]) {
     res.status(400).json({
