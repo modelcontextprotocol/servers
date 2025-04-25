@@ -365,6 +365,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Postman](https://github.com/shannonlal/mcp-postman)** - MCP server for running Postman Collections locally via Newman. Allows for simple execution of Postman Server and returns the results of whether the collection passed all the tests.
 - **[Productboard](https://github.com/kenjihikmatullah/productboard-mcp)** - Integrate the Productboard API into agentic workflows via MCP.
 - **[Prometheus](https://github.com/pab1it0/prometheus-mcp-server)** - Query and analyze Prometheus - open-source monitoring system.
+- **[PubChem](https://github.com/sssjiang/pubchem_mcp_server)** - extract drug information from pubchem API.
 - **[Pulumi](https://github.com/dogukanakkaya/pulumi-mcp-server)** - MCP Server to Interact with Pulumi API, creates and lists Stacks
 - **[Pushover](https://github.com/ashiknesin/pushover-mcp)** - Send instant notifications to your devices using [Pushover.net](https://pushover.net/)
 - **[Quarkus](https://github.com/quarkiverse/quarkus-mcp-servers)** - MCP servers for the Quarkus Java framework.
