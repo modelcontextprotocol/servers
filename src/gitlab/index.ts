@@ -111,24 +111,6 @@ async function createBranch(
   return GitLabReferenceSchema.parse(await response.json());
 }
 
-async function getDefaultBranchRef(projectId: string): Promise<string> {
-  const response = await fetch(
-    `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}`,
-    {
-      headers: {
-        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
-      }
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`GitLab API error: ${response.statusText}`);
-  }
-
-  const project = GitLabRepositorySchema.parse(await response.json());
-  return project.default_branch;
-}
-
 async function getFileContents(
   projectId: string,
   filePath: string,
@@ -138,6 +120,8 @@ async function getFileContents(
   let url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/repository/files/${encodedPath}`;
   if (ref) {
     url += `?ref=${encodeURIComponent(ref)}`;
+  } else {
+    url += '?ref=HEAD';
   }
 
   const response = await fetch(url, {
@@ -444,7 +428,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const args = CreateBranchSchema.parse(request.params.arguments);
         let ref = args.ref;
         if (!ref) {
-          ref = await getDefaultBranchRef(args.project_id);
+          ref = "HEAD";
         }
 
         const branch = await createBranch(args.project_id, {

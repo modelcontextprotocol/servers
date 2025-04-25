@@ -157,7 +157,7 @@ export const GitHubLabelSchema = z.object({
   name: z.string(),
   color: z.string(),
   default: z.boolean(),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
 });
 
 export const GitHubMilestoneSchema = z.object({
