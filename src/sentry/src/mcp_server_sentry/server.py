@@ -10,7 +10,7 @@ from mcp.server.models import InitializationOptions
 from mcp.shared.exceptions import McpError
 import mcp.server.stdio
 
-SENTRY_API_BASE = "https://sentry.io/api/0/"
+SENTRY_API_BASE_DEFAULT = "https://sentry.io/api/0/"
 MISSING_AUTH_TOKEN_MESSAGE = (
     """Sentry authentication token not found. Please specify your Sentry auth token."""
 )
@@ -45,12 +45,15 @@ Event Count: {self.count}
             description=f"Sentry Issue: {self.title}",
             messages=[
                 types.PromptMessage(
-                    role="user", content=types.TextContent(type="text", text=self.to_text())
+                    role="user",
+                    content=types.TextContent(type="text", text=self.to_text()),
                 )
             ],
         )
 
-    def to_tool_result(self) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
+    def to_tool_result(
+        self,
+    ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
         return [types.TextContent(type="text", text=self.to_text())]
 
 
@@ -72,7 +75,9 @@ def extract_issue_id(issue_id_or_url: str) -> str:
     if issue_id_or_url.startswith(("http://", "https://")):
         parsed_url = urlparse(issue_id_or_url)
         if not parsed_url.hostname or not parsed_url.hostname.endswith(".sentry.io"):
-            raise SentryError("Invalid Sentry URL. Must be a URL ending with .sentry.io")
+            raise SentryError(
+                "Invalid Sentry URL. Must be a URL ending with .sentry.io"
+            )
 
         path_parts = parsed_url.path.strip("/").split("/")
         if len(path_parts) < 2 or path_parts[0] != "issues":
@@ -177,7 +182,7 @@ async def handle_sentry_issue(
             first_seen=issue_data["firstSeen"],
             last_seen=issue_data["lastSeen"],
             count=issue_data["count"],
-            stacktrace=stacktrace
+            stacktrace=stacktrace,
         )
 
     except SentryError as e:
@@ -188,9 +193,19 @@ async def handle_sentry_issue(
         raise McpError(f"An error occurred: {str(e)}")
 
 
-async def serve(auth_token: str) -> Server:
+async def serve(auth_token: str, api_base_url: str) -> Server:
+    """
+    Start the Sentry MCP server with the specified authentication token and API base URL.
+
+    Args:
+        auth_token (str): Sentry authentication token.
+        api_base_url (str): Base URL for the Sentry API (region-specific).
+
+    Returns:
+        Server: The initialized MCP server instance.
+    """
     server = Server("sentry")
-    http_client = httpx.AsyncClient(base_url=SENTRY_API_BASE)
+    http_client = httpx.AsyncClient(base_url=api_base_url)
 
     @server.list_prompts()
     async def handle_list_prompts() -> list[types.Prompt]:
@@ -235,11 +250,11 @@ async def serve(auth_token: str) -> Server:
                     "properties": {
                         "issue_id_or_url": {
                             "type": "string",
-                            "description": "Sentry issue ID or URL to analyze"
+                            "description": "Sentry issue ID or URL to analyze",
                         }
                     },
-                    "required": ["issue_id_or_url"]
-                }
+                    "required": ["issue_id_or_url"],
+                },
             )
         ]
 
@@ -253,10 +268,13 @@ async def serve(auth_token: str) -> Server:
         if not arguments or "issue_id_or_url" not in arguments:
             raise ValueError("Missing issue_id_or_url argument")
 
-        issue_data = await handle_sentry_issue(http_client, auth_token, arguments["issue_id_or_url"])
+        issue_data = await handle_sentry_issue(
+            http_client, auth_token, arguments["issue_id_or_url"]
+        )
         return issue_data.to_tool_result()
 
     return server
+
 
 @click.command()
 @click.option(
@@ -265,10 +283,31 @@ async def serve(auth_token: str) -> Server:
     required=True,
     help="Sentry authentication token",
 )
-def main(auth_token: str):
+@click.option(
+    "--api-base-url",
+    envvar="SENTRY_API_BASE_URL",
+    default=SENTRY_API_BASE_DEFAULT,
+    show_default=True,
+    help="Base URL for the Sentry API (e.g., https://sentry.io/api/0/ for US, https://eu.sentry.io/api/0/ for EU)",
+)
+def main(auth_token: str, api_base_url: str):
+    """
+    Main entry point for the Sentry MCP server.
+
+    Args:
+        auth_token (str): Sentry authentication token.
+        api_base_url (str): Base URL for the Sentry API (region-specific).
+    """
+    # Validate the API base URL
+    if not api_base_url.startswith("https://") or not api_base_url.endswith("/api/0/"):
+        raise click.BadParameter(
+            "Invalid Sentry API base URL. It must start with 'https://' and end with '/api/0/'. "
+            "For example: 'https://sentry.io/api/0/' (US) or 'https://eu.sentry.io/api/0/' (EU)."
+        )
+
     async def _run():
         async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-            server = await serve(auth_token)
+            server = await serve(auth_token, api_base_url)
             await server.run(
                 read_stream,
                 write_stream,

@@ -33,7 +33,7 @@ A Model Context Protocol server for retrieving and analyzing issues from Sentry.
 ### Using uv (recommended)
 
 When using [`uv`](https://docs.astral.sh/uv/) no specific installation is needed. We will
-use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run *mcp-server-sentry*.
+use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run _mcp-server-sentry_.
 
 ### Using PIP
 
@@ -51,6 +51,29 @@ python -m mcp_server_sentry
 
 ## Configuration
 
+### Region Support (US/EU)
+
+By default, the server connects to the US Sentry API (`https://sentry.io/api/0/`).
+To connect to the EU Sentry API, set the `--api-base-url` CLI option or the `SENTRY_API_BASE_URL` environment variable:
+
+- **US Region (default):**
+  - Base URL: `https://sentry.io/api/0/`
+- **EU Region:**
+  - Base URL: `https://eu.sentry.io/api/0/`
+
+#### Example: Using the EU Sentry API
+
+```sh
+python -m mcp_server_sentry --auth-token YOUR_SENTRY_TOKEN --api-base-url https://eu.sentry.io/api/0/
+```
+
+Or with the environment variable:
+
+```sh
+export SENTRY_API_BASE_URL="https://eu.sentry.io/api/0/"
+python -m mcp_server_sentry --auth-token YOUR_SENTRY_TOKEN
+```
+
 ### Usage with Claude Desktop
 
 Add this to your `claude_desktop_config.json`:
@@ -62,10 +85,11 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "sentry": {
     "command": "uvx",
-    "args": ["mcp-server-sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+    "args": ["mcp-server-sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-base-url", "https://eu.sentry.io/api/0/"]
   }
 }
 ```
+
 </details>
 
 <details>
@@ -77,10 +101,11 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "sentry": {
     "command": "docker",
-    "args": ["run", "-i", "--rm", "mcp/sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+    "args": ["run", "-i", "--rm", "mcp/sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-base-url", "https://eu.sentry.io/api/0/"]
   }
 }
 ```
+
 </details>
 
 <details>
@@ -91,10 +116,11 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "sentry": {
     "command": "python",
-    "args": ["-m", "mcp_server_sentry", "--auth-token", "YOUR_SENTRY_TOKEN"]
+    "args": ["-m", "mcp_server_sentry", "--auth-token", "YOUR_SENTRY_TOKEN", "--api-base-url", "https://eu.sentry.io/api/0/"]
   }
 }
 ```
+
 </details>
 
 ### Usage with VS Code
@@ -137,6 +163,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   }
 }
 ```
+
 </details>
 
 <details>
@@ -165,6 +192,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   }
 }
 ```
+
 </details>
 
 ### Usage with [Zed](https://github.com/zed-industries/zed)
@@ -184,6 +212,7 @@ Add to your Zed settings.json:
   }
 ],
 ```
+
 </details>
 
 <details>
@@ -197,6 +226,7 @@ Add to your Zed settings.json:
   }
 },
 ```
+
 </details>
 
 ## Debugging
