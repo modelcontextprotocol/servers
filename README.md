@@ -197,7 +197,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[ChatMCP](https://github.com/AI-QL/chat-mcp)** – An Open Source Cross-platform GUI Desktop application compatible with Linux, macOS, and Windows, enabling seamless interaction with MCP servers across dynamically selectable LLMs, by **[AIQL](https://github.com/AI-QL)**
 - **[ChatSum](https://github.com/mcpso/mcp-server-chatsum)** - Query and Summarize chat messages with LLM. by [mcpso](https://mcp.so)
 - **[Chess.com](https://github.com/pab1it0/chess-mcp)** - Access Chess.com player data, game records, and other public information through standardized MCP interfaces, allowing AI assistants to search and analyze chess information.
-- **[ChessPal Chess Engine (stockfish)](https://github.com/wilson-urdaneta/chesspal-mcp-engine)** - A Stockfish-powered chess engine exposed as an MCP server. Calculates best moves and supports both HTTP/SSE and stdio transports. Part of the ChessPal project.
+- **[ChessPal Chess Engine (stockfish)](https://github.com/wilson-urdaneta/chesspal-mcp-engine)** - A Stockfish-powered chess engine exposed as an MCP server. Calculates best moves and supports both HTTP/SSE and stdio transports.
 - **[Chroma](https://github.com/privetin/chroma)** - Vector database server for semantic document search and metadata filtering, built on Chroma
 - **[ClaudePost](https://github.com/ZilongXue/claude-post)** - ClaudePost enables seamless email management for Gmail, offering secure features like email search, reading, and sending.
 - **[ClickUp](https://github.com/TaazKareem/clickup-mcp-server)** - MCP server for ClickUp task management, supporting task creation, updates, bulk operations, and markdown descriptions.
