@@ -64,13 +64,13 @@ To connect to the EU Sentry API, set the `--api-base-url` CLI option or the `SEN
 #### Example: Using the EU Sentry API
 
 ```sh
-python -m mcp_server_sentry --auth-token YOUR_SENTRY_TOKEN --api-base-url https://eu.sentry.io/api/0/
+python -m mcp_server_sentry --auth-token YOUR_SENTRY_TOKEN --api-base-url https://de.sentry.io/api/0/
 ```
 
 Or with the environment variable:
 
 ```sh
-export SENTRY_API_BASE_URL="https://eu.sentry.io/api/0/"
+export SENTRY_API_BASE_URL="https://de.sentry.io/api/0/"
 python -m mcp_server_sentry --auth-token YOUR_SENTRY_TOKEN
 ```
 

@@ -288,7 +288,7 @@ async def serve(auth_token: str, api_base_url: str) -> Server:
     envvar="SENTRY_API_BASE_URL",
     default=SENTRY_API_BASE_DEFAULT,
     show_default=True,
-    help="Base URL for the Sentry API (e.g., https://sentry.io/api/0/ for US, https://eu.sentry.io/api/0/ for EU)",
+    help="Base URL for the Sentry API (e.g., https://sentry.io/api/0/ for US, https://de.sentry.io/api/0/ for EU)",
 )
 def main(auth_token: str, api_base_url: str):
     """
@@ -302,7 +302,7 @@ def main(auth_token: str, api_base_url: str):
     if not api_base_url.startswith("https://") or not api_base_url.endswith("/api/0/"):
         raise click.BadParameter(
             "Invalid Sentry API base URL. It must start with 'https://' and end with '/api/0/'. "
-            "For example: 'https://sentry.io/api/0/' (US) or 'https://eu.sentry.io/api/0/' (EU)."
+            "For example: 'https://sentry.io/api/0/' (US) or 'https://de.sentry.io/api/0/' (EU)."
         )
 
     async def _run():
