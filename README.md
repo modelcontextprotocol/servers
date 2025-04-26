@@ -341,6 +341,7 @@ A growing set of community-developed and maintained servers demonstrates various
 
 - **[Neo4j](https://github.com/da-okazaki/mcp-neo4j-server)** - A community built server that interacts with Neo4j Graph Database.
 - **[Neovim](https://github.com/bigcodegen/mcp-neovim-server)** - An MCP Server for your Neovim session.
+- **[NocoDB](https://github.com/edwinbernadus/nocodb-mcp-server)** - Read and write access to NocoDB database.
 - **[nomad-mcp](https://github.com/kocierik/mcp-nomad)** - A server that provides a set of tools for managing Nomad clusters through the MCP.
 - **[Notion](https://github.com/suekou/mcp-notion-server)** (by suekou) - Interact with Notion API.
 - **[Notion](https://github.com/v-3/notion-server)** (by v-3) - Notion MCP integration. Search, Read, Update, and Create pages through Claude chat.
