@@ -78,6 +78,7 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
    - `chat:write` - Send messages as the app
    - `reactions:write` - Add emoji reactions to messages
    - `users:read` - View users and their basic information
+   - `users.profile:read` - View detailed profiles about users
 
 4. Install App to Workspace:
    - Click "Install to Workspace" and authorize the app
@@ -89,7 +90,7 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
 
 Add the following to your `claude_desktop_config.json`:
 
-#### npx
+#### NPX
 
 ```json
 {
@@ -133,6 +134,84 @@ Add the following to your `claude_desktop_config.json`:
         "SLACK_BOT_TOKEN": "xoxb-your-bot-token",
         "SLACK_TEAM_ID": "T01234567",
         "SLACK_CHANNEL_IDS": "C01234567, C76543210"
+      }
+    }
+  }
+}
+```
+
+### Usage with VS Code
+
+For quick installation, click one of the installation buttons below...
+
+[![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-NPM-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=slack&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22slack_bot_token%22%2C%22description%22%3A%22Slack%20Bot%20Token%20(starts%20with%20xoxb-)%22%2C%22password%22%3Atrue%7D%2C%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22slack_team_id%22%2C%22description%22%3A%22Slack%20Team%20ID%20(starts%20with%20T)%22%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-slack%22%5D%2C%22env%22%3A%7B%22SLACK_BOT_TOKEN%22%3A%22%24%7Binput%3Aslack_bot_token%7D%22%2C%22SLACK_TEAM_ID%22%3A%22%24%7Binput%3Aslack_team_id%7D%22%7D%7D) [![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-NPM-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=slack&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22slack_bot_token%22%2C%22description%22%3A%22Slack%20Bot%20Token%20(starts%20with%20xoxb-)%22%2C%22password%22%3Atrue%7D%2C%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22slack_team_id%22%2C%22description%22%3A%22Slack%20Team%20ID%20(starts%20with%20T)%22%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-slack%22%5D%2C%22env%22%3A%7B%22SLACK_BOT_TOKEN%22%3A%22%24%7Binput%3Aslack_bot_token%7D%22%2C%22SLACK_TEAM_ID%22%3A%22%24%7Binput%3Aslack_team_id%7D%22%7D%7D&quality=insiders)
+
+[![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=slack&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22slack_bot_token%22%2C%22description%22%3A%22Slack%20Bot%20Token%20(starts%20with%20xoxb-)%22%2C%22password%22%3Atrue%7D%2C%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22slack_team_id%22%2C%22description%22%3A%22Slack%20Team%20ID%20(starts%20with%20T)%22%7D%5D&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22mcp%2Fslack%22%5D%2C%22env%22%3A%7B%22SLACK_BOT_TOKEN%22%3A%22%24%7Binput%3Aslack_bot_token%7D%22%2C%22SLACK_TEAM_ID%22%3A%22%24%7Binput%3Aslack_team_id%7D%22%7D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=slack&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22slack_bot_token%22%2C%22description%22%3A%22Slack%20Bot%20Token%20(starts%20with%20xoxb-)%22%2C%22password%22%3Atrue%7D%2C%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22slack_team_id%22%2C%22description%22%3A%22Slack%20Team%20ID%20(starts%20with%20T)%22%7D%5D&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22mcp%2Fslack%22%5D%2C%22env%22%3A%7B%22SLACK_BOT_TOKEN%22%3A%22%24%7Binput%3Aslack_bot_token%7D%22%2C%22SLACK_TEAM_ID%22%3A%22%24%7Binput%3Aslack_team_id%7D%22%7D%7D&quality=insiders)
+
+For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open Settings (JSON)`.
+
+Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+
+> Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
+
+#### NPX
+
+```json
+{
+  "mcp": {
+    "inputs": [
+      {
+        "type": "promptString",
+        "id": "slack_bot_token",
+        "description": "Slack Bot Token (starts with xoxb-)",
+        "password": true
+      },
+      {
+        "type": "promptString",
+        "id": "slack_team_id",
+        "description": "Slack Team ID (starts with T)"
+      }
+    ],
+    "servers": {
+      "slack": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-slack"],
+        "env": {
+          "SLACK_BOT_TOKEN": "${input:slack_bot_token}",
+          "SLACK_TEAM_ID": "${input:slack_team_id}"
+        }
+      }
+    }
+  }
+}
+```
+
+#### Docker
+
+```json
+{
+  "mcp": {
+    "inputs": [
+      {
+        "type": "promptString",
+        "id": "slack_bot_token",
+        "description": "Slack Bot Token (starts with xoxb-)",
+        "password": true
+      },
+      {
+        "type": "promptString",
+        "id": "slack_team_id",
+        "description": "Slack Team ID (starts with T)"
+      }
+    ],
+    "servers": {
+      "slack": {
+        "command": "docker",
+        "args": ["run", "-i", "--rm", "mcp/slack"],
+        "env": {
+          "SLACK_BOT_TOKEN": "${input:slack_bot_token}",
+          "SLACK_TEAM_ID": "${input:slack_team_id}"
+        }
       }
     }
   }
