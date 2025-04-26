@@ -1,0 +1,17 @@
+---
+description: Advice for using the puppeteer tool
+globs: 
+alwaysApply: false
+---
+When using Puppeteer for web interactions, please:
+
+1. Navigate to the target website
+2. Take a screenshot immediately after navigation to verify the page loaded. if needed wait for it to load
+3. Use direct position-based clicking where possible
+4. Use precise CSS selectors when possible (ID, class, or element+attribute combinations)
+5. If direct selectors fail, try JavaScript evaluation with document.querySelector or XPath
+6. Take screenshots after each significant interaction
+7. Describe what you observe on the page after each step
+8. When targeting text-containing elements, use JavaScript evaluation instead of :contains() selectors
+
+If attempting complex interactions, provide step-by-step guidance to yourself on what you're trying to accomplish.

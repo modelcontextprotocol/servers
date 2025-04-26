@@ -13,6 +13,7 @@ import {
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import puppeteer, { Browser, Page } from "puppeteer";
+import fetch from "node-fetch";
 
 // Define the tools once to avoid repetition
 const TOOLS: Tool[] = [
@@ -54,6 +55,31 @@ const TOOLS: Tool[] = [
       required: ["selector"],
     },
   },
+  {
+    name: "puppeteer_click_position",
+    description: "Click at specific x,y coordinates on the page",
+    inputSchema: {
+      type: "object",
+      properties: {
+        x: { type: "number", description: "X coordinate in pixels" },
+        y: { type: "number", description: "Y coordinate in pixels" },
+        button: { type: "string", description: "Mouse button to use (default: left). Options: left, right, middle" },
+        clickCount: { type: "number", description: "Number of clicks (default: 1)" },
+      },
+      required: ["x", "y"],
+    },
+  },
+  // {
+  //   name: "puppeteer_click_semantic",
+  //   description: "Click on an element based on a semantic description",
+  //   inputSchema: {
+  //     type: "object",
+  //     properties: {
+  //       description: { type: "string", description: "Description of the element to click (e.g. 'Submit button', 'Search icon in top right corner', 'Login link')" },
+  //     },
+  //     required: ["description"],
+  //   },
+  // },
   {
     name: "puppeteer_fill",
     description: "Fill out an input field",
@@ -98,6 +124,19 @@ const TOOLS: Tool[] = [
         script: { type: "string", description: "JavaScript code to execute" },
       },
       required: ["script"],
+    },
+  },
+  {
+    name: "puppeteer_scroll",
+    description: "Scroll the page vertically or to a specific element",
+    inputSchema: {
+      type: "object",
+      properties: {
+        selector: { type: "string", description: "CSS selector for element to scroll to" },
+        x: { type: "number", description: "Horizontal scroll position in pixels" },
+        y: { type: "number", description: "Vertical scroll position in pixels" },
+        behavior: { type: "string", description: "Scroll behavior: 'auto' (instant) or 'smooth' (default: 'auto')" },
+      },
     },
   },
 ];
@@ -211,6 +250,74 @@ declare global {
   }
 }
 
+// Function to call Claude for semantic clicking
+/* 
+async function callClaudeForClick(screenshot: string, description: string): Promise<{x: number, y: number} | null> {
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      console.error("Error: ANTHROPIC_API_KEY environment variable is not set");
+      return null;
+    }
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model: "claude-3-7-sonnet-20250219",
+        max_tokens: 1024,
+        temperature: 0,
+        system: "You are a helpful assistant that analyzes screenshots and provides coordinates to click on specific elements. Use the computer tools to identify where to click based on the user's description.",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: `Locate and click on the element described as: "${description}"` },
+              { 
+                type: "image", 
+                source: { type: "base64", media_type: "image/png", data: screenshot }
+              }
+            ]
+          }
+        ],
+        tools: [
+          {
+            name: "computer", 
+            type: "computer_20250124",
+            display_width_px: 800,
+            display_height_px: 600
+          }
+        ]
+      })
+    });
+
+    const data = await response.json();
+    
+    // Parse the response to find the click coordinates
+    // Look for tool_use content in the Claude response
+    if (data.content && Array.isArray(data.content)) {
+      for (const content of data.content) {
+        if (content.type === "tool_use" && content.name === "computer") {
+          const input = content.input;
+          if (input && input.action === "click" && typeof input.x === "number" && typeof input.y === "number") {
+            return { x: input.x, y: input.y };
+          }
+        }
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error calling Claude:", error);
+    return null;
+  }
+}
+*/
+
 async function handleToolCall(name: string, args: any): Promise<CallToolResult> {
   const page = await ensureBrowser(args);
 
@@ -280,6 +387,151 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
           content: [{
             type: "text",
             text: `Failed to click ${args.selector}: ${(error as Error).message}`,
+          }],
+          isError: true,
+        };
+      }
+
+    case "puppeteer_click_position":
+      try {
+        const x = args.x;
+        const y = args.y;
+        const button = args.button || 'left';
+        const clickCount = args.clickCount || 1;
+        
+        await page.mouse.click(x, y, { button: button as 'left' | 'right' | 'middle', clickCount });
+        
+        return {
+          content: [{
+            type: "text",
+            text: `Clicked at position (${x}, ${y}) with ${button} button ${clickCount} time(s)`,
+          }],
+          isError: false,
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: `Failed to click at position: ${(error as Error).message}`,
+          }],
+          isError: true,
+        };
+      }
+
+    // case "puppeteer_click_semantic":
+    //   try {
+    //     const description = args.description;
+        
+    //     // Take a screenshot to analyze
+    //     const screenshot = await page.screenshot({ encoding: "base64", fullPage: false });
+        
+    //     // Try up to 3 times to get click coordinates
+    //     let clickCoords = null;
+    //     let attempts = 0;
+        
+    //     while (!clickCoords && attempts < 3) {
+    //       attempts++;
+    //       clickCoords = await callClaudeForClick(screenshot as string, description);
+          
+    //       if (!clickCoords && attempts < 3) {
+    //         // Wait a bit before retrying
+    //         await new Promise(resolve => setTimeout(resolve, 1000));
+    //       }
+    //     }
+        
+    //     if (!clickCoords) {
+    //       return {
+    //         content: [{
+    //           type: "text",
+    //           text: "Internal error: Could not determine where to click. Make sure ANTHROPIC_API_KEY environment variable is set.",
+    //         }],
+    //         isError: true,
+    //       };
+    //     }
+        
+    //     // Perform the click
+    //     await page.mouse.click(clickCoords.x, clickCoords.y);
+        
+    //     return {
+    //       content: [{
+    //         type: "text",
+    //         text: `Semantically clicked "${description}" at position (${clickCoords.x}, ${clickCoords.y})`,
+    //       }],
+    //       isError: false,
+    //     };
+    //   } catch (error) {
+    //     return {
+    //       content: [{
+    //         type: "text",
+    //         text: `Failed to perform semantic click: ${(error as Error).message}`,
+    //       }],
+    //       isError: true,
+    //     };
+    //   }
+
+    case "puppeteer_scroll":
+      try {
+        if (args.selector) {
+          // Scroll to element
+          const element = await page.$(args.selector);
+          if (!element) {
+            return {
+              content: [{
+                type: "text",
+                text: `Element not found: ${args.selector}`,
+              }],
+              isError: true,
+            };
+          }
+          
+          await page.evaluate((selector, behavior) => {
+            const element = document.querySelector(selector);
+            if (element) {
+              element.scrollIntoView({ behavior: behavior || 'auto' });
+            }
+          }, args.selector, args.behavior);
+          
+          return {
+            content: [{
+              type: "text",
+              text: `Scrolled to element: ${args.selector}`,
+            }],
+            isError: false,
+          };
+        } else if (args.x !== undefined || args.y !== undefined) {
+          // Scroll to position
+          const x = args.x ?? 0;
+          const y = args.y ?? 0;
+          
+          await page.evaluate((x, y, behavior) => {
+            window.scrollTo({
+              left: x,
+              top: y,
+              behavior: behavior || 'auto'
+            });
+          }, x, y, args.behavior);
+          
+          return {
+            content: [{
+              type: "text",
+              text: `Scrolled to position (${x}, ${y})`,
+            }],
+            isError: false,
+          };
+        } else {
+          return {
+            content: [{
+              type: "text",
+              text: `No scroll target specified. Please provide a selector or x/y coordinates.`,
+            }],
+            isError: true,
+          };
+        }
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: `Failed to scroll: ${(error as Error).message}`,
           }],
           isError: true,
         };
@@ -415,7 +667,6 @@ const server = new Server(
     },
   },
 );
-
 
 // Setup request handlers
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
