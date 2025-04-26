@@ -28,6 +28,15 @@ A Model Context Protocol server that provides browser automation capabilities us
   - Click elements on the page
   - Input: `selector` (string): CSS selector for element to click
 
+- **puppeteer_click_position**
+
+  - Click at specific x,y coordinates on the page
+  - Inputs:
+    - `x` (number, required): X coordinate in pixels
+    - `y` (number, required): Y coordinate in pixels
+    - `button` (string, optional, default: 'left'): Mouse button to use. Options: 'left', 'right', 'middle'
+    - `clickCount` (number, optional, default: 1): Number of clicks
+
 - **puppeteer_hover**
 
   - Hover elements on the page
@@ -47,9 +56,20 @@ A Model Context Protocol server that provides browser automation capabilities us
     - `selector` (string): CSS selector for element to select
     - `value` (string): Value to select
 
+- **puppeteer_scroll**
+
+  - Scroll the page vertically or to a specific element
+  - Inputs:
+    - `selector` (string, optional): CSS selector for element to scroll to
+    - `x` (number, optional): Horizontal scroll position in pixels
+    - `y` (number, optional): Vertical scroll position in pixels
+    - `behavior` (string, optional, default: 'auto'): Scroll behavior: 'auto' (instant) or 'smooth'
+
 - **puppeteer_evaluate**
   - Execute JavaScript in the browser console
   - Input: `script` (string): JavaScript code to execute
+
+<!-- Note: puppeteer_click_semantic tool is currently disabled in the implementation -->
 
 ### Resources
 
