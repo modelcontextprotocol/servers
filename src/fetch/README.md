@@ -87,6 +87,21 @@ Add to your Claude settings:
 ```
 </details>
 
+<details>
+<summary>Using conda installation</summary>
+
+> Use absolute paths with conda
+
+```json
+"mcpServers": {
+  "fetch": {
+    "command": "/{your_conda_path}/envs/{env_name}/bin/python",
+    "args": ["-m", "mcp_server_fetch"]
+  }
+}
+```
+</details>
+
 ### Configure for VS Code
 
 For quick installation, use one of the one-click install buttons below...
