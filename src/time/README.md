@@ -45,10 +45,12 @@ Add to your Claude settings:
 <summary>Using uvx</summary>
 
 ```json
-"mcpServers": {
-  "time": {
-    "command": "uvx",
-    "args": ["mcp-server-time"]
+{
+  "mcpServers": {
+    "time": {
+      "command": "uvx",
+      "args": ["mcp-server-time"]
+    }
   }
 }
 ```
@@ -58,10 +60,12 @@ Add to your Claude settings:
 <summary>Using docker</summary>
 
 ```json
-"mcpServers": {
-  "time": {
-    "command": "docker",
-    "args": ["run", "-i", "--rm", "mcp/time"]
+{
+  "mcpServers": {
+    "time": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "mcp/time"]
+    }
   }
 }
 ```
@@ -71,10 +75,12 @@ Add to your Claude settings:
 <summary>Using pip installation</summary>
 
 ```json
-"mcpServers": {
-  "time": {
-    "command": "python",
-    "args": ["-m", "mcp_server_time"]
+{
+  "mcpServers": {
+    "time": {
+      "command": "python",
+      "args": ["-m", "mcp_server_time"]
+    }
   }
 }
 ```
