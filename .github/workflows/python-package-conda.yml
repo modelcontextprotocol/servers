@@ -32,3 +32,9 @@ jobs:
       run: |
         conda install pytest
         pytest
+name: base
+dependencies:
+  - python=3.10
+  - flake8
+  - pytest
+  - <diğer-bağımlılıklar>
