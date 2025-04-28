@@ -60,6 +60,10 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - Creates parent directories if needed
   - Succeeds silently if directory exists
 
+- **compress_directory**
+  - Compress directory contents with zip
+  - Input: `path` (string)
+
 - **list_directory**
   - List directory contents with [FILE] or [DIR] prefixes
   - Input: `path` (string)
