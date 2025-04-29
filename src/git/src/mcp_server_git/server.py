@@ -1,6 +1,5 @@
 import logging
 from pathlib import Path
-import os
 from typing import Sequence
 from mcp.server import Server
 from mcp.server.session import ServerSession
