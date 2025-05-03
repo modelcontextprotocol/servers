@@ -1,0 +1,25 @@
+{
+  "name": "mcp-filesystem-tests",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build:server": "cd ../../src/filesystem && npm run build",
+    "build:tests": "tsc",
+    "build": "npm run build:server && npm run build:tests",
+    "test": "npm run build && node dist/test.js",
+    "test:comprehensive": "npm run build && node dist/comprehensive-test.js",
+    "test:create-file": "npm run build && node dist/create-file-test.js",
+    "search": "npm run build && node dist/sdk-search-test.js",
+    "search:content": "npm run build && node dist/content-search-test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "latest"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  }
+}
