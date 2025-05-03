@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/modelcontextprotocol-server-aws-kb-retrieval-badge.png)](https://mseep.ai/app/modelcontextprotocol-server-aws-kb-retrieval)
+
 # Model Context Protocol servers
 
 This repository is a collection of *reference implementations* for the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), as well as references
