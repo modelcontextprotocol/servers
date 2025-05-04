@@ -20,6 +20,7 @@ import {
   GitLabSearchResponseSchema,
   GitLabTreeSchema,
   GitLabCommitSchema,
+  GitLabMembersResponseSchema,
   CreateRepositoryOptionsSchema,
   CreateIssueOptionsSchema,
   CreateMergeRequestOptionsSchema,
@@ -33,6 +34,7 @@ import {
   CreateMergeRequestSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
+  ListMembersSchema,
   type GitLabFork,
   type GitLabReference,
   type GitLabRepository,
@@ -44,6 +46,7 @@ import {
   type GitLabTree,
   type GitLabCommit,
   type FileOperation,
+  type GitLabMembersResponse,
 } from './schemas.js';
 
 const server = new Server({
@@ -359,6 +362,35 @@ async function createRepository(
   return GitLabRepositorySchema.parse(await response.json());
 }
 
+async function listMembers(
+  projectId: string,
+  includeInheritance: boolean = false,
+  page: number = 1,
+  perPage: number = 20
+): Promise<GitLabMembersResponse> {
+  // Build URL for project members, with or without inheritance
+  const url = includeInheritance 
+    ? `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/members/all`
+    : `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/members`;
+
+  const urlObj = new URL(url);
+  urlObj.searchParams.append("page", page.toString());
+  urlObj.searchParams.append("per_page", perPage.toString());
+
+  const response = await fetch(urlObj.toString(), {
+    headers: {
+      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitLab API error: ${response.statusText} (${response.status})`);
+  }
+
+  const members = await response.json();
+  return GitLabMembersResponseSchema.parse(members);
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -406,6 +438,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_branch",
         description: "Create a new branch in a GitLab project",
         inputSchema: zodToJsonSchema(CreateBranchSchema)
+      },
+      {
+        name: "list_members",
+        description: "List members of a GitLab project",
+        inputSchema: zodToJsonSchema(ListMembersSchema)
       }
     ]
   };
@@ -493,6 +530,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { project_id, ...options } = args;
         const mergeRequest = await createMergeRequest(project_id, options);
         return { content: [{ type: "text", text: JSON.stringify(mergeRequest, null, 2) }] };
+      }
+
+      case "list_members": {
+        const args = ListMembersSchema.parse(request.params.arguments);
+        const members = await listMembers(
+          args.project_id, 
+          args.include_inheritance, 
+          args.page, 
+          args.per_page
+        );
+        return { content: [{ type: "text", text: JSON.stringify(members, null, 2) }] };
       }
 
       default:
