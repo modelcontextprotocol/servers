@@ -273,6 +273,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Google Calendar](https://github.com/nspady/google-calendar-mcp)** - Google Calendar MCP Server for managing Google calendar events. Also supports searching for events by attributes like title and location.
 - **[Google Custom Search](https://github.com/adenot/mcp-google-search)** - Provides Google Search results via the Google Custom Search API
 - **[Google Sheets](https://github.com/xing5/mcp-google-sheets)** - Access and editing data to your Google Sheets.
+- **[Google Sheets](https://github.com/rohans2/mcp-google-sheets)** - A MCP Server written in TypeScript to access and edit data in your Google Sheets.
 - **[Google Tasks](https://github.com/zcaceres/gtasks-mcp)** - Google Tasks API Model Context Protocol Server.
 - **[Google Vertex AI Search](https://github.com/ubie-oss/mcp-vertexai-search)** - Provides Google Vertex AI Search results by grounding a Gemini model with your own private data
 - **[GraphQL Schema](https://github.com/hannesj/mcp-graphql-schema)** - Allow LLMs to explore large GraphQL schemas without bloating the context.
