@@ -39,20 +39,7 @@ const TOOLS: Tool[] = [
         selector: { type: "string", description: "CSS selector for element to screenshot" },
         width: { type: "number", description: "Width in pixels (default: 800)" },
         height: { type: "number", description: "Height in pixels (default: 600)" },
-      },
-      required: ["name"],
-    },
-  },
-  {
-    name: "puppeteer_screenshot_encoded",
-    description: "Take a screenshot of the current page or a specific element and return it as a base64-encoded data URI",
-    inputSchema: {
-      type: "object",
-      properties: {
-        name: { type: "string", description: "Name for the screenshot" },
-        selector: { type: "string", description: "CSS selector for element to screenshot" },
-        width: { type: "number", description: "Width in pixels (default: 800)" },
-        height: { type: "number", description: "Height in pixels (default: 600)" },
+        encoded: { type: "boolean", description: "If true, capture the screenshot as a base64-encoded data URI (as text) instead of binary image content. Default false." },
       },
       required: ["name"],
     },
