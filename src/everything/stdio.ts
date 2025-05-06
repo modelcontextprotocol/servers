@@ -3,7 +3,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "./everything.js";
 
-console.log('Starting default (STDIO) server...');
+console.error('Starting default (STDIO) server...');
 
 async function main() {
   const transport = new StdioServerTransport();
