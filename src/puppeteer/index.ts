@@ -242,6 +242,7 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
     case "puppeteer_screenshot": {
       const width = args.width ?? 800;
       const height = args.height ?? 600;
+      const encoded = args.encoded ?? false;
       await page.setViewport({ width, height });
 
       const screenshot = await (args.selector ?
@@ -269,52 +270,14 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
             type: "text",
             text: `Screenshot '${args.name}' taken at ${width}x${height}`,
           } as TextContent,
-          {
+          encoded ? ({
+            type: "text",
+            text: `data:image/png;base64,${screenshot}`,
+          } as TextContent) : ({
             type: "image",
             data: screenshot,
             mimeType: "image/png",
-          } as ImageContent,
-        ],
-        isError: false,
-      };
-    }
-
-    case "puppeteer_screenshot_encoded": {
-      const width = args.width ?? 800;
-      const height = args.height ?? 600;
-      await page.setViewport({ width, height });
-
-      const screenshot = await (args.selector
-        ? (await page.$(args.selector))?.screenshot({ encoding: "base64" })
-        : page.screenshot({ encoding: "base64", fullPage: false }));
-
-      if (!screenshot) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: args.selector ? `Element not found: ${args.selector}` : "Screenshot failed",
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      screenshots.set(args.name, screenshot as string);
-      server.notification({
-        method: "notifications/resources/list_changed",
-      });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Screenshot '${args.name}' taken at ${width}x${height}`,
-          } as TextContent,
-          {
-            type: "text",
-            text: `data:image/png;base64,${screenshot}`,
-          } as TextContent,
+          } as ImageContent),
         ],
         isError: false,
       };
