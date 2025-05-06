@@ -2,7 +2,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
 import { createServer } from "./everything.js";
 
-console.log('Starting SSE server...');
+console.error('Starting SSE server...');
 
 const app = express();
 
