@@ -1,12 +1,12 @@
 FROM node:22-bookworm-slim
 
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
 # for arm64 support we need to install chromium provided by debian
 # npm ERR! The chromium binary is not available for arm64.
 # https://github.com/puppeteer/puppeteer/issues/7740
 
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD true
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 RUN apt-get update && \
