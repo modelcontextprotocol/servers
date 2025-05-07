@@ -42,7 +42,7 @@ const allowedDirectories = args.map(dir =>
 // Validate that all directories exist and are accessible
 await Promise.all(args.map(async (dir) => {
   try {
-    const stats = await fs.stat(dir);
+    const stats = await fs.stat(expandHome(dir));
     if (!stats.isDirectory()) {
       console.error(`Error: ${dir} is not a directory`);
       process.exit(1);
