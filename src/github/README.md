@@ -307,6 +307,10 @@ For detailed search syntax, see [GitHub's searching documentation](https://docs.
 
 ## Setup
 
+### Configurable GitHub Host Support
+This project now supports a configurable GitHub host via the `GITHUB_API_URL` environment variable.  
+Set `GITHUB_API_URL` to your custom GitHub API URL to use a different host.
+
 ### Personal Access Token
 [Create a GitHub Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) with appropriate permissions:
    - Go to [Personal access tokens](https://github.com/settings/tokens) (in GitHub Settings > Developer settings)

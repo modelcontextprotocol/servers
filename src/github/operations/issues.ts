@@ -53,7 +53,7 @@ export const UpdateIssueOptionsSchema = z.object({
 });
 
 export async function getIssue(owner: string, repo: string, issue_number: number) {
-  return githubRequest(`https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}`);
+  return githubRequest(`/repos/${owner}/${repo}/issues/${issue_number}`);
 }
 
 export async function addIssueComment(
@@ -62,7 +62,7 @@ export async function addIssueComment(
   issue_number: number,
   body: string
 ) {
-  return githubRequest(`https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}/comments`, {
+  return githubRequest(`/repos/${owner}/${repo}/issues/${issue_number}/comments`, {
     method: "POST",
     body: { body },
   });
@@ -74,7 +74,7 @@ export async function createIssue(
   options: z.infer<typeof CreateIssueOptionsSchema>
 ) {
   return githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/issues`,
+    `/repos/${owner}/${repo}/issues`,
     {
       method: "POST",
       body: options,
@@ -98,7 +98,7 @@ export async function listIssues(
   };
 
   return githubRequest(
-    buildUrl(`https://api.github.com/repos/${owner}/${repo}/issues`, urlParams)
+    buildUrl(`/repos/${owner}/${repo}/issues`, urlParams)
   );
 }
 
@@ -109,7 +109,7 @@ export async function updateIssue(
   options: Omit<z.infer<typeof UpdateIssueOptionsSchema>, "owner" | "repo" | "issue_number">
 ) {
   return githubRequest(
-    `https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}`,
+    `/repos/${owner}/${repo}/issues/${issue_number}`,
     {
       method: "PATCH",
       body: options,
