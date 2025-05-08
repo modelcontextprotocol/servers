@@ -192,21 +192,11 @@ async def serve(
 
     if repository is not None:
         try:
-            logger.debug(f"Validating repository path: {repository}")
-            repo = git.Repo(repository)
+            git.Repo(repository)
             logger.info(f"Using repository at {repository}")
-        except git.InvalidGitRepositoryError as e:
-            logger.error(f"{repository} is not a valid Git repository: {e}")
-            # Return a detailed error message for debugging
-            return [
-                TextContent(
-                    type="text",
-                    text=f"Error: {repository} is not a valid Git repository: {e}",
-                )
-            ]
-        except Exception as e:
-            logger.error(f"Unexpected error while validating repository: {e}")
-            return [TextContent(type="text", text=f"Unexpected error: {e}")]
+        except git.InvalidGitRepositoryError:
+            logger.error(f"{repository} is not a valid Git repository")
+            return
 
     server = Server("mcp-git")
 
@@ -290,7 +280,6 @@ async def serve(
             roots_result: ListRootsResult = (
                 await server.request_context.session.list_roots()
             )
-            logger.debug(f"Roots result: {roots_result}")
             repo_paths = []
             for root in roots_result.roots:
                 path = root.uri.path
