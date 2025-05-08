@@ -84,7 +84,10 @@ Once authenticated, you can use the server in your app's server configuration:
       "args": [
         "-y",
         "@modelcontextprotocol/server-gdrive"
-      ]
+      ],
+      "env": {
+        "GDRIVE_CREDENTIALS_PATH": "/path/to/.gdrive-server-credentials.json"
+      }
     }
   }
 }
