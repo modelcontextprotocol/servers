@@ -16,6 +16,9 @@ def main():
         help="Ignore robots.txt restrictions",
     )
     parser.add_argument("--proxy-url", type=str, help="Proxy URL to use for requests")
+    parser.add_argument(
+        "--timeout", type=int, default=30, help="Timeout for requests in seconds"
+    )
 
     args = parser.parse_args()
     asyncio.run(serve(args.user_agent, args.ignore_robots_txt, args.proxy_url))
