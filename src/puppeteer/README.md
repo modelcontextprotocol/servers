@@ -74,6 +74,28 @@ The server provides access to two types of resources:
 - Basic web interaction (navigation, clicking, form filling)
 - Customizable Puppeteer launch options
 
+### Viewport Handling
+
+The browser viewport size can be controlled in multiple ways, with the following precedence:
+
+1. Tool Call Parameters (Highest Priority)
+   - When width/height are provided to `puppeteer_screenshot`
+   - When defaultViewport is set in `puppeteer_navigate` launchOptions
+
+2. Environment Configuration (Medium Priority)
+   - Via defaultViewport in PUPPETEER_LAUNCH_OPTIONS
+   - Example: `{ "defaultViewport": { "width": 1920, "height": 1080 } }`
+
+3. Default Values (Lowest Priority)
+   - Width: 800 pixels
+   - Height: 600 pixels
+
+The viewport settings are maintained across operations unless explicitly changed. For example, if you set the viewport via PUPPETEER_LAUNCH_OPTIONS, it will persist until either:
+- A tool call provides new viewport dimensions
+- The browser is restarted with different launch options
+
+This ensures consistent viewport behavior while allowing flexibility when needed.
+
 ## Configuration to use Puppeteer Server
 
 ### Usage with Claude Desktop
