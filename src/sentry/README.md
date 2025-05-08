@@ -66,9 +66,8 @@ Add this to your `claude_desktop_config.json`:
   }
 }
 ```
-</details>
 
-<details>
+</details>
 
 <details>
 <summary>Using docker</summary>
@@ -81,6 +80,7 @@ Add this to your `claude_desktop_config.json`:
   }
 }
 ```
+
 </details>
 
 <details>
@@ -95,6 +95,7 @@ Add this to your `claude_desktop_config.json`:
   }
 }
 ```
+
 </details>
 
 ### Usage with VS Code
@@ -137,6 +138,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   }
 }
 ```
+
 </details>
 
 <details>
@@ -165,6 +167,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   }
 }
 ```
+
 </details>
 
 ### Usage with [Zed](https://github.com/zed-industries/zed)
@@ -184,6 +187,7 @@ Add to your Zed settings.json:
   }
 ],
 ```
+
 </details>
 
 <details>
@@ -197,6 +201,7 @@ Add to your Zed settings.json:
   }
 },
 ```
+
 </details>
 
 ## Debugging
