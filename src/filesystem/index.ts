@@ -53,6 +53,18 @@ await Promise.all(args.map(async (dir) => {
   }
 }));
 
+async function getConsistentRealPath(inputPath) {
+    let resolvedPath = await fs.realpath(inputPath);
+  
+    // Check if in Windows and the path is like "X:"
+    if (process.platform === 'win32' && /^[a-zA-Z]:$/.test(resolvedPath)) {
+      // add path separator '\'
+      resolvedPath += path.sep;
+    }
+  
+    return resolvedPath;
+}
+
 // Security utilities
 async function validatePath(requestedPath: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
@@ -70,7 +82,7 @@ async function validatePath(requestedPath: string): Promise<string> {
 
   // Handle symlinks by checking their real path
   try {
-    const realPath = await fs.realpath(absolute);
+    const realPath = await getConsistentRealPath(absolute);
     const normalizedReal = normalizePath(realPath);
     const isRealPathAllowed = allowedDirectories.some(dir => normalizedReal.startsWith(dir));
     if (!isRealPathAllowed) {
@@ -81,7 +93,7 @@ async function validatePath(requestedPath: string): Promise<string> {
     // For new files that don't exist yet, verify parent directory
     const parentDir = path.dirname(absolute);
     try {
-      const realParentPath = await fs.realpath(parentDir);
+      const realParentPath = getConsistentRealPath(parentDir);
       const normalizedParent = normalizePath(realParentPath);
       const isParentAllowed = allowedDirectories.some(dir => normalizedParent.startsWith(dir));
       if (!isParentAllowed) {
