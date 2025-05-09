@@ -1,0 +1,20 @@
+{
+  "name": "jira_mcp",
+  "version": "1.0.0",
+  "description": "Jira MCP",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Maximiliano Garcia",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.10.1",
+    "dotenv": "^16.5.0",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "typescript": "^5.8.3"
+  }
+}
