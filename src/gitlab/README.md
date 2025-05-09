@@ -80,20 +80,34 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `allow_collaboration` (optional boolean): Allow commits from upstream members
    - Returns: Created merge request details
 
-8. `fork_repository`
+8. `get_merge_request_raw_diff`
+   - Get a merge request information of the difference in a raw format
+   - Inputs:
+     - `project_id` (string): Project ID or URL-encoded path
+     - `merge_request_id` (string): ID of the merge request
+   - Returns: The difference of the merge request in a raw format
+
+9. `fork_repository`
    - Fork a project
    - Inputs:
      - `project_id` (string): Project ID or URL-encoded path
      - `namespace` (optional string): Namespace to fork to
    - Returns: Forked project details
 
-9. `create_branch`
+10. `create_branch`
    - Create a new branch
    - Inputs:
      - `project_id` (string): Project ID or URL-encoded path
      - `branch` (string): Name for new branch
      - `ref` (optional string): Source branch/commit for new branch
    - Returns: Created branch reference
+
+11. `get_job_logs`
+   - Retrieve the logs from a job
+   - Inputs:
+     - `project_id` (string): Project ID or URL-encoded path
+     - `job_id` (string): ID of the job
+   - Returns: The logs of the job
 
 ## Setup
 
