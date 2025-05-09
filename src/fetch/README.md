@@ -159,6 +159,10 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
 
+### Customization - Request Timeout
+
+The server can be configured to use a custom request timeout by using the `--timeout` argument. The default is 30 seconds.
+
 ## Debugging
 
 You can use the MCP inspector to debug the server. For uvx installations:
