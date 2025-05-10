@@ -68,6 +68,8 @@ Add this to your `claude_desktop_config.json`:
       "command": "docker",
       "args": [
         "run",
+        "--name",
+        "sequentialthinking",
         "--rm",
         "-i",
         "mcp/sequentialthinking"
