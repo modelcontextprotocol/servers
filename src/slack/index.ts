@@ -19,6 +19,17 @@ interface PostMessageArgs {
   text: string;
 }
 
+interface UpdateMessageArgs {
+  channel_id: string;
+  timestamp: string;
+  text: string;
+}
+
+interface DeleteMessageArgs {
+  channel_id: string;
+  timestamp: string;
+}
+
 interface ReplyToThreadArgs {
   channel_id: string;
   thread_ts: string;
@@ -87,6 +98,48 @@ const postMessageTool: Tool = {
       },
     },
     required: ["channel_id", "text"],
+  },
+};
+
+const updateMessageTool: Tool = {
+  name: "slack_update_message",
+  description: "Update the text of an existing message in a Slack channel",
+  inputSchema: {
+    type: "object",
+    properties: {
+      channel_id: {
+        type: "string",
+        description: "The ID of the channel containing the message",
+      },
+      timestamp: {
+        type: "string",
+        description: "The timestamp of the message to update in the format '1234567890.123456'. Timestamps in the format without the period can be converted by adding the period such that 6 numbers come after it.",
+      },
+      text: {
+        type: "string",
+        description: "The new text for the message",
+      },
+    },
+    required: ["channel_id", "timestamp", "text"],
+  },
+};
+
+const deleteMessageTool: Tool = {
+  name: "slack_delete_message",
+  description: "Delete a message from a Slack channel",
+  inputSchema: {
+    type: "object",
+    properties: {
+      channel_id: {
+        type: "string",
+        description: "The ID of the channel containing the message",
+      },
+      timestamp: {
+        type: "string",
+        description: "The timestamp of the message to delete in the format '1234567890.123456'. Timestamps in the format without the period can be converted by adding the period such that 6 numbers come after it.",
+      },
+    },
+    required: ["channel_id", "timestamp"],
   },
 };
 
@@ -281,6 +334,33 @@ class SlackClient {
     return response.json();
   }
 
+  async updateMessage(channel_id: string, timestamp: string, text: string): Promise<any> {
+    const response = await fetch("https://slack.com/api/chat.update", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify({
+        channel: channel_id,
+        ts: timestamp,
+        text: text,
+      }),
+    });
+
+    return response.json();
+  }
+
+  async deleteMessage(channel_id: string, timestamp: string): Promise<any> {
+    const response = await fetch("https://slack.com/api/chat.delete", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify({
+        channel: channel_id,
+        ts: timestamp,
+      }),
+    });
+
+    return response.json();
+  }
+
   async postReply(
     channel_id: string,
     thread_ts: string,
@@ -444,6 +524,35 @@ async function main() {
             };
           }
 
+          case "slack_update_message": {
+            const args = request.params.arguments as unknown as UpdateMessageArgs;
+            if (!args.channel_id || !args.timestamp || !args.text) {
+              throw new Error("Missing required arguments: channel_id, timestamp, and text");
+            }
+            const response = await slackClient.updateMessage(
+              args.channel_id,
+              args.timestamp,
+              args.text,
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
+          case "slack_delete_message": {
+            const args = request.params.arguments as unknown as DeleteMessageArgs;
+            if (!args.channel_id || !args.timestamp) {
+              throw new Error("Missing required arguments: channel_id and timestamp");
+            }
+            const response = await slackClient.deleteMessage(
+              args.channel_id,
+              args.timestamp,
+            );
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
           case "slack_reply_to_thread": {
             const args = request.params
               .arguments as unknown as ReplyToThreadArgs;
@@ -559,6 +668,8 @@ async function main() {
       tools: [
         listChannelsTool,
         postMessageTool,
+        updateMessageTool,
+        deleteMessageTool,
         replyToThreadTool,
         addReactionTool,
         getChannelHistoryTool,
