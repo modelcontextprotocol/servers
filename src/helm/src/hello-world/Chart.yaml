@@ -1,0 +1,9 @@
+apiVersion: v2
+name: hello-world
+description: A Helm chart for a simple Hello World application
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+maintainers:
+  - name: Jeff Nasseri
+    email: jeff.nasseri@example.com

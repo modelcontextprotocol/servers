@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-server-helm"
+version = "0.1.1"
+description = "MCP server for Helm integration with Claude and other AI assistants"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Jeff Nasseri", email = "jeff.nasseri@example.com"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "mcp-python>=0.1.0",
+]
+
+[project.scripts]
+mcp-server-helm = "mcp_helm.server:main"
