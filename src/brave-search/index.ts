@@ -73,7 +73,10 @@ const server = new Server(
   },
   {
     capabilities: {
-      tools: {},
+      tools: {
+        brave_web_search: WEB_SEARCH_TOOL,
+        brave_local_search: LOCAL_SEARCH_TOOL,
+      },
     },
   },
 );
