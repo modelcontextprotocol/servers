@@ -95,6 +95,15 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `ref` (optional string): Source branch/commit for new branch
    - Returns: Created branch reference
 
+10. `search_commits`
+    - Search for commits globally or in a specific GitLab project
+    - Inputs:
+      - `search` (string): Search term for commits
+      - `project_id` (optional string): Project ID or URL-encoded path (if omitted, searches globally)
+      - `page` (optional number): Page number for pagination (default 1)
+      - `per_page` (optional number): Number of results per page (default 20)
+    - Returns: Array of commit objects matching the search
+
 ## Setup
 
 ### Personal Access Token
@@ -254,6 +263,9 @@ docker build -t vonwig/gitlab:mcp -f src/gitlab/Dockerfile .
 
 - `GITLAB_PERSONAL_ACCESS_TOKEN`: Your GitLab personal access token (required)
 - `GITLAB_API_URL`: Base URL for GitLab API (optional, defaults to `https://gitlab.com/api/v4`)
+- `GITLAB_PREMIUM_FEATURES`: Set to `true` to enable premium features (such as advanced search including `search_commits`).
+
+> Note: Some features such as `search_commits` require GitLab Premium or Ultimate tier and may not be available on all GitLab instances. Set `GITLAB_PREMIUM_FEATURES=true` in your environment to enable these features if your instance supports them.
 
 ## License
 
