@@ -119,7 +119,11 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "git": {
     "command": "uvx",
-    "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
+    "args": ["mcp-server-git", "--repository", "path/to/git/repo"],
+    "env": {
+      "GIT_USER_NAME": "username",
+      "GIT_USER_EMAIL": "username@example.com"
+    }
   }
 }
 ```
@@ -134,7 +138,11 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "git": {
     "command": "docker",
-    "args": ["run", "--rm", "-i", "--mount", "type=bind,src=/Users/username,dst=/Users/username", "mcp/git"]
+    "args": ["run", "--rm", "-i", "--mount", "type=bind,src=/Users/username,dst=/Users/username", "mcp/git"],
+    "env": {
+      "GIT_USER_NAME": "username",
+      "GIT_USER_EMAIL": "username@example.com"
+    }
   }
 }
 ```
@@ -147,7 +155,11 @@ Add this to your `claude_desktop_config.json`:
 "mcpServers": {
   "git": {
     "command": "python",
-    "args": ["-m", "mcp_server_git", "--repository", "path/to/git/repo"]
+    "args": ["-m", "mcp_server_git", "--repository", "path/to/git/repo"],
+    "env": {
+      "GIT_USER_NAME": "username",
+      "GIT_USER_EMAIL": "username@example.com"
+    }
   }
 }
 ```
@@ -213,7 +225,11 @@ Add to your Zed settings.json:
   "mcp-server-git": {
     "command": {
       "path": "uvx",
-      "args": ["mcp-server-git"]
+      "args": ["mcp-server-git"],
+      "env": {
+        "GIT_USER_NAME": "username",
+        "GIT_USER_EMAIL": "username@example.com"
+      }
     }
   }
 ],
@@ -228,7 +244,11 @@ Add to your Zed settings.json:
   "mcp-server-git": {
     "command": {
       "path": "python",
-      "args": ["-m", "mcp_server_git"]
+      "args": ["-m", "mcp_server_git"],
+      "env": {
+        "GIT_USER_NAME": "username",
+        "GIT_USER_EMAIL": "username@example.com"
+      }
     }
   }
 },
@@ -276,7 +296,11 @@ If you are doing local development, there are two ways to test your changes:
         "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
         "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
         "mcp/git"
-      ]
+      ],
+      "env": {
+        "GIT_USER_NAME": "username",
+        "GIT_USER_EMAIL": "username@example.com"
+      }
     }
   }
 }
@@ -293,7 +317,11 @@ If you are doing local development, there are two ways to test your changes:
       "/<path to mcp-servers>/mcp-servers/src/git",
       "run",
       "mcp-server-git"
-    ]
+    ],
+    "env": {
+      "GIT_USER_NAME": "username",
+      "GIT_USER_EMAIL": "username@example.com"
+    }
   }
 }
 ```
