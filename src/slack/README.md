@@ -34,15 +34,29 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
      - `reaction` (string): Emoji name without colons
    - Returns: Reaction confirmation
 
-5. `slack_get_channel_history`
+5. `slack_remove_reaction`
+   - Remove an emoji reaction from a message, file, or file comment
+   - Required inputs:
+     - `reaction` (string): Emoji name without colons
+   - Optional inputs (must provide either file_id, file_comment_id, or both channel_id and timestamp):
+     - `file_id` (string): ID of the file to remove reaction from
+     - `file_comment_id` (string): ID of the file comment to remove reaction from
+     - `channel_id` (string): The channel containing the message
+     - `timestamp` (string): Message timestamp to remove reaction from
+   - Returns: Reaction removal confirmation
+
+6. `slack_get_channel_history`
    - Get recent messages from a channel
    - Required inputs:
      - `channel_id` (string): The channel ID
    - Optional inputs:
-     - `limit` (number, default: 10): Number of messages to retrieve
+     - `limit` (number, default: 100, max: 999): Number of messages to retrieve
+     - `cursor` (string): Pagination cursor for next page of results
+     - `latest` (string): Only messages before this Unix timestamp (format: 1234567890.123456)
+     - `oldest` (string): Only messages after this Unix timestamp (format: 1234567890.123456)
    - Returns: List of messages with their content and metadata
 
-6. `slack_get_thread_replies`
+7. `slack_get_thread_replies`
    - Get all replies in a message thread
    - Required inputs:
      - `channel_id` (string): The channel containing the thread
@@ -50,14 +64,14 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
    - Returns: List of replies with their content and metadata
 
 
-7. `slack_get_users`
+8. `slack_get_users`
    - Get list of workspace users with basic profile information
    - Optional inputs:
      - `cursor` (string): Pagination cursor for next page
      - `limit` (number, default: 100, max: 200): Maximum users to return
    - Returns: List of users with their basic profiles
 
-8. `slack_get_user_profile`
+9. `slack_get_user_profile`
    - Get detailed profile information for a specific user
    - Required inputs:
      - `user_id` (string): The user's ID
