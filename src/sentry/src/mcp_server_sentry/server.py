@@ -1,6 +1,8 @@
 import asyncio
 from dataclasses import dataclass
+import os
 from urllib.parse import urlparse
+import json
 
 import click
 import httpx
@@ -10,10 +12,16 @@ from mcp.server.models import InitializationOptions
 from mcp.shared.exceptions import McpError
 import mcp.server.stdio
 
-SENTRY_API_BASE = "https://sentry.io/api/0/"
-MISSING_AUTH_TOKEN_MESSAGE = (
-    """Sentry authentication token not found. Please specify your Sentry auth token."""
-)
+if os.environ.get("SENTRY_API_BASE"):
+    SENTRY_API_BASE = os.environ.get("SENTRY_API_BASE")
+    if not SENTRY_API_BASE.endswith("/api/0/"):
+        SENTRY_API_BASE = SENTRY_API_BASE.rstrip("/") + "/api/0/"
+else:
+    SENTRY_API_BASE = "https://sentry.io/api/0/"
+
+MISSING_AUTH_TOKEN_MESSAGE = """Sentry authentication token not found. Please set the SENTRY_TOKEN environment variable."""
+
+MISSING_ORG_MESSAGE = """Sentry organization slug not found. Please set the SENTRY_ORG environment variable."""
 
 
 @dataclass
@@ -45,12 +53,15 @@ Event Count: {self.count}
             description=f"Sentry Issue: {self.title}",
             messages=[
                 types.PromptMessage(
-                    role="user", content=types.TextContent(type="text", text=self.to_text())
+                    role="user",
+                    content=types.TextContent(type="text", text=self.to_text()),
                 )
             ],
         )
 
-    def to_tool_result(self) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
+    def to_tool_result(
+        self,
+    ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
         return [types.TextContent(type="text", text=self.to_text())]
 
 
@@ -58,13 +69,18 @@ class SentryError(Exception):
     pass
 
 
+class SentryErrorWrapper:
+    def __init__(self, message: str):
+        self.message = message
+
+
 def extract_issue_id(issue_id_or_url: str) -> str:
     """
     Extracts the Sentry issue ID from either a full URL or a standalone ID.
 
-    This function validates the input and returns the numeric issue ID.
-    It raises SentryError for invalid inputs, including empty strings,
-    non-Sentry URLs, malformed paths, and non-numeric IDs.
+    This function validates the input and returns the issue ID.
+    It raises SentryError for invalid inputs, including empty strings
+    and non-Sentry URLs.
     """
     if not issue_id_or_url:
         raise SentryError("Missing issue_id_or_url argument")
@@ -72,7 +88,9 @@ def extract_issue_id(issue_id_or_url: str) -> str:
     if issue_id_or_url.startswith(("http://", "https://")):
         parsed_url = urlparse(issue_id_or_url)
         if not parsed_url.hostname or not parsed_url.hostname.endswith(".sentry.io"):
-            raise SentryError("Invalid Sentry URL. Must be a URL ending with .sentry.io")
+            raise SentryError(
+                "Invalid Sentry URL. Must be a URL ending with .sentry.io"
+            )
 
         path_parts = parsed_url.path.strip("/").split("/")
         if len(path_parts) < 2 or path_parts[0] != "issues":
@@ -83,9 +101,6 @@ def extract_issue_id(issue_id_or_url: str) -> str:
         issue_id = path_parts[-1]
     else:
         issue_id = issue_id_or_url
-
-    if not issue_id.isdigit():
-        raise SentryError("Invalid Sentry issue ID. Must be a numeric value.")
 
     return issue_id
 
@@ -140,31 +155,52 @@ def create_stacktrace(latest_event: dict) -> str:
 
 
 async def handle_sentry_issue(
-    http_client: httpx.AsyncClient, auth_token: str, issue_id_or_url: str
+    http_client: httpx.AsyncClient, auth_token: str, issue_id_or_url: str, org_slug: str
 ) -> SentryIssueData:
+    if not auth_token:
+        raise McpError(SentryErrorWrapper(MISSING_AUTH_TOKEN_MESSAGE))
     try:
         issue_id = extract_issue_id(issue_id_or_url)
 
         response = await http_client.get(
-            f"issues/{issue_id}/", headers={"Authorization": f"Bearer {auth_token}"}
+            f"organizations/{org_slug}/issues/{issue_id}/",
+            headers={"Authorization": f"Bearer {auth_token}"},
         )
         if response.status_code == 401:
             raise McpError(
-                "Error: Unauthorized. Please check your MCP_SENTRY_AUTH_TOKEN token."
+                SentryErrorWrapper(
+                    "Error: Unauthorized. Please check your MCP_SENTRY_AUTH_TOKEN token."
+                )
             )
         response.raise_for_status()
-        issue_data = response.json()
+
+        try:
+            issue_data = response.json()
+        except json.JSONDecodeError:
+            raise McpError(
+                SentryErrorWrapper(
+                    f"Invalid JSON response from Sentry API: {response.text}"
+                )
+            )
 
         # Get issue hashes
         hashes_response = await http_client.get(
-            f"issues/{issue_id}/hashes/",
+            f"organizations/{org_slug}/issues/{issue_id}/hashes/",
             headers={"Authorization": f"Bearer {auth_token}"},
         )
         hashes_response.raise_for_status()
-        hashes = hashes_response.json()
+
+        try:
+            hashes = hashes_response.json()
+        except json.JSONDecodeError:
+            raise McpError(
+                SentryErrorWrapper(
+                    f"Invalid JSON response from Sentry API (hashes): {hashes_response.text}"
+                )
+            )
 
         if not hashes:
-            raise McpError("No Sentry events found for this issue")
+            raise McpError(SentryErrorWrapper("No Sentry events found for this issue"))
 
         latest_event = hashes[0]["latestEvent"]
         stacktrace = create_stacktrace(latest_event)
@@ -177,18 +213,24 @@ async def handle_sentry_issue(
             first_seen=issue_data["firstSeen"],
             last_seen=issue_data["lastSeen"],
             count=issue_data["count"],
-            stacktrace=stacktrace
+            stacktrace=stacktrace,
         )
 
     except SentryError as e:
-        raise McpError(str(e))
+        raise McpError(SentryErrorWrapper(str(e)))
     except httpx.HTTPStatusError as e:
-        raise McpError(f"Error fetching Sentry issue: {str(e)}")
+        raise McpError(SentryErrorWrapper(f"Error fetching Sentry issue: {str(e)}"))
     except Exception as e:
-        raise McpError(f"An error occurred: {str(e)}")
+        if hasattr(e, "message"):
+            raise McpError(SentryErrorWrapper(e.message))
+        else:
+            raise McpError(SentryErrorWrapper(str(e)))
 
 
-async def serve(auth_token: str) -> Server:
+async def serve(auth_token: str, org_slug: str) -> Server:
+    if not auth_token:
+        raise McpError(SentryErrorWrapper(MISSING_AUTH_TOKEN_MESSAGE))
+
     server = Server("sentry")
     http_client = httpx.AsyncClient(base_url=SENTRY_API_BASE)
 
@@ -216,7 +258,9 @@ async def serve(auth_token: str) -> Server:
             raise ValueError(f"Unknown prompt: {name}")
 
         issue_id_or_url = (arguments or {}).get("issue_id_or_url", "")
-        issue_data = await handle_sentry_issue(http_client, auth_token, issue_id_or_url)
+        issue_data = await handle_sentry_issue(
+            http_client, auth_token, issue_id_or_url, org_slug
+        )
         return issue_data.to_prompt_result()
 
     @server.list_tools()
@@ -235,11 +279,11 @@ async def serve(auth_token: str) -> Server:
                     "properties": {
                         "issue_id_or_url": {
                             "type": "string",
-                            "description": "Sentry issue ID or URL to analyze"
+                            "description": "Sentry issue ID or URL to analyze",
                         }
                     },
-                    "required": ["issue_id_or_url"]
-                }
+                    "required": ["issue_id_or_url"],
+                },
             )
         ]
 
@@ -253,7 +297,9 @@ async def serve(auth_token: str) -> Server:
         if not arguments or "issue_id_or_url" not in arguments:
             raise ValueError("Missing issue_id_or_url argument")
 
-        issue_data = await handle_sentry_issue(http_client, auth_token, arguments["issue_id_or_url"])
+        issue_data = await handle_sentry_issue(
+            http_client, auth_token, arguments["issue_id_or_url"], org_slug
+        )
         return issue_data.to_tool_result()
 
     return server
@@ -266,20 +312,29 @@ async def serve(auth_token: str) -> Server:
     help="Sentry authentication token",
 )
 def main(auth_token: str):
+    org_slug = os.environ.get("SENTRY_ORG")
+    issue_id_or_url = os.environ.get("SENTRY_ISSUE")
+
     async def _run():
-        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-            server = await serve(auth_token)
-            await server.run(
-                read_stream,
-                write_stream,
-                InitializationOptions(
-                    server_name="sentry",
-                    server_version="0.4.1",
-                    capabilities=server.get_capabilities(
-                        notification_options=NotificationOptions(),
-                        experimental_capabilities={},
+        if issue_id_or_url:
+            async with httpx.AsyncClient(base_url=SENTRY_API_BASE) as http_client:
+                issue_data = await handle_sentry_issue(
+                    http_client, auth_token, issue_id_or_url, org_slug
+                )
+        else:
+            async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+                server = await serve(auth_token, org_slug=org_slug)
+                await server.run(
+                    read_stream,
+                    write_stream,
+                    InitializationOptions(
+                        server_name="sentry",
+                        server_version="0.4.1",
+                        capabilities=server.get_capabilities(
+                            notification_options=NotificationOptions(),
+                            experimental_capabilities={},
+                        ),
                     ),
-                ),
-            )
+                )
 
     asyncio.run(_run())
