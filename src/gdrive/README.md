@@ -6,10 +6,15 @@ This MCP server integrates with Google Drive to allow listing, reading, and sear
 
 ### Tools
 
-- **search**
+- **gdrive_search**
   - Search for files in Google Drive
   - Input: `query` (string): Search query
-  - Returns file names and MIME types of matching files
+  - Returns detailed file information including names, URIs, MIME types, modification dates, and sizes
+  
+- **gdrive_read_file**
+  - Read content of a Google Drive file
+  - Input: `uri` (string): File URI in format `gdrive:///{fileId}`
+  - Returns file content and metadata in appropriate format
 
 ### Resources
 
@@ -148,6 +153,30 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
         ]
       }
     }
+  }
+}
+```
+
+## Example Usage
+
+### Search for files
+
+```json
+{
+  "name": "gdrive_search",
+  "arguments": {
+    "query": "report"
+  }
+}
+```
+
+### Read file content
+
+```json
+{
+  "name": "gdrive_read_file",
+  "arguments": {
+    "uri": "gdrive:///1ofMYUoboOrrv465qV4n8GV_4Lr1qBiPdjUs6O9u22Cc"
   }
 }
 ```
