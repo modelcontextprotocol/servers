@@ -22,7 +22,9 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        url: { type: "string" },
+        url: { type: "string", description: "URL to navigate to" },
+        launchOptions: { type: "object", description: "PuppeteerJS LaunchOptions. Default null. If changed and not null, browser restarts. Example: { headless: true, args: ['--no-sandbox'] }" },
+        allowDangerous: { type: "boolean", description: "Allow dangerous LaunchOptions that reduce security. When false, dangerous args like --no-sandbox will throw errors. Default false." },
       },
       required: ["url"],
     },
@@ -37,6 +39,7 @@ const TOOLS: Tool[] = [
         selector: { type: "string", description: "CSS selector for element to screenshot" },
         width: { type: "number", description: "Width in pixels (default: 800)" },
         height: { type: "number", description: "Height in pixels (default: 600)" },
+        encoded: { type: "boolean", description: "If true, capture the screenshot as a base64-encoded data URI (as text) instead of binary image content. Default false." },
       },
       required: ["name"],
     },
@@ -101,16 +104,65 @@ const TOOLS: Tool[] = [
 ];
 
 // Global state
-let browser: Browser | undefined;
-let page: Page | undefined;
+let browser: Browser | null;
+let page: Page | null;
 const consoleLogs: string[] = [];
 const screenshots = new Map<string, string>();
+let previousLaunchOptions: any = null;
 
-async function ensureBrowser() {
+async function ensureBrowser({ launchOptions, allowDangerous }: any) {
+
+  const DANGEROUS_ARGS = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--single-process',
+    '--disable-web-security',
+    '--ignore-certificate-errors',
+    '--disable-features=IsolateOrigins',
+    '--disable-site-isolation-trials',
+    '--allow-running-insecure-content'
+  ];
+
+  // Parse environment config safely
+  let envConfig = {};
+  try {
+    envConfig = JSON.parse(process.env.PUPPETEER_LAUNCH_OPTIONS || '{}');
+  } catch (error: any) {
+    console.warn('Failed to parse PUPPETEER_LAUNCH_OPTIONS:', error?.message || error);
+  }
+
+  // Deep merge environment config with user-provided options
+  const mergedConfig = deepMerge(envConfig, launchOptions || {});
+
+  // Security validation for merged config
+  if (mergedConfig?.args) {
+    const dangerousArgs = mergedConfig.args?.filter?.((arg: string) => DANGEROUS_ARGS.some((dangerousArg: string) => arg.startsWith(dangerousArg)));
+    if (dangerousArgs?.length > 0 && !(allowDangerous || (process.env.ALLOW_DANGEROUS === 'true'))) {
+      throw new Error(`Dangerous browser arguments detected: ${dangerousArgs.join(', ')}. Fround from environment variable and tool call argument. ` +
+        'Set allowDangerous: true in the tool call arguments to override.');
+    }
+  }
+
+  try {
+    if ((browser && !browser.connected) ||
+      (launchOptions && (JSON.stringify(launchOptions) != JSON.stringify(previousLaunchOptions)))) {
+      await browser?.close();
+      browser = null;
+    }
+  }
+  catch (error) {
+    browser = null;
+  }
+
+  previousLaunchOptions = launchOptions;
+
   if (!browser) {
     const npx_args = { headless: false }
     const docker_args = { headless: true, args: ["--no-sandbox", "--single-process", "--no-zygote"] }
-    browser = await puppeteer.launch(process.env.DOCKER_CONTAINER ? docker_args : npx_args);
+    browser = await puppeteer.launch(deepMerge(
+      process.env.DOCKER_CONTAINER ? docker_args : npx_args,
+      mergedConfig
+    ));
     const pages = await browser.pages();
     page = pages[0];
 
@@ -126,6 +178,31 @@ async function ensureBrowser() {
   return page!;
 }
 
+// Deep merge utility function
+function deepMerge(target: any, source: any): any {
+  const output = Object.assign({}, target);
+  if (typeof target !== 'object' || typeof source !== 'object') return source;
+
+  for (const key of Object.keys(source)) {
+    const targetVal = target[key];
+    const sourceVal = source[key];
+    if (Array.isArray(targetVal) && Array.isArray(sourceVal)) {
+      // Deduplicate args/ignoreDefaultArgs, prefer source values
+      output[key] = [...new Set([
+        ...(key === 'args' || key === 'ignoreDefaultArgs' ?
+          targetVal.filter((arg: string) => !sourceVal.some((launchArg: string) => arg.startsWith('--') && launchArg.startsWith(arg.split('=')[0]))) :
+          targetVal),
+        ...sourceVal
+      ])];
+    } else if (sourceVal instanceof Object && key in target) {
+      output[key] = deepMerge(targetVal, sourceVal);
+    } else {
+      output[key] = sourceVal;
+    }
+  }
+  return output;
+}
+
 declare global {
   interface Window {
     mcpHelper: {
@@ -136,7 +213,7 @@ declare global {
 }
 
 async function handleToolCall(name: string, args: any): Promise<CallToolResult> {
-  const page = await ensureBrowser();
+  const page = await ensureBrowser(args);
 
   switch (name) {
     case "puppeteer_navigate":
@@ -152,6 +229,7 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
     case "puppeteer_screenshot": {
       const width = args.width ?? 800;
       const height = args.height ?? 600;
+      const encoded = args.encoded ?? false;
       await page.setViewport({ width, height });
 
       const screenshot = await (args.selector ?
@@ -179,11 +257,14 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
             type: "text",
             text: `Screenshot '${args.name}' taken at ${width}x${height}`,
           } as TextContent,
-          {
+          encoded ? ({
+            type: "text",
+            text: `data:image/png;base64,${screenshot}`,
+          } as TextContent) : ({
             type: "image",
             data: screenshot,
             mimeType: "image/png",
-          } as ImageContent,
+          } as ImageContent),
         ],
         isError: false,
       };
@@ -285,15 +366,15 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
               window.mcpHelper.logs.push(`[${method}] ${args.join(' ')}`);
               (window.mcpHelper.originalConsole as any)[method](...args);
             };
-          } );
-        } );
+          });
+        });
 
-        const result = await page.evaluate( args.script );
+        const result = await page.evaluate(args.script);
 
         const logs = await page.evaluate(() => {
           Object.assign(console, window.mcpHelper.originalConsole);
           const logs = window.mcpHelper.logs;
-          delete ( window as any).mcpHelper;
+          delete (window as any).mcpHelper;
           return logs;
         });
 
