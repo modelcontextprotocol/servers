@@ -200,7 +200,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Bitable MCP](https://github.com/lloydzhou/bitable-mcp)** (by lloydzhou) - MCP server provides access to Lark Bitable through the Model Context Protocol. It allows users to interact with Bitable tables using predefined tools.
 - **[Blender](https://github.com/ahujasid/blender-mcp)** (by ahujasid) - Blender integration allowing prompt enabled 3D scene creation, modeling and manipulation.
 - **[blockbeats-mcp](https://github.com/kukapay/blockbeats-mcp)** - An MCP server that delivers blockchain news and in-depth articles from BlockBeats for AI agents.
-- **[blocknatives-mcp](https://github.com/kukapay/blocknative-mcp)** - An MCP server that provides real-time gas price predictions across multiple blockchains.
+- **[blocknative-mcp](https://github.com/kukapay/blocknative-mcp)** - An MCP server that provides real-time gas price predictions across multiple blockchains.
 - **[bridge-rates-mcp](https://github.com/kukapay/bridge-rates-mcp)** - An MCP server that delivers real-time cross-chain bridge rates and optimal transfer routes to onchain AI agents.
 - **[browser-use](https://github.com/co-browser/browser-use-mcp-server)** (by co-browser) - browser-use MCP server with dockerized playwright + chromium + vnc. supports stdio & resumable http.
 - **[Bsc-mcp](https://github.com/TermiX-official/bsc-mcp)** The first MCP server that serves as the bridge between AI and BNB Chain, enabling AI agents to execute complex on-chain operations through seamless integration with the BNB Chain, including transfer, swap, launch, security check on any token and even more.
@@ -221,7 +221,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[cognee-mcp](https://github.com/topoteretes/cognee/tree/main/cognee-mcp)** - GraphRAG memory server with customizable ingestion, data processing and search
 - **[coin_api_mcp](https://github.com/longmans/coin_api_mcp)** - Provides access to [coinmarketcap](https://coinmarketcap.com/) cryptocurrency data.
 - **[CoinMarketCap](https://github.com/shinzo-labs/coinmarketcap-mcp)** - Implements the complete [CoinMarketCap](https://coinmarketcap.com/) API for accessing cryptocurrency market data, exchange information, and other blockchain-related metrics.
-- **[cointelegraph_mcp](https://github.com/kukapay/cointelegraph-mcp)** - An MCP server that provides real-time access to the latest news from Cointelegraph.
+- **[cointelegraph-mcp](https://github.com/kukapay/cointelegraph-mcp)** - An MCP server that provides real-time access to the latest news from Cointelegraph.
 - **[Computer-Use - Remote MacOS Use](https://github.com/baryhuang/mcp-remote-macos-use)** - Open-source out-of-the-box alternative to OpenAI Operator, providing a full desktop experience and optimized for using remote macOS machines as autonomous AI agents.
 - **[Contentful-mcp](https://github.com/ivo-toby/contentful-mcp)** - Read, update, delete, publish content in your [Contentful](https://contentful.com) space(s) from this MCP Server.
 - **[CreateveAI Nexus](https://github.com/spgoodman/createveai-nexus-server)** - Open-Source Bridge Between AI Agents and Enterprise Systems, with simple custom API plug-in capabilities (including close compatibility with ComfyUI nodes), support for Copilot Studio's MCP agent integations, and support for Azure deployment in secure environments with secrets stored in Azure Key Vault, as well as straightforward on-premises deployment.
