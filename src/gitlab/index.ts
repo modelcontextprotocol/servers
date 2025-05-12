@@ -7,8 +7,8 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import fetch from "node-fetch";
-import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import {
   GitLabForkSchema,
   GitLabReferenceSchema,
@@ -33,6 +33,7 @@ import {
   CreateMergeRequestSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
+  SearchCommitsSchema,
   type GitLabFork,
   type GitLabReference,
   type GitLabRepository,
@@ -44,20 +45,24 @@ import {
   type GitLabTree,
   type GitLabCommit,
   type FileOperation,
-} from './schemas.js';
+} from "./schemas.js";
 
-const server = new Server({
-  name: "gitlab-mcp-server",
-  version: "0.5.1",
-}, {
-  capabilities: {
-    tools: {}
+const server = new Server(
+  {
+    name: "gitlab-mcp-server",
+    version: "0.5.1",
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
   }
-});
+);
 
 const GITLAB_PERSONAL_ACCESS_TOKEN = process.env.GITLAB_PERSONAL_ACCESS_TOKEN;
-const GITLAB_API_URL = process.env.GITLAB_API_URL || 'https://gitlab.com/api/v4';
-
+const GITLAB_API_URL =
+  process.env.GITLAB_API_URL || "https://gitlab.com/api/v4";
+const GITLAB_PREMIUM_FEATURES = process.env.GITLAB_PREMIUM_FEATURES === "true";
 if (!GITLAB_PERSONAL_ACCESS_TOKEN) {
   console.error("GITLAB_PERSONAL_ACCESS_TOKEN environment variable is not set");
   process.exit(1);
@@ -67,15 +72,19 @@ async function forkProject(
   projectId: string,
   namespace?: string
 ): Promise<GitLabFork> {
-  const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/fork`;
-  const queryParams = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';
+  const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(
+    projectId
+  )}/fork`;
+  const queryParams = namespace
+    ? `?namespace=${encodeURIComponent(namespace)}`
+    : "";
 
   const response = await fetch(url + queryParams, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
-      "Content-Type": "application/json"
-    }
+      Authorization: `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
   });
 
   if (!response.ok) {
@@ -90,17 +99,19 @@ async function createBranch(
   options: z.infer<typeof CreateBranchOptionsSchema>
 ): Promise<GitLabReference> {
   const response = await fetch(
-    `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/repository/branches`,
+    `${GITLAB_API_URL}/projects/${encodeURIComponent(
+      projectId
+    )}/repository/branches`,
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
-        "Content-Type": "application/json"
+        Authorization: `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         branch: options.name,
-        ref: options.ref
-      })
+        ref: options.ref,
+      }),
     }
   );
 
@@ -117,17 +128,19 @@ async function getFileContents(
   ref?: string
 ): Promise<GitLabContent> {
   const encodedPath = encodeURIComponent(filePath);
-  let url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/repository/files/${encodedPath}`;
+  let url = `${GITLAB_API_URL}/projects/${encodeURIComponent(
+    projectId
+  )}/repository/files/${encodedPath}`;
   if (ref) {
     url += `?ref=${encodeURIComponent(ref)}`;
   } else {
-    url += '?ref=HEAD';
+    url += "?ref=HEAD";
   }
 
   const response = await fetch(url, {
     headers: {
-      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
-    }
+      Authorization: `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+    },
   });
 
   if (!response.ok) {
@@ -135,9 +148,9 @@ async function getFileContents(
   }
 
   const data = GitLabContentSchema.parse(await response.json());
-  
+
   if (!Array.isArray(data) && data.content) {
-    data.content = Buffer.from(data.content, 'base64').toString('utf8');
+    data.content = Buffer.from(data.content, "base64").toString("utf8");
   }
 
   return data;
@@ -152,16 +165,16 @@ async function createIssue(
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
-        "Content-Type": "application/json"
+        Authorization: `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         title: options.title,
         description: options.description,
         assignee_ids: options.assignee_ids,
         milestone_id: options.milestone_id,
-        labels: options.labels?.join(',')
-      })
+        labels: options.labels?.join(","),
+      }),
     }
   );
 
@@ -177,12 +190,14 @@ async function createMergeRequest(
   options: z.infer<typeof CreateMergeRequestOptionsSchema>
 ): Promise<GitLabMergeRequest> {
   const response = await fetch(
-    `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/merge_requests`,
+    `${GITLAB_API_URL}/projects/${encodeURIComponent(
+      projectId
+    )}/merge_requests`,
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
-        "Content-Type": "application/json"
+        Authorization: `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         title: options.title,
@@ -190,8 +205,8 @@ async function createMergeRequest(
         source_branch: options.source_branch,
         target_branch: options.target_branch,
         allow_collaboration: options.allow_collaboration,
-        draft: options.draft
-      })
+        draft: options.draft,
+      }),
     }
   );
 
@@ -211,13 +226,15 @@ async function createOrUpdateFile(
   previousPath?: string
 ): Promise<GitLabCreateUpdateFileResponse> {
   const encodedPath = encodeURIComponent(filePath);
-  const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/repository/files/${encodedPath}`;
+  const url = `${GITLAB_API_URL}/projects/${encodeURIComponent(
+    projectId
+  )}/repository/files/${encodedPath}`;
 
   const body = {
     branch,
     content,
     commit_message: commitMessage,
-    ...(previousPath ? { previous_path: previousPath } : {})
+    ...(previousPath ? { previous_path: previousPath } : {}),
   };
 
   // Check if file exists
@@ -232,10 +249,10 @@ async function createOrUpdateFile(
   const response = await fetch(url, {
     method,
     headers: {
-      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
-      "Content-Type": "application/json"
+      Authorization: `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -251,20 +268,22 @@ async function createTree(
   ref?: string
 ): Promise<GitLabTree> {
   const response = await fetch(
-    `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/repository/tree`,
+    `${GITLAB_API_URL}/projects/${encodeURIComponent(
+      projectId
+    )}/repository/tree`,
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
-        "Content-Type": "application/json"
+        Authorization: `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        files: files.map(file => ({
+        files: files.map((file) => ({
           file_path: file.path,
-          content: file.content
+          content: file.content,
         })),
-        ...(ref ? { ref } : {})
-      })
+        ...(ref ? { ref } : {}),
+      }),
     }
   );
 
@@ -282,22 +301,24 @@ async function createCommit(
   actions: FileOperation[]
 ): Promise<GitLabCommit> {
   const response = await fetch(
-    `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}/repository/commits`,
+    `${GITLAB_API_URL}/projects/${encodeURIComponent(
+      projectId
+    )}/repository/commits`,
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
-        "Content-Type": "application/json"
+        Authorization: `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         branch,
         commit_message: message,
-        actions: actions.map(action => ({
+        actions: actions.map((action) => ({
           action: "create",
           file_path: action.path,
-          content: action.content
-        }))
-      })
+          content: action.content,
+        })),
+      }),
     }
   );
 
@@ -308,31 +329,35 @@ async function createCommit(
   return GitLabCommitSchema.parse(await response.json());
 }
 
-async function searchProjects(
-  query: string,
+// Fix searchCommits typing
+async function searchCommits(
+  search: string,
+  projectId?: string,
   page: number = 1,
   perPage: number = 20
-): Promise<GitLabSearchResponse> {
-  const url = new URL(`${GITLAB_API_URL}/projects`);
-  url.searchParams.append("search", query);
-  url.searchParams.append("page", page.toString());
-  url.searchParams.append("per_page", perPage.toString());
-
-  const response = await fetch(url.toString(), {
+): Promise<GitLabCommit[]> {
+  let url: string;
+  if (projectId) {
+    url = `${GITLAB_API_URL}/projects/${encodeURIComponent(
+      projectId
+    )}/search?scope=commits&search=${encodeURIComponent(
+      search
+    )}&page=${page}&per_page=${perPage}`;
+  } else {
+    url = `${GITLAB_API_URL}/search?scope=commits&search=${encodeURIComponent(
+      search
+    )}&page=${page}&per_page=${perPage}`;
+  }
+  const response = await fetch(url, {
     headers: {
-      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
-    }
+      Authorization: `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+    },
   });
-
   if (!response.ok) {
     throw new Error(`GitLab API error: ${response.statusText}`);
   }
-
-  const projects = await response.json();
-  return GitLabSearchResponseSchema.parse({
-    count: parseInt(response.headers.get("X-Total") || "0"),
-    items: projects
-  });
+  const commits = (await response.json()) as any[]; // Cast to any[]
+  return commits.map((commit: any) => GitLabCommitSchema.parse(commit));
 }
 
 async function createRepository(
@@ -341,15 +366,15 @@ async function createRepository(
   const response = await fetch(`${GITLAB_API_URL}/projects`, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
-      "Content-Type": "application/json"
+      Authorization: `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       name: options.name,
       description: options.description,
       visibility: options.visibility,
-      initialize_with_readme: options.initialize_with_readme
-    })
+      initialize_with_readme: options.initialize_with_readme,
+    }),
   });
 
   if (!response.ok) {
@@ -360,55 +385,64 @@ async function createRepository(
 }
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: "create_or_update_file",
-        description: "Create or update a single file in a GitLab project",
-        inputSchema: zodToJsonSchema(CreateOrUpdateFileSchema)
-      },
-      {
-        name: "search_repositories",
-        description: "Search for GitLab projects",
-        inputSchema: zodToJsonSchema(SearchRepositoriesSchema)
-      },
-      {
-        name: "create_repository",
-        description: "Create a new GitLab project",
-        inputSchema: zodToJsonSchema(CreateRepositorySchema)
-      },
-      {
-        name: "get_file_contents",
-        description: "Get the contents of a file or directory from a GitLab project",
-        inputSchema: zodToJsonSchema(GetFileContentsSchema)
-      },
-      {
-        name: "push_files",
-        description: "Push multiple files to a GitLab project in a single commit",
-        inputSchema: zodToJsonSchema(PushFilesSchema)
-      },
-      {
-        name: "create_issue",
-        description: "Create a new issue in a GitLab project",
-        inputSchema: zodToJsonSchema(CreateIssueSchema)
-      },
-      {
-        name: "create_merge_request",
-        description: "Create a new merge request in a GitLab project",
-        inputSchema: zodToJsonSchema(CreateMergeRequestSchema)
-      },
-      {
-        name: "fork_repository",
-        description: "Fork a GitLab project to your account or specified namespace",
-        inputSchema: zodToJsonSchema(ForkRepositorySchema)
-      },
-      {
-        name: "create_branch",
-        description: "Create a new branch in a GitLab project",
-        inputSchema: zodToJsonSchema(CreateBranchSchema)
-      }
-    ]
-  };
+  const tools = [
+    {
+      name: "create_or_update_file",
+      description: "Create or update a single file in a GitLab project",
+      inputSchema: zodToJsonSchema(CreateOrUpdateFileSchema),
+    },
+    {
+      name: "search_repositories",
+      description: "Search for GitLab projects",
+      inputSchema: zodToJsonSchema(SearchRepositoriesSchema),
+    },
+    {
+      name: "create_repository",
+      description: "Create a new GitLab project",
+      inputSchema: zodToJsonSchema(CreateRepositorySchema),
+    },
+    {
+      name: "get_file_contents",
+      description:
+        "Get the contents of a file or directory from a GitLab project",
+      inputSchema: zodToJsonSchema(GetFileContentsSchema),
+    },
+    {
+      name: "push_files",
+      description: "Push multiple files to a GitLab project in a single commit",
+      inputSchema: zodToJsonSchema(PushFilesSchema),
+    },
+    {
+      name: "create_issue",
+      description: "Create a new issue in a GitLab project",
+      inputSchema: zodToJsonSchema(CreateIssueSchema),
+    },
+    {
+      name: "create_merge_request",
+      description: "Create a new merge request in a GitLab project",
+      inputSchema: zodToJsonSchema(CreateMergeRequestSchema),
+    },
+    {
+      name: "fork_repository",
+      description:
+        "Fork a GitLab project to your account or specified namespace",
+      inputSchema: zodToJsonSchema(ForkRepositorySchema),
+    },
+    {
+      name: "create_branch",
+      description: "Create a new branch in a GitLab project",
+      inputSchema: zodToJsonSchema(CreateBranchSchema),
+    },
+  ];
+  if (GITLAB_PREMIUM_FEATURES) {
+    tools.push({
+      name: "search_commits",
+      description:
+        "Search for commits globally or in a specific GitLab project",
+      inputSchema: zodToJsonSchema(SearchCommitsSchema),
+    });
+  }
+  return { tools };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -421,7 +455,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "fork_repository": {
         const args = ForkRepositorySchema.parse(request.params.arguments);
         const fork = await forkProject(args.project_id, args.namespace);
-        return { content: [{ type: "text", text: JSON.stringify(fork, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(fork, null, 2) }],
+        };
       }
 
       case "create_branch": {
@@ -433,28 +469,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const branch = await createBranch(args.project_id, {
           name: args.branch,
-          ref
+          ref,
         });
 
-        return { content: [{ type: "text", text: JSON.stringify(branch, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(branch, null, 2) }],
+        };
       }
 
       case "search_repositories": {
-        const args = SearchRepositoriesSchema.parse(request.params.arguments);
-        const results = await searchProjects(args.search, args.page, args.per_page);
-        return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+        // const args = SearchRepositoriesSchema.parse(request.params.arguments);
+        // const results = await searchProjects(
+        //   args.search,
+        //   args.page,
+        //   args.per_page
+        // );
+        // return {
+        //   content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+        // };
+        throw new Error("searchProjects is not implemented");
       }
 
       case "create_repository": {
         const args = CreateRepositorySchema.parse(request.params.arguments);
         const repository = await createRepository(args);
-        return { content: [{ type: "text", text: JSON.stringify(repository, null, 2) }] };
+        return {
+          content: [
+            { type: "text", text: JSON.stringify(repository, null, 2) },
+          ],
+        };
       }
 
       case "get_file_contents": {
         const args = GetFileContentsSchema.parse(request.params.arguments);
-        const contents = await getFileContents(args.project_id, args.file_path, args.ref);
-        return { content: [{ type: "text", text: JSON.stringify(contents, null, 2) }] };
+        const contents = await getFileContents(
+          args.project_id,
+          args.file_path,
+          args.ref
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(contents, null, 2) }],
+        };
       }
 
       case "create_or_update_file": {
@@ -467,7 +522,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args.branch,
           args.previous_path
         );
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
       case "push_files": {
@@ -476,23 +533,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args.project_id,
           args.commit_message,
           args.branch,
-          args.files.map(f => ({ path: f.file_path, content: f.content }))
+          args.files.map((f) => ({ path: f.file_path, content: f.content }))
         );
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
       case "create_issue": {
         const args = CreateIssueSchema.parse(request.params.arguments);
         const { project_id, ...options } = args;
         const issue = await createIssue(project_id, options);
-        return { content: [{ type: "text", text: JSON.stringify(issue, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(issue, null, 2) }],
+        };
       }
 
       case "create_merge_request": {
         const args = CreateMergeRequestSchema.parse(request.params.arguments);
         const { project_id, ...options } = args;
         const mergeRequest = await createMergeRequest(project_id, options);
-        return { content: [{ type: "text", text: JSON.stringify(mergeRequest, null, 2) }] };
+        return {
+          content: [
+            { type: "text", text: JSON.stringify(mergeRequest, null, 2) },
+          ],
+        };
+      }
+
+      case "search_commits": {
+        const args = SearchCommitsSchema.parse(request.params.arguments);
+        const results = await searchCommits(
+          args.search,
+          args.project_id,
+          args.page,
+          args.per_page
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
+        };
       }
 
       default:
@@ -500,7 +578,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Invalid arguments: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+      throw new Error(
+        `Invalid arguments: ${error.errors
+          .map((e) => `${e.path.join(".")}: ${e.message}`)
+          .join(", ")}`
+      );
     }
     throw error;
   }
