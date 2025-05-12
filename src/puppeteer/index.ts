@@ -39,6 +39,7 @@ const TOOLS: Tool[] = [
         selector: { type: "string", description: "CSS selector for element to screenshot" },
         width: { type: "number", description: "Width in pixels (default: 800)" },
         height: { type: "number", description: "Height in pixels (default: 600)" },
+        encoded: { type: "boolean", description: "If true, capture the screenshot as a base64-encoded data URI (as text) instead of binary image content. Default false." },
       },
       required: ["name"],
     },
@@ -228,6 +229,7 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
     case "puppeteer_screenshot": {
       const width = args.width ?? 800;
       const height = args.height ?? 600;
+      const encoded = args.encoded ?? false;
       await page.setViewport({ width, height });
 
       const screenshot = await (args.selector ?
@@ -255,11 +257,14 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
             type: "text",
             text: `Screenshot '${args.name}' taken at ${width}x${height}`,
           } as TextContent,
-          {
+          encoded ? ({
+            type: "text",
+            text: `data:image/png;base64,${screenshot}`,
+          } as TextContent) : ({
             type: "image",
             data: screenshot,
             mimeType: "image/png",
-          } as ImageContent,
+          } as ImageContent),
         ],
         isError: false,
       };
