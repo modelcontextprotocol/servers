@@ -32,7 +32,7 @@ export async function resetValidationState(): Promise<void> {
     state.checkedThisPrompt = false;
     state.promptId = null;
     await saveState(state);
-    console.log("State reset for next prompt");
+    // State reset for next prompt
   }
 }
 
@@ -66,5 +66,5 @@ export async function markValidatedInPrompt(promptId?: string): Promise<void> {
   state.promptId = promptId || 'prompt-' + Date.now();
   state.lastCheckTime = Date.now();
   await saveState(state);
-  console.log('Validation marked as complete for prompt: ' + state.promptId);
+  // Validation marked as complete for prompt
 }

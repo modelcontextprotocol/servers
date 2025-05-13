@@ -130,7 +130,7 @@ async function isGitClean(filePath: string): Promise<{isRepo: boolean, isClean: 
     
     return { isRepo: true, isClean, repoPath };
   } catch (error) {
-    console.error('Error checking Git status:', error);
+    // Error checking Git status
     return { isRepo: false, isClean: false, repoPath: null };
   }
 }
@@ -146,7 +146,7 @@ async function validateGitStatus(filePath: string, promptId?: string): Promise<v
   // Skip if we've already checked in this prompt
   const hasValidated = await hasValidatedInPrompt(promptId);
   if (hasValidated) {
-    console.log('Skipping validation for ' + filePath + ' - already validated in this prompt');
+    // Skip validation - already validated
     return;
   }
   
@@ -170,7 +170,6 @@ async function validateGitStatus(filePath: string, promptId?: string): Promise<v
   
   // Mark that we've checked in this prompt
   await markValidatedInPrompt(promptId);
-  console.log('Validation passed for ' + filePath + ' - marked as checked');
 }
 
 // Git validation utilities
@@ -595,7 +594,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     
     // Generate a unique prompt ID for this request
     const promptId = 'prompt-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
-    console.log('Processing request ' + name + ' with promptId: ' + promptId);
 
     // Get the response from the appropriate tool handler
     let response;
