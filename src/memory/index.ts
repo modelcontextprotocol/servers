@@ -71,7 +71,6 @@ class KnowledgeGraphManager {
     const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
     // Lowercase all entity properties before saving
     graph.entities.push(...newEntities.map(entity => ({
-      ...entity,
       name: entity.name.toLowerCase(),
       entityType: entity.entityType.toLowerCase(),
       observations: entity.observations.map(obs => obs.toLowerCase())
@@ -89,7 +88,6 @@ class KnowledgeGraphManager {
     ));
     // Lowercase all relation properties before saving
     graph.relations.push(...newRelations.map(relation => ({
-      ...relation,
       from: relation.from.toLowerCase(),
       to: relation.to.toLowerCase(),
       relationType: relation.relationType.toLowerCase()
