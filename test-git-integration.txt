@@ -1,0 +1,2 @@
+// This is a test modification
+console.log("Hello, testing Git integration!");

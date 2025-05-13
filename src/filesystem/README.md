@@ -1,6 +1,6 @@
-# Filesystem MCP Server
+# Filesystem MCP Server with Git Integration
 
-Node.js server implementing Model Context Protocol (MCP) for filesystem operations.
+Node.js server implementing Model Context Protocol (MCP) for filesystem operations with Git integration.
 
 ## Features
 
@@ -9,6 +9,7 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Move files/directories
 - Search files
 - Get file metadata
+- Git integration with clean branch validation
 
 **Note**: The server will only allow operations within directories specified via `args`.
 
@@ -97,6 +98,16 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - Returns:
     - Directories that this server can read/write from
 
+- **git_status**
+  - Checks if a path is within a Git repository and returns its status
+  - Input: `path` (string)
+  - Returns:
+    - Repository path
+    - Current branch
+    - Whether the repository is clean
+    - Git integration configuration
+    - List of changed files
+
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
 
@@ -118,6 +129,7 @@ Note: all directories must be mounted to `/projects` by default.
         "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
         "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
         "mcp/filesystem",
+        "--require-clean-branch",
         "/projects"
       ]
     }
@@ -135,6 +147,7 @@ Note: all directories must be mounted to `/projects` by default.
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
+        "--git",
         "/Users/username/Desktop",
         "/path/to/other/allowed/dir"
       ]
@@ -174,6 +187,7 @@ Note: all directories must be mounted to `/projects` by default.
           "--rm",
           "--mount", "type=bind,src=${workspaceFolder},dst=/projects/workspace",
           "mcp/filesystem",
+          "--require-clean-branch",
           "/projects"
         ]
       }
@@ -193,6 +207,7 @@ Note: all directories must be mounted to `/projects` by default.
         "args": [
           "-y",
           "@modelcontextprotocol/server-filesystem",
+          "--git",
           "${workspaceFolder}"
         ]
       }
@@ -200,6 +215,31 @@ Note: all directories must be mounted to `/projects` by default.
   }
 }
 ```
+
+## Git Integration
+
+The filesystem MCP server includes Git integration that can prevent file modifications when a Git repository has uncommitted changes. This is useful when you want to ensure that all changes are properly committed before allowing further modifications.
+
+### Command Line Options
+
+- `--git`: Enable Git integration. This will identify Git repositories but won't restrict modifications.
+- `--require-clean-branch`: Enable Git integration and only allow file modifications in repositories with clean branches (no uncommitted changes). Implies `--git`.
+
+### Git Status Tool
+
+The server provides a `git_status` tool to check the status of a Git repository:
+
+```typescript
+// Example call to git_status
+const result = await callTool("git_status", { path: "/projects/myrepo/file.txt" });
+```
+
+The result will include:
+- Repository path
+- Current branch
+- Clean/dirty status
+- Git integration configuration
+- List of changed files
 
 ## Build
 

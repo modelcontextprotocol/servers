@@ -14,11 +14,38 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
+import { simpleGit, SimpleGit } from 'simple-git';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
+
+// Configuration options
+type GitConfig = {
+  enabled: boolean;
+  requireCleanBranch: boolean;
+};
+
+const gitConfig: GitConfig = {
+  enabled: false,
+  requireCleanBranch: false,
+};
+
+// Extract any options from the command line arguments
+const directoryArgs: string[] = [];
+for (let i = 0; i < args.length; i++) {
+  const arg = args[i];
+  if (arg === '--git') {
+    gitConfig.enabled = true;
+  } else if (arg === '--require-clean-branch') {
+    gitConfig.enabled = true;
+    gitConfig.requireCleanBranch = true;
+  } else {
+    directoryArgs.push(arg);
+  }
+}
+
+if (directoryArgs.length === 0) {
+  console.error("Usage: mcp-server-filesystem [--git] [--require-clean-branch] <allowed-directory> [additional-directories...]");
   process.exit(1);
 }
 
@@ -35,12 +62,12 @@ function expandHome(filepath: string): string {
 }
 
 // Store allowed directories in normalized form
-const allowedDirectories = args.map(dir =>
+const allowedDirectories = directoryArgs.map(dir =>
   normalizePath(path.resolve(expandHome(dir)))
 );
 
 // Validate that all directories exist and are accessible
-await Promise.all(args.map(async (dir) => {
+await Promise.all(directoryArgs.map(async (dir) => {
   try {
     const stats = await fs.stat(expandHome(dir));
     if (!stats.isDirectory()) {
@@ -52,6 +79,63 @@ await Promise.all(args.map(async (dir) => {
     process.exit(1);
   }
 }));
+
+// Git validation utilities
+async function isGitClean(filePath: string): Promise<{isRepo: boolean, isClean: boolean, repoPath: string | null}> {
+  try {
+    // Find the containing git repository (if any)
+    let currentPath = path.dirname(filePath);
+    let repoPath = null;
+    
+    // Walk up the directory tree looking for a .git folder
+    while (currentPath !== path.parse(currentPath).root) {
+      try {
+        const gitDir = path.join(currentPath, '.git');
+        const gitDirStat = await fs.stat(gitDir);
+        if (gitDirStat.isDirectory()) {
+          repoPath = currentPath;
+          break;
+        }
+      } catch {
+        // .git directory not found at this level, continue up
+      }
+      
+      currentPath = path.dirname(currentPath);
+    }
+    
+    if (!repoPath) {
+      return { isRepo: false, isClean: false, repoPath: null };
+    }
+    
+    // Initialize git in the repository path
+    const git = simpleGit(repoPath);
+    
+    // Check if the working directory is clean
+    const status = await git.status();
+    const isClean = status.isClean();
+    
+    return { isRepo: true, isClean, repoPath };
+  } catch (error) {
+    console.error('Error checking Git status:', error);
+    return { isRepo: false, isClean: false, repoPath: null };
+  }
+}
+
+// Check if the Git status allows modification
+async function validateGitStatus(filePath: string): Promise<void> {
+  if (!gitConfig.enabled) {
+    return; // Git validation is disabled
+  }
+  
+  const { isRepo, isClean, repoPath } = await isGitClean(filePath);
+  
+  if (isRepo && gitConfig.requireCleanBranch && !isClean) {
+    throw new Error(
+      `Git repository at ${repoPath} has uncommitted changes. ` + 
+      `This server is configured to require a clean branch before allowing changes.`
+    );
+  }
+}
 
 // Security utilities
 async function validatePath(requestedPath: string): Promise<string> {
@@ -143,6 +227,10 @@ const SearchFilesArgsSchema = z.object({
 });
 
 const GetFileInfoArgsSchema = z.object({
+  path: z.string(),
+});
+
+const GetGitStatusArgsSchema = z.object({
   path: z.string(),
 });
 
@@ -435,6 +523,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: [],
         },
       },
+      {
+        name: "git_status",
+        description:
+          "Checks if a path is within a Git repository and returns its status. " +
+          "Provides information about the repository cleanliness and current configuration. " +
+          "Useful for understanding if changes will be allowed based on the server's Git integration settings.",
+        inputSchema: zodToJsonSchema(GetGitStatusArgsSchema) as ToolInput,
+      },
     ],
   };
 });
@@ -485,6 +581,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
+        
+        // Check Git status before allowing write
+        await validateGitStatus(validPath);
+        
         await fs.writeFile(validPath, parsed.data.content, "utf-8");
         return {
           content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
@@ -497,6 +597,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for edit_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
+        
+        // If this is not a dry run, check Git status before allowing edits
+        if (!parsed.data.dryRun) {
+          await validateGitStatus(validPath);
+        }
+        
         const result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.dryRun);
         return {
           content: [{ type: "text", text: result }],
@@ -509,6 +615,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for create_directory: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
+        
+        // Check Git status before creating directory
+        await validateGitStatus(validPath);
+        
         await fs.mkdir(validPath, { recursive: true });
         return {
           content: [{ type: "text", text: `Successfully created directory ${parsed.data.path}` }],
@@ -580,6 +690,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const validSourcePath = await validatePath(parsed.data.source);
         const validDestPath = await validatePath(parsed.data.destination);
+        
+        // Check Git status for both source and destination paths
+        await validateGitStatus(validSourcePath);
+        await validateGitStatus(validDestPath);
+        
         await fs.rename(validSourcePath, validDestPath);
         return {
           content: [{ type: "text", text: `Successfully moved ${parsed.data.source} to ${parsed.data.destination}` }],
@@ -620,6 +735,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }],
         };
       }
+      
+      case "git_status": {
+        const parsed = GetGitStatusArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for git_status: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        
+        // Get Git status information
+        const gitStatus = await isGitClean(validPath);
+        
+        if (!gitStatus.isRepo) {
+          return {
+            content: [{ type: "text", text: `The path ${parsed.data.path} is not in a Git repository.` }],
+          };
+        }
+        
+        // If it's a repository, get additional info using simple-git
+        const git = simpleGit(gitStatus.repoPath!);
+        const status = await git.status();
+        const branch = status.current;
+        const statusSummary = [
+          `Repository: ${gitStatus.repoPath}`,
+          `Current branch: ${branch}`,
+          `Status: ${gitStatus.isClean ? 'Clean' : 'Dirty'}`,
+          `Git integration enabled: ${gitConfig.enabled ? 'Yes' : 'No'}`,
+          `Require clean branch: ${gitConfig.requireCleanBranch ? 'Yes' : 'No'}`,
+        ];
+        
+        // Add info about tracked files
+        if (status.files.length > 0) {
+          statusSummary.push('\nChanged files:');
+          for (const file of status.files) {
+            statusSummary.push(`  ${file.path} [${file.working_dir}]`);
+          }
+        }
+        
+        return {
+          content: [{ type: "text", text: statusSummary.join('\n') }],
+        };
+      }
 
       default:
         throw new Error(`Unknown tool: ${name}`);
@@ -639,6 +795,17 @@ async function runServer() {
   await server.connect(transport);
   console.error("Secure MCP Filesystem Server running on stdio");
   console.error("Allowed directories:", allowedDirectories);
+  
+  if (gitConfig.enabled) {
+    console.error("Git integration: Enabled");
+    if (gitConfig.requireCleanBranch) {
+      console.error("Git require clean branch: Yes - File modifications will only be allowed in clean Git branches");
+    } else {
+      console.error("Git require clean branch: No - File modifications allowed regardless of Git status");
+    }
+  } else {
+    console.error("Git integration: Disabled");
+  }
 }
 
 runServer().catch((error) => {
