@@ -123,13 +123,22 @@ async function isGitClean(filePath: string): Promise<{isRepo: boolean, isClean: 
 
 // Check if the Git status allows modification
 async function validateGitStatus(filePath: string): Promise<void> {
-  if (!gitConfig.enabled) {
+  if (!gitConfig.requireCleanBranch) {
     return; // Git validation is disabled
   }
   
   const { isRepo, isClean, repoPath } = await isGitClean(filePath);
   
-  if (isRepo && gitConfig.requireCleanBranch && !isClean) {
+  // When requireCleanBranch is set, we require the file to be in a Git repository
+  if (!isRepo) {
+    throw new Error(
+      `The file ${filePath} is not in a Git repository. ` +
+      `This server is configured to require files to be in Git repositories with clean branches.`
+    );
+  }
+  
+  // And we require the repository to be clean
+  if (!isClean) {
     throw new Error(
       `Git repository at ${repoPath} has uncommitted changes. ` + 
       `This server is configured to require a clean branch before allowing changes.`
