@@ -16,6 +16,9 @@ import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 import { simpleGit, SimpleGit } from 'simple-git';
 
+// Import state utilities
+import { getState, saveState, hasValidatedInPrompt, markValidatedInPrompt, resetValidationState } from './state-utils.js';
+
 // Command line argument parsing
 const args = process.argv.slice(2);
 
@@ -135,14 +138,15 @@ async function isGitClean(filePath: string): Promise<{isRepo: boolean, isClean: 
 // Check if the Git status allows modification
 // With the One-Check-Per-Prompt approach, validation is only performed
 // on the first file operation in each prompt and skipped for subsequent operations
-async function validateGitStatus(filePath: string): Promise<void> {
+async function validateGitStatus(filePath: string, promptId?: string): Promise<void> {
   if (!gitConfig.requireCleanBranch) {
     return; // Git validation is disabled
   }
   
   // Skip if we've already checked in this prompt
-  if (gitConfig.checkedThisPrompt) {
-    console.log(`Skipping validation for ${filePath} - already checked`);
+  const hasValidated = await hasValidatedInPrompt(promptId);
+  if (hasValidated) {
+    console.log('Skipping validation for ' + filePath + ' - already validated in this prompt');
     return;
   }
   
@@ -151,36 +155,27 @@ async function validateGitStatus(filePath: string): Promise<void> {
   // When requireCleanBranch is set, we require the file to be in a Git repository
   if (!isRepo) {
     throw new Error(
-      `The file ${filePath} is not in a Git repository. ` +
-      `This server is configured to require files to be in Git repositories with clean branches.`
-    );
+      "The file " + filePath + " is not in a Git repository. " +
+      "This server is configured to require files to be in Git repositories with clean branches."
+      );
   }
   
   // And we require the repository to be clean
   if (!isClean) {
-    throw new Error(
-      `Git repository at ${repoPath} has uncommitted changes. ` + 
-      `This server is configured to require a clean branch before allowing changes.`
-    );
+      throw new Error(
+        "Git repository at " + repoPath + " has uncommitted changes. " + 
+        "This server is configured to require a clean branch before allowing changes."
+      );
   }
   
   // Mark that we've checked in this prompt
-  gitConfig.checkedThisPrompt = true;
-  console.log(`Validation passed for ${filePath} - marked as checked`);
+  await markValidatedInPrompt(promptId);
+  console.log('Validation passed for ' + filePath + ' - marked as checked');
 }
 
-// Reset the validation state
-// This function is called after each tool request to reset the validation state
-// so that the next prompt will perform a fresh validation
-function resetValidationState(): void {
-  if (gitConfig.checkedThisPrompt) {
-    gitConfig.checkedThisPrompt = false;
-    console.log("State reset for next prompt");
-  }
-}
-
+// Git validation utilities
 // Security utilities
-async function validatePath(requestedPath: string, skipGitCheck: boolean = false): Promise<string> {
+async function validatePath(requestedPath: string, skipGitCheck: boolean = false, promptId?: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
@@ -205,7 +200,7 @@ async function validatePath(requestedPath: string, skipGitCheck: boolean = false
     
     // Perform Git validation if required
     if (!skipGitCheck && gitConfig.requireCleanBranch) {
-      await validateGitStatus(realPath);
+      await validateGitStatus(realPath, promptId);
     }
     
     return realPath;
@@ -222,7 +217,7 @@ async function validatePath(requestedPath: string, skipGitCheck: boolean = false
       
       // Perform Git validation on the parent directory for new files
       if (!skipGitCheck && gitConfig.requireCleanBranch) {
-        await validateGitStatus(parentDir);
+        await validateGitStatus(parentDir, promptId);
       }
       
       return absolute;
@@ -334,7 +329,8 @@ async function getFileStats(filePath: string): Promise<FileInfo> {
 async function searchFiles(
   rootPath: string,
   pattern: string,
-  excludePatterns: string[] = []
+  excludePatterns: string[] = [],
+  promptId?: string
 ): Promise<string[]> {
   const results: string[] = [];
 
@@ -346,7 +342,7 @@ async function searchFiles(
 
       try {
         // Validate each path before processing (skip Git check for search)
-        await validatePath(fullPath, true);
+        await validatePath(fullPath, true, promptId);
 
         // Check if path matches any exclude pattern
         const relativePath = path.relative(rootPath, fullPath);
@@ -596,6 +592,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const { name, arguments: args } = request.params;
+    
+    // Generate a unique prompt ID for this request
+    const promptId = 'prompt-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+    console.log('Processing request ' + name + ' with promptId: ' + promptId);
 
     // Get the response from the appropriate tool handler
     let response;
@@ -606,7 +606,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
+        const validPath = await validatePath(parsed.data.path, true, promptId); // Skip Git check for read-only operation
         const content = await fs.readFile(validPath, "utf-8");
         response = {
           content: [{ type: "text", text: content }],
@@ -622,7 +622,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const results = await Promise.all(
           parsed.data.paths.map(async (filePath: string) => {
             try {
-              const validPath = await validatePath(filePath, true); // Skip Git check for read-only operation
+              const validPath = await validatePath(filePath, true, promptId); // Skip Git check for read-only operation
               const content = await fs.readFile(validPath, "utf-8");
               return `${filePath}:\n${content}\n`;
             } catch (error) {
@@ -642,7 +642,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path); // Git check is now performed in validatePath
+        const validPath = await validatePath(parsed.data.path, false, promptId); // Git check is now performed in validatePath
         
         await fs.writeFile(validPath, parsed.data.content, "utf-8");
         response = {
@@ -658,7 +658,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         
         // If this is a dry run, skip Git check
-        const validPath = await validatePath(parsed.data.path, parsed.data.dryRun);
+        const validPath = await validatePath(parsed.data.path, parsed.data.dryRun, promptId);
         
         const result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.dryRun);
         response = {
@@ -672,7 +672,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for create_directory: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path); // Git check is now performed in validatePath
+        const validPath = await validatePath(parsed.data.path, false, promptId); // Git check is now performed in validatePath
         
         await fs.mkdir(validPath, { recursive: true });
         response = {
@@ -686,7 +686,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for list_directory: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
+        const validPath = await validatePath(parsed.data.path, true, promptId); // Skip Git check for read-only operation
         const entries = await fs.readdir(validPath, { withFileTypes: true });
         const formatted = entries
           .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
@@ -710,7 +710,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             async function buildTree(currentPath: string): Promise<TreeEntry[]> {
-                const validPath = await validatePath(currentPath, true); // Skip Git check for read-only operation
+                const validPath = await validatePath(currentPath, true, promptId); // Skip Git check for read-only operation
                 const entries = await fs.readdir(validPath, {withFileTypes: true});
                 const result: TreeEntry[] = [];
 
@@ -746,8 +746,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for move_file: ${parsed.error}`);
         }
-        const validSourcePath = await validatePath(parsed.data.source); // Git check is now performed in validatePath
-        const validDestPath = await validatePath(parsed.data.destination); // Git check is now performed in validatePath
+        const validSourcePath = await validatePath(parsed.data.source, false, promptId); // Git check is now performed in validatePath
+        const validDestPath = await validatePath(parsed.data.destination, false, promptId); // Git check is now performed in validatePath
         
         await fs.rename(validSourcePath, validDestPath);
         response = {
@@ -761,8 +761,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
-        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
+        const validPath = await validatePath(parsed.data.path, true, promptId); // Skip Git check for read-only operation
+        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns, promptId);
         response = {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };
@@ -774,7 +774,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for get_file_info: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
+        const validPath = await validatePath(parsed.data.path, true, promptId); // Skip Git check for read-only operation
         const info = await getFileStats(validPath);
         response = {
           content: [{ type: "text", text: Object.entries(info)
@@ -799,7 +799,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for git_status: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
+        const validPath = await validatePath(parsed.data.path, true, promptId); // Skip Git check for read-only operation
         
         // Get Git status information
         const gitStatus = await isGitClean(validPath);
@@ -842,12 +842,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
     
     // Reset validation state after successful response
-    resetValidationState();
+    await resetValidationState();
     
     return response;
   } catch (error) {
     // Reset validation state even on error
-    resetValidationState();
+    await resetValidationState();
     
     const errorMessage = error instanceof Error ? error.message : String(error);
     return {
