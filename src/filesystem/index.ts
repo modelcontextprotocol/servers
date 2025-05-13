@@ -589,11 +589,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  // Generate a unique prompt ID for this request that remains stable across multiple calls
+  // We'll use a combination of the current hour and minute to make it stable for a short period
+  const now = new Date();
+  const promptId = `prompt-${now.getFullYear()}${now.getMonth()}${now.getDate()}-${now.getHours()}${now.getMinutes()}`;
+  
   try {
     const { name, arguments: args } = request.params;
-    
-    // Generate a unique prompt ID for this request
-    const promptId = 'prompt-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
 
     // Get the response from the appropriate tool handler
     let response;
@@ -839,13 +841,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error(`Unknown tool: ${name}`);
     }
     
-    // Reset validation state after successful response
-    await resetValidationState();
+    // Reset validation state after successful response, but preserve state within the same prompt
+    await resetValidationState(promptId);
     
     return response;
   } catch (error) {
-    // Reset validation state even on error
-    await resetValidationState();
+    // Reset validation state even on error, but preserve state within the same prompt
+    await resetValidationState(promptId);
     
     const errorMessage = error instanceof Error ? error.message : String(error);
     return {

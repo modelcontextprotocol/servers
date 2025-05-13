@@ -25,15 +25,17 @@ export async function saveState(state: PromptState): Promise<void> {
   await fs.writeFile(STATE_FILE_PATH, JSON.stringify(state, null, 2), 'utf-8');
 }
 
-// Reset the validation state
-export async function resetValidationState(): Promise<void> {
+// Reset the validation state, but only if it's a new prompt
+export async function resetValidationState(currentPromptId?: string): Promise<void> {
   const state = await getState();
-  if (state.checkedThisPrompt) {
+  // Only reset if no promptId is provided or if it's different from the current one
+  if (!currentPromptId || state.promptId !== currentPromptId) {
     state.checkedThisPrompt = false;
     state.promptId = null;
     await saveState(state);
     // State reset for next prompt
   }
+  // Skip reset if we're in the same prompt to allow multiple operations
 }
 
 // Check if we've already validated in this prompt
