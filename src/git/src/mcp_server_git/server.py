@@ -102,10 +102,10 @@ def git_log(repo: git.Repo, max_count: int = 10) -> list[str]:
     log = []
     for commit in commits:
         log.append(
-            f"Commit: {commit.hexsha}\n"
-            f"Author: {commit.author}\n"
+            f"Commit: {commit.hexsha!r}\n"
+            f"Author: {commit.author!r}\n"
             f"Date: {commit.authored_datetime}\n"
-            f"Message: {commit.message}\n"
+            f"Message: {commit.message!r}\n"
         )
     return log
 
