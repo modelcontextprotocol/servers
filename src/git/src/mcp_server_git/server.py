@@ -111,7 +111,7 @@ def git_log(repo: git.Repo, max_count: int = 10) -> list[str]:
 
 def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None = None) -> str:
     if base_branch:
-        base = repo.refs[base_branch]
+        base = repo.references[base_branch]
     else:
         base = repo.active_branch
 
