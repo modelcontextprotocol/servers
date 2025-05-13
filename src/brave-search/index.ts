@@ -14,6 +14,7 @@ const WEB_SEARCH_TOOL: Tool = {
     "Performs a web search using the Brave Search API, ideal for general queries, news, articles, and online content. " +
     "Use this for broad information gathering, recent events, or when you need diverse web sources. " +
     "Supports pagination, content filtering, and freshness controls. " +
+    "Can optionally apply one or more Brave Goggles (URLs) for custom re-ranking to modify the results of the query. " +
     "Maximum 20 results per request, with offset for pagination. ",
   inputSchema: {
     type: "object",
@@ -32,6 +33,11 @@ const WEB_SEARCH_TOOL: Tool = {
         description: "Pagination offset (max 9, default 0)",
         default: 0
       },
+      goggles: {
+        type: "array",
+        items: { type: "string" },
+        description: "Optional array of Goggle URLs or definitions for custom re-ranking. See https://github.com/brave/goggles-quickstart"
+      }
     },
     required: ["query"],
   },
@@ -83,6 +89,21 @@ const BRAVE_API_KEY = process.env.BRAVE_API_KEY!;
 if (!BRAVE_API_KEY) {
   console.error("Error: BRAVE_API_KEY environment variable is required");
   process.exit(1);
+}
+
+// Optional default goggles from environment variable (JSON string array)
+let DEFAULT_GOGGLES: string[] = [];
+if (process.env.BRAVE_GOGGLES) {
+  try {
+    const parsedGoggles = JSON.parse(process.env.BRAVE_GOGGLES);
+    if (Array.isArray(parsedGoggles) && parsedGoggles.every(item => typeof item === 'string')) {
+      DEFAULT_GOGGLES = parsedGoggles.filter(Boolean); // Filter empty strings
+    } else {
+      console.error('Warning: BRAVE_GOGGLES environment variable is not a valid JSON string array. Ignoring.');
+    }
+  } catch (error) {
+    console.error(`Warning: Failed to parse BRAVE_GOGGLES environment variable as JSON: ${error}. Ignoring.`);
+  }
 }
 
 const RATE_LIMIT = {
@@ -156,15 +177,20 @@ interface BravePoiResponse {
 }
 
 interface BraveDescription {
-  descriptions: {[id: string]: string};
+  descriptions: { [id: string]: string };
 }
 
-function isBraveWebSearchArgs(args: unknown): args is { query: string; count?: number } {
+function isBraveWebSearchArgs(args: unknown): args is { query: string; count?: number; offset?: number; goggles?: string[] } {
   return (
     typeof args === "object" &&
     args !== null &&
     "query" in args &&
-    typeof (args as { query: string }).query === "string"
+    typeof (args as { query: string }).query === "string" &&
+    ((args as { count?: number }).count === undefined || typeof (args as { count?: number }).count === "number") &&
+    ((args as { offset?: number }).offset === undefined || typeof (args as { offset?: number }).offset === "number") &&
+    ((args as { goggles?: string[] }).goggles === undefined ||
+      (Array.isArray((args as { goggles?: string[] }).goggles) &&
+        (args as { goggles?: string[] }).goggles!.every(item => typeof item === 'string')))
   );
 }
 
@@ -177,12 +203,20 @@ function isBraveLocalSearchArgs(args: unknown): args is { query: string; count?:
   );
 }
 
-async function performWebSearch(query: string, count: number = 10, offset: number = 0) {
+async function performWebSearch(query: string, count: number = 10, offset: number = 0, goggles: string[] = []) {
   checkRateLimit();
   const url = new URL('https://api.search.brave.com/res/v1/web/search');
   url.searchParams.set('q', query);
   url.searchParams.set('count', Math.min(count, 20).toString()); // API limit
   url.searchParams.set('offset', offset.toString());
+
+  // Merge default goggles from ENV with argument goggles
+  // No URL filtering needed here
+  const allGoggles = [...new Set([...DEFAULT_GOGGLES, ...goggles])];
+
+  if (allGoggles.length > 0) {
+    allGoggles.forEach(goggle => url.searchParams.append('goggles', goggle));
+  }
 
   const response = await fetch(url, {
     headers: {
@@ -232,7 +266,7 @@ async function performLocalSearch(query: string, count: number = 5) {
   }
 
   const webData = await webResponse.json() as BraveWeb;
-  const locationIds = webData.locations?.results?.filter((r): r is {id: string; title?: string} => r.id != null).map(r => r.id) || [];
+  const locationIds = webData.locations?.results?.filter((r): r is { id: string; title?: string } => r.id != null).map(r => r.id) || [];
 
   if (locationIds.length === 0) {
     return performWebSearch(query, count); // Fallback to web search
@@ -325,8 +359,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!isBraveWebSearchArgs(args)) {
           throw new Error("Invalid arguments for brave_web_search");
         }
-        const { query, count = 10 } = args;
-        const results = await performWebSearch(query, count);
+        const { query, count = 10, offset = 0, goggles = [] } = args;
+        const results = await performWebSearch(query, count, offset, goggles);
         return {
           content: [{ type: "text", text: results }],
           isError: false,
