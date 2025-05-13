@@ -133,7 +133,7 @@ async function isGitClean(filePath: string): Promise<{isRepo: boolean, isClean: 
 }
 
 // Check if the Git status allows modification
-// With the One-Check-Per-Prompt approach, Git validation is only performed
+// With the One-Check-Per-Prompt approach, validation is only performed
 // on the first file operation in each prompt and skipped for subsequent operations
 async function validateGitStatus(filePath: string): Promise<void> {
   if (!gitConfig.requireCleanBranch) {
@@ -142,7 +142,7 @@ async function validateGitStatus(filePath: string): Promise<void> {
   
   // Skip if we've already checked in this prompt
   if (gitConfig.checkedThisPrompt) {
-    console.log(`Skipping Git check for ${filePath} as we already checked in this prompt`);
+    console.log(`Skipping validation for ${filePath} - already checked`);
     return;
   }
   
@@ -166,16 +166,16 @@ async function validateGitStatus(filePath: string): Promise<void> {
   
   // Mark that we've checked in this prompt
   gitConfig.checkedThisPrompt = true;
-  console.log(`Git check passed for ${filePath} and marked as checked for this prompt`);
+  console.log(`Validation passed for ${filePath} - marked as checked`);
 }
 
-// Reset the Git check state
-// This function is called after each tool request to reset the Git check state
-// so that the next prompt will perform a fresh Git check
-function resetGitCheckState(): void {
+// Reset the validation state
+// This function is called after each tool request to reset the validation state
+// so that the next prompt will perform a fresh validation
+function resetValidationState(): void {
   if (gitConfig.checkedThisPrompt) {
     gitConfig.checkedThisPrompt = false;
-    console.log("Git check state reset for next prompt");
+    console.log("State reset for next prompt");
   }
 }
 
@@ -841,13 +841,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error(`Unknown tool: ${name}`);
     }
     
-    // Reset Git check state after successful response
-    resetGitCheckState();
+    // Reset validation state after successful response
+    resetValidationState();
     
     return response;
   } catch (error) {
-    // Reset Git check state even on error
-    resetGitCheckState();
+    // Reset validation state even on error
+    resetValidationState();
     
     const errorMessage = error instanceof Error ? error.message : String(error);
     return {
@@ -866,7 +866,7 @@ async function runServer() {
   
   if (gitConfig.requireCleanBranch) {
     console.error("Git integration: Enabled");
-    console.error("Git require clean branch: Yes - Files will only be modified after a Git check on the first operation in each prompt");
+    console.error("Git require clean branch: Yes - Files will only be modified after a validation on the first operation in each prompt");
   } else {
     console.error("Git integration: Disabled");
   }
