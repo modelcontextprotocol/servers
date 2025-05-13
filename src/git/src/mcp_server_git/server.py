@@ -132,10 +132,10 @@ def git_init(repo_path: str) -> str:
 def git_show(repo: git.Repo, revision: str) -> str:
     commit = repo.commit(revision)
     output = [
-        f"Commit: {commit.hexsha}\n"
-        f"Author: {commit.author}\n"
-        f"Date: {commit.authored_datetime}\n"
-        f"Message: {commit.message}\n"
+        f"Commit: {commit.hexsha!r}\n"
+        f"Author: {commit.author!r}\n"
+        f"Date: {commit.authored_datetime!r}\n"
+        f"Message: {commit.message!r}\n"
     ]
     if commit.parents:
         parent = commit.parents[0]
