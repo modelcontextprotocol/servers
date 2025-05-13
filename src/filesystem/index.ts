@@ -21,12 +21,10 @@ const args = process.argv.slice(2);
 
 // Configuration options
 type GitConfig = {
-  enabled: boolean;
   requireCleanBranch: boolean;
 };
 
 const gitConfig: GitConfig = {
-  enabled: false,
   requireCleanBranch: false,
 };
 
@@ -34,10 +32,7 @@ const gitConfig: GitConfig = {
 const directoryArgs: string[] = [];
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
-  if (arg === '--git') {
-    gitConfig.enabled = true;
-  } else if (arg === '--require-clean-branch') {
-    gitConfig.enabled = true;
+  if (arg === '--require-clean-branch') {
     gitConfig.requireCleanBranch = true;
   } else {
     directoryArgs.push(arg);
