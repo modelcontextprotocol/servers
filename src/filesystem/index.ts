@@ -597,7 +597,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // Generate a unique prompt ID for this request that remains stable across multiple calls
   // We'll use a combination of the current hour and minute to make it stable for a short period
   const now = new Date();
-  const promptId = `prompt-${now.getTime()}`;
+  const promptId = `prompt-${now.getFullYear()}${now.getMonth()}${now.getDate()}-${now.getHours()}${now.getMinutes()}`;
   
   try {
     const { name, arguments: args } = request.params;
