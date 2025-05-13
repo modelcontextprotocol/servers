@@ -23,6 +23,10 @@ COPY --from=builder /app/package-lock.json /app/package-lock.json
 
 ENV NODE_ENV=production
 
-RUN npm ci --ignore-scripts --omit-dev
+# Install all production dependencies including simple-git
+RUN npm ci --ignore-scripts --omit=dev
+
+# If simple-git is still not available, install it specifically
+RUN npm list simple-git || npm install simple-git
 
 ENTRYPOINT ["node", "/app/dist/index.js"]
