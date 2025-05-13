@@ -126,7 +126,9 @@ async function isGitClean(filePath: string): Promise<{isRepo: boolean, isClean: 
     
     // Check if the working directory is clean
     const status = await git.status();
-    const isClean = status.isClean();
+    // Consider a repo clean only if it has no modified, deleted, or untracked files
+    // status.isClean() only checks for modified tracked files, but we want to also check for untracked files
+    const isClean = status.isClean() && status.not_added.length === 0;
     
     return { isRepo: true, isClean, repoPath };
   } catch (error) {
