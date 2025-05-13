@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -7,10 +9,29 @@ import {
 import { z } from "zod";
 import { createClient } from 'redis';
 
-// Get Redis URL from command line args or use default
+// Configuration
 const REDIS_URL = process.argv[2] || "redis://localhost:6379";
+const MAX_RETRIES = 5;
+const MIN_RETRY_DELAY = 1000; // 1 second
+const MAX_RETRY_DELAY = 30000; // 30 seconds
+
+// Create Redis client with retry strategy
 const redisClient = createClient({
-    url: REDIS_URL
+    url: REDIS_URL,
+    socket: {
+        reconnectStrategy: (retries) => {
+            if (retries >= MAX_RETRIES) {
+                console.error(`[Redis Error] Maximum retries (${MAX_RETRIES}) reached. Giving up.`);
+                console.error(`[Redis Error] Connection: ${REDIS_URL}`);
+                return new Error('Max retries reached');
+            }
+            const delay = Math.min(Math.pow(2, retries) * MIN_RETRY_DELAY, MAX_RETRY_DELAY);
+            console.error(`[Redis Retry] Attempt ${retries + 1}/${MAX_RETRIES} failed`);
+            console.error(`[Redis Retry] Next attempt in ${delay}ms`);
+            console.error(`[Redis Retry] Connection: ${REDIS_URL}`);
+            return delay;
+        }
+    }
 });
 
 // Define Zod schemas for validation
@@ -36,7 +57,12 @@ const ListArgumentsSchema = z.object({
 const server = new Server(
     {
         name: "redis",
-        version: "1.0.0"
+        version: "0.0.1"
+    },
+    {
+        capabilities: {
+            tools: {}
+        }
     }
 );
 
@@ -212,25 +238,54 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 });
 
-// Start the server
-async function main() {
+// Set up Redis event handlers
+redisClient.on('error', (err: Error) => {
+    console.error(`[Redis Error] ${err.name}: ${err.message}`);
+    console.error(`[Redis Error] Connection: ${REDIS_URL}`);
+    console.error(`[Redis Error] Stack: ${err.stack}`);
+});
+
+redisClient.on('connect', () => {
+    console.error(`[Redis Connected] Successfully connected to ${REDIS_URL}`);
+});
+
+redisClient.on('reconnecting', () => {
+    console.error('[Redis Reconnecting] Connection lost, attempting to reconnect...');
+});
+
+redisClient.on('end', () => {
+    console.error('[Redis Disconnected] Connection closed');
+});
+
+async function runServer() {
     try {
         // Connect to Redis
-        redisClient.on('error', (err: Error) => console.error('Redis Client Error', err));
         await redisClient.connect();
-        console.error(`Connected to Redis successfully at ${REDIS_URL}`);
 
+        // Set up MCP server
         const transport = new StdioServerTransport();
         await server.connect(transport);
         console.error("Redis MCP Server running on stdio");
     } catch (error) {
-        console.error("Error during startup:", error);
-        await redisClient.quit();
+        const err = error as Error;
+        console.error("[Redis Fatal] Server initialization failed");
+        console.error(`[Redis Fatal] Error: ${err.name}: ${err.message}`);
+        console.error(`[Redis Fatal] Connection: ${REDIS_URL}`);
+        console.error(`[Redis Fatal] Stack: ${err.stack}`);
+        await redisClient.quit().catch(() => {});
         process.exit(1);
     }
 }
 
-main().catch((error) => {
-    console.error("Fatal error in main():", error);
-    redisClient.quit().finally(() => process.exit(1));
+// Handle process termination
+process.on('SIGINT', async () => {
+    await redisClient.quit().catch(() => {});
+    process.exit(0);
 });
+
+process.on('SIGTERM', async () => {
+    await redisClient.quit().catch(() => {});
+    process.exit(0);
+});
+
+runServer();
