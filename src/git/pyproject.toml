@@ -31,6 +31,7 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 dev-dependencies = ["pyright>=1.1.389", "ruff>=0.7.3", "pytest>=8.0.0"]
+typed=true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
