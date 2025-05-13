@@ -22,10 +22,12 @@ const args = process.argv.slice(2);
 // Configuration options
 type GitConfig = {
   requireCleanBranch: boolean;
+  checkedThisPrompt: boolean;
 };
 
 const gitConfig: GitConfig = {
   requireCleanBranch: false,
+  checkedThisPrompt: false
 };
 
 // Extract any options from the command line arguments
@@ -131,9 +133,17 @@ async function isGitClean(filePath: string): Promise<{isRepo: boolean, isClean: 
 }
 
 // Check if the Git status allows modification
+// With the One-Check-Per-Prompt approach, Git validation is only performed
+// on the first file operation in each prompt and skipped for subsequent operations
 async function validateGitStatus(filePath: string): Promise<void> {
   if (!gitConfig.requireCleanBranch) {
     return; // Git validation is disabled
+  }
+  
+  // Skip if we've already checked in this prompt
+  if (gitConfig.checkedThisPrompt) {
+    console.log(`Skipping Git check for ${filePath} as we already checked in this prompt`);
+    return;
   }
   
   const { isRepo, isClean, repoPath } = await isGitClean(filePath);
@@ -152,6 +162,20 @@ async function validateGitStatus(filePath: string): Promise<void> {
       `Git repository at ${repoPath} has uncommitted changes. ` + 
       `This server is configured to require a clean branch before allowing changes.`
     );
+  }
+  
+  // Mark that we've checked in this prompt
+  gitConfig.checkedThisPrompt = true;
+  console.log(`Git check passed for ${filePath} and marked as checked for this prompt`);
+}
+
+// Reset the Git check state
+// This function is called after each tool request to reset the Git check state
+// so that the next prompt will perform a fresh Git check
+function resetGitCheckState(): void {
+  if (gitConfig.checkedThisPrompt) {
+    gitConfig.checkedThisPrompt = false;
+    console.log("Git check state reset for next prompt");
   }
 }
 
@@ -573,6 +597,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const { name, arguments: args } = request.params;
 
+    // Get the response from the appropriate tool handler
+    let response;
+    
     switch (name) {
       case "read_file": {
         const parsed = ReadFileArgsSchema.safeParse(args);
@@ -581,9 +608,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
         const content = await fs.readFile(validPath, "utf-8");
-        return {
+        response = {
           content: [{ type: "text", text: content }],
         };
+        break;
       }
 
       case "read_multiple_files": {
@@ -603,9 +631,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
           }),
         );
-        return {
+        response = {
           content: [{ type: "text", text: results.join("\n---\n") }],
         };
+        break;
       }
 
       case "write_file": {
@@ -616,9 +645,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validPath = await validatePath(parsed.data.path); // Git check is now performed in validatePath
         
         await fs.writeFile(validPath, parsed.data.content, "utf-8");
-        return {
+        response = {
           content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
         };
+        break;
       }
 
       case "edit_file": {
@@ -631,9 +661,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validPath = await validatePath(parsed.data.path, parsed.data.dryRun);
         
         const result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.dryRun);
-        return {
+        response = {
           content: [{ type: "text", text: result }],
         };
+        break;
       }
 
       case "create_directory": {
@@ -644,9 +675,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validPath = await validatePath(parsed.data.path); // Git check is now performed in validatePath
         
         await fs.mkdir(validPath, { recursive: true });
-        return {
+        response = {
           content: [{ type: "text", text: `Successfully created directory ${parsed.data.path}` }],
         };
+        break;
       }
 
       case "list_directory": {
@@ -659,9 +691,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const formatted = entries
           .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
           .join("\n");
-        return {
+        response = {
           content: [{ type: "text", text: formatted }],
         };
+        break;
       }
 
         case "directory_tree": {
@@ -699,12 +732,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             const treeData = await buildTree(parsed.data.path);
-            return {
+            response = {
                 content: [{
                     type: "text",
                     text: JSON.stringify(treeData, null, 2)
                 }],
             };
+            break;
         }
 
       case "move_file": {
@@ -716,9 +750,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validDestPath = await validatePath(parsed.data.destination); // Git check is now performed in validatePath
         
         await fs.rename(validSourcePath, validDestPath);
-        return {
+        response = {
           content: [{ type: "text", text: `Successfully moved ${parsed.data.source} to ${parsed.data.destination}` }],
         };
+        break;
       }
 
       case "search_files": {
@@ -728,9 +763,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
         const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
-        return {
+        response = {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };
+        break;
       }
 
       case "get_file_info": {
@@ -740,20 +776,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
         const info = await getFileStats(validPath);
-        return {
+        response = {
           content: [{ type: "text", text: Object.entries(info)
             .map(([key, value]) => `${key}: ${value}`)
             .join("\n") }],
         };
+        break;
       }
 
       case "list_allowed_directories": {
-        return {
+        response = {
           content: [{
             type: "text",
             text: `Allowed directories:\n${allowedDirectories.join('\n')}`
           }],
         };
+        break;
       }
       
       case "git_status": {
@@ -767,9 +805,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const gitStatus = await isGitClean(validPath);
         
         if (!gitStatus.isRepo) {
-          return {
+          response = {
             content: [{ type: "text", text: `The path ${parsed.data.path} is not in a Git repository.` }],
           };
+          break;
         }
         
         // If it's a repository, get additional info using simple-git
@@ -792,15 +831,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
         
-        return {
+        response = {
           content: [{ type: "text", text: statusSummary.join('\n') }],
         };
+        break;
       }
 
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
+    
+    // Reset Git check state after successful response
+    resetGitCheckState();
+    
+    return response;
   } catch (error) {
+    // Reset Git check state even on error
+    resetGitCheckState();
+    
     const errorMessage = error instanceof Error ? error.message : String(error);
     return {
       content: [{ type: "text", text: `Error: ${errorMessage}` }],
@@ -818,7 +866,7 @@ async function runServer() {
   
   if (gitConfig.requireCleanBranch) {
     console.error("Git integration: Enabled");
-    console.error("Git require clean branch: Yes - File modifications will only be allowed in Git repositories with clean branches");
+    console.error("Git require clean branch: Yes - Files will only be modified after a Git check on the first operation in each prompt");
   } else {
     console.error("Git integration: Disabled");
   }
