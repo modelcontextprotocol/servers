@@ -147,7 +147,7 @@ Note: all directories must be mounted to `/projects` by default.
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "--git",
+        "--require-clean-branch",
         "/Users/username/Desktop",
         "/path/to/other/allowed/dir"
       ]
@@ -207,7 +207,7 @@ Note: all directories must be mounted to `/projects` by default.
         "args": [
           "-y",
           "@modelcontextprotocol/server-filesystem",
-          "--git",
+          "--require-clean-branch",
           "${workspaceFolder}"
         ]
       }
@@ -218,12 +218,11 @@ Note: all directories must be mounted to `/projects` by default.
 
 ## Git Integration
 
-The filesystem MCP server includes Git integration that can prevent file modifications when a Git repository has uncommitted changes. This is useful when you want to ensure that all changes are properly committed before allowing further modifications.
+The filesystem MCP server includes Git integration that can prevent file modifications unless they are within Git repositories with clean working directories.
 
 ### Command Line Options
 
-- `--git`: Enable Git integration. This will identify Git repositories but won't restrict modifications.
-- `--require-clean-branch`: Enable Git integration and only allow file modifications in repositories with clean branches (no uncommitted changes). Implies `--git`.
+- `--require-clean-branch`: Enable Git integration and only allow file modifications in repositories with clean branches (no uncommitted changes). Files outside Git repositories will not be modifiable.
 
 ### Git Status Tool
 

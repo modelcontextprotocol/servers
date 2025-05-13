@@ -800,13 +800,9 @@ async function runServer() {
   console.error("Secure MCP Filesystem Server running on stdio");
   console.error("Allowed directories:", allowedDirectories);
   
-  if (gitConfig.enabled) {
+  if (gitConfig.requireCleanBranch) {
     console.error("Git integration: Enabled");
-    if (gitConfig.requireCleanBranch) {
-      console.error("Git require clean branch: Yes - File modifications will only be allowed in clean Git branches");
-    } else {
-      console.error("Git require clean branch: No - File modifications allowed regardless of Git status");
-    }
+    console.error("Git require clean branch: Yes - File modifications will only be allowed in Git repositories with clean branches");
   } else {
     console.error("Git integration: Disabled");
   }
