@@ -79,8 +79,22 @@ await Promise.all(directoryArgs.map(async (dir) => {
 async function isGitClean(filePath: string): Promise<{isRepo: boolean, isClean: boolean, repoPath: string | null}> {
   try {
     // Find the containing git repository (if any)
-    let currentPath = path.isAbsolute(filePath) ? path.dirname(filePath) : path.dirname(path.resolve(filePath));
+    // First, check if the provided path itself is a git repository
+    const resolvedPath = path.isAbsolute(filePath) ? filePath : path.resolve(filePath);
+    let currentPath = resolvedPath;
     let repoPath = null;
+    
+    // Get file stats to check if it's a directory or file
+    try {
+      const stats = await fs.stat(resolvedPath);
+      // If it's a file, start from its parent directory
+      if (!stats.isDirectory()) {
+        currentPath = path.dirname(resolvedPath);
+      }
+    } catch (error) {
+      // If path doesn't exist, start from its parent directory
+      currentPath = path.dirname(resolvedPath);
+    }
     
     // Walk up the directory tree looking for a .git folder
     while (currentPath !== path.parse(currentPath).root) {
