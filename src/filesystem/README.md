@@ -218,11 +218,13 @@ Note: all directories must be mounted to `/projects` by default.
 
 ## Git Integration
 
-The filesystem MCP server includes Git integration that can prevent file modifications unless they are within Git repositories with clean working directories.
+The filesystem MCP server includes Git integration that prevents file modifications unless they are within Git repositories with clean working directories. All file operations that modify the filesystem (create, write, edit, move, etc.) will be subject to Git validation when enabled.
 
 ### Command Line Options
 
 - `--require-clean-branch`: Enable Git integration and only allow file modifications in repositories with clean branches (no uncommitted changes). Files outside Git repositories will not be modifiable.
+
+Note that read-only operations (reading files, listing directories, etc.) are not affected by Git validation and will work regardless of Git repository status.
 
 ### Git Status Tool
 

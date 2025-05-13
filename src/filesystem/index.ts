@@ -79,7 +79,7 @@ await Promise.all(directoryArgs.map(async (dir) => {
 async function isGitClean(filePath: string): Promise<{isRepo: boolean, isClean: boolean, repoPath: string | null}> {
   try {
     // Find the containing git repository (if any)
-    let currentPath = path.dirname(filePath);
+    let currentPath = path.isAbsolute(filePath) ? path.dirname(filePath) : path.dirname(path.resolve(filePath));
     let repoPath = null;
     
     // Walk up the directory tree looking for a .git folder
@@ -142,7 +142,7 @@ async function validateGitStatus(filePath: string): Promise<void> {
 }
 
 // Security utilities
-async function validatePath(requestedPath: string): Promise<string> {
+async function validatePath(requestedPath: string, skipGitCheck: boolean = false): Promise<string> {
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
@@ -164,6 +164,12 @@ async function validatePath(requestedPath: string): Promise<string> {
     if (!isRealPathAllowed) {
       throw new Error("Access denied - symlink target outside allowed directories");
     }
+    
+    // Perform Git validation if required
+    if (!skipGitCheck && gitConfig.requireCleanBranch) {
+      await validateGitStatus(realPath);
+    }
+    
     return realPath;
   } catch (error) {
     // For new files that don't exist yet, verify parent directory
@@ -175,8 +181,17 @@ async function validatePath(requestedPath: string): Promise<string> {
       if (!isParentAllowed) {
         throw new Error("Access denied - parent directory outside allowed directories");
       }
+      
+      // Perform Git validation on the parent directory for new files
+      if (!skipGitCheck && gitConfig.requireCleanBranch) {
+        await validateGitStatus(parentDir);
+      }
+      
       return absolute;
-    } catch {
+    } catch (validationError) {
+      if (validationError instanceof Error) {
+        throw validationError; // Re-throw Git validation errors
+      }
       throw new Error(`Parent directory does not exist: ${parentDir}`);
     }
   }
@@ -292,8 +307,8 @@ async function searchFiles(
       const fullPath = path.join(currentPath, entry.name);
 
       try {
-        // Validate each path before processing
-        await validatePath(fullPath);
+        // Validate each path before processing (skip Git check for search)
+        await validatePath(fullPath, true);
 
         // Check if path matches any exclude pattern
         const relativePath = path.relative(rootPath, fullPath);
@@ -550,7 +565,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
+        const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
         const content = await fs.readFile(validPath, "utf-8");
         return {
           content: [{ type: "text", text: content }],
@@ -565,7 +580,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const results = await Promise.all(
           parsed.data.paths.map(async (filePath: string) => {
             try {
-              const validPath = await validatePath(filePath);
+              const validPath = await validatePath(filePath, true); // Skip Git check for read-only operation
               const content = await fs.readFile(validPath, "utf-8");
               return `${filePath}:\n${content}\n`;
             } catch (error) {
@@ -584,10 +599,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
-        
-        // Check Git status before allowing write
-        await validateGitStatus(validPath);
+        const validPath = await validatePath(parsed.data.path); // Git check is now performed in validatePath
         
         await fs.writeFile(validPath, parsed.data.content, "utf-8");
         return {
@@ -600,12 +612,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for edit_file: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
         
-        // If this is not a dry run, check Git status before allowing edits
-        if (!parsed.data.dryRun) {
-          await validateGitStatus(validPath);
-        }
+        // If this is a dry run, skip Git check
+        const validPath = await validatePath(parsed.data.path, parsed.data.dryRun);
         
         const result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.dryRun);
         return {
@@ -618,10 +627,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for create_directory: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
-        
-        // Check Git status before creating directory
-        await validateGitStatus(validPath);
+        const validPath = await validatePath(parsed.data.path); // Git check is now performed in validatePath
         
         await fs.mkdir(validPath, { recursive: true });
         return {
@@ -634,7 +640,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for list_directory: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
+        const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
         const entries = await fs.readdir(validPath, { withFileTypes: true });
         const formatted = entries
           .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
@@ -657,7 +663,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             async function buildTree(currentPath: string): Promise<TreeEntry[]> {
-                const validPath = await validatePath(currentPath);
+                const validPath = await validatePath(currentPath, true); // Skip Git check for read-only operation
                 const entries = await fs.readdir(validPath, {withFileTypes: true});
                 const result: TreeEntry[] = [];
 
@@ -692,12 +698,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for move_file: ${parsed.error}`);
         }
-        const validSourcePath = await validatePath(parsed.data.source);
-        const validDestPath = await validatePath(parsed.data.destination);
-        
-        // Check Git status for both source and destination paths
-        await validateGitStatus(validSourcePath);
-        await validateGitStatus(validDestPath);
+        const validSourcePath = await validatePath(parsed.data.source); // Git check is now performed in validatePath
+        const validDestPath = await validatePath(parsed.data.destination); // Git check is now performed in validatePath
         
         await fs.rename(validSourcePath, validDestPath);
         return {
@@ -710,7 +712,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
+        const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
         const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
@@ -722,7 +724,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for get_file_info: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
+        const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
         const info = await getFileStats(validPath);
         return {
           content: [{ type: "text", text: Object.entries(info)
@@ -745,7 +747,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for git_status: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
+        const validPath = await validatePath(parsed.data.path, true); // Skip Git check for read-only operation
         
         // Get Git status information
         const gitStatus = await isGitClean(validPath);
@@ -764,7 +766,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           `Repository: ${gitStatus.repoPath}`,
           `Current branch: ${branch}`,
           `Status: ${gitStatus.isClean ? 'Clean' : 'Dirty'}`,
-          `Git integration enabled: ${gitConfig.enabled ? 'Yes' : 'No'}`,
+          `Git integration enabled: ${gitConfig.requireCleanBranch ? 'Yes' : 'No'}`,
           `Require clean branch: ${gitConfig.requireCleanBranch ? 'Yes' : 'No'}`,
         ];
         
