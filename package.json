@@ -22,6 +22,7 @@
     "@modelcontextprotocol/server-everything": "*",
     "@modelcontextprotocol/server-gdrive": "*",
     "@modelcontextprotocol/server-postgres": "*",
+    "@modelcontextprotocol/server-oracle": "*",
     "@modelcontextprotocol/server-puppeteer": "*",
     "@modelcontextprotocol/server-slack": "*",
     "@modelcontextprotocol/server-brave-search": "*",

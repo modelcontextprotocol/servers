@@ -1,0 +1,30 @@
+{
+  "name": "@modelcontextprotocol/server-oracle",
+  "version": "0.6.2",
+  "description": "MCP server for interacting with Oracle databases",
+  "license": "MIT",
+  "author": "Anthropic, PBC (https://anthropic.com)",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "type": "module",
+  "bin": {
+    "mcp-server-oracle": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.0.1",
+    "oracledb": "^6.1.0"
+  },
+  "devDependencies": {
+    "@types/oracledb": "^6.1.0",
+    "shx": "^0.3.4",
+    "typescript": "^5.0.0"
+  }
+}
