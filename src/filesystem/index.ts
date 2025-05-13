@@ -17,7 +17,7 @@ import { minimatch } from 'minimatch';
 import { simpleGit, SimpleGit } from 'simple-git';
 
 // Import state utilities
-import { getState, saveState, hasValidatedInPrompt, markValidatedInPrompt, resetValidationState } from './state-utils.js';
+import { getState, saveState, hasValidatedInPrompt, markValidatedInPrompt, resetValidationState, hasValidatedRepo, markRepoValidated } from './state-utils.js';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -136,18 +136,11 @@ async function isGitClean(filePath: string): Promise<{isRepo: boolean, isClean: 
 }
 
 // Check if the Git status allows modification
-// With the One-Check-Per-Prompt approach, validation is only performed
-// on the first file operation in each prompt and skipped for subsequent operations
+// With the Repository-Aware-Check-Per-Prompt approach, validation is performed
+// the first time each repository is accessed in a prompt
 async function validateGitStatus(filePath: string, promptId?: string): Promise<void> {
   if (!gitConfig.requireCleanBranch) {
     return; // Git validation is disabled
-  }
-  
-  // Skip if we've already checked in this prompt
-  const hasValidated = await hasValidatedInPrompt(promptId);
-  if (hasValidated) {
-    // Skip validation - already validated
-    return;
   }
   
   const { isRepo, isClean, repoPath } = await isGitClean(filePath);
@@ -160,7 +153,14 @@ async function validateGitStatus(filePath: string, promptId?: string): Promise<v
       );
   }
   
-  // And we require the repository to be clean
+  // Skip if we've already checked this repo in this prompt
+  const hasValidated = await hasValidatedRepo(repoPath, promptId);
+  if (hasValidated) {
+    // Skip validation - this repo was already validated in this prompt
+    return;
+  }
+  
+  // We require the repository to be clean
   if (!isClean) {
       throw new Error(
         "Git repository at " + repoPath + " has uncommitted changes. " + 
@@ -168,7 +168,10 @@ async function validateGitStatus(filePath: string, promptId?: string): Promise<v
       );
   }
   
-  // Mark that we've checked in this prompt
+  // Mark that we've checked this repo in this prompt
+  await markRepoValidated(repoPath, promptId);
+  
+  // Also mark general validation for backward compatibility
   await markValidatedInPrompt(promptId);
 }
 
