@@ -99,13 +99,17 @@ class KnowledgeGraphManager {
   async addObservations(observations: { entityName: string; contents: string[] }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
     const graph = await this.loadGraph();
     const results = observations.map(o => {
-      const entity = graph.entities.find(e => e.name === o.entityName);
+      // Lowercase the entityName for lookup
+      const entityNameLowercase = o.entityName.toLowerCase();
+      const entity = graph.entities.find(e => e.name === entityNameLowercase);
       if (!entity) {
         throw new Error(`Entity with name ${o.entityName} not found`);
       }
-      const newObservations = o.contents.filter(content => !entity.observations.includes(content));
+      // Lowercase all observation contents
+      const lowercasedContents = o.contents.map(content => content.toLowerCase());
+      const newObservations = lowercasedContents.filter(content => !entity.observations.includes(content));
       entity.observations.push(...newObservations);
-      return { entityName: o.entityName, addedObservations: newObservations };
+      return { entityName: entityNameLowercase, addedObservations: newObservations };
     });
     await this.saveGraph(graph);
     return results;
@@ -113,17 +117,23 @@ class KnowledgeGraphManager {
 
   async deleteEntities(entityNames: string[]): Promise<void> {
     const graph = await this.loadGraph();
-    graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
-    graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
+    // Lowercase all entity names for consistent comparison
+    const lowercasedEntityNames = entityNames.map(name => name.toLowerCase());
+    graph.entities = graph.entities.filter(e => !lowercasedEntityNames.includes(e.name));
+    graph.relations = graph.relations.filter(r => !lowercasedEntityNames.includes(r.from) && !lowercasedEntityNames.includes(r.to));
     await this.saveGraph(graph);
   }
 
   async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
     const graph = await this.loadGraph();
     deletions.forEach(d => {
-      const entity = graph.entities.find(e => e.name === d.entityName);
+      // Lowercase the entityName for lookup
+      const entityNameLowercase = d.entityName.toLowerCase();
+      const entity = graph.entities.find(e => e.name === entityNameLowercase);
       if (entity) {
-        entity.observations = entity.observations.filter(o => !d.observations.includes(o));
+        // Lowercase all observation contents for consistent comparison
+        const lowercasedObservations = d.observations.map(obs => obs.toLowerCase());
+        entity.observations = entity.observations.filter(o => !lowercasedObservations.includes(o));
       }
     });
     await this.saveGraph(graph);
@@ -131,7 +141,13 @@ class KnowledgeGraphManager {
 
   async deleteRelations(relations: Relation[]): Promise<void> {
     const graph = await this.loadGraph();
-    graph.relations = graph.relations.filter(r => !relations.some(delRelation =>
+    // Lowercase all relation properties for consistent comparison
+    const lowercasedRelations = relations.map(relation => ({
+      from: relation.from.toLowerCase(),
+      to: relation.to.toLowerCase(),
+      relationType: relation.relationType.toLowerCase()
+    }));
+    graph.relations = graph.relations.filter(r => !lowercasedRelations.some(delRelation =>
       r.from === delRelation.from &&
       r.to === delRelation.to &&
       r.relationType === delRelation.relationType
@@ -174,8 +190,11 @@ class KnowledgeGraphManager {
   async openNodes(names: string[]): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
 
+    // Lowercase all entity names for consistent lookup
+    const lowercasedNames = names.map(name => name.toLowerCase());
+    
     // Filter entities
-    const filteredEntities = graph.entities.filter(e => names.includes(e.name));
+    const filteredEntities = graph.entities.filter(e => lowercasedNames.includes(e.name));
 
     // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
