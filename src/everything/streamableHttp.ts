@@ -4,6 +4,8 @@ import express, { Request, Response } from "express";
 import { createServer } from "./everything.js";
 import { randomUUID } from 'node:crypto';
 
+console.error('Starting Streamable HTTP server...');
+
 const app = express();
 
 const { server, cleanup } = createServer();
