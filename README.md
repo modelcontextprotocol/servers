@@ -325,7 +325,6 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Kubernetes and OpenShift](https://github.com/manusa/kubernetes-mcp-server)** - A powerful Kubernetes MCP server with additional support for OpenShift. Besides providing CRUD operations for any Kubernetes resource, this server provides specialized tools to interact with your cluster.
 - **[Langflow-DOC-QA-SERVER](https://github.com/GongRzhe/Langflow-DOC-QA-SERVER)** - A Model Context Protocol server for document Q&A powered by Langflow. It demonstrates core MCP concepts by providing a simple interface to query documents through a Langflow backend.
 - **[Lightdash](https://github.com/syucream/lightdash-mcp-server)** - Interact with [Lightdash](https://www.lightdash.com/), a BI tool.
-- **[lsp-mcp](https://github.com/Tritlo/lsp-mcp)** - Interact with Language Servers usint the Language Server Protocol to provide additional context information via hover, code actions and completions.
 - **[Linear](https://github.com/tacticlaunch/mcp-linear)** - Interact with Linear project management system.
 - **[Linear](https://github.com/jerhadf/linear-mcp-server)** - Allows LLM to interact with Linear's API for project management, including searching, creating, and updating issues.
 - **[Linear (Go)](https://github.com/geropl/linear-mcp-go)** - Allows LLM to interact with Linear's API via a single static binary.
@@ -333,6 +332,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[LlamaCloud](https://github.com/run-llama/mcp-server-llamacloud)** (by marcusschiesser) - Integrate the data stored in a managed index on [LlamaCloud](https://cloud.llamaindex.ai/)
 - **[lldb-mcp](https://github.com/stass/lldb-mcp)** - A Model Context Protocol server for LLDB that provides LLM-driven debugging.
 - **[llm-context](https://github.com/cyberchitta/llm-context.py)** - Provides a repo-packing MCP tool with configurable profiles that specify file inclusion/exclusion patterns and optional prompts.
+- **[lsp-mcp](https://github.com/Tritlo/lsp-mcp)** - Interact with Language Servers usint the Language Server Protocol to provide additional context information via hover, code actions and completions.
 - **[lucene-mcp-server](https://github.com/VivekKumarNeu/MCP-Lucene-Server)** - spring boot server using Lucene for fast document search and management.
 - **[mac-messages-mcp](https://github.com/carterlasalle/mac_messages_mcp)** - An MCP server that securely interfaces with your iMessage database via the Model Context Protocol (MCP), allowing LLMs to query and analyze iMessage conversations. It includes robust phone number validation, attachment processing, contact management, group chat handling, and full support for sending and receiving messages.
 - **[MalwareBazaar_MCP](https://github.com/mytechnotalent/MalwareBazaar_MCP)** (by Kevin Thomas) - An AI-driven MCP server that autonomously interfaces with MalwareBazaar, delivering real-time threat intel and sample metadata for authorized cybersecurity research workflows.
