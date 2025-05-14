@@ -8,7 +8,7 @@ The fetch tool will truncate the response, but by using the `start_index` argume
 
 - `fetch` - Fetches a URL from the internet and extracts its contents as markdown.
     - `url` (string, required): URL to fetch
-    - `max_length` (integer, optional): Maximum number of characters to return (default: 5000)
+    - `max_length` (integer, optional): Maximum number of characters to return (default: 5000). This can be overridden (see customization below)
     - `start_index` (integer, optional): Start content from this character index (default: 0)
     - `raw` (boolean, optional): Get raw content without markdown conversion (default: false)
 
@@ -158,6 +158,39 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 ### Customization - Proxy
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
+
+### Customization - Max Length
+
+By default, the maximum length of content returned is 5000 characters. This can be customized by setting the `MAX_LENGTH` environment variable.
+
+<details>
+<summary>Using uvx</summary>
+
+```json
+"mcpServers": {
+  "fetch": {
+    "command": "uvx",
+    "args": ["mcp-server-fetch"],
+    "env": {
+      "MAX_LENGTH": "10000"
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using Docker</summary>
+
+```json
+"mcpServers": {
+  "fetch": {
+    "command": "docker",
+    "args": ["run", "-i", "--rm", "-e", "MAX_LENGTH=10000", "mcp/fetch"]
+  }
+}
+```
+</details>
 
 ## Debugging
 

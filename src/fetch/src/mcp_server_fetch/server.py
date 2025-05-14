@@ -1,5 +1,6 @@
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
+import os
 
 import markdownify
 import readabilipy.simple_json
@@ -22,6 +23,7 @@ from pydantic import BaseModel, Field, AnyUrl
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
+MAX_LENGTH = os.environ.get("MAX_LENGTH", 5000)
 
 
 def extract_content_from_html(html: str) -> str:
@@ -155,7 +157,7 @@ class Fetch(BaseModel):
     max_length: Annotated[
         int,
         Field(
-            default=5000,
+            default=MAX_LENGTH,
             description="Maximum number of characters to return.",
             gt=0,
             lt=1000000,
