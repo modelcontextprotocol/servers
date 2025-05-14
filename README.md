@@ -503,7 +503,7 @@ A growing set of community-developed and maintained servers demonstrates various
 These are high-level frameworks that make it easier to build MCP servers or clients.
 
 ### For servers
-
+* **[csharp-sdk](https://github.com/modelcontextprotocol/csharp-sdk)** (C#) - The official C# SDK for Model Context Protocol servers and clients. Maintained in collaboration with Microsoft.
 * **[EasyMCP](https://github.com/zcaceres/easy-mcp/)** (TypeScript)
 - **[FastAPI to MCP auto generator](https://github.com/tadata-org/fastapi_mcp)** – A zero-configuration tool for automatically exposing FastAPI endpoints as MCP tools by **[Tadata](https://tadata.com/)**
 * **[FastMCP](https://github.com/punkpeye/fastmcp)** (TypeScript)
