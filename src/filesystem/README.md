@@ -80,6 +80,18 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - Case-insensitive matching
   - Returns full paths to matches
 
+- **search_in_files**
+  - Search inside files for specific text or regex patterns
+  - Inputs:
+    - `path` (string): Starting directory
+    - `searchText` (string): Text or regex pattern to search for within files
+    - `filePattern` (string, optional, default: '*'): Glob pattern to filter which files to search
+    - `excludePatterns` (string[], optional, default: []): Glob patterns to exclude from search
+    - `maxResults` (number, optional, default: 1000): Maximum number of results to return
+    - `useRegex` (boolean, optional, default: false): Whether to interpret searchText as regular expression
+  - Returns matching lines with file path, line number, and content context
+  - Performs grep-like functionality across multiple files
+
 - **get_file_info**
   - Get detailed file/directory metadata
   - Input: `path` (string)

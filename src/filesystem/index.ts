@@ -14,12 +14,35 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
+import Fuse from 'fuse.js';  // Import Fuse.js for fuzzy matching
 
 // Command line argument parsing
 const args = process.argv.slice(2);
 if (args.length === 0) {
   console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
   process.exit(1);
+}
+
+// Utility function to convert snake_case to camelCase
+function snakeToCamel(str: string): string {
+  return str.replace(/_([a-z])/g, (match, group) => group.toUpperCase());
+}
+
+// Helper to recursively convert object keys from snake_case to camelCase
+function convertKeysToCamelCase(obj: any): any {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(convertKeysToCamelCase);
+  }
+
+  return Object.keys(obj).reduce((result: Record<string, any>, key: string) => {
+    const camelKey = snakeToCamel(key);
+    result[camelKey] = convertKeysToCamelCase(obj[key]);
+    return result;
+  }, {});
 }
 
 // Normalize all paths consistently
@@ -146,6 +169,15 @@ const GetFileInfoArgsSchema = z.object({
   path: z.string(),
 });
 
+const SearchInFilesArgsSchema = z.object({
+  path: z.string(),
+  searchText: z.string().describe('Text or regex pattern to search for within files'),
+  filePattern: z.string().optional().default('*').describe('Glob pattern to filter which files to search'),
+  excludePatterns: z.array(z.string()).optional().default([]).describe('Glob patterns to exclude from search'),
+  maxResults: z.number().optional().default(1000).describe('Maximum number of results to return'),
+  useRegex: z.boolean().optional().default(false).describe('Whether to interpret searchText as regular expression')
+});
+
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
@@ -232,9 +264,155 @@ async function searchFiles(
   return results;
 }
 
+interface SearchMatch {
+  file: string;
+  line: number;
+  content: string;
+}
+
+async function searchInFiles(
+  rootPath: string,
+  searchText: string,
+  filePattern: string = '*',
+  excludePatterns: string[] = [],
+  maxResults: number = 1000,
+  useRegex: boolean = false
+): Promise<SearchMatch[]> {
+  const matches: SearchMatch[] = [];
+  let searchRegex: RegExp | null = null;
+  
+  if (useRegex) {
+    try {
+      searchRegex = new RegExp(searchText, 'g');
+    } catch (error) {
+      throw new Error(`Invalid regular expression: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  } else {
+    // For non-regex mode, create a regex that matches the search string as a substring
+    // This ensures partial matches similar to grep's default behavior
+    searchRegex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+  }
+
+  async function searchInFile(filePath: string): Promise<void> {
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const lines = content.split('\n');
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        let lineMatches: boolean | RegExpMatchArray | null = false;
+        
+        if (useRegex) {
+          // Reset lastIndex to ensure we start from beginning of line
+          if (searchRegex) searchRegex.lastIndex = 0;
+          lineMatches = line.match(searchRegex as RegExp);
+        } else {
+          lineMatches = line.includes(searchText);
+        }
+          
+        if (lineMatches) {
+          let displayContent = line.trim();
+          
+          // If line is longer than 50 chars, show only relevant portion with context
+          if (displayContent.length > 50) {
+            let matchIndex = -1;
+            let matchLength = searchText.length;
+            
+            if (useRegex && lineMatches instanceof Array && lineMatches.length > 0) {
+              // For regex matches, get the position of the first match
+              matchIndex = line.indexOf(lineMatches[0]);
+              matchLength = lineMatches[0].length;
+            } else if (!useRegex) {
+              // For simple text search
+              matchIndex = line.indexOf(searchText);
+            }
+            
+            if (matchIndex >= 0) {
+              // Calculate start and end positions to show context around match
+              const contextSize = 20; // Characters of context on each side
+              let startPos = Math.max(0, matchIndex - contextSize);
+              let endPos = Math.min(line.length, matchIndex + matchLength + contextSize);
+              
+              // Create the truncated content with ellipses if needed
+              displayContent = 
+                (startPos > 0 ? '...' : '') + 
+                line.substring(startPos, endPos).trim() + 
+                (endPos < line.length ? '...' : '');
+            }
+          }
+          
+          matches.push({
+            file: filePath,
+            line: i + 1,
+            content: displayContent
+          });
+          
+          if (matches.length >= maxResults) {
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      // Skip files that can't be read or aren't text files
+    }
+  }
+
+  async function search(currentPath: string) {
+    if (matches.length >= maxResults) return;
+    
+    const entries = await fs.readdir(currentPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (matches.length >= maxResults) break;
+      
+      const fullPath = path.join(currentPath, entry.name);
+      
+      try {
+        // Validate each path before processing
+        await validatePath(fullPath);
+
+        // Check if path matches any exclude pattern
+        const relativePath = path.relative(rootPath, fullPath);
+        const shouldExclude = excludePatterns.some(pattern => {
+          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
+          return minimatch(relativePath, globPattern, { dot: true });
+        });
+
+        if (shouldExclude) {
+          continue;
+        }
+
+        if (entry.isDirectory()) {
+          await search(fullPath);
+        } else if (entry.isFile()) {
+          // Check if file matches the file pattern
+          if (minimatch(entry.name, filePattern, { dot: true })) {
+            await searchInFile(fullPath);
+          }
+        }
+      } catch (error) {
+        // Skip invalid paths during search
+        continue;
+      }
+    }
+  }
+
+  await search(rootPath);
+  return matches;
+}
+
 // file editing and diffing utilities
 function normalizeLineEndings(text: string): string {
-  return text.replace(/\r\n/g, '\n');
+  // First convert Windows-style \r\n to Unix-style \n
+  let normalized = text.replace(/\r\n/g, '\n');
+  
+  // Handle literal \n (backslash + n) that might come from Python or other clients
+  // Only perform this replacement when we find \\n but not an actual newline
+  if (normalized.includes('\\n') && !normalized.includes('\n')) {
+    normalized = normalized.replace(/\\n/g, '\n');
+  }
+  
+  return normalized;
 }
 
 function createUnifiedDiff(originalContent: string, newContent: string, filepath: string = 'file'): string {
@@ -262,6 +440,8 @@ async function applyFileEdits(
 
   // Apply edits sequentially
   let modifiedContent = content;
+  let failedEdits: {edit: {oldText: string, newText: string}, matchInfo: string}[] = [];
+
   for (const edit of edits) {
     const normalizedOld = normalizeLineEndings(edit.oldText);
     const normalizedNew = normalizeLineEndings(edit.newText);
@@ -309,11 +489,50 @@ async function applyFileEdits(
     }
 
     if (!matchFound) {
-      throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
+      // Use Fuse.js for fuzzy matching to provide helpful error message
+      const contentArray = modifiedContent.split('\n');
+      const fuse = new Fuse(contentArray, { 
+        includeScore: true, 
+        threshold: 0.6,  // More permissive threshold for finding potential matches
+        ignoreLocation: true,
+        minMatchCharLength: 3
+      });
+      
+      // For multi-line text, try to find the first line as a starting point
+      const firstOldLine = oldLines[0].trim();
+      const fuzzyMatches = fuse.search(firstOldLine);
+      
+      let matchInfo = '';
+      if (fuzzyMatches.length > 0) {
+        // Get the best match 
+        const bestMatch = fuzzyMatches[0];
+        const bestMatchText = contentArray[bestMatch.refIndex];
+        const scorePercentage = bestMatch.score ? Math.round((1 - bestMatch.score) * 100) : 0;
+        
+        // Create message about the fuzzy match
+        matchInfo = `Found similar match (${scorePercentage}% similarity): "${bestMatchText}"`;
+      } else {
+        matchInfo = "No similar matches found";
+      }
+      
+      failedEdits.push({ 
+        edit, 
+        matchInfo 
+      });
     }
   }
 
-  // Create unified diff
+  // If any edits failed, throw an error with match information
+  if (failedEdits.length > 0) {
+    const errorDetails = failedEdits.map(({ edit, matchInfo }) => {
+      const snippet = edit.oldText.substring(0, 50) + (edit.oldText.length > 50 ? '...' : '');
+      return `Failed to match: "${snippet}"\n${matchInfo}`;
+    }).join('\n\n');
+    
+    throw new Error(`Some edits could not be applied to file ${filePath}.\n\n${errorDetails}`);
+  }
+
+  // Create unified diff if all edits were applied
   const diff = createUnifiedDiff(content, modifiedContent, filePath);
 
   // Format diff with appropriate number of backticks
@@ -321,13 +540,13 @@ async function applyFileEdits(
   while (diff.includes('`'.repeat(numBackticks))) {
     numBackticks++;
   }
-  const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
-
+  
+  // Apply changes if not a dry run
   if (!dryRun) {
     await fs.writeFile(filePath, modifiedContent, 'utf-8');
   }
 
-  return formattedDiff;
+  return `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
 }
 
 // Tool handlers
@@ -416,6 +635,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(SearchFilesArgsSchema) as ToolInput,
       },
       {
+        name: "search_in_files",
+        description:
+          "Search inside files for specific text or regex patterns. Performs a grep-like " +
+          "search within files under the specified directory. Returns matched lines with " +
+          "file path and line number. Can filter which files to search with glob patterns. " +
+          "Useful for finding code references or text content across multiple files. " +
+          "Only searches within allowed directories.",
+        inputSchema: zodToJsonSchema(SearchInFilesArgsSchema) as ToolInput,
+      },
+      {
         name: "get_file_info",
         description:
           "Retrieve detailed metadata about a file or directory. Returns comprehensive " +
@@ -427,8 +656,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "list_allowed_directories",
         description:
-          "Returns the list of directories that this server is allowed to access. " +
-          "Use this to understand which directories are available before trying to access files.",
+          "Returns the list of parent directories that this server is allowed to access. " +
+          "Use this to understand which directories are available before trying to access files. " +
+          "Note, that sub-directories are allowed to be searched.",
         inputSchema: {
           type: "object",
           properties: {},
@@ -442,7 +672,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
-    const { name, arguments: args } = request.params;
+    const { name, arguments: rawArgs } = request.params;
+    
+    // Convert any snake_case keys in arguments to camelCase
+    const args = convertKeysToCamelCase(rawArgs);
 
     switch (name) {
       case "read_file": {
@@ -609,6 +842,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{ type: "text", text: Object.entries(info)
             .map(([key, value]) => `${key}: ${value}`)
             .join("\n") }],
+        };
+      }
+
+      case "search_in_files": {
+        const parsed = SearchInFilesArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for search_in_files: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const results = await searchInFiles(
+          validPath, 
+          parsed.data.searchText,
+          parsed.data.filePattern,
+          parsed.data.excludePatterns,
+          parsed.data.maxResults,
+          parsed.data.useRegex
+        );
+        
+        if (results.length === 0) {
+          return {
+            content: [{ type: "text", text: "No matches found" }],
+          };
+        }
+
+        const formatted = results.map(match => 
+          `${match.file}:${match.line}: ${match.content}`
+        ).join('\n');
+        
+        return {
+          content: [{ type: "text", text: formatted }],
         };
       }
 
