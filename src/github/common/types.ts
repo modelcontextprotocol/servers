@@ -35,6 +35,7 @@ export const GitHubRepositorySchema = z.object({
   ssh_url: z.string(),
   clone_url: z.string(),
   default_branch: z.string(),
+  is_template: z.boolean()
 });
 
 export const GithubFileContentLinks = z.object({
