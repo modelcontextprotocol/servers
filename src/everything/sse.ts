@@ -19,6 +19,7 @@ app.get("/sse", async (req, res) => {
     await cleanup();
     await server.close();
   };
+
 });
 
 app.post("/message", async (req, res) => {
@@ -27,7 +28,14 @@ app.post("/message", async (req, res) => {
   await transport.handlePostMessage(req, res);
 });
 
+process.on("SIGINT", async () => {
+  await cleanup();
+  await server.close();
+  process.exit(0);
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.error(`Server is running on port ${PORT}`);
 });
+
