@@ -1,19 +1,26 @@
 import logging
+from enum import Enum
 from pathlib import Path
 from typing import Sequence
+
 from mcp.server import Server
 from mcp.server.session import ServerSession
+from mcp.server.sse import SseServerTransport
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     ClientCapabilities,
-    TextContent,
-    Tool,
     ListRootsResult,
     RootsCapability,
+    TextContent,
+    Tool,
 )
-from enum import Enum
-import git
 from pydantic import BaseModel
+from starlette.applications import Starlette
+from starlette.responses import Response
+from starlette.routing import Mount, Route
+
+import git
+
 
 class GitStatus(BaseModel):
     repo_path: str
@@ -147,7 +154,12 @@ def git_show(repo: git.Repo, revision: str) -> str:
         output.append(d.diff.decode('utf-8'))
     return "".join(output)
 
-async def serve(repository: Path | None) -> None:
+async def serve(
+    repository: Path | None,
+    transport: str = "stdio",
+    host: str = "127.0.0.1",
+    port: int = 9000,
+) -> tuple[Starlette | None, str, int] | None:
     logger = logging.getLogger(__name__)
 
     if repository is not None:
@@ -355,5 +367,26 @@ async def serve(repository: Path | None) -> None:
                 raise ValueError(f"Unknown tool: {name}")
 
     options = server.create_initialization_options()
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, options, raise_exceptions=True)
+    if transport == "stdio":
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(read_stream, write_stream, options, raise_exceptions=True)
+        return None
+    elif transport == "sse":
+        sse = SseServerTransport("/messages/")
+
+        async def handle_sse(request):
+            async with sse.connect_sse(
+                request.scope, request.receive, request._send
+            ) as streams:
+                await server.run(streams[0], streams[1], options)
+            return Response()
+
+        routes = [
+            Route("/sse", endpoint=handle_sse, methods=["GET"]),
+            Mount("/messages/", app=sse.handle_post_message),
+        ]
+        app = Starlette(routes=routes)
+        return app, host, port
+    else:
+        logger.error(f"Unknown transport: {transport}")
+        raise ValueError(f"Unknown transport: {transport}")
