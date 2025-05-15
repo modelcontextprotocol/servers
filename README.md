@@ -1,55 +1,60 @@
-# Model Context Protocol servers
+  # Model Context Protocol Servers
 
-This repository is a collection of *reference implementations* for the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), as well as references
-to community built servers and additional resources.
+Este repositorio contiene únicamente implementaciones de referencia para el [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) enfocadas en tres servidores:
 
-The servers in this repository showcase the versatility and extensibility of MCP, demonstrating how it can be used to give Large Language Models (LLMs) secure, controlled access to tools and data sources.
-Each MCP server is implemented with either the [Typescript MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk) or [Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk).
+- **[Git](src/git)**: Herramientas para leer, buscar y manipular repositorios Git locales.
+- **[GitHub](src/github)**: Operaciones sobre repositorios remotos y la API de GitHub.
+- **[Google Drive](src/gdrive)**: Acceso y búsqueda de archivos en Google Drive.
 
-> Note: Lists in this README are maintained in alphabetical order to minimize merge conflicts when adding new items.
+Estos servidores demuestran cómo el MCP puede ofrecer a los Modelos de Lenguaje Grande (LLMs) acceso seguro y controlado a repositorios de código y archivos en la nube.
 
-## 🌟 Reference Servers
+## Uso
 
-These servers aim to demonstrate MCP features and the TypeScript and Python SDKs.
+Cada servidor MCP está implementado con el [SDK de TypeScript para MCP](https://github.com/modelcontextprotocol/typescript-sdk) o el [SDK de Python para MCP](https://github.com/modelcontextprotocol/python-sdk).
 
-- **[AWS KB Retrieval](src/aws-kb-retrieval-server)** - Retrieval from AWS Knowledge Base using Bedrock Agent Runtime
-- **[Brave Search](src/brave-search)** - Web and local search using Brave's Search API
-- **[EverArt](src/everart)** - AI image generation using various models
-- **[Everything](src/everything)** - Reference / test server with prompts, resources, and tools
-- **[Fetch](src/fetch)** - Web content fetching and conversion for efficient LLM usage
-- **[Filesystem](src/filesystem)** - Secure file operations with configurable access controls
-- **[Git](src/git)** - Tools to read, search, and manipulate Git repositories
-- **[GitHub](src/github)** - Repository management, file operations, and GitHub API integration
-- **[GitLab](src/gitlab)** - GitLab API, enabling project management
-- **[Google Drive](src/gdrive)** - File access and search capabilities for Google Drive
-- **[Google Maps](src/google-maps)** - Location services, directions, and place details
-- **[Memory](src/memory)** - Knowledge graph-based persistent memory system
-- **[PostgreSQL](src/postgres)** - Read-only database access with schema inspection
-- **[Puppeteer](src/puppeteer)** - Browser automation and web scraping
-- **[Redis](src/redis)** - Interact with Redis key-value stores
-- **[Sentry](src/sentry)** - Retrieving and analyzing issues from Sentry.io
-- **[Sequential Thinking](src/sequentialthinking)** - Dynamic and reflective problem-solving through thought sequences
-- **[Slack](src/slack)** - Channel management and messaging capabilities
-- **[Sqlite](src/sqlite)** - Database interaction and business intelligence capabilities
-- **[Time](src/time)** - Time and timezone conversion capabilities
+Para ejecutar un servidor basado en TypeScript:
 
-## 🤝 Third-Party Servers
+```sh
+npx -y @modelcontextprotocol/server-gdrive
+npx -y @modelcontextprotocol/server-github
+```
 
-### 🎖️ Official Integrations
+Para ejecutar el servidor de Git (Python):
 
-Official integrations are maintained by companies building production ready MCP servers for their platforms.
+```sh
+uvx mcp-server-git
+# o bien
+pip install mcp-server-git
+python -m mcp_server_git
+```
 
-- <img height="12" width="12" src="https://www.21st.dev/favicon.ico" alt="21st.dev Logo" /> **[21st.dev Magic](https://github.com/21st-dev/magic-mcp)** - Create crafted UI components inspired by the best 21st.dev design engineers.
-- <img height="12" width="12" src="https://invoxx-public-bucket.s3.eu-central-1.amazonaws.com/frontend-resources/adfin-logo-small.svg" alt="Adfin Logo" /> **[Adfin](https://github.com/Adfin-Engineering/mcp-server-adfin)** - The only platform you need to get paid - all payments in one place, invoicing and accounting reconciliations with [Adfin](https://www.adfin.com/).
-- <img height="12" width="12" src="https://www.agentql.com/favicon/favicon.png" alt="AgentQL Logo" /> **[AgentQL](https://github.com/tinyfish-io/agentql-mcp)** - Enable AI agents to get structured data from unstructured web with [AgentQL](https://www.agentql.com/).
-- <img height="12" width="12" src="https://agentrpc.com/favicon.ico" alt="AgentRPC Logo" /> **[AgentRPC](https://github.com/agentrpc/agentrpc)** - Connect to any function, any language, across network boundaries using [AgentRPC](https://www.agentrpc.com/).
-- <img height="12" width="12" src="https://aiven.io/favicon.ico" alt="Aiven Logo" /> **[Aiven](https://github.com/Aiven-Open/mcp-aiven)** - Navigate your [Aiven projects](https://go.aiven.io/mcp-server) and interact with the PostgreSQL®, Apache Kafka®, ClickHouse® and OpenSearch® services
-- <img height="12" width="12" src="https://iotdb.apache.org/img/logo.svg" alt="Apache IoTDB Logo" /> **[Apache IoTDB](https://github.com/apache/iotdb-mcp-server)** - MCP Server for [Apache IoTDB](https://github.com/apache/iotdb) database and its tools
-- <img height="12" width="12" src="https://apify.com/favicon.ico" alt="Apify Logo" /> **[Apify](https://github.com/apify/actors-mcp-server)** - [Actors MCP Server](https://apify.com/apify/actors-mcp-server): Use 3,000+ pre-built cloud tools to extract data from websites, e-commerce, social media, search engines, maps, and more
-- <img height="12" width="12" src="https://2052727.fs1.hubspotusercontent-na1.net/hubfs/2052727/cropped-cropped-apimaticio-favicon-1-32x32.png" alt="APIMatic Logo" /> **[APIMatic MCP](https://github.com/apimatic/apimatic-validator-mcp)** - APIMatic MCP Server is used to validate OpenAPI specifications using [APIMatic](https://www.apimatic.io/). The server processes OpenAPI files and returns validation summaries by leveraging APIMatic’s API.
-- <img height="12" width="12" src="https://phoenix.arize.com/wp-content/uploads/2023/04/cropped-Favicon-32x32.png" alt="Arize-Phoenix Logo" /> **[Arize Phoenix](https://github.com/Arize-ai/phoenix/tree/main/js/packages/phoenix-mcp)** - Inspect traces, manage prompts, curate datasets, and run experiments using [Arize Phoenix](https://github.com/Arize-ai/phoenix), an open-source AI and LLM observability tool.
-- <img height="12" width="12" src="https://www.datastax.com/favicon-32x32.png" alt="DataStax logo" /> **[Astra DB](https://github.com/datastax/astra-db-mcp)** - Comprehensive tools for managing collections and documents in a [DataStax Astra DB](https://www.datastax.com/products/datastax-astra) NoSQL database with a full range of operations such as create, update, delete, find, and associated bulk actions.
-- <img height="12" width="12" src="https://assets.atlan.com/assets/atlan-a-logo-blue-background.png" alt="Atlan Logo" /> **[Atlan](https://github.com/atlanhq/agent-toolkit/tree/main/modelcontextprotocol)** - The Atlan Model Context Protocol server allows you to interact with the [Atlan](https://www.atlan.com/) services through multiple tools.
+## Ejemplo de configuración para clientes MCP
+
+```json
+{
+  "mcpServers": {
+    "git": {
+      "command": "uvx",
+      "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
+      }
+    },
+    "gdrive": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-gdrive"]
+    }
+  }
+}
+```
+
+## Licencia
+
+Este proyecto está licenciado bajo la Licencia MIT. Consulta el archivo [LICENSE](LICENSE) para más detalles.
 - <img height="12" width="12" src="https://resources.audiense.com/hubfs/favicon-1.png" alt="Audiense Logo" /> **[Audiense Insights](https://github.com/AudienseCo/mcp-audiense-insights)** - Marketing insights and audience analysis from [Audiense](https://www.audiense.com/products/audiense-insights) reports, covering demographic, cultural, influencer, and content engagement analysis.
 - <img height="12" width="12" src="https://a0.awsstatic.com/libra-css/images/site/fav/favicon.ico" alt="AWS Logo" /> **[AWS](https://github.com/awslabs/mcp)** -  Specialized MCP servers that bring AWS best practices directly to your development workflow.
 - <img height="12" width="12" src="https://axiom.co/favicon.ico" alt="Axiom Logo" /> **[Axiom](https://github.com/axiomhq/mcp-server-axiom)** - Query and analyze your Axiom logs, traces, and all other event data in natural language
