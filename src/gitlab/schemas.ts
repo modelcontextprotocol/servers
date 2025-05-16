@@ -7,6 +7,26 @@ export const GitLabAuthorSchema = z.object({
   date: z.string()
 });
 
+// Member schema
+export const GitLabMemberSchema = z.object({
+  id: z.number(),
+  username: z.string(),
+  name: z.string(),
+  state: z.string(),
+  avatar_url: z.string(),
+  web_url: z.string(),
+  access_level: z.number(),
+  email: z.string().optional(),
+  group_saml_identity: z.object({
+    extern_uid: z.string(),
+    provider: z.string(),
+    saml_provider_id: z.number()
+  }).nullable().optional(),
+  override: z.boolean().optional()
+});
+
+export const GitLabMembersResponseSchema = z.array(GitLabMemberSchema);
+
 // Repository related schemas
 export const GitLabOwnerSchema = z.object({
   username: z.string(), // Changed from login to match GitLab API
@@ -304,6 +324,13 @@ export const CreateBranchSchema = ProjectParamsSchema.extend({
     .describe("Source branch/commit for new branch")
 });
 
+export const ListMembersSchema = ProjectParamsSchema.extend({
+  include_inheritance: z.boolean().optional()
+    .describe("Include members inherited from parent groups (use 'all' endpoint)"),
+  page: z.number().optional().describe("Page number for pagination (default: 1)"),
+  per_page: z.number().optional().describe("Number of results per page (default: 20)")
+});
+
 // Export types
 export type GitLabAuthor = z.infer<typeof GitLabAuthorSchema>;
 export type GitLabFork = z.infer<typeof GitLabForkSchema>;
@@ -323,3 +350,5 @@ export type CreateMergeRequestOptions = z.infer<typeof CreateMergeRequestOptions
 export type CreateBranchOptions = z.infer<typeof CreateBranchOptionsSchema>;
 export type GitLabCreateUpdateFileResponse = z.infer<typeof GitLabCreateUpdateFileResponseSchema>;
 export type GitLabSearchResponse = z.infer<typeof GitLabSearchResponseSchema>;
+export type GitLabMember = z.infer<typeof GitLabMemberSchema>;
+export type GitLabMembersResponse = z.infer<typeof GitLabMembersResponseSchema>;
