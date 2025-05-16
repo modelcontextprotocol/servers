@@ -10,6 +10,16 @@ export const CreateRepositoryOptionsSchema = z.object({
   autoInit: z.boolean().optional().describe("Initialize with README.md"),
 });
 
+export const CreateRepositoryUsingTemplateSchema = z.object({
+  templateOwner: z.string().describe("Template repository owner (username or organization)"),
+  templateName: z.string().describe("Template repository name"),
+  owner: z.string().optional().describe("Repository owner (username or organization)"),
+  name: z.string().describe("Repository name"),
+  description: z.string().optional().describe("Repository description"),
+  private: z.boolean().optional().describe("Whether the repository should be private"),
+  includeAllBranches: z.boolean().optional().describe("Should include all branches from the template repository"),
+});
+
 export const SearchRepositoriesSchema = z.object({
   query: z.string().describe("Search query (see GitHub search syntax)"),
   page: z.number().optional().describe("Page number for pagination (default: 1)"),
@@ -28,6 +38,17 @@ export type CreateRepositoryOptions = z.infer<typeof CreateRepositoryOptionsSche
 // Function implementations
 export async function createRepository(options: CreateRepositoryOptions) {
   const response = await githubRequest("https://api.github.com/user/repos", {
+    method: "POST",
+    body: options,
+  });
+  return GitHubRepositorySchema.parse(response);
+}
+
+export async function createRepositoryUsingTemplate(
+    template_owner: string,
+    template_repo: string,
+    options: object) {
+  const response = await githubRequest(`https://api.github.com/repos/${template_owner}/${template_repo}/generate`, {
     method: "POST",
     body: options,
   });

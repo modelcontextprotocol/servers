@@ -281,6 +281,18 @@ MCP Server for the GitHub API, enabling file operations, repository management, 
      - `pull_number` (number): Pull request number
    - Returns: Array of pull request reviews with details like the review state (APPROVED, CHANGES_REQUESTED, etc.), reviewer, and review body
 
+27. `create_repository_using_template`
+    - Create a new GitHub repository using a repository template
+    - Inputs:
+        - `templateOwner` (string): Owner of the template repository
+        - `templateRepo` (string): Name of the template repository
+        - `owner` (optional string): Repository owner
+        - `name` (string): Repository name
+        - `description` (optional string): Repository description
+        - `private` (optional boolean): Whether repo should be private
+        - `includeAllBranches` (optional boolean): Should include all branches from the template repository
+    - Returns: Created repository details
+
 ## Search Query Syntax
 
 ### Code Search

@@ -87,6 +87,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(repository.CreateRepositoryOptionsSchema),
       },
       {
+        name: "create_repository_using_template",
+        description: "Create a new GitHub repository using a repository template",
+        inputSchema: zodToJsonSchema(repository.CreateRepositoryUsingTemplateSchema),
+      },
+      {
         name: "get_file_contents",
         description: "Get the contents of a file or directory from a GitHub repository",
         inputSchema: zodToJsonSchema(files.GetFileContentsSchema),
@@ -248,6 +253,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "create_repository": {
         const args = repository.CreateRepositoryOptionsSchema.parse(request.params.arguments);
         const result = await repository.createRepository(args);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "create_repository_using_template": {
+        const args = repository.CreateRepositoryUsingTemplateSchema.parse(request.params.arguments);
+        const result = await repository.createRepositoryUsingTemplate(
+            args.templateOwner,
+            args.templateName,
+            {
+              owner: args.owner,
+              name: args.name,
+              description: args.description,
+              private: args.private,
+              include_all_branches: args.includeAllBranches,
+            }
+        );
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
