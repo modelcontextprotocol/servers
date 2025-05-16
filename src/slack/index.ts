@@ -33,6 +33,7 @@ interface AddReactionArgs {
 
 interface GetChannelHistoryArgs {
   channel_id: string;
+  cursor?: string;
   limit?: number;
 }
 
@@ -145,6 +146,10 @@ const getChannelHistoryTool: Tool = {
       channel_id: {
         type: "string",
         description: "The ID of the channel",
+      },
+      cursor: {
+        type: "string",
+        description: "Pagination cursor for next page of results",
       },
       limit: {
         type: "number",
@@ -319,12 +324,17 @@ class SlackClient {
 
   async getChannelHistory(
     channel_id: string,
-    limit: number = 10,
+    cursor?: string,
+    limit: number = 10
   ): Promise<any> {
     const params = new URLSearchParams({
       channel: channel_id,
       limit: limit.toString(),
     });
+
+    if (cursor) {
+      params.append("cursor", cursor);
+    }
 
     const response = await fetch(
       `https://slack.com/api/conversations.history?${params}`,
@@ -487,6 +497,7 @@ async function main() {
             }
             const response = await slackClient.getChannelHistory(
               args.channel_id,
+              args.cursor,
               args.limit,
             );
             return {
