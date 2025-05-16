@@ -182,6 +182,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Airtable](https://github.com/felores/airtable-mcp)** - Airtable Model Context Protocol Server.
 - **[AlphaVantage](https://github.com/calvernaz/alphavantage)** - MCP server for stock market data API [AlphaVantage](https://www.alphavantage.co)
 - **[Amadeus](https://github.com/donghyun-chae/mcp-amadeus)** (by donghyun-chae) - An MCP server to access, explore, and interact with Amadeus Flight Offers Search API for retrieving detailed flight options, including airline, times, duration, and pricing data.
+- [<img height="12" width="12" src="https://ankiweb.net/logo.png" alt="Anki Logo" />](Anki) **[Anki](https://github.com/nietus/anki-mcp)** - MCP server to run locally with Anki and Ankiconnect. Supports creating, updating, searching and filtering cards and decks. Include mass update and other advanced tools.
 - **[Anki](https://github.com/scorzeth/anki-mcp-server)** - An MCP server for interacting with your [Anki](https://apps.ankiweb.net) decks and cards.
 - **[Any Chat Completions](https://github.com/pyroprompts/any-chat-completions-mcp)** - Interact with any OpenAI SDK Compatible Chat Completions API like OpenAI, Perplexity, Groq, xAI and many more.
 - **[Apache Gravitino(incubating)](https://github.com/datastrato/mcp-server-gravitino)** - Allow LLMs to explore metadata of structured data and unstructured data with Gravitino, and perform data governance tasks including tagging/classification.
