@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 
-import { authenticate } from "@google-cloud/local-auth";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { authenticate } from "@google-cloud/local-auth"
+import { Server } from "@modelcontextprotocol/sdk/server/index.js"
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   CallToolRequestSchema,
   ListResourcesRequestSchema,
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-import fs from "fs";
-import { google } from "googleapis";
-import path from "path";
-import { fileURLToPath } from 'url';
+} from "@modelcontextprotocol/sdk/types.js"
+import fs from "fs"
+import { google, drive_v3 } from "googleapis" // Added drive_v3
+import path from "path"
+import { fileURLToPath } from 'url'
 
-const drive = google.drive("v3");
+const drive = google.drive("v3")
 
 const server = new Server(
   {
@@ -27,21 +27,21 @@ const server = new Server(
       tools: {},
     },
   },
-);
+)
 
 server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
-  const pageSize = 10;
+  const pageSize = 10
   const params: any = {
     pageSize,
     fields: "nextPageToken, files(id, name, mimeType)",
-  };
-
-  if (request.params?.cursor) {
-    params.pageToken = request.params.cursor;
   }
 
-  const res = await drive.files.list(params);
-  const files = res.data.files!;
+  if (request.params?.cursor) {
+    params.pageToken = request.params.cursor
+  }
+
+  const res = await drive.files.list(params)
+  const files = res.data.files!
 
   return {
     resources: files.map((file) => ({
@@ -50,42 +50,42 @@ server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
       name: file.name,
     })),
     nextCursor: res.data.nextPageToken,
-  };
-});
+  }
+})
 
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-  const fileId = request.params.uri.replace("gdrive:///", "");
+  const fileId = request.params.uri.replace("gdrive:///", "")
 
   // First get file metadata to check mime type
   const file = await drive.files.get({
     fileId,
     fields: "mimeType",
-  });
+  })
 
   // For Google Docs/Sheets/etc we need to export
   if (file.data.mimeType?.startsWith("application/vnd.google-apps")) {
-    let exportMimeType: string;
+    let exportMimeType: string
     switch (file.data.mimeType) {
       case "application/vnd.google-apps.document":
-        exportMimeType = "text/markdown";
-        break;
+        exportMimeType = "text/markdown"
+        break
       case "application/vnd.google-apps.spreadsheet":
-        exportMimeType = "text/csv";
-        break;
+        exportMimeType = "text/csv"
+        break
       case "application/vnd.google-apps.presentation":
-        exportMimeType = "text/plain";
-        break;
+        exportMimeType = "text/plain"
+        break
       case "application/vnd.google-apps.drawing":
-        exportMimeType = "image/png";
-        break;
+        exportMimeType = "image/png"
+        break
       default:
-        exportMimeType = "text/plain";
+        exportMimeType = "text/plain"
     }
 
     const res = await drive.files.export(
       { fileId, mimeType: exportMimeType },
       { responseType: "text" },
-    );
+    )
 
     return {
       contents: [
@@ -95,15 +95,15 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
           text: res.data,
         },
       ],
-    };
+    }
   }
 
   // For regular files download content
   const res = await drive.files.get(
     { fileId, alt: "media" },
     { responseType: "arraybuffer" },
-  );
-  const mimeType = file.data.mimeType || "application/octet-stream";
+  )
+  const mimeType = file.data.mimeType || "application/octet-stream"
   if (mimeType.startsWith("text/") || mimeType === "application/json") {
     return {
       contents: [
@@ -113,7 +113,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
           text: Buffer.from(res.data as ArrayBuffer).toString("utf-8"),
         },
       ],
-    };
+    }
   } else {
     return {
       contents: [
@@ -123,9 +123,9 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
           blob: Buffer.from(res.data as ArrayBuffer).toString("base64"),
         },
       ],
-    };
+    }
   }
-});
+})
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -144,25 +144,42 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["query"],
         },
       },
+      {
+        name: "list_shared_drives",
+        description: "List all Shared Drives accessible by the authenticated user.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            pageSize: {
+              type: "number",
+              description: "Maximum number of shared drives to return."
+            },
+            pageToken: {
+              type: "string",
+              description: "Page token for fetching the next page of results."
+            }
+          },
+        },
+      },
     ],
-  };
-});
+  }
+})
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === "search") {
-    const userQuery = request.params.arguments?.query as string;
-    const escapedQuery = userQuery.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-    const formattedQuery = `fullText contains '${escapedQuery}'`;
+    const userQuery = request.params.arguments?.query as string
+    const escapedQuery = userQuery.replace(/\\/g, "\\\\").replace(/'/g, "\\'")
+    const formattedQuery = `fullText contains '${escapedQuery}'`
 
     const res = await drive.files.list({
       q: formattedQuery,
       pageSize: 10,
       fields: "files(id, name, mimeType, modifiedTime, size)",
-    });
+    })
 
     const fileList = res.data.files
       ?.map((file: any) => `${file.name} (${file.mimeType})`)
-      .join("\n");
+      .join("\n")
     return {
       content: [
         {
@@ -171,49 +188,89 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         },
       ],
       isError: false,
-    };
+    }
+  } else if (request.params.name === "list_shared_drives") {
+    const pageSize = (request.params.arguments?.pageSize as number) || 10
+    const pageToken = (request.params.arguments?.pageToken as string) || undefined
+
+    try {
+      const res = await drive.drives.list({
+        pageSize: pageSize,
+        pageToken: pageToken,
+        fields: "nextPageToken, drives(id, name, kind)",
+      })
+
+      const driveList = res.data.drives
+        ?.map((d: any) => `Name: ${d.name}, ID: ${d.id}`)
+        .join("\n")
+      
+      let responseText = `Found ${res.data.drives?.length ?? 0} shared drives:\n${driveList || 'No shared drives found.'}`
+      if (res.data.nextPageToken) {
+        responseText += `\n\nNext page token: ${res.data.nextPageToken}`
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText,
+          },
+        ],
+        isError: false,
+      }
+    } catch (e: any) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error listing shared drives: ${e.message}`,
+          },
+        ],
+        isError: true,
+      }
+    }
   }
-  throw new Error("Tool not found");
-});
+  throw new Error("Tool not found")
+})
 
 const credentialsPath = process.env.GDRIVE_CREDENTIALS_PATH || path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../../.gdrive-server-credentials.json",
-);
+)
 
 async function authenticateAndSaveCredentials() {
-  console.log("Launching auth flow…");
+  console.log("Launching auth flow…")
   const auth = await authenticate({
     keyfilePath: process.env.GDRIVE_OAUTH_PATH || path.join(
       path.dirname(fileURLToPath(import.meta.url)),
       "../../../gcp-oauth.keys.json",
     ),
     scopes: ["https://www.googleapis.com/auth/drive.readonly"],
-  });
-  fs.writeFileSync(credentialsPath, JSON.stringify(auth.credentials));
-  console.log("Credentials saved. You can now run the server.");
+  })
+  fs.writeFileSync(credentialsPath, JSON.stringify(auth.credentials))
+  console.log("Credentials saved. You can now run the server.")
 }
 
 async function loadCredentialsAndRunServer() {
   if (!fs.existsSync(credentialsPath)) {
     console.error(
       "Credentials not found. Please run with 'auth' argument first.",
-    );
-    process.exit(1);
+    )
+    process.exit(1)
   }
 
-  const credentials = JSON.parse(fs.readFileSync(credentialsPath, "utf-8"));
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials(credentials);
-  google.options({ auth });
+  const credentials = JSON.parse(fs.readFileSync(credentialsPath, "utf-8"))
+  const auth = new google.auth.OAuth2()
+  auth.setCredentials(credentials)
+  google.options({ auth })
 
-  console.error("Credentials loaded. Starting server.");
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  console.error("Credentials loaded. Starting server.")
+  const transport = new StdioServerTransport()
+  await server.connect(transport)
 }
 
 if (process.argv[2] === "auth") {
-  authenticateAndSaveCredentials().catch(console.error);
+  authenticateAndSaveCredentials().catch(console.error)
 } else {
-  loadCredentialsAndRunServer().catch(console.error);
+  loadCredentialsAndRunServer().catch(console.error)
 }
