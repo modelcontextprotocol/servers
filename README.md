@@ -172,7 +172,9 @@ Official integrations are maintained by companies building production ready MCP 
 A growing set of community-developed and maintained servers demonstrates various applications of MCP across different domains.
 
 > **Note:** Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
-- **[Ableton Live](https://github.com/Simon-Kansara/ableton-live-mcp-server)** - an MCP server to control Ableton Live.
+
+- **[A2A-MCP Java Bridge](https://github.com/vishalmysore/a2ajava)** - A2AJava brings powerful A2A-MCP integration directly into your Java applications. It enables developers to annotate standard Java methods and instantly expose them as MCP Server, A2A-discoverable actions — with no boilerplate or service registration overhead.
+- **[Ableton Live](https://github.com/Simon-Kansara/ableton-live-mcp-server)** - an MCP server to control Ableton Live.- 
 - **[Ableton Live](https://github.com/ahujasid/ableton-mcp)** (by ahujasid) - Ableton integration allowing prompt enabled music creation.
 - **[Airbnb](https://github.com/openbnb-org/mcp-server-airbnb)** - Provides tools to search Airbnb and get listing details.
 - **[AI Agent Marketplace Index](https://github.com/AI-Agent-Hub/ai-agent-marketplace-index-mcp)** - MCP server to search more than 5000+ AI agents and tools of various categories from [AI Agent Marketplace Index](http://www.deepnlp.org/store/ai-agent) and monitor traffic of AI Agents.
