@@ -97,6 +97,8 @@ async function validatePath(requestedPath: string): Promise<string> {
 // Schema definitions
 const ReadFileArgsSchema = z.object({
   path: z.string(),
+  tail: z.number().optional().describe('If provided, returns only the last N lines of the file'),
+  head: z.number().optional().describe('If provided, returns only the first N lines of the file')
 });
 
 const ReadMultipleFilesArgsSchema = z.object({
@@ -125,6 +127,11 @@ const CreateDirectoryArgsSchema = z.object({
 
 const ListDirectoryArgsSchema = z.object({
   path: z.string(),
+});
+
+const ListDirectoryWithSizesArgsSchema = z.object({
+  path: z.string(),
+  sortBy: z.enum(['name', 'size']).optional().default('name').describe('Sort entries by name or size'),
 });
 
 const DirectoryTreeArgsSchema = z.object({
@@ -330,6 +337,107 @@ async function applyFileEdits(
   return formattedDiff;
 }
 
+// Helper functions
+function formatSize(bytes: number): string {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  if (bytes === 0) return '0 B';
+  
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  if (i === 0) return `${bytes} ${units[i]}`;
+  
+  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+}
+
+// Memory-efficient implementation to get the last N lines of a file
+async function tailFile(filePath: string, numLines: number): Promise<string> {
+  const CHUNK_SIZE = 1024; // Read 1KB at a time
+  const stats = await fs.stat(filePath);
+  const fileSize = stats.size;
+  
+  if (fileSize === 0) return '';
+  
+  // Open file for reading
+  const fileHandle = await fs.open(filePath, 'r');
+  try {
+    const lines: string[] = [];
+    let position = fileSize;
+    let chunk = Buffer.alloc(CHUNK_SIZE);
+    let linesFound = 0;
+    let remainingText = '';
+    
+    // Read chunks from the end of the file until we have enough lines
+    while (position > 0 && linesFound < numLines) {
+      const size = Math.min(CHUNK_SIZE, position);
+      position -= size;
+      
+      const { bytesRead } = await fileHandle.read(chunk, 0, size, position);
+      if (!bytesRead) break;
+      
+      // Get the chunk as a string and prepend any remaining text from previous iteration
+      const readData = chunk.slice(0, bytesRead).toString('utf-8');
+      const chunkText = readData + remainingText;
+      
+      // Split by newlines and count
+      const chunkLines = normalizeLineEndings(chunkText).split('\n');
+      
+      // If this isn't the end of the file, the first line is likely incomplete
+      // Save it to prepend to the next chunk
+      if (position > 0) {
+        remainingText = chunkLines[0];
+        chunkLines.shift(); // Remove the first (incomplete) line
+      }
+      
+      // Add lines to our result (up to the number we need)
+      for (let i = chunkLines.length - 1; i >= 0 && linesFound < numLines; i--) {
+        lines.unshift(chunkLines[i]);
+        linesFound++;
+      }
+    }
+    
+    return lines.join('\n');
+  } finally {
+    await fileHandle.close();
+  }
+}
+
+// New function to get the first N lines of a file
+async function headFile(filePath: string, numLines: number): Promise<string> {
+  const fileHandle = await fs.open(filePath, 'r');
+  try {
+    const lines: string[] = [];
+    let buffer = '';
+    let bytesRead = 0;
+    const chunk = Buffer.alloc(1024); // 1KB buffer
+    
+    // Read chunks and count lines until we have enough or reach EOF
+    while (lines.length < numLines) {
+      const result = await fileHandle.read(chunk, 0, chunk.length, bytesRead);
+      if (result.bytesRead === 0) break; // End of file
+      bytesRead += result.bytesRead;
+      buffer += chunk.slice(0, result.bytesRead).toString('utf-8');
+      
+      const newLineIndex = buffer.lastIndexOf('\n');
+      if (newLineIndex !== -1) {
+        const completeLines = buffer.slice(0, newLineIndex).split('\n');
+        buffer = buffer.slice(newLineIndex + 1);
+        for (const line of completeLines) {
+          lines.push(line);
+          if (lines.length >= numLines) break;
+        }
+      }
+    }
+    
+    // If there is leftover content and we still need lines, add it
+    if (buffer.length > 0 && lines.length < numLines) {
+      lines.push(buffer);
+    }
+    
+    return lines.join('\n');
+  } finally {
+    await fileHandle.close();
+  }
+}
+
 // Tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -340,7 +448,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "Read the complete contents of a file from the file system. " +
           "Handles various text encodings and provides detailed error messages " +
           "if the file cannot be read. Use this tool when you need to examine " +
-          "the contents of a single file. Only works within allowed directories.",
+          "the contents of a single file. Use the 'head' parameter to read only " +
+          "the first N lines of a file, or the 'tail' parameter to read only " +
+          "the last N lines of a file. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(ReadFileArgsSchema) as ToolInput,
       },
       {
@@ -386,6 +496,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "prefixes. This tool is essential for understanding directory structure and " +
           "finding specific files within a directory. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(ListDirectoryArgsSchema) as ToolInput,
+      },
+      {
+        name: "list_directory_with_sizes",
+        description:
+          "Get a detailed listing of all files and directories in a specified path, including sizes. " +
+          "Results clearly distinguish between files and directories with [FILE] and [DIR] " +
+          "prefixes. This tool is useful for understanding directory structure and " +
+          "finding specific files within a directory. Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(ListDirectoryWithSizesArgsSchema) as ToolInput,
       },
       {
         name: "directory_tree",
@@ -451,6 +570,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
+        
+        if (parsed.data.head && parsed.data.tail) {
+          throw new Error("Cannot specify both head and tail parameters simultaneously");
+        }
+        
+        if (parsed.data.tail) {
+          // Use memory-efficient tail implementation for large files
+          const tailContent = await tailFile(validPath, parsed.data.tail);
+          return {
+            content: [{ type: "text", text: tailContent }],
+          };
+        }
+        
+        if (parsed.data.head) {
+          // Use memory-efficient head implementation for large files
+          const headContent = await headFile(validPath, parsed.data.head);
+          return {
+            content: [{ type: "text", text: headContent }],
+          };
+        }
+        
         const content = await fs.readFile(validPath, "utf-8");
         return {
           content: [{ type: "text", text: content }],
@@ -530,11 +670,77 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-        case "directory_tree": {
-            const parsed = DirectoryTreeArgsSchema.safeParse(args);
-            if (!parsed.success) {
-                throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
+      case "list_directory_with_sizes": {
+        const parsed = ListDirectoryWithSizesArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for list_directory_with_sizes: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const entries = await fs.readdir(validPath, { withFileTypes: true });
+        
+        // Get detailed information for each entry
+        const detailedEntries = await Promise.all(
+          entries.map(async (entry) => {
+            const entryPath = path.join(validPath, entry.name);
+            try {
+              const stats = await fs.stat(entryPath);
+              return {
+                name: entry.name,
+                isDirectory: entry.isDirectory(),
+                size: stats.size,
+                mtime: stats.mtime
+              };
+            } catch (error) {
+              return {
+                name: entry.name,
+                isDirectory: entry.isDirectory(),
+                size: 0,
+                mtime: new Date(0)
+              };
             }
+          })
+        );
+        
+        // Sort entries based on sortBy parameter
+        const sortedEntries = [...detailedEntries].sort((a, b) => {
+          if (parsed.data.sortBy === 'size') {
+            return b.size - a.size; // Descending by size
+          }
+          // Default sort by name
+          return a.name.localeCompare(b.name);
+        });
+        
+        // Format the output
+        const formattedEntries = sortedEntries.map(entry => 
+          `${entry.isDirectory ? "[DIR]" : "[FILE]"} ${entry.name.padEnd(30)} ${
+            entry.isDirectory ? "" : formatSize(entry.size).padStart(10)
+          }`
+        );
+        
+        // Add summary
+        const totalFiles = detailedEntries.filter(e => !e.isDirectory).length;
+        const totalDirs = detailedEntries.filter(e => e.isDirectory).length;
+        const totalSize = detailedEntries.reduce((sum, entry) => sum + (entry.isDirectory ? 0 : entry.size), 0);
+        
+        const summary = [
+          "",
+          `Total: ${totalFiles} files, ${totalDirs} directories`,
+          `Combined size: ${formatSize(totalSize)}`
+        ];
+        
+        return {
+          content: [{ 
+            type: "text", 
+            text: [...formattedEntries, ...summary].join("\n") 
+          }],
+        };
+      }
+
+      case "directory_tree": {
+        const parsed = DirectoryTreeArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
+        }
 
             interface TreeEntry {
                 name: string;
