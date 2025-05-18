@@ -41,22 +41,16 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - Features:
     - Line-based and multi-line content matching
     - Whitespace normalization with indentation preservation
-    - Fuzzy matching with confidence scoring
     - Multiple simultaneous edits with correct positioning
     - Indentation style detection and preservation
     - Git-style diff output with context
     - Preview changes with dry run mode
-    - Failed match debugging with confidence scores
   - Inputs:
     - `path` (string): File to edit
     - `edits` (array): List of edit operations
       - `oldText` (string): Text to search for (can be substring)
       - `newText` (string): Text to replace with
     - `dryRun` (boolean): Preview changes without applying (default: false)
-    - `options` (object): Optional formatting settings
-      - `preserveIndentation` (boolean): Keep existing indentation (default: true)
-      - `normalizeWhitespace` (boolean): Normalize spaces while preserving structure (default: true)
-      - `partialMatch` (boolean): Enable fuzzy matching (default: true)
   - Returns detailed diff and match information for dry runs, otherwise applies changes
   - Best Practice: Always use dryRun first to preview changes before applying them
 
@@ -144,6 +138,64 @@ Note: all directories must be mounted to `/projects` by default.
         "/Users/username/Desktop",
         "/path/to/other/allowed/dir"
       ]
+    }
+  }
+}
+```
+
+## Usage with VS Code
+
+For quick installation, click the installation buttons below...
+
+[![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-NPM-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=filesystem&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-filesystem%22%2C%22%24%7BworkspaceFolder%7D%22%5D%7D) [![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-NPM-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=filesystem&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-filesystem%22%2C%22%24%7BworkspaceFolder%7D%22%5D%7D&quality=insiders)
+
+[![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=filesystem&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22--mount%22%2C%22type%3Dbind%2Csrc%3D%24%7BworkspaceFolder%7D%2Cdst%3D%2Fprojects%2Fworkspace%22%2C%22mcp%2Ffilesystem%22%2C%22%2Fprojects%22%5D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=filesystem&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22--mount%22%2C%22type%3Dbind%2Csrc%3D%24%7BworkspaceFolder%7D%2Cdst%3D%2Fprojects%2Fworkspace%22%2C%22mcp%2Ffilesystem%22%2C%22%2Fprojects%22%5D%7D&quality=insiders)
+
+For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open Settings (JSON)`.
+
+Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+
+> Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
+
+You can provide sandboxed directories to the server by mounting them to `/projects`. Adding the `ro` flag will make the directory readonly by the server.
+
+### Docker
+Note: all directories must be mounted to `/projects` by default. 
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "filesystem": {
+        "command": "docker",
+        "args": [
+          "run",
+          "-i",
+          "--rm",
+          "--mount", "type=bind,src=${workspaceFolder},dst=/projects/workspace",
+          "mcp/filesystem",
+          "/projects"
+        ]
+      }
+    }
+  }
+}
+```
+
+### NPX
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "filesystem": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-filesystem",
+          "${workspaceFolder}"
+        ]
+      }
     }
   }
 }
