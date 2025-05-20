@@ -8,7 +8,7 @@ console.error('Starting Streamable HTTP server...');
 
 const app = express();
 
-const cleanupHooks: (() => Promise<void>)[] = [];
+const serverCleanupHooks: (() => Promise<void>)[] = [];
 
 const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
@@ -48,7 +48,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
       // Connect the transport to the MCP server BEFORE handling the request
       // so responses can flow back through the same transport
       const { server, cleanup } = createServer();
-      cleanupHooks.push(() => cleanup().then(() => server.close()));
+      serverCleanupHooks.push(() => cleanup().then(() => server.close()));
       await server.connect(transport);
 
       await transport.handleRequest(req, res);
@@ -169,7 +169,7 @@ process.on('SIGINT', async () => {
       console.error(`Error closing transport for session ${sessionId}:`, error);
     }
   }
-  await Promise.all(cleanupHooks);
+  await Promise.all(serverCleanupHooks);
   console.error('Server shutdown complete');
   process.exit(0);
 });
