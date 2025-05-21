@@ -282,6 +282,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[EVM MCP Server](https://github.com/mcpdotdirect/evm-mcp-server)** - Comprehensive blockchain services for 30+ EVM networks, supporting native tokens, ERC20, NFTs, smart contracts, transactions, and ENS resolution.
 - **[Everything Search](https://github.com/mamertofabian/mcp-everything-search)** - Fast file searching capabilities across Windows (using [Everything SDK](https://www.voidtools.com/support/everything/sdk/)), macOS (using mdfind command), and Linux (using locate/plocate command).
 - **[Excel](https://github.com/haris-musa/excel-mcp-server)** - Excel manipulation including data reading/writing, worksheet management, formatting, charts, and pivot table.
+- **[falai](https://github.com/universal-mcp/falai)** - Fal.ai mcp server from **[agentr](https://agentr.dev/)** that provides support for generating media using fast inference engine.
 - **[Fantasy PL](https://github.com/rishijatia/fantasy-pl-mcp)** - Give your coding agent direct access to up-to date Fantasy Premier League data
 - **[fastn.ai – Unified API MCP Server](https://github.com/fastnai/mcp-fastn)** - A remote, dynamic MCP server with a unified API that connects to 1,000+ tools, actions, and workflows, featuring built-in authentication and monitoring.
 - **[Federal Reserve Economic Data (FRED)](https://github.com/stefanoamorelli/fred-mcp-server)** (by Stefano Amorelli) - Community developed MCP server to interact with the Federal Reserve Economic Data.
