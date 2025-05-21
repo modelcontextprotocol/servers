@@ -63,6 +63,27 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
      - `user_id` (string): The user's ID
    - Returns: Detailed user profile information
 
+9. `slack_rename_channel`
+   - Rename a Slack channel
+   - Required inputs:
+     - `channel_id` (string): The ID of the channel to rename
+     - `name` (string): The new name for the channel (without the # prefix)
+   - Returns: Channel rename confirmation
+
+10. `slack_set_channel_topic`
+   - Set the topic (description) for a Slack channel
+   - Required inputs:
+     - `channel_id` (string): The ID of the channel
+     - `topic` (string): The new topic text for the channel
+   - Returns: Topic update confirmation
+
+11. `slack_set_channel_purpose`
+   - Set the purpose for a Slack channel
+   - Required inputs:
+     - `channel_id` (string): The ID of the channel
+     - `purpose` (string): The new purpose text for the channel
+   - Returns: Purpose update confirmation
+
 ## Setup
 
 1. Create a Slack App:
@@ -75,6 +96,7 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
    Navigate to "OAuth & Permissions" and add these scopes:
    - `channels:history` - View messages and other content in public channels
    - `channels:read` - View basic channel information
+   - `channels:write` - Modify public channels (for renaming and setting topic/purpose)
    - `chat:write` - Send messages as the app
    - `reactions:write` - Add emoji reactions to messages
    - `users:read` - View users and their basic information
