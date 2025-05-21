@@ -26,6 +26,7 @@ A Model Context Protocol server that provides browser automation capabilities us
     - `width` (number, optional, default: 800): Screenshot width
     - `height` (number, optional, default: 600): Screenshot height
     - `encoded` (boolean, optional): If true, capture the screenshot as a base64-encoded data URI (as text) instead of binary image content. Default false.
+    - `path` (string, optional): File path to save the screenshot to on the local filesystem. Can be absolute or relative to current working directory.
 
 - **puppeteer_click**
 
@@ -67,12 +68,13 @@ The server provides access to two types of resources:
 2. **Screenshots** (`screenshot://<name>`)
    - PNG images of captured screenshots
    - Accessible via the screenshot name specified during capture
+   - Can be saved to local filesystem by specifying the `path` parameter
 
 ## Key Features
 
 - Browser automation
 - Console log monitoring
-- Screenshot capabilities
+- Screenshot capabilities (with file saving)
 - JavaScript execution
 - Basic web interaction (navigation, clicking, form filling)
 - Customizable Puppeteer launch options
