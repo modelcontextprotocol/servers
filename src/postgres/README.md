@@ -2,6 +2,9 @@
 
 A Model Context Protocol server that provides read-only access to PostgreSQL databases. This server enables LLMs to inspect database schemas and execute read-only queries.
 
+> [!CAUTION]
+> This server provides database access to AI models. If you need to enforce read-only access for security, create a separate database user with only SELECT permissions instead of relying on this server's built-in restrictions.
+
 ## Components
 
 ### Tools
