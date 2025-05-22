@@ -14,6 +14,9 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import puppeteer, { Browser, Page } from "puppeteer";
 
+const DEFAULT_VIEWPORT_WIDTH = 800;
+const DEFAULT_VIEWPORT_HEIGHT = 600;
+
 // Define the tools once to avoid repetition
 const TOOLS: Tool[] = [
   {
@@ -23,7 +26,7 @@ const TOOLS: Tool[] = [
       type: "object",
       properties: {
         url: { type: "string", description: "URL to navigate to" },
-        launchOptions: { type: "object", description: "PuppeteerJS LaunchOptions. Default null. If changed and not null, browser restarts. Example: { headless: true, args: ['--no-sandbox'] }" },
+        launchOptions: { type: "object", description: "PuppeteerJS LaunchOptions. Values provided here will override any corresponding values from PUPPETEER_LAUNCH_OPTIONS environment variable. Example: { headless: true, defaultViewport: { width: 1920, height: 1080 }, args: ['--no-sandbox'] }. The defaultViewport settings will be maintained across operations." },
         allowDangerous: { type: "boolean", description: "Allow dangerous LaunchOptions that reduce security. When false, dangerous args like --no-sandbox will throw errors. Default false." },
       },
       required: ["url"],
@@ -37,8 +40,8 @@ const TOOLS: Tool[] = [
       properties: {
         name: { type: "string", description: "Name for the screenshot" },
         selector: { type: "string", description: "CSS selector for element to screenshot" },
-        width: { type: "number", description: "Width in pixels (default: 800)" },
-        height: { type: "number", description: "Height in pixels (default: 600)" },
+        width: { type: "number", description: `Width in pixels (uses value from tool call if provided, otherwise from PUPPETEER_LAUNCH_OPTIONS if set, finally defaults to ${DEFAULT_VIEWPORT_WIDTH})` },
+        height: { type: "number", description: `Height in pixels (uses value from tool call if provided, otherwise from PUPPETEER_LAUNCH_OPTIONS if set, finally defaults to ${DEFAULT_VIEWPORT_HEIGHT})` },
         encoded: { type: "boolean", description: "If true, capture the screenshot as a base64-encoded data URI (as text) instead of binary image content. Default false." },
       },
       required: ["name"],
@@ -109,6 +112,7 @@ let page: Page | null;
 const consoleLogs: string[] = [];
 const screenshots = new Map<string, string>();
 let previousLaunchOptions: any = null;
+let storedViewport: { width: number; height: number } | null = null;
 
 async function ensureBrowser({ launchOptions, allowDangerous }: any) {
 
@@ -159,12 +163,25 @@ async function ensureBrowser({ launchOptions, allowDangerous }: any) {
   if (!browser) {
     const npx_args = { headless: false }
     const docker_args = { headless: true, args: ["--no-sandbox", "--single-process", "--no-zygote"] }
-    browser = await puppeteer.launch(deepMerge(
+    const finalConfig = deepMerge(
       process.env.DOCKER_CONTAINER ? docker_args : npx_args,
       mergedConfig
-    ));
+    );
+    
+    if (finalConfig.defaultViewport) {
+      storedViewport = {
+        width: finalConfig.defaultViewport.width || DEFAULT_VIEWPORT_WIDTH,
+        height: finalConfig.defaultViewport.height || DEFAULT_VIEWPORT_HEIGHT
+      };
+    }
+
+    browser = await puppeteer.launch(finalConfig);
     const pages = await browser.pages();
     page = pages[0];
+
+    if (storedViewport) {
+      await page.setViewport(storedViewport);
+    }
 
     page.on("console", (msg) => {
       const logEntry = `[${msg.type()}] ${msg.text()}`;
@@ -227,10 +244,18 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
       };
 
     case "puppeteer_screenshot": {
-      const width = args.width ?? 800;
-      const height = args.height ?? 600;
+      let previousViewport = null;
       const encoded = args.encoded ?? false;
-      await page.setViewport({ width, height });
+      
+      // Only change viewport if explicitly requested
+      if (args.width !== undefined || args.height !== undefined) {
+        if (storedViewport) {
+          previousViewport = { ...storedViewport };
+        }
+        const width = args.width ?? (storedViewport?.width ?? DEFAULT_VIEWPORT_WIDTH);
+        const height = args.height ?? (storedViewport?.height ?? DEFAULT_VIEWPORT_HEIGHT);
+        await page.setViewport({ width, height });
+      }
 
       const screenshot = await (args.selector ?
         (await page.$(args.selector))?.screenshot({ encoding: "base64" }) :
@@ -251,11 +276,15 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
         method: "notifications/resources/list_changed",
       });
 
+      if (previousViewport) {
+        await page.setViewport(previousViewport);
+      }
+
       return {
         content: [
           {
             type: "text",
-            text: `Screenshot '${args.name}' taken at ${width}x${height}`,
+            text: `Screenshot '${args.name}' taken at ${page.viewport()?.width}x${page.viewport()?.height}`,
           } as TextContent,
           encoded ? ({
             type: "text",
