@@ -95,6 +95,15 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `ref` (optional string): Source branch/commit for new branch
    - Returns: Created branch reference
 
+10. `list_members`
+    - List all members of a project
+    - Inputs:
+      - `project_id` (string): Project ID or URL-encoded path
+      - `include_inheritance` (optional boolean): Include inherited members  
+      - `page` (optional number): Page number for pagination (default: 1)
+      - `per_page` (optional number): Results per page (default: 20)
+    - Returns: List of members with their access levels and details
+
 ## Setup
 
 ### Personal Access Token
