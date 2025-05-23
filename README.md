@@ -342,6 +342,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[JavaFX](https://github.com/mcpso/mcp-server-javafx)** - Make drawings using a JavaFX canvas
 - **[JDBC](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jdbc)** - Connect to any JDBC-compatible database and query, insert, update, delete, and more. Supports MySQL, PostgreSQL, Oracle, SQL Server, sqllite and [more](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jdbc#supported-jdbc-variants).
 - **[JMeter](https://github.com/QAInsights/jmeter-mcp-server)** - Run load testing using Apache JMeter via MCP-compliant tools.
+- **[jobswithgpt](https://github.com/jobswithgpt/mcp)** - Job search MCP using jobswithgpt which indexes 500K+ public job listings and refreshed continously.
 - **[JSON](https://github.com/GongRzhe/JSON-MCP-Server)** - JSON handling and processing server with advanced query capabilities using JSONPath syntax and support for array, string, numeric, and date operations.
 - **[Jupyter Notebook](https://github.com/jjsantos01/jupyter-notebook-mcp)** - connects Jupyter Notebook to Claude AI, allowing Claude to directly interact with and control Jupyter Notebooks. This integration enables AI-assisted code execution, data analysis, visualization, and more.
 - **[jupiter-mcp](https://github.com/kukapay/jupiter-mcp)** - An MCP server for executing token swaps on the Solana blockchain using Jupiter's new Ultra API.
