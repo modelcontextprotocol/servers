@@ -6,36 +6,46 @@ console.error('Starting SSE server...');
 
 const app = express();
 
-const { server, cleanup } = createServer();
-
-let transport: SSEServerTransport;
+const transports: Map<string, SSEServerTransport> = new Map<string, SSEServerTransport>();
 
 app.get("/sse", async (req, res) => {
-  console.error("Received connection");
-  transport = new SSEServerTransport("/message", res);
-  await server.connect(transport);
+  let transport: SSEServerTransport;
+  const { server, cleanup } = createServer();
 
-  server.onclose = async () => {
-    await cleanup();
-    await server.close();
-  };
+  if (req?.query?.sessionId) {
+    const sessionId = (req?.query?.sessionId as string) || "none";
+    transport = transports.get(sessionId) as SSEServerTransport;
+    console.error("Client Reconnecting? ", transport.sessionId);
+  } else {
+    // Create and store transport for new session
+    transport = new SSEServerTransport("/message", res);
+    transports.set(transport.sessionId, transport);
+
+    // Connect server to transport
+    await server.connect(transport);
+    console.error("Client Connected: ", transport.sessionId);
+
+    // Handle close of connection
+    server.onclose = async () => {
+      console.error("Client Disconnected: ", transport.sessionId);
+      transports.delete(transport.sessionId);
+      await cleanup();
+    };
+
+  }
 
 });
 
 app.post("/message", async (req, res) => {
-  console.error("Received message");
-
-  await transport.handlePostMessage(req, res);
-});
-
-process.on("SIGINT", async () => {
-  await cleanup();
-  await server.close();
-  process.exit(0);
+  const sessionId = (req?.query?.sessionId as string) || "none";
+  const transport = transports.get(sessionId);
+  if (transport) {
+    console.error("Client Message from", sessionId);
+    await transport.handlePostMessage(req, res);
+  }
 });
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.error(`Server is running on port ${PORT}`);
 });
-
