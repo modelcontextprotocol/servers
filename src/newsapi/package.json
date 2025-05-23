@@ -1,0 +1,32 @@
+{
+    "name": "@modelcontextprotocol/server-newsapi",
+    "version": "0.1.0",
+    "description": "MCP server for interacting with News API",
+    "license": "MIT",
+    "author": "",
+    "homepage": "https://modelcontextprotocol.io",
+    "type": "module",
+    "bin": {
+        "mcp-server-newsapi": "dist/index.js"
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc && chmod +x dist/index.js",
+        "prepare": "npm run build",
+        "watch": "tsc --watch",
+        "publish": "npm publish --access public"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "1.0.1",
+        "express": "^5.1.0"
+    },
+    "devDependencies": {
+        "@types/express": "^5.0.1",
+        "@types/node": "^22",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.8.3"
+    },
+    "main": "index.js"
+}
