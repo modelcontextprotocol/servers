@@ -80,9 +80,15 @@ MCP Server for the Slack API, enabling Claude to interact with Slack workspaces.
    - `users:read` - View users and their basic information
    - `users.profile:read` - View detailed profiles about users
 
+3. Configure User Token Service: 
+   Navigate to "OAuth & Permissions" and scroll down until you find section User Token Scopes. Add the following scopes:
+   - `chat:write`- Send messages on a user’s behalf
+   - `im:write` - Start direct messages with people on a user’s behalf
+
 4. Install App to Workspace:
    - Click "Install to Workspace" and authorize the app
    - Save the "Bot User OAuth Token" that starts with `xoxb-`
+   - Save the "User OAuth Token" that starts with `xoxp-`
 
 5. Get your Team ID (starts with a `T`) by following [this guidance](https://slack.com/help/articles/221769328-Locate-your-Slack-URL-or-ID#find-your-workspace-or-org-id)
 
