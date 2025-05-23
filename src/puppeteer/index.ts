@@ -13,6 +13,8 @@ import {
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import puppeteer, { Browser, Page } from "puppeteer";
+import path from 'path';
+import fs from 'fs';
 
 // Define the tools once to avoid repetition
 const TOOLS: Tool[] = [
@@ -40,6 +42,7 @@ const TOOLS: Tool[] = [
         width: { type: "number", description: "Width in pixels (default: 800)" },
         height: { type: "number", description: "Height in pixels (default: 600)" },
         encoded: { type: "boolean", description: "If true, capture the screenshot as a base64-encoded data URI (as text) instead of binary image content. Default false." },
+        path: { type: "string", description: "File path to save the screenshot to on the local filesystem" },
       },
       required: ["name"],
     },
@@ -251,11 +254,29 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
         method: "notifications/resources/list_changed",
       });
 
+      let savedPath = null;
+      if (args.path) {
+        const filePath = path.isAbsolute(args.path)
+          ? args.path
+          : path.join(process.cwd() || '/tmp', args.path);
+
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+
+        const buffer = Buffer.from(screenshot as string, 'base64');
+        fs.writeFileSync(filePath, buffer);
+        savedPath = filePath;
+      }
+
       return {
         content: [
           {
             type: "text",
-            text: `Screenshot '${args.name}' taken at ${width}x${height}`,
+            text: (savedPath
+              ? `Screenshot '${args.name}' taken at ${width}x${height} and saved to ${savedPath}`
+              : `Screenshot '${args.name}' taken at ${width}x${height}`),
           } as TextContent,
           encoded ? ({
             type: "text",
