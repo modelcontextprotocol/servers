@@ -211,12 +211,58 @@ export const GitLabMergeRequestDiffRefSchema = z.object({
   start_sha: z.string()
 });
 
+export const GitLabMergeRequestChangeSchema = z.object({
+  old_path: z.string(),
+  new_path: z.string(),
+  a_mode: z.string(),
+  b_mode: z.string(),
+  diff: z.string(),
+  new_file: z.boolean(),
+  renamed_file: z.boolean(),
+  deleted_file: z.boolean()
+});
+
+export const GitLabMergeRequestVersionSchema = z.object({
+  id: z.number(),
+  head_commit_sha: z.string(),
+  base_commit_sha: z.string(),
+  start_commit_sha: z.string(),
+  created_at: z.string(),
+  merge_request_id: z.number(),
+  state: z.string(),
+  real_size: z.string(),
+  patch_id_sha: z.string().optional()
+});
+
+export const GitLabMergeRequestVersionDetailSchema = z.object({
+  id: z.number(),
+  head_commit_sha: z.string(),
+  base_commit_sha: z.string(),
+  start_commit_sha: z.string(),
+  created_at: z.string(),
+  merge_request_id: z.number(),
+  state: z.string(),
+  real_size: z.string(),
+  patch_id_sha: z.string().optional(),
+  commits: z.array(z.object({
+    id: z.string(),
+    short_id: z.string(),
+    title: z.string(),
+    author_name: z.string(),
+    author_email: z.string(),
+    created_at: z.string(),
+    message: z.string(),
+    web_url: z.string()
+  })).optional(),
+  diffs: z.array(GitLabMergeRequestChangeSchema).optional()
+});
+
 export const GitLabMergeRequestSchema = z.object({
   id: z.number(),
   iid: z.number(), // Added to match GitLab API
   project_id: z.number(), // Added to match GitLab API
   title: z.string(),
-  description: z.string(), // Changed from body to match GitLab API
+  description: z.string().nullable(), // Changed from body to match GitLab API, allow null
   state: z.string(),
   merged: z.boolean().optional(),
   author: GitLabUserSchema,
@@ -230,6 +276,26 @@ export const GitLabMergeRequestSchema = z.object({
   merged_at: z.string().nullable(),
   closed_at: z.string().nullable(),
   merge_commit_sha: z.string().nullable()
+});
+
+export const GitLabMergeRequestChangesSchema = z.object({
+  changes: z.array(GitLabMergeRequestChangeSchema)
+});
+
+// Note related schemas
+export const GitLabNoteSchema = z.object({
+  id: z.number(),
+  body: z.string(),
+  author: GitLabUserSchema,
+  created_at: z.string(),
+  updated_at: z.string(),
+  system: z.boolean(),
+  noteable_id: z.number(),
+  noteable_type: z.string(),
+  noteable_iid: z.number().nullable(),
+  resolvable: z.boolean().optional(),
+  resolved: z.boolean().optional(),
+  resolved_by: z.any().nullable().optional()
 });
 
 // API Operation Parameter Schemas
@@ -304,6 +370,48 @@ export const CreateBranchSchema = ProjectParamsSchema.extend({
     .describe("Source branch/commit for new branch")
 });
 
+export const CreateMergeRequestCommentSchema = ProjectParamsSchema.extend({
+  merge_request_iid: z.number().describe("The IID of the merge request"),
+  body: z.string().describe("The content of the comment"),
+  created_at: z.string().optional().describe("Date time string, ISO 8601 formatted")
+});
+
+export const GetMergeRequestChangesSchema = ProjectParamsSchema.extend({
+  merge_request_iid: z.number().describe("The IID of the merge request")
+});
+
+export const GetLatestMergeRequestVersionInputSchema = ProjectParamsSchema.extend({
+  merge_request_iid: z.number().describe("The IID of the merge request")
+});
+
+export const GetProjectIdFromMrUrlInputSchema = z.object({
+    mr_url: z.string().url().describe("The full URL of the GitLab Merge Request (e.g., https://gitlab.example.com/namespace/project/-/merge_requests/123)")
+});
+
+export const GetProjectIdFromMrUrlOutputSchema = z.object({
+    project_id: z.number().describe("The numeric ID of the GitLab project")
+});
+
+// Schema for the position object in the diff thread
+export const GitLabDiffPositionSchema = z.object({
+    base_sha: z.string().describe("Base commit SHA of the diff"),
+    start_sha: z.string().describe("Start commit SHA of the diff"),
+    head_sha: z.string().describe("Head commit SHA of the diff"),
+    old_path: z.string().describe("File path in the old version"),
+    new_path: z.string().describe("File path in the new version"),
+    position_type: z.string().default('text').describe("Type of the position, usually 'text'"),
+    old_line: z.number().optional().describe("Line number in the old file (if applicable)"),
+    new_line: z.number().describe("Line number in the new file"),
+});
+
+// Schema for the create_merge_request_diff_thread tool input
+export const CreateMergeRequestDiffThreadSchema = ProjectParamsSchema.extend({
+    merge_request_iid: z.number().describe("The IID of the merge request"),
+    body: z.string().describe("The content of the comment thread"),
+    position: GitLabDiffPositionSchema.describe("Position object for the diff comment"),
+    commit_id: z.string().optional().describe("Commit ID if the comment is for a specific commit diff")
+});
+
 // Export types
 export type GitLabAuthor = z.infer<typeof GitLabAuthorSchema>;
 export type GitLabFork = z.infer<typeof GitLabForkSchema>;
@@ -317,9 +425,18 @@ export type FileOperation = z.infer<typeof FileOperationSchema>;
 export type GitLabTree = z.infer<typeof GitLabTreeSchema>;
 export type GitLabCommit = z.infer<typeof GitLabCommitSchema>;
 export type GitLabReference = z.infer<typeof GitLabReferenceSchema>;
+export type GitLabNote = z.infer<typeof GitLabNoteSchema>;
+export type GitLabMergeRequestChange = z.infer<typeof GitLabMergeRequestChangeSchema>;
+export type GitLabMergeRequestChanges = z.infer<typeof GitLabMergeRequestChangesSchema>;
+export type GitLabMergeRequestVersion = z.infer<typeof GitLabMergeRequestVersionSchema>;
+export type GitLabMergeRequestVersionDetail = z.infer<typeof GitLabMergeRequestVersionDetailSchema>;
 export type CreateRepositoryOptions = z.infer<typeof CreateRepositoryOptionsSchema>;
 export type CreateIssueOptions = z.infer<typeof CreateIssueOptionsSchema>;
 export type CreateMergeRequestOptions = z.infer<typeof CreateMergeRequestOptionsSchema>;
 export type CreateBranchOptions = z.infer<typeof CreateBranchOptionsSchema>;
 export type GitLabCreateUpdateFileResponse = z.infer<typeof GitLabCreateUpdateFileResponseSchema>;
 export type GitLabSearchResponse = z.infer<typeof GitLabSearchResponseSchema>;
+export type GetProjectIdFromMrUrlInput = z.infer<typeof GetProjectIdFromMrUrlInputSchema>;
+export type GetProjectIdFromMrUrlOutput = z.infer<typeof GetProjectIdFromMrUrlOutputSchema>;
+export type CreateMergeRequestDiffThreadInput = z.infer<typeof CreateMergeRequestDiffThreadSchema>;
+export type GetLatestMergeRequestVersionInput = z.infer<typeof GetLatestMergeRequestVersionInputSchema>;
