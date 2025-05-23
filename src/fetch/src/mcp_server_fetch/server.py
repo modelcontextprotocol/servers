@@ -19,6 +19,9 @@ from mcp.types import (
 )
 from protego import Protego
 from pydantic import BaseModel, Field, AnyUrl
+from httpx import AsyncClient, HTTPError, AsyncHTTPTransport
+
+
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
@@ -68,11 +71,14 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
     """
-    from httpx import AsyncClient, HTTPError
-
     robot_txt_url = get_robots_txt_url(url)
 
-    async with AsyncClient(proxies=proxy_url) as client:
+    if proxy_url:
+        client = AsyncClient(transport=AsyncHTTPTransport(proxy=proxy_url))
+    else:
+        client = AsyncClient()
+
+    async with client:
         try:
             response = await client.get(
                 robot_txt_url,
@@ -114,9 +120,16 @@ async def fetch_url(
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
     """
-    from httpx import AsyncClient, HTTPError
 
-    async with AsyncClient(proxies=proxy_url) as client:
+    # from httpx import AsyncClient, HTTPError
+    # async with AsyncClient(proxies=proxy_url) as client:
+
+    if proxy_url:
+        client = AsyncClient(transport=AsyncHTTPTransport(proxy=proxy_url))
+    else:
+        client = AsyncClient()
+
+    async with client:
         try:
             response = await client.get(
                 url,
