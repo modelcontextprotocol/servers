@@ -316,6 +316,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Google Calendar](https://github.com/v-3/google-calendar)** - Integration with Google Calendar to check schedules, find time, and add/delete events
 - **[Google Calendar](https://github.com/nspady/google-calendar-mcp)** - Google Calendar MCP Server for managing Google calendar events. Also supports searching for events by attributes like title and location.
 - **[Google Custom Search](https://github.com/adenot/mcp-google-search)** - Provides Google Search results via the Google Custom Search API
+- **[Google_Docs](https://github.com/universal-mcp/google-docs)** - Google Docs mcp server from **[agentr](https://agentr.dev/)** that provides support for users to create, edit, and collaborate on documents in real-time.
 - **[Google Sheets](https://github.com/xing5/mcp-google-sheets)** - Access and editing data to your Google Sheets.
 - **[Google Sheets](https://github.com/rohans2/mcp-google-sheets)** - A MCP Server written in TypeScript to access and edit data in your Google Sheets.
 - **[Google Tasks](https://github.com/zcaceres/gtasks-mcp)** - Google Tasks API Model Context Protocol Server.
