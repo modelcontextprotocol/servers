@@ -17,8 +17,21 @@ import { minimatch } from 'minimatch';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
+
+// Support: mcp-server-filesystem <allowed-directory> [additional-directories...] [--ignore-write <pattern1> <pattern2> ...]
+let allowedDirs: string[] = [];
+let ignoreWritePatterns: string[] = [];
+
+const ignoreFlagIndex = args.indexOf('--ignore-write');
+if (ignoreFlagIndex !== -1) {
+  allowedDirs = args.slice(0, ignoreFlagIndex);
+  ignoreWritePatterns = args.slice(ignoreFlagIndex + 1);
+} else {
+  allowedDirs = args;
+}
+
+if (allowedDirs.length === 0) {
+  console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...] [--ignore-write <pattern1> <pattern2> ...]");
   process.exit(1);
 }
 
@@ -35,7 +48,7 @@ function expandHome(filepath: string): string {
 }
 
 // Store allowed directories in normalized form
-const allowedDirectories = args.map(dir =>
+const allowedDirectories = allowedDirs.map(dir =>
   normalizePath(path.resolve(expandHome(dir)))
 );
 
@@ -485,6 +498,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
+        // Prevent writing to files matching ignoreWritePatterns
+        const baseName = path.basename(validPath);
+        const shouldIgnore = ignoreWritePatterns.some(pattern => {
+          // Simple glob-like match: support *.env, .env, .env.*, etc.
+          if (pattern.includes('*')) {
+            // Convert pattern to regex
+            const regex = new RegExp('^' + pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+            return regex.test(baseName);
+          }
+          return baseName === pattern;
+        });
+        if (shouldIgnore) {
+          throw new Error(`Write operation to file '${baseName}' is not allowed by server policy (matched ignore pattern).`);
+        }
         await fs.writeFile(validPath, parsed.data.content, "utf-8");
         return {
           content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
