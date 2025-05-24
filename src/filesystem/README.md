@@ -36,6 +36,13 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
     - `path` (string): File location
     - `content` (string): File content
 
+- **append_file**
+  - Append content to an existing file without overwriting previous content
+  - Inputs:
+    - `path` (string): File location
+    - `content` (string): Content to append
+  - Useful for adding content to log files or continuing content from previous operations
+
 - **edit_file**
   - Make selective edits using advanced pattern matching and formatting
   - Features:
