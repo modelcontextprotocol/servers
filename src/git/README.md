@@ -106,6 +106,25 @@ After installation, you can run it as a script using:
 python -m mcp_server_git
 ```
 
+## Transport Options
+
+You can control how the MCP Git server communicates with clients using the `--transport` argument:
+
+- `--transport stdio` (default): Communicates over standard input/output. Works with Claude Desktop, VS Code, Zed, etc.
+- `--transport sse`: Enables HTTP streaming via Server-Sent Events (SSE).
+
+When using `sse`, you can also specify:
+
+- `--host` (default: `127.0.0.1`): The network interface to listen on.
+- `--port` (default: `9000`): The port for the HTTP server.
+
+**Example (SSE):**
+```bash
+uv run --directory /path/to/servers/src/git -m mcp_server_git --repository /path/to/repo --transport sse --host 0.0.0.0 --port 9000
+```
+
+> If you don't specify `--transport`, it defaults to `stdio`.
+
 ## Configuration
 
 ### Usage with Claude Desktop
