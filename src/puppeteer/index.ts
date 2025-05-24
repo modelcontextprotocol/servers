@@ -30,6 +30,32 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "puppeteer_keyboard_shortcut",
+    description: "Press a keyboard shortcut or key combination",
+    inputSchema: {
+      type: "object",
+      properties: {
+        keys: {
+          type: "array",
+          items: { type: "string" },
+          description: "Array of keys to press simultaneously (e.g. ['Control', 'c'] for Ctrl+C)"
+        },
+        sequence: {
+          type: "string",
+          description: "Alternative to keys: A string like 'Control+c' for Ctrl+C"
+        }
+      },
+      description: "Provide either 'keys' array OR 'sequence' string, not both"
+    },
+  },
+  {
+    name: "puppeteer_enter",
+    description: "Press enter",
+    inputSchema: {
+      type: "object",
+    },
+  },
+  {
     name: "puppeteer_screenshot",
     description: "Take a screenshot of the current page or a specific element",
     inputSchema: {
@@ -270,6 +296,16 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
       };
     }
 
+    case "puppeteer_enter":
+      await page.keyboard.press('Enter');
+      return {
+        content: [{
+          type: "text",
+          text: `Pressed enter`,
+        }],
+        isError: false,
+      };
+
     case "puppeteer_click":
       try {
         await page.click(args.selector);
@@ -392,6 +428,60 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
           content: [{
             type: "text",
             text: `Script execution failed: ${(error as Error).message}`,
+          }],
+          isError: true,
+        };
+      }
+
+    case "puppeteer_keyboard_shortcut":
+      try {
+        if (args.keys && Array.isArray(args.keys)) {
+          // Press all keys down in sequence
+          for (const key of args.keys) {
+            await page.keyboard.down(key);
+          }
+
+          // Release all keys in reverse order
+          for (const key of [...args.keys].reverse()) {
+            await page.keyboard.up(key);
+          }
+
+          return {
+            content: [{
+              type: "text",
+              text: `Pressed keyboard shortcut: ${args.keys.join('+')}`,
+            }],
+            isError: false,
+          };
+        } else if (args.sequence) {
+          // Handle sequence format like "Control+c"
+          const keys = args.sequence.split('+');
+
+          // Press all keys down in sequence
+          for (const key of keys) {
+            await page.keyboard.down(key);
+          }
+
+          // Release all keys in reverse order
+          for (const key of [...keys].reverse()) {
+            await page.keyboard.up(key);
+          }
+
+          return {
+            content: [{
+              type: "text",
+              text: `Pressed keyboard shortcut: ${args.sequence}`,
+            }],
+            isError: false,
+          };
+        } else {
+          throw new Error("Either 'keys' array or 'sequence' string must be provided");
+        }
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: `Failed to press keyboard shortcut: ${(error as Error).message}`,
           }],
           isError: true,
         };
