@@ -55,6 +55,16 @@ A Model Context Protocol server that provides browser automation capabilities us
   - Execute JavaScript in the browser console
   - Input: `script` (string): JavaScript code to execute
 
+- **puppeteer_keyboard_shortcut**
+  - Press a keyboard shortcut or key combination
+  - Inputs (provide either one):
+    - `keys` (array of strings): Array of keys to press simultaneously (e.g. ['Control', 'c'] for Ctrl+C)
+    - `sequence` (string): Alternative to keys: A string like 'Control+c' for Ctrl+C
+
+- **puppeteer_enter**
+  - Press the Enter key
+  - No inputs required
+
 ### Resources
 
 The server provides access to two types of resources:
@@ -75,6 +85,7 @@ The server provides access to two types of resources:
 - Screenshot capabilities
 - JavaScript execution
 - Basic web interaction (navigation, clicking, form filling)
+- Keyboard shortcuts and key presses
 - Customizable Puppeteer launch options
 
 ## Configuration to use Puppeteer Server
