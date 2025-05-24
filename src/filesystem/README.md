@@ -12,6 +12,21 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 
 **Note**: The server will only allow operations within directories specified via `args`.
 
+**Security Note**: You can prevent write operations to sensitive files (such as `.env`, `.env.*`, or any custom pattern) by using the `--ignore-write` command-line argument. See below for usage.
+
+## Usage
+
+### Command-line Arguments
+
+```
+mcp-server-filesystem <allowed-directory> [additional-directories...] [--ignore-write <pattern1> <pattern2> ...]
+```
+
+- `<allowed-directory>`: One or more directories the server is allowed to access.
+- `--ignore-write <pattern1> <pattern2> ...`: (Optional) List of filenames or glob patterns to block from write operations. Example: `--ignore-write .env .env.* *.secret`
+
+If a file matches any of the ignore patterns, write operations to that file will be blocked, even if it is inside an allowed directory.
+
 ## API
 
 ### Resources
