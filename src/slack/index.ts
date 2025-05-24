@@ -50,6 +50,22 @@ interface GetUserProfileArgs {
   user_id: string;
 }
 
+// New interface definitions for channel management
+interface RenameChannelArgs {
+  channel_id: string;
+  name: string;
+}
+
+interface SetChannelTopicArgs {
+  channel_id: string;
+  topic: string;
+}
+
+interface SetChannelPurposeArgs {
+  channel_id: string;
+  purpose: string;
+}
+
 // Tool definitions
 const listChannelsTool: Tool = {
   name: "slack_list_channels",
@@ -207,6 +223,64 @@ const getUserProfileTool: Tool = {
       },
     },
     required: ["user_id"],
+  },
+};
+
+// New tool definitions for channel management
+const renameChannelTool: Tool = {
+  name: "slack_rename_channel",
+  description: "Rename a Slack channel",
+  inputSchema: {
+    type: "object",
+    properties: {
+      channel_id: {
+        type: "string",
+        description: "The ID of the channel to rename",
+      },
+      name: {
+        type: "string",
+        description: "The new name for the channel (without the # prefix)",
+      },
+    },
+    required: ["channel_id", "name"],
+  },
+};
+
+const setChannelTopicTool: Tool = {
+  name: "slack_set_channel_topic",
+  description: "Set the topic (description) for a Slack channel",
+  inputSchema: {
+    type: "object",
+    properties: {
+      channel_id: {
+        type: "string",
+        description: "The ID of the channel",
+      },
+      topic: {
+        type: "string",
+        description: "The new topic text for the channel",
+      },
+    },
+    required: ["channel_id", "topic"],
+  },
+};
+
+const setChannelPurposeTool: Tool = {
+  name: "slack_set_channel_purpose",
+  description: "Set the purpose for a Slack channel",
+  inputSchema: {
+    type: "object",
+    properties: {
+      channel_id: {
+        type: "string",
+        description: "The ID of the channel",
+      },
+      purpose: {
+        type: "string",
+        description: "The new purpose text for the channel",
+      },
+    },
+    required: ["channel_id", "purpose"],
   },
 };
 
@@ -378,6 +452,46 @@ class SlackClient {
 
     return response.json();
   }
+
+  // New methods for channel management
+  async renameChannel(channel_id: string, name: string): Promise<any> {
+    const response = await fetch("https://slack.com/api/conversations.rename", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify({
+        channel: channel_id,
+        name: name,
+      }),
+    });
+
+    return response.json();
+  }
+
+  async setChannelTopic(channel_id: string, topic: string): Promise<any> {
+    const response = await fetch("https://slack.com/api/conversations.setTopic", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify({
+        channel: channel_id,
+        topic: topic,
+      }),
+    });
+
+    return response.json();
+  }
+
+  async setChannelPurpose(channel_id: string, purpose: string): Promise<any> {
+    const response = await fetch("https://slack.com/api/conversations.setPurpose", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify({
+        channel: channel_id,
+        purpose: purpose,
+      }),
+    });
+
+    return response.json();
+  }
 }
 
 async function main() {
@@ -534,6 +648,40 @@ async function main() {
             };
           }
 
+          // New case statements for channel management
+          case "slack_rename_channel": {
+            const args = request.params.arguments as unknown as RenameChannelArgs;
+            if (!args.channel_id || !args.name) {
+              throw new Error("Missing required arguments: channel_id and name");
+            }
+            const response = await slackClient.renameChannel(args.channel_id, args.name);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
+          case "slack_set_channel_topic": {
+            const args = request.params.arguments as unknown as SetChannelTopicArgs;
+            if (!args.channel_id || !args.topic) {
+              throw new Error("Missing required arguments: channel_id and topic");
+            }
+            const response = await slackClient.setChannelTopic(args.channel_id, args.topic);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
+          case "slack_set_channel_purpose": {
+            const args = request.params.arguments as unknown as SetChannelPurposeArgs;
+            if (!args.channel_id || !args.purpose) {
+              throw new Error("Missing required arguments: channel_id and purpose");
+            }
+            const response = await slackClient.setChannelPurpose(args.channel_id, args.purpose);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
           default:
             throw new Error(`Unknown tool: ${request.params.name}`);
         }
@@ -565,6 +713,10 @@ async function main() {
         getThreadRepliesTool,
         getUsersTool,
         getUserProfileTool,
+        // New tools for channel management
+        renameChannelTool,
+        setChannelTopicTool,
+        setChannelPurposeTool,
       ],
     };
   });
