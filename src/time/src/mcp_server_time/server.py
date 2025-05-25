@@ -15,6 +15,8 @@ from pydantic import BaseModel
 class TimeTools(str, Enum):
     GET_CURRENT_TIME = "get_current_time"
     CONVERT_TIME = "convert_time"
+    CALCULATE_DATE = "calculate_date"
+    GET_DAY_OF_WEEK = "get_day_of_week"
 
 
 class TimeResult(BaseModel):
@@ -33,6 +35,20 @@ class TimeConversionInput(BaseModel):
     source_tz: str
     time: str
     target_tz_list: list[str]
+
+
+class DateCalculationResult(BaseModel):
+    input_date: str
+    days_added: int
+    result_date: str
+    day_of_week: str
+    calculation_details: str
+
+
+class DayOfWeekResult(BaseModel):
+    date: str
+    day_of_week: str
+    day_number: int  # 0=Monday, 6=Sunday
 
 
 def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
@@ -112,6 +128,88 @@ class TimeServer:
             time_difference=time_diff_str,
         )
 
+    def calculate_date(self, date_str: str, days: int, timezone_name: str) -> DateCalculationResult:
+        """Calculate a new date by adding or subtracting days from a given date"""
+        timezone = get_zoneinfo(timezone_name)
+        
+        # Parse the date string - support multiple formats
+        date_formats = [
+            "%Y-%m-%d",
+            "%B %d, %Y",  # May 25, 2025
+            "%b %d, %Y",  # May 25, 2025 (abbreviated)
+            "%d/%m/%Y",
+            "%m/%d/%Y",
+            "%Y/%m/%d",
+        ]
+        
+        parsed_date = None
+        for fmt in date_formats:
+            try:
+                parsed_date = datetime.strptime(date_str, fmt)
+                break
+            except ValueError:
+                continue
+        
+        if parsed_date is None:
+            raise ValueError(f"Could not parse date '{date_str}'. Supported formats: YYYY-MM-DD, Month DD, YYYY, MM/DD/YYYY, DD/MM/YYYY, YYYY/MM/DD")
+        
+        # Apply timezone to the date
+        localized_date = parsed_date.replace(tzinfo=timezone)
+        
+        # Add days
+        result_date = localized_date + timedelta(days=days)
+        
+        # Get day of week
+        day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        day_of_week = day_names[result_date.weekday()]
+        
+        # Format calculation details
+        if days >= 0:
+            calc_details = f"Added {days} days to {localized_date.strftime('%B %d, %Y')}"
+        else:
+            calc_details = f"Subtracted {abs(days)} days from {localized_date.strftime('%B %d, %Y')}"
+        
+        return DateCalculationResult(
+            input_date=localized_date.strftime("%B %d, %Y"),
+            days_added=days,
+            result_date=result_date.strftime("%B %d, %Y"),
+            day_of_week=day_of_week,
+            calculation_details=calc_details
+        )
+
+    def get_day_of_week(self, date_str: str) -> DayOfWeekResult:
+        """Get the day of week for a given date"""
+        # Parse the date string - support multiple formats
+        date_formats = [
+            "%Y-%m-%d",
+            "%B %d, %Y",  # May 25, 2025
+            "%b %d, %Y",  # May 25, 2025 (abbreviated)
+            "%d/%m/%Y",
+            "%m/%d/%Y",
+            "%Y/%m/%d",
+        ]
+        
+        parsed_date = None
+        for fmt in date_formats:
+            try:
+                parsed_date = datetime.strptime(date_str, fmt)
+                break
+            except ValueError:
+                continue
+        
+        if parsed_date is None:
+            raise ValueError(f"Could not parse date '{date_str}'. Supported formats: YYYY-MM-DD, Month DD, YYYY, MM/DD/YYYY, DD/MM/YYYY, YYYY/MM/DD")
+        
+        # Get day of week
+        day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        weekday = parsed_date.weekday()
+        
+        return DayOfWeekResult(
+            date=parsed_date.strftime("%B %d, %Y"),
+            day_of_week=day_names[weekday],
+            day_number=weekday
+        )
+
 
 async def serve(local_timezone: str | None = None) -> None:
     server = Server("mcp-time")
@@ -158,6 +256,42 @@ async def serve(local_timezone: str | None = None) -> None:
                     "required": ["source_timezone", "time", "target_timezone"],
                 },
             ),
+            Tool(
+                name=TimeTools.CALCULATE_DATE.value,
+                description="Calculate a date by adding or subtracting days from a given date",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "date": {
+                            "type": "string",
+                            "description": "Date in various formats (e.g., '2025-05-25', 'May 25, 2025', '05/25/2025')",
+                        },
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to add (positive) or subtract (negative)",
+                        },
+                        "timezone": {
+                            "type": "string",
+                            "description": f"IANA timezone name for the date calculation. Use '{local_tz}' as local timezone if not provided.",
+                        },
+                    },
+                    "required": ["date", "days", "timezone"],
+                },
+            ),
+            Tool(
+                name=TimeTools.GET_DAY_OF_WEEK.value,
+                description="Get the day of the week for a given date",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "date": {
+                            "type": "string",
+                            "description": "Date in various formats (e.g., '2025-05-25', 'May 25, 2025', '05/25/2025')",
+                        },
+                    },
+                    "required": ["date"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -186,6 +320,26 @@ async def serve(local_timezone: str | None = None) -> None:
                         arguments["time"],
                         arguments["target_timezone"],
                     )
+                    
+                case TimeTools.CALCULATE_DATE.value:
+                    if not all(
+                        k in arguments
+                        for k in ["date", "days", "timezone"]
+                    ):
+                        raise ValueError("Missing required arguments")
+                    
+                    result = time_server.calculate_date(
+                        arguments["date"],
+                        arguments["days"],
+                        arguments["timezone"],
+                    )
+                    
+                case TimeTools.GET_DAY_OF_WEEK.value:
+                    if "date" not in arguments:
+                        raise ValueError("Missing required argument: date")
+                    
+                    result = time_server.get_day_of_week(arguments["date"])
+                    
                 case _:
                     raise ValueError(f"Unknown tool: {name}")
 
