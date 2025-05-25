@@ -34,6 +34,8 @@ interface AddReactionArgs {
 interface GetChannelHistoryArgs {
   channel_id: string;
   limit?: number;
+  oldest?: string;
+  latest?: string;
 }
 
 interface GetThreadRepliesArgs {
@@ -150,6 +152,15 @@ const getChannelHistoryTool: Tool = {
         type: "number",
         description: "Number of messages to retrieve (default 10)",
         default: 10,
+      },
+      oldest: {
+        type: "string",
+        description: "Unix timestamp of the oldest message that will be included in the results (default 0)",
+        default: "0",
+      },
+      latest: {
+        type: "string",
+        description: "Unix timestamp of the latest message that will be included in the results",
       },
     },
     required: ["channel_id"],
@@ -320,11 +331,18 @@ class SlackClient {
   async getChannelHistory(
     channel_id: string,
     limit: number = 10,
+    oldest: string = "0",
+    latest: string = ""
   ): Promise<any> {
     const params = new URLSearchParams({
       channel: channel_id,
       limit: limit.toString(),
+      oldest: oldest,
     });
+
+    if (latest) {
+      params.append("latest", latest);
+    }
 
     const response = await fetch(
       `https://slack.com/api/conversations.history?${params}`,
@@ -485,9 +503,12 @@ async function main() {
             if (!args.channel_id) {
               throw new Error("Missing required argument: channel_id");
             }
+
             const response = await slackClient.getChannelHistory(
               args.channel_id,
               args.limit,
+              args.oldest,
+              args.latest,
             );
             return {
               content: [{ type: "text", text: JSON.stringify(response) }],
