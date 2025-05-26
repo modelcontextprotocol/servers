@@ -25,6 +25,7 @@ export const GitLabRepositorySchema = z.object({
   owner: GitLabOwnerSchema.optional(),
   web_url: z.string(), // Changed from html_url to match GitLab API
   description: z.string().nullable(),
+  merge_requests_template: z.string().optional(),
   fork: z.boolean().optional(),
   ssh_url_to_repo: z.string(), // Changed from ssh_url to match GitLab API
   http_url_to_repo: z.string(), // Changed from clone_url to match GitLab API
