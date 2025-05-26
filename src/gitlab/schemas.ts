@@ -133,11 +133,7 @@ export const CreateBranchOptionsSchema = z.object({
   ref: z.string() // The source branch/commit for the new branch
 });
 
-// Project API operation schemas
-export const GetProjectSchema = z.object({
-  project_id: z.string().describe("Project ID or URL-encoded path"),
-});
-
+// Response schemas for operations
 export const GitLabCreateUpdateFileResponseSchema = z.object({
   file_path: z.string(),
   branch: z.string(),
@@ -240,6 +236,8 @@ export const GitLabMergeRequestSchema = z.object({
 const ProjectParamsSchema = z.object({
   project_id: z.string().describe("Project ID or URL-encoded path") // Changed from owner/repo to match GitLab API
 });
+
+export const GetProjectSchema = ProjectParamsSchema;
 
 export const CreateOrUpdateFileSchema = ProjectParamsSchema.extend({
   file_path: z.string().describe("Path where to create/update the file"),
