@@ -33,6 +33,7 @@ import {
   CreateMergeRequestSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
+  GetProjectSchema,
   type GitLabFork,
   type GitLabReference,
   type GitLabRepository,
@@ -359,6 +360,26 @@ async function createRepository(
   return GitLabRepositorySchema.parse(await response.json());
 }
 
+async function getProject(projectId: string): Promise<GitLabRepository> {
+  projectId = decodeURIComponent(projectId); // Decode project ID
+  const url = new URL(
+    `${GITLAB_API_URL}/projects/${encodeURIComponent(projectId)}`
+  );
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitLab API error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return GitLabRepositorySchema.parse(data);
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -376,6 +397,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_repository",
         description: "Create a new GitLab project",
         inputSchema: zodToJsonSchema(CreateRepositorySchema)
+      },
+      {
+        name: "get_project",
+        description: "Get details of a specific GitLab project",
+        inputSchema: zodToJsonSchema(GetProjectSchema)
       },
       {
         name: "get_file_contents",
@@ -493,6 +519,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { project_id, ...options } = args;
         const mergeRequest = await createMergeRequest(project_id, options);
         return { content: [{ type: "text", text: JSON.stringify(mergeRequest, null, 2) }] };
+      }
+
+      case "get_project": {
+        const args = GetProjectSchema.parse(request.params.arguments);
+        const project = await getProject(args.project_id);
+        return { content: [{ type: "text", text: JSON.stringify(project, null, 2) }] };
       }
 
       default:

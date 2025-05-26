@@ -133,7 +133,11 @@ export const CreateBranchOptionsSchema = z.object({
   ref: z.string() // The source branch/commit for the new branch
 });
 
-// Response schemas for operations
+// Project API operation schemas
+export const GetProjectSchema = z.object({
+  project_id: z.string().describe("Project ID or URL-encoded path"),
+});
+
 export const GitLabCreateUpdateFileResponseSchema = z.object({
   file_path: z.string(),
   branch: z.string(),

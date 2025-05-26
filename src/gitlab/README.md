@@ -49,7 +49,13 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `initialize_with_readme` (optional boolean): Initialize with README
    - Returns: Created project details
 
-5. `get_file_contents`
+5. `get_project`
+   - Get details of a specific GitLab project
+   - Inputs:
+     - `project_id` (string): Project ID or URL-encoded path
+   - Returns: Project details
+
+6. `get_file_contents`
    - Get contents of a file or directory
    - Inputs:
      - `project_id` (string): Project ID or URL-encoded path
@@ -57,7 +63,7 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `ref` (optional string): Branch/tag/commit to get contents from
    - Returns: File/directory contents
 
-6. `create_issue`
+7. `create_issue`
    - Create a new issue
    - Inputs:
      - `project_id` (string): Project ID or URL-encoded path
@@ -68,7 +74,7 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `milestone_id` (optional number): Milestone ID
    - Returns: Created issue details
 
-7. `create_merge_request`
+8. `create_merge_request`
    - Create a new merge request
    - Inputs:
      - `project_id` (string): Project ID or URL-encoded path
@@ -80,20 +86,20 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `allow_collaboration` (optional boolean): Allow commits from upstream members
    - Returns: Created merge request details
 
-8. `fork_repository`
+9. `fork_repository`
    - Fork a project
    - Inputs:
      - `project_id` (string): Project ID or URL-encoded path
      - `namespace` (optional string): Namespace to fork to
    - Returns: Forked project details
 
-9. `create_branch`
-   - Create a new branch
-   - Inputs:
-     - `project_id` (string): Project ID or URL-encoded path
-     - `branch` (string): Name for new branch
-     - `ref` (optional string): Source branch/commit for new branch
-   - Returns: Created branch reference
+10. `create_branch`
+    - Create a new branch
+    - Inputs:
+      - `project_id` (string): Project ID or URL-encoded path
+      - `branch` (string): Name for new branch
+      - `ref` (optional string): Source branch/commit for new branch
+    - Returns: Created branch reference
 
 ## Setup
 
