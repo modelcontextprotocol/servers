@@ -95,6 +95,12 @@ MCP Server for the GitLab API, enabling project management, file operations, and
      - `ref` (optional string): Source branch/commit for new branch
    - Returns: Created branch reference
 
+10. `get_users`
+    - Get multiple users from GitLab by their usernames
+    - Inputs:
+      - `usernames` (string[]): Array of usernames to search for
+    - Returns: Object mapping usernames to user profiles (or null if not found)
+
 ## Setup
 
 ### Personal Access Token
