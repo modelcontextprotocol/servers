@@ -20,6 +20,7 @@ import {
   GitLabSearchResponseSchema,
   GitLabTreeSchema,
   GitLabCommitSchema,
+  GitLabUserSchema,
   CreateRepositoryOptionsSchema,
   CreateIssueOptionsSchema,
   CreateMergeRequestOptionsSchema,
@@ -33,6 +34,7 @@ import {
   CreateMergeRequestSchema,
   ForkRepositorySchema,
   CreateBranchSchema,
+  GetUsersSchema,
   type GitLabFork,
   type GitLabReference,
   type GitLabRepository,
@@ -43,6 +45,8 @@ import {
   type GitLabSearchResponse,
   type GitLabTree,
   type GitLabCommit,
+  type GitLabUser,
+  type GitLabUsersResponse,
   type FileOperation,
 } from './schemas.js';
 
@@ -359,6 +363,50 @@ async function createRepository(
   return GitLabRepositorySchema.parse(await response.json());
 }
 
+async function getUser(username: string): Promise<GitLabUser | null> {
+  try {
+    const url = new URL(`${GITLAB_API_URL}/users`);
+    url.searchParams.append("username", username);
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        "Authorization": `Bearer ${GITLAB_PERSONAL_ACCESS_TOKEN}`
+      }
+    });
+
+    if (!response.ok) {
+      console.error(`Error fetching user '${username}': ${response.statusText}`);
+      return null;
+    }
+    
+    const users = await response.json();
+    
+    // GitLab returns an array of users that match the username
+    if (Array.isArray(users) && users.length > 0) {
+      // Find exact match for username (case-sensitive)
+      const exactMatch = users.find(user => user.username === username);
+      if (exactMatch) {
+        return GitLabUserSchema.parse(exactMatch);
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error(`Error fetching user '${username}':`, error);
+    return null;
+  }
+}
+
+async function getUsers(usernames: string[]): Promise<GitLabUsersResponse> {
+  const results: GitLabUsersResponse = {};
+  
+  for (const username of usernames) {
+    results[username] = await getUser(username);
+  }
+  
+  return results;
+}
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -406,6 +454,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_branch",
         description: "Create a new branch in a GitLab project",
         inputSchema: zodToJsonSchema(CreateBranchSchema)
+      },
+      {
+        name: "get_users",
+        description: "Get multiple users from GitLab by their usernames",
+        inputSchema: zodToJsonSchema(GetUsersSchema)
       }
     ]
   };
@@ -493,6 +546,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { project_id, ...options } = args;
         const mergeRequest = await createMergeRequest(project_id, options);
         return { content: [{ type: "text", text: JSON.stringify(mergeRequest, null, 2) }] };
+      }
+
+      case "get_users": {
+        const args = GetUsersSchema.parse(request.params.arguments);
+        const users = await getUsers(args.usernames);
+        return { content: [{ type: "text", text: JSON.stringify(users, null, 2) }] };
       }
 
       default:

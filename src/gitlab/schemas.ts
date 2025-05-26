@@ -7,6 +7,24 @@ export const GitLabAuthorSchema = z.object({
   date: z.string()
 });
 
+// User schemas
+export const GetUsersSchema = z.object({
+  usernames: z.array(z.string()).describe("Array of usernames to search for"),
+});
+
+export const GitLabUserSchema = z.object({
+  username: z.string(), // Changed from login to match GitLab API
+  id: z.number(),
+  name: z.string(),
+  avatar_url: z.string(),
+  web_url: z.string() // Changed from html_url to match GitLab API
+});
+
+export const GitLabUsersResponseSchema = z.record(
+  z.string(),
+  GitLabUserSchema.nullable()
+);
+
 // Repository related schemas
 export const GitLabOwnerSchema = z.object({
   username: z.string(), // Changed from login to match GitLab API
@@ -170,14 +188,6 @@ export const GitLabLabelSchema = z.object({
   description: z.string().optional()
 });
 
-export const GitLabUserSchema = z.object({
-  username: z.string(), // Changed from login to match GitLab API
-  id: z.number(),
-  name: z.string(),
-  avatar_url: z.string(),
-  web_url: z.string() // Changed from html_url to match GitLab API
-});
-
 export const GitLabMilestoneSchema = z.object({
   id: z.number(),
   iid: z.number(), // Added to match GitLab API
@@ -306,6 +316,8 @@ export const CreateBranchSchema = ProjectParamsSchema.extend({
 
 // Export types
 export type GitLabAuthor = z.infer<typeof GitLabAuthorSchema>;
+export type GitLabUser = z.infer<typeof GitLabUserSchema>;
+export type GitLabUsersResponse = z.infer<typeof GitLabUsersResponseSchema>;
 export type GitLabFork = z.infer<typeof GitLabForkSchema>;
 export type GitLabIssue = z.infer<typeof GitLabIssueSchema>;
 export type GitLabMergeRequest = z.infer<typeof GitLabMergeRequestSchema>;
