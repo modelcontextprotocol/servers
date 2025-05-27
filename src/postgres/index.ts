@@ -161,6 +161,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const name = request.params.name;
   const args = request.params.arguments as any;
 
+  const tableNameRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/
+  if (!tableNameRegex.test(args.table)) {
+    throw new Error("Invalid table name")
+  }
+
   try {
     switch (name) {
       case "query": {
@@ -193,10 +198,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const setParts = Object.entries(args.values)
           .map(([key], i) => `"${key}" = $${i + 1}`)
           .join(", ");
-        const values = Object.values(args.values);
-        const sql = `UPDATE "${args.table}" SET ${setParts} WHERE ${args.where} RETURNING *`;
+        const setValues = Object.values(args.values);
+        const whereParts = Object.entries(args.where)
+          .map(([key], i) => `"${key}" = $${i + setValues.length + 1}`)
+          .join(" AND ");
+        const whereValues = Object.values(args.where);
 
-        const result = await client.query(sql, values);
+        const sql = `UPDATE "${args.table}" SET ${setParts} WHERE ${whereParts} RETURNING *`;
+
+        const result = await client.query(sql, [...setValues, ...whereValues]);
+
         await client.query("COMMIT");
         return {
           content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
@@ -206,9 +217,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "delete": {
         await client.query("BEGIN TRANSACTION READ WRITE");
-        const sql = `DELETE FROM "${args.table}" WHERE ${args.where} RETURNING *`;
 
-        const result = await client.query(sql);
+        const whereParts = Object.entries(args.where)
+          .map(([key], i) => `"${key}" = $${i + 1}`)
+          .join(" AND ");
+        const whereValues = Object.values(args.where);
+
+        const sql = `DELETE FROM "${args.table}" WHERE ${whereParts} RETURNING *`;
+
+        const result = await client.query(sql, whereValues);
+
         await client.query("COMMIT");
         return {
           content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
