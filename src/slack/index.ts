@@ -50,6 +50,97 @@ interface GetUserProfileArgs {
   user_id: string;
 }
 
+// Canvas access delete
+interface CanvasesAccessDeleteArgs {
+  canvas_id: string;
+  channel_ids?: string[];
+  user_ids?: string[];
+}
+
+// Canvas access set
+interface CanvasesAccessSetArgs {
+  canvas_id: string;
+  access_level: "read" | "write";
+  channel_ids?: string[];
+  user_ids?: string[];
+}
+
+// Canvas create
+interface CanvasesCreateArgs {
+  title: string;
+  document_content?: object; // Consider refining with a more specific type if needed
+  ownership_details?: {
+    channel_id?: string;
+    user_id?: string;
+  };
+}
+
+interface CanvasesCreateResponse {
+  ok: boolean;
+  canvas_id: string;
+  title: string;
+  file_id: string;
+  owner_id: string;
+  date_created: number;
+  date_updated: number;
+  is_private_share: boolean;
+  is_public_share: boolean;
+  is_org_shared: boolean;
+  is_team_shared: boolean;
+  is_external_shared: boolean;
+  channel_actions_ts: string;
+  channel_actions_count: number;
+  editors: string[];
+  permissions: object; // Consider refining with a more specific type if needed
+  access: string;
+  url_private: string;
+  url_private_download: string;
+  app_id?: string; // Marked as optional as it might not always be present
+  app_name?: string; // Marked as optional as it might not always be present
+}
+
+// Canvas delete
+interface CanvasesDeleteArgs {
+  canvas_id: string;
+}
+
+// Canvas edit
+interface CanvasesEditArgs {
+  canvas_id: string;
+  changes: object[]; // Consider refining with a more specific type if needed
+}
+
+// Canvas sections lookup
+interface CanvasesSectionsLookupArgs {
+  canvas_id: string;
+  criteria: object; // Consider refining with a more specific type if needed
+}
+
+interface CanvasesSectionsLookupResponse {
+  ok: boolean;
+  sections: Array<{
+    id: string;
+    type: string;
+    canvas_id: string;
+    parent_id: string;
+    owner_id: string;
+    date_created: number;
+    date_updated: number;
+    access: string;
+    permissions: object; // Consider refining with a more specific type if needed
+    team_id: string;
+    is_empty: boolean;
+    title?: string; // Marked as optional as it might not always be present
+    markdown?: string; // Marked as optional as it might not always be present
+  }>;
+}
+
+// Conversations canvases create
+interface ConversationsCanvasesCreateArgs {
+  channel_id: string;
+  document_content?: object; // Consider refining with a more specific type if needed
+}
+
 // Tool definitions
 const listChannelsTool: Tool = {
   name: "slack_list_channels",
@@ -68,6 +159,148 @@ const listChannelsTool: Tool = {
         description: "Pagination cursor for next page of results",
       },
     },
+  },
+};
+
+const conversationsCanvasesCreateTool: Tool = {
+  name: "slack_conversations_canvases_create",
+  description: "Create a new canvas for a conversation.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      channel_id: {
+        type: "string",
+        description: "The channel ID to create the canvas in.",
+      },
+      document_content: {
+        type: "object",
+        description: "The content of the canvas document. See Slack API documentation for structure.",
+      },
+    },
+    required: ["channel_id"],
+  },
+};
+
+const canvasesSectionsLookupTool: Tool = {
+  name: "slack_canvases_sections_lookup",
+  description: "Look up sections in a canvas based on criteria.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      canvas_id: {
+        type: "string",
+        description: "The ID of the canvas to search sections in.",
+      },
+      criteria: {
+        type: "object",
+        description: "The criteria to filter sections by. See Slack API documentation for structure.",
+      },
+    },
+    required: ["canvas_id", "criteria"],
+  },
+};
+
+const canvasesEditTool: Tool = {
+  name: "slack_canvases_edit",
+  description: "Edit a canvas document.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      canvas_id: {
+        type: "string",
+        description: "The ID of the canvas to edit.",
+      },
+      changes: {
+        type: "array",
+        items: {
+          type: "object",
+        },
+        description: "A list of change operations to apply to the canvas. See Slack API documentation for structure.",
+      },
+    },
+    required: ["canvas_id", "changes"],
+  },
+};
+
+const canvasesDeleteTool: Tool = {
+  name: "slack_canvases_delete",
+  description: "Delete a canvas.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      canvas_id: {
+        type: "string",
+        description: "The ID of the canvas to delete.",
+      },
+    },
+    required: ["canvas_id"],
+  },
+};
+
+const canvasesCreateTool: Tool = {
+  name: "slack_canvases_create",
+  description: "Create a new canvas.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      title: {
+        type: "string",
+        description: "The title of the canvas.",
+      },
+      document_content: {
+        type: "object",
+        description: "The content of the canvas document. See Slack API documentation for structure.",
+      },
+      ownership_details: {
+        type: "object",
+        properties: {
+          channel_id: {
+            type: "string",
+            description: "The channel ID to own the canvas.",
+          },
+          user_id: {
+            type: "string",
+            description: "The user ID to own the canvas.",
+          },
+        },
+        description: "Details for canvas ownership.",
+      },
+    },
+    required: ["title"],
+  },
+};
+
+const canvasesAccessSetTool: Tool = {
+  name: "slack_canvases_access_set",
+  description: "Set the access level for users or channels to a canvas.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      canvas_id: {
+        type: "string",
+        description: "The ID of the canvas to set access for.",
+      },
+      access_level: {
+        type: "string",
+        enum: ["read", "write"],
+        description: "The access level to grant.",
+      },
+      channel_ids: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+        description: "A list of channel IDs to grant access to.",
+      },
+      user_ids: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+        description: "A list of user IDs to grant access to.",
+      },
+    },
+    required: ["canvas_id", "access_level"],
   },
 };
 
@@ -207,6 +440,35 @@ const getUserProfileTool: Tool = {
       },
     },
     required: ["user_id"],
+  },
+};
+
+const canvasesAccessDeleteTool: Tool = {
+  name: "slack_canvases_access_delete",
+  description: "Revoke access to a canvas for users or channels.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      canvas_id: {
+        type: "string",
+        description: "The ID of the canvas to revoke access to.",
+      },
+      channel_ids: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+        description: "A list of channel IDs to revoke access for.",
+      },
+      user_ids: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+        description: "A list of user IDs to revoke access for.",
+      },
+    },
+    required: ["canvas_id"],
   },
 };
 
@@ -378,6 +640,69 @@ class SlackClient {
 
     return response.json();
   }
+
+  async canvasesAccessDelete(args: CanvasesAccessDeleteArgs): Promise<any> {
+    const response = await fetch("https://slack.com/api/canvases.access.delete", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify(args),
+    });
+    return response.json();
+  }
+
+  async conversationsCanvasesCreate(args: ConversationsCanvasesCreateArgs): Promise<CanvasesCreateResponse> {
+    const response = await fetch("https://slack.com/api/conversations.canvases.create", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify(args),
+    });
+    return response.json();
+  }
+
+  async canvasesSectionsLookup(args: CanvasesSectionsLookupArgs): Promise<CanvasesSectionsLookupResponse> {
+    const response = await fetch("https://slack.com/api/canvases.sections.lookup", {
+      method: "POST", // Slack API docs say GET, but it's likely POST for a body with criteria
+      headers: this.botHeaders,
+      body: JSON.stringify(args),
+    });
+    return response.json();
+  }
+
+  async canvasesEdit(args: CanvasesEditArgs): Promise<any> {
+    const response = await fetch("https://slack.com/api/canvases.edit", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify(args),
+    });
+    return response.json();
+  }
+
+  async canvasesDelete(args: CanvasesDeleteArgs): Promise<any> {
+    const response = await fetch("https://slack.com/api/canvases.delete", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify(args),
+    });
+    return response.json();
+  }
+
+  async canvasesCreate(args: CanvasesCreateArgs): Promise<CanvasesCreateResponse> {
+    const response = await fetch("https://slack.com/api/canvases.create", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify(args),
+    });
+    return response.json();
+  }
+
+  async canvasesAccessSet(args: CanvasesAccessSetArgs): Promise<any> {
+    const response = await fetch("https://slack.com/api/canvases.access.set", {
+      method: "POST",
+      headers: this.botHeaders,
+      body: JSON.stringify(args),
+    });
+    return response.json();
+  }
 }
 
 async function main() {
@@ -534,6 +859,83 @@ async function main() {
             };
           }
 
+          case "slack_canvases_access_delete": {
+            const args = request.params.arguments as unknown as CanvasesAccessDeleteArgs;
+            if (!args.canvas_id) {
+              throw new Error("Missing required argument: canvas_id");
+            }
+            const response = await slackClient.canvasesAccessDelete(args);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
+          case "slack_canvases_access_set": {
+            const args = request.params.arguments as unknown as CanvasesAccessSetArgs;
+            if (!args.canvas_id || !args.access_level) {
+              throw new Error("Missing required arguments: canvas_id and access_level");
+            }
+            const response = await slackClient.canvasesAccessSet(args);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
+          case "slack_canvases_create": {
+            const args = request.params.arguments as unknown as CanvasesCreateArgs;
+            if (!args.title) {
+              throw new Error("Missing required argument: title");
+            }
+            const response = await slackClient.canvasesCreate(args);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
+          case "slack_canvases_delete": {
+            const args = request.params.arguments as unknown as CanvasesDeleteArgs;
+            if (!args.canvas_id) {
+              throw new Error("Missing required argument: canvas_id");
+            }
+            const response = await slackClient.canvasesDelete(args);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
+          case "slack_canvases_edit": {
+            const args = request.params.arguments as unknown as CanvasesEditArgs;
+            if (!args.canvas_id || !args.changes) {
+              throw new Error("Missing required arguments: canvas_id and changes");
+            }
+            const response = await slackClient.canvasesEdit(args);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
+          case "slack_canvases_sections_lookup": {
+            const args = request.params.arguments as unknown as CanvasesSectionsLookupArgs;
+            if (!args.canvas_id || !args.criteria) {
+              throw new Error("Missing required arguments: canvas_id and criteria");
+            }
+            const response = await slackClient.canvasesSectionsLookup(args);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
+          case "slack_conversations_canvases_create": {
+            const args = request.params.arguments as unknown as ConversationsCanvasesCreateArgs;
+            if (!args.channel_id) {
+              throw new Error("Missing required argument: channel_id");
+            }
+            const response = await slackClient.conversationsCanvasesCreate(args);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
           default:
             throw new Error(`Unknown tool: ${request.params.name}`);
         }
@@ -565,6 +967,13 @@ async function main() {
         getThreadRepliesTool,
         getUsersTool,
         getUserProfileTool,
+        canvasesAccessDeleteTool,
+        canvasesAccessSetTool,
+        canvasesCreateTool,
+        canvasesDeleteTool,
+        canvasesEditTool,
+        canvasesSectionsLookupTool,
+        conversationsCanvasesCreateTool,
       ],
     };
   });
