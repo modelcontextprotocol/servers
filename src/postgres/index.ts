@@ -2,7 +2,8 @@
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
+import
+{
   CallToolRequestSchema,
   ListResourcesRequestSchema,
   ListToolsRequestSchema,
@@ -41,7 +42,8 @@ const pool = new pg.Pool({
 
 const SCHEMA_PATH = "schema";
 
-server.setRequestHandler(ListResourcesRequestSchema, async () => {
+server.setRequestHandler(ListResourcesRequestSchema, async () =>
+{
   const client = await pool.connect();
   try {
     const result = await client.query(
@@ -59,7 +61,8 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
   }
 });
 
-server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+server.setRequestHandler(ReadResourceRequestSchema, async (request) =>
+{
   const resourceUrl = new URL(request.params.uri);
 
   const pathComponents = resourceUrl.pathname.split("/");
@@ -91,7 +94,8 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   }
 });
 
-server.setRequestHandler(ListToolsRequestSchema, async () => {
+server.setRequestHandler(ListToolsRequestSchema, async () =>
+{
   return {
     tools: [
       {
@@ -104,38 +108,146 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
+      {
+        name: "insert",
+        description: "Execute a SQL write query to insert a new row into a table",
+        inputSchema: {
+          type: "object",
+          properties: {
+            table: { type: "string", description: "The name of the row to insert into" },
+            values: { type: "object", description: "The values to insert into the table" }
+          },
+          required: ["table", "values"],
+        }
+      },
+      {
+        name: "update",
+        description: "Execute a SQL write query to update existing rows in a table",
+        inputSchema: {
+          type: "object",
+          properties: {
+            table: { type: "string", description: "The name of the table to update" },
+            values: { type: "object", description: "The values to update in the table" },
+            where: { type: "string", description: "The WHERE clause to filter rows to update" }
+          },
+          required: ["table", "values", "where"],
+        }
+      },
+      {
+        name: "delete",
+        description: "Execute a SQL write query to delete rows from a table",
+        inputSchema: {
+          type: "object",
+          properties: {
+            table: { type: "string", description: "The name of the table to delete from" },
+            where: { type: "string", description: "The WHERE clause to filter rows to delete" }
+          },
+          required: ["table", "where"],
+        }
+      },
+      {
+        name: "execute",
+        description: "Execute a general SQL command (e.g., CREATE TABLE, ALTER TABLE)",
+        inputSchema: {
+          type: "object",
+          properties: {
+            sql: { type: "string", description: "The SQL command to execute" }
+          },
+          required: ["sql"],
+        }
+      }
     ],
   };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "query") {
-    const sql = request.params.arguments?.sql as string;
+server.setRequestHandler(CallToolRequestSchema, async (request) =>
+{
+  const client = await pool.connect();
+  const name = request.params.name;
+  const args = request.params.arguments as any;
 
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN TRANSACTION READ ONLY");
-      const result = await client.query(sql);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
-        isError: false,
-      };
-    } catch (error) {
-      throw error;
-    } finally {
-      client
-        .query("ROLLBACK")
-        .catch((error) =>
-          console.warn("Could not roll back transaction:", error),
-        );
+  try {
+    switch (name) {
+      case "query": {
+        await client.query("BEGIN TRANSACTION READ ONLY");
+        const result = await client.query(args.sql);
+        await client.query("COMMIT");
+        return {
+          content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
+          isError: false,
+        };
+      }
 
-      client.release();
+      case "insert": {
+        await client.query("BEGIN TRANSACTION READ WRITE");
+        const columns = Object.keys(args.values).map((key) => `"${key}"`).join(", ");
+        const values = Object.values(args.values);
+        const placeholders = values.map((_, i) => `$${i + 1}`).join(", ");
+        const sql = `INSERT INTO "${args.table}" (${columns}) VALUES (${placeholders}) RETURNING *`;
+
+        const result = await client.query(sql, values);
+        await client.query("COMMIT");
+        return {
+          content: [{ type: "text", text: JSON.stringify(result.rows[0], null, 2) }],
+          isError: false,
+        };
+      }
+
+      case "update": {
+        await client.query("BEGIN TRANSACTION READ WRITE");
+        const setParts = Object.entries(args.values)
+          .map(([key], i) => `"${key}" = $${i + 1}`)
+          .join(", ");
+        const values = Object.values(args.values);
+        const sql = `UPDATE "${args.table}" SET ${setParts} WHERE ${args.where} RETURNING *`;
+
+        const result = await client.query(sql, values);
+        await client.query("COMMIT");
+        return {
+          content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
+          isError: false,
+        };
+      }
+
+      case "delete": {
+        await client.query("BEGIN TRANSACTION READ WRITE");
+        const sql = `DELETE FROM "${args.table}" WHERE ${args.where} RETURNING *`;
+
+        const result = await client.query(sql);
+        await client.query("COMMIT");
+        return {
+          content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
+          isError: false,
+        };
+      }
+
+      case "execute": {
+        await client.query("BEGIN TRANSACTION READ WRITE");
+        await client.query(args.sql);
+        await client.query("COMMIT");
+        return {
+          content: [{ type: "text", text: "SQL command executed successfully." }],
+          isError: false,
+        };
+      }
+
+      default:
+        throw new Error(`Unknown tool: ${name}`);
     }
+  } catch (error: any) {
+    await client.query("ROLLBACK").catch(() => { });
+    return {
+      content: [{ type: "text", text: `Error: ${error.message}` }],
+      isError: true,
+    };
+  } finally {
+    client.release();
   }
-  throw new Error(`Unknown tool: ${request.params.name}`);
 });
 
-async function runServer() {
+
+async function runServer()
+{
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
