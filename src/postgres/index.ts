@@ -2,8 +2,7 @@
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import
-{
+import {
   CallToolRequestSchema,
   ListResourcesRequestSchema,
   ListToolsRequestSchema,
@@ -42,8 +41,7 @@ const pool = new pg.Pool({
 
 const SCHEMA_PATH = "schema";
 
-server.setRequestHandler(ListResourcesRequestSchema, async () =>
-{
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
   const client = await pool.connect();
   try {
     const result = await client.query(
@@ -61,8 +59,7 @@ server.setRequestHandler(ListResourcesRequestSchema, async () =>
   }
 });
 
-server.setRequestHandler(ReadResourceRequestSchema, async (request) =>
-{
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const resourceUrl = new URL(request.params.uri);
 
   const pathComponents = resourceUrl.pathname.split("/");
@@ -94,8 +91,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) =>
   }
 });
 
-server.setRequestHandler(ListToolsRequestSchema, async () =>
-{
+server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
@@ -151,7 +147,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () =>
         inputSchema: {
           type: "object",
           properties: {
-            sql: { type: "string", description: "The SQL command to execute" }
+            sql: { type: "string", description: "SQL command to execute general queries" }
           },
           required: ["sql"],
         }
@@ -160,8 +156,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () =>
   };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (request) =>
-{
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const client = await pool.connect();
   const name = request.params.name;
   const args = request.params.arguments as any;
@@ -246,8 +241,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) =>
 });
 
 
-async function runServer()
-{
+async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
