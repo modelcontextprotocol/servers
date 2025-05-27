@@ -124,7 +124,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             table: { type: "string", description: "The name of the table to update" },
             values: { type: "object", description: "The values to update in the table" },
-            where: { type: "string", description: "The WHERE clause to filter rows to update" }
+            where: { type: "object", description: "The WHERE clause to filter rows to update" }
           },
           required: ["table", "values", "where"],
         }
@@ -136,7 +136,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             table: { type: "string", description: "The name of the table to delete from" },
-            where: { type: "string", description: "The WHERE clause to filter rows to delete" }
+            where: { type: "object", description: "The WHERE clause to filter rows to delete" }
           },
           required: ["table", "where"],
         }
@@ -161,32 +161,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const name = request.params.name;
   const args = request.params.arguments as any;
 
-  const tableNameRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/
-  if (!tableNameRegex.test(args.table)) {
-    throw new Error("Invalid table name")
-  }
+  const tableNameRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
   try {
+    if (args.table && !tableNameRegex.test(args.table)) {
+      throw new Error("Invalid table name");
+    }
+
     switch (name) {
       case "query": {
-        await client.query("BEGIN TRANSACTION READ ONLY");
-        const result = await client.query(args.sql);
-        await client.query("COMMIT");
+        const result = await withTransaction(client, true, () => client.query(args.sql));
         return {
-          content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify((result as any).rows, null, 2) }],
           isError: false,
         };
       }
 
       case "insert": {
-        await client.query("BEGIN TRANSACTION READ WRITE");
-        const columns = Object.keys(args.values).map((key) => `"${key}"`).join(", ");
-        const values = Object.values(args.values);
-        const placeholders = values.map((_, i) => `$${i + 1}`).join(", ");
-        const sql = `INSERT INTO "${args.table}" (${columns}) VALUES (${placeholders}) RETURNING *`;
+        if (args.values) validateObjectKeys(args.values, "column");
 
-        const result = await client.query(sql, values);
-        await client.query("COMMIT");
+        const { sql, params } = buildInsertQuery(args.table, args.values);
+        const result = await withTransaction(client, false, () => {
+          return client.query(sql, params);
+        });
         return {
           content: [{ type: "text", text: JSON.stringify(result.rows[0], null, 2) }],
           isError: false,
@@ -194,21 +191,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "update": {
-        await client.query("BEGIN TRANSACTION READ WRITE");
-        const setParts = Object.entries(args.values)
-          .map(([key], i) => `"${key}" = $${i + 1}`)
-          .join(", ");
-        const setValues = Object.values(args.values);
-        const whereParts = Object.entries(args.where)
-          .map(([key], i) => `"${key}" = $${i + setValues.length + 1}`)
-          .join(" AND ");
-        const whereValues = Object.values(args.where);
+        if (args.values) validateObjectKeys(args.values, "column");
+        if (args.where) validateObjectKeys(args.where, "where field");
 
-        const sql = `UPDATE "${args.table}" SET ${setParts} WHERE ${whereParts} RETURNING *`;
-
-        const result = await client.query(sql, [...setValues, ...whereValues]);
-
-        await client.query("COMMIT");
+        const { sql, params } = buildUpdateQuery(args.table, args.values, args.where);
+        const result = await withTransaction(client, false, () => client.query(sql, params));
         return {
           content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
           isError: false,
@@ -216,18 +203,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "delete": {
-        await client.query("BEGIN TRANSACTION READ WRITE");
+        if (args.where) validateObjectKeys(args.where, "where field");
 
-        const whereParts = Object.entries(args.where)
-          .map(([key], i) => `"${key}" = $${i + 1}`)
-          .join(" AND ");
-        const whereValues = Object.values(args.where);
-
-        const sql = `DELETE FROM "${args.table}" WHERE ${whereParts} RETURNING *`;
-
-        const result = await client.query(sql, whereValues);
-
-        await client.query("COMMIT");
+        const { sql, params } = buildDeleteQuery(args.table, args.where);
+        const result = await withTransaction(client, false, () => {
+          return client.query(sql, params);
+        });
         return {
           content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
           isError: false,
@@ -235,9 +216,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "execute": {
-        await client.query("BEGIN TRANSACTION READ WRITE");
-        await client.query(args.sql);
-        await client.query("COMMIT");
+        await withTransaction(client, false, () => client.query(args.sql));
         return {
           content: [{ type: "text", text: "SQL command executed successfully." }],
           isError: false,
@@ -248,7 +227,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error: any) {
-    await client.query("ROLLBACK").catch(() => { });
     return {
       content: [{ type: "text", text: `Error: ${error.message}` }],
       isError: true,
@@ -258,6 +236,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+function buildInsertQuery(table: string, values: Record<string, any>) {
+  const columns = Object.keys(values).map(key => `"${key}"`).join(", ");
+  const placeholders = Object.values(values).map((_, i) => `$${i + 1}`).join(", ");
+  const sql = `INSERT INTO "${table}" (${columns}) VALUES (${placeholders}) RETURNING *`;
+  const params = Object.values(values);
+  return { sql, params };
+}
+
+function buildUpdateQuery(table: string, values: Record<string, any>, where: Record<string, any>) {
+  const setParts = Object.keys(values).map((key, i) => `"${key}" = $${i + 1}`).join(", ");
+  const whereOffset = Object.keys(values).length;
+  const whereParts = Object.keys(where).map((key, i) => `"${key}" = $${i + 1 + whereOffset}`).join(" AND ");
+  const sql = `UPDATE "${table}" SET ${setParts} WHERE ${whereParts} RETURNING *`;
+  const params = [...Object.values(values), ...Object.values(where)];
+  return { sql, params };
+}
+
+function buildDeleteQuery(table: string, where: Record<string, any>) {
+  const whereParts = Object.keys(where).map((key, i) => `"${key}" = $${i + 1}`).join(" AND ");
+  const sql = `DELETE FROM "${table}" WHERE ${whereParts} RETURNING *`;
+  const params = Object.values(where);
+  return { sql, params };
+}
+
+async function withTransaction<T>(client: pg.PoolClient, readOnly: boolean, fn: () => Promise<T>): Promise<T> {
+  try {
+    await client.query(`BEGIN TRANSACTION ${readOnly ? "READ ONLY" : "READ WRITE"}`);
+    const result = await fn();
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => { });
+    throw error;
+  }
+}
+
+const validIdentifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+function validateObjectKeys(obj: Record<string, any>, name = "field") {
+  for (const key of Object.keys(obj)) {
+    if (!validIdentifier.test(key)) {
+      throw new Error(`Invalid ${name} name: ${key}`);
+    }
+  }
+}
 
 async function runServer() {
   const transport = new StdioServerTransport();
