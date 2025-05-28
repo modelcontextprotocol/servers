@@ -1,17 +1,15 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
-  CallToolRequestSchema,
   ListResourcesRequestSchema,
-  ListToolsRequestSchema,
   ReadResourceRequestSchema,
+  isInitializeRequest
 } from "@modelcontextprotocol/sdk/types.js";
 import { randomUUID } from "node:crypto";
 import express from "express";
-import pg from "pg";
 import dotenv from 'dotenv';
 
-dotenv.config(); // loads variables from .env into process.env
+dotenv.config();
 
 const server = new Server(
   {
@@ -26,137 +24,152 @@ const server = new Server(
   },
 );
 
-const databaseUrl = process.env.POSTGRES_CONNECTION_STRING;
-if (!databaseUrl) {
-  console.error("Missing POSTGRES_CONNECTION_STRING in environment");
-  process.exit(1);
-}
-
-const resourceBaseUrl = new URL(databaseUrl);
-resourceBaseUrl.protocol = "postgres:";
-resourceBaseUrl.password = ""; // Clear password for constructing resource URIs
-
-const pool = new pg.Pool({
-  connectionString: databaseUrl,
-});
-
-const SCHEMA_PATH = "schema";
+// List available resources when clients request them
 server.setRequestHandler(ListResourcesRequestSchema, async () => {
-  const client = await pool.connect();
-  try {
-    const result = await client.query(
-      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'",
-    );
-    return {
-      resources: result.rows.map((row) => ({
-        uri: new URL(`${row.table_name}/${SCHEMA_PATH}`, resourceBaseUrl).href,
-        mimeType: "application/json",
-        name: `"${row.table_name}" database schema`,
-      })),
-    };
-  } finally {
-    client.release();
-  }
-});
-
-server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-  const resourceUrl = new URL(request.params.uri);
-
-  const pathComponents = resourceUrl.pathname.split("/");
-  const schema = pathComponents.pop();
-  const tableName = pathComponents.pop();
-
-  if (schema !== SCHEMA_PATH) {
-    throw new Error("Invalid resource URI");
-  }
-
-  const client = await pool.connect();
-  try {
-    const result = await client.query(
-      "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1",
-      [tableName],
-    );
-
-    return {
-      contents: [
-        {
-          uri: request.params.uri,
-          mimeType: "application/json",
-          text: JSON.stringify(result.rows, null, 2),
-        },
-      ],
-    };
-  } finally {
-    client.release();
-  }
-});
-
-server.setRequestHandler(ListToolsRequestSchema, async () => {
+  console.log("Handling resources/list request");
   return {
-    tools: [
+    resources: [
       {
-        name: "query",
-        description: "Run a read-only SQL query",
-        inputSchema: {
-          type: "object",
-          properties: {
-            sql: { type: "string" },
-          },
-        },
+        uri: "hello://world",
+        name: "Hello World Message",
+        description: "A simple greeting message",
+        mimeType: "text/plain",
       },
     ],
   };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "query") {
-    const sql = request.params.arguments?.sql as string;
-
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN TRANSACTION READ ONLY");
-      const result = await client.query(sql);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
-        isError: false,
-      };
-    } catch (error) {
-      throw error;
-    } finally {
-      client
-        .query("ROLLBACK")
-        .catch((error) =>
-          console.warn("Could not roll back transaction:", error),
-        );
-
-      client.release();
-    }
+// Return resource content when clients request it
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  console.log("Handling resources/read request for:", request.params.uri);
+  if (request.params.uri === "hello://world") {
+    return {
+      contents: [
+        {
+          uri: "hello://world",
+          text: "Hello, World! This is my first MCP resource.",
+        },
+      ],
+    };
   }
-  throw new Error(`Unknown tool: ${request.params.name}`);
+  throw new Error("Resource not found");
 });
 
+const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
-async function runServer() {
-  const app = express();
-  app.use(express.json());
+// async function runServer() {
+const app = express();
+app.use(express.json());
 
-  // Create transport with session management
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
-  });
+// Handle all MCP requests (POST) at /mcp endpoint
+app.post('/mcp', async (req, res) => {
+  try {
+    console.log("Received POST request:", JSON.stringify(req.body, null, 2));
+    console.log("Headers:", req.headers);
 
-  // Connect the MCP server to the transport
-  await server.connect(transport);
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    let transport: StreamableHTTPServerTransport;
 
-  // Handle all MCP requests (GET, POST, DELETE) at /mcp endpoint
-  app.all('/mcp', async (req, res) => {
+    if (sessionId && transports[sessionId]) {
+      // Reuse existing transport
+      console.log("Using existing transport for session:", sessionId);
+      transport = transports[sessionId];
+    } else if (isInitializeRequest(req.body)) {
+      // New initialization request
+      console.log("Creating new transport for initialization");
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (sessionId) => {
+          transports[sessionId] = transport;
+          console.log("Session initialized:", sessionId);
+        },
+      });
+
+      // Clean up transport when closed
+      transport.onclose = () => {
+        console.log("Transport closed for session:", transport.sessionId);
+        if (transport.sessionId) {
+          delete transports[transport.sessionId];
+        }
+      };
+
+      // Connect the server to the transport
+      await server.connect(transport);
+      console.log("Server connected to transport");
+    } else {
+      // Invalid request - missing session ID for non-initialize request
+      console.log("Invalid request: missing session ID or not an initialize request");
+      res.status(400).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32000,
+          message: 'Bad Request: No valid session ID provided and not an initialize request',
+        },
+        id: req.body.id || null,
+      });
+      return;
+    }
+
+    // Handle the request
+    console.log("Handling request through transport");
     await transport.handleRequest(req, res, req.body);
-  });
+  } catch (error) {
+    console.error("Error handling POST request:", error);
+    res.status(500).json({
+      jsonrpc: '2.0',
+      error: {
+        code: -32603,
+        message: 'Internal error: ' + (error instanceof Error ? error.message : String(error)),
+      },
+      id: req.body?.id || null,
+    });
+  }
+});
 
-  const port = process.env.PORT || 3000;
-  app.listen(port, () => {
-    console.log(`PostgreSQL MCP server running on http://localhost:${port}/mcp`);
-  });
-}
+// Handle GET requests for server-to-client notifications via SSE
+app.get('/mcp', async (req, res) => {
+  try {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    console.log("GET request for session:", sessionId);
 
-runServer().catch(console.error);
+    if (!sessionId || !transports[sessionId]) {
+      res.status(400).send('Invalid or missing session ID');
+      return;
+    }
+
+    const transport = transports[sessionId];
+    await transport.handleRequest(req, res);
+  } catch (error) {
+    console.error("Error handling GET request:", error);
+    res.status(500).send('Internal server error');
+  }
+});
+
+// Handle DELETE requests for session termination
+app.delete('/mcp', async (req, res) => {
+  try {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    console.log("DELETE request for session:", sessionId);
+
+    if (!sessionId || !transports[sessionId]) {
+      res.status(400).send('Invalid or missing session ID');
+      return;
+    }
+
+    const transport = transports[sessionId];
+    await transport.handleRequest(req, res);
+
+    // Clean up the transport
+    delete transports[sessionId];
+  } catch (error) {
+    console.error("Error handling DELETE request:", error);
+    res.status(500).send('Internal server error');
+  }
+});
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`MCP server running on http://localhost:${port}/mcp`);
+});
+
+// runServer().catch(console.error);
