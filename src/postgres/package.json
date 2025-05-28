@@ -5,7 +5,9 @@
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
   "homepage": "https://modelcontextprotocol.io",
-  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "bugs": {
+    "url": "https://github.com/modelcontextprotocol/servers/issues"
+  },
   "type": "module",
   "bin": {
     "mcp-server-postgres": "dist/index.js"
@@ -16,15 +18,25 @@
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "dev": "tsx index.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.0.1",
-    "pg": "^8.13.0"
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "pg": "^8.16.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.2",
+    "@types/node": "^22.15.23",
     "@types/pg": "^8.11.10",
     "shx": "^0.3.4",
-    "typescript": "^5.6.2"
-  }
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  },
+  "main": "index.js",
+  "keywords": []
 }
