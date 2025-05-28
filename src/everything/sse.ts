@@ -42,6 +42,8 @@ app.post("/message", async (req, res) => {
   if (transport) {
     console.error("Client Message from", sessionId);
     await transport.handlePostMessage(req, res);
+  } else {
+    console.error(`No transport found for sessionId ${sessionId}`)
   }
 });
 
