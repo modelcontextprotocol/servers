@@ -13,7 +13,7 @@ app.get("/sse", async (req, res) => {
   const { server, cleanup } = createServer();
 
   if (req?.query?.sessionId) {
-    const sessionId = (req?.query?.sessionId as string) || "none";
+    const sessionId = (req?.query?.sessionId as string);
     transport = transports.get(sessionId) as SSEServerTransport;
     console.error("Client Reconnecting? This shouldn't happen; when client has a sessionId, GET /sse should not be called again.", transport.sessionId);
   } else {
@@ -37,7 +37,7 @@ app.get("/sse", async (req, res) => {
 });
 
 app.post("/message", async (req, res) => {
-  const sessionId = (req?.query?.sessionId as string) || "none";
+  const sessionId = (req?.query?.sessionId as string);
   const transport = transports.get(sessionId);
   if (transport) {
     console.error("Client Message from", sessionId);
