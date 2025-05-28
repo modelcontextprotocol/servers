@@ -31,8 +31,23 @@ mcpServer.resource("Hello World Message", "hello://world", {
     ],
 }));
 
+function getEnvVar(name: string):string {
+  const value = process.env[name];
+  if (value === undefined || value === null) {
+    throw new Error(`${name} is not defined`);
+  }
+  if (typeof value !== 'string') {
+    throw new Error(`${name} must be a string`);
+  }
+  return value;
+}
 
-const databaseUrl = process.env.POSTGRES_CONNECTION_STRING;
+const username = getEnvVar('POSTGRES_USERNAME');
+const password = getEnvVar('POSTGRES_PASSWORD');
+const host = getEnvVar('POSTGRES_HOST');
+const database = getEnvVar('POSTGRES_DATABASE');
+
+const databaseUrl = `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:5432/${database}?sslmode=require`;
 if (!databaseUrl) {
     console.error("Missing POSTGRES_CONNECTION_STRING in environment");
     process.exit(1);
@@ -309,12 +324,17 @@ app.get("/mcp", async (req, res) => {
 });
 
 // サーバーのポート番号を設定 - 環境変数PORTが設定されていればその値を使用し、なければデフォルト値3000を使用
-const PORT = process.env.PORT || 3000;
+const PORT: number = parseInt(process.env.PORT || '3000', 10);
+const HOST: string = process.env.HOST || '0.0.0.0';
 
-// HTTP サーバーの起動 - 指定されたポートでリクエストの待ち受けを開始
-app.listen(PORT, () => {
+// HTTP サーバーの起動 - 指定されたホストとポートでリクエストの待ち受けを開始
+app.listen(PORT, HOST, () => {
     // サーバー起動成功時のログメッセージを出力
-    console.log(`Stateful server is running on http://localhost:${PORT}/mcp`);
+    console.log(`Stateful server is running on http://${HOST}:${PORT}/mcp`);
+    // 開発環境での便利なログも追加
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`Local access: http://localhost:${PORT}/mcp`);
+    }
 });
 
 // SIGINT (Ctrl+Cなど) を受け取ったときのグレースフルシャットダウン処理 - リソースを適切に解放するため
