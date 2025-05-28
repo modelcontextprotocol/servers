@@ -108,6 +108,11 @@ const WriteFileArgsSchema = z.object({
   content: z.string(),
 });
 
+const AppendFileArgsSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+});
+
 const EditOperation = z.object({
   oldText: z.string().describe('Text to search for - must match exactly'),
   newText: z.string().describe('Text to replace with')
@@ -344,6 +349,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(ReadFileArgsSchema) as ToolInput,
       },
       {
+        name: "append_file",
+        description:
+          "Append content to an existing file or create a new file if it doesn't exist. " +
+          "This is safer than overwriting when you need to add content incrementally. " +
+          "Preserves existing content and adds new content at the end of the file. " +
+          "Handles text content with proper encoding. Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(AppendFileArgsSchema) as ToolInput,
+      },
+      {
         name: "read_multiple_files",
         description:
           "Read the contents of multiple files simultaneously. This is more " +
@@ -366,6 +380,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description:
           "Make line-based edits to a text file. Each edit replaces exact line sequences " +
           "with new content. Returns a git-style diff showing the changes made. " +
+          "When modifying existing files, prefer using this tool for partial changes (adding/modifying/removing specific parts) " +
+          "rather than rewriting the entire or substantial portions of the file. " +
           "Only works within allowed directories.",
         inputSchema: zodToJsonSchema(EditFileArgsSchema) as ToolInput,
       },
@@ -488,6 +504,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         await fs.writeFile(validPath, parsed.data.content, "utf-8");
         return {
           content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
+        };
+      }
+
+      case "append_file": {
+        const parsed = AppendFileArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for append_file: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        await fs.appendFile(validPath, parsed.data.content, "utf-8");
+        return {
+          content: [{ type: "text", text: `Successfully appended to ${parsed.data.path}` }],
         };
       }
 
