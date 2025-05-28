@@ -24,6 +24,7 @@ These servers aim to demonstrate MCP features and the TypeScript and Python SDKs
 - **[Google Drive](src/gdrive)** - File access and search capabilities for Google Drive
 - **[Google Maps](src/google-maps)** - Location services, directions, and place details
 - **[Memory](src/memory)** - Knowledge graph-based persistent memory system
+- **[MindsDB](src/mindsdb)** - Federated data. Join data from any combination of data sources.
 - **[PostgreSQL](src/postgres)** - Read-only database access with schema inspection
 - **[Puppeteer](src/puppeteer)** - Browser automation and web scraping
 - **[Redis](src/redis)** - Interact with Redis key-value stores
