@@ -15,7 +15,7 @@ app.get("/sse", async (req, res) => {
   if (req?.query?.sessionId) {
     const sessionId = (req?.query?.sessionId as string) || "none";
     transport = transports.get(sessionId) as SSEServerTransport;
-    console.error("Client Reconnecting? ", transport.sessionId);
+    console.error("Client Reconnecting? This shouldn't happen; when client has a sessionId, GET /sse should not be called again.", transport.sessionId);
   } else {
     // Create and store transport for new session
     transport = new SSEServerTransport("/message", res);
