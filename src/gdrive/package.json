@@ -21,11 +21,14 @@
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
     "@modelcontextprotocol/sdk": "1.0.1",
+    "dotenv": "^16.5.0",
     "googleapis": "^144.0.0"
   },
   "devDependencies": {
     "@types/node": "^22",
     "shx": "^0.3.4",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.3",
     "typescript": "^5.6.2"
   }
 }
