@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  mcp-http:
+    build:
+      target: builder
+    volumes:
+      - ./src:/app/src
+      - ./tsconfig.json:/app/tsconfig.json
+    environment:
+      - NODE_ENV=development
+    command: npm run dev:http
+
+  mcp-stdio:
+    build:
+      target: builder
+    volumes:
+      - ./src:/app/src
+      - ./tsconfig.json:/app/tsconfig.json
+    environment:
+      - NODE_ENV=development
+    command: npm run dev:stdio

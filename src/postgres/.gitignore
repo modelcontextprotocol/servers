@@ -1,0 +1,34 @@
+# .dockerignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.pyc~
+
+# Node.js dependencies
+node_modules
+dist
+
+# Logs and results
+logs
+json_results
+
+# Development & local files
+.env
+.dockerignore
+.git
+*.md
+*.lock
+
+# Shared code (if you don't want to include it in build context)
+shared_code
+
+# Local scripts not needed in container
+client.py
+print_contents.py
+constants.py
+#pyproject.toml
+uv.lock
+*.py
