@@ -15,14 +15,31 @@
   "files": [
     "dist"
   ],
+
   "scripts": {
-    "build": "tsc && shx chmod +x dist/*.js",
-    "prepare": "npm run build",
-    "watch": "tsc --watch",
-    "start": "node dist/index.js",
-    "dev": "tsx index.ts",
-    "client": "tsx client.ts"
-  },
+      "build": "tsc && shx chmod +x dist/*.js",
+      "prepare": "npm run build",
+      "watch": "tsc --watch",
+      "clean": "rm -rf dist",
+      "dev:http": "tsx src/index.ts",
+      "dev:stdio": "tsx src/stdioIndex.ts",
+      "start:http": "node dist/index.js",
+      "start:stdio": "node dist/stdioIndex.js",
+      "docker:build": "docker-compose build",
+      "docker:up": "docker-compose up -d mcp-http",
+      "docker:up:stdio": "docker-compose --profile stdio up mcp-stdio",
+      "docker:down": "docker-compose down",
+      "docker:logs": "docker-compose logs -f",
+      "docker:logs:http": "docker-compose logs -f mcp-http",
+      "docker:logs:stdio": "docker-compose logs -f mcp-stdio",
+      "docker:shell:http": "docker-compose exec mcp-http sh",
+      "docker:clean": "docker-compose down -v --rmi all",
+      "compose:dev": "docker-compose -f docker-compose.yml -f docker-compose.dev.yml up",
+      "test:http": "curl -X POST http://localhost:3000/mcp -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"server/info\",\"id\":1}'",
+      "lint": "echo 'Linting not configured'",
+      "format": "echo 'Formatting not configured'"
+    },
+
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
     "cors": "^2.8.5",
