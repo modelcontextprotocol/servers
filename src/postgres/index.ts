@@ -115,7 +115,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const client = await pool.connect();
     try {
       await client.query("BEGIN TRANSACTION READ ONLY");
-      const result = await client.query(sql);
+      // Use a prepared statement to isolate the query. This approach
+      // ensures that the SQL text is parsed as a single statement, preventing
+      // malicious injections like "SELECT 1; COMMIT; DROP TABLE users;" which
+      // could bypass the read-only transaction by committing it prematurely.
+      const result = await client.query({
+        name: "isolated-statement",
+        text: sql,
+        values: [],
+      });
       return {
         content: [{ type: "text", text: JSON.stringify(result.rows, null, 2) }],
         isError: false,
@@ -129,7 +137,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           console.warn("Could not roll back transaction:", error),
         );
 
-      client.release();
+      // Release the client with destroy=true to ensure complete cleanup of the
+      // database session, preventing any potential state leakage between queries.
+      client.release(true);
     }
   }
   throw new Error(`Unknown tool: ${request.params.name}`);
