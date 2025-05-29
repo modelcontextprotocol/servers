@@ -1,0 +1,9 @@
+[project]
+name = "postgres"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "podman-compose>=1.4.0",
+]

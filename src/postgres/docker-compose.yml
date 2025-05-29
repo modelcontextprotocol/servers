@@ -1,22 +1,27 @@
+# docker-compose.yml
 version: '3.8'
 
 services:
-  app:
+  # HTTP Server
+  mcp-http:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/http/Dockerfile
     ports:
       - "3000:3000"
-      - "8000:8000"
     environment:
       - POSTGRES_USERNAME=${POSTGRES_USERNAME}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_DATABASE=${POSTGRES_DATABASE}
+      - PORT=3000
+      - HOST=0.0.0.0
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8080,http://localhost:3000}
     networks:
-      - app-network
+      - mcp-network
     restart: unless-stopped
-
-networks:
-  app-network:
-    driver: bridge
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/mcp"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
