@@ -9,44 +9,112 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
 import path from "path";
-import os from 'os';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
+// Import CommonJS module using dynamic import
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const pathUtils = require('./path-utils.cjs');
+const { normalizePath, expandHome } = pathUtils;
+
+console.error('[STARTUP] Filesystem MCP server starting...');
 
 // Command line argument parsing
-const args = process.argv.slice(2);
+// Join all arguments and then re-split them to handle paths with spaces
+// This is a workaround for the shell splitting paths with spaces
+const rawArgs = process.argv.slice(2);
+console.error('[STARTUP] Raw arguments:', rawArgs);
+
+// Process arguments to handle paths with spaces
+// If an argument starts with a quote but doesn't end with one, it's part of a path with spaces
+let processedArgs: string[] = [];
+let currentArg = '';
+let inQuotedArg = false;
+
+for (const arg of rawArgs) {
+  // If we're not in a quoted argument and this arg starts with a quote
+  if (!inQuotedArg && (arg.startsWith('"') || arg.startsWith("'"))) {
+    // If it also ends with a quote, it's a complete quoted argument
+    if ((arg.startsWith('"') && arg.endsWith('"')) || 
+        (arg.startsWith("'") && arg.endsWith("'"))) {
+      processedArgs.push(arg.slice(1, -1)); // Remove the quotes
+    } else {
+      // Otherwise, it's the start of a quoted argument
+      currentArg = arg.slice(1); // Remove the starting quote
+      inQuotedArg = true;
+    }
+  }
+  // If we're in a quoted argument and this arg ends with a quote
+  else if (inQuotedArg && ((arg.endsWith('"') && !arg.endsWith('\\"')) || 
+                           (arg.endsWith("'") && !arg.endsWith("\\'"))) ) {
+    // It's the end of a quoted argument
+    currentArg += ' ' + arg.slice(0, -1); // Remove the ending quote
+    processedArgs.push(currentArg);
+    currentArg = '';
+    inQuotedArg = false;
+  }
+  // If we're in a quoted argument
+  else if (inQuotedArg) {
+    // It's part of a quoted argument
+    currentArg += ' ' + arg;
+  }
+  // Otherwise, it's a regular argument
+  else {
+    processedArgs.push(arg);
+  }
+}
+
+// If we're still in a quoted argument, add it
+if (inQuotedArg) {
+  processedArgs.push(currentArg);
+}
+
+// Special handling for Windows paths that might have been split
+// Look for arguments that might be parts of a Windows path
+for (let i = 0; i < processedArgs.length - 1; i++) {
+  const current = processedArgs[i];
+  const next = processedArgs[i + 1];
+  
+  // If current ends with a drive letter and colon, and next starts with a backslash or slash
+  if (/[A-Za-z]:$/.test(current) && (next.startsWith('\\') || next.startsWith('/'))) {
+    // Join them and remove from the array
+    processedArgs[i] = current + next;
+    processedArgs.splice(i + 1, 1);
+    i--; // Recheck this index in case we need to join more parts
+  }
+}
+
+const args = processedArgs;
 if (args.length === 0) {
   console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
   process.exit(1);
 }
 
-// Normalize all paths consistently
-function normalizePath(p: string): string {
-  return path.normalize(p);
-}
-
-function expandHome(filepath: string): string {
-  if (filepath.startsWith('~/') || filepath === '~') {
-    return path.join(os.homedir(), filepath.slice(1));
-  }
-  return filepath;
-}
+console.error('[STARTUP] Processed arguments:', args);
 
 // Store allowed directories in normalized form
-const allowedDirectories = args.map(dir =>
-  normalizePath(path.resolve(expandHome(dir)))
-);
+const allowedDirectories = args.map(dir => {
+  // Handle paths with spaces by removing any surrounding quotes first
+  const cleanDir = dir.replace(/^["']|["']$/g, '');
+  const normalized = normalizePath(path.resolve(expandHome(cleanDir)));
+  console.error(`[STARTUP] Normalized directory ${cleanDir} to ${normalized}`);
+  return normalized;
+});
+
+console.error('[STARTUP] Normalized allowed directories:', allowedDirectories);
 
 // Validate that all directories exist and are accessible
-await Promise.all(args.map(async (dir) => {
+await Promise.all(allowedDirectories.map(async (dir) => {
   try {
     const stats = await fs.stat(expandHome(dir));
     if (!stats.isDirectory()) {
       console.error(`Error: ${dir} is not a directory`);
       process.exit(1);
     }
+    console.error(`[STARTUP] Successfully validated directory: ${dir}`);
   } catch (error) {
     console.error(`Error accessing directory ${dir}:`, error);
     process.exit(1);
@@ -54,16 +122,23 @@ await Promise.all(args.map(async (dir) => {
 }));
 
 // Security utilities
-async function validatePath(requestedPath: string): Promise<string> {
+export async function validatePath(requestedPath: string): Promise<string> {
+  // Normalize the path first to handle any special characters or formats
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
     : path.resolve(process.cwd(), expandedPath);
 
+  // Ensure consistent normalization for security checks
   const normalizedRequested = normalizePath(absolute);
+  console.error(`[DEBUG] Normalized requested path: ${normalizedRequested}`);
 
-  // Check if path is within allowed directories
-  const isAllowed = allowedDirectories.some(dir => normalizedRequested.startsWith(dir));
+  // Check if path is within allowed directories using normalized paths
+  const isAllowed = allowedDirectories.some(dir => {
+    const result = normalizedRequested.startsWith(dir);
+    console.error(`[DEBUG] Checking against allowed dir: ${dir} -> ${result}`);
+    return result;
+  });
   if (!isAllowed) {
     throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
   }
@@ -72,6 +147,7 @@ async function validatePath(requestedPath: string): Promise<string> {
   try {
     const realPath = await fs.realpath(absolute);
     const normalizedReal = normalizePath(realPath);
+    console.error(`[DEBUG] Normalized real path: ${normalizedReal}`);
     const isRealPathAllowed = allowedDirectories.some(dir => normalizedReal.startsWith(dir));
     if (!isRealPathAllowed) {
       throw new Error("Access denied - symlink target outside allowed directories");
@@ -160,6 +236,7 @@ interface FileInfo {
 }
 
 // Server setup
+console.error('[STARTUP] Initializing MCP server...');
 const server = new Server(
   {
     name: "secure-filesystem-server",
@@ -530,48 +607,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-        case "directory_tree": {
-            const parsed = DirectoryTreeArgsSchema.safeParse(args);
-            if (!parsed.success) {
-                throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
-            }
+      case "directory_tree": {
+        const parsed = DirectoryTreeArgsSchema.safeParse(args);
+        if (!parsed.success) {
+            throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
+        }
 
-            interface TreeEntry {
-                name: string;
-                type: 'file' | 'directory';
-                children?: TreeEntry[];
-            }
+        interface TreeEntry {
+            name: string;
+            type: 'file' | 'directory';
+            children?: TreeEntry[];
+        }
 
-            async function buildTree(currentPath: string): Promise<TreeEntry[]> {
-                const validPath = await validatePath(currentPath);
-                const entries = await fs.readdir(validPath, {withFileTypes: true});
-                const result: TreeEntry[] = [];
+        async function buildTree(currentPath: string): Promise<TreeEntry[]> {
+            const validPath = await validatePath(currentPath);
+            const entries = await fs.readdir(validPath, {withFileTypes: true});
+            const result: TreeEntry[] = [];
 
-                for (const entry of entries) {
-                    const entryData: TreeEntry = {
-                        name: entry.name,
-                        type: entry.isDirectory() ? 'directory' : 'file'
-                    };
+            for (const entry of entries) {
+                const entryData: TreeEntry = {
+                    name: entry.name,
+                    type: entry.isDirectory() ? 'directory' : 'file'
+                };
 
-                    if (entry.isDirectory()) {
-                        const subPath = path.join(currentPath, entry.name);
-                        entryData.children = await buildTree(subPath);
-                    }
-
-                    result.push(entryData);
+                if (entry.isDirectory()) {
+                    const subPath = path.join(currentPath, entry.name);
+                    entryData.children = await buildTree(subPath);
                 }
 
-                return result;
+                result.push(entryData);
             }
 
-            const treeData = await buildTree(parsed.data.path);
-            return {
-                content: [{
-                    type: "text",
-                    text: JSON.stringify(treeData, null, 2)
-                }],
-            };
+            return result;
         }
+
+        const treeData = await buildTree(parsed.data.path);
+        return {
+            content: [{
+                type: "text",
+                text: JSON.stringify(treeData, null, 2)
+            }],
+        };
+      }
 
       case "move_file": {
         const parsed = MoveFileArgsSchema.safeParse(args);
