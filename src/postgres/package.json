@@ -17,7 +17,7 @@
   ],
 
   "scripts": {
-      "build": "tsc && shx chmod +x dist/*.js",
+      "build": "tsc && shx chmod +x dist/src/*.js",
       "prepare": "npm run build",
       "watch": "tsc --watch",
       "clean": "rm -rf dist",
