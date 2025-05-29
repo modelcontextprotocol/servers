@@ -10,7 +10,8 @@ app.listen(config.server.port, config.server.host, () => {
     }
 });
 
-process.on("SIGINT", async () => {
+// Graceful shutdown handler
+const shutdown = async () => {
     console.log("Shutting down server...");
     try {
         await closeAllTransports();
@@ -21,4 +22,8 @@ process.on("SIGINT", async () => {
     await mcpServer.close();
     console.log("Server shutdown complete");
     process.exit(0);
-});
+};
+
+// Handle SIGINT and SIGTERM
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
