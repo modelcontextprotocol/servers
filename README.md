@@ -457,7 +457,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[OpenDota](https://github.com/asusevski/opendota-mcp-server)** - Interact with OpenDota API to retrieve Dota 2 match data, player statistics, and more.
 - **[OpenLink Generic Java Database Connectivity](https://github.com/OpenLinkSoftware/mcp-jdbc-server)** -- Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers)
 - **[OpenLink Generic Open Database Connectivity](https://github.com/OpenLinkSoftware/mcp-odbc-server)** -- Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers)
-- **[OpenLink Generic Python Open Database Connectivity](https://github.com/OpenLinkSoftware/mcp-odbc-server)** -- Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers) for pyODBC
+- **[OpenLink Generic Python Open Database Connectivity](https://github.com/OpenLinkSoftware/mcp-pyodbc-server)** -- Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers) for pyODBC
 - **[OpenRPC](https://github.com/shanejonas/openrpc-mpc-server)** - Interact with and discover JSON-RPC APIs via [OpenRPC](https://open-rpc.org).
 - **[Open Strategy Partners Marketing Tools](https://github.com/open-strategy-partners/osp_marketing_tools)** - Content editing codes, value map, and positioning tools for product marketing.
 - **[OpenWeather](https://github.com/mschneider82/mcp-openweather)** - Interact with the free openweathermap API to get the current and forecast weather for a location.
