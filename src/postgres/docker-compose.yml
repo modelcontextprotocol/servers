@@ -6,7 +6,7 @@ services:
   mcp-http:
     build:
       context: .
-      dockerfile: docker/http/Dockerfile
+      dockerfile: src/http/Dockerfile
     ports:
       - "3000:3000"
     environment:
@@ -19,9 +19,13 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8080,http://localhost:3000}
     networks:
       - mcp-network
+
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/mcp"]
       interval: 30s
       timeout: 5s
       retries: 3
+networks:
+  mcp-network:
+    driver: bridge
