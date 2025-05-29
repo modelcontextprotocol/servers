@@ -53,7 +53,7 @@ await Promise.all(args.map(async (dir) => {
   }
 }));
 
-async function getConsistentRealPath(inputPath) {
+async function getConsistentRealPath(inputPath: string) {
     let resolvedPath = await fs.realpath(inputPath);
   
     // Check if in Windows and the path is like "X:"
@@ -93,7 +93,7 @@ async function validatePath(requestedPath: string): Promise<string> {
     // For new files that don't exist yet, verify parent directory
     const parentDir = path.dirname(absolute);
     try {
-      const realParentPath = getConsistentRealPath(parentDir);
+      const realParentPath = await getConsistentRealPath(parentDir);
       const normalizedParent = normalizePath(realParentPath);
       const isParentAllowed = allowedDirectories.some(dir => normalizedParent.startsWith(dir));
       if (!isParentAllowed) {
