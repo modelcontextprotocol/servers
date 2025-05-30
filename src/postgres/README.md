@@ -159,6 +159,10 @@ npx @modelcontextprotocol/inspector npx tsx src/stdioIndex.ts
 2. Install `uv` from [here](https://docs.astral.sh/uv/getting-started/installation/)
 3. Install podman compose package: `uv sync` (will sync packages in `pyproject.toml`)
 ```bash
+#get the environment variables
+set -a
+source .env
+set +a
 #start podman container (if running for the first time)
 make podman-up #will construct the container of the MCP server
 #if already exists: podman start <name_of_the_container>
