@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-postgres",
-  "version": "0.6.2",
+  "version": "0.8.0",
   "description": "MCP server for interacting with PostgreSQL databases",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
@@ -10,10 +10,11 @@
   },
   "type": "module",
   "bin": {
-    "mcp-server-postgres": "dist/index.js"
+    "mcp-server-postgres": "dist/src/index.js",
+    "mcp-server-postgres-stdio": "dist/src/stdioIndex.js"
   },
   "files": [
-    "dist"
+    "dist/src"
   ],
 
   "scripts": {
