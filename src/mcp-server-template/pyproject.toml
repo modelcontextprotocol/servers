@@ -1,0 +1,42 @@
+## This file should be edited 
+
+[project]
+name = "mcp-server-calculator"
+version = "0.1.0"
+description = "MCP Server providing tools to ..."
+authors = [
+    { name = "XyAgent", email = "agent@xyber.inc" },
+]
+readme = "README.md"
+requires-python = ">=3.12"
+
+## Feel free to add more dependencies here!
+## Can be done manually or via "uv add ..."
+
+dependencies = [
+    "mcp>=1.6.0,<2.0.0",
+    "starlette>=0.37.0",
+    "pydantic-settings>=2.0",  
+    "uvicorn[standard]",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "httpx", 
+    "ruff",
+    "black",
+    "isort",
+    # feel free to add/edit dependencies   
+]
+debug = [
+    "debugpy>=1.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_server_calculator"] ## Don't forget to put the actual path to your project here!
