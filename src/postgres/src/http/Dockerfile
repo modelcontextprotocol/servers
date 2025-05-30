@@ -10,6 +10,7 @@ WORKDIR /app
 RUN --mount=type=cache,target=/root/.npm npm install
 RUN npm run build
 
+RUN apk add wget
 # Production dependencies
 RUN --mount=type=cache,target=/root/.npm-production npm ci --ignore-scripts --omit=dev
 

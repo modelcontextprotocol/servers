@@ -52,18 +52,48 @@ test:
 	npm run test:http
 
 podman-build:
-	podman-compose build
+	@if [ "$$(podman machine info --format '{{.Host.State}}' 2>/dev/null)" != "Running" ]; then \
+		echo "Starting Podman..."; \
+		podman machine start; \
+	else \
+		echo "Podman is already running."; \
+	fi
+	uv run podman-compose build
 
 podman-up:
-	podman-compose up -d mcp-http
+	@if [ "$$(podman machine info --format '{{.Host.State}}' 2>/dev/null)" != "Running" ]; then \
+		echo "Starting Podman..."; \
+		podman machine start; \
+	else \
+		echo "Podman is already running."; \
+	fi
+	uv run podman-compose up -d mcp-http
 
 podman-down:
+	@if [ "$$(podman machine info --format '{{.Host.State}}' 2>/dev/null)" != "Running" ]; then \
+		echo "Starting Podman..."; \
+		podman machine start; \
+	else \
+		echo "Podman is already running."; \
+	fi
 	podman-compose down
 
 podman-logs:
+	@if [ "$$(podman machine info --format '{{.Host.State}}' 2>/dev/null)" != "Running" ]; then \
+		echo "Starting Podman..."; \
+		podman machine start; \
+	else \
+		echo "Podman is already running."; \
+	fi
 	podman-compose logs -f mcp-http
 
 podman-clean:
+	@if [ "$$(podman machine info --format '{{.Host.State}}' 2>/dev/null)" != "Running" ]; then \
+		echo "Starting Podman..."; \
+		podman machine start; \
+	else \
+		echo "Podman is already running."; \
+	fi
 	podman-compose down -v
 	podman system prune -af --volumes
 
