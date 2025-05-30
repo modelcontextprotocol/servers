@@ -45,6 +45,9 @@ const server = new Server(
   }
 );
 
+console.error("[MCP Startup] Using GITHUB_PERSONAL_ACCESS_TOKEN:", process.env.GITHUB_PERSONAL_ACCESS_TOKEN ? process.env.GITHUB_PERSONAL_ACCESS_TOKEN.slice(0, 8) + '...' : 'NOT SET');
+console.error("[MCP Startup] Using GITHUB_API_URL:", process.env.GITHUB_API_URL || 'https://api.github.com');
+
 function formatGitHubError(error: GitHubError): string {
   let message = `GitHub API Error: ${error.message}`;
   

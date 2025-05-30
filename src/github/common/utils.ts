@@ -28,6 +28,8 @@ export function buildUrl(baseUrl: string, params: Record<string, string | number
 
 const USER_AGENT = `modelcontextprotocol/servers/github/v${VERSION} ${getUserAgent()}`;
 
+export const baseUrl = process.env.GITHUB_API_URL || "https://api.github.com";
+
 export async function githubRequest(
   url: string,
   options: RequestOptions = {}
@@ -43,6 +45,18 @@ export async function githubRequest(
     headers["Authorization"] = `Bearer ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN}`;
   }
 
+  // Debug logging
+  const maskedHeaders = { ...headers };
+  if (maskedHeaders["Authorization"]) {
+    maskedHeaders["Authorization"] = maskedHeaders["Authorization"].replace(/Bearer (gh[pousr]_)[A-Za-z0-9]+/, 'Bearer $1********');
+  }
+  console.error("[githubRequest] URL:", url);
+  console.error("[githubRequest] Method:", options.method || "GET");
+  console.error("[githubRequest] Headers:", maskedHeaders);
+  if (options.body) {
+    console.error("[githubRequest] Body:", options.body);
+  }
+
   const response = await fetch(url, {
     method: options.method || "GET",
     headers,
@@ -50,6 +64,9 @@ export async function githubRequest(
   });
 
   const responseBody = await parseResponseBody(response);
+
+  console.error("[githubRequest] Response status:", response.status);
+  console.error("[githubRequest] Response body:", responseBody);
 
   if (!response.ok) {
     throw createGitHubError(response.status, responseBody);
@@ -114,7 +131,7 @@ export async function checkBranchExists(
 ): Promise<boolean> {
   try {
     await githubRequest(
-      `https://api.github.com/repos/${owner}/${repo}/branches/${branch}`
+      `${baseUrl}/repos/${owner}/${repo}/branches/${branch}`
     );
     return true;
   } catch (error) {
@@ -127,7 +144,7 @@ export async function checkBranchExists(
 
 export async function checkUserExists(username: string): Promise<boolean> {
   try {
-    await githubRequest(`https://api.github.com/users/${username}`);
+    await githubRequest(`${baseUrl}/users/${username}`);
     return true;
   } catch (error) {
     if (error && typeof error === "object" && "status" in error && error.status === 404) {
