@@ -20,6 +20,7 @@ json_results
 .dockerignore
 .git
 *.md
+!README.md
 *.lock
 
 # Shared code (if you don't want to include it in build context)
