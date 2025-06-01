@@ -152,7 +152,7 @@ Install MCP Inspector: instructions: [here](https://modelcontextprotocol.io/docs
 #from project directory
 npx @modelcontextprotocol/inspector npx tsx src/stdioIndex.ts
 ```
-![Stdio in MCP Inspector](/Users/ahmed/Documents/stdio.png)
+![Stdio in MCP Inspector](images/stdio.png)
 
 ##### Check Streamable HTTP MCP Server
 1. Install podman from [here](https://podman.io/docs/installation)
@@ -171,10 +171,10 @@ npx @modelcontextprotocol/inspector
 After selecting `Streamable HTTP` from drop down menu, insert `http://localhost:3000/mcp` into URL.
 
 MCP tools:
-![MCP Tools in MCP Inspector](/Users/ahmed/Documents/http_tool.png)
+![MCP Tools in MCP Inspector](images/http_tool.png)
 
 MCP Resource:
-![MCP Resource in MCP Inspector](/Users/ahmed/Documents/http_resource.png)
+![MCP Resource in MCP Inspector](images/http_resource.png)
 
 
 ## Configuration
