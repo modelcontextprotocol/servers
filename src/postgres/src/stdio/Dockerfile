@@ -27,4 +27,4 @@ WORKDIR /app
 # Install production dependencies
 RUN npm ci --ignore-scripts --omit=dev
 
-ENTRYPOINT ["node", "dist/stdioIndex.js"]
+ENTRYPOINT ["node", "dist/src/stdioIndex.js"]

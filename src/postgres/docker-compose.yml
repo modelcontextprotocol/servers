@@ -6,6 +6,8 @@ services:
   mcp-http:
     build:
       context: .
+      platforms:
+        - linux/amd64
       dockerfile: src/http/Dockerfile
     ports:
       - "3000:3000"
