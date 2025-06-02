@@ -23,20 +23,19 @@ These servers aim to demonstrate MCP features and the TypeScript and Python SDKs
 
 The following reference servers are now archived and can be found at [servers-archived](https://github.com/modelcontextprotocol/servers-archived).
 
-- **[AWS KB Retrieval](src/aws-kb-retrieval-server)** - Retrieval from AWS Knowledge Base using Bedrock Agent Runtime
-- **[Brave Search](src/brave-search)** - Web and local search using Brave's Search API
-- **[EverArt](src/everart)** - AI image generation using various models
-- **[Git](src/git)** - Tools to read, search, and manipulate Git repositories
-- **[GitHub](src/github)** - Repository management, file operations, and GitHub API integration
-- **[GitLab](src/gitlab)** - GitLab API, enabling project management
-- **[Google Drive](src/gdrive)** - File access and search capabilities for Google Drive
-- **[Google Maps](src/google-maps)** - Location services, directions, and place details
-- **[PostgreSQL](src/postgres)** - Read-only database access with schema inspection
-- **[Puppeteer](src/puppeteer)** - Browser automation and web scraping
-- **[Redis](src/redis)** - Interact with Redis key-value stores
-- **[Sentry](src/sentry)** - Retrieving and analyzing issues from Sentry.io
-- **[Slack](src/slack)** - Channel management and messaging capabilities
-- **[Sqlite](src/sqlite)** - Database interaction and business intelligence capabilities
+- **[AWS KB Retrieval](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/aws-kb-retrieval-server)** - Retrieval from AWS Knowledge Base using Bedrock Agent Runtime
+- **[Brave Search](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/brave-search)** - Web and local search using Brave's Search API
+- **[EverArt](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/everart)** - AI image generation using various models
+- **[GitHub](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/github)** - Repository management, file operations, and GitHub API integration
+- **[GitLab](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/gitlab)** - GitLab API, enabling project management
+- **[Google Drive](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/gdrive)** - File access and search capabilities for Google Drive
+- **[Google Maps](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/google-maps)** - Location services, directions, and place details
+- **[PostgreSQL](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/postgres)** - Read-only database access with schema inspection
+- **[Puppeteer](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/puppeteer)** - Browser automation and web scraping
+- **[Redis](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/redis)** - Interact with Redis key-value stores
+- **[Sentry](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/sentry)** - Retrieving and analyzing issues from Sentry.io
+- **[Slack](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/slack)** - Channel management and messaging capabilities
+- **[Sqlite](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/sqlite)** - Database interaction and business intelligence capabilities
 
 ## 🤝 Third-Party Servers
 
