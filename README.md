@@ -23,20 +23,20 @@ These servers aim to demonstrate MCP features and the TypeScript and Python SDKs
 
 The following reference servers are now archived and can be found at [servers-archived](https://github.com/modelcontextprotocol/servers-archived).
 
-- **[AWS KB Retrieval](src/aws-kb-retrieval-server)** - Retrieval from AWS Knowledge Base using Bedrock Agent Runtime
-- **[Brave Search](src/brave-search)** - Web and local search using Brave's Search API
-- **[EverArt](src/everart)** - AI image generation using various models
-- **[Git](src/git)** - Tools to read, search, and manipulate Git repositories
-- **[GitHub](src/github)** - Repository management, file operations, and GitHub API integration
-- **[GitLab](src/gitlab)** - GitLab API, enabling project management
-- **[Google Drive](src/gdrive)** - File access and search capabilities for Google Drive
-- **[Google Maps](src/google-maps)** - Location services, directions, and place details
-- **[PostgreSQL](src/postgres)** - Read-only database access with schema inspection
-- **[Puppeteer](src/puppeteer)** - Browser automation and web scraping
-- **[Redis](src/redis)** - Interact with Redis key-value stores
-- **[Sentry](src/sentry)** - Retrieving and analyzing issues from Sentry.io
-- **[Slack](src/slack)** - Channel management and messaging capabilities
-- **[Sqlite](src/sqlite)** - Database interaction and business intelligence capabilities
+- **AWS KB Retrieval** - Retrieval from AWS Knowledge Base using Bedrock Agent Runtime
+- **Brave Search** - Web and local search using Brave's Search API
+- **EverArt** - AI image generation using various models
+- **Git** - Tools to read, search, and manipulate Git repositories
+- **GitHub** - Repository management, file operations, and GitHub API integration
+- **GitLab** - GitLab API, enabling project management
+- **Google Drive** - File access and search capabilities for Google Drive
+- **Google Maps** - Location services, directions, and place details
+- **PostgreSQL** - Read-only database access with schema inspection
+- **Puppeteer** - Browser automation and web scraping
+- **Redis** - Interact with Redis key-value stores
+- **Sentry** - Retrieving and analyzing issues from Sentry.io
+- **Slack** - Channel management and messaging capabilities
+- **Sqlite** - Database interaction and business intelligence capabilities
 
 ## 🤝 Third-Party Servers
 
