@@ -1,5 +1,13 @@
 # Filesystem MCP Server
 
+---
+
+## Unicode Filename Robustness (June 2025)
+
+**New:** All file operations now normalize Unicode in file paths, including non-breaking spaces and special Unicode punctuation. This fixes ENOENT errors for macOS screenshot files and similar edge cases. See `PR_TEST_RESULTS.md` for detailed test results and evidence.
+
+---
+
 Node.js server implementing Model Context Protocol (MCP) for filesystem operations.
 
 ## Features
