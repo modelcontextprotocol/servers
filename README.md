@@ -465,6 +465,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Open Strategy Partners Marketing Tools](https://github.com/open-strategy-partners/osp_marketing_tools)** - Content editing codes, value map, and positioning tools for product marketing.
 - **[Oura Ring](https://github.com/rajvirtual/oura-mcp-server)** (by Rajesh Vijay) - MCP Server to access and analyze your Oura Ring data. It provides a structured way to fetch and understand your health metrics.
 - **[Outline](https://github.com/Vortiago/mcp-outline)** - MCP Server to interact with [Outline](https://www.getoutline.com) knowledge base to search, read, create, and manage documents and their content, access collections, add comments, and manage document backlinks.
+- **[Outlook Mail + Calendar + OneDrive](https://github.com/Norcim133/OutlookMCPServer) - Virtual assistant with Outlook Mail, Calendar, and early OneDrive support (requires Azure admin).
 - **[pancakeswap-poolspy-mcp](https://github.com/kukapay/pancakeswap-poolspy-mcp)** - An MCP server that tracks newly created liquidity pools on Pancake Swap.
 - **[Pandoc](https://github.com/vivekVells/mcp-pandoc)** - MCP server for seamless document format conversion using Pandoc, supporting Markdown, HTML, PDF, DOCX (.docx), csv and more.
 - **[Paradex MCP](https://github.com/sv/mcp-paradex-py)** - MCP native server for interacting with Paradex platform, including fully features trading.
