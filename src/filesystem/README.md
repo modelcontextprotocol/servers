@@ -9,8 +9,50 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Move files/directories
 - Search files
 - Get file metadata
+- Dynamic directory access control via MCP roots protocol
 
-**Note**: The server will only allow operations within directories specified via `args`.
+## Directory Access Control
+
+The server uses a flexible directory access control system. Directories can be specified via command-line arguments or dynamically via the MCP roots protocol.
+
+### Method 1: Command-line Arguments
+Specify allowed directories when starting the server:
+```bash
+mcp-server-filesystem /path/to/dir1 /path/to/dir2
+```
+
+### Method 2: MCP Roots Protocol  
+MCP clients that support the roots protocol can dynamically provide allowed directories. Client roots completely replace any command-line directories when provided.
+
+### How It Works
+
+The server's directory access control follows this flow:
+
+1. **Server Startup**
+   - Server starts with directories from command-line arguments (if provided)
+   - If no arguments provided, server starts with empty allowed directories
+
+2. **Client Connection & Initialization**
+   - Client connects and sends `initialize` request with capabilities
+   - Server checks if client supports roots protocol (`capabilities.roots`)
+   
+3. **Roots Protocol Handling** (if client supports roots)
+   - **On initialization**: Server requests roots from client via `roots/list`
+   - Client responds with its configured roots
+   - Server replaces ALL allowed directories with client's roots
+   - **On runtime updates**: Client can send `notifications/roots/list_changed`
+   - Server requests updated roots and replaces allowed directories again
+
+4. **Fallback Behavior** (if client doesn't support roots)
+   - Server continues using command-line directories only
+   - No dynamic updates possible
+
+5. **Access Control**
+   - All filesystem operations are restricted to allowed directories
+   - Use `list_allowed_directories` tool to see current directories
+   - Server requires at least ONE allowed directory to operate
+
+**Important**: If server starts without command-line arguments AND client doesn't support roots protocol (or provides empty roots), the server will throw an error during initialization.
 
 ## API
 
