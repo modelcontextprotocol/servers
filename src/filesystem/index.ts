@@ -129,6 +129,7 @@ const ListDirectoryArgsSchema = z.object({
 
 const DirectoryTreeArgsSchema = z.object({
   path: z.string(),
+  depth: z.number().optional().default(3).describe('Depth of directory tree to traverse. Default is 3 levels deep.'),
 });
 
 const MoveFileArgsSchema = z.object({
@@ -390,8 +391,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "directory_tree",
         description:
-            "Get a recursive tree view of files and directories as a JSON structure. " +
-            "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
+            "Get a recursive tree view of files and directories as a JSON structure upto default depth 3." +
+            "Each entry includes 'name', 'type' (file/directory), and 'children' for directories" +
             "Files have no children array, while directories always have a children array (which may be empty). " +
             "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(DirectoryTreeArgsSchema) as ToolInput,
@@ -542,7 +543,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 children?: TreeEntry[];
             }
 
-            async function buildTree(currentPath: string): Promise<TreeEntry[]> {
+            async function buildTree(currentPath: string, depth: number): Promise<TreeEntry[]> {
                 const validPath = await validatePath(currentPath);
                 const entries = await fs.readdir(validPath, {withFileTypes: true});
                 const result: TreeEntry[] = [];
@@ -553,9 +554,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         type: entry.isDirectory() ? 'directory' : 'file'
                     };
 
-                    if (entry.isDirectory()) {
+                    if (entry.isDirectory() && depth > 0) {
                         const subPath = path.join(currentPath, entry.name);
-                        entryData.children = await buildTree(subPath);
+                        entryData.children = await buildTree(subPath, depth - 1);
                     }
 
                     result.push(entryData);
@@ -564,7 +565,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return result;
             }
 
-            const treeData = await buildTree(parsed.data.path);
+            const treeData = await buildTree(parsed.data.path, parsed.data.depth);
             return {
                 content: [{
                     type: "text",
