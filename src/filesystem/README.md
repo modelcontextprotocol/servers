@@ -71,6 +71,14 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
     - `destination` (string)
   - Fails if destination exists
 
+- **copy_file**
+  - Copy a file or directory from source to destination
+  - Inputs:
+    - `source` (string)
+    - `destination` (string)
+  - For directories, copies all contents recursively
+  - Fails if destination exists
+
 - **search_files**
   - Recursively search for files/directories
   - Inputs:
