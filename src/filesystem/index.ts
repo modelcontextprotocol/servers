@@ -136,6 +136,11 @@ const MoveFileArgsSchema = z.object({
   destination: z.string(),
 });
 
+const CopyFileArgsSchema = z.object({
+  source: z.string(),
+  destination: z.string(),
+});
+
 const SearchFilesArgsSchema = z.object({
   path: z.string(),
   pattern: z.string(),
@@ -368,6 +373,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "with new content. Returns a git-style diff showing the changes made. " +
           "Only works within allowed directories.",
         inputSchema: zodToJsonSchema(EditFileArgsSchema) as ToolInput,
+      },
+      {
+        name: "copy_file",
+        description:
+          "Copy a file or directory from source to destination. For directories, copies all contents recursively. " +
+          "If destination exists, the operation will fail. Both source and destination must be within allowed directories.",
+        inputSchema: zodToJsonSchema(CopyFileArgsSchema) as ToolInput,
       },
       {
         name: "create_directory",
@@ -609,6 +621,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{ type: "text", text: Object.entries(info)
             .map(([key, value]) => `${key}: ${value}`)
             .join("\n") }],
+        };
+      }
+
+      case "copy_file": {
+        const parsed = CopyFileArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for copy_file: ${parsed.error}`);
+        }
+        const validSourcePath = await validatePath(parsed.data.source);
+        const validDestPath = await validatePath(parsed.data.destination);
+        
+        // Check if destination already exists
+        try {
+          await fs.access(validDestPath);
+          throw new Error(`Destination already exists: ${parsed.data.destination}`);
+        } catch (error) {
+          // If error is NOT about file not existing, re-throw it
+          if (error instanceof Error && !error.message.includes('ENOENT')) {
+            throw error;
+          }
+        }
+        
+        // Check if source is a directory
+        const sourceStats = await fs.stat(validSourcePath);
+        
+        if (sourceStats.isDirectory()) {
+          // For directories, use fs.cp with recursive option
+          await fs.cp(validSourcePath, validDestPath, { recursive: true });
+        } else {
+          // For files, use copyFile which is optimized for large files
+          await fs.copyFile(validSourcePath, validDestPath);
+        }
+        
+        return {
+          content: [{ type: "text", text: `Successfully copied ${parsed.data.source} to ${parsed.data.destination}` }],
         };
       }
 
