@@ -6,6 +6,17 @@ A Model Context Protocol server for Git repository interaction and automation. T
 
 Please note that mcp-server-git is currently in early development. The functionality and available tools are subject to change and expansion as we continue to develop and improve the server.
 
+### Repository Path Security
+
+When running the server with the `--repository` flag, all Git operations are restricted to that specific repository path, regardless of any `repo_path` values provided in tool calls. This provides an important security boundary:
+
+- The server will reject any attempts to access paths outside the configured repository
+- All tool operations that accept a `repo_path` parameter will ignore it and use the configured repository instead
+- Path traversal attempts (e.g., using `../`) are blocked
+- If no repository is configured, the server requires explicit repository paths for each operation
+
+This makes it safe to expose the server to untrusted clients while maintaining control over which repositories they can access.
+
 ### Tools
 
 1. `git_status`
@@ -65,7 +76,7 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of the new branch
-     - `start_point` (string, optional): Starting point for the new branch
+     - `base_branch` (string, optional): Starting point (branch name or commit hash) for the new branch. Defaults to the current active branch.
    - Returns: Confirmation of branch creation
 10. `git_checkout`
    - Switches branches
