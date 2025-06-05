@@ -3,7 +3,7 @@ from enum import Enum
 import json
 from typing import Sequence
 
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
@@ -42,7 +42,14 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     # Get local timezone from datetime.now()
     tzinfo = datetime.now().astimezone(tz=None).tzinfo
     if tzinfo is not None:
-        return ZoneInfo(str(tzinfo))
+        try:
+            return ZoneInfo(str(tzinfo))  
+        except ZoneInfoNotFoundError:
+            try:
+                from tzlocal import get_localzone
+                return get_localzone()
+            except:
+                return ZoneInfo("UTC")  # Fallback to UTC if local tzinfo is invalid
     raise McpError("Could not determine local timezone - tzinfo is None")
 
 
@@ -199,3 +206,8 @@ async def serve(local_timezone: str | None = None) -> None:
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, options)
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(serve())
