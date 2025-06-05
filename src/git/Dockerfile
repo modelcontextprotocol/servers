@@ -1,38 +1,38 @@
 # Use a Python image with uv pre-installed
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS uv
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS build
 
-# Install the project into `/app`
 WORKDIR /app
 
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
+# Copia solo los archivos necesarios para instalar dependencias
+COPY pyproject.toml uv.lock ./
 
-# Copy from the cache instead of linking since it's a mounted volume
-ENV UV_LINK_MODE=copy
+# Instala dependencias en un venv local
+RUN python3 -m venv /app/.venv \
+    && . /app/.venv/bin/activate \
+    && pip install --upgrade pip \
+    && pip install --no-cache-dir --upgrade uv \
+    && uv pip compile --generate-hashes pyproject.toml -o requirements.txt \
+    && uv pip install --no-cache-dir --require-hashes -r requirements.txt
 
-# Install the project's dependencies using the lockfile and settings
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev --no-editable
+# Copia el resto del código
+COPY . .
 
-# Then, add the rest of the project source code and install it
-# Installing separately from its dependencies allows optimal layer caching
-ADD . /app
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable
+# Instala el proyecto en el venv
+RUN . /app/.venv/bin/activate && pip install --no-cache-dir .
 
+# Segunda etapa: imagen limpia y segura
 FROM python:3.12-slim-bookworm
 
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
- 
-COPY --from=uv /root/.local /root/.local
-COPY --from=uv --chown=app:app /app/.venv /app/.venv
 
-# Place executables in the environment at the front of the path
+# Copia el venv completo y el código fuente
+COPY --from=build /app /app
+
+# Asegura permisos para cualquier usuario
+RUN chmod -R a+rx /app
+
 ENV PATH="/app/.venv/bin:$PATH"
 
-# when running the container, add --db-path and a bind mount to the host's db file
 ENTRYPOINT ["mcp-server-git"]
