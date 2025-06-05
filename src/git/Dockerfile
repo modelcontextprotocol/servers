@@ -24,12 +24,18 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.12-slim-bookworm
 
+# Crea el usuario y grupo app con UID/GID 1000:1000
+RUN groupadd -g 1000 app && useradd -m -u 1000 -g app app
+
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
  
 COPY --from=uv /root/.local /root/.local
-COPY --from=uv --chown=app:app /app/.venv /app/.venv
+COPY --from=uv /app/.venv /app/.venv
+
+# Da permisos a app sobre el venv y el directorio de trabajo
+RUN chown -R app:app /app /root/.local
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
