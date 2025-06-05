@@ -84,6 +84,11 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to directory to initialize git repo
    - Returns: Confirmation of repository initialization
+13. `git_pull`
+  - Pulls changes from Git repository
+  - Inputs:
+    - `repo_path` (string): Path to Git repository
+  - Returns: Details of repository change update
 
 ## Installation
 
@@ -234,6 +239,26 @@ Add to your Zed settings.json:
 },
 ```
 </details>
+
+### Usage with [Cursor](https://www.cursor.com/)
+
+For Docker installation, add the following content to your Cursor mcp.json:
+
+```json
+{
+"mcpServers": {
+  "git": {
+    "command": "docker",
+    "args": [
+      "run", 
+      "--rm", 
+      "-i", 
+      "--mount", "type=bind,src=${workspaceFolder},dst=/workspace", 
+      "mcp/gi"]
+  }
+}
+}
+```
 
 ## Debugging
 
