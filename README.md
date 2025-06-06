@@ -326,6 +326,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[freqtrade-mcp](https://github.com/kukapay/freqtrade-mcp)** - An MCP server that integrates with the Freqtrade cryptocurrency trading bot.
 - **[Ghost](https://github.com/MFYDev/ghost-mcp)** - A Model Context Protocol (MCP) server for interacting with Ghost CMS through LLM interfaces like Claude.
 - **[Git](https://github.com/geropl/git-mcp-go)** - Allows LLM to interact with a local git repository, incl. optional push support.
+- **[Git Mob](https://github.com/Mubashwer/git-mob-mcp-server)** - MCP server that interfaces with the [git-mob](https://github.com/Mubashwer/git-mob) CLI app for managing co-authors in git commits during pair/mob programming.
 - **[Github Actions](https://github.com/ko1ynnky/github-actions-mcp-server)** - A Model Context Protocol (MCP) server for interacting with Github Actions.
 - **[GitHub Enterprise MCP](https://github.com/ddukbg/github-enterprise-mcp)** - A Model Context Protocol (MCP) server for interacting with GitHub Enterprise.
 - **[Glean](https://github.com/longyi1207/glean-mcp-server)** - A server that uses Glean API to search and chat.
