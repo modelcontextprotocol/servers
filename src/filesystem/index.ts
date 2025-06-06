@@ -4,7 +4,11 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
+  ReadResourceRequestSchema,
   ToolSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
@@ -12,8 +16,10 @@ import path from "path";
 import os from 'os';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { diffLines, createTwoFilesPatch } from 'diff';
+import { createTwoFilesPatch } from 'diff';
+import * as mimeTypes from 'mime-types';
 import { minimatch } from 'minimatch';
+import { BigIntStats, stat, Stats } from "fs";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -167,7 +173,9 @@ const server = new Server(
   },
   {
     capabilities: {
+      resources: {},
       tools: {},
+      prompts: {}
     },
   },
 );
@@ -621,6 +629,137 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "load_folder": {
+        const MAX_FILES = 30;
+        const ctx = args as { path: string } | undefined;
+        if (!ctx?.path) {
+          throw new Error("No folder path provided");
+        }
+
+        // Validate and get the real path
+        const validPath = await validatePath(ctx.path);
+        
+        // Verify it's a directory
+        const stats = await fs.stat(validPath);
+        if (!stats.isDirectory()) {
+          throw new Error("Path must be a directory");
+        }
+
+        const messages = [];
+        let fileCount = 0;
+
+        // Recursive function to process directory
+        async function processDirectory(dirPath: string) {
+          const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+          for (const entry of entries) {
+            // Check file limit before processing each entry
+            if (fileCount >= MAX_FILES) {
+              throw new Error(`Too many files - maximum is ${MAX_FILES}`);
+            }
+
+            const fullPath = path.join(dirPath, entry.name);
+            
+            try {
+              // Validate path before processing
+              await validatePath(fullPath);
+
+              if (entry.isDirectory()) {
+                // Recursively process subdirectories
+                await processDirectory(fullPath);
+              } else if (entry.isFile()) {
+                fileCount++; // Increment counter for each file processed
+                // Use absolute path for URI
+                const absolutePath = path.resolve(fullPath);
+                const uriPath = absolutePath.split(path.sep).join('/');
+                const uri = `file://${uriPath}`;
+                
+                // Detect mime type
+                const mimeType = mimeTypes.lookup(fullPath) || 'application/octet-stream';
+                const fileStats = await fs.stat(fullPath);
+                const loadType = loadAsType(mimeType, fileStats);
+
+                // Read file content
+                let content;
+                switch (loadType) {
+                  case FileType.TEXT:
+                    content = await fs.readFile(fullPath, 'utf8');
+                    messages.push({
+                      role: "user",
+                      content: {
+                        type: "resource",
+                        resource: {
+                          uri,
+                          mimeType,
+                          text: content
+                        }
+                      }
+                    });
+                    break;
+                    
+                  case FileType.IMAGE:
+                    content = (await fs.readFile(fullPath)).toString('base64');
+                    messages.push({
+                      role: "user",
+                      content: {
+                        type: "image",
+                        data: content,
+                        mimeType,
+                      }
+                    });
+                    break;
+                    
+                  case FileType.BINARY:
+                    content = (await fs.readFile(fullPath)).toString('base64');
+                    messages.push({
+                      role: "user",
+                      content: {
+                        type: "resource",
+                        resource: {
+                          uri,
+                          mimeType,
+                          blob: content
+                        }
+                      }
+                    });
+                    break;
+                  default:
+                    // Skip unsupported file types
+                    continue;
+                }
+                messages.push({
+                  role: "assistant",
+                  content: {
+                    type: "text",
+                    text: `Loaded file ${uriPath}`
+                  }
+                });
+              }
+            } catch (error) {
+              // Log error but continue processing other files
+              console.error(`Error processing ${fullPath}:`, error);
+              continue;
+            }
+          }
+        }
+
+        // Start recursive processing from the root directory
+        await processDirectory(validPath);
+
+        if (messages.length === 0) {
+          throw new Error("No readable files found in directory");
+        }
+
+        messages.push({
+          role: "assistant",
+          content: {
+            type: "text",
+            text: `Loaded ${messages.length / 2} files recursively from ${validPath}`
+          }
+        });
+        return { messages };
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -632,6 +771,349 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 });
+
+// Add this handler after the other resource handlers
+server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => {
+  return {
+    resourceTemplates: [
+      {
+        uriTemplate: "file://{path}",
+        name: "File Resource",
+        description: "A file on the local filesystem",
+      },
+      {
+        uriTemplate: "folder://{path}",
+        name: "File Resource",
+        description: "A folder on the local filesystem",
+      },
+    ],
+  };
+});
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  try {
+    // Handle both file:// and folder:// URIs
+    const match = request.params.uri.match(/^(file|folder):\/\/(.+)/);
+    if (!match) {
+      throw new Error('Invalid URI format');
+    }
+
+    const [, scheme, pathStr] = match;
+    // Convert URI slashes to platform-specific path separators
+    const platformPath = pathStr.split('/').join(path.sep);
+    const validPath = await validatePath(platformPath);
+    
+    // Get file stats to determine type
+    const stats = await fs.stat(validPath);
+    
+    switch (scheme) {
+      case 'folder': {
+        if (!stats.isDirectory()) {
+          throw new Error('folder:// URI must point to a directory');
+        }
+        const entries = await fs.readdir(validPath);
+        return {
+          contents: [{
+            uri: request.params.uri,
+            mimeType: 'inode/directory',
+            text: entries.join('\n')
+          }]
+        };
+      }
+      
+      case 'file': {
+        // TODO: verify that this supports symlinks and other weird file types.
+        if (!stats.isFile()) {
+          throw new Error('file:// URI must point to a file');
+        }
+        const mimeType = mimeTypes.lookup(validPath) || 'application/x-unknown';
+        const typeToUse = loadAsType(mimeType, stats);
+        
+        if (typeToUse === FileType.TEXT) {
+          const content = await fs.readFile(validPath, 'utf8');
+          return {
+            contents: [{
+              uri: request.params.uri,
+              description: `File ${pathStr}`,
+              mimeType,
+              text: content
+            }]
+          };
+        } else {
+          const content = await fs.readFile(validPath);
+          return {
+            contents: [{
+              uri: request.params.uri,
+              description: `File ${pathStr}`,
+              mimeType,
+              blob: content.toString('base64')
+            }]
+          };
+        }
+      }
+      
+      default:
+        throw new Error(`Unsupported URI scheme: ${scheme}`);
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to read resource ${request.params.uri}: ${errorMessage}`);
+  }
+});
+
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+  try {
+    const { name, arguments: args } = request.params;
+    
+    switch (name) {
+      case "load_file": {
+        const ctx = args as { path: string } | undefined;
+        if (!ctx?.path) {
+          throw new Error("No resource path provided");
+        }
+
+        // Validate and get the real path
+        const validPath = await validatePath(ctx.path);
+        
+        // Get file stats and determine type
+        const stats = await fs.stat(validPath);
+        if (stats.isDirectory()) {
+          throw new Error("Cannot analyze directories, only files");
+        }
+
+        // Use mime-types to detect MIME type
+        const mimeType = mimeTypes.lookup(validPath) || 'application/octet-stream';
+
+        const loadType = loadAsType(mimeType, stats);
+        
+        const absolutePath = path.resolve(validPath);
+        const uriPath = absolutePath.split(path.sep).join('/');
+        const uri = `file://${uriPath}`;
+
+        // Read file content
+        let content;
+        if (loadType === FileType.TEXT) {
+          content = await fs.readFile(validPath, 'utf8');
+        } else {
+          content = (await fs.readFile(validPath)).toString('base64');
+        }
+        
+        // Create prompt messages
+        return {
+          messages: [
+            {
+              role: "user",
+              content: loadType === FileType.IMAGE ? {
+                type: "image",
+                data: content,
+                mimeType,
+              } : {
+                type: "resource",
+                resource: {
+                  uri,
+                  mimeType,
+                  ...(loadType === FileType.TEXT ? { text: content } : { blob: content }),
+                }
+              }
+            },
+            {
+              role: "assistant",
+              content: {
+                type: "text",
+                text: `Loaded file ${uriPath}`
+              }
+            },
+          ]
+        };
+      }
+
+      case "load_folder": {
+        const ctx = args as { path: string } | undefined;
+        if (!ctx?.path) {
+          throw new Error("No folder path provided");
+        }
+
+        // Validate and get the real path
+        const validPath = await validatePath(ctx.path);
+        
+        // Verify it's a directory
+        const stats = await fs.stat(validPath);
+        if (!stats.isDirectory()) {
+          throw new Error("Path must be a directory");
+        }
+
+        const messages = [];
+
+        // Recursive function to process directory
+        async function processDirectory(dirPath: string) {
+          const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+          for (const entry of entries) {
+            const fullPath = path.join(dirPath, entry.name);
+            
+            // Validate path before processing
+            await validatePath(fullPath);
+
+            if (entry.isDirectory()) {
+              // Recursively process subdirectories
+              await processDirectory(fullPath);
+            } else if (entry.isFile()) {
+              // Use absolute path for URI
+              const absolutePath = path.resolve(fullPath);
+              const uriPath = absolutePath.split(path.sep).join('/');
+              const uri = `file://${uriPath}`;
+              
+              // Detect mime type
+              const mimeType = mimeTypes.lookup(fullPath) || 'application/octet-stream';
+              const fileStats = await fs.stat(fullPath);
+              const loadType = loadAsType(mimeType, fileStats);
+
+              // Read file content
+              let content;
+              switch (loadType) {
+                case FileType.TEXT:
+                  content = await fs.readFile(fullPath, 'utf8');
+                  messages.push({
+                    role: "user",
+                    content: {
+                      type: "resource",
+                      resource: {
+                        uri,
+                        mimeType,
+                        text: content
+                      }
+                    }
+                  });
+                  break;
+                  
+                case FileType.IMAGE:
+                  content = (await fs.readFile(fullPath)).toString('base64');
+                  messages.push({
+                    role: "user",
+                    content: {
+                      type: "image",
+                      data: content,
+                      mimeType,
+                    }
+                  });
+                  break;
+                  
+                case FileType.BINARY:
+                  content = (await fs.readFile(fullPath)).toString('base64');
+                  messages.push({
+                    role: "user",
+                    content: {
+                      type: "resource",
+                      resource: {
+                        uri,
+                        mimeType,
+                        blob: content
+                      }
+                    }
+                  });
+                  break;
+                default:
+                  // Skip unsupported file types
+                  continue;
+              }
+              messages.push({
+                role: "assistant",
+                content: {
+                  type: "text",
+                  text: `Loaded file ${uriPath}`
+                }
+              });
+            }
+          }
+        }
+
+        // Start recursive processing from the root directory
+        await processDirectory(validPath);
+
+        if (messages.length === 0) {
+          throw new Error("No readable files found in directory");
+        }
+
+        messages.push({
+          role: "assistant",
+          content: {
+            type: "text",
+            text: `Loaded ${messages.length / 2} files recursively from ${validPath}`
+          }
+        });
+        return { messages };
+      }
+
+      default:
+        throw new Error(`Unknown prompt name: ${name}`);
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to handle prompt ${request.params.name}: ${errorMessage}`);
+  }
+});
+
+server.setRequestHandler(ListPromptsRequestSchema, async () => {
+  return {
+    prompts: [
+      {
+        name: 'load_file',
+        description: "Load and analyze contents of a single file with automatic type detection and appropriate handling for text, image, and binary files",
+        arguments: [
+          {
+            name: "path",
+            description: "Path to the file relative to workspace root",
+            type: "string",
+            required: true,
+          }
+        ]
+      },
+      {
+        name: 'load_folder',
+        description: "Recursively load and analyze all files in a directory and its subdirectories (limited to 30 files maximum). Automatically detects and appropriately handles different file types, skipping unsupported ones.",
+        arguments: [
+          {
+            name: "path",
+            description: "Path to the directory relative to workspace root",
+            type: "string",
+            required: true,
+          }
+        ]
+      }
+    ]
+  };
+});
+
+// Define the FileType enum
+enum FileType {
+  TEXT = 'TEXT',
+  IMAGE = 'IMAGE',
+  BINARY = 'BINARY',
+}
+
+// Utility function to determine file type
+function loadAsType(mimeType: string, stats: Stats | BigIntStats): FileType {
+  if (mimeType.startsWith('text/') || 
+      ['application/json', 'application/javascript', 'application/typescript', 'application/xml', 'application/csv', 'application/tsv'].includes(mimeType)) {
+    return FileType.TEXT;
+  }
+
+  if (mimeType.startsWith('image/')) {
+    return FileType.IMAGE;
+  }
+
+  if (['application/octet-stream', 'application/pdf', 'application/zip', 'application/x-tar', 'application/x-gzip', 'application/x-bzip2', 'application/x-7z-compressed', 'application/x-rar', 'application/x-xz'].includes(mimeType)) {
+    return FileType.BINARY;
+  }
+
+  // If file is smaller than 100kb and type is unknown, treat as text
+  if (stats.size < 100 * 1024) {
+    return FileType.TEXT;
+  }
+
+  // Otherwise fall back to binary
+  return FileType.BINARY;
+}
 
 // Start server
 async function runServer() {
