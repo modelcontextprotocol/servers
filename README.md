@@ -255,6 +255,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Blender](https://github.com/ahujasid/blender-mcp)** (by ahujasid) - Blender integration allowing prompt enabled 3D scene creation, modeling and manipulation.
 - **[BreakoutRoom](https://github.com/agree-able/room-mcp)** - Agents accomplishing goals together in p2p rooms 
 - **[browser-use](https://github.com/co-browser/browser-use-mcp-server)** (by co-browser) - browser-use MCP server with dockerized playwright + chromium + vnc. supports stdio & resumable http.
+- **[BrowserLoop](https://github.com/mattiasw/browserloop)** - An MCP server for taking screenshots of web pages using Playwright. Supports high-quality capture with configurable formats, viewport sizes, cookie-based authentication, and both full page and element-specific screenshots.
 - **[Bsc-mcp](https://github.com/TermiX-official/bsc-mcp)** The first MCP server that serves as the bridge between AI and BNB Chain, enabling AI agents to execute complex on-chain operations through seamless integration with the BNB Chain, including transfer, swap, launch, security check on any token and even more.
 - **[BVG MCP Server - (Unofficial) ](https://github.com/svkaizoku/mcp-bvg)** - Unofficial MCP server for Berliner Verkehrsbetriebe Api. 
 - **[Calculator](https://github.com/githejie/mcp-server-calculator)** - This server enables LLMs to use calculator for precise numerical calculations.
