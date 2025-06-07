@@ -4,13 +4,18 @@ This repository is a collection of *reference implementations* for the [Model Co
 to community built servers and additional resources.
 
 The servers in this repository showcase the versatility and extensibility of MCP, demonstrating how it can be used to give Large Language Models (LLMs) secure, controlled access to tools and data sources.
-Each MCP server is implemented with either the [Typescript MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk) or [Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk).
+Typically, each MCP server is implemented with an MCP SDK:
+- [C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk)
+- [Java MCP SDK](https://github.com/modelcontextprotocol/java-sdk)
+- [Kotlin MCP SDK](https://github.com/modelcontextprotocol/kotlin-sdk)
+- [Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk)
+- [Typescript MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 
 > Note: Lists in this README are maintained in alphabetical order to minimize merge conflicts when adding new items.
 
 ## 🌟 Reference Servers
 
-These servers aim to demonstrate MCP features and the TypeScript and Python SDKs.
+These servers aim to demonstrate MCP features and the official SDKs.
 
 - **[Everything](src/everything)** - Reference / test server with prompts, resources, and tools
 - **[Fetch](src/fetch)** - Web content fetching and conversion for efficient LLM usage
