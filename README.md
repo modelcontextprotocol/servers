@@ -537,6 +537,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Telegram-Client](https://github.com/chaindead/telegram-mcp)** - A Telegram API bridge that manages user data, dialogs, messages, drafts, read status, and more for seamless interactions.
 - **[Teradata](https://github.com/arturborycki/mcp-teradata)** - his MCP server enables LLMs to interact with Teradata databases. This MCP Server support tools and prompts for multi task data analytics
 - **[Terminal-Control](https://github.com/GongRzhe/terminal-controller-mcp)** - A MCP server that enables secure terminal command execution, directory navigation, and file system operations through a standardized interface.
+- **[Terraform-Cloud](https://github.com/severity1/terraform-cloud-mcp)** - An MCP server that integrates AI assistants with the Terraform Cloud API, allowing you to manage your infrastructure through natural conversation.
 - **[TFT-Match-Analyzer](https://github.com/GeLi2001/tft-mcp-server)** - MCP server for teamfight tactics match history & match details fetching, providing user the detailed context for every match.
 - **[thegraph-mcp](https://github.com/kukapay/thegraph-mcp)** - An MCP server that powers AI agents with indexed blockchain data from The Graph.
 - **[Ticketmaster](https://github.com/delorenj/mcp-server-ticketmaster)** - Search for events, venues, and attractions through the Ticketmaster Discovery API
