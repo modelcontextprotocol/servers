@@ -44,6 +44,8 @@ The following reference servers are now archived and can be found at [servers-ar
 
 Official integrations are maintained by companies building production ready MCP servers for their platforms.
 
+- <img height="12" width="12" src="https://avatars.githubusercontent.com/u/58433296" alt="CTERA Portal" /> **[CTERA Portal](https://github.com/ctera/mcp-ctera-core)** - CTERA Portal is a multi-tenant, multi-cloud platform that delivers a global namespace and unified management across petabytes of distributed content.
+- <img height="12" width="12" src="https://avatars.githubusercontent.com/u/58433296" alt="CTERA Edge Filer" /> **[CTERA Edge Filer](https://github.com/ctera/mcp-ctera-edge)** - CTERA Edge Filer delivers intelligent edge caching and multiprotocol file access, enabling fast, secure access to files across core and remote sites.
 - <img height="12" width="12" src="https://www.21st.dev/favicon.ico" alt="21st.dev Logo" /> **[21st.dev Magic](https://github.com/21st-dev/magic-mcp)** - Create crafted UI components inspired by the best 21st.dev design engineers.
 - <img height="12" width="12" src="https://invoxx-public-bucket.s3.eu-central-1.amazonaws.com/frontend-resources/adfin-logo-small.svg" alt="Adfin Logo" /> **[Adfin](https://github.com/Adfin-Engineering/mcp-server-adfin)** - The only platform you need to get paid - all payments in one place, invoicing and accounting reconciliations with [Adfin](https://www.adfin.com/).
 - <img height="12" width="12" src="https://www.agentql.com/favicon/favicon.png" alt="AgentQL Logo" /> **[AgentQL](https://github.com/tinyfish-io/agentql-mcp)** - Enable AI agents to get structured data from unstructured web with [AgentQL](https://www.agentql.com/).
