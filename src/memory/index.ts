@@ -137,12 +137,23 @@ class KnowledgeGraphManager {
   async searchNodes(query: string): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
     
+    // Map to safe lower case
+    function toSafeLowerCase(str: unknown): string {
+      if (typeof str !== 'string') return '';
+      return str.trim().toLowerCase();
+    }
+
     // Filter entities
-    const filteredEntities = graph.entities.filter(e => 
-      e.name.toLowerCase().includes(query.toLowerCase()) ||
-      e.entityType.toLowerCase().includes(query.toLowerCase()) ||
-      e.observations.some(o => o.toLowerCase().includes(query.toLowerCase()))
-    );
+    const filteredEntities = graph.entities.filter(e => {
+      const lowerQuery = toSafeLowerCase(query);
+    
+      return (
+        toSafeLowerCase(e.name).includes(lowerQuery) ||
+        toSafeLowerCase(e.entityType).includes(lowerQuery) ||
+        (Array.isArray(e.observations) && 
+          e.observations.some(o => toSafeLowerCase(o).includes(lowerQuery)))
+      );
+    });
   
     // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
