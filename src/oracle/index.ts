@@ -25,8 +25,10 @@ const server = new Server(
 );
 
 const prompts = [
-  { id: 1, text: "query select * from tabs" },
-  { id: 2, text: "explain select * from tabs" }
+  { id: 1, text: "query select * from COUNTRIES" },
+  { id: 2, text: "explain select * from COUNTRIES" },
+  { id: 3, text: "stats COUNTRIES" },
+  { id: 4, text: "connect to Oracle using an string like host.docker.internal:1521/freepdb1 user name and password" }
 ];
 
 const args = process.argv.slice(2);
@@ -131,19 +133,18 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   let connection;
   try {
     connection = await pool.getConnection();
-    const result = await connection.execute<{ COLUMN_NAME: string, DATA_TYPE: string }>(
-      `SELECT column_name as "COLUMN_NAME", data_type as "DATA_TYPE" FROM user_tab_columns WHERE table_name = UPPER(:tableName)`,
-      { tableName },
-    );
+    const result = await connection.execute<{ METADATA: string }>(
+      `select dbms_developer.get_metadata (name => UPPER(:tableName)) as metadata from dual`, [tableName], { outFormat: oracledb.OUT_FORMAT_OBJECT });
 
     return {
       contents: [
         {
           uri: request.params.uri,
           mimeType: "application/json",
-          text: JSON.stringify(result.rows, null, 2),
+          text: JSON.stringify(result.rows?.[0]?.METADATA, null, 2),
         },
       ],
+      isError: false,
     };
   } finally {
     if (connection) {
@@ -189,6 +190,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
+      {
+        name: "connect",
+        description: "Switch to a new Oracle DB connection on the fly",
+        inputSchema: {
+          type: "object",
+          properties: {
+            connectionString: { type: "string" },
+            user: { type: "string" },
+            password: { type: "string" },
+          },
+          required: ["connectionString", "user", "password"],
+        },
+      },
     ],
   };
 });
@@ -199,7 +213,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   if (request.params.name === "query") {
-    const sql = request.params.arguments?.sql as string;
+    const sql = typeof request.params.arguments?.sql === "string" 
+      ? request.params.arguments.sql.replace(/;\s*$/, "") 
+      : "";
 
     let connection;
     try {
@@ -223,7 +239,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
   if (request.params.name === "explain") {
-    const sql = request.params.arguments?.sql as string;
+    const sql = typeof request.params.arguments?.sql === "string" 
+      ? request.params.arguments.sql.replace(/;\s*$/, "") 
+      : "";
 
     let connection;
     try {
@@ -309,6 +327,44 @@ FROM dual`, [tableName,tableName,tableName], { outFormat: oracledb.OUT_FORMAT_OB
           console.warn("Could not close connection:", err);
         }
       }
+    }
+  }
+  if (request.params.name === "connect") {
+    const newConnectionString = request.params.arguments?.connectionString;
+    const newUser = request.params.arguments?.user;
+    const newPassword = request.params.arguments?.password;
+    if (
+      typeof newConnectionString !== "string" || !newConnectionString ||
+      typeof newUser !== "string" || !newUser ||
+      typeof newPassword !== "string" || !newPassword
+    ) {
+      return {
+        content: [{ type: "text", text: "Missing or invalid connectionString, user, or password argument." }],
+        isError: true,
+      };
+    }
+    try {
+      if (pool) {
+        try {
+          await pool.close(0); // Close existing pool immediately
+        } catch (err) {
+          // Log but continue
+          console.warn("Error closing previous pool:", err);
+        }
+      }
+      // Override env vars for this session
+      process.env.ORACLE_USER = newUser;
+      process.env.ORACLE_PASSWORD = newPassword;
+      await initializePool(newConnectionString);
+      return {
+        content: [{ type: "text", text: `Successfully connected to new Oracle DB: ${newConnectionString} as user ${newUser}` }],
+        isError: false,
+      };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Failed to connect: ${err}` }],
+        isError: true,
+      };
     }
   }
   throw new Error(`Unknown tool: ${request.params.name}`);
