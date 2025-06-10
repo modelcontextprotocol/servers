@@ -360,6 +360,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[FDIC BankFind MCP Server - (Unofficial)](https://github.com/clafollett/fdic-bank-find-mcp-server)** - The is a MCPserver that brings the power of FDIC BankFind APIs straight to your AI tools and workflows. Structured U.S. banking data, delivered with maximum vibes. 😎📊
 - **[Federal Reserve Economic Data (FRED)](https://github.com/stefanoamorelli/fred-mcp-server)** (by Stefano Amorelli) - Community developed MCP server to interact with the Federal Reserve Economic Data.
 - **[Fetch](https://github.com/zcaceres/fetch-mcp)** - A server that flexibly fetches HTML, JSON, Markdown, or plaintext.
+- **[Feyod](https://github.com/jeroenvdmeer/feyod-mcp)** - A server that answers questions about football matches, and specialised in the football club Feyenoord.
 - **[Figma](https://github.com/GLips/Figma-Context-MCP)** - Give your coding agent direct access to Figma file data, helping it one-shot design implementation.
 - **[Fingertip](https://github.com/fingertip-com/fingertip-mcp)** - MCP server for Fingertip.com to search and create new sites.
 - **[Firebase](https://github.com/gannonh/firebase-mcp)** - Server to interact with Firebase services including Firebase Authentication, Firestore, and Firebase Storage.
