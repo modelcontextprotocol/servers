@@ -444,6 +444,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Langflow-DOC-QA-SERVER](https://github.com/GongRzhe/Langflow-DOC-QA-SERVER)** - A Model Context Protocol server for document Q&A powered by Langflow. It demonstrates core MCP concepts by providing a simple interface to query documents through a Langflow backend.
 - **[Lark(Feishu)](https://github.com/kone-net/mcp_server_lark)** - A Model Context Protocol(MCP) server for Lark(Feishu) sheet, message, doc and etc.
 - **[lean-lsp-mcp](https://github.com/oOo0oOo/lean-lsp-mcp)** - Interact with the [Lean theorem prover](https://lean-lang.org/) via the Language Server Protocol.
+- **[libvirt-mcp](https://github.com/MatiasVara/libvirt-mcp)** - Allows LLM to interact with libvirt thus enabling to create, destroy or list the Virtual Machines in a system.
 - **[Lightdash](https://github.com/syucream/lightdash-mcp-server)** - Interact with [Lightdash](https://www.lightdash.com/), a BI tool.
 - **[LINE](https://github.com/amornpan/py-mcp-line)** (by amornpan) - Implementation for LINE Bot integration that enables Language Models to read and analyze LINE conversations through a standardized interface. Features asynchronous operation, comprehensive logging, webhook event handling, and support for various message types.
 - **[Linear](https://github.com/tacticlaunch/mcp-linear)** - Interact with Linear project management system.
