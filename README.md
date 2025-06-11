@@ -657,6 +657,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[token-minter-mcp](https://github.com/kukapay/token-minter-mcp)** - An MCP server providing tools for AI agents to mint ERC-20 tokens across multiple blockchains.
 - **[token-revoke-mcp](https://github.com/kukapay/token-revoke-mcp)** - An MCP server for checking and revoking ERC-20 token allowances across multiple blockchains.
 - **[Ton Blockchain MCP](https://github.com/devonmojito/ton-blockchain-mcp)** - An MCP server for interacting with Ton Blockchain.
+- **[BNBChain MCP](https://github.com/bnb-chain/bnbchain-mcp)** - An MCP server for interacting with BSC, opBNB, and the Greenfield blockchain.
 - **[TouchDesigner](https://github.com/8beeeaaat/touchdesigner-mcp)** - An MCP server for TouchDesigner, enabling interaction with TouchDesigner projects, nodes, and parameters.
 - **[Travel Planner](https://github.com/GongRzhe/TRAVEL-PLANNER-MCP-Server)** - Travel planning and itinerary management server integrating with Google Maps API for location search, place details, and route calculations.
 - **[Trello MCP Server](https://github.com/lioarce01/trello-mcp-server)** - An MCP server that interact with user Trello boards, modifying them with prompting.
