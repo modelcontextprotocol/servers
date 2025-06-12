@@ -1,6 +1,6 @@
 # Time MCP Server
 
-A Model Context Protocol server that provides time and timezone conversion capabilities. This server enables LLMs to get current time information and perform timezone conversions using IANA timezone names, with automatic system timezone detection.
+A Model Context Protocol server that provides time, timezone conversion, and date calculation capabilities. This server enables LLMs to get current time information, perform timezone conversions, calculate future/past dates, and determine days of the week using IANA timezone names, with automatic system timezone detection.
 
 ### Available Tools
 
@@ -13,6 +13,16 @@ A Model Context Protocol server that provides time and timezone conversion capab
     - `source_timezone` (string): Source IANA timezone name
     - `time` (string): Time in 24-hour format (HH:MM)
     - `target_timezone` (string): Target IANA timezone name
+
+- `calculate_date` - Calculate a date by adding or subtracting days.
+  - Required arguments:
+    - `date` (string): Date in various formats (e.g., '2025-05-25', 'May 25, 2025', '05/25/2025')
+    - `days` (integer): Number of days to add (positive) or subtract (negative)
+    - `timezone` (string): IANA timezone name for the date calculation
+
+- `get_day_of_week` - Get the day of the week for a given date.
+  - Required arguments:
+    - `date` (string): Date in various formats (e.g., '2025-05-25', 'May 25, 2025', '05/25/2025')
 
 ## Installation
 
@@ -224,6 +234,46 @@ Response:
 }
 ```
 
+3. Calculate a date by adding days:
+```json
+{
+  "name": "calculate_date",
+  "arguments": {
+    "date": "May 25, 2025",
+    "days": 5,
+    "timezone": "America/New_York"
+  }
+}
+```
+Response:
+```json
+{
+  "input_date": "May 25, 2025",
+  "days_added": 5,
+  "result_date": "May 30, 2025",
+  "day_of_week": "Friday",
+  "calculation_details": "Added 5 days to May 25, 2025"
+}
+```
+
+4. Get day of the week:
+```json
+{
+  "name": "get_day_of_week",
+  "arguments": {
+    "date": "2025-05-25"
+  }
+}
+```
+Response:
+```json
+{
+  "date": "May 25, 2025",
+  "day_of_week": "Sunday",
+  "day_number": 6
+}
+```
+
 ## Debugging
 
 You can use the MCP inspector to debug the server. For uvx installations:
@@ -245,6 +295,10 @@ npx @modelcontextprotocol/inspector uv run mcp-server-time
 2. "What time is it in Tokyo?"
 3. "When it's 4 PM in New York, what time is it in London?"
 4. "Convert 9:30 AM Tokyo time to New York time"
+5. "If today is May 25, 2025, what date will it be in 5 days?"
+6. "What day of the week is May 25, 2025?"
+7. "Calculate the date 10 days before Christmas 2024"
+8. "What day of the week was January 1, 2025?"
 
 ## Build
 
