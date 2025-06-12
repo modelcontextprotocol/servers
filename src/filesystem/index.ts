@@ -147,6 +147,11 @@ const EditFileArgsSchema = z.object({
   dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format')
 });
 
+const AppendFileArgsSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+});
+
 const CreateDirectoryArgsSchema = z.object({
   path: z.string(),
 });
@@ -549,6 +554,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(EditFileArgsSchema) as ToolInput,
       },
       {
+        name: "append_file",
+        description:
+          "Appends content to a file. If the file does not exist, it will be created. " +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(AppendFileArgsSchema) as ToolInput,
+      },
+      {
         name: "create_directory",
         description:
           "Create a new directory or ensure a directory exists. Can create multiple " +
@@ -766,6 +778,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.dryRun);
         return {
           content: [{ type: "text", text: result }],
+        };
+      }
+
+      case "append_file": {
+        const parsed = AppendFileArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for append_file: ${parsed.error}`);
+        }
+
+        const validPath = await validatePath(parsed.data.path);
+        await fs.appendFile(validPath, parsed.data.content, "utf-8");
+        return {
+          content: [{ type: "text", text: `Successfully appended to ${parsed.data.path}` }],
         };
       }
 
