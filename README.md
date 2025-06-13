@@ -764,6 +764,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
 - **[YouTube Video Summarizer](https://github.com/nabid-pf/youtube-video-summarizer-mcp)** - Summarize lengthy youtube videos.
 - **[Zoom](https://github.com/Prathamesh0901/zoom-mcp-server/tree/main)** - Create, update, read and delete your zoom meetings.
+- **[kwrds.ai](https://github.com/mkotsollaris/kwrds_ai_mcp)** - <img height="12" width="12" src="https://www.kwrds.ai/favicon.ico" alt="kwrds.ai Logo" /> Keyword research, people also ask, SERP and other SEO tools for [kwrds.ai](https://www.kwrds.ai/)
 
 ## 📚 Frameworks
 
