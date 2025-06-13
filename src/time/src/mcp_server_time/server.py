@@ -35,6 +35,7 @@ class TimeConversionInput(BaseModel):
     target_tz_list: list[str]
 
 
+
 def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     if local_tz_override:
         return ZoneInfo(local_tz_override)
@@ -42,7 +43,40 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     # Get local timezone from datetime.now()
     tzinfo = datetime.now().astimezone(tz=None).tzinfo
     if tzinfo is not None:
-        return ZoneInfo(str(tzinfo))
+        tz_name = str(tzinfo)
+        
+        # Handle ambiguous timezone abbreviations
+        if tz_name == "CST":
+            # Try to determine which CST based on UTC offset
+            offset = datetime.now().astimezone(tz=None).utcoffset()
+            if offset:
+                total_seconds = offset.total_seconds()
+                if total_seconds == 8 * 3600:  # UTC+8
+                    return ZoneInfo("Asia/Shanghai")
+                elif total_seconds == -6 * 3600:  # UTC-6
+                    return ZoneInfo("America/Chicago")
+                elif total_seconds == -5 * 3600:  # UTC-5
+                    return ZoneInfo("America/Havana")
+        
+        # Handle other common ambiguous abbreviations
+        timezone_mapping = {
+            "EST": "America/New_York",
+            "PST": "America/Los_Angeles",
+            "MST": "America/Denver",
+            "JST": "Asia/Tokyo",
+            "KST": "Asia/Seoul",
+        }
+        
+        if tz_name in timezone_mapping:
+            return ZoneInfo(timezone_mapping[tz_name])
+        
+        # Try to use the original timezone name
+        try:
+            return ZoneInfo(tz_name)
+        except Exception:
+            # If all else fails, default to UTC
+            return ZoneInfo("UTC")
+    
     raise McpError("Could not determine local timezone - tzinfo is None")
 
 
