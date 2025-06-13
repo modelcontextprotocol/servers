@@ -719,6 +719,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Travel Planner](https://github.com/GongRzhe/TRAVEL-PLANNER-MCP-Server)** - Travel planning and itinerary management server integrating with Google Maps API for location search, place details, and route calculations.
 - **[Trello MCP Server](https://github.com/lioarce01/trello-mcp-server)** - An MCP server that interact with user Trello boards, modifying them with prompting.
 - **[Tripadvisor](https://github.com/pab1it0/tripadvisor-mcp)** - A MCP server that enables LLMs to interact with Tripadvisor API, supporting location data, reviews, and photos through standardized MCP interfaces
+- **[TrueNAS Core MCP](https://github.com/vespo92/TrueNasCoreMCP)** - An MCP server for interacting with TrueNAS Core.
 - **[Tsuki-Mcp-Filesystem-Server](https://github.com/yuutotsuki/tsuki_mcp_filesystem_server)** - A simple, fast, and fully MCP-compliant server for listing local filesystem files. Built with Python + FastAPI. Designed for OpenAI's Agent SDK via `resources/list`.
 - **[Tyk API Management](https://github.com/TykTechnologies/tyk-dashboard-mcp)** - Chat with all of your organization's managed APIs and perform other API lifecycle operations, managing tokens, users, analytics, and more.
 - **[Typesense](https://github.com/suhail-ak-s/mcp-typesense-server)** - A Model Context Protocol (MCP) server implementation that provides AI models with access to Typesense search capabilities. This server enables LLMs to discover, search, and analyze data stored in Typesense collections.
