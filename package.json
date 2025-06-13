@@ -20,14 +20,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/server-everything": "*",
-    "@modelcontextprotocol/server-gdrive": "*",
-    "@modelcontextprotocol/server-postgres": "*",
-    "@modelcontextprotocol/server-oracle": "*",
-    "@modelcontextprotocol/server-puppeteer": "*",
-    "@modelcontextprotocol/server-slack": "*",
-    "@modelcontextprotocol/server-brave-search": "*",
-    "@modelcontextprotocol/server-memory": "*",
     "@modelcontextprotocol/server-filesystem": "*",
+    "@modelcontextprotocol/server-memory": "*",
+    "@modelcontextprotocol/server-oracle": "*",
     "@modelcontextprotocol/server-sequential-thinking": "*"
   }
 }
