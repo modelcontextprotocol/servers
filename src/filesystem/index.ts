@@ -205,16 +205,16 @@ async function searchFiles(
 
         // Check if path matches any exclude pattern
         const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(pattern => {
-          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
-          return minimatch(relativePath, globPattern, { dot: true });
-        });
+        const shouldExclude = excludePatterns.some(pattern =>
+          minimatch(relativePath, pattern, { dot: true })
+        );
 
         if (shouldExclude) {
           continue;
         }
 
-        if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
+        // Use glob matching for the search pattern as well
+        if (minimatch(relativePath, pattern, { dot: true })) {
           results.push(fullPath);
         }
 
@@ -254,7 +254,7 @@ function createUnifiedDiff(originalContent: string, newContent: string, filepath
 
 async function applyFileEdits(
   filePath: string,
-  edits: Array<{oldText: string, newText: string}>,
+  edits: Array<{ oldText: string, newText: string }>,
   dryRun = false
 ): Promise<string> {
   // Read file content and normalize line endings
@@ -390,10 +390,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "directory_tree",
         description:
-            "Get a recursive tree view of files and directories as a JSON structure. " +
-            "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
-            "Files have no children array, while directories always have a children array (which may be empty). " +
-            "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
+          "Get a recursive tree view of files and directories as a JSON structure. " +
+          "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
+          "Files have no children array, while directories always have a children array (which may be empty). " +
+          "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(DirectoryTreeArgsSchema) as ToolInput,
       },
       {
@@ -409,9 +409,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "search_files",
         description:
           "Recursively search for files and directories matching a pattern. " +
-          "Searches through all subdirectories from the starting path. The search " +
-          "is case-insensitive and matches partial names. Returns full paths to all " +
-          "matching items. Great for finding files when you don't know their exact location. " +
+          "The patterns should be glob-style patterns that match paths relative to the working directory. " +
+          "Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
+          "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
           "Only searches within allowed directories.",
         inputSchema: zodToJsonSchema(SearchFilesArgsSchema) as ToolInput,
       },
@@ -530,48 +530,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-        case "directory_tree": {
-            const parsed = DirectoryTreeArgsSchema.safeParse(args);
-            if (!parsed.success) {
-                throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
-            }
-
-            interface TreeEntry {
-                name: string;
-                type: 'file' | 'directory';
-                children?: TreeEntry[];
-            }
-
-            async function buildTree(currentPath: string): Promise<TreeEntry[]> {
-                const validPath = await validatePath(currentPath);
-                const entries = await fs.readdir(validPath, {withFileTypes: true});
-                const result: TreeEntry[] = [];
-
-                for (const entry of entries) {
-                    const entryData: TreeEntry = {
-                        name: entry.name,
-                        type: entry.isDirectory() ? 'directory' : 'file'
-                    };
-
-                    if (entry.isDirectory()) {
-                        const subPath = path.join(currentPath, entry.name);
-                        entryData.children = await buildTree(subPath);
-                    }
-
-                    result.push(entryData);
-                }
-
-                return result;
-            }
-
-            const treeData = await buildTree(parsed.data.path);
-            return {
-                content: [{
-                    type: "text",
-                    text: JSON.stringify(treeData, null, 2)
-                }],
-            };
+      case "directory_tree": {
+        const parsed = DirectoryTreeArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
         }
+
+        interface TreeEntry {
+          name: string;
+          type: 'file' | 'directory';
+          children?: TreeEntry[];
+        }
+
+        async function buildTree(currentPath: string): Promise<TreeEntry[]> {
+          const validPath = await validatePath(currentPath);
+          const entries = await fs.readdir(validPath, { withFileTypes: true });
+          const result: TreeEntry[] = [];
+
+          for (const entry of entries) {
+            const entryData: TreeEntry = {
+              name: entry.name,
+              type: entry.isDirectory() ? 'directory' : 'file'
+            };
+
+            if (entry.isDirectory()) {
+              const subPath = path.join(currentPath, entry.name);
+              entryData.children = await buildTree(subPath);
+            }
+
+            result.push(entryData);
+          }
+
+          return result;
+        }
+
+        const treeData = await buildTree(parsed.data.path);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(treeData, null, 2)
+          }],
+        };
+      }
 
       case "move_file": {
         const parsed = MoveFileArgsSchema.safeParse(args);
@@ -606,9 +606,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validPath = await validatePath(parsed.data.path);
         const info = await getFileStats(validPath);
         return {
-          content: [{ type: "text", text: Object.entries(info)
-            .map(([key, value]) => `${key}: ${value}`)
-            .join("\n") }],
+          content: [{
+            type: "text", text: Object.entries(info)
+              .map(([key, value]) => `${key}: ${value}`)
+              .join("\n")
+          }],
         };
       }
 
