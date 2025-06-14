@@ -14,6 +14,7 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
+import { exec } from "child_process";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -144,6 +145,10 @@ const SearchFilesArgsSchema = z.object({
 
 const GetFileInfoArgsSchema = z.object({
   path: z.string(),
+});
+
+const CompressDirectoryArgsSchema = z.object({
+  path: z.string()
 });
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
@@ -435,6 +440,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: [],
         },
       },
+      {
+        name: "compress_directory",
+        description:
+          "Compress a directory into a zip file. Compresses all files and subdirectories.",
+        inputSchema: zodToJsonSchema(CompressDirectoryArgsSchema) as ToolInput
+      }
     ],
   };
 });
@@ -513,6 +524,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{ type: "text", text: `Successfully created directory ${parsed.data.path}` }],
         };
+      }
+
+      case "compress_directory": {
+        const parsed = CompressDirectoryArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(
+            `Invalid arguments for compress_directory: ${parsed.error}`
+          );
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const parentFolder = path.dirname(validPath);
+        const dirname = path.basename(validPath);
+        const outputZipPath = path.join(parentFolder, `${dirname}.zip`);
+
+        exec(`zip -r ${outputZipPath} ${validPath}`, (error) => {
+          if (error) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "Error while compressing directory: ${error.message}"
+                }
+              ]
+            };
+          }
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Successfully compressed directory to ${outputZipPath}`
+              }
+            ]
+          };
+        });
       }
 
       case "list_directory": {
