@@ -17,7 +17,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
-    "mcp>=1.0.0",
+    "mcp[cli]>=1.4.1",
     "pydantic>=2.0.0",
     "tzdata>=2024.2",
 ]
