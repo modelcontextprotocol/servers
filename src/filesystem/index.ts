@@ -24,7 +24,12 @@ if (args.length === 0) {
 
 // Normalize all paths consistently
 function normalizePath(p: string): string {
-  return path.normalize(p);
+  const normalized = path.normalize(p);
+  // On Windows, paths are case-insensitive. Normalize to lowercase for comparisons.
+  if (process.platform === 'win32') {
+    return normalized.toLowerCase();
+  }
+  return normalized;
 }
 
 function expandHome(filepath: string): string {
