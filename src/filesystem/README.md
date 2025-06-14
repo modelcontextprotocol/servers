@@ -25,6 +25,16 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - Input: `path` (string)
   - Reads complete file contents with UTF-8 encoding
 
+- **read_file_lines**
+  - Read specific lines from a file with offset/limit
+  - Inputs:
+    - `path` (string): File location
+    - `offset` (number): Starting line number (0-indexed)
+    - `limit` (number): Maximum number of lines to read
+  - Features:
+    - Efficient for large files (doesn't load entire file)
+  - Best Practice: Use instead of read_file when you only need specific lines or batching is needed
+
 - **read_multiple_files**
   - Read multiple files simultaneously
   - Input: `paths` (string[])
