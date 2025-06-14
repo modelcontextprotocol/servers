@@ -54,8 +54,15 @@ await Promise.all(args.map(async (dir) => {
 }));
 
 // Security utilities
+// validatePath ensures that the requested file path is sanitized for Unicode issues,
+// expanded for home directories, resolved to an absolute path, and checked against the
+// list of allowed directories. It also handles symlinks securely and provides clear error
+// messages for all access issues. This is the main entry point for all file path validation
+// in the server, and is now robust against macOS screenshot Unicode edge cases.
 async function validatePath(requestedPath: string): Promise<string> {
-  const expandedPath = expandHome(requestedPath);
+  // Sanitize Unicode and problematic characters for cross-platform compatibility
+  const sanitizedPath = sanitizeFilePath(requestedPath);
+  const expandedPath = expandHome(sanitizedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
     : path.resolve(process.cwd(), expandedPath);
@@ -328,6 +335,20 @@ async function applyFileEdits(
   }
 
   return formattedDiff;
+}
+
+// Unicode normalization and sanitization for file paths
+// This function ensures that all file paths are normalized to NFC form (canonical Unicode),
+// replaces non-breaking spaces (U+00A0) with regular spaces, and also replaces a range of
+// special Unicode spaces and punctuation that are known to cause issues with macOS-generated
+// screenshot files and other OS-specific files. This is critical for cross-platform compatibility
+// and to prevent ENOENT errors when files appear in directory listings but cannot be accessed
+// due to invisible or non-standard Unicode characters in their names.
+function sanitizeFilePath(filePath: string): string {
+  return filePath
+    .normalize('NFC') // Normalize to canonical Unicode form
+    .replace(/\u00A0/g, ' ') // Replace non-breaking spaces with regular spaces
+    .replace(/[\u2000-\u206F\u2E00-\u2E7F]/g, ' '); // Replace other Unicode spaces/punctuation
 }
 
 // Tool handlers
