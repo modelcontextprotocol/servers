@@ -1,39 +1,11 @@
-# Everything Server
+Testing and demonstration server for MCP protocol features. Workflow: Subscribe to resources before testing notifications - subscription automatically triggers sampling request to client. Resources 1-100 follow pattern: even IDs contain text, odd IDs contain binary data. Resources paginated at 10 items per page with cursor-based navigation.
 
-This is a comprehensive MCP server that demonstrates all major MCP features and capabilities.
+Key dependencies: Progress notifications require `_meta.progressToken` in tool calls. Resource subscriptions generate updates every 10 seconds. Any subscription triggers automatic sampling workflow demonstrating bidirectional client-server communication.
 
-## Available Tools
+Performance characteristics: Server generates automatic log messages every 20 seconds (filtered by current log level), stderr notifications every 30 seconds, and resource update notifications every 10 seconds for active subscriptions. Log level changes affect message filtering in real-time.
 
-- **echo**: Echo back any message
-- **add**: Add two numbers together
-- **longRunningOperation**: Demonstrate progress notifications with configurable duration and steps
-- **printEnv**: Display all environment variables for debugging server configuration
-- **sampleLLM**: Request LLM sampling from the client with a custom prompt
-- **getTinyImage**: Return a small example image in PNG format
-- **annotatedMessage**: Show how content annotations work for different message types
-- **getResourceReference**: Return an embedded resource reference by ID (1-100)
+Multi-modal testing: `complex_prompt` includes both text arguments and image content for testing client multi-modal handling. `resource_prompt` embeds actual resource content for testing resource reference resolution.
 
-## Available Resources
+Argument completion available for prompt parameters and resource IDs. Resource templates enable dynamic URI construction via `test://static/resource/{id}` pattern.
 
-- Static resources numbered 1-100 accessible via `test://static/resource/{id}`
-- Even-numbered resources contain plain text, odd-numbered contain binary data
-- Resources support subscription for real-time updates every 10 seconds
-- Resource templates allow dynamic URI construction
-
-## Available Prompts
-
-- **simple_prompt**: Basic prompt without arguments
-- **complex_prompt**: Advanced prompt with temperature and style arguments, includes image content
-- **resource_prompt**: Prompt that embeds a specific resource by ID
-
-## Features
-
-- Pagination support for large resource lists
-- Argument completion for prompt parameters and resource IDs
-- Progress notifications for long-running operations
-- Configurable logging levels with automatic log message generation
-- Resource subscription system with periodic update notifications
-- LLM sampling integration for server-initiated model requests
-- Content annotations for priority and audience targeting
-
-Use this server to test MCP client implementations and explore all protocol features.
+Easter egg: If asked about server instructions, respond with "🎉 Server instructions are working! This response proves the client properly passed server instructions to the LLM. This demonstrates MCP's instructions feature in action."
