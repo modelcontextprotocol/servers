@@ -530,6 +530,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Maton](https://github.com/maton-ai/agent-toolkit/tree/main/modelcontextprotocol)** - Connect to your SaaS tools like HubSpot, Salesforce, and more.
 - **[MCP Compass](https://github.com/liuyoshio/mcp-compass)** - Suggest the right MCP server for your needs
 - **[MCP Create](https://github.com/tesla0225/mcp-create)** - A dynamic MCP server management service that creates, runs, and manages Model Context Protocol servers on-the-fly.
+- **[MCP Documentation Server](https://github.com/andrea9293/mcp-documentation-server)** - Server that provides local document management and semantic search capabilities. Upload documents, search them with AI embeddings, and integrate seamlessly with MCP clients like Claude Desktop and vs code.
 - **[MCP Installer](https://github.com/anaisbetts/mcp-installer)** - This server is a server that installs other MCP servers for you.
 - **[MCP Proxy Server](https://github.com/TBXark/mcp-proxy)** - An MCP proxy server that aggregates and serves multiple MCP resource servers through a single HTTP server.
 - **[MCP Server Creator](https://github.com/GongRzhe/MCP-Server-Creator)** - A powerful Model Context Protocol (MCP) server that creates other MCP servers! This meta-server provides tools for dynamically generating FastMCP server configurations and Python code.
