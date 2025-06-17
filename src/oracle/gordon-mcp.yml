@@ -1,9 +1,0 @@
-services:
-  time:
-    image: mcp/time
-  oracle:
-    image: mcp/oracle
-    command: ["host.docker.internal:1521/freepdb1"]
-    environment:
-      - ORACLE_USER=hr
-      - ORACLE_PASSWORD=hr_2025

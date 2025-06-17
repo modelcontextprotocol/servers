@@ -20,9 +20,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/server-everything": "*",
-    "@modelcontextprotocol/server-filesystem": "*",
     "@modelcontextprotocol/server-memory": "*",
-    "@modelcontextprotocol/server-oracle": "*",
+    "@modelcontextprotocol/server-filesystem": "*",
     "@modelcontextprotocol/server-sequential-thinking": "*"
   }
 }
