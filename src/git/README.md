@@ -288,12 +288,13 @@ If you are doing local development, there are two ways to test your changes:
 "mcpServers": {
   "git": {
     "command": "uv",
-    "args": [ 
+    "args": [
       "--directory",
       "/<path to mcp-servers>/mcp-servers/src/git",
       "run",
       "mcp-server-git"
     ]
+    }
   }
 }
 ```
