@@ -473,6 +473,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[iFlytek SparkAgent Platform](https://github.com/iflytek/ifly-spark-agent-mcp)** - This is a simple example of using MCP Server to invoke the task chain of the  iFlytek SparkAgent Platform.
 - **[iFlytek Workflow](https://github.com/iflytek/ifly-workflow-mcp-server)** - Connect to iFlytek Workflow via the MCP server and run your own Agent.
 - **[Image Generation](https://github.com/GongRzhe/Image-Generation-MCP-Server)** - This MCP server provides image generation capabilities using the Replicate Flux model.
+- **[ImageSorcery MCP](https://github.com/sunriseapps/imagesorcery-mcp)** - ComputerVision-based 🪄 sorcery of image recognition and editing tools for AI assistants.
 - **[iMCP](https://github.com/loopwork-ai/iMCP)** - A macOS app that provides an MCP server for your iMessage, Reminders, and other Apple services.
 - **[InfluxDB](https://github.com/idoru/influxdb-mcp-server)** - Run queries against InfluxDB OSS API v2.
 - **[Inoyu](https://github.com/sergehuber/inoyu-mcp-unomi-server)** - Interact with an Apache Unomi CDP customer data platform to retrieve and update customer profiles
