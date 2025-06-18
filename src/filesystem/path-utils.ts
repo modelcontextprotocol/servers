@@ -53,11 +53,28 @@ export function normalizePath(p: string): string {
   // Convert WSL or Unix-style Windows paths to Windows format
   p = convertToWindowsPath(p);
   
-  // Handle double backslashes and ensure proper escaping
-  p = p.replace(/\\\\/g, '\\');
+  // Check if this is a UNC path before normalization
+  const isUNCPath = p.startsWith('\\\\');
+  
+  // For non-UNC paths, normalize double backslashes first
+  if (!isUNCPath) {
+    p = p.replace(/\\\\/g, '\\');
+  }
   
   // Use Node's path normalization, which handles . and .. segments
-  const normalized = path.normalize(p);
+  let normalized = path.normalize(p);
+  
+  // Handle UNC paths after normalization to preserve the leading \\
+  if (isUNCPath) {
+    // Ensure UNC path starts with exactly two backslashes
+    if (normalized.startsWith('\\') && !normalized.startsWith('\\\\')) {
+      normalized = '\\' + normalized;
+    }
+    // Normalize any remaining double backslashes in the rest of the path
+    normalized = normalized.replace(/^(\\\\)(.*)/, (match, leading, rest) => {
+      return leading + rest.replace(/\\\\/g, '\\');
+    });
+  }
   
   // Handle Windows paths: convert slashes and ensure drive letter is capitalized
   if (normalized.match(/^[a-zA-Z]:|^\/mnt\/[a-z]\/|^\/[a-z]\//i)) {

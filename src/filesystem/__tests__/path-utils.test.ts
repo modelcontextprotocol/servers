@@ -124,6 +124,35 @@ describe('Path Utilities', () => {
       expect(normalizePath('C:\\Path with @at+plus$dollar%percent'))
         .toBe('C:\\Path with @at+plus$dollar%percent');
     });
+
+    it('capitalizes lowercase drive letters for Windows paths', () => {
+      expect(normalizePath('c:/windows/system32'))
+        .toBe('C:\\windows\\system32');
+      expect(normalizePath('/mnt/d/my/folder')) // WSL path with lowercase drive
+        .toBe('D:\\my\\folder');
+      expect(normalizePath('/e/another/folder')) // Unix-style Windows path with lowercase drive
+        .toBe('E:\\another\\folder');
+    });
+
+    it('handles UNC paths correctly', () => {
+      // UNC paths should preserve the leading double backslash
+      const uncPath = '\\\\SERVER\\share\\folder';
+      expect(normalizePath(uncPath)).toBe('\\\\SERVER\\share\\folder');
+      
+      // Test UNC path with double backslashes that need normalization
+      const uncPathWithDoubles = '\\\\\\\\SERVER\\\\share\\\\folder';
+      expect(normalizePath(uncPathWithDoubles)).toBe('\\\\SERVER\\share\\folder');
+    });
+
+    it('returns normalized non-Windows/WSL/Unix-style Windows paths as is after basic normalization', () => {
+      // Relative path
+      const relativePath = 'some/relative/path';
+      expect(normalizePath(relativePath)).toBe(relativePath.replace(/\//g, '\\'));
+
+      // A path that looks somewhat absolute but isn't a drive or recognized Unix root for Windows conversion
+      const otherAbsolutePath = '\\someserver\\share\\file';
+      expect(normalizePath(otherAbsolutePath)).toBe(otherAbsolutePath);
+    });
   });
 
   describe('expandHome', () => {
