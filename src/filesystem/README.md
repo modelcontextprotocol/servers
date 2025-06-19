@@ -9,6 +9,7 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Move files/directories
 - Search files
 - Get file metadata
+- Load files into model context
 
 **Note**: The server will only allow operations within directories specified via `args`.
 
@@ -16,7 +17,18 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 
 ### Resources
 
-- `file://system`: File system operations interface
+The server supports files and directories as resources:
+
+- **Files** (`file:///<path>`)
+  - Text files are provided as UTF-8 text
+  - Binary files (images, PDFs, etc.) are provided as base64-encoded blobs
+  - Automatic MIME type detection for common file types
+
+- **Directories** (`folder:///<path>`)
+  - Listed as resources with `inode/directory` MIME type
+  - Contents provided as newline-separated file listing
+  - Pagination support for large directories
+
 
 ### Tools
 
@@ -96,6 +108,21 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - No input required
   - Returns:
     - Directories that this server can read/write from
+
+### Prompts
+
+- **load_file**
+  - Load and a single file into model context
+  - Input: `path` (string, absolute path to file)
+  - Automatic file type detection and handling, supports text, image, and binary files
+  - Only supports files in allowed directories
+
+- **load_folder**
+  - Recursively load all files in a folder into model context
+  - Input: `path` (string, absolute path to folder)
+  - Automatic file type detection and handling, supports text, image, and binary files
+  - Limit of 30 files
+  - Only supports files in allowed directories
 
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
