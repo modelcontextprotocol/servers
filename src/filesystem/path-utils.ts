@@ -55,8 +55,13 @@ export function normalizePath(p: string): string {
   
   // Handle double backslashes, preserving leading UNC \\
   if (p.startsWith('\\\\')) {
-    // For UNC paths, normalize double backslashes *after* the leading marker
-    const restOfPath = p.substring(2).replace(/\\\\/g, '\\');
+    // For UNC paths, first normalize any excessive leading backslashes to exactly \\
+    // Then normalize double backslashes in the rest of the path
+    let uncPath = p;
+    // Replace multiple leading backslashes with exactly two
+    uncPath = uncPath.replace(/^\\{2,}/, '\\\\');
+    // Now normalize any remaining double backslashes in the rest of the path
+    const restOfPath = uncPath.substring(2).replace(/\\\\/g, '\\');
     p = '\\\\' + restOfPath;
   } else {
     // For non-UNC paths, normalize all double backslashes
