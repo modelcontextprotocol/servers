@@ -811,6 +811,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[YouTrack](https://github.com/tonyzorin/youtrack-mcp)** - A Model Context Protocol (MCP) server implementation for JetBrains YouTrack, allowing AI assistants to interact with YouTrack issue tracking system.
 - **[YouTube](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/youtube)** - Extract Youtube video information (with proxies support).
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
+- **[Youtube Uploader MCP](https://github.com/anwerj/youtube-uploader-mcp)** - AI‑powered YouTube uploader—no CLI, no YouTube Studio.
 - **[YouTube Video Summarizer](https://github.com/nabid-pf/youtube-video-summarizer-mcp)** - Summarize lengthy youtube videos.
 - **[Zoom](https://github.com/Prathamesh0901/zoom-mcp-server/tree/main)** - Create, update, read and delete your zoom meetings.
 
