@@ -85,6 +85,15 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `repo_path` (string): Path to directory to initialize git repo
    - Returns: Confirmation of repository initialization
 
+13. `git_branch`
+   - List Git branches
+   - Inputs:
+     - `repo_path` (string): Path to the Git repository.
+     - `branch_type` (string): Whether to list local branches ('local'), remote branches ('remote') or all branches('all').
+     - `contains` (string, optional): The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified
+     - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
+   - Returns: List of branches
+
 ## Installation
 
 ### Using uv (recommended)
