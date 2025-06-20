@@ -17,7 +17,7 @@
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
     "watch": "tsc --watch",
-    "test": "jest --config=jest.config.cjs"
+    "test": "jest --config=jest.config.cjs --coverage"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.3",
