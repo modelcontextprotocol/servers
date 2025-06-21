@@ -15,101 +15,27 @@ import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 import { normalizePath, expandHome } from './path-utils.js';
 
-console.error('[STARTUP] Filesystem MCP server starting...');
-
 // Command line argument parsing
-// Join all arguments and then re-split them to handle paths with spaces
-// This is a workaround for the shell splitting paths with spaces
-const rawArgs = process.argv.slice(2);
-console.error('[STARTUP] Raw arguments:', rawArgs);
-
-// Process arguments to handle paths with spaces
-// If an argument starts with a quote but doesn't end with one, it's part of a path with spaces
-let processedArgs: string[] = [];
-let currentArg = '';
-let inQuotedArg = false;
-
-for (const arg of rawArgs) {
-  // If we're not in a quoted argument and this arg starts with a quote
-  if (!inQuotedArg && (arg.startsWith('"') || arg.startsWith("'"))) {
-    // If it also ends with a quote, it's a complete quoted argument
-    if ((arg.startsWith('"') && arg.endsWith('"')) || 
-        (arg.startsWith("'") && arg.endsWith("'"))) {
-      processedArgs.push(arg.slice(1, -1)); // Remove the quotes
-    } else {
-      // Otherwise, it's the start of a quoted argument
-      currentArg = arg.slice(1); // Remove the starting quote
-      inQuotedArg = true;
-    }
-  }
-  // If we're in a quoted argument and this arg ends with a quote
-  else if (inQuotedArg && ((arg.endsWith('"') && !arg.endsWith('\\"')) || 
-                           (arg.endsWith("'") && !arg.endsWith("\\'"))) ) {
-    // It's the end of a quoted argument
-    currentArg += ' ' + arg.slice(0, -1); // Remove the ending quote
-    processedArgs.push(currentArg);
-    currentArg = '';
-    inQuotedArg = false;
-  }
-  // If we're in a quoted argument
-  else if (inQuotedArg) {
-    // It's part of a quoted argument
-    currentArg += ' ' + arg;
-  }
-  // Otherwise, it's a regular argument
-  else {
-    processedArgs.push(arg);
-  }
-}
-
-// If we're still in a quoted argument, add it
-if (inQuotedArg) {
-  processedArgs.push(currentArg);
-}
-
-// Special handling for Windows paths that might have been split
-// Look for arguments that might be parts of a Windows path
-for (let i = 0; i < processedArgs.length - 1; i++) {
-  const current = processedArgs[i];
-  const next = processedArgs[i + 1];
-  
-  // If current ends with a drive letter and colon, and next starts with a backslash or slash
-  if (/[A-Za-z]:$/.test(current) && (next.startsWith('\\') || next.startsWith('/'))) {
-    // Join them and remove from the array
-    processedArgs[i] = current + next;
-    processedArgs.splice(i + 1, 1);
-    i--; // Recheck this index in case we need to join more parts
-  }
-}
-
-const args = processedArgs;
+const args = process.argv.slice(2);
 if (args.length === 0) {
   console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
   process.exit(1);
 }
 
-console.error('[STARTUP] Processed arguments:', args);
-
 // Store allowed directories in normalized form
 const allowedDirectories = args.map(dir => {
-  // Handle paths with spaces by removing any surrounding quotes first
-  const cleanDir = dir.replace(/^["']|["']$/g, '');
-  const normalized = normalizePath(path.resolve(expandHome(cleanDir)));
-  console.error(`[STARTUP] Normalized directory ${cleanDir} to ${normalized}`);
+  const normalized = normalizePath(path.resolve(expandHome(dir)));
   return normalized;
 });
-
-console.error('[STARTUP] Normalized allowed directories:', allowedDirectories);
 
 // Validate that all directories exist and are accessible
 await Promise.all(allowedDirectories.map(async (dir) => {
   try {
-    const stats = await fs.stat(expandHome(dir));
+    const stats = await fs.stat(dir);
     if (!stats.isDirectory()) {
       console.error(`Error: ${dir} is not a directory`);
       process.exit(1);
     }
-    console.error(`[STARTUP] Successfully validated directory: ${dir}`);
   } catch (error) {
     console.error(`Error accessing directory ${dir}:`, error);
     process.exit(1);
@@ -126,14 +52,9 @@ export async function validatePath(requestedPath: string): Promise<string> {
 
   // Ensure consistent normalization for security checks
   const normalizedRequested = normalizePath(absolute);
-  console.error(`[DEBUG] Normalized requested path: ${normalizedRequested}`);
 
   // Check if path is within allowed directories using normalized paths
-  const isAllowed = allowedDirectories.some(dir => {
-    const result = normalizedRequested.startsWith(dir);
-    console.error(`[DEBUG] Checking against allowed dir: ${dir} -> ${result}`);
-    return result;
-  });
+  const isAllowed = allowedDirectories.some(dir => normalizedRequested.startsWith(dir));
   if (!isAllowed) {
     throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
   }
@@ -142,7 +63,6 @@ export async function validatePath(requestedPath: string): Promise<string> {
   try {
     const realPath = await fs.realpath(absolute);
     const normalizedReal = normalizePath(realPath);
-    console.error(`[DEBUG] Normalized real path: ${normalizedReal}`);
     const isRealPathAllowed = allowedDirectories.some(dir => normalizedReal.startsWith(dir));
     if (!isRealPathAllowed) {
       throw new Error("Access denied - symlink target outside allowed directories");
@@ -238,7 +158,6 @@ interface FileInfo {
 }
 
 // Server setup
-console.error('[STARTUP] Initializing MCP server...');
 const server = new Server(
   {
     name: "secure-filesystem-server",
