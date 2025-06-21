@@ -20,6 +20,13 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const instructions = readFileSync(join(__dirname, "instructions.md"), "utf-8");
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
@@ -110,6 +117,7 @@ export const createServer = () => {
         logging: {},
         completions: {},
       },
+      instructions
     }
   );
 
@@ -160,9 +168,9 @@ export const createServer = () => {
   // Set up update interval for stderr messages
   stdErrUpdateInterval = setInterval(() => {
     const shortTimestamp = new Date().toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
     });
     server.notification({
       method: "notifications/stderr",
