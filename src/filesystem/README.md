@@ -209,6 +209,26 @@ Docker build:
 docker build -t mcp/filesystem -f src/filesystem/Dockerfile .
 ```
 
+## Unicode Filename Handling (macOS Screenshot Issue)
+
+### Problem
+
+macOS system screenshot filenames and some other files may contain non-breaking spaces (U+00A0) or rare Unicode punctuation, leading to ENOENT (file not found) errors in MCP operations, even if files appear in directory listings.
+
+### Solution
+
+All file operations now normalize Unicode in paths:
+- Converts non-breaking spaces and rare Unicode punctuation to normal spaces.
+- Applies Unicode NFC normalization before accessing files.
+
+If you still see ENOENT for files with visible Unicode characters:
+- Try renaming the file manually in Finder/Terminal.
+- Report the filename for further investigation.
+
+### Developer Note
+
+See `src/filesystem/unicodeNormalize.ts` for full normalization logic.
+
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
