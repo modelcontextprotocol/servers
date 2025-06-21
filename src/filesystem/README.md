@@ -22,8 +22,12 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 
 - **read_file**
   - Read complete contents of a file
-  - Input: `path` (string)
+  - Inputs:
+    - `path` (string): File path to read
+    - `head` (number, optional): Read only the first N lines of the file
+    - `tail` (number, optional): Read only the last N lines of the file
   - Reads complete file contents with UTF-8 encoding
+  - Cannot specify both `head` and `tail` simultaneously
 
 - **read_multiple_files**
   - Read multiple files simultaneously
@@ -63,6 +67,23 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - **list_directory**
   - List directory contents with [FILE] or [DIR] prefixes
   - Input: `path` (string)
+
+- **list_directory_with_sizes**
+  - List directory contents with [FILE] or [DIR] prefixes, including file sizes
+  - Inputs:
+    - `path` (string): Directory path to list
+    - `sortBy` (string, optional): Sort entries by "name" or "size" (default: "name")
+  - Returns detailed listing with file sizes and summary statistics
+  - Shows total files, directories, and combined size
+
+- **directory_tree**
+  - Get a recursive tree view of files and directories as a JSON structure
+  - Input: `path` (string): Starting directory path
+  - Returns JSON structure with:
+    - `name`: File/directory name
+    - `type`: "file" or "directory"
+    - `children`: Array of child entries (for directories only)
+  - Output is formatted with 2-space indentation for readability
 
 - **move_file**
   - Move or rename files and directories
