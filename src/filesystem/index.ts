@@ -9,11 +9,11 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
 import path from "path";
-import os from 'os';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
+import { normalizePath, expandHome } from './path-utils.js';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -22,27 +22,16 @@ if (args.length === 0) {
   process.exit(1);
 }
 
-// Normalize all paths consistently
-function normalizePath(p: string): string {
-  return path.normalize(p);
-}
-
-function expandHome(filepath: string): string {
-  if (filepath.startsWith('~/') || filepath === '~') {
-    return path.join(os.homedir(), filepath.slice(1));
-  }
-  return filepath;
-}
-
 // Store allowed directories in normalized form
-const allowedDirectories = args.map(dir =>
-  normalizePath(path.resolve(expandHome(dir)))
-);
+const allowedDirectories = args.map(dir => {
+  const normalized = normalizePath(path.resolve(expandHome(dir)));
+  return normalized;
+});
 
 // Validate that all directories exist and are accessible
-await Promise.all(args.map(async (dir) => {
+await Promise.all(allowedDirectories.map(async (dir) => {
   try {
-    const stats = await fs.stat(expandHome(dir));
+    const stats = await fs.stat(dir);
     if (!stats.isDirectory()) {
       console.error(`Error: ${dir} is not a directory`);
       process.exit(1);
@@ -54,15 +43,17 @@ await Promise.all(args.map(async (dir) => {
 }));
 
 // Security utilities
-async function validatePath(requestedPath: string): Promise<string> {
+export async function validatePath(requestedPath: string): Promise<string> {
+  // Normalize the path first to handle any special characters or formats
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
     : path.resolve(process.cwd(), expandedPath);
 
+  // Ensure consistent normalization for security checks
   const normalizedRequested = normalizePath(absolute);
 
-  // Check if path is within allowed directories
+  // Check if path is within allowed directories using normalized paths
   const isAllowed = allowedDirectories.some(dir => normalizedRequested.startsWith(dir));
   if (!isAllowed) {
     throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
@@ -742,42 +733,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
         }
 
-            interface TreeEntry {
-                name: string;
-                type: 'file' | 'directory';
-                children?: TreeEntry[];
-            }
+        interface TreeEntry {
+            name: string;
+            type: 'file' | 'directory';
+            children?: TreeEntry[];
+        }
 
-            async function buildTree(currentPath: string): Promise<TreeEntry[]> {
-                const validPath = await validatePath(currentPath);
-                const entries = await fs.readdir(validPath, {withFileTypes: true});
-                const result: TreeEntry[] = [];
+        async function buildTree(currentPath: string): Promise<TreeEntry[]> {
+            const validPath = await validatePath(currentPath);
+            const entries = await fs.readdir(validPath, {withFileTypes: true});
+            const result: TreeEntry[] = [];
 
-                for (const entry of entries) {
-                    const entryData: TreeEntry = {
-                        name: entry.name,
-                        type: entry.isDirectory() ? 'directory' : 'file'
-                    };
+            for (const entry of entries) {
+                const entryData: TreeEntry = {
+                    name: entry.name,
+                    type: entry.isDirectory() ? 'directory' : 'file'
+                };
 
-                    if (entry.isDirectory()) {
-                        const subPath = path.join(currentPath, entry.name);
-                        entryData.children = await buildTree(subPath);
-                    }
-
-                    result.push(entryData);
+                if (entry.isDirectory()) {
+                    const subPath = path.join(currentPath, entry.name);
+                    entryData.children = await buildTree(subPath);
                 }
 
-                return result;
+                result.push(entryData);
             }
 
-            const treeData = await buildTree(parsed.data.path);
-            return {
-                content: [{
-                    type: "text",
-                    text: JSON.stringify(treeData, null, 2)
-                }],
-            };
+            return result;
         }
+
+        const treeData = await buildTree(parsed.data.path);
+        return {
+            content: [{
+                type: "text",
+                text: JSON.stringify(treeData, null, 2)
+            }],
+        };
+      }
 
       case "move_file": {
         const parsed = MoveFileArgsSchema.safeParse(args);
