@@ -11,8 +11,7 @@
     "mcp-server-filesystem": "dist/index.js"
   },
   "files": [
-    "dist",
-    "run-server.js"
+    "dist"
   ],
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
