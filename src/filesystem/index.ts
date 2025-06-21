@@ -13,12 +13,7 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
-// Import CommonJS module using dynamic import
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-const pathUtils = require('./path-utils.cjs');
-const { normalizePath, expandHome } = pathUtils;
+import { normalizePath, expandHome } from './path-utils.js';
 
 console.error('[STARTUP] Filesystem MCP server starting...');
 
