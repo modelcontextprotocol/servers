@@ -15,7 +15,7 @@
     "run-server.js"
   ],
   "scripts": {
-    "build": "tsc && shx cp path-utils.cjs dist/ && shx chmod +x dist/*.js",
+    "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
     "watch": "tsc --watch",
     "test": "jest --config=jest.config.cjs --coverage"
