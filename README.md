@@ -787,6 +787,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Voice MCP](https://github.com/mbailey/voice-mcp)** - Enable voice conversations with Claude using any OpenAI-compatible STT/TTS service ([voice-mcp.com](https://voice-mcp.com))
 - **[VolcEngine TOS](https://github.com/dinghuazhou/sample-mcp-server-tos)** - A sample MCP server for VolcEngine TOS that flexibly get objects from TOS.
 - **[Voyp](https://github.com/paulotaylor/voyp-mcp)** - VOYP MCP server for making calls using Artificial Intelligence.
+- **[vulnicheck](https://github.com/andrasfe/vulnicheck)** - Real-time Python package vulnerability scanner that checks dependencies against OSV and NVD databases, providing comprehensive security analysis with CVE details, lock file support, and actionable upgrade recommendations.
 - **[Wanaku MCP Router](https://github.com/wanaku-ai/wanaku/)** - The Wanaku MCP Router is a SSE-based MCP server that provides an extensible routing engine that allows integrating your enterprise systems with AI agents.
 - **[weather-mcp-server](https://github.com/devilcoder01/weather-mcp-server)** - Get real-time weather data for any location using weatherapi.
 - **[Webflow](https://github.com/kapilduraphe/webflow-mcp-server)** - Interfact with the Webflow APIs
