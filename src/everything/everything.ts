@@ -20,6 +20,13 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const instructions = readFileSync(join(__dirname, "instructions.md"), "utf-8");
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
@@ -108,14 +115,17 @@ export const createServer = () => {
         resources: { subscribe: true },
         tools: {},
         logging: {},
+        completions: {},
       },
+      instructions
     }
   );
 
   let subscriptions: Set<string> = new Set();
   let subsUpdateInterval: NodeJS.Timeout | undefined;
-  // Set up update interval for subscribed resources
+  let stdErrUpdateInterval: NodeJS.Timeout | undefined;
 
+  // Set up update interval for subscribed resources
   subsUpdateInterval = setInterval(() => {
     for (const uri of subscriptions) {
       server.notification({
@@ -123,7 +133,7 @@ export const createServer = () => {
         params: { uri },
       });
     }
-  }, 5000);
+  }, 10000);
 
   let logLevel: LoggingLevel = "debug";
   let logsUpdateInterval: NodeJS.Timeout | undefined;
@@ -152,7 +162,21 @@ export const createServer = () => {
     };
     if (!isMessageIgnored(message.params.level as LoggingLevel))
       server.notification(message);
-  }, 15000);
+  }, 20000);
+
+
+  // Set up update interval for stderr messages
+  stdErrUpdateInterval = setInterval(() => {
+    const shortTimestamp = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+    server.notification({
+      method: "notifications/stderr",
+      params: { content: `${shortTimestamp}: A stderr message` },
+    });
+  }, 30000);
 
   // Helper method to request sampling from client
   const requestSampling = async (
@@ -676,6 +700,7 @@ export const createServer = () => {
   const cleanup = async () => {
     if (subsUpdateInterval) clearInterval(subsUpdateInterval);
     if (logsUpdateInterval) clearInterval(logsUpdateInterval);
+    if (stdErrUpdateInterval) clearInterval(stdErrUpdateInterval);
   };
 
   return { server, cleanup };

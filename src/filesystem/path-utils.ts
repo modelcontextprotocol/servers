@@ -53,14 +53,31 @@ export function normalizePath(p: string): string {
   // Convert WSL or Unix-style Windows paths to Windows format
   p = convertToWindowsPath(p);
   
-  // Handle double backslashes and ensure proper escaping
-  p = p.replace(/\\\\/g, '\\');
+  // Handle double backslashes, preserving leading UNC \\
+  if (p.startsWith('\\\\')) {
+    // For UNC paths, first normalize any excessive leading backslashes to exactly \\
+    // Then normalize double backslashes in the rest of the path
+    let uncPath = p;
+    // Replace multiple leading backslashes with exactly two
+    uncPath = uncPath.replace(/^\\{2,}/, '\\\\');
+    // Now normalize any remaining double backslashes in the rest of the path
+    const restOfPath = uncPath.substring(2).replace(/\\\\/g, '\\');
+    p = '\\\\' + restOfPath;
+  } else {
+    // For non-UNC paths, normalize all double backslashes
+    p = p.replace(/\\\\/g, '\\');
+  }
   
   // Use Node's path normalization, which handles . and .. segments
-  const normalized = path.normalize(p);
+  let normalized = path.normalize(p);
+  
+  // Fix UNC paths after normalization (path.normalize can remove a leading backslash)
+  if (p.startsWith('\\\\') && !normalized.startsWith('\\\\')) {
+    normalized = '\\' + normalized;
+  }
   
   // Handle Windows paths: convert slashes and ensure drive letter is capitalized
-  if (normalized.match(/^[a-zA-Z]:|^\/mnt\/[a-z]\/|^\/[a-z]\//i)) {
+  if (normalized.match(/^[a-zA-Z]:/)) {
     let result = normalized.replace(/\//g, '\\');
     // Capitalize drive letter if present
     if (/^[a-z]:/.test(result)) {
@@ -69,8 +86,9 @@ export function normalizePath(p: string): string {
     return result;
   }
   
-  // Leave other paths unchanged
-  return normalized;
+  // For all other paths (including relative paths), convert forward slashes to backslashes
+  // This ensures relative paths like "some/relative/path" become "some\\relative\\path"
+  return normalized.replace(/\//g, '\\');
 }
 
 /**
