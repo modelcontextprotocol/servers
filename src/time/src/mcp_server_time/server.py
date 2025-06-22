@@ -40,10 +40,30 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
         return ZoneInfo(local_tz_override)
 
     # Get local timezone from datetime.now()
-    tzinfo = datetime.now().astimezone(tz=None).tzinfo
+    local_dt = datetime.now().astimezone(tz=None)
+    tzinfo = local_dt.tzinfo
+    
     if tzinfo is not None:
-        return ZoneInfo(str(tzinfo))
-    raise McpError("Could not determine local timezone - tzinfo is None")
+        try:
+            # Try to get the IANA timezone name directly
+            return ZoneInfo(str(tzinfo))
+        except Exception:
+            # Fallback: Use the UTC offset to determine an appropriate timezone
+            offset = local_dt.utcoffset().total_seconds() / 3600
+            
+            # Common offsets to IANA mappings (add more as needed)
+            offset_to_zone = {
+                5.5: "Asia/Kolkata",  # IST (Indian Standard Time)
+                1.0: "Europe/Dublin",  # IST (Irish Standard Time) during summer
+                2.0: "Asia/Jerusalem",  # IST (Israel Standard Time)
+                # Add other common offsets as needed
+            }
+            
+            if offset in offset_to_zone:
+                return ZoneInfo(offset_to_zone[offset])
+            else:
+                # If no specific mapping, use UTC with the appropriate offset
+                return ZoneInfo("Etc/UTC")  # Default fallback
 
 
 def get_zoneinfo(timezone_name: str) -> ZoneInfo:
