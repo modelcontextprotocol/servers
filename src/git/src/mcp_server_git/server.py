@@ -59,6 +59,15 @@ class GitShow(BaseModel):
 class GitInit(BaseModel):
     repo_path: str
 
+class GitLogDateRange(BaseModel):
+    repo_path: str
+    start_date: str
+    end_date: str
+
+class GitLogByDate(BaseModel):
+    repo_path: str
+    date: str 
+
 class GitTools(str, Enum):
     STATUS = "git_status"
     DIFF_UNSTAGED = "git_diff_unstaged"
@@ -72,6 +81,8 @@ class GitTools(str, Enum):
     CHECKOUT = "git_checkout"
     SHOW = "git_show"
     INIT = "git_init"
+    LOG_DATE_RANGE = "git_log_date_range"
+    LOG_BY_DATE = "git_log_by_date"
 
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
@@ -146,6 +157,46 @@ def git_show(repo: git.Repo, revision: str) -> str:
         output.append(f"\n--- {d.a_path}\n+++ {d.b_path}\n")
         output.append(d.diff.decode('utf-8'))
     return "".join(output)
+
+def git_log_date_range(repo: git.Repo, start_date: str, end_date: str) -> list[str]:
+    log_output = repo.git.log(
+        '--since', f"{start_date}",
+        '--until', f"{end_date}",
+        '--format=%H%n%an%n%ad%n%s%n'
+    ).split('\n')
+    
+    log = []
+    # Process commits in groups of 4 (hash, author, date, message)
+    for i in range(0, len(log_output), 4):
+        if i + 3 < len(log_output):
+            log.append(
+                f"Commit: {log_output[i]}\n"
+                f"Author: {log_output[i+1]}\n"
+                f"Date: {log_output[i+2]}\n"
+                f"Message: {log_output[i+3]}\n"
+            )
+    return log
+
+def git_log_by_date(repo: git.Repo, date: str) -> list[str]:
+    log_output = repo.git.log(
+        '--since', f"{date} 00:00:00",
+        '--until', f"{date} 23:59:59",
+        '--format=%H%n%an%n%ad%n%s%n'
+    ).split('\n')
+    
+    log = []
+    # Process commits in groups of 4 (hash, author, date, message)
+    for i in range(0, len(log_output), 4):
+        if i + 3 < len(log_output):
+            log.append(
+                f"Commit: {log_output[i]}\n"
+                f"Author: {log_output[i+1]}\n"
+                f"Date: {log_output[i+2]}\n"
+                f"Message: {log_output[i+3]}\n"
+            )
+    return log
+
+
 
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
@@ -222,6 +273,16 @@ async def serve(repository: Path | None) -> None:
                 name=GitTools.INIT,
                 description="Initialize a new Git repository",
                 inputSchema=GitInit.schema(),
+            ),
+            Tool(
+                name=GitTools.LOG_DATE_RANGE,
+                description="Retrieve git commits within a specified date range",
+                inputSchema=GitLogDateRange.schema(),
+            ),
+            Tool(
+                name=GitTools.LOG_BY_DATE,
+                description="Retrieve git commits for a specific date",
+                inputSchema=GitLogByDate.schema(),
             )
         ]
 
@@ -349,6 +410,27 @@ async def serve(repository: Path | None) -> None:
                 return [TextContent(
                     type="text",
                     text=result
+                )]
+
+            case GitTools.LOG_DATE_RANGE:
+                log = git_log_date_range(
+                    repo,
+                    arguments["start_date"],
+                    arguments["end_date"]
+                )
+                return [TextContent(
+                    type="text",
+                    text="Commit history:\n" + "\n".join(log)
+                )]
+
+            case GitTools.LOG_BY_DATE:
+                log = git_log_by_date(
+                    repo,
+                    arguments["date"]
+                )
+                return [TextContent(
+                    type="text",
+                    text="Commit history:\n" + "\n".join(log)
                 )]
 
             case _:
