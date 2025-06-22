@@ -1,0 +1,23 @@
+# Set the maximum line length to 79.
+fix = true
+line-length = 79
+
+[lint]
+select = [
+    'F',      # Pyflakes
+    'E',      # pycodestyle (Error)
+    'I',      # isort
+    'D',      # pydocstyle
+    'UP',     # pyupgrade
+    'YTT',    # flake8-2020
+    'B',      # flake8-bugbear
+    'T10',    # flake8-debugger
+    'T20',    # flake8-print
+    'C4',     # flake8-comprehensions
+    'PYI006', # flake8-pyi
+    'PYI062', # flake8-pyi
+    'PYI063', # flake8-pyi
+    'PYI066', # flake8-pyi
+]
+ignore = ['D100', 'D104', 'D101', 'D102', 'D103', 'D105', 'D107', 'D205','D400', 'D401', 'D415', 'E501', 'B011', 'B028', 'B904']
+flake8-quotes = {inline-quotes = 'single', multiline-quotes = 'double'}
