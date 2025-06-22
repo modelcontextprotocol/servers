@@ -1,7 +1,7 @@
 # Security Policy
 Thank you for helping us keep our MCP servers secure.
 
-These servers are maintained by [Anthropic](https://www.anthropic.com/) as part of the Model Context Protocol project. 
+The **reference servers** in this repo are maintained by [Anthropic](https://www.anthropic.com/) as part of the Model Context Protocol project.
 
 The security of our systems and user data is Anthropic’s top priority. We appreciate the work of security researchers acting in good faith in identifying and reporting potential vulnerabilities.
 
