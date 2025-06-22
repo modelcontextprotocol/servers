@@ -59,6 +59,11 @@ class GitShow(BaseModel):
 class GitInit(BaseModel):
     repo_path: str
 
+class GitMv(BaseModel):
+    repo_path: str
+    source: str
+    destination: str
+
 class GitTools(str, Enum):
     STATUS = "git_status"
     DIFF_UNSTAGED = "git_diff_unstaged"
@@ -72,6 +77,7 @@ class GitTools(str, Enum):
     CHECKOUT = "git_checkout"
     SHOW = "git_show"
     INIT = "git_init"
+    MV = "git_mv"
 
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
@@ -146,6 +152,10 @@ def git_show(repo: git.Repo, revision: str) -> str:
         output.append(f"\n--- {d.a_path}\n+++ {d.b_path}\n")
         output.append(d.diff.decode('utf-8'))
     return "".join(output)
+
+def git_mv(repo: git.Repo, source: str, destination: str) -> str:
+    repo.git.mv(source, destination)
+    return f"Moved '{source}' to '{destination}'"
 
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
@@ -222,6 +232,11 @@ async def serve(repository: Path | None) -> None:
                 name=GitTools.INIT,
                 description="Initialize a new Git repository",
                 inputSchema=GitInit.schema(),
+            ),
+            Tool(
+                name=GitTools.MV,
+                description="Move or rename a file, directory or symlink in the git repository",
+                inputSchema=GitMv.schema(),
             )
         ]
 
@@ -346,6 +361,13 @@ async def serve(repository: Path | None) -> None:
 
             case GitTools.SHOW:
                 result = git_show(repo, arguments["revision"])
+                return [TextContent(
+                    type="text",
+                    text=result
+                )]
+
+            case GitTools.MV:
+                result = git_mv(repo, arguments["source"], arguments["destination"])
                 return [TextContent(
                     type="text",
                     text=result
