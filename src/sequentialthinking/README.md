@@ -77,6 +77,8 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 
+To disable logging of thought information set env var: `DISABLE_THOUGHT_LOGGING` to `TRUE`.
+
 ### Usage with VS Code
 
 For quick installation, click one of the installation buttons below...
