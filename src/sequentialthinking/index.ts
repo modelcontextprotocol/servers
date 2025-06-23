@@ -25,7 +25,7 @@ interface ThoughtData {
 class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
-  private disableThoughtLogging: boolean; // <-- ADDED
+  private disableThoughtLogging: boolean;
 
   constructor() {
     this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
