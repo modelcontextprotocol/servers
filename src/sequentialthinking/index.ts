@@ -28,10 +28,7 @@ class SequentialThinkingServer {
   private disableThoughtLogging: boolean; // <-- ADDED
 
   constructor() {
-    // Disable logging if the ENV var is "1" or "true" (case-insensitive)
-    this.disableThoughtLogging =
-      process.env.DISABLE_THOUGHT_LOGGING === "1" ||
-      (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
+    this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
   }
 
   private validateThoughtData(input: unknown): ThoughtData {
@@ -108,7 +105,6 @@ class SequentialThinkingServer {
         this.branches[validatedInput.branchId].push(validatedInput);
       }
 
-      // --- ONLY LOG IF NOT DISABLED ---
       if (!this.disableThoughtLogging) {
         const formattedThought = this.formatThought(validatedInput);
         console.error(formattedThought);
