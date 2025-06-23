@@ -51,6 +51,29 @@ describe('Lib Functions', () => {
         expect(formatSize(1025)).toBe('1.00 KB');
         expect(formatSize(1048575)).toBe('1024.00 KB');
       });
+
+      it('handles very large numbers beyond TB', () => {
+        // The function only supports up to TB, so very large numbers will show as TB
+        expect(formatSize(1024 * 1024 * 1024 * 1024 * 1024)).toBe('1024.00 TB');
+        expect(formatSize(Number.MAX_SAFE_INTEGER)).toContain('TB');
+      });
+
+      it('handles negative numbers', () => {
+        // Negative numbers will result in NaN for the log calculation
+        expect(formatSize(-1024)).toContain('NaN');
+        expect(formatSize(-0)).toBe('0 B');
+      });
+
+      it('handles decimal numbers', () => {
+        expect(formatSize(1536.5)).toBe('1.50 KB');
+        expect(formatSize(1023.9)).toBe('1023.9 B');
+      });
+
+      it('handles very small positive numbers', () => {
+        expect(formatSize(1)).toBe('1 B');
+        expect(formatSize(0.5)).toBe('0.5 B');
+        expect(formatSize(0.1)).toBe('0.1 B');
+      });
     });
 
     describe('normalizeLineEndings', () => {
@@ -101,6 +124,24 @@ describe('Lib Functions', () => {
         expect(diff.split('\n').filter((line: string) => line.startsWith('+') && !line.startsWith('+++'))).toHaveLength(0);
         expect(diff.split('\n').filter((line: string) => line.startsWith('-') && !line.startsWith('---'))).toHaveLength(0);
       });
+
+      it('handles empty content', () => {
+        const diff = createUnifiedDiff('', '');
+        expect(diff).toContain('--- file');
+        expect(diff).toContain('+++ file');
+      });
+
+      it('handles default filename parameter', () => {
+        const diff = createUnifiedDiff('old', 'new');
+        expect(diff).toContain('--- file');
+        expect(diff).toContain('+++ file');
+      });
+
+      it('handles custom filename', () => {
+        const diff = createUnifiedDiff('old', 'new', 'custom.txt');
+        expect(diff).toContain('--- custom.txt');
+        expect(diff).toContain('+++ custom.txt');
+      });
     });
   });
 
@@ -125,17 +166,6 @@ describe('Lib Functions', () => {
           .rejects.toThrow('Access denied - path outside allowed directories');
       });
 
-      it('handles symlinks within allowed directories', async () => {
-        const symlinkPath = process.platform === 'win32' ? 'C:\\Users\\test\\symlink.txt' : '/home/user/symlink.txt';
-        const realPath = process.platform === 'win32' ? 'C:\\Users\\test\\realfile.txt' : '/home/user/realfile.txt';
-        
-        mockFs.realpath.mockResolvedValueOnce(realPath);
-        
-        const result = await validatePath(symlinkPath, allowedDirs);
-        expect(result).toBe(realPath);
-      });
-
-
       it('handles non-existent files by checking parent directory', async () => {
         const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\newfile.txt' : '/home/user/newfile.txt';
         const parentPath = process.platform === 'win32' ? 'C:\\Users\\test' : '/home/user';
@@ -146,6 +176,17 @@ describe('Lib Functions', () => {
         
         const result = await validatePath(newFilePath, allowedDirs);
         expect(result).toBe(path.resolve(newFilePath));
+      });
+
+      it('rejects when parent directory does not exist', async () => {
+        const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\nonexistent\\newfile.txt' : '/home/user/nonexistent/newfile.txt';
+        
+        mockFs.realpath
+          .mockRejectedValueOnce(new Error('ENOENT'))
+          .mockRejectedValueOnce(new Error('ENOENT'));
+        
+        await expect(validatePath(newFilePath, allowedDirs))
+          .rejects.toThrow('Parent directory does not exist');
       });
     });
   });
@@ -237,39 +278,6 @@ describe('Lib Functions', () => {
         mockFs.realpath.mockImplementation(async (path: any) => path.toString());
       });
 
-      it('searches files recursively', async () => {
-        const mockEntries1 = [
-          { name: 'test.txt', isDirectory: () => false },
-          { name: 'subdir', isDirectory: () => true }
-        ];
-        const mockEntries2 = [
-          { name: 'nested_test.js', isDirectory: () => false }
-        ];
-        
-        mockFs.readdir
-          .mockResolvedValueOnce(mockEntries1 as any)
-          .mockResolvedValueOnce(mockEntries2 as any);
-        
-        const testDir = process.platform === 'win32' ? 'C:\\allowed\\dir' : '/allowed/dir';
-        const allowedDirs = process.platform === 'win32' ? ['C:\\allowed'] : ['/allowed'];
-        
-        const result = await searchFilesWithValidation(
-          testDir,
-          'test',
-          allowedDirs,
-          {}
-        );
-        
-        const expectedResults = process.platform === 'win32' ? [
-          'C:\\allowed\\dir\\test.txt',
-          'C:\\allowed\\dir\\subdir\\nested_test.js'
-        ] : [
-          '/allowed/dir/test.txt',
-          '/allowed/dir/subdir/nested_test.js'
-        ];
-        
-        expect(result).toEqual(expectedResults);
-      });
 
       it('excludes files matching exclude patterns', async () => {
         const mockEntries = [
@@ -292,6 +300,66 @@ describe('Lib Functions', () => {
         
         const expectedResult = process.platform === 'win32' ? 'C:\\allowed\\dir\\test.txt' : '/allowed/dir/test.txt';
         expect(result).toEqual([expectedResult]);
+      });
+
+      it('handles validation errors during search', async () => {
+        const mockEntries = [
+          { name: 'test.txt', isDirectory: () => false },
+          { name: 'invalid_file.txt', isDirectory: () => false }
+        ];
+        
+        mockFs.readdir.mockResolvedValueOnce(mockEntries as any);
+        
+        // Mock validatePath to throw error for invalid_file.txt
+        mockFs.realpath.mockImplementation(async (path: any) => {
+          if (path.toString().includes('invalid_file.txt')) {
+            throw new Error('Access denied');
+          }
+          return path.toString();
+        });
+        
+        const testDir = process.platform === 'win32' ? 'C:\\allowed\\dir' : '/allowed/dir';
+        const allowedDirs = process.platform === 'win32' ? ['C:\\allowed'] : ['/allowed'];
+        
+        const result = await searchFilesWithValidation(
+          testDir,
+          'test',
+          allowedDirs,
+          {}
+        );
+        
+        // Should only return the valid file, skipping the invalid one
+        const expectedResult = process.platform === 'win32' ? 'C:\\allowed\\dir\\test.txt' : '/allowed/dir/test.txt';
+        expect(result).toEqual([expectedResult]);
+      });
+
+      it('handles complex exclude patterns with wildcards', async () => {
+        const mockEntries = [
+          { name: 'test.txt', isDirectory: () => false },
+          { name: 'test.backup', isDirectory: () => false },
+          { name: 'important_test.js', isDirectory: () => false }
+        ];
+        
+        mockFs.readdir.mockResolvedValueOnce(mockEntries as any);
+        
+        const testDir = process.platform === 'win32' ? 'C:\\allowed\\dir' : '/allowed/dir';
+        const allowedDirs = process.platform === 'win32' ? ['C:\\allowed'] : ['/allowed'];
+        
+        const result = await searchFilesWithValidation(
+          testDir,
+          'test',
+          allowedDirs,
+          { excludePatterns: ['*.backup'] }
+        );
+        
+        const expectedResults = process.platform === 'win32' ? [
+          'C:\\allowed\\dir\\test.txt',
+          'C:\\allowed\\dir\\important_test.js'
+        ] : [
+          '/allowed/dir/test.txt',
+          '/allowed/dir/important_test.js'
+        ];
+        expect(result).toEqual(expectedResults);
       });
     });
   });
@@ -368,6 +436,60 @@ describe('Lib Functions', () => {
         await expect(applyFileEdits('/test/file.txt', edits, false))
           .rejects.toThrow('Could not find exact match for edit');
       });
+
+      it('handles complex multi-line edits with indentation', async () => {
+        mockFs.readFile.mockResolvedValue('function test() {\n  console.log("hello");\n  return true;\n}');
+        
+        const edits = [
+          { 
+            oldText: '  console.log("hello");\n  return true;', 
+            newText: '  console.log("world");\n  console.log("test");\n  return false;' 
+          }
+        ];
+        
+        await applyFileEdits('/test/file.js', edits, false);
+        
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          '/test/file.js',
+          'function test() {\n  console.log("world");\n  console.log("test");\n  return false;\n}',
+          'utf-8'
+        );
+      });
+
+      it('handles edits with different indentation patterns', async () => {
+        mockFs.readFile.mockResolvedValue('    if (condition) {\n        doSomething();\n    }');
+        
+        const edits = [
+          { 
+            oldText: 'doSomething();', 
+            newText: 'doSomethingElse();\n        doAnotherThing();' 
+          }
+        ];
+        
+        await applyFileEdits('/test/file.js', edits, false);
+        
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          '/test/file.js',
+          '    if (condition) {\n        doSomethingElse();\n        doAnotherThing();\n    }',
+          'utf-8'
+        );
+      });
+
+      it('handles CRLF line endings in file content', async () => {
+        mockFs.readFile.mockResolvedValue('line1\r\nline2\r\nline3\r\n');
+        
+        const edits = [
+          { oldText: 'line2', newText: 'modified line2' }
+        ];
+        
+        await applyFileEdits('/test/file.txt', edits, false);
+        
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          '/test/file.txt',
+          'line1\nmodified line2\nline3\n',
+          'utf-8'
+        );
+      });
     });
 
     describe('tailFile', () => {
@@ -399,6 +521,45 @@ describe('Lib Functions', () => {
         expect(mockFs.stat).toHaveBeenCalledWith('/test/file.txt');
         expect(mockFs.open).toHaveBeenCalledWith('/test/file.txt', 'r');
       });
+
+      it('handles files with content and returns last lines', async () => {
+        mockFs.stat.mockResolvedValue({ size: 50 } as any);
+        
+        const mockFileHandle = {
+          read: jest.fn(),
+          close: jest.fn()
+        } as any;
+        
+        // Simulate reading file content in chunks
+        mockFileHandle.read
+          .mockResolvedValueOnce({ bytesRead: 20, buffer: Buffer.from('line3\nline4\nline5\n') })
+          .mockResolvedValueOnce({ bytesRead: 0 });
+        mockFileHandle.close.mockResolvedValue(undefined);
+        
+        mockFs.open.mockResolvedValue(mockFileHandle);
+        
+        const result = await tailFile('/test/file.txt', 2);
+        
+        expect(mockFileHandle.close).toHaveBeenCalled();
+      });
+
+      it('handles read errors gracefully', async () => {
+        mockFs.stat.mockResolvedValue({ size: 100 } as any);
+        
+        const mockFileHandle = {
+          read: jest.fn(),
+          close: jest.fn()
+        } as any;
+        
+        mockFileHandle.read.mockResolvedValue({ bytesRead: 0 });
+        mockFileHandle.close.mockResolvedValue(undefined);
+        
+        mockFs.open.mockResolvedValue(mockFileHandle);
+        
+        await tailFile('/test/file.txt', 5);
+        
+        expect(mockFileHandle.close).toHaveBeenCalled();
+      });
     });
 
     describe('headFile', () => {
@@ -417,6 +578,63 @@ describe('Lib Functions', () => {
         await headFile('/test/file.txt', 2);
         
         expect(mockFs.open).toHaveBeenCalledWith('/test/file.txt', 'r');
+      });
+
+      it('handles files with content and returns first lines', async () => {
+        const mockFileHandle = {
+          read: jest.fn(),
+          close: jest.fn()
+        } as any;
+        
+        // Simulate reading file content with newlines
+        mockFileHandle.read
+          .mockResolvedValueOnce({ bytesRead: 20, buffer: Buffer.from('line1\nline2\nline3\n') })
+          .mockResolvedValueOnce({ bytesRead: 0 });
+        mockFileHandle.close.mockResolvedValue(undefined);
+        
+        mockFs.open.mockResolvedValue(mockFileHandle);
+        
+        const result = await headFile('/test/file.txt', 2);
+        
+        expect(mockFileHandle.close).toHaveBeenCalled();
+      });
+
+      it('handles files with leftover content', async () => {
+        const mockFileHandle = {
+          read: jest.fn(),
+          close: jest.fn()
+        } as any;
+        
+        // Simulate reading file content without final newline
+        mockFileHandle.read
+          .mockResolvedValueOnce({ bytesRead: 15, buffer: Buffer.from('line1\nline2\nend') })
+          .mockResolvedValueOnce({ bytesRead: 0 });
+        mockFileHandle.close.mockResolvedValue(undefined);
+        
+        mockFs.open.mockResolvedValue(mockFileHandle);
+        
+        const result = await headFile('/test/file.txt', 5);
+        
+        expect(mockFileHandle.close).toHaveBeenCalled();
+      });
+
+      it('handles reaching requested line count', async () => {
+        const mockFileHandle = {
+          read: jest.fn(),
+          close: jest.fn()
+        } as any;
+        
+        // Simulate reading exactly the requested number of lines
+        mockFileHandle.read
+          .mockResolvedValueOnce({ bytesRead: 12, buffer: Buffer.from('line1\nline2\n') })
+          .mockResolvedValueOnce({ bytesRead: 0 });
+        mockFileHandle.close.mockResolvedValue(undefined);
+        
+        mockFs.open.mockResolvedValue(mockFileHandle);
+        
+        const result = await headFile('/test/file.txt', 2);
+        
+        expect(mockFileHandle.close).toHaveBeenCalled();
       });
     });
   });

@@ -30,9 +30,13 @@ export function formatSize(bytes: number): string {
   if (bytes === 0) return '0 B';
   
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  if (i === 0) return `${bytes} ${units[i]}`;
   
-  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+  // Handle numbers less than 1 byte (should stay in bytes)
+  if (i < 0 || i === 0) return `${bytes} ${units[0]}`;
+  
+  // Clamp to the largest unit if the number is too large
+  const unitIndex = Math.min(i, units.length - 1);
+  return `${(bytes / Math.pow(1024, unitIndex)).toFixed(2)} ${units[unitIndex]}`;
 }
 
 export function normalizeLineEndings(text: string): string {
