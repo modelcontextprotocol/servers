@@ -86,6 +86,14 @@ const GetResourceReferenceSchema = z.object({
     .describe("ID of the resource to reference (1-100)"),
 });
 
+const ElicitationSchema = z.object({
+  message: z.string().describe("Message to use for elicitation"),
+  includeSchema: z
+    .boolean()
+    .default(true)
+    .describe("Whether to include the favorite things schema"),
+});
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -95,6 +103,7 @@ enum ToolName {
   GET_TINY_IMAGE = "getTinyImage",
   ANNOTATED_MESSAGE = "annotatedMessage",
   GET_RESOURCE_REFERENCE = "getResourceReference",
+  ELICITATION_DEMO = "elicitationDemo",
 }
 
 enum PromptName {
@@ -109,13 +118,13 @@ export const createServer = () => {
       name: "example-servers/everything",
       version: "1.0.0",
     },
-    {
-      capabilities: {
+    {      capabilities: {
         prompts: {},
         resources: { subscribe: true },
         tools: {},
         logging: {},
         completions: {},
+        elicitation: {},
       },
       instructions
     }
@@ -204,6 +213,22 @@ export const createServer = () => {
     };
 
     return await server.request(request, CreateMessageResultSchema);
+  };
+
+  // Helper method to make elicitation requests
+  const requestElicitation = async (
+    message: string,
+    requestedSchema: any
+  ) => {
+    const request = {
+      method: 'elicitation/create',
+      params: {
+        message,
+        requestedSchema
+      }
+    };
+
+    return await server.request(request, z.any());
   };
 
   const ALL_RESOURCES: Resource[] = Array.from({ length: 100 }, (_, i) => {
@@ -459,6 +484,11 @@ export const createServer = () => {
           "Returns a resource reference that can be used by MCP clients",
         inputSchema: zodToJsonSchema(GetResourceReferenceSchema) as ToolInput,
       },
+      {
+        name: ToolName.ELICITATION_DEMO,
+        description: "Demonstrates the elicitation feature",
+        inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
+      },
     ];
 
     return { tools };
@@ -646,6 +676,40 @@ export const createServer = () => {
       }
 
       return { content };
+    }
+
+    if (name === ToolName.ELICITATION_DEMO) {
+      const { message, includeSchema } = ElicitationSchema.parse(args);
+
+      // Make the elicitation request like in your example
+      const elicitationResult = await requestElicitation(
+        'What are your favorite things?',
+        {
+          type: 'object',
+          properties: {
+            color: { type: 'string', description: 'Favorite color' },
+            number: { type: 'integer', description: 'Favorite number', minimum: 1, maximum: 100 },
+            things: { 
+              type: 'string', 
+              enum: ['cats', 'dogs', 'birds', 'brown paper packages tied up with string'], 
+              description: 'Favorite things' 
+            },
+          }
+        }
+      );
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Elicitation demo completed! Message: ${message}`,
+          },
+          {
+            type: "text", 
+            text: `Elicitation result: ${JSON.stringify(elicitationResult, null, 2)}`,
+          },
+        ],
+      };
     }
 
     throw new Error(`Unknown tool: ${name}`);
