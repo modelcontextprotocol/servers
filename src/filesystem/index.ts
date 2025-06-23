@@ -11,9 +11,19 @@ import fs from "fs/promises";
 import path from "path";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { diffLines, createTwoFilesPatch } from 'diff';
-import { minimatch } from 'minimatch';
 import { normalizePath, expandHome } from './path-utils.js';
+import {
+  // Function imports
+  formatSize,
+  validatePath,
+  getFileStats,
+  readFileContent,
+  writeFileContent,
+  searchFilesWithValidation,
+  applyFileEdits,
+  tailFile,
+  headFile
+} from './lib.js';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -42,48 +52,6 @@ await Promise.all(allowedDirectories.map(async (dir) => {
   }
 }));
 
-// Security utilities
-export async function validatePath(requestedPath: string): Promise<string> {
-  // Normalize the path first to handle any special characters or formats
-  const expandedPath = expandHome(requestedPath);
-  const absolute = path.isAbsolute(expandedPath)
-    ? path.resolve(expandedPath)
-    : path.resolve(process.cwd(), expandedPath);
-
-  // Ensure consistent normalization for security checks
-  const normalizedRequested = normalizePath(absolute);
-
-  // Check if path is within allowed directories using normalized paths
-  const isAllowed = allowedDirectories.some(dir => normalizedRequested.startsWith(dir));
-  if (!isAllowed) {
-    throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
-  }
-
-  // Handle symlinks by checking their real path
-  try {
-    const realPath = await fs.realpath(absolute);
-    const normalizedReal = normalizePath(realPath);
-    const isRealPathAllowed = allowedDirectories.some(dir => normalizedReal.startsWith(dir));
-    if (!isRealPathAllowed) {
-      throw new Error("Access denied - symlink target outside allowed directories");
-    }
-    return realPath;
-  } catch (error) {
-    // For new files that don't exist yet, verify parent directory
-    const parentDir = path.dirname(absolute);
-    try {
-      const realParentPath = await fs.realpath(parentDir);
-      const normalizedParent = normalizePath(realParentPath);
-      const isParentAllowed = allowedDirectories.some(dir => normalizedParent.startsWith(dir));
-      if (!isParentAllowed) {
-        throw new Error("Access denied - parent directory outside allowed directories");
-      }
-      return absolute;
-    } catch {
-      throw new Error(`Parent directory does not exist: ${parentDir}`);
-    }
-  }
-}
 
 // Schema definitions
 const ReadFileArgsSchema = z.object({
@@ -147,16 +115,6 @@ const GetFileInfoArgsSchema = z.object({
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
-interface FileInfo {
-  size: number;
-  created: Date;
-  modified: Date;
-  accessed: Date;
-  isDirectory: boolean;
-  isFile: boolean;
-  permissions: string;
-}
-
 // Server setup
 const server = new Server(
   {
@@ -169,265 +127,6 @@ const server = new Server(
     },
   },
 );
-
-// Tool implementations
-async function getFileStats(filePath: string): Promise<FileInfo> {
-  const stats = await fs.stat(filePath);
-  return {
-    size: stats.size,
-    created: stats.birthtime,
-    modified: stats.mtime,
-    accessed: stats.atime,
-    isDirectory: stats.isDirectory(),
-    isFile: stats.isFile(),
-    permissions: stats.mode.toString(8).slice(-3),
-  };
-}
-
-async function searchFiles(
-  rootPath: string,
-  pattern: string,
-  excludePatterns: string[] = []
-): Promise<string[]> {
-  const results: string[] = [];
-
-  async function search(currentPath: string) {
-    const entries = await fs.readdir(currentPath, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(currentPath, entry.name);
-
-      try {
-        // Validate each path before processing
-        await validatePath(fullPath);
-
-        // Check if path matches any exclude pattern
-        const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(pattern => {
-          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
-          return minimatch(relativePath, globPattern, { dot: true });
-        });
-
-        if (shouldExclude) {
-          continue;
-        }
-
-        if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
-          results.push(fullPath);
-        }
-
-        if (entry.isDirectory()) {
-          await search(fullPath);
-        }
-      } catch (error) {
-        // Skip invalid paths during search
-        continue;
-      }
-    }
-  }
-
-  await search(rootPath);
-  return results;
-}
-
-// file editing and diffing utilities
-function normalizeLineEndings(text: string): string {
-  return text.replace(/\r\n/g, '\n');
-}
-
-function createUnifiedDiff(originalContent: string, newContent: string, filepath: string = 'file'): string {
-  // Ensure consistent line endings for diff
-  const normalizedOriginal = normalizeLineEndings(originalContent);
-  const normalizedNew = normalizeLineEndings(newContent);
-
-  return createTwoFilesPatch(
-    filepath,
-    filepath,
-    normalizedOriginal,
-    normalizedNew,
-    'original',
-    'modified'
-  );
-}
-
-async function applyFileEdits(
-  filePath: string,
-  edits: Array<{oldText: string, newText: string}>,
-  dryRun = false
-): Promise<string> {
-  // Read file content and normalize line endings
-  const content = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
-
-  // Apply edits sequentially
-  let modifiedContent = content;
-  for (const edit of edits) {
-    const normalizedOld = normalizeLineEndings(edit.oldText);
-    const normalizedNew = normalizeLineEndings(edit.newText);
-
-    // If exact match exists, use it
-    if (modifiedContent.includes(normalizedOld)) {
-      modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
-      continue;
-    }
-
-    // Otherwise, try line-by-line matching with flexibility for whitespace
-    const oldLines = normalizedOld.split('\n');
-    const contentLines = modifiedContent.split('\n');
-    let matchFound = false;
-
-    for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
-      const potentialMatch = contentLines.slice(i, i + oldLines.length);
-
-      // Compare lines with normalized whitespace
-      const isMatch = oldLines.every((oldLine, j) => {
-        const contentLine = potentialMatch[j];
-        return oldLine.trim() === contentLine.trim();
-      });
-
-      if (isMatch) {
-        // Preserve original indentation of first line
-        const originalIndent = contentLines[i].match(/^\s*/)?.[0] || '';
-        const newLines = normalizedNew.split('\n').map((line, j) => {
-          if (j === 0) return originalIndent + line.trimStart();
-          // For subsequent lines, try to preserve relative indentation
-          const oldIndent = oldLines[j]?.match(/^\s*/)?.[0] || '';
-          const newIndent = line.match(/^\s*/)?.[0] || '';
-          if (oldIndent && newIndent) {
-            const relativeIndent = newIndent.length - oldIndent.length;
-            return originalIndent + ' '.repeat(Math.max(0, relativeIndent)) + line.trimStart();
-          }
-          return line;
-        });
-
-        contentLines.splice(i, oldLines.length, ...newLines);
-        modifiedContent = contentLines.join('\n');
-        matchFound = true;
-        break;
-      }
-    }
-
-    if (!matchFound) {
-      throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
-    }
-  }
-
-  // Create unified diff
-  const diff = createUnifiedDiff(content, modifiedContent, filePath);
-
-  // Format diff with appropriate number of backticks
-  let numBackticks = 3;
-  while (diff.includes('`'.repeat(numBackticks))) {
-    numBackticks++;
-  }
-  const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
-
-  if (!dryRun) {
-    await fs.writeFile(filePath, modifiedContent, 'utf-8');
-  }
-
-  return formattedDiff;
-}
-
-// Helper functions
-function formatSize(bytes: number): string {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  if (bytes === 0) return '0 B';
-  
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  if (i === 0) return `${bytes} ${units[i]}`;
-  
-  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
-}
-
-// Memory-efficient implementation to get the last N lines of a file
-async function tailFile(filePath: string, numLines: number): Promise<string> {
-  const CHUNK_SIZE = 1024; // Read 1KB at a time
-  const stats = await fs.stat(filePath);
-  const fileSize = stats.size;
-  
-  if (fileSize === 0) return '';
-  
-  // Open file for reading
-  const fileHandle = await fs.open(filePath, 'r');
-  try {
-    const lines: string[] = [];
-    let position = fileSize;
-    let chunk = Buffer.alloc(CHUNK_SIZE);
-    let linesFound = 0;
-    let remainingText = '';
-    
-    // Read chunks from the end of the file until we have enough lines
-    while (position > 0 && linesFound < numLines) {
-      const size = Math.min(CHUNK_SIZE, position);
-      position -= size;
-      
-      const { bytesRead } = await fileHandle.read(chunk, 0, size, position);
-      if (!bytesRead) break;
-      
-      // Get the chunk as a string and prepend any remaining text from previous iteration
-      const readData = chunk.slice(0, bytesRead).toString('utf-8');
-      const chunkText = readData + remainingText;
-      
-      // Split by newlines and count
-      const chunkLines = normalizeLineEndings(chunkText).split('\n');
-      
-      // If this isn't the end of the file, the first line is likely incomplete
-      // Save it to prepend to the next chunk
-      if (position > 0) {
-        remainingText = chunkLines[0];
-        chunkLines.shift(); // Remove the first (incomplete) line
-      }
-      
-      // Add lines to our result (up to the number we need)
-      for (let i = chunkLines.length - 1; i >= 0 && linesFound < numLines; i--) {
-        lines.unshift(chunkLines[i]);
-        linesFound++;
-      }
-    }
-    
-    return lines.join('\n');
-  } finally {
-    await fileHandle.close();
-  }
-}
-
-// New function to get the first N lines of a file
-async function headFile(filePath: string, numLines: number): Promise<string> {
-  const fileHandle = await fs.open(filePath, 'r');
-  try {
-    const lines: string[] = [];
-    let buffer = '';
-    let bytesRead = 0;
-    const chunk = Buffer.alloc(1024); // 1KB buffer
-    
-    // Read chunks and count lines until we have enough or reach EOF
-    while (lines.length < numLines) {
-      const result = await fileHandle.read(chunk, 0, chunk.length, bytesRead);
-      if (result.bytesRead === 0) break; // End of file
-      bytesRead += result.bytesRead;
-      buffer += chunk.slice(0, result.bytesRead).toString('utf-8');
-      
-      const newLineIndex = buffer.lastIndexOf('\n');
-      if (newLineIndex !== -1) {
-        const completeLines = buffer.slice(0, newLineIndex).split('\n');
-        buffer = buffer.slice(newLineIndex + 1);
-        for (const line of completeLines) {
-          lines.push(line);
-          if (lines.length >= numLines) break;
-        }
-      }
-    }
-    
-    // If there is leftover content and we still need lines, add it
-    if (buffer.length > 0 && lines.length < numLines) {
-      lines.push(buffer);
-    }
-    
-    return lines.join('\n');
-  } finally {
-    await fileHandle.close();
-  }
-}
 
 // Tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -560,7 +259,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
+        const validPath = await validatePath(parsed.data.path, allowedDirectories);
         
         if (parsed.data.head && parsed.data.tail) {
           throw new Error("Cannot specify both head and tail parameters simultaneously");
@@ -582,7 +281,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           };
         }
         
-        const content = await fs.readFile(validPath, "utf-8");
+        const content = await readFileContent(validPath);
         return {
           content: [{ type: "text", text: content }],
         };
@@ -596,8 +295,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const results = await Promise.all(
           parsed.data.paths.map(async (filePath: string) => {
             try {
-              const validPath = await validatePath(filePath);
-              const content = await fs.readFile(validPath, "utf-8");
+              const validPath = await validatePath(filePath, allowedDirectories);
+              const content = await readFileContent(validPath);
               return `${filePath}:\n${content}\n`;
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
@@ -615,8 +314,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
-        await fs.writeFile(validPath, parsed.data.content, "utf-8");
+        const validPath = await validatePath(parsed.data.path, allowedDirectories);
+        await writeFileContent(validPath, parsed.data.content);
         return {
           content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
         };
@@ -627,7 +326,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for edit_file: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
+        const validPath = await validatePath(parsed.data.path, allowedDirectories);
         const result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.dryRun);
         return {
           content: [{ type: "text", text: result }],
@@ -639,7 +338,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for create_directory: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
+        const validPath = await validatePath(parsed.data.path, allowedDirectories);
         await fs.mkdir(validPath, { recursive: true });
         return {
           content: [{ type: "text", text: `Successfully created directory ${parsed.data.path}` }],
@@ -651,7 +350,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for list_directory: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
+        const validPath = await validatePath(parsed.data.path, allowedDirectories);
         const entries = await fs.readdir(validPath, { withFileTypes: true });
         const formatted = entries
           .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
@@ -666,7 +365,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for list_directory_with_sizes: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
+        const validPath = await validatePath(parsed.data.path, allowedDirectories);
         const entries = await fs.readdir(validPath, { withFileTypes: true });
         
         // Get detailed information for each entry
@@ -740,7 +439,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         async function buildTree(currentPath: string): Promise<TreeEntry[]> {
-            const validPath = await validatePath(currentPath);
+            const validPath = await validatePath(currentPath, allowedDirectories);
             const entries = await fs.readdir(validPath, {withFileTypes: true});
             const result: TreeEntry[] = [];
 
@@ -775,8 +474,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for move_file: ${parsed.error}`);
         }
-        const validSourcePath = await validatePath(parsed.data.source);
-        const validDestPath = await validatePath(parsed.data.destination);
+        const validSourcePath = await validatePath(parsed.data.source, allowedDirectories);
+        const validDestPath = await validatePath(parsed.data.destination, allowedDirectories);
         await fs.rename(validSourcePath, validDestPath);
         return {
           content: [{ type: "text", text: `Successfully moved ${parsed.data.source} to ${parsed.data.destination}` }],
@@ -788,8 +487,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
-        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
+        const validPath = await validatePath(parsed.data.path, allowedDirectories);
+        const results = await searchFilesWithValidation(validPath, parsed.data.pattern, allowedDirectories, { excludePatterns: parsed.data.excludePatterns });
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };
@@ -800,7 +499,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for get_file_info: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path);
+        const validPath = await validatePath(parsed.data.path, allowedDirectories);
         const info = await getFileStats(validPath);
         return {
           content: [{ type: "text", text: Object.entries(info)
