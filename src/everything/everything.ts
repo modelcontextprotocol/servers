@@ -118,7 +118,8 @@ export const createServer = () => {
       name: "example-servers/everything",
       version: "1.0.0",
     },
-    {      capabilities: {
+    {      
+      capabilities: {
         prompts: {},
         resources: { subscribe: true },
         tools: {},
