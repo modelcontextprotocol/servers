@@ -3,7 +3,8 @@ from enum import Enum
 import json
 from typing import Sequence
 
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, available_timezones
+from zoneinfo._common import ZoneInfoNotFoundError
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
@@ -42,7 +43,26 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     # Get local timezone from datetime.now()
     tzinfo = datetime.now().astimezone(tz=None).tzinfo
     if tzinfo is not None:
-        return ZoneInfo(str(tzinfo))
+        try:
+            # Try to directly use the tzinfo string representation
+            return ZoneInfo(str(tzinfo))
+        except ZoneInfoNotFoundError:
+            # If it fails (e.g., when tzinfo is just an offset like '-03'),
+            # find a matching IANA timezone based on offset
+
+            # Get the current UTC offset in seconds
+            offset_seconds = datetime.now().astimezone().utcoffset().total_seconds()
+            
+            # Find the first timezone that matches our offset
+            for tz_name in available_timezones():
+                tz = ZoneInfo(tz_name)
+                dt = datetime.now(tz)
+                if dt.utcoffset().total_seconds() == offset_seconds:
+                    return ZoneInfo(tz_name)
+                    
+            # If we get here, no matching timezone was found
+            raise McpError(f"Could not find a matching IANA timezone for offset {offset_seconds/3600} hours")
+    
     raise McpError("Could not determine local timezone - tzinfo is None")
 
 
