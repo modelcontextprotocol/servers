@@ -2,6 +2,9 @@
 
 A Model Context Protocol server that provides web content fetching capabilities. This server enables LLMs to retrieve and process content from web pages, converting HTML to markdown for easier consumption.
 
+> [!CAUTION]
+> This server can access local/internal IP addresses and may represent a security risk. Exercise caution when using this MCP server to ensure this does not expose any sensitive data.
+
 The fetch tool will truncate the response, but by using the `start_index` argument, you can specify where to start the content extraction. This lets models read a webpage in chunks, until they find the information they need.
 
 ### Available Tools
@@ -52,10 +55,12 @@ Add to your Claude settings:
 <summary>Using uvx</summary>
 
 ```json
-"mcpServers": {
-  "fetch": {
-    "command": "uvx",
-    "args": ["mcp-server-fetch"]
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    }
   }
 }
 ```
@@ -65,10 +70,12 @@ Add to your Claude settings:
 <summary>Using docker</summary>
 
 ```json
-"mcpServers": {
-  "fetch": {
-    "command": "docker",
-    "args": ["run", "-i", "--rm", "mcp/fetch"]
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "mcp/fetch"]
+    }
   }
 }
 ```
@@ -78,10 +85,12 @@ Add to your Claude settings:
 <summary>Using pip installation</summary>
 
 ```json
-"mcpServers": {
-  "fetch": {
-    "command": "python",
-    "args": ["-m", "mcp_server_fetch"]
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "python",
+      "args": ["-m", "mcp_server_fetch"]
+    }
   }
 }
 ```
