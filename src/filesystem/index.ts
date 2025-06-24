@@ -7,6 +7,7 @@ import {
   ListToolsRequestSchema,
   ToolSchema,
   RootsListChangedNotificationSchema,
+  type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
 import path from "path";
@@ -17,6 +18,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
+import { getValidRootDirectories } from './roots-utils.js';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -894,26 +896,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-// Replaces any existing allowed directories based on roots provided by the MCP client.
-async function updateAllowedDirectoriesFromRoots(roots: Array<{ uri: string; name?: string }>) {
-  const rootDirs: string[] = [];
-  for (const root of roots) {
-    let dir: string;
-    // Handle both file:// URIs (MCP standard) and plain directory paths (for flexibility)
-    dir = normalizePath(path.resolve(root.uri.startsWith('file://')? root.uri.slice(7) : root.uri));
-    try {
-      const stats = await fs.stat(dir);
-      if (stats.isDirectory()) {
-        rootDirs.push(dir);
-      }else {
-        console.error(`Skipping non-directory root: ${dir}`);
-      }
-    } catch (error) {
-      // Skip invalid directories
-      console.error(`Skipping invalid directory: ${dir} due to error:`, error instanceof Error ? error.message : String(error));
-    }
-  }
-  if(rootDirs.length > 0) {
+// Updates allowed directories based on MCP client roots
+async function updateAllowedDirectoriesFromRoots(roots: Root[]) {
+  const rootDirs = await getValidRootDirectories(roots);
+  if (rootDirs.length > 0) {
     allowedDirectories.splice(0, allowedDirectories.length, ...rootDirs);
   }
 }
@@ -941,16 +927,16 @@ server.oninitialized = async () => {
       if (response && 'roots' in response) {
         await updateAllowedDirectoriesFromRoots(response.roots);
       } else {
-        console.error("Client returned no roots set, keeping current settings");
+        console.log("Client returned no roots set, keeping current settings");
       }
     } catch (error) {
       console.error("Failed to request initial roots from client:", error instanceof Error ? error.message : String(error));
     }
   } else {
     if (allowedDirectories.length > 0) {
-      console.error("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
+      console.log("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
     }else{
-      throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client does not support MCP roots protocol. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol.`);
+      throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
     }
   }
 };
@@ -961,7 +947,7 @@ async function runServer() {
   await server.connect(transport);
   console.error("Secure MCP Filesystem Server running on stdio");
   if (allowedDirectories.length === 0) {
-    console.error("Started without allowed directories - waiting for client to provide roots via MCP protocol");
+    console.log("Started without allowed directories - waiting for client to provide roots via MCP protocol");
   }
 }
 
