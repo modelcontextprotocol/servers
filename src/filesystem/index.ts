@@ -136,6 +136,7 @@ const ListDirectoryWithSizesArgsSchema = z.object({
 
 const DirectoryTreeArgsSchema = z.object({
   path: z.string(),
+  exclude: z.array(z.string()).optional().default([]),
 });
 
 const MoveFileArgsSchema = z.object({
@@ -748,9 +749,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 children?: TreeEntry[];
             }
 
-            async function buildTree(currentPath: string): Promise<TreeEntry[]> {
+            async function buildTree(currentPath: string, exclude: string[]): Promise<TreeEntry[]> {
                 const validPath = await validatePath(currentPath);
-                const entries = await fs.readdir(validPath, {withFileTypes: true});
+                const entries = (await fs.readdir(validPath, { withFileTypes: true })).filter((item) => item.isDirectory() && !(exclude.includes(item.name)));
                 const result: TreeEntry[] = [];
 
                 for (const entry of entries) {
@@ -761,7 +762,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
                     if (entry.isDirectory()) {
                         const subPath = path.join(currentPath, entry.name);
-                        entryData.children = await buildTree(subPath);
+                        entryData.children = await buildTree(subPath, exclude);
                     }
 
                     result.push(entryData);
@@ -770,7 +771,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return result;
             }
 
-            const treeData = await buildTree(parsed.data.path);
+            const treeData = await buildTree(parsed.data.path, parsed.data.exclude);
             return {
                 content: [{
                     type: "text",
