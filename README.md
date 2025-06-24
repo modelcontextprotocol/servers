@@ -406,6 +406,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Calculator](https://github.com/githejie/mcp-server-calculator)** - This server enables LLMs to use calculator for precise numerical calculations.
 - **[CalDAV MCP](https://github.com/dominik1001/caldav-mcp)** - A CalDAV MCP server to expose calendar operations as tools for AI assistants.
 - **[Calendly](https://github.com/universal-mcp/calendly)** - Calendly MCP server from **[agentr](https://agentr.dev/)** that provides support for managing events and scheduling via Calendly.
+- **[Canva](https://github.com/universal-mcp/canva)** - Canva MCP server from **[agentr](https://agentr.dev/)** that provides support for managing tools of Canva App.
 - **[CCTV VMS MCP](https://github.com/jyjune/mcp_vms)** - A Model Context Protocol (MCP) server designed to connect to a CCTV recording program (VMS) to retrieve recorded and live video streams. It also provides tools to control the VMS software, such as showing live or playback dialogs for specific channels at specified times.
 - **[CFBD API](https://github.com/lenwood/cfbd-mcp-server)** - An MCP server for the [College Football Data API](https://collegefootballdata.com/).
 - **[ChatMCP](https://github.com/AI-QL/chat-mcp)** – An Open Source Cross-platform GUI Desktop application compatible with Linux, macOS, and Windows, enabling seamless interaction with MCP servers across dynamically selectable LLMs, by **[AIQL](https://github.com/AI-QL)**
