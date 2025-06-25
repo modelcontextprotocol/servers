@@ -9,11 +9,11 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Move files/directories
 - Search files
 - Get file metadata
-- Dynamic directory access control via MCP roots protocol
+- Dynamic directory access control via [Roots](https://modelcontextprotocol.io/docs/concepts/roots)
 
 ## Directory Access Control
 
-The server uses a flexible directory access control system. Directories can be specified via command-line arguments or dynamically via the MCP roots protocol.
+The server uses a flexible directory access control system. Directories can be specified via command-line arguments or dynamically via [Roots](https://modelcontextprotocol.io/docs/concepts/roots).
 
 ### Method 1: Command-line Arguments
 Specify Allowed directories when starting the server:
@@ -21,14 +21,14 @@ Specify Allowed directories when starting the server:
 mcp-server-filesystem /path/to/dir1 /path/to/dir2
 ```
 
-### Method 2: MCP Roots Protocol (Recommended)
-MCP clients that support the roots protocol can dynamically update the Allowed directories. 
+### Method 2: MCP Roots (Recommended)
+MCP clients that support [Roots](https://modelcontextprotocol.io/docs/concepts/roots) can dynamically update the Allowed directories. 
 
 Roots notified by Client to Server, completely replace any server-side Allowed directories when provided.
 
 **Important**: If server starts without command-line arguments AND client doesn't support roots protocol (or provides empty roots), the server will throw an error during initialization.
 
-This is the recommended method, as MCP roots protocol for dynamic directory management. This enables runtime directory updates via `roots/list_changed` notifications without server restart, providing a more flexible and modern integration experience.
+This is the recommended method, as this enables runtime directory updates via `roots/list_changed` notifications without server restart, providing a more flexible and modern integration experience.
 
 ### How It Works
 
