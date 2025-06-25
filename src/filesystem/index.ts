@@ -927,14 +927,14 @@ server.oninitialized = async () => {
       if (response && 'roots' in response) {
         await updateAllowedDirectoriesFromRoots(response.roots);
       } else {
-        console.log("Client returned no roots set, keeping current settings");
+        console.error("Client returned no roots set, keeping current settings");
       }
     } catch (error) {
       console.error("Failed to request initial roots from client:", error instanceof Error ? error.message : String(error));
     }
   } else {
     if (allowedDirectories.length > 0) {
-      console.log("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
+      console.error("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
     }else{
       throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
     }
@@ -947,7 +947,7 @@ async function runServer() {
   await server.connect(transport);
   console.error("Secure MCP Filesystem Server running on stdio");
   if (allowedDirectories.length === 0) {
-    console.log("Started without allowed directories - waiting for client to provide roots via MCP protocol");
+    console.error("Started without allowed directories - waiting for client to provide roots via MCP protocol");
   }
 }
 
