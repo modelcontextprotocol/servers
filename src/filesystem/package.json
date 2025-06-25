@@ -16,20 +16,26 @@
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "jest --config=jest.config.cjs --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.5.0",
+    "@modelcontextprotocol/sdk": "^1.12.3",
     "diff": "^5.1.0",
     "glob": "^10.3.10",
     "minimatch": "^10.0.1",
     "zod-to-json-schema": "^3.23.5"
   },
   "devDependencies": {
+    "@jest/globals": "^29.7.0",
     "@types/diff": "^5.0.9",
+    "@types/jest": "^29.5.14",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^22",
+    "jest": "^29.7.0",
     "shx": "^0.3.4",
-    "typescript": "^5.3.3"
+    "ts-jest": "^29.1.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
   }
 }

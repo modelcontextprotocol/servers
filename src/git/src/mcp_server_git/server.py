@@ -15,18 +15,24 @@ from enum import Enum
 import git
 from pydantic import BaseModel, Field
 
+# Default number of context lines to show in diff output
+DEFAULT_CONTEXT_LINES = 3
+
 class GitStatus(BaseModel):
     repo_path: str
 
 class GitDiffUnstaged(BaseModel):
     repo_path: str
+    context_lines: int = DEFAULT_CONTEXT_LINES
 
 class GitDiffStaged(BaseModel):
     repo_path: str
+    context_lines: int = DEFAULT_CONTEXT_LINES
 
 class GitDiff(BaseModel):
     repo_path: str
     target: str
+    context_lines: int = DEFAULT_CONTEXT_LINES
 
 class GitCommit(BaseModel):
     repo_path: str
@@ -95,14 +101,14 @@ class GitTools(str, Enum):
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
 
-def git_diff_unstaged(repo: git.Repo) -> str:
-    return repo.git.diff()
+def git_diff_unstaged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+    return repo.git.diff(f"--unified={context_lines}")
 
-def git_diff_staged(repo: git.Repo) -> str:
-    return repo.git.diff("--cached")
+def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+    return repo.git.diff(f"--unified={context_lines}", "--cached")
 
-def git_diff(repo: git.Repo, target: str) -> str:
-    return repo.git.diff(target)
+def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+    return repo.git.diff(f"--unified={context_lines}", target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
     commit = repo.index.commit(message)
@@ -121,16 +127,16 @@ def git_log(repo: git.Repo, max_count: int = 10) -> list[str]:
     log = []
     for commit in commits:
         log.append(
-            f"Commit: {commit.hexsha}\n"
-            f"Author: {commit.author}\n"
+            f"Commit: {commit.hexsha!r}\n"
+            f"Author: {commit.author!r}\n"
             f"Date: {commit.authored_datetime}\n"
-            f"Message: {commit.message}\n"
+            f"Message: {commit.message!r}\n"
         )
     return log
 
 def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None = None) -> str:
     if base_branch:
-        base = repo.refs[base_branch]
+        base = repo.references[base_branch]
     else:
         base = repo.active_branch
 
@@ -151,10 +157,10 @@ def git_init(repo_path: str) -> str:
 def git_show(repo: git.Repo, revision: str) -> str:
     commit = repo.commit(revision)
     output = [
-        f"Commit: {commit.hexsha}\n"
-        f"Author: {commit.author}\n"
-        f"Date: {commit.authored_datetime}\n"
-        f"Message: {commit.message}\n"
+        f"Commit: {commit.hexsha!r}\n"
+        f"Author: {commit.author!r}\n"
+        f"Date: {commit.authored_datetime!r}\n"
+        f"Message: {commit.message!r}\n"
     ]
     if commit.parents:
         parent = commit.parents[0]
@@ -213,67 +219,67 @@ async def serve(repository: Path | None) -> None:
             Tool(
                 name=GitTools.STATUS,
                 description="Shows the working tree status",
-                inputSchema=GitStatus.schema(),
+                inputSchema=GitStatus.model_json_schema(),
             ),
             Tool(
                 name=GitTools.DIFF_UNSTAGED,
                 description="Shows changes in the working directory that are not yet staged",
-                inputSchema=GitDiffUnstaged.schema(),
+                inputSchema=GitDiffUnstaged.model_json_schema(),
             ),
             Tool(
                 name=GitTools.DIFF_STAGED,
                 description="Shows changes that are staged for commit",
-                inputSchema=GitDiffStaged.schema(),
+                inputSchema=GitDiffStaged.model_json_schema(),
             ),
             Tool(
                 name=GitTools.DIFF,
                 description="Shows differences between branches or commits",
-                inputSchema=GitDiff.schema(),
+                inputSchema=GitDiff.model_json_schema(),
             ),
             Tool(
                 name=GitTools.COMMIT,
                 description="Records changes to the repository",
-                inputSchema=GitCommit.schema(),
+                inputSchema=GitCommit.model_json_schema(),
             ),
             Tool(
                 name=GitTools.ADD,
                 description="Adds file contents to the staging area",
-                inputSchema=GitAdd.schema(),
+                inputSchema=GitAdd.model_json_schema(),
             ),
             Tool(
                 name=GitTools.RESET,
                 description="Unstages all staged changes",
-                inputSchema=GitReset.schema(),
+                inputSchema=GitReset.model_json_schema(),
             ),
             Tool(
                 name=GitTools.LOG,
                 description="Shows the commit logs",
-                inputSchema=GitLog.schema(),
+                inputSchema=GitLog.model_json_schema(),
             ),
             Tool(
                 name=GitTools.CREATE_BRANCH,
                 description="Creates a new branch from an optional base branch",
-                inputSchema=GitCreateBranch.schema(),
+                inputSchema=GitCreateBranch.model_json_schema(),
             ),
             Tool(
                 name=GitTools.CHECKOUT,
                 description="Switches branches",
-                inputSchema=GitCheckout.schema(),
+                inputSchema=GitCheckout.model_json_schema(),
             ),
             Tool(
                 name=GitTools.SHOW,
                 description="Shows the contents of a commit",
-                inputSchema=GitShow.schema(),
+                inputSchema=GitShow.model_json_schema(),
             ),
             Tool(
                 name=GitTools.INIT,
                 description="Initialize a new Git repository",
-                inputSchema=GitInit.schema(),
+                inputSchema=GitInit.model_json_schema(),
             ),
             Tool(
                 name=GitTools.BRANCH,
                 description="List Git branches",
-                inputSchema=GitBranch.schema(),
+                inputSchema=GitBranch.model_json_schema(),
             )
         ]
 
@@ -330,21 +336,21 @@ async def serve(repository: Path | None) -> None:
                 )]
 
             case GitTools.DIFF_UNSTAGED:
-                diff = git_diff_unstaged(repo)
+                diff = git_diff_unstaged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
                 return [TextContent(
                     type="text",
                     text=f"Unstaged changes:\n{diff}"
                 )]
 
             case GitTools.DIFF_STAGED:
-                diff = git_diff_staged(repo)
+                diff = git_diff_staged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
                 return [TextContent(
                     type="text",
                     text=f"Staged changes:\n{diff}"
                 )]
 
             case GitTools.DIFF:
-                diff = git_diff(repo, arguments["target"])
+                diff = git_diff(repo, arguments["target"], arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
                 return [TextContent(
                     type="text",
                     text=f"Diff with {arguments['target']}:\n{diff}"
