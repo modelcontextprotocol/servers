@@ -62,13 +62,6 @@ const SampleLLMSchema = z.object({
     .describe("Maximum number of tokens to generate"),
 });
 
-// Example completion values
-const EXAMPLE_COMPLETIONS = {
-  style: ["casual", "formal", "technical", "friendly"],
-  temperature: ["0", "0.5", "0.7", "1.0"],
-  resourceId: ["1", "2", "3", "4", "5"],
-};
-
 const GetTinyImageSchema = z.object({});
 
 const AnnotatedMessageSchema = z.object({
@@ -118,6 +111,13 @@ enum PromptName {
   COMPLEX = "complex_prompt",
   RESOURCE = "resource_prompt",
 }
+
+// Example completion values
+const EXAMPLE_COMPLETIONS = {
+  style: ["casual", "formal", "technical", "friendly"],
+  temperature: ["0", "0.5", "0.7", "1.0"],
+  resourceId: ["1", "2", "3", "4", "5"],
+};
 
 export const createServer = () => {
   const server = new Server(
