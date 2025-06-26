@@ -23,8 +23,45 @@ jobs:
           PACKAGES=$(find . -name pyproject.toml -exec dirname {} \; | sed 's/^\.\///' | jq -R -s -c 'split("\n")[:-1]')
           echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
 
-  build:
+  test:
     needs: [detect-packages]
+    strategy:
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
+    name: Test ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "src/${{ matrix.package }}/.python-version"
+
+      - name: Install dependencies
+        working-directory: src/${{ matrix.package }}
+        run: uv sync --frozen --all-extras --dev
+
+      - name: Check if tests exist
+        id: check-tests
+        working-directory: src/${{ matrix.package }}
+        run: |
+          if [ -d "tests" ] || [ -d "test" ] || grep -q "pytest" pyproject.toml; then
+            echo "has-tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "has-tests=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run tests
+        if: steps.check-tests.outputs.has-tests == 'true'
+        working-directory: src/${{ matrix.package }}
+        run: uv run pytest
+
+  build:
+    needs: [detect-packages, test]
     strategy:
       matrix:
         package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
