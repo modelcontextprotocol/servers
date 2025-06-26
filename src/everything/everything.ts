@@ -690,10 +690,10 @@ export const createServer = () => {
           properties: {
             color: { type: 'string', description: 'Favorite color' },
             number: { type: 'integer', description: 'Favorite number', minimum: 1, maximum: 100 },
-            things: { 
+            pets: { 
               type: 'string', 
-              enum: ['cats', 'dogs', 'birds', 'brown paper packages tied up with string'], 
-              description: 'Favorite things' 
+              enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'], 
+              description: 'Favorite pets' 
             },
           }
         }
