@@ -118,7 +118,7 @@ export const createServer = () => {
       name: "example-servers/everything",
       version: "1.0.0",
     },
-    {      
+    {
       capabilities: {
         prompts: {},
         resources: { subscribe: true },
@@ -216,7 +216,6 @@ export const createServer = () => {
     return await server.request(request, CreateMessageResultSchema);
   };
 
-  // Helper method to make elicitation requests
   const requestElicitation = async (
     message: string,
     requestedSchema: any
@@ -682,7 +681,6 @@ export const createServer = () => {
     if (name === ToolName.ELICITATION_DEMO) {
       const { message, includeSchema } = ElicitationSchema.parse(args);
 
-      // Make the elicitation request like in your example
       const elicitationResult = await requestElicitation(
         'What are your favorite things?',
         {
