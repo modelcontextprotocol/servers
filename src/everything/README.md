@@ -80,6 +80,15 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
       - `pets` (enum): Favorite pet
    - Returns: Confirmation of the elicitation demo with selection summary.
 
+10. `structuredContent`
+   - Demonstrates a tool returning structured content using the example in the specification
+   - Provides an output schema to allow testing of client SHOULD advisory to validate the result using the schema
+   - Inputs:
+     - `location` (string): A location or ZIP code, mock data is returned regardless of value
+   - Returns: a response with
+     - `structuredContent` field conformant to the output schema
+     - A backward compatible Text Content field, a SHOULD advisory in the specification
+
 ### Resources
 
 The server provides 100 test resources in two formats:

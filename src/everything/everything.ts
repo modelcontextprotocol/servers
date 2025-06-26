@@ -31,6 +31,9 @@ const instructions = readFileSync(join(__dirname, "instructions.md"), "utf-8");
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
+const ToolOutputSchema = ToolSchema.shape.outputSchema;
+type ToolOutput = z.infer<typeof ToolOutputSchema>;
+
 /* Input schemas for tools implemented in this server */
 const EchoSchema = z.object({
   message: z.string().describe("Message to echo"),
@@ -93,6 +96,28 @@ const GetResourceLinksSchema = z.object({
     .describe("Number of resource links to return (1-10)"),
 });
 
+const StructuredContentSchema = {
+  input: z.object({
+    location: z
+      .string()
+      .trim()
+      .min(1)
+      .describe("City name or zip code"),
+  }),
+
+  output: z.object({
+    temperature: z
+      .number()
+      .describe("Temperature in celsius"),
+    conditions: z
+      .string()
+      .describe("Weather conditions description"),
+    humidity: z
+      .number()
+      .describe("Humidity percentage"),
+  })
+};
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -104,6 +129,7 @@ enum ToolName {
   GET_RESOURCE_REFERENCE = "getResourceReference",
   ELICITATION = "startElicitation",
   GET_RESOURCE_LINKS = "getResourceLinks",
+  STRUCTURED_CONTENT = "structuredContent"
 }
 
 enum PromptName {
@@ -503,6 +529,13 @@ export const createServer = () => {
           "Returns multiple resource links that reference different types of resources",
         inputSchema: zodToJsonSchema(GetResourceLinksSchema) as ToolInput,
       },
+      {
+        name: ToolName.STRUCTURED_CONTENT,
+        description:
+          "Returns structured content along with an output schema for client data validation",
+        inputSchema: zodToJsonSchema(StructuredContentSchema.input) as ToolInput,
+        outputSchema: zodToJsonSchema(StructuredContentSchema.output) as ToolOutput,
+      },
     ];
 
     return { tools };
@@ -775,6 +808,27 @@ export const createServer = () => {
       }
 
       return { content };
+    }
+
+    if (name === ToolName.STRUCTURED_CONTENT) {
+      // The same response is returned for every input.
+      const validatedArgs = StructuredContentSchema.input.parse(args);
+
+      const weather = {
+        temperature: 22.5,
+        conditions: "Partly cloudy",
+        humidity: 65
+      }
+
+      const backwardCompatiblecontent = {
+        type: "text",
+        text: JSON.stringify(weather)
+      }
+
+      return {
+        content: [ backwardCompatiblecontent ],
+        structuredContent: weather
+      };
     }
 
     throw new Error(`Unknown tool: ${name}`);
