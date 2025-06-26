@@ -619,8 +619,8 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Markdownify](https://github.com/zcaceres/mcp-markdownify-server)** - MCP to convert almost anything to Markdown (PPTX, HTML, PDF, Youtube Transcripts and more)
 - **[Markitdown](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/markitdown)** - Convert files to Markdown
 - **[MasterGo](https://github.com/mastergo-design/mastergo-magic-mcp)** - The server designed to connect MasterGo design tools with AI models. It enables AI models to directly retrieve DSL data from MasterGo design files.
-- **[Matlab-MCP-Tools](https://github.com/neuromechanist/matlab-mcp-tools)** - An MCP to write and execute MATLAB scripts, maintain workspace context between MCP calls, visualize plots, and perform section-by-section analysis of MATLAB code with full access to MATLAB's computational capabilities.
 - **[Masquerade](https://github.com/postralai/masquerade)** - Redact sensitive information from your PDF documents before sending them to Claude. Masquerade serves as a privacy firewall for LLMs.
+- **[Matlab-MCP-Tools](https://github.com/neuromechanist/matlab-mcp-tools)** - An MCP to write and execute MATLAB scripts, maintain workspace context between MCP calls, visualize plots, and perform section-by-section analysis of MATLAB code with full access to MATLAB's computational capabilities.
 - **[Maton](https://github.com/maton-ai/agent-toolkit/tree/main/modelcontextprotocol)** - Connect to your SaaS tools like HubSpot, Salesforce, and more.
 - **[MCP Compass](https://github.com/liuyoshio/mcp-compass)** - Suggest the right MCP server for your needs
 - **[MCP Create](https://github.com/tesla0225/mcp-create)** - A dynamic MCP server management service that creates, runs, and manages Model Context Protocol servers on-the-fly.
