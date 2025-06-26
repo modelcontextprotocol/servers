@@ -46,7 +46,10 @@ const LongRunningOperationSchema = z.object({
     .number()
     .default(10)
     .describe("Duration of the operation in seconds"),
-  steps: z.number().default(5).describe("Number of steps in the operation"),
+  steps: z
+    .number()
+    .default(5)
+    .describe("Number of steps in the operation"),
 });
 
 const PrintEnvSchema = z.object({});
