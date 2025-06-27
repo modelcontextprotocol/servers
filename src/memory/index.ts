@@ -149,7 +149,7 @@ class KnowledgeGraphManager {
   
     // Filter relations to only include those between filtered entities
     const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
+      filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
     );
   
     const filteredGraph: KnowledgeGraph = {
@@ -171,7 +171,7 @@ class KnowledgeGraphManager {
   
     // Filter relations to only include those between filtered entities
     const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
+      filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
     );
   
     const filteredGraph: KnowledgeGraph = {
