@@ -506,6 +506,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[FireCrawl](https://github.com/vrknetha/mcp-server-firecrawl)** - Advanced web scraping with JavaScript rendering, PDF support, and smart rate limiting
 - **[FitBit MCP Server](https://github.com/NitayRabi/fitbit-mcp)** - An MCP server that connects to FitBit API using a token obtained from OAuth flow.
 - **[FlightRadar24](https://github.com/sunsetcoder/flightradar24-mcp-server)** - A Claude Desktop MCP server that helps you track flights in real-time using Flightradar24 data.
+- **[Fluent-MCP](https://github.com/modesty/fluent-mcp)** - MCP server for Fluent (ServiceNow SDK) providing access to ServiceNow SDK CLI, API specifications, code snippets, and more.
 - **[Flyworks Avatar](https://github.com/Flyworks-AI/flyworks-mcp)** - Fast and free zeroshot lipsync MCP server.
 - **[FoundationModels](https://github.com/phimage/mcp-foundation-models)** - An MCP server that integrates Apple's [FoundationModels](https://developer.apple.com/documentation/foundationmodels) for text generation.
 - **[Foursquare](https://github.com/foursquare/foursquare-places-mcp)** - Enable your agent to recommend places around the world with the [Foursquare Places API](https://location.foursquare.com/products/places-api/)
