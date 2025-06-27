@@ -644,6 +644,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[mcp-vision](https://github.com/groundlight/mcp-vision)** - A MCP server exposing HuggingFace computer vision models such as zero-shot object detection as tools, enhancing the vision capabilities of large language or vision-language models.
 - **[mcp-weather](https://github.com/TimLukaHorstmann/mcp-weather)** - Accurate weather forecasts via the AccuWeather API (free tier available).
 - **[mcp_weather](https://github.com/isdaniel/mcp_weather_server)** - Get weather information from https://api.open-meteo.com API.
+- **[mcp-youtube-extract](https://github.com/sinjab/mcp_youtube_extract)** - A Model Context Protocol server for YouTube operations, extracting video information and transcripts with intelligent fallback logic. Features comprehensive logging, error handling, and support for both auto-generated and manual transcripts.
 - **[MCPIgnore Filesytem](https://github.com/CyberhavenInc/filesystem-mcpignore)** - A Data Security First filesystem MCP server that implements .mcpignore to prevent MCP clients from accessing sensitive data.
 - **[MediaWiki](https://github.com/ProfessionalWiki/MediaWiki-MCP-Server)** - A Model Context Protocol (MCP) Server that interacts with any MediaWiki wiki
 - **[MediaWiki MCP adapter](https://github.com/lucamauri/MediaWiki-MCP-adapter)** - A custom Model Context Protocol adapter for MediaWiki and WikiBase APIs
