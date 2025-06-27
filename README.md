@@ -649,6 +649,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[MediaWiki MCP adapter](https://github.com/lucamauri/MediaWiki-MCP-adapter)** - A custom Model Context Protocol adapter for MediaWiki and WikiBase APIs
 - **[mem0-mcp](https://github.com/mem0ai/mem0-mcp)** - A Model Context Protocol server for Mem0, which helps with managing coding preferences.
 - **[Membase](https://github.com/unibaseio/membase-mcp)** - Save and query your agent memory in distributed way by Membase.
+- **[Meta Ads Remote MCP] (https://github.com/pipeboard-co/meta-ads-mcp)** - Remote MCP server to interact with Meta Ads API - access, analyze, and manage Facebook, Instagram, and other Meta platforms advertising campaigns.
 - **[MetaTrader MCP](https://github.com/ariadng/metatrader-mcp-server)** - Enable AI LLMs to execute trades using MetaTrader 5 platform.
 - **[Metricool MCP](https://github.com/metricool/mcp-metricool)** - A Model Context Protocol server that integrates with Metricool's social media analytics platform to retrieve performance metrics and schedule content across networks like Instagram, Facebook, Twitter, LinkedIn, TikTok and YouTube.
 - **[Microsoft 365](https://github.com/merill/lokka)** - (by Merill) A Model Context Protocol (MCP) server for Microsoft 365. Includes support for all services including Teams, SharePoint, Exchange, OneDrive, Entra, Intune and more. See [Lokka](https://lokka.dev/) for more details.
