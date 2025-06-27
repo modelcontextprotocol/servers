@@ -634,6 +634,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[mcp-grep](https://github.com/erniebrodeur/mcp-grep)** - Python-based MCP server that brings grep functionality to LLMs. Supports common grep features including pattern searching, case-insensitive matching, context lines, and recursive directory searches.
 - **[mcp-k8s-go](https://github.com/strowk/mcp-k8s-go)** - Golang-based Kubernetes server for MCP to browse pods and their logs, events, namespaces and more. Built to be extensible.
 - **[mcp-local-rag](https://github.com/nkapila6/mcp-local-rag)** - "primitive" RAG-like web search model context protocol (MCP) server that runs locally using Google's MediaPipe Text Embedder and DuckDuckGo Search.
+- **[mcp-mcp](https://github.com/wojtyniak/mcp-mcp)** - Meta-MCP Server that acts as a tool discovery service for MCP clients.
 - **[mcp-meme-sticky](https://github.com/nkapila6/mcp-meme-sticky)** - Make memes or stickers using MCP server for WhatsApp or Telegram.
 - **[MCP-NixOS](https://github.com/utensils/mcp-nixos)** - A Model Context Protocol server that provides AI assistants with accurate, real-time information about NixOS packages, system options, Home Manager settings, and nix-darwin macOS configurations.
 - **[mcp-open-library](https://github.com/8enSmith/mcp-open-library)** - A Model Context Protocol (MCP) server for the Open Library API that enables AI assistants to search for book and author information.
