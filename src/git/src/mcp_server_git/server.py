@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Sequence, Optional
+from typing import Sequence, Optional, Set
 from mcp.server import Server
 from mcp.server.session import ServerSession
 from mcp.server.stdio import stdio_server
@@ -14,9 +14,200 @@ from mcp.types import (
 from enum import Enum
 import git
 from pydantic import BaseModel, Field
+import asyncio
+from collections import defaultdict
+import time
+import fnmatch
 
 # Default number of context lines to show in diff output
 DEFAULT_CONTEXT_LINES = 3
+
+# Discovery configuration
+class DiscoveryConfig(BaseModel):
+    """Configuration for secure repository auto-discovery"""
+    enabled: bool = False
+    max_depth: int = 2
+    exclude_patterns: list[str] = Field(default_factory=lambda: ['node_modules', '.venv', '__pycache__', '.git'])
+    cache_ttl_seconds: int = 300  # 5 minute cache
+
+class RepositoryCache:
+    """Secure cache for discovered repositories with TTL and audit logging"""
+    def __init__(self, ttl_seconds: int = 300):
+        self.repos: Set[str] = set()
+        self.last_scan: dict[str, float] = defaultdict(float)
+        self.ttl = ttl_seconds
+        self.logger = logging.getLogger(__name__ + '.cache')
+    
+    def add_repo(self, repo_path: str) -> None:
+        """Add repository to cache with security logging"""
+        self.repos.add(repo_path)
+        self.last_scan[repo_path] = time.time()
+        self.logger.info(f"Repository added to cache: {repo_path}")
+    
+    def is_cached(self, directory: str) -> bool:
+        """Check if directory scan is still valid"""
+        return (time.time() - self.last_scan[directory]) < self.ttl
+    
+    def get_repos(self) -> Set[str]:
+        """Get valid cached repositories, cleaning expired entries"""
+        current_time = time.time()
+        expired = [path for path, scan_time in self.last_scan.items() 
+                  if current_time - scan_time > self.ttl]
+        for path in expired:
+            self.repos.discard(path)
+            del self.last_scan[path]
+            self.logger.debug(f"Expired repository removed from cache: {path}")
+        return self.repos.copy()
+    
+    def clear(self) -> None:
+        """Clear all cached repositories"""
+        self.repos.clear()
+        self.last_scan.clear()
+        self.logger.info("Repository cache cleared")
+
+# Global repository cache instance
+_repository_cache = RepositoryCache()
+
+def find_git_repository_root(path: Path) -> Optional[Path]:
+    """Securely walk up directory tree to find git repository root"""
+    current = path if path.is_dir() else path.parent
+    max_traversal = 10  # Limit directory traversal for security
+    
+    for _ in range(max_traversal):
+        if current == current.parent:  # Reached filesystem root
+            break
+            
+        if (current / '.git').exists():
+            try:
+                # Validate it's a proper git repository
+                git.Repo(current)
+                return current
+            except git.InvalidGitRepositoryError:
+                pass
+        
+        current = current.parent
+    
+    return None
+
+def matches_exclude_pattern(path: Path, exclude_patterns: list[str]) -> bool:
+    """Check if path matches any exclude pattern"""
+    path_str = str(path)
+    path_name = path.name
+    
+    for pattern in exclude_patterns:
+        # Support both filename and path patterns
+        if fnmatch.fnmatch(path_name, pattern) or fnmatch.fnmatch(path_str, pattern):
+            return True
+    return False
+
+async def discover_repositories_secure(
+    root_paths: Sequence[str], 
+    config: DiscoveryConfig
+) -> Set[str]:
+    """Securely discover git repositories within allowed root paths"""
+    logger = logging.getLogger(__name__ + '.discovery')
+    discovered = set()
+    
+    if not config.enabled:
+        return discovered
+    
+    logger.info(f"Starting secure repository discovery in {len(root_paths)} root paths")
+    logger.debug(f"Discovery config: max_depth={config.max_depth}, exclude_patterns={config.exclude_patterns}")
+    
+    for root_path_str in root_paths:
+        root_path = Path(root_path_str)
+        
+        # Check cache first
+        if _repository_cache.is_cached(root_path_str):
+            logger.debug(f"Using cached scan results for {root_path_str}")
+            continue
+        
+        # Perform secure scan
+        try:
+            repos_in_root = await _scan_directory_secure(root_path, config)
+            discovered.update(repos_in_root)
+            
+            # Cache the scan timestamp
+            _repository_cache.last_scan[root_path_str] = time.time()
+            for repo in repos_in_root:
+                _repository_cache.add_repo(repo)
+                
+        except Exception as e:
+            logger.warning(f"Error scanning {root_path_str}: {e}")
+    
+    # Add all cached repositories
+    discovered.update(_repository_cache.get_repos())
+    
+    logger.info(f"Discovery completed. Found {len(discovered)} repositories")
+    return discovered
+
+async def _scan_directory_secure(
+    directory: Path, 
+    config: DiscoveryConfig, 
+    current_depth: int = 0
+) -> Set[str]:
+    """Securely scan directory for git repositories with depth and pattern limits"""
+    discovered = set()
+    
+    if current_depth > config.max_depth:
+        return discovered
+    
+    try:
+        if not directory.exists() or not directory.is_dir():
+            return discovered
+        
+        # Check if current directory is a git repository
+        if (directory / '.git').exists():
+            try:
+                git.Repo(directory)
+                discovered.add(str(directory.resolve()))
+                # Don't scan subdirectories of git repos
+                return discovered
+            except git.InvalidGitRepositoryError:
+                pass
+        
+        # Scan subdirectories if not excluded
+        if matches_exclude_pattern(directory, config.exclude_patterns):
+            return discovered
+        
+        # Use asyncio to prevent blocking
+        loop = asyncio.get_event_loop()
+        scan_tasks = []
+        
+        try:
+            for item in directory.iterdir():
+                if item.is_dir() and not item.name.startswith('.'):
+                    if not matches_exclude_pattern(item, config.exclude_patterns):
+                        task = loop.run_in_executor(
+                            None,
+                            lambda d=item: asyncio.run(
+                                _scan_directory_secure(d, config, current_depth + 1)
+                            )
+                        )
+                        scan_tasks.append(task)
+            
+            # Wait for all scans to complete with timeout
+            if scan_tasks:
+                results = await asyncio.wait_for(
+                    asyncio.gather(*scan_tasks, return_exceptions=True),
+                    timeout=30.0  # 30 second timeout per directory level
+                )
+                
+                for result in results:
+                    if isinstance(result, set):
+                        discovered.update(result)
+                        
+        except (PermissionError, OSError, asyncio.TimeoutError) as e:
+            logging.getLogger(__name__ + '.discovery').debug(
+                f"Skipping directory {directory}: {e}"
+            )
+            
+    except Exception as e:
+        logging.getLogger(__name__ + '.discovery').warning(
+            f"Error scanning {directory}: {e}"
+        )
+    
+    return discovered
 
 class GitStatus(BaseModel):
     repo_path: str
@@ -83,6 +274,16 @@ class GitBranch(BaseModel):
         description="The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified",
     )
 
+class GitDiscoverRepositories(BaseModel):
+    scan_path: Optional[str] = Field(
+        None,
+        description="Specific path to scan for repositories (optional, uses MCP roots if not provided)"
+    )
+    force_refresh: bool = Field(
+        False,
+        description="Force refresh of cached discovery results"
+    )
+
 class GitTools(str, Enum):
     STATUS = "git_status"
     DIFF_UNSTAGED = "git_diff_unstaged"
@@ -97,6 +298,7 @@ class GitTools(str, Enum):
     SHOW = "git_show"
     INIT = "git_init"
     BRANCH = "git_branch"
+    DISCOVER_REPOSITORIES = "git_discover_repositories"
 
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
@@ -200,16 +402,25 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
 
     return branch_info
 
-async def serve(repository: Path | None) -> None:
+async def serve(repositories: list[Path], discovery_config: Optional[DiscoveryConfig] = None) -> None:
     logger = logging.getLogger(__name__)
 
-    if repository is not None:
+    # Validate explicitly provided repositories
+    validated_repos = []
+    for repo in repositories:
         try:
-            git.Repo(repository)
-            logger.info(f"Using repository at {repository}")
+            git.Repo(repo)
+            validated_repos.append(repo)
+            logger.info(f"Using repository at {repo}")
         except git.InvalidGitRepositoryError:
-            logger.error(f"{repository} is not a valid Git repository")
-            return
+            logger.error(f"{repo} is not a valid Git repository")
+    
+    # Log discovery configuration
+    if discovery_config and discovery_config.enabled:
+        logger.info(f"Repository auto-discovery enabled with max_depth={discovery_config.max_depth}")
+        logger.debug(f"Discovery exclude patterns: {discovery_config.exclude_patterns}")
+    else:
+        logger.info("Repository auto-discovery disabled")
 
     server = Server("mcp-git")
 
@@ -280,6 +491,11 @@ async def serve(repository: Path | None) -> None:
                 name=GitTools.BRANCH,
                 description="List Git branches",
                 inputSchema=GitBranch.model_json_schema(),
+            ),
+            Tool(
+                name=GitTools.DISCOVER_REPOSITORIES,
+                description="Discover git repositories within allowed paths (requires --enable-discovery)",
+                inputSchema=GitDiscoverRepositories.model_json_schema(),
             )
         ]
 
@@ -295,6 +511,11 @@ async def serve(repository: Path | None) -> None:
 
             roots_result: ListRootsResult = await server.request_context.session.list_roots()
             logger.debug(f"Roots result: {roots_result}")
+            
+            # Get root paths for discovery
+            root_paths = [root.uri.path for root in roots_result.roots]
+            
+            # Traditional single-repo validation (for backward compatibility)
             repo_paths = []
             for root in roots_result.roots:
                 path = root.uri.path
@@ -303,17 +524,83 @@ async def serve(repository: Path | None) -> None:
                     repo_paths.append(str(path))
                 except git.InvalidGitRepositoryError:
                     pass
-            return repo_paths
+            
+            # Enhanced discovery if enabled
+            discovered_repos = set()
+            if discovery_config and discovery_config.enabled:
+                try:
+                    discovered_repos = await discover_repositories_secure(root_paths, discovery_config)
+                    logger.info(f"Auto-discovery found {len(discovered_repos)} additional repositories")
+                except Exception as e:
+                    logger.warning(f"Repository auto-discovery failed: {e}")
+            
+            # Combine traditional and discovered repositories
+            all_repos = set(repo_paths) | discovered_repos
+            return list(all_repos)
 
         def by_commandline() -> Sequence[str]:
-            return [str(repository)] if repository is not None else []
+            return [str(repo) for repo in validated_repos]
 
         cmd_repos = by_commandline()
         root_repos = await by_roots()
-        return [*root_repos, *cmd_repos]
+        
+        # Combine and deduplicate
+        all_repos = list(set([*root_repos, *cmd_repos]))
+        logger.info(f"Total available repositories: {len(all_repos)}")
+        return all_repos
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+        
+        # Handle repository discovery tool
+        if name == GitTools.DISCOVER_REPOSITORIES:
+            if not discovery_config or not discovery_config.enabled:
+                return [TextContent(
+                    type="text",
+                    text="Repository discovery is not enabled. Use --enable-discovery flag when starting the server."
+                )]
+            
+            scan_path = arguments.get("scan_path")
+            force_refresh = arguments.get("force_refresh", False)
+            
+            if force_refresh:
+                _repository_cache.clear()
+                logger.info("Repository cache cleared due to force_refresh")
+            
+            try:
+                if scan_path:
+                    # Scan specific path
+                    discovered = await _scan_directory_secure(Path(scan_path), discovery_config)
+                    result_text = f"Discovered repositories in {scan_path}:\n" + "\n".join(sorted(discovered))
+                else:
+                    # Use MCP session roots
+                    if isinstance(server.request_context.session, ServerSession):
+                        roots_result = await server.request_context.session.list_roots()
+                        root_paths = [root.uri.path for root in roots_result.roots]
+                        discovered = await discover_repositories_secure(root_paths, discovery_config)
+                        result_text = f"Discovered repositories in MCP roots:\n" + "\n".join(sorted(discovered))
+                    else:
+                        result_text = "No MCP session available for root discovery"
+                
+                return [TextContent(
+                    type="text",
+                    text=result_text if discovered else "No git repositories found"
+                )]
+                
+            except Exception as e:
+                logger.error(f"Repository discovery failed: {e}")
+                return [TextContent(
+                    type="text",
+                    text=f"Repository discovery failed: {str(e)}"
+                )]
+        
+        # All other tools require repo_path
+        if "repo_path" not in arguments:
+            return [TextContent(
+                type="text",
+                text="Error: repo_path argument is required"
+            )]
+            
         repo_path = Path(arguments["repo_path"])
         
         # Handle git init separately since it doesn't require an existing repo
@@ -325,7 +612,25 @@ async def serve(repository: Path | None) -> None:
             )]
             
         # For all other commands, we need an existing repo
-        repo = git.Repo(repo_path)
+        # Try intelligent repository resolution if path is not a git repo
+        if not (repo_path / '.git').exists():
+            git_root = find_git_repository_root(repo_path)
+            if git_root:
+                repo_path = git_root
+                logger.debug(f"Resolved {arguments['repo_path']} to git repository at {repo_path}")
+            else:
+                return [TextContent(
+                    type="text",
+                    text=f"No git repository found at or above {repo_path}. Use git_discover_repositories to find available repositories."
+                )]
+        
+        try:
+            repo = git.Repo(repo_path)
+        except git.InvalidGitRepositoryError:
+            return [TextContent(
+                type="text",
+                text=f"Invalid git repository at {repo_path}"
+            )]
 
         match name:
             case GitTools.STATUS:

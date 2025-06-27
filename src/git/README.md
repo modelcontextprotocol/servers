@@ -97,6 +97,65 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
    - Returns: List of branches
 
+14. `git_discover_repositories`
+   - Discover git repositories within allowed paths (requires --enable-discovery)
+   - Inputs:
+     - `scan_path` (string, optional): Specific path to scan for repositories (must be within MCP roots)
+     - `force_refresh` (boolean, optional): Clear cache and force fresh scan
+   - Returns: List of discovered git repositories
+
+## Enhanced Features: Secure Repository Discovery
+
+### Repository Auto-Discovery
+The git server now supports secure automatic discovery of git repositories within allowed directories. This feature is **opt-in** and designed with security as the top priority.
+
+#### Key Security Features:
+- **Explicit Opt-in**: Discovery must be enabled with `--enable-discovery` flag
+- **Bounded Scanning**: Respects MCP session roots and configurable depth limits
+- **Pattern Exclusion**: Automatically excludes sensitive directories like `node_modules`, `.venv`
+- **Performance Limits**: Timeouts and async scanning prevent performance issues
+- **Audit Logging**: All discovery activities are logged for security review
+- **Cache Management**: TTL-based caching with secure cleanup
+
+### Enhanced CLI Options
+
+#### Multiple Repository Support
+```bash
+# Specify multiple repositories explicitly
+mcp-server-git --repository /path/to/repo1 --repository /path/to/repo2
+
+# Or use short form
+mcp-server-git -r /path/to/repo1 -r /path/to/repo2
+```
+
+#### Auto-Discovery Configuration
+```bash
+# Enable discovery with default settings
+mcp-server-git --enable-discovery
+
+# Customize discovery parameters
+mcp-server-git --enable-discovery \
+  --max-discovery-depth 3 \
+  --discovery-exclude "node_modules" \
+  --discovery-exclude ".venv" \
+  --discovery-exclude "target"
+
+# Combine explicit repos with discovery
+mcp-server-git -r /important/repo --enable-discovery
+```
+
+### Intelligent Repository Resolution
+The server now automatically resolves file paths to their containing git repository:
+```json
+{
+  "name": "git_status",
+  "arguments": {
+    "repo_path": "/workspace/myproject/src/components"
+  }
+}
+```
+↳ Automatically resolves to `/workspace/myproject` if it contains a `.git` directory
+
 ## Installation
 
 ### Using uv (recommended)
@@ -125,13 +184,50 @@ python -m mcp_server_git
 Add this to your `claude_desktop_config.json`:
 
 <details>
-<summary>Using uvx</summary>
+<summary>Using uvx (single repository)</summary>
 
 ```json
 "mcpServers": {
   "git": {
     "command": "uvx",
     "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using uvx with auto-discovery</summary>
+
+```json
+"mcpServers": {
+  "git": {
+    "command": "uvx",
+    "args": [
+      "mcp-server-git", 
+      "--enable-discovery",
+      "--max-discovery-depth", "2",
+      "--discovery-exclude", "node_modules",
+      "--discovery-exclude", ".venv"
+    ]
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using uvx with multiple repositories</summary>
+
+```json
+"mcpServers": {
+  "git": {
+    "command": "uvx",
+    "args": [
+      "mcp-server-git",
+      "--repository", "path/to/repo1",
+      "--repository", "path/to/repo2",
+      "--enable-discovery"
+    ]
   }
 }
 ```
