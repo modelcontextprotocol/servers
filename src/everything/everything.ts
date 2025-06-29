@@ -123,6 +123,7 @@ export const createServer = () => {
   const server = new Server(
     {
       name: "example-servers/everything",
+      title: "Everything Example Server",
       version: "1.0.0",
     },
     {
