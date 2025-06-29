@@ -775,6 +775,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[ServiceNow](https://github.com/osomai/servicenow-mcp)** - A MCP server to interact with a ServiceNow instance
 - **[ShaderToy](https://github.com/wilsonchenghy/ShaderToy-MCP)** - This MCP server lets LLMs to interact with the ShaderToy API, allowing LLMs to learn from compute shaders examples and enabling them to create complex GLSL shaders that they are previously not capable of.
 - **[Shodan MCP](https://github.com/Hexix23/shodan-mcp)** - MCP server to interact with [Shodan](https://www.shodan.io/)
+- **[ShareSeer](https://github.com/shareseer/shareseer-mcp-server)** - MCP to Access SEC filings, financials & insider trading data in real time using [ShareSeer](https://shareseer.com)
 - **[Shopify](https://github.com/GeLi2001/shopify-mcp)** - MCP to interact with Shopify API including order, product, customers and so on.
 - **[Simple Loki MCP](https://github.com/ghrud92/simple-loki-mcp)** - A simple MCP server to query Loki logs using logcli.
 - **[Siri Shortcuts](https://github.com/dvcrn/mcp-server-siri-shortcuts)** - MCP to interact with Siri Shortcuts on macOS. Exposes all Shortcuts as MCP tools.
