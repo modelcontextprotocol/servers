@@ -948,6 +948,7 @@ Additional resources on MCP.
 - **[Smithery](https://smithery.ai/)** - A registry of MCP servers to find the right tools for your LLM agents by **[Henry Mao](https://github.com/calclavia)**
 - **[Toolbase](https://gettoolbase.ai)** - Desktop application that manages tools and MCP servers with just a few clicks - no coding required by **[gching](https://github.com/gching)**
 - **[ToolHive](https://github.com/StacklokLabs/toolhive)** - A lightweight utility designed to simplify the deployment and management of MCP servers, ensuring ease of use, consistency, and security through containerization by **[StacklokLabs](https://github.com/StacklokLabs)**
+- **[Facebook Ads](https://github.com/fortytwode/10xer)** - Access Facebook advertising data, insights, and account information through natural language conversations with Claude.
 
 ## 🚀 Getting Started
 
