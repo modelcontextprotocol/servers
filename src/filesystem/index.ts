@@ -15,16 +15,25 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 
-// Command line argument parsing
-const args = process.argv.slice(2);
+// Command line argument parsing - simple approach
+// Skip the first two arguments (node executable and script path)
+const rawArgs = process.argv.slice(2);
+
+// Filter out any arguments that start with '--' (options)
+// and keep only the directory paths
+const args: string[] = [];
+for (let i = 0; i < rawArgs.length; i++) {
+  const arg = rawArgs[i];
+  // We're handling filesystem paths, so arguments starting with '-'
+  // would never be valid paths on any OS
+  if (!arg.startsWith('-')) {
+    args.push(arg);
+  }
+}
+
 if (args.length === 0) {
   console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
   process.exit(1);
-}
-
-// Normalize all paths consistently
-function normalizePath(p: string): string {
-  return path.normalize(p);
 }
 
 function expandHome(filepath: string): string {
@@ -34,15 +43,19 @@ function expandHome(filepath: string): string {
   return filepath;
 }
 
-// Store allowed directories in normalized form
-const allowedDirectories = args.map(dir =>
-  normalizePath(path.resolve(expandHome(dir)))
-);
+// Store allowed directories in normalized form using path.normalize
+const allowedDirectories = args.map((dir: string) => {
+  const expanded = expandHome(dir);
+  // path.resolve handles different path formats and ensures absolute paths
+  // path.normalize ensures consistent path format for the OS
+  return path.normalize(path.resolve(expanded));
+});
 
 // Validate that all directories exist and are accessible
-await Promise.all(args.map(async (dir) => {
+await Promise.all(args.map(async (dir: string) => {
   try {
-    const stats = await fs.stat(expandHome(dir));
+    const expandedDir = expandHome(dir);
+    const stats = await fs.stat(expandedDir);
     if (!stats.isDirectory()) {
       console.error(`Error: ${dir} is not a directory`);
       process.exit(1);
@@ -55,39 +68,46 @@ await Promise.all(args.map(async (dir) => {
 
 // Security utilities
 async function validatePath(requestedPath: string): Promise<string> {
+  // Use path functions for consistent handling
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
     : path.resolve(process.cwd(), expandedPath);
-
-  const normalizedRequested = normalizePath(absolute);
+  
+  // Normalize for consistent path format
+  const normalizedPath = path.normalize(absolute);
 
   // Check if path is within allowed directories
-  const isAllowed = allowedDirectories.some(dir => normalizedRequested.startsWith(dir));
+  const isAllowed = allowedDirectories.some((dir: string) => 
+    // startsWith works well for directory containment checks
+    normalizedPath.startsWith(dir));
   if (!isAllowed) {
-    throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
+    throw new Error(`Access denied - path outside allowed directories: ${normalizedPath} not in ${allowedDirectories.join(', ')}`);
   }
 
   // Handle symlinks by checking their real path
   try {
-    const realPath = await fs.realpath(absolute);
-    const normalizedReal = normalizePath(realPath);
-    const isRealPathAllowed = allowedDirectories.some(dir => normalizedReal.startsWith(dir));
+    const realPath = await fs.realpath(normalizedPath);
+    // Normalize the real path too
+    const normalizedRealPath = path.normalize(realPath);
+    const isRealPathAllowed = allowedDirectories.some((dir: string) => 
+      normalizedRealPath.startsWith(dir));
     if (!isRealPathAllowed) {
       throw new Error("Access denied - symlink target outside allowed directories");
     }
-    return realPath;
+    return normalizedRealPath;
   } catch (error) {
     // For new files that don't exist yet, verify parent directory
-    const parentDir = path.dirname(absolute);
+    const parentDir = path.dirname(normalizedPath);
     try {
       const realParentPath = await fs.realpath(parentDir);
-      const normalizedParent = normalizePath(realParentPath);
-      const isParentAllowed = allowedDirectories.some(dir => normalizedParent.startsWith(dir));
+      const normalizedParentPath = path.normalize(realParentPath);
+      const isParentAllowed = allowedDirectories.some((dir: string) => 
+        normalizedParentPath.startsWith(dir));
       if (!isParentAllowed) {
         throw new Error("Access denied - parent directory outside allowed directories");
       }
-      return absolute;
+      return normalizedPath;
     } catch {
       throw new Error(`Parent directory does not exist: ${parentDir}`);
     }
