@@ -34,10 +34,31 @@ function expandHome(filepath: string): string {
   return filepath;
 }
 
+function getIgnorePatterns(): string[] {
+  const ignoreEnv: string | undefined = process.env.MCP_FILESYSTEM_IGNORE_PATTERNS;
+  if (!ignoreEnv) return [];
+
+  return ignoreEnv
+    .split(',')
+    .map(pattern => pattern.trim())
+    .map(pattern => pattern.includes('*') ? pattern : `*${pattern}*`);
+}
+
+
+function isIgnored(filePath: string, ignored: string[]): boolean {
+  if (!ignored.length) return false;
+
+  return ignored.some(pattern => {
+    return minimatch(filePath, pattern, { dot: true })
+  });
+}
+
 // Store allowed directories in normalized form
 const allowedDirectories = args.map(dir =>
   normalizePath(path.resolve(expandHome(dir)))
 );
+
+const ignorePatterns = getIgnorePatterns();
 
 // Validate that all directories exist and are accessible
 await Promise.all(args.map(async (dir) => {
@@ -663,6 +684,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validPath = await validatePath(parsed.data.path);
         const entries = await fs.readdir(validPath, { withFileTypes: true });
         const formatted = entries
+          .filter((entry) => !isIgnored(entry.name, ignorePatterns))
           .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
           .join("\n");
         return {
@@ -754,6 +776,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const result: TreeEntry[] = [];
 
                 for (const entry of entries) {
+                    if (isIgnored(entry.name, ignorePatterns)) continue;
+                    
                     const entryData: TreeEntry = {
                         name: entry.name,
                         type: entry.isDirectory() ? 'directory' : 'file'
