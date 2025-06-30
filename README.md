@@ -14,7 +14,6 @@ Typically, each MCP server is implemented with an MCP SDK:
 > Note: Lists in this README are maintained in alphabetical order to minimize merge conflicts when adding new items.
 
 ## 🌟 Reference Servers
-
 These servers aim to demonstrate MCP features and the official SDKs.
 
 - **[Everything](src/everything)** - Reference / test server with prompts, resources, and tools
