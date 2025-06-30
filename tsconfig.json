@@ -1,14 +1,27 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "Node16",
-    "moduleResolution": "Node16",
-    "strict": true,
+    "target": "ES2020",
+    "module": "ES2020",
+    "lib": ["ES2020"],
+    "moduleResolution": "node",
+    "rootDir": ".",
+    "outDir": "dist",
     "esModuleInterop": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "dist"]
 }
