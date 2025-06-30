@@ -9,6 +9,8 @@ import {
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { Entity, Relation, KnowledgeGraph } from './types.js';
+import { searchGraph, ScoredKnowledgeGraph } from './query-language.js';
 
 // Define memory file path using environment variable with fallback
 const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
@@ -20,22 +22,9 @@ const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
     : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH)
   : defaultMemoryPath;
 
-// We are storing our memory using entities, relations, and observations in a graph structure
-interface Entity {
-  name: string;
-  entityType: string;
-  observations: string[];
-}
-
-interface Relation {
-  from: string;
-  to: string;
-  relationType: string;
-}
-
-interface KnowledgeGraph {
-  entities: Entity[];
-  relations: Relation[];
+// Helper function to format dates in YYYY-MM-DD format
+function formatDate(date: Date = new Date()): string {
+  return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD
 }
 
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
@@ -44,12 +33,26 @@ class KnowledgeGraphManager {
     try {
       const data = await fs.readFile(MEMORY_FILE_PATH, "utf-8");
       const lines = data.split("\n").filter(line => line.trim() !== "");
-      return lines.reduce((graph: KnowledgeGraph, line) => {
-        const item = JSON.parse(line);
-        if (item.type === "entity") graph.entities.push(item as Entity);
-        if (item.type === "relation") graph.relations.push(item as Relation);
+      const graph = lines.reduce((graph: KnowledgeGraph, line) => {
+        try {
+          const item = JSON.parse(line);
+          if (item.type === "entity") graph.entities.push(item as Entity);
+          if (item.type === "relation") graph.relations.push(item as Relation);
+        } catch (error) {
+          console.error(`Error parsing line: ${line}`, error);
+        }
         return graph;
       }, { entities: [], relations: [] });
+
+      // Ensure all entities have date fields
+      const todayFormatted = formatDate();
+      graph.entities.forEach(entity => {
+        // Ensure the fields exist
+        if (!entity.lastWrite) entity.lastWrite = todayFormatted;
+        if (!entity.lastRead) entity.lastRead = todayFormatted;
+      });
+
+      return graph;
     } catch (error) {
       if (error instanceof Error && 'code' in error && (error as any).code === "ENOENT") {
         return { entities: [], relations: [] };
@@ -68,7 +71,14 @@ class KnowledgeGraphManager {
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
     const graph = await this.loadGraph();
-    const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
+    const todayFormatted = formatDate();
+    const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name))
+      .map(entity => ({
+        ...entity,
+        lastRead: todayFormatted,
+        lastWrite: todayFormatted,
+        isImportant: entity.isImportant || false // Default to false if not specified
+      }));
     graph.entities.push(...newEntities);
     await this.saveGraph(graph);
     return newEntities;
@@ -88,13 +98,17 @@ class KnowledgeGraphManager {
 
   async addObservations(observations: { entityName: string; contents: string[] }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
     const graph = await this.loadGraph();
+    const todayFormatted = formatDate();
     const results = observations.map(o => {
       const entity = graph.entities.find(e => e.name === o.entityName);
       if (!entity) {
         throw new Error(`Entity with name ${o.entityName} not found`);
       }
       const newObservations = o.contents.filter(content => !entity.observations.includes(content));
-      entity.observations.push(...newObservations);
+      if (newObservations.length > 0) {
+        entity.observations.push(...newObservations);
+        entity.lastWrite = todayFormatted;
+      }
       return { entityName: o.entityName, addedObservations: newObservations };
     });
     await this.saveGraph(graph);
@@ -110,10 +124,16 @@ class KnowledgeGraphManager {
 
   async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
     const graph = await this.loadGraph();
+    const todayFormatted = formatDate();
     deletions.forEach(d => {
       const entity = graph.entities.find(e => e.name === d.entityName);
       if (entity) {
+        const originalLength = entity.observations.length;
         entity.observations = entity.observations.filter(o => !d.observations.includes(o));
+        // Only update the date if observations were actually deleted
+        if (entity.observations.length < originalLength) {
+          entity.lastWrite = todayFormatted;
+        }
       }
     });
     await this.saveGraph(graph);
@@ -133,53 +153,157 @@ class KnowledgeGraphManager {
     return this.loadGraph();
   }
 
-  // Very basic search function
+  /**
+   * Searches the knowledge graph with a structured query language.
+   * 
+   * The query language supports:
+   * - type:value - Filter entities by type
+   * - name:value - Filter entities by name
+   * - +word - Require this term (AND logic)
+   * - -word - Exclude this term (NOT logic)
+   * - word1|word2|word3 - Match any of these terms (OR logic)
+   * - Any other text - Used for fuzzy matching
+   * 
+   * Example: "type:person +programmer -manager frontend|backend|fullstack" searches for
+   * entities of type "person" that contain "programmer", don't contain "manager",
+   * and contain at least one of "frontend", "backend", or "fullstack".
+   * 
+   * Results are sorted by relevance, with exact name matches ranked highest.
+   * 
+   * @param query The search query string
+   * @returns A filtered knowledge graph containing matching entities and their relations
+   */
   async searchNodes(query: string): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
     
-    // Filter entities
-    const filteredEntities = graph.entities.filter(e => 
-      e.name.toLowerCase().includes(query.toLowerCase()) ||
-      e.entityType.toLowerCase().includes(query.toLowerCase()) ||
-      e.observations.some(o => o.toLowerCase().includes(query.toLowerCase()))
-    );
-  
-    // Create a Set of filtered entity names for quick lookup
-    const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
-  
-    // Filter relations to only include those between filtered entities
+    // Get the basic search results with scores
+    const searchResult = searchGraph(query, graph);
+    
+    // Create a map of entity name to search score for quick lookup
+    // const searchScores = new Map<string, number>();
+    // searchResult.scoredEntities.forEach(scored => {
+      // searchScores.set(scored.entity.name, scored.score);
+    // });
+    
+    // Find the maximum search score for normalization
+    const maxSearchScore = searchResult.scoredEntities.length > 0 
+      ? Math.max(...searchResult.scoredEntities.map(scored => scored.score))
+      : 1.0;
+    
+    // Get all entities sorted by lastRead date (most recent first)
+    const entitiesByRecency = [...graph.entities]
+      .filter(e => e.lastRead) // Filter out entities without lastRead
+      .sort((a, b) => {
+        // Sort in descending order (newest first)
+        return new Date(b.lastRead!).getTime() - new Date(a.lastRead!).getTime();
+      });
+    
+    // Get the 20 most recently accessed entities
+    const top20Recent = new Set(entitiesByRecency.slice(0, 20).map(e => e.name));
+    
+    // Get the 10 most recently accessed entities (subset of top20)
+    const top10Recent = new Set(entitiesByRecency.slice(0, 10).map(e => e.name));
+    
+    // Score the entities based on the criteria
+    const scoredEntities = searchResult.scoredEntities.map(scoredEntity => {
+      let score = 0;
+      
+      // Score based on recency
+      if (top20Recent.has(scoredEntity.entity.name)) score += 1;
+      if (top10Recent.has(scoredEntity.entity.name)) score += 1;
+      
+      // Score based on importance
+      if (scoredEntity.entity.isImportant) {
+        score += 1;
+        score *= 2; // Double the score for important entities
+      }
+      
+      // Add normalized search score (0-1 range)
+      const searchScore = scoredEntity.score || 0;
+      score += searchScore / maxSearchScore;
+      
+      return { entity: scoredEntity.entity, score };
+    });
+    
+    // Sort by score (highest first) and take top 10
+    const topEntities = scoredEntities
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map(item => item.entity);
+    
+    // Create a filtered graph with only the top entities
+    const filteredEntityNames = new Set(topEntities.map(e => e.name));
     const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
+      filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
     );
-  
-    const filteredGraph: KnowledgeGraph = {
-      entities: filteredEntities,
-      relations: filteredRelations,
+    
+    const result: KnowledgeGraph = {
+      entities: topEntities,
+      relations: filteredRelations
     };
-  
-    return filteredGraph;
+    
+    // Update access dates for found entities
+    const todayFormatted = formatDate();
+    result.entities.forEach(foundEntity => {
+      // Find the actual entity in the original graph and update its access date
+      const originalEntity = graph.entities.find(e => e.name === foundEntity.name);
+      if (originalEntity) {
+        originalEntity.lastRead = todayFormatted;
+      }
+    });
+    
+    // Save the updated access dates
+    await this.saveGraph(graph);
+    
+    return result;
   }
 
   async openNodes(names: string[]): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
+    const todayFormatted = formatDate();
     
-    // Filter entities
-    const filteredEntities = graph.entities.filter(e => names.includes(e.name));
+    // Filter entities and update read dates
+    const filteredEntities = graph.entities.filter(e => {
+      if (names.includes(e.name)) {
+        // Update the lastRead whenever an entity is opened
+        e.lastRead = todayFormatted;
+        return true;
+      }
+      return false;
+    });
+  
+    // Since we're modifying entities, we need to save the graph
+    await this.saveGraph(graph);
   
     // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
   
-    // Filter relations to only include those between filtered entities
+    // Filter relations to include those where either from or to entity is in the filtered set
     const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
+      filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
     );
   
     const filteredGraph: KnowledgeGraph = {
       entities: filteredEntities,
       relations: filteredRelations,
     };
-  
+
     return filteredGraph;
+  }
+
+  async setEntityImportance(entityNames: string[], isImportant: boolean): Promise<void> {
+    const graph = await this.loadGraph();
+    const todayFormatted = formatDate();
+    
+    entityNames.forEach(name => {
+      const entity = graph.entities.find(e => e.name === name);
+      if (entity) {
+        entity.isImportant = isImportant;
+        entity.lastWrite = todayFormatted; // Update lastWrite since we're modifying the entity
+      }
+    });
+    
+    await this.saveGraph(graph);
   }
 }
 
@@ -335,21 +459,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["relations"],
         },
       },
-      {
+      /* {
         name: "read_graph",
         description: "Read the entire knowledge graph",
         inputSchema: {
           type: "object",
           properties: {},
         },
-      },
+      }, */
       {
         name: "search_nodes",
         description: "Search for nodes in the knowledge graph based on a query",
         inputSchema: {
           type: "object",
           properties: {
-            query: { type: "string", description: "The search query to match against entity names, types, and observation content" },
+            query: { 
+              type: "string", 
+              description: "The search query to match against entity names, types, and observation content. Supports a query language with these operators: 'type:value' to filter by entity type, 'name:value' to filter by entity name, '+word' to require a term (AND logic), '-word' to exclude a term (NOT logic). Any remaining text is used for fuzzy matching. Example: 'type:person +programmer -manager frontend|backend|fullstack' searches for entities of type 'person' that contain 'programmer', don't contain 'manager', and contain at least one of 'frontend', 'backend', or 'fullstack'." 
+            },
           },
           required: ["query"],
         },
