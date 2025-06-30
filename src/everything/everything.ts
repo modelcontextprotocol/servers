@@ -486,7 +486,7 @@ export const createServer = () => {
       },
       {
         name: ToolName.ELICITATION_DEMO,
-        description: "Demonstrates the elicitation feature",
+        description: "Demonstrates the Elicitation feature by asking the user to provide information about their favorite color, number, and pets.",
         inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
       },
     ];
