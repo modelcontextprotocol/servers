@@ -10,10 +10,12 @@ import {
 import fs from "fs/promises";
 import path from "path";
 import os from 'os';
+import { randomBytes } from 'crypto';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
+import { isPathWithinAllowedDirectories } from './path-validation.js';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -34,9 +36,21 @@ function expandHome(filepath: string): string {
   return filepath;
 }
 
-// Store allowed directories in normalized form
-const allowedDirectories = args.map(dir =>
-  normalizePath(path.resolve(expandHome(dir)))
+// Store allowed directories in normalized and resolved form
+const allowedDirectories = await Promise.all(
+  args.map(async (dir) => {
+    const expanded = expandHome(dir);
+    const absolute = path.resolve(expanded);
+    try {
+      // Resolve symlinks in allowed directories during startup
+      const resolved = await fs.realpath(absolute);
+      return normalizePath(resolved);
+    } catch (error) {
+      // If we can't resolve (doesn't exist), use the normalized absolute path
+      // This allows configuring allowed dirs that will be created later
+      return normalizePath(absolute);
+    }
+  })
 );
 
 // Validate that all directories exist and are accessible
@@ -63,7 +77,7 @@ async function validatePath(requestedPath: string): Promise<string> {
   const normalizedRequested = normalizePath(absolute);
 
   // Check if path is within allowed directories
-  const isAllowed = allowedDirectories.some(dir => normalizedRequested.startsWith(dir));
+  const isAllowed = isPathWithinAllowedDirectories(normalizedRequested, allowedDirectories);
   if (!isAllowed) {
     throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
   }
@@ -72,25 +86,26 @@ async function validatePath(requestedPath: string): Promise<string> {
   try {
     const realPath = await fs.realpath(absolute);
     const normalizedReal = normalizePath(realPath);
-    const isRealPathAllowed = allowedDirectories.some(dir => normalizedReal.startsWith(dir));
-    if (!isRealPathAllowed) {
-      throw new Error("Access denied - symlink target outside allowed directories");
+    if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
+      throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
     }
     return realPath;
   } catch (error) {
     // For new files that don't exist yet, verify parent directory
-    const parentDir = path.dirname(absolute);
-    try {
-      const realParentPath = await fs.realpath(parentDir);
-      const normalizedParent = normalizePath(realParentPath);
-      const isParentAllowed = allowedDirectories.some(dir => normalizedParent.startsWith(dir));
-      if (!isParentAllowed) {
-        throw new Error("Access denied - parent directory outside allowed directories");
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      const parentDir = path.dirname(absolute);
+      try {
+        const realParentPath = await fs.realpath(parentDir);
+        const normalizedParent = normalizePath(realParentPath);
+        if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
+          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+        }
+        return absolute;
+      } catch {
+        throw new Error(`Parent directory does not exist: ${parentDir}`);
       }
-      return absolute;
-    } catch {
-      throw new Error(`Parent directory does not exist: ${parentDir}`);
     }
+    throw error;
   }
 }
 
@@ -331,7 +346,19 @@ async function applyFileEdits(
   const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
 
   if (!dryRun) {
-    await fs.writeFile(filePath, modifiedContent, 'utf-8');
+    // Security: Use atomic rename to prevent race conditions where symlinks
+    // could be created between validation and write. Rename operations
+    // replace the target file atomically and don't follow symlinks.
+    const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
+    try {
+      await fs.writeFile(tempPath, modifiedContent, 'utf-8');
+      await fs.rename(tempPath, filePath);
+    } catch (error) {
+      try {
+        await fs.unlink(tempPath);
+      } catch {}
+      throw error;
+    }
   }
 
   return formattedDiff;
@@ -625,7 +652,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        await fs.writeFile(validPath, parsed.data.content, "utf-8");
+
+        try {
+          // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
+          // preventing writes through pre-existing symlinks
+          await fs.writeFile(validPath, parsed.data.content, { encoding: "utf-8", flag: 'wx' });
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+            // Security: Use atomic rename to prevent race conditions where symlinks
+            // could be created between validation and write. Rename operations
+            // replace the target file atomically and don't follow symlinks.
+            const tempPath = `${validPath}.${randomBytes(16).toString('hex')}.tmp`;
+            try {
+              await fs.writeFile(tempPath, parsed.data.content, 'utf-8');
+              await fs.rename(tempPath, validPath);
+            } catch (renameError) {
+              try {
+                await fs.unlink(tempPath);
+              } catch {}
+              throw renameError;
+            }
+          } else {
+            throw error;
+          }
+        }
+
         return {
           content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
         };
