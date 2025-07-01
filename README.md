@@ -585,6 +585,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Kibana MCP](https://github.com/TocharianOU/mcp-server-kibana.git)** (by TocharianOU) - A community-maintained MCP server implementation that allows any MCP-compatible client to access and manage Kibana instances through natural language or programmatic requests.
 - **[Kibela](https://github.com/kiwamizamurai/mcp-kibela-server)** (by kiwamizamurai) - Interact with Kibela API.
 - **[KiCad MCP](https://github.com/lamaalrajih/kicad-mcp)** - MCP server for KiCad on Mac, Windows, and Linux.
+- **[kill-process-mcp](https://github.com/misiektoja/kill-process-mcp)** - List and terminate OS processes via natural language queries
 - **[kintone](https://github.com/macrat/mcp-server-kintone)** - Manage records and apps in [kintone](https://kintone.com) through LLM tools.
 - **[Kokoro TTS](https://github.com/mberg/kokoro-tts-mcp)** - Use Kokoro text to speech to convert text to MP3s with optional autoupload to S3.
 - **[Kong Konnect](https://github.com/Kong/mcp-konnect)** - A Model Context Protocol (MCP) server for interacting with Kong Konnect APIs, allowing AI assistants to query and analyze Kong Gateway configurations, traffic, and analytics.
