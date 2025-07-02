@@ -43,7 +43,7 @@ function expandHome(filepath: string): string {
 }
 
 // Store allowed directories in normalized and resolved form
-const allowedDirectories = await Promise.all(
+let allowedDirectories = await Promise.all(
   args.map(async (dir) => {
     const expanded = expandHome(dir);
     const absolute = path.resolve(expanded);
@@ -897,10 +897,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 // Updates allowed directories based on MCP client roots
-async function updateAllowedDirectoriesFromRoots(roots: Root[]) {
-  const rootDirs = await getValidRootDirectories(roots);
-  if (rootDirs.length > 0) {
-    allowedDirectories.splice(0, allowedDirectories.length, ...rootDirs);
+async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
+  const validatedRootDirs = await getValidRootDirectories(requestedRoots);
+  if (validatedRootDirs.length > 0) {
+    allowedDirectories = [...validatedRootDirs];
+    console.error(`Updated allowed directories from MCP roots: ${validatedRootDirs.length} valid directories`);
+  } else {
+    console.error("No valid root directories provided by client");
   }
 }
 

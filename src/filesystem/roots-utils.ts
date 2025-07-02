@@ -1,16 +1,26 @@
 import { promises as fs, type Stats } from 'fs';
 import path from 'path';
+import os from 'os';
 import { normalizePath } from './path-utils.js';
 import type { Root } from '@modelcontextprotocol/sdk/types.js';
 
 /**
- * Converts a root URI to a normalized directory path.
- * @param uri - File URI (file://...) or plain directory path
- * @returns Normalized absolute directory path
+ * Converts a root URI to a normalized directory path with basic security validation.
+ * @param rootUri - File URI (file://...) or plain directory path
+ * @returns Promise resolving to validated path or null if invalid
  */
-function parseRootUri(uri: string): string {
-  const rawPath = uri.startsWith('file://') ? uri.slice(7) : uri;
-  return normalizePath(path.resolve(rawPath));
+async function parseRootUri(rootUri: string): Promise<string | null> {
+  try {
+    const rawPath = rootUri.startsWith('file://') ? rootUri.slice(7) : rootUri;
+    const expandedPath = rawPath.startsWith('~/') || rawPath === '~' 
+      ? path.join(os.homedir(), rawPath.slice(1)) 
+      : rawPath;
+    const absolutePath = path.resolve(expandedPath);
+    const resolvedPath = await fs.realpath(absolutePath);
+    return normalizePath(resolvedPath);
+  } catch {
+    return null; // Path doesn't exist or other error
+  }
 }
 
 /**
@@ -29,33 +39,38 @@ function formatDirectoryError(dir: string, error?: unknown, reason?: string): st
 }
 
 /**
- * Gets valid directory paths from MCP root specifications.
+ * Resolves requested root directories from MCP root specifications.
  * 
  * Converts root URI specifications (file:// URIs or plain paths) into normalized
  * directory paths, validating that each path exists and is a directory.
+ * Includes symlink resolution for security.
  * 
- * @param roots - Array of root specifications with URI and optional name
+ * @param requestedRoots - Array of root specifications with URI and optional name
  * @returns Promise resolving to array of validated directory paths
  */
 export async function getValidRootDirectories(
-  roots: readonly Root[]
+  requestedRoots: readonly Root[]
 ): Promise<string[]> {
-  const validDirectories: string[] = [];
+  const validatedDirectories: string[] = [];
   
-  for (const root of roots) {
-    const dir = parseRootUri(root.uri);
+  for (const requestedRoot of requestedRoots) {
+    const resolvedPath = await parseRootUri(requestedRoot.uri);
+    if (!resolvedPath) {
+      console.error(formatDirectoryError(requestedRoot.uri, undefined, 'invalid path or inaccessible'));
+      continue;
+    }
     
     try {
-      const stats: Stats = await fs.stat(dir);
+      const stats: Stats = await fs.stat(resolvedPath);
       if (stats.isDirectory()) {
-        validDirectories.push(dir);
+        validatedDirectories.push(resolvedPath);
       } else {
-        console.error(formatDirectoryError(dir, undefined, 'non-directory root'));
+        console.error(formatDirectoryError(resolvedPath, undefined, 'non-directory root'));
       }
     } catch (error) {
-      console.error(formatDirectoryError(dir, error));
+      console.error(formatDirectoryError(resolvedPath, error));
     }
   }
   
-  return validDirectories;
+  return validatedDirectories;
 }
