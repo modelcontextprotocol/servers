@@ -14,7 +14,6 @@ Typically, each MCP server is implemented with an MCP SDK:
 > Note: Lists in this README are maintained in alphabetical order to minimize merge conflicts when adding new items.
 
 ## 🌟 Reference Servers
-
 These servers aim to demonstrate MCP features and the official SDKs.
 
 - **[Everything](src/everything)** - Reference / test server with prompts, resources, and tools
@@ -491,6 +490,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Fabric MCP](https://github.com/aci-labs/ms-fabric-mcp)** - Microsoft Fabric MCP server to accelerate working in your Fabric Tenant with the help of your favorite LLM models.
 - **[fabric-mcp-server](https://github.com/adapoet/fabric-mcp-server)** - The fabric-mcp-server is an MCP server that integrates [Fabric](https://github.com/danielmiessler/fabric) patterns with [Cline](https://cline.bot/), exposing them as tools for AI-driven task execution and enhancing Cline's capabilities.
 - **[Facebook Ads](https://github.com/gomarble-ai/facebook-ads-mcp-server)** - MCP server acting as an interface to the Facebook Ads, enabling programmatic access to Facebook Ads data and management features.
+- **[Facebook Ads](https://github.com/fortytwode/10xer)** - Access Facebook advertising data, insights, and account information through natural language conversations with Claude.
 - **[Facebook Ads Library](https://github.com/trypeggy/facebook-ads-library-mcp)** - Get any answer from the Facebook Ads Library, conduct deep research including messaging, creative testing and comparisons in seconds.
 - **[falai](https://github.com/universal-mcp/falai)** - Fal.ai mcp server from **[agentr](https://agentr.dev/)** that provides support for generating media using fast inference engine.
 - **[Fantasy PL](https://github.com/rishijatia/fantasy-pl-mcp)** - Give your coding agent direct access to up-to date Fantasy Premier League data
