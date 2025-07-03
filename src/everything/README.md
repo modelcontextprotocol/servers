@@ -72,6 +72,14 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
      - Embedded resource with `type: "resource"`
      - Text instruction for using the resource URI
 
+9. `elicitationDemo`
+   - Initiates an elicitation (interaction) within the MCP client.
+   - Inputs:
+      - `color` (string): Favorite color
+      - `number` (number, 1-100): Favorite number
+      - `pets` (enum): Favorite pet
+   - Returns: Confirmation of the elicitation demo with selection summary.
+
 ### Resources
 
 The server provides 100 test resources in two formats:
