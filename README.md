@@ -808,6 +808,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[TeamRetro](https://github.com/adepanges/teamretro-mcp-server)** - This MCP server allows LLMs to interact with TeamRetro, allowing LLMs to manage user, team, team member, retrospective, health check, action, agreement and fetch the reports.
 - **[Telegram](https://github.com/chigwell/telegram-mcp)** - An MCP server that provides paginated chat reading, message retrieval, and message sending capabilities for Telegram through Telethon integration.
 - **[Telegram-Client](https://github.com/chaindead/telegram-mcp)** - A Telegram API bridge that manages user data, dialogs, messages, drafts, read status, and more for seamless interactions.
+- **[Telegram-mcp-server](https://github.com/DLHellMe/telegram-mcp-server)** - Access Telegram channels and groups directly in Claude. Features dual-mode operation with API access (100x faster) or web scraping, unlimited post retrieval, and search functionality.
 - **[Tempo](https://github.com/scottlepp/tempo-mcp-server)** - An MCP server to query traces/spans from [Grafana Tempo](https://github.com/grafana/tempo).
 - **[Teradata](https://github.com/arturborycki/mcp-teradata)** - his MCP server enables LLMs to interact with Teradata databases. This MCP Server support tools and prompts for multi task data analytics
 - **[Terminal-Control](https://github.com/GongRzhe/terminal-controller-mcp)** - A MCP server that enables secure terminal command execution, directory navigation, and file system operations through a standardized interface.
