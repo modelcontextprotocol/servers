@@ -159,7 +159,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://app.gibsonai.com/favicon.ico" alt="GibsonAI Logo" /> **[GibsonAI](https://github.com/GibsonAI/mcp)** - AI-Powered Cloud databases: Build, migrate, and deploy database instances with AI
 - <img height="12" width="12" src="https://gitea.com/assets/img/favicon.svg" alt="Gitea Logo" /> **[Gitea](https://gitea.com/gitea/gitea-mcp)** - Interact with Gitea instances with MCP.
 - <img height="12" width="12" src="https://gitee.com/favicon.ico" alt="Gitee Logo" /> **[Gitee](https://github.com/oschina/mcp-gitee)** - Gitee API integration, repository, issue, and pull request management, and more.
-- <img height="12" width="12" src="https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png" alt="GitHub Logo" /> **[Github](https://github.com/github/github-mcp-server)** - GitHub's official MCP Server
+- <img height="12" width="12" src="https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png" alt="GitHub Logo" /> **[GitHub](https://github.com/github/github-mcp-server)** - GitHub's official MCP Server.
 - <img height="12" width="12" src="https://app.glean.com/images/favicon3-196x196.png" alt="Glean Logo" /> **[Glean](https://github.com/gleanwork/mcp-server)** - Enterprise search and chat using Glean's API.
 - <img height="12" width="12" src="https://cdn.jsdelivr.net/gh/jsdelivr/globalping-media@refs/heads/master/icons/android-chrome-192x192.png" alt="Globalping Logo" /> **[Globalping](https://github.com/jsdelivr/globalping-mcp-server)** - Access a network of thousands of probes to run network commands like ping, traceroute, mtr, http and DNS resolve.
 - <img height="12" width="12" src="https://gnucleus.ai/favicon.ico" alt="gNucleus Logo" /> **[gNucleus Text-To-CAD](https://github.com/gNucleus/text-to-cad-mcp)** - Generate CAD parts and assemblies from text using gNucleus AI models.
@@ -540,7 +540,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Ghost](https://github.com/MFYDev/ghost-mcp)** - A Model Context Protocol (MCP) server for interacting with Ghost CMS through LLM interfaces like Claude.
 - **[Git](https://github.com/geropl/git-mcp-go)** - Allows LLM to interact with a local git repository, incl. optional push support.
 - **[Git Mob](https://github.com/Mubashwer/git-mob-mcp-server)** - MCP server that interfaces with the [git-mob](https://github.com/Mubashwer/git-mob) CLI app for managing co-authors in git commits during pair/mob programming.
-- **[Github Actions](https://github.com/ko1ynnky/github-actions-mcp-server)** - A Model Context Protocol (MCP) server for interacting with Github Actions.
+- **[GitHub Actions](https://github.com/ko1ynnky/github-actions-mcp-server)** - A Model Context Protocol (MCP) server for interacting with Github Actions.
 - **[GitHub Enterprise MCP](https://github.com/ddukbg/github-enterprise-mcp)** - A Model Context Protocol (MCP) server for interacting with GitHub Enterprise.
 - **[GitHub Repos Manager MCP Server](https://github.com/kurdin/github-repos-manager-mcp)** - Token-based GitHub automation management. No Docker, Flexible configuration, 80+ tools with direct API integration.
 - **[GitMCP](https://github.com/idosal/git-mcp)** - gitmcp.io is a generic remote MCP server to connect to ANY GitHub repository or project documentation effortlessly
@@ -600,7 +600,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Java Decompiler](https://github.com/idachev/mcp-javadc)** - Decompile Java bytecode into readable source code from .class files, package names, or JAR archives using CFR decompiler
 - **[JavaFX](https://github.com/mcpso/mcp-server-javafx)** - Make drawings using a JavaFX canvas
 - **[JavaFX](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jfx)** - Make drawings using a JavaFX canvas
-- **[JDBC](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jdbc)** - Connect to any JDBC-compatible database and query, insert, update, delete, and more. Supports MySQL, PostgreSQL, Oracle, SQL Server, sqllite and [more](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jdbc#supported-jdbc-variants).
+- **[JDBC](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jdbc)** - Connect to any JDBC-compatible database and query, insert, update, delete, and more. Supports MySQL, PostgreSQL, Oracle, SQL Server, SQLite and [more](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jdbc#supported-jdbc-variants).
 - **[JMeter](https://github.com/QAInsights/jmeter-mcp-server)** - Run load testing using Apache JMeter via MCP-compliant tools.
 - **[Job Searcher](https://github.com/0xDAEF0F/job-searchoor)** - A FastMCP server that provides tools for retrieving and filtering job listings based on time period, keywords, and remote work preferences.
 - **[jobswithgpt](https://github.com/jobswithgpt/mcp)** - Job search MCP using jobswithgpt which indexes 500K+ public job listings and refreshed continously.
