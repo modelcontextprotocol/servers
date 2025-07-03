@@ -755,7 +755,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Puppeteer vision](https://github.com/djannot/puppeteer-vision-mcp)** - Use Puppeteer to browse a webpage and return a high quality Markdown. Use AI vision capabilities to handle cookies, captchas, and other interactive elements automatically.
 - **[Pushover](https://github.com/ashiknesin/pushover-mcp)** - Send instant notifications to your devices using [Pushover.net](https://pushover.net/)
 - **[pydantic/pydantic-ai/mcp-run-python](https://github.com/pydantic/pydantic-ai/tree/main/mcp-run-python)** - Run Python code in a secure sandbox via MCP tool calls, powered by Deno and Pyodide
-- **[Python Click](https://github.com/ofek/click-mcp-server)** - Interact with local Python CLIs based on the Click framework.
+- **[Python CLI MCP](https://github.com/ofek/pycli-mcp)** - Interact with local Python command line applications.
 - **[QGIS](https://github.com/jjsantos01/qgis_mcp)** - connects QGIS to Claude AI through the MCP. This integration enables prompt-assisted project creation, layer loading, code execution, and more.
 - **[Qiniu MCP Server](https://github.com/qiniu/qiniu-mcp-server)** - The Model Context Protocol (MCP) Server built on Qiniu Cloud products supports users in accessing Qiniu Cloud Storage, intelligent multimedia services, and more through this MCP Server within the context of AI large model clients.
 - **[Quarkus](https://github.com/quarkiverse/quarkus-mcp-servers)** - MCP servers for the Quarkus Java framework.
