@@ -4,6 +4,8 @@ import {
   CompleteRequestSchema,
   CreateMessageRequest,
   CreateMessageResultSchema,
+  ElicitRequest,
+  ElicitResultSchema,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
   ListResourcesRequestSchema,
@@ -66,7 +68,7 @@ const EXAMPLE_COMPLETIONS = {
   resourceId: ["1", "2", "3", "4", "5"],
 };
 
-const GetTinyImageSchema = z.object({});
+const NoArgSchema = z.object({});
 
 const AnnotatedMessageSchema = z.object({
   messageType: z
@@ -92,6 +94,7 @@ enum ToolName {
   LONG_RUNNING_OPERATION = "longRunningOperation",
   PRINT_ENV = "printEnv",
   SAMPLE_LLM = "sampleLLM",
+  ELICITATION = "elicitationRequest",
   GET_TINY_IMAGE = "getTinyImage",
   ANNOTATED_MESSAGE = "annotatedMessage",
   GET_RESOURCE_REFERENCE = "getResourceReference",
@@ -204,6 +207,36 @@ export const createServer = () => {
     };
 
     return await server.request(request, CreateMessageResultSchema);
+  };
+
+  // Helper method to elicitation user input from client
+  const elicitUserInput = async () => {
+    const request: ElicitRequest = {
+      "method": "elicitation/create",
+      "params": {
+        "message": "Describe your upcoming travel plans.",
+        "requestedSchema": {
+          "type": "object",
+          "properties": {
+            "destination": {
+              "type": "string",
+              "description": "Your travel destination"
+            },
+            "distance": {
+              "type": "number",
+              "description": "Distance you expect to travel in miles"
+            },
+            "mixtape": {
+              "type": "string",
+              "description": "Name of mixtape you plan to listen to on the way"
+            }
+          },
+          "required": ["destination", "distance"]
+        }
+      }
+    };
+
+    return await server.request(request, ElicitResultSchema);
   };
 
   const ALL_RESOURCES: Resource[] = Array.from({ length: 100 }, (_, i) => {
@@ -443,9 +476,14 @@ export const createServer = () => {
         inputSchema: zodToJsonSchema(SampleLLMSchema) as ToolInput,
       },
       {
+        name: ToolName.ELICITATION,
+        description: "Elicits input from the user",
+        inputSchema: zodToJsonSchema(NoArgSchema) as ToolInput,
+      },
+      {
         name: ToolName.GET_TINY_IMAGE,
         description: "Returns the MCP_TINY_IMAGE",
-        inputSchema: zodToJsonSchema(GetTinyImageSchema) as ToolInput,
+        inputSchema: zodToJsonSchema(NoArgSchema) as ToolInput,
       },
       {
         name: ToolName.ANNOTATED_MESSAGE,
@@ -547,8 +585,16 @@ export const createServer = () => {
       };
     }
 
+    if (name === ToolName.ELICITATION) {
+      const result = await elicitUserInput();
+      return {
+        content: [
+          { type: "text", text: `Traveling ${result?.content?.distance} miles to ${result?.content?.destination}, listening to ${result?.content?.mixtape}` },
+        ],
+      };
+    }
+
     if (name === ToolName.GET_TINY_IMAGE) {
-      GetTinyImageSchema.parse(args);
       return {
         content: [
           {
