@@ -690,12 +690,6 @@ export const createServer = () => {
         });
       }
 
-      // Add summary text
-      content.push({
-        type: "text",
-        text: `\nThese resource links reference actual resources available through the resources/read endpoint.`,
-      });
-
       return { content };
     }
 
