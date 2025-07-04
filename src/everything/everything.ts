@@ -86,7 +86,7 @@ const GetResourceReferenceSchema = z.object({
     .describe("ID of the resource to reference (1-100)"),
 });
 
-const ElicitationSchema = z.object({
+const itationSchema = z.object({
   message: z.string().describe("Message to use for elicitation"),
   includeSchema: z
     .boolean()
@@ -103,7 +103,7 @@ enum ToolName {
   GET_TINY_IMAGE = "getTinyImage",
   ANNOTATED_MESSAGE = "annotatedMessage",
   GET_RESOURCE_REFERENCE = "getResourceReference",
-  ELICITATION_DEMO = "elicitationDemo",
+  ELICITATION = "startElicitation",
 }
 
 enum PromptName {
@@ -485,7 +485,7 @@ export const createServer = () => {
         inputSchema: zodToJsonSchema(GetResourceReferenceSchema) as ToolInput,
       },
       {
-        name: ToolName.ELICITATION_DEMO,
+        name: ToolName.ELICITATION,
         description: "Demonstrates the Elicitation feature by asking the user to provide information about their favorite color, number, and pets.",
         inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
       },
@@ -678,7 +678,7 @@ export const createServer = () => {
       return { content };
     }
 
-    if (name === ToolName.ELICITATION_DEMO) {
+    if (name === ToolName.ELICITATION) {
       const { message, includeSchema } = ElicitationSchema.parse(args);
 
       const elicitationResult = await requestElicitation(

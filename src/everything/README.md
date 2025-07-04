@@ -72,7 +72,7 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
      - Embedded resource with `type: "resource"`
      - Text instruction for using the resource URI
 
-9. `elicitationDemo`
+9. `startElicitation`
    - Initiates an elicitation (interaction) within the MCP client.
    - Inputs:
       - `color` (string): Favorite color
