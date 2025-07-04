@@ -670,7 +670,7 @@ export const createServer = () => {
       // Add intro text
       content.push({
         type: "text",
-        text: `Here are ${count} resource links to resources available in this server:`,
+        text: `Here are ${count} resource links to resources available in this server (see full output in tool response if your client does not support resource_link yet):`,
       });
 
       // Return resource links to actual resources from ALL_RESOURCES
