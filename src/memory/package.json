@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-memory",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "MCP server for enabling memory for Claude through a knowledge graph",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
