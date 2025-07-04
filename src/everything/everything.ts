@@ -86,7 +86,7 @@ const GetResourceReferenceSchema = z.object({
     .describe("ID of the resource to reference (1-100)"),
 });
 
-const itationSchema = z.object({
+const ElicitationSchema = z.object({
   message: z.string().describe("Message to use for elicitation"),
   includeSchema: z
     .boolean()
