@@ -127,7 +127,7 @@ export const createServer = () => {
         logging: {},
         completions: {},
       },
-      instructions,
+      instructions
     }
   );
 
@@ -174,12 +174,13 @@ export const createServer = () => {
       server.notification(message);
   }, 20000);
 
+
   // Set up update interval for stderr messages
   stdErrUpdateInterval = setInterval(() => {
     const shortTimestamp = new Date().toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit",
+      second: "2-digit"
     });
     server.notification({
       method: "notifications/stderr",
