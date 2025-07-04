@@ -512,8 +512,8 @@ async def serve(repositories: list[Path], discovery_config: Optional[DiscoveryCo
             roots_result: ListRootsResult = await server.request_context.session.list_roots()
             logger.debug(f"Roots result: {roots_result}")
             
-            # Get root paths for discovery
-            root_paths = [root.uri.path for root in roots_result.roots]
+            # Get root paths for discovery, filtering out None values
+            root_paths = [root.uri.path for root in roots_result.roots if root.uri.path is not None]
             
             # Traditional single-repo validation (for backward compatibility)
             repo_paths = []
@@ -576,10 +576,11 @@ async def serve(repositories: list[Path], discovery_config: Optional[DiscoveryCo
                     # Use MCP session roots
                     if isinstance(server.request_context.session, ServerSession):
                         roots_result = await server.request_context.session.list_roots()
-                        root_paths = [root.uri.path for root in roots_result.roots]
+                        root_paths = [root.uri.path for root in roots_result.roots if root.uri.path is not None]
                         discovered = await discover_repositories_secure(root_paths, discovery_config)
                         result_text = f"Discovered repositories in MCP roots:\n" + "\n".join(sorted(discovered))
                     else:
+                        discovered = set()  # Initialize discovered for type safety
                         result_text = "No MCP session available for root discovery"
                 
                 return [TextContent(
