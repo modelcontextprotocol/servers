@@ -451,6 +451,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[coin_api_mcp](https://github.com/longmans/coin_api_mcp)** - Provides access to [coinmarketcap](https://coinmarketcap.com/) cryptocurrency data.
 - **[CoinMarketCap](https://github.com/shinzo-labs/coinmarketcap-mcp)** - Implements the complete [CoinMarketCap](https://coinmarketcap.com/) API for accessing cryptocurrency market data, exchange information, and other blockchain-related metrics.
 - **[commands](https://github.com/g0t4/mcp-server-commands)** - Run commands and scripts. Just like in a terminal.
+- <img height="12" width="12" src="https://composio.dev/wp-content/uploads/2025/05/fevicon-composio.png" alt="Composio Logo" />  **[Composio](https://mcp/composio.dev)** - Instantly connect to 100+ managed MCP Servers with built-in auth
 - **[Computer-Use - Remote MacOS Use](https://github.com/baryhuang/mcp-remote-macos-use)** - Open-source out-of-the-box alternative to OpenAI Operator, providing a full desktop experience and optimized for using remote macOS machines as autonomous AI agents.
 - **[Congress.gov API](https://github.com/AshwinSundar/congress_gov_mcp)** - An MCP server to interact with real-time data from the Congress.gov API, which is the official API for the United States Congress.
 - **[consul-mcp](https://github.com/kocierik/consul-mcp-server)** - A consul MCP server for service management, health check and Key-Value Store
