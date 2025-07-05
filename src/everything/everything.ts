@@ -88,6 +88,15 @@ const GetResourceReferenceSchema = z.object({
 
 const ElicitationSchema = z.object({});
 
+const GetResourceLinksSchema = z.object({
+  count: z
+    .number()
+    .min(1)
+    .max(10)
+    .default(3)
+    .describe("Number of resource links to return (1-10)"),
+});
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -98,6 +107,7 @@ enum ToolName {
   ANNOTATED_MESSAGE = "annotatedMessage",
   GET_RESOURCE_REFERENCE = "getResourceReference",
   ELICITATION = "startElicitation",
+  GET_RESOURCE_LINKS = "getResourceLinks",
 }
 
 enum PromptName {
@@ -483,6 +493,12 @@ export const createServer = () => {
         description: "Demonstrates the Elicitation feature by asking the user to provide information about their favorite color, number, and pets.",
         inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
       },
+      {
+        name: ToolName.GET_RESOURCE_LINKS,
+        description:
+          "Returns multiple resource links that reference different types of resources",
+        inputSchema: zodToJsonSchema(GetResourceLinksSchema) as ToolInput,
+      },
     ];
 
     return { tools };
@@ -723,6 +739,34 @@ export const createServer = () => {
         type: "text",
         text: `\nRaw result: ${JSON.stringify(elicitationResult, null, 2)}`,
       });
+    }
+    
+    if (name === ToolName.GET_RESOURCE_LINKS) {
+      const { count } = GetResourceLinksSchema.parse(args);
+      const content = [];
+
+      // Add intro text
+      content.push({
+        type: "text",
+        text: `Here are ${count} resource links to resources available in this server (see full output in tool response if your client does not support resource_link yet):`,
+      });
+
+      // Return resource links to actual resources from ALL_RESOURCES
+      const actualCount = Math.min(count, ALL_RESOURCES.length);
+      for (let i = 0; i < actualCount; i++) {
+        const resource = ALL_RESOURCES[i];
+        content.push({
+          type: "resource_link",
+          uri: resource.uri,
+          name: resource.name,
+          description: `Resource ${i + 1}: ${
+            resource.mimeType === "text/plain"
+              ? "plaintext resource"
+              : "binary blob resource"
+          }`,
+          mimeType: resource.mimeType,
+        });
+      }
 
       return { content };
     }
