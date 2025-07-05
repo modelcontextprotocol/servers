@@ -86,6 +86,15 @@ const GetResourceReferenceSchema = z.object({
     .describe("ID of the resource to reference (1-100)"),
 });
 
+const GetResourceLinksSchema = z.object({
+  count: z
+    .number()
+    .min(1)
+    .max(10)
+    .default(3)
+    .describe("Number of resource links to return (1-10)"),
+});
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -95,6 +104,7 @@ enum ToolName {
   GET_TINY_IMAGE = "getTinyImage",
   ANNOTATED_MESSAGE = "annotatedMessage",
   GET_RESOURCE_REFERENCE = "getResourceReference",
+  GET_RESOURCE_LINKS = "getResourceLinks",
 }
 
 enum PromptName {
@@ -459,6 +469,12 @@ export const createServer = () => {
           "Returns a resource reference that can be used by MCP clients",
         inputSchema: zodToJsonSchema(GetResourceReferenceSchema) as ToolInput,
       },
+      {
+        name: ToolName.GET_RESOURCE_LINKS,
+        description:
+          "Returns multiple resource links that reference different types of resources",
+        inputSchema: zodToJsonSchema(GetResourceLinksSchema) as ToolInput,
+      },
     ];
 
     return { tools };
@@ -642,6 +658,36 @@ export const createServer = () => {
             priority: 0.5,
             audience: ["user"], // Images primarily for user visualization
           },
+        });
+      }
+
+      return { content };
+    }
+
+    if (name === ToolName.GET_RESOURCE_LINKS) {
+      const { count } = GetResourceLinksSchema.parse(args);
+      const content = [];
+
+      // Add intro text
+      content.push({
+        type: "text",
+        text: `Here are ${count} resource links to resources available in this server (see full output in tool response if your client does not support resource_link yet):`,
+      });
+
+      // Return resource links to actual resources from ALL_RESOURCES
+      const actualCount = Math.min(count, ALL_RESOURCES.length);
+      for (let i = 0; i < actualCount; i++) {
+        const resource = ALL_RESOURCES[i];
+        content.push({
+          type: "resource_link",
+          uri: resource.uri,
+          name: resource.name,
+          description: `Resource ${i + 1}: ${
+            resource.mimeType === "text/plain"
+              ? "plaintext resource"
+              : "binary blob resource"
+          }`,
+          mimeType: resource.mimeType,
         });
       }
 
