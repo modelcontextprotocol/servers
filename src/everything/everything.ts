@@ -86,13 +86,7 @@ const GetResourceReferenceSchema = z.object({
     .describe("ID of the resource to reference (1-100)"),
 });
 
-const ElicitationSchema = z.object({
-  message: z.string().describe("Message to use for elicitation"),
-  includeSchema: z
-    .boolean()
-    .default(true)
-    .describe("Whether to include the favorite things schema"),
-});
+const ElicitationSchema = z.object({});
 
 enum ToolName {
   ECHO = "echo",
@@ -679,7 +673,7 @@ export const createServer = () => {
     }
 
     if (name === ToolName.ELICITATION) {
-      const { message, includeSchema } = ElicitationSchema.parse(args);
+      ElicitationSchema.parse(args);
 
       const elicitationResult = await requestElicitation(
         'What are your favorite things?',
@@ -697,18 +691,40 @@ export const createServer = () => {
         }
       );
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Elicitation demo completed! Message: ${message}`,
-          },
-          {
-            type: "text", 
-            text: `Elicitation result: ${JSON.stringify(elicitationResult, null, 2)}`,
-          },
-        ],
-      };
+      // Handle different response actions
+      const content = [];
+      
+      if (elicitationResult.action === 'accept' && elicitationResult.content) {
+        content.push({
+          type: "text",
+          text: `✅ User provided their favorite things!`,
+        });
+        
+        // Only access elicitationResult.content when action is accept
+        const { color, number, pets } = elicitationResult.content;
+        content.push({
+          type: "text",
+          text: `Their favorites are:\n- Color: ${color || 'not specified'}\n- Number: ${number || 'not specified'}\n- Pets: ${pets || 'not specified'}`,
+        });
+      } else if (elicitationResult.action === 'decline') {
+        content.push({
+          type: "text",
+          text: `❌ User declined to provide their favorite things.`,
+        });
+      } else if (elicitationResult.action === 'cancel') {
+        content.push({
+          type: "text",
+          text: `⚠️ User cancelled the elicitation dialog.`,
+        });
+      }
+      
+      // Include raw result for debugging
+      content.push({
+        type: "text",
+        text: `\nRaw result: ${JSON.stringify(elicitationResult, null, 2)}`,
+      });
+
+      return { content };
     }
 
     throw new Error(`Unknown tool: ${name}`);
