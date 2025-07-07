@@ -505,7 +505,19 @@ async def serve(repository: Path | None) -> None:
                     type="text",
                     text="Commit history:\n" + "\n".join(log)
                 )]
-
+            
+            case GitTools.BRANCH:
+                result = git_branch(
+                    repo,
+                    arguments.get("branch_type", 'local'),
+                    arguments.get("contains", None),
+                    arguments.get("not_contains", None),
+                )
+                return [TextContent(
+                    type="text",
+                    text=result
+                )]
+            
             case _:
                 raise ValueError(f"Unknown tool: {name}")
 
