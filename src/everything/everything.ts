@@ -86,6 +86,8 @@ const GetResourceReferenceSchema = z.object({
     .describe("ID of the resource to reference (1-100)"),
 });
 
+const ElicitationSchema = z.object({});
+
 const GetResourceLinksSchema = z.object({
   count: z
     .number()
@@ -104,6 +106,7 @@ enum ToolName {
   GET_TINY_IMAGE = "getTinyImage",
   ANNOTATED_MESSAGE = "annotatedMessage",
   GET_RESOURCE_REFERENCE = "getResourceReference",
+  ELICITATION = "startElicitation",
   GET_RESOURCE_LINKS = "getResourceLinks",
 }
 
@@ -126,6 +129,7 @@ export const createServer = () => {
         tools: {},
         logging: {},
         completions: {},
+        elicitation: {},
       },
       instructions
     }
@@ -214,6 +218,21 @@ export const createServer = () => {
     };
 
     return await server.request(request, CreateMessageResultSchema);
+  };
+
+  const requestElicitation = async (
+    message: string,
+    requestedSchema: any
+  ) => {
+    const request = {
+      method: 'elicitation/create',
+      params: {
+        message,
+        requestedSchema
+      }
+    };
+
+    return await server.request(request, z.any());
   };
 
   const ALL_RESOURCES: Resource[] = Array.from({ length: 100 }, (_, i) => {
@@ -470,6 +489,11 @@ export const createServer = () => {
         inputSchema: zodToJsonSchema(GetResourceReferenceSchema) as ToolInput,
       },
       {
+        name: ToolName.ELICITATION,
+        description: "Demonstrates the Elicitation feature by asking the user to provide information about their favorite color, number, and pets.",
+        inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
+      },
+      {
         name: ToolName.GET_RESOURCE_LINKS,
         description:
           "Returns multiple resource links that reference different types of resources",
@@ -664,6 +688,61 @@ export const createServer = () => {
       return { content };
     }
 
+    if (name === ToolName.ELICITATION) {
+      ElicitationSchema.parse(args);
+
+      const elicitationResult = await requestElicitation(
+        'What are your favorite things?',
+        {
+          type: 'object',
+          properties: {
+            color: { type: 'string', description: 'Favorite color' },
+            number: { type: 'integer', description: 'Favorite number', minimum: 1, maximum: 100 },
+            pets: { 
+              type: 'string', 
+              enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'], 
+              description: 'Favorite pets' 
+            },
+          }
+        }
+      );
+
+      // Handle different response actions
+      const content = [];
+      
+      if (elicitationResult.action === 'accept' && elicitationResult.content) {
+        content.push({
+          type: "text",
+          text: `✅ User provided their favorite things!`,
+        });
+        
+        // Only access elicitationResult.content when action is accept
+        const { color, number, pets } = elicitationResult.content;
+        content.push({
+          type: "text",
+          text: `Their favorites are:\n- Color: ${color || 'not specified'}\n- Number: ${number || 'not specified'}\n- Pets: ${pets || 'not specified'}`,
+        });
+      } else if (elicitationResult.action === 'decline') {
+        content.push({
+          type: "text",
+          text: `❌ User declined to provide their favorite things.`,
+        });
+      } else if (elicitationResult.action === 'cancel') {
+        content.push({
+          type: "text",
+          text: `⚠️ User cancelled the elicitation dialog.`,
+        });
+      }
+      
+      // Include raw result for debugging
+      content.push({
+        type: "text",
+        text: `\nRaw result: ${JSON.stringify(elicitationResult, null, 2)}`,
+      });
+
+      return { content };
+    }
+    
     if (name === ToolName.GET_RESOURCE_LINKS) {
       const { count } = GetResourceLinksSchema.parse(args);
       const content = [];
