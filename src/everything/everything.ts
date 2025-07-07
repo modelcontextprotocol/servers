@@ -739,6 +739,8 @@ export const createServer = () => {
         type: "text",
         text: `\nRaw result: ${JSON.stringify(elicitationResult, null, 2)}`,
       });
+
+      return { content };
     }
     
     if (name === ToolName.GET_RESOURCE_LINKS) {
