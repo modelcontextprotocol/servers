@@ -1,8 +1,11 @@
 import fs from "fs/promises";
 import path from "path";
+import os from 'os';
+import { randomBytes } from 'crypto';
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 import { normalizePath, expandHome } from './path-utils.js';
+import { isPathWithinAllowedDirectories } from './path-validation.js';
 
 // Type definitions
 interface FileInfo {
@@ -60,17 +63,15 @@ export function createUnifiedDiff(originalContent: string, newContent: string, f
 
 // Security & Validation Functions
 export async function validatePath(requestedPath: string, allowedDirectories: string[]): Promise<string> {
-  // Normalize the path first to handle any special characters or formats
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
     : path.resolve(process.cwd(), expandedPath);
 
-  // Ensure consistent normalization for security checks
   const normalizedRequested = normalizePath(absolute);
 
-  // Check if path is within allowed directories using normalized paths
-  const isAllowed = allowedDirectories.some(dir => normalizedRequested.startsWith(dir));
+  // Check if path is within allowed directories
+  const isAllowed = isPathWithinAllowedDirectories(normalizedRequested, allowedDirectories);
   if (!isAllowed) {
     throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
   }
@@ -79,25 +80,26 @@ export async function validatePath(requestedPath: string, allowedDirectories: st
   try {
     const realPath = await fs.realpath(absolute);
     const normalizedReal = normalizePath(realPath);
-    const isRealPathAllowed = allowedDirectories.some(dir => normalizedReal.startsWith(dir));
-    if (!isRealPathAllowed) {
-      throw new Error("Access denied - symlink target outside allowed directories");
+    if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
+      throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
     }
     return realPath;
   } catch (error) {
     // For new files that don't exist yet, verify parent directory
-    const parentDir = path.dirname(absolute);
-    try {
-      const realParentPath = await fs.realpath(parentDir);
-      const normalizedParent = normalizePath(realParentPath);
-      const isParentAllowed = allowedDirectories.some(dir => normalizedParent.startsWith(dir));
-      if (!isParentAllowed) {
-        throw new Error("Access denied - parent directory outside allowed directories");
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      const parentDir = path.dirname(absolute);
+      try {
+        const realParentPath = await fs.realpath(parentDir);
+        const normalizedParent = normalizePath(realParentPath);
+        if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
+          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+        }
+        return absolute;
+      } catch {
+        throw new Error(`Parent directory does not exist: ${parentDir}`);
       }
-      return absolute;
-    } catch {
-      throw new Error(`Parent directory does not exist: ${parentDir}`);
     }
+    throw error;
   }
 }
 
@@ -121,7 +123,29 @@ export async function readFileContent(filePath: string, encoding: string = 'utf-
 }
 
 export async function writeFileContent(filePath: string, content: string): Promise<void> {
-  await fs.writeFile(filePath, content, 'utf-8');
+  try {
+    // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
+    // preventing writes through pre-existing symlinks
+    await fs.writeFile(filePath, content, { encoding: "utf-8", flag: 'wx' });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      // Security: Use atomic rename to prevent race conditions where symlinks
+      // could be created between validation and write. Rename operations
+      // replace the target file atomically and don't follow symlinks.
+      const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
+      try {
+        await fs.writeFile(tempPath, content, 'utf-8');
+        await fs.rename(tempPath, filePath);
+      } catch (renameError) {
+        try {
+          await fs.unlink(tempPath);
+        } catch {}
+        throw renameError;
+      }
+    } else {
+      throw error;
+    }
+  }
 }
 
 
@@ -253,7 +277,19 @@ export async function applyFileEdits(
   const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
 
   if (!dryRun) {
-    await fs.writeFile(filePath, modifiedContent, 'utf-8');
+    // Security: Use atomic rename to prevent race conditions where symlinks
+    // could be created between validation and write. Rename operations
+    // replace the target file atomically and don't follow symlinks.
+    const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
+    try {
+      await fs.writeFile(tempPath, modifiedContent, 'utf-8');
+      await fs.rename(tempPath, filePath);
+    } catch (error) {
+      try {
+        await fs.unlink(tempPath);
+      } catch {}
+      throw error;
+    }
   }
 
   return formattedDiff;

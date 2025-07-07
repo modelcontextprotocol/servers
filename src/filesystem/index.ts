@@ -6,12 +6,18 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ToolSchema,
+  RootsListChangedNotificationSchema,
+  type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
 import path from "path";
+import os from 'os';
+import { randomBytes } from 'crypto';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { normalizePath, expandHome } from './path-utils.js';
+import { isPathWithinAllowedDirectories } from './path-validation.js';
+import { getValidRootDirectories } from './roots-utils.js';
 import {
   // Function imports
   formatSize,
@@ -28,15 +34,29 @@ import {
 // Command line argument parsing
 const args = process.argv.slice(2);
 if (args.length === 0) {
-  console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
-  process.exit(1);
+  console.error("Usage: mcp-server-filesystem [allowed-directory] [additional-directories...]");
+  console.error("Note: Allowed directories can be provided via:");
+  console.error("  1. Command-line arguments (shown above)");
+  console.error("  2. MCP roots protocol (if client supports it)");
+  console.error("At least one directory must be provided by EITHER method for the server to operate.");
 }
 
-// Store allowed directories in normalized form
-const allowedDirectories = args.map(dir => {
-  const normalized = normalizePath(path.resolve(expandHome(dir)));
-  return normalized;
-});
+// Store allowed directories in normalized and resolved form
+let allowedDirectories = await Promise.all(
+  args.map(async (dir) => {
+    const expanded = expandHome(dir);
+    const absolute = path.resolve(expanded);
+    try {
+      // Resolve symlinks in allowed directories during startup
+      const resolved = await fs.realpath(absolute);
+      return normalizePath(resolved);
+    } catch (error) {
+      // If we can't resolve (doesn't exist), use the normalized absolute path
+      // This allows configuring allowed dirs that will be created later
+      return normalizePath(absolute);
+    }
+  })
+);
 
 // Validate that all directories exist and are accessible
 await Promise.all(allowedDirectories.map(async (dir) => {
@@ -51,7 +71,6 @@ await Promise.all(allowedDirectories.map(async (dir) => {
     process.exit(1);
   }
 }));
-
 
 // Schema definitions
 const ReadFileArgsSchema = z.object({
@@ -236,8 +255,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "list_allowed_directories",
         description:
-          "Returns the list of directories that this server is allowed to access. " +
-          "Use this to understand which directories are available before trying to access files.",
+          "Returns the list of root directories that this server is allowed to access. " +
+          "Use this to understand which directories are available before trying to access files. ",
         inputSchema: {
           type: "object",
           properties: {},
@@ -529,12 +548,62 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+// Updates allowed directories based on MCP client roots
+async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
+  const validatedRootDirs = await getValidRootDirectories(requestedRoots);
+  if (validatedRootDirs.length > 0) {
+    allowedDirectories = [...validatedRootDirs];
+    console.error(`Updated allowed directories from MCP roots: ${validatedRootDirs.length} valid directories`);
+  } else {
+    console.error("No valid root directories provided by client");
+  }
+}
+
+// Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
+server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+  try {
+    // Request the updated roots list from the client
+    const response = await server.listRoots();
+    if (response && 'roots' in response) {
+      await updateAllowedDirectoriesFromRoots(response.roots);
+    }
+  } catch (error) {
+    console.error("Failed to request roots from client:", error instanceof Error ? error.message : String(error));
+  }
+});
+
+// Handles post-initialization setup, specifically checking for and fetching MCP roots.
+server.oninitialized = async () => {
+  const clientCapabilities = server.getClientCapabilities();
+
+  if (clientCapabilities?.roots) {
+    try {
+      const response = await server.listRoots();
+      if (response && 'roots' in response) {
+        await updateAllowedDirectoriesFromRoots(response.roots);
+      } else {
+        console.error("Client returned no roots set, keeping current settings");
+      }
+    } catch (error) {
+      console.error("Failed to request initial roots from client:", error instanceof Error ? error.message : String(error));
+    }
+  } else {
+    if (allowedDirectories.length > 0) {
+      console.error("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
+    }else{
+      throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
+    }
+  }
+};
+
 // Start server
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Secure MCP Filesystem Server running on stdio");
-  console.error("Allowed directories:", allowedDirectories);
+  if (allowedDirectories.length === 0) {
+    console.error("Started without allowed directories - waiting for client to provide roots via MCP protocol");
+  }
 }
 
 runServer().catch((error) => {
