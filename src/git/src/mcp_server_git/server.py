@@ -485,17 +485,6 @@ async def serve(repository: Path | None) -> None:
                     text="Commit history:\n" + "\n".join(log)
                 )]
 
-            case GitTools.LOG_DATE_RANGE:
-                log = git_log_date_range(
-                    repo,
-                    arguments["start_date"],
-                    arguments["end_date"]
-                )
-                return [TextContent(
-                    type="text",
-                    text="Commit history:\n" + "\n".join(log)
-                )]
-
             case GitTools.LOG_BY_DATE:
                 log = git_log_by_date(
                     repo,
