@@ -1,0 +1,4 @@
+fastmcp
+python-dotenv
+pyotp
+smartapi-python
