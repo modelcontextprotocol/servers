@@ -212,10 +212,3 @@ jobs:
             --title "Release $VERSION" \
             --notes-file RELEASE_NOTES.md
 
-      - name: Docker MCP images
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.DOCKER_TOKEN }}
-          repository: docker/labs-ai-tools-for-devs
-          event-type: build-mcp-images
-          client-payload: '{"ref": "${{ needs.create-metadata.outputs.version }}"}'
