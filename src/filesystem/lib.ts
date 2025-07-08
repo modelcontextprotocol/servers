@@ -7,6 +7,19 @@ import { minimatch } from 'minimatch';
 import { normalizePath, expandHome } from './path-utils.js';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
 
+// Global allowed directories - set by the main module
+let allowedDirectories: string[] = [];
+
+// Function to set allowed directories from the main module
+export function setAllowedDirectories(directories: string[]): void {
+  allowedDirectories = [...directories];
+}
+
+// Function to get current allowed directories
+export function getAllowedDirectories(): string[] {
+  return [...allowedDirectories];
+}
+
 // Type definitions
 interface FileInfo {
   size: number;
@@ -62,7 +75,7 @@ export function createUnifiedDiff(originalContent: string, newContent: string, f
 }
 
 // Security & Validation Functions
-export async function validatePath(requestedPath: string, allowedDirectories: string[]): Promise<string> {
+export async function validatePath(requestedPath: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
@@ -70,13 +83,14 @@ export async function validatePath(requestedPath: string, allowedDirectories: st
 
   const normalizedRequested = normalizePath(absolute);
 
-  // Check if path is within allowed directories
+  // Security: Check if path is within allowed directories before any file operations
   const isAllowed = isPathWithinAllowedDirectories(normalizedRequested, allowedDirectories);
   if (!isAllowed) {
     throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
   }
 
-  // Handle symlinks by checking their real path
+  // Security: Handle symlinks by checking their real path to prevent symlink attacks
+  // This prevents attackers from creating symlinks that point outside allowed directories
   try {
     const realPath = await fs.realpath(absolute);
     const normalizedReal = normalizePath(realPath);
@@ -85,7 +99,8 @@ export async function validatePath(requestedPath: string, allowedDirectories: st
     }
     return realPath;
   } catch (error) {
-    // For new files that don't exist yet, verify parent directory
+    // Security: For new files that don't exist yet, verify parent directory
+    // This ensures we can't create files in unauthorized locations
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       const parentDir = path.dirname(absolute);
       try {
@@ -153,20 +168,19 @@ export async function writeFileContent(filePath: string, content: string): Promi
 export async function searchFiles(
   rootPath: string,
   pattern: string,
-  options: SearchOptions = {}
+  excludePatterns: string[] = []
 ): Promise<string[]> {
-  const { excludePatterns = [] } = options;
   const results: string[] = [];
 
-  async function search(currentPath: string, allowedDirectories: string[]) {
+  async function search(currentPath: string) {
     const entries = await fs.readdir(currentPath, { withFileTypes: true });
 
     for (const entry of entries) {
       const fullPath = path.join(currentPath, entry.name);
 
       try {
-        // Validate each path before processing
-        await validatePath(fullPath, allowedDirectories);
+        // Security: Validate each path before processing to ensure it's within allowed directories
+        await validatePath(fullPath);
 
         // Check if path matches any exclude pattern
         const relativePath = path.relative(rootPath, fullPath);
@@ -184,7 +198,7 @@ export async function searchFiles(
         }
 
         if (entry.isDirectory()) {
-          await search(fullPath, allowedDirectories);
+          await search(fullPath);
         }
       } catch (error) {
         // Skip invalid paths during search
@@ -193,8 +207,7 @@ export async function searchFiles(
     }
   }
 
-  // Note: This function needs allowedDirectories parameter to work properly
-  // For now, we'll create a wrapper that accepts it
+  await search(rootPath);
   return results;
 }
 
@@ -402,8 +415,8 @@ export async function searchFilesWithValidation(
       const fullPath = path.join(currentPath, entry.name);
 
       try {
-        // Validate each path before processing
-        await validatePath(fullPath, allowedDirectories);
+        // Security: Validate each path before processing to ensure it's within allowed directories
+        await validatePath(fullPath);
 
         // Check if path matches any exclude pattern
         const relativePath = path.relative(rootPath, fullPath);

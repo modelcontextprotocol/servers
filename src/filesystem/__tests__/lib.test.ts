@@ -156,13 +156,13 @@ describe('Lib Functions', () => {
 
       it('validates allowed paths', async () => {
         const testPath = process.platform === 'win32' ? 'C:\\Users\\test\\file.txt' : '/home/user/file.txt';
-        const result = await validatePath(testPath, allowedDirs);
+        const result = await validatePath(testPath);
         expect(result).toBe(testPath);
       });
 
       it('rejects disallowed paths', async () => {
         const testPath = process.platform === 'win32' ? 'C:\\Windows\\System32\\file.txt' : '/etc/passwd';
-        await expect(validatePath(testPath, allowedDirs))
+        await expect(validatePath(testPath))
           .rejects.toThrow('Access denied - path outside allowed directories');
       });
 
@@ -174,7 +174,7 @@ describe('Lib Functions', () => {
           .mockRejectedValueOnce(new Error('ENOENT'))
           .mockResolvedValueOnce(parentPath);
         
-        const result = await validatePath(newFilePath, allowedDirs);
+        const result = await validatePath(newFilePath);
         expect(result).toBe(path.resolve(newFilePath));
       });
 
@@ -185,7 +185,7 @@ describe('Lib Functions', () => {
           .mockRejectedValueOnce(new Error('ENOENT'))
           .mockRejectedValueOnce(new Error('ENOENT'));
         
-        await expect(validatePath(newFilePath, allowedDirs))
+        await expect(validatePath(newFilePath))
           .rejects.toThrow('Parent directory does not exist');
       });
     });

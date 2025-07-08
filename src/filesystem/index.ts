@@ -25,10 +25,11 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
-  searchFilesWithValidation,
+  searchFiles,
   applyFileEdits,
   tailFile,
-  headFile
+  headFile,
+  setAllowedDirectories
 } from './lib.js';
 
 // Command line argument parsing
@@ -47,7 +48,8 @@ let allowedDirectories = await Promise.all(
     const expanded = expandHome(dir);
     const absolute = path.resolve(expanded);
     try {
-      // Resolve symlinks in allowed directories during startup
+      // Security: Resolve symlinks in allowed directories during startup
+      // This ensures we know the real paths and can validate against them later
       const resolved = await fs.realpath(absolute);
       return normalizePath(resolved);
     } catch (error) {
@@ -71,6 +73,9 @@ await Promise.all(allowedDirectories.map(async (dir) => {
     process.exit(1);
   }
 }));
+
+// Initialize the global allowedDirectories in lib.ts
+setAllowedDirectories(allowedDirectories);
 
 // Schema definitions
 const ReadFileArgsSchema = z.object({
@@ -278,7 +283,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, allowedDirectories);
+        const validPath = await validatePath(parsed.data.path);
         
         if (parsed.data.head && parsed.data.tail) {
           throw new Error("Cannot specify both head and tail parameters simultaneously");
@@ -314,7 +319,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const results = await Promise.all(
           parsed.data.paths.map(async (filePath: string) => {
             try {
-              const validPath = await validatePath(filePath, allowedDirectories);
+              const validPath = await validatePath(filePath);
               const content = await readFileContent(validPath);
               return `${filePath}:\n${content}\n`;
             } catch (error) {
@@ -333,7 +338,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, allowedDirectories);
+        const validPath = await validatePath(parsed.data.path);
         await writeFileContent(validPath, parsed.data.content);
         return {
           content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
@@ -345,7 +350,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for edit_file: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, allowedDirectories);
+        const validPath = await validatePath(parsed.data.path);
         const result = await applyFileEdits(validPath, parsed.data.edits, parsed.data.dryRun);
         return {
           content: [{ type: "text", text: result }],
@@ -357,7 +362,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for create_directory: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, allowedDirectories);
+        const validPath = await validatePath(parsed.data.path);
         await fs.mkdir(validPath, { recursive: true });
         return {
           content: [{ type: "text", text: `Successfully created directory ${parsed.data.path}` }],
@@ -369,7 +374,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for list_directory: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, allowedDirectories);
+        const validPath = await validatePath(parsed.data.path);
         const entries = await fs.readdir(validPath, { withFileTypes: true });
         const formatted = entries
           .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
@@ -384,7 +389,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for list_directory_with_sizes: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, allowedDirectories);
+        const validPath = await validatePath(parsed.data.path);
         const entries = await fs.readdir(validPath, { withFileTypes: true });
         
         // Get detailed information for each entry
@@ -458,7 +463,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         async function buildTree(currentPath: string): Promise<TreeEntry[]> {
-            const validPath = await validatePath(currentPath, allowedDirectories);
+            const validPath = await validatePath(currentPath);
             const entries = await fs.readdir(validPath, {withFileTypes: true});
             const result: TreeEntry[] = [];
 
@@ -493,8 +498,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for move_file: ${parsed.error}`);
         }
-        const validSourcePath = await validatePath(parsed.data.source, allowedDirectories);
-        const validDestPath = await validatePath(parsed.data.destination, allowedDirectories);
+        const validSourcePath = await validatePath(parsed.data.source);
+        const validDestPath = await validatePath(parsed.data.destination);
         await fs.rename(validSourcePath, validDestPath);
         return {
           content: [{ type: "text", text: `Successfully moved ${parsed.data.source} to ${parsed.data.destination}` }],
@@ -506,8 +511,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, allowedDirectories);
-        const results = await searchFilesWithValidation(validPath, parsed.data.pattern, allowedDirectories, { excludePatterns: parsed.data.excludePatterns });
+        const validPath = await validatePath(parsed.data.path);
+        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };
@@ -518,7 +523,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new Error(`Invalid arguments for get_file_info: ${parsed.error}`);
         }
-        const validPath = await validatePath(parsed.data.path, allowedDirectories);
+        const validPath = await validatePath(parsed.data.path);
         const info = await getFileStats(validPath);
         return {
           content: [{ type: "text", text: Object.entries(info)
@@ -553,6 +558,7 @@ async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
   const validatedRootDirs = await getValidRootDirectories(requestedRoots);
   if (validatedRootDirs.length > 0) {
     allowedDirectories = [...validatedRootDirs];
+    setAllowedDirectories(allowedDirectories); // Update the global state in lib.ts
     console.error(`Updated allowed directories from MCP roots: ${validatedRootDirs.length} valid directories`);
   } else {
     console.error("No valid root directories provided by client");
