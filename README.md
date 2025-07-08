@@ -226,7 +226,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://memgraph.com/favicon.png" alt="Memgraph Logo" /> **[Memgraph](https://github.com/memgraph/mcp-memgraph)** - Query your data in [Memgraph](https://memgraph.com/) graph database.
 - <img height="12" width="12" src="https://memgraph.com/favicon.png" alt="Memgraph Logo" /> **[Memgraph](https://github.com/memgraph/ai-toolkit/tree/main/integrations/mcp-memgraph)** - Query your data in [Memgraph](https://memgraph.com/) graph database.
 - <img height="12" width="12" src="https://www.mercadopago.com/favicon.ico" alt="MercadoPago Logo" /> **[Mercado Pago](https://mcp.mercadopago.com/)** - Mercado Pago's official MCP server.
-- <img height="12" width="12" src="https://metoro.io/static/images/logos/Metoro.svg" alt="Metoro Logo" /> **[Metoro](https://github.com/metoro-io/metoro-mcp-server)** - Query and interact with kubernetes environments monitored by Metoro
+- <img height="12" width="12" src="https://metoro.io/static/images/logos/MetoroLogo.png" alt="Metoro Logo" /> **[Metoro](https://github.com/metoro-io/metoro-mcp-server)** - Query and interact with kubernetes environments monitored by Metoro
 - <img height="12" width="12" src="https://claritystatic.azureedge.net/images/logo.ico" alt="Microsoft Clarity Logo"/> **[Microsoft Clarity](https://github.com/microsoft/clarity-mcp-server)** - Official MCP Server to get your behavioral analytics data and insights from [Clarity](https://clarity.microsoft.com)
 - <img height="12" width="12" src="https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/releases/v1.0.1735/1.0.1735.4099/commondataserviceforapps/icon.png" alt="Microsoft Dataverse Logo" /> **[Microsoft Dataverse](https://go.microsoft.com/fwlink/?linkid=2320176)** - Chat over your business data using NL - Discover tables, run queries, retrieve data, insert or update records, and execute custom prompts grounded in business knowledge and context.
 - <img height="12" width="12" src="https://www.microsoft.com/favicon.ico" alt="microsoft.com favicon" /> **[Microsoft Learn Docs](https://github.com/microsoftdocs/mcp)** - An MCP server that provides structured access to Microsoft’s official documentation. Retrieves accurate, authoritative, and context-aware technical content for code generation, question answering, and workflow grounding.
@@ -527,7 +527,6 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Feyod](https://github.com/jeroenvdmeer/feyod-mcp)** - A server that answers questions about football matches, and specialised in the football club Feyenoord.
 - **[Fibaro HC3](https://github.com/coding-sailor/mcp-server-hc3)** - MCP server for Fibaro Home Center 3 smart home systems.
 - **[Figma](https://github.com/GLips/Figma-Context-MCP)** - Give your coding agent direct access to Figma file data, helping it one-shot design implementation.
-- **[Fingertip](https://github.com/fingertip-com/fingertip-mcp)** - MCP server for Fingertip.com to search and create new sites.
 - **[Firebase](https://github.com/gannonh/firebase-mcp)** - Server to interact with Firebase services including Firebase Authentication, Firestore, and Firebase Storage.
 - **[FireCrawl](https://github.com/vrknetha/mcp-server-firecrawl)** - Advanced web scraping with JavaScript rendering, PDF support, and smart rate limiting
 - **[FitBit MCP Server](https://github.com/NitayRabi/fitbit-mcp)** - An MCP server that connects to FitBit API using a token obtained from OAuth flow.
@@ -600,7 +599,6 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[iTerm MCP](https://github.com/ferrislucas/iterm-mcp)** - Integration with iTerm2 terminal emulator for macOS, enabling LLMs to execute and monitor terminal commands.
 - **[iTerm MCP Server](https://github.com/rishabkoul/iTerm-MCP-Server)** - A Model Context Protocol (MCP) server implementation for iTerm2 terminal integration. Able to manage multiple iTerm Sessions.
 - **[Java Decompiler](https://github.com/idachev/mcp-javadc)** - Decompile Java bytecode into readable source code from .class files, package names, or JAR archives using CFR decompiler
-- **[JavaFX](https://github.com/mcpso/mcp-server-javafx)** - Make drawings using a JavaFX canvas
 - **[JavaFX](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jfx)** - Make drawings using a JavaFX canvas
 - **[JDBC](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jdbc)** - Connect to any JDBC-compatible database and query, insert, update, delete, and more. Supports MySQL, PostgreSQL, Oracle, SQL Server, sqllite and [more](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jdbc#supported-jdbc-variants).
 - **[JMeter](https://github.com/QAInsights/jmeter-mcp-server)** - Run load testing using Apache JMeter via MCP-compliant tools.
@@ -799,7 +797,6 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Riot Games](https://github.com/jifrozen0110/mcp-riot)** - MCP server for League of Legends – fetch player info, ranks, champion stats, and match history via Riot API.
 - **[Rquest](https://github.com/xxxbrian/mcp-rquest)** - An MCP server providing realistic browser-like HTTP request capabilities with accurate TLS/JA3/JA4 fingerprints for bypassing anti-bot measures.
 - **[Rust MCP Filesystem](https://github.com/rust-mcp-stack/rust-mcp-filesystem)** - Fast, asynchronous MCP server for efficient handling of various filesystem operations built with the power of Rust.
-- **[Salesforce MCP](https://github.com/salesforce-mcp/salesforce-mcp)** -  Salesforce MCP server. Supports cloud version Salesforce-mcp.com and allows both data & metadata functions. 
 - **[Salesforce MCP](https://github.com/smn2gnt/MCP-Salesforce)** - Interact with Salesforce Data and Metadata
 - **[Salesforce MCP (AiondaDotCom)](https://github.com/AiondaDotCom/mcp-salesforce)** - Universal Salesforce integration with OAuth authentication, smart learning system, comprehensive backup capabilities, and full CRUD operations for any Salesforce org including custom objects and fields.
 - **[Salesforce MCP Server](https://github.com/tsmztech/mcp-server-salesforce)** - Comprehensive Salesforce integration with tools for querying records, executing Apex, managing fields/objects, and handling debug logs
@@ -874,7 +871,6 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Trello MCP Server](https://github.com/lioarce01/trello-mcp-server)** - An MCP server that interact with user Trello boards, modifying them with prompting.
 - **[Tripadvisor](https://github.com/pab1it0/tripadvisor-mcp)** - A MCP server that enables LLMs to interact with Tripadvisor API, supporting location data, reviews, and photos through standardized MCP interfaces
 - **[TrueNAS Core MCP](https://github.com/vespo92/TrueNasCoreMCP)** - An MCP server for interacting with TrueNAS Core.
-- **[Tsuki-Mcp-Filesystem-Server](https://github.com/yuutotsuki/tsuki_mcp_filesystem_server)** - A simple, fast, and fully MCP-compliant server for listing local filesystem files. Built with Python + FastAPI. Designed for OpenAI's Agent SDK via `resources/list`.
 - **[Tyk API Management](https://github.com/TykTechnologies/tyk-dashboard-mcp)** - Chat with all of your organization's managed APIs and perform other API lifecycle operations, managing tokens, users, analytics, and more.
 - **[Typesense](https://github.com/suhail-ak-s/mcp-typesense-server)** - A Model Context Protocol (MCP) server implementation that provides AI models with access to Typesense search capabilities. This server enables LLMs to discover, search, and analyze data stored in Typesense collections.
 - **[uniswap-poolspy-mcp](https://github.com/kukapay/uniswap-poolspy-mcp)** - An MCP server that tracks newly created liquidity pools on Uniswap across nine blockchain networks.
