@@ -219,6 +219,10 @@ class GitServer:
         """
         if not self.base_path:
             raise ValueError("No base repository path configured")
+        
+        # Initialize resolved_path to ensure it's always bound for exception handlers
+        resolved_path = Path(repo_path)
+        
         try:
             resolved_path = self.resolve_repo_path(repo_path)
             validated_path = self.path_validator.validate_path(resolved_path)
@@ -229,9 +233,9 @@ class GitServer:
                 raise ValueError(f"Repository root {repo_root} not in allowed scope")
             return repo
         except git.InvalidGitRepositoryError:
-            raise ValueError(f"{validated_path} is not a Git repository")
+            raise ValueError(f"{resolved_path} is not a Git repository")
         except git.NoSuchPathError:
-            raise ValueError(f"Path {validated_path} does not exist")
+            raise ValueError(f"Path {resolved_path} does not exist")
         except ValueError as e:
             # Re-raise ValueError with the original message
             raise ValueError(str(e))
@@ -295,17 +299,20 @@ class GitServer:
                 try:
                     # Try to get the ref (branch)
                     base = repo.refs[base_branch]
+                    new_branch = repo.create_head(branch_name, base)
+                    return f"Created branch '{branch_name}' from '{base.name}'"
                 except (IndexError, AttributeError):
                     # If it's not a ref, try to get the commit
                     try:
-                        base = repo.commit(base_branch)
+                        commit = repo.commit(base_branch)
+                        new_branch = repo.create_head(branch_name, commit.hexsha)
+                        return f"Created branch '{branch_name}' from '{commit.hexsha}'"
                     except (git.BadName, ValueError):
                         raise ValueError(f"Invalid base branch or commit: {base_branch}")
             else:
                 base = repo.active_branch
-
-            new_branch = repo.create_head(branch_name, base)
-            return f"Created branch '{branch_name}' from '{base.name if hasattr(base, 'name') else base.hexsha}'"
+                new_branch = repo.create_head(branch_name, base)
+                return f"Created branch '{branch_name}' from '{base.name}'"
         except git.GitCommandError as e:
             raise ValueError(f"Failed to create branch: {str(e)}")
 
@@ -437,7 +444,7 @@ async def serve(repository: Path | None) -> None:
             if repository:
                 # In single-repo mode with a parent directory,
                 # we still need repo_path but restrict it to subdirectories
-                if not git.repo.fun.is_git_dir(repository / ".git"):
+                if not (repository / ".git").exists():
                     schema["properties"]["repo_path"]["description"] = "Path to Git repository (must be under the configured base directory)"
                 else:
                     # If repository itself is a Git repo, remove repo_path as before
@@ -483,7 +490,7 @@ async def serve(repository: Path | None) -> None:
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         try:
             # Auto-use configured repository only if it's actually a Git repository
-            if repository and git.repo.fun.is_git_dir(repository / ".git"):
+            if repository and (repository / ".git").exists():
                 arguments = arguments.copy()
                 arguments["repo_path"] = str(repository)
             elif repository:

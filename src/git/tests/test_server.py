@@ -50,47 +50,27 @@ def test_path_validator_accepts_inside_path(git_server_with_repo, test_repositor
 
 @pytest.mark.asyncio
 async def test_call_tool_uses_configured_repo(test_repository):
-    # Create a server with configured repository
-    server = Server("test-git")
+    # Create a git_server with configured repository
     git_server = GitServer(test_repository.working_dir)
     
     # Create a change in the working directory
     test_file = Path(test_repository.working_dir) / "test.txt"
     test_file.write_text("modified content")
     
-    # Mock the call_tool method to use our git_server
-    async def mock_call_tool(name: str, arguments: dict) -> list[TextContent]:
-        if name == "git_status":
-            try:
-                status = git_server.git_status(git_server.get_repo(arguments["repo_path"]))
-                return [TextContent(
-                    type="text",
-                    text=f"Repository status:\n{status}"
-                )]
-            except ValueError as e:
-                # We expect this error when trying to use a different path
-                if "not in allowed scope" in str(e):
-                    # Use the configured repository instead
-                    status = git_server.git_status(git_server.get_repo(test_repository.working_dir))
-                    return [TextContent(
-                        type="text",
-                        text=f"Repository status:\n{status}"
-                    )]
-                raise
-        return []
+    # Test that the git_server correctly handles the configured repository
+    try:
+        # This should fail because the path is outside the allowed scope
+        git_server.get_repo("/some/other/path")
+        assert False, "Expected ValueError for out-of-scope path"
+    except ValueError as e:
+        assert "not in allowed scope" in str(e)
     
-    server.call_tool = mock_call_tool
+    # This should work because it's the configured repository
+    repo = git_server.get_repo(test_repository.working_dir)
+    status = git_server.git_status(repo)
     
-    # Try to use a different repo_path in arguments
-    different_path = "/some/other/path"
-    result = await server.call_tool("git_status", {"repo_path": different_path})
-    
-    # Verify the configured repository was used instead
-    assert isinstance(result, list)
-    assert len(result) == 1
-    assert isinstance(result[0], TextContent)
-    assert "Repository status" in result[0].text
-    assert "test.txt" in result[0].text  # Our test file from the fixture
+    # Verify the configured repository was used
+    assert "test.txt" in status  # Our test file from the fixture
 
 def test_git_server_requires_base_path_for_operations(git_server_without_repo):
     with pytest.raises(ValueError, match="No base repository path configured"):
