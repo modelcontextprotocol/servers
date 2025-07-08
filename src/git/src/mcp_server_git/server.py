@@ -1,7 +1,7 @@
 # server.py
 import logging
 from pathlib import Path
-from typing import Sequence
+from typing import Sequence, Optional
 from mcp.server import Server
 from mcp.server.session import ServerSession
 from mcp.server.stdio import stdio_server
@@ -14,8 +14,11 @@ from mcp.types import (
 )
 from enum import Enum
 import git
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 import asyncio
+
+# Default number of context lines to show in diff output
+DEFAULT_CONTEXT_LINES = 3
 
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
     """
@@ -81,22 +84,23 @@ class GitPathModel(BaseModel):
             raise ValueError("Path traversal attempts not allowed")
         return v
 
-class git_status(GitPathModel):
+class GitStatus(GitPathModel):
     pass
 
-class git_diff_unstaged(GitPathModel):
-    pass
+class GitDiffUnstaged(GitPathModel):
+    context_lines: int = DEFAULT_CONTEXT_LINES
 
-class git_diff_staged(GitPathModel):
-    pass
+class GitDiffStaged(GitPathModel):
+    context_lines: int = DEFAULT_CONTEXT_LINES
 
-class git_diff(GitPathModel):
+class GitDiff(GitPathModel):
     target: str
+    context_lines: int = DEFAULT_CONTEXT_LINES
 
-class git_commit(GitPathModel):
+class GitCommit(GitPathModel):
     message: str
 
-class git_add(GitPathModel):
+class GitAdd(GitPathModel):
     files: list[str]
     
     @field_validator('files', mode='before')
@@ -106,27 +110,42 @@ class git_add(GitPathModel):
                 raise ValueError(f"Path traversal attempt detected in file: {file}")
         return v
 
-class git_reset(GitPathModel):
+class GitReset(GitPathModel):
     pass
 
-class git_log(GitPathModel):
+class GitLog(GitPathModel):
     max_count: int = 10
 
-class git_create_branch(GitPathModel):
+class GitCreateBranch(GitPathModel):
     branch_name: str
     base_branch: str | None = None
 
-class GitCheckoutModel(GitPathModel):
+class GitCheckout(GitPathModel):
     branch_name: str
 
-# Alias for backward compatibility with tool registration
-git_checkout_model = GitCheckoutModel
-
-class git_show(GitPathModel):
+class GitShow(GitPathModel):
     revision: str
 
-class git_init(GitPathModel):
+class GitInit(GitPathModel):
     pass
+
+class GitBranch(BaseModel):
+    repo_path: str = Field(
+        ...,
+        description="The path to the Git repository.",
+    )
+    branch_type: str = Field(
+        ...,
+        description="Whether to list local branches ('local'), remote branches ('remote') or all branches('all').",
+    )
+    contains: Optional[str] = Field(
+        None,
+        description="The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified",
+    )
+    not_contains: Optional[str] = Field(
+        None,
+        description="The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified",
+    )
 
 class GitTools(str, Enum):
     STATUS = "git_status"
@@ -138,9 +157,10 @@ class GitTools(str, Enum):
     RESET = "git_reset"
     LOG = "git_log"
     CREATE_BRANCH = "git_create_branch"
-    CHECKOUT = "git_checkout_model"  # Updated to use new model name
+    CHECKOUT = "git_checkout"
     SHOW = "git_show"
     INIT = "git_init"
+    BRANCH = "git_branch"
 
 TOOL_DESCRIPTIONS = {
     GitTools.STATUS: "Show the working tree status",
@@ -154,7 +174,8 @@ TOOL_DESCRIPTIONS = {
     GitTools.CREATE_BRANCH: "Create a new branch",
     GitTools.CHECKOUT: "Switch branches or restore working tree files",
     GitTools.SHOW: "Show various types of objects (commits, tags, etc)",
-    GitTools.INIT: "Create an empty Git repository"
+    GitTools.INIT: "Create an empty Git repository",
+    GitTools.BRANCH: "List Git branches"
 }
 
 class GitServer:
@@ -218,14 +239,14 @@ class GitServer:
     def git_status(self, repo: git.Repo) -> str:
         return repo.git.status()
 
-    def git_diff_unstaged(self, repo: git.Repo) -> str:
-        return repo.git.diff()
+    def git_diff_unstaged(self, repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+        return repo.git.diff(f"--unified={context_lines}")
 
-    def git_diff_staged(self, repo: git.Repo) -> str:
-        return repo.git.diff("--cached")
+    def git_diff_staged(self, repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+        return repo.git.diff(f"--unified={context_lines}", "--cached")
 
-    def git_diff(self, repo: git.Repo, target: str) -> str:
-        return repo.git.diff(target)
+    def git_diff(self, repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+        return repo.git.diff(f"--unified={context_lines}", target)
 
     def git_commit(self, repo: git.Repo, message: str) -> str:
         commit = repo.index.commit(message)
@@ -248,10 +269,10 @@ class GitServer:
         log = []
         for commit in commits:
             log.append(
-                f"Commit: {commit.hexsha}\n"
-                f"Author: {commit.author}\n"
+                f"Commit: {commit.hexsha!r}\n"
+                f"Author: {commit.author!r}\n"
                 f"Date: {commit.authored_datetime}\n"
-                f"Message: {commit.message}\n"
+                f"Message: {commit.message!r}\n"
             )
         return log
 
@@ -320,10 +341,10 @@ class GitServer:
     def git_show(self, repo: git.Repo, revision: str) -> str:
         commit = repo.commit(revision)
         output = [
-            f"Commit: {commit.hexsha}\n"
-            f"Author: {commit.author}\n"
-            f"Date: {commit.authored_datetime}\n"
-            f"Message: {commit.message}\n"
+            f"Commit: {commit.hexsha!r}\n"
+            f"Author: {commit.author!r}\n"
+            f"Date: {commit.authored_datetime!r}\n"
+            f"Message: {commit.message!r}\n"
         ]
         if commit.parents:
             parent = commit.parents[0]
@@ -334,6 +355,34 @@ class GitServer:
             output.append(f"\n--- {d.a_path}\n+++ {d.b_path}\n")
             output.append(d.diff.decode('utf-8'))
         return "".join(output)
+
+    def git_branch(self, repo: git.Repo, branch_type: str, contains: str | None = None, not_contains: str | None = None) -> str:
+        match contains:
+            case None:
+                contains_sha = (None,)
+            case _:
+                contains_sha = ("--contains", contains)
+
+        match not_contains:
+            case None:
+                not_contains_sha = (None,)
+            case _:
+                not_contains_sha = ("--no-contains", not_contains)
+
+        match branch_type:
+            case 'local':
+                b_type = None
+            case 'remote':
+                b_type = "-r"
+            case 'all':
+                b_type = "-a"
+            case _:
+                return f"Invalid branch type: {branch_type}"
+
+        # None value will be auto deleted by GitPython
+        branch_info = repo.git.branch(b_type, *contains_sha, *not_contains_sha)
+
+        return branch_info
 
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
@@ -355,7 +404,36 @@ async def serve(repository: Path | None) -> None:
     async def list_tools() -> list[Tool]:
         tools = []
         for tool in GitTools:
-            schema = globals()[tool.value].schema()
+            # Get the schema from the appropriate model class
+            if tool == GitTools.STATUS:
+                schema = GitStatus.model_json_schema()
+            elif tool == GitTools.DIFF_UNSTAGED:
+                schema = GitDiffUnstaged.model_json_schema()
+            elif tool == GitTools.DIFF_STAGED:
+                schema = GitDiffStaged.model_json_schema()
+            elif tool == GitTools.DIFF:
+                schema = GitDiff.model_json_schema()
+            elif tool == GitTools.COMMIT:
+                schema = GitCommit.model_json_schema()
+            elif tool == GitTools.ADD:
+                schema = GitAdd.model_json_schema()
+            elif tool == GitTools.RESET:
+                schema = GitReset.model_json_schema()
+            elif tool == GitTools.LOG:
+                schema = GitLog.model_json_schema()
+            elif tool == GitTools.CREATE_BRANCH:
+                schema = GitCreateBranch.model_json_schema()
+            elif tool == GitTools.CHECKOUT:
+                schema = GitCheckout.model_json_schema()
+            elif tool == GitTools.SHOW:
+                schema = GitShow.model_json_schema()
+            elif tool == GitTools.INIT:
+                schema = GitInit.model_json_schema()
+            elif tool == GitTools.BRANCH:
+                schema = GitBranch.model_json_schema()
+            else:
+                continue
+                
             if repository:
                 # In single-repo mode with a parent directory,
                 # we still need repo_path but restrict it to subdirectories
@@ -371,6 +449,35 @@ async def serve(repository: Path | None) -> None:
                 inputSchema=schema
             ))
         return tools
+
+    async def list_repos() -> Sequence[str]:
+        async def by_roots() -> Sequence[str]:
+            if not isinstance(server.request_context.session, ServerSession):
+                raise TypeError("server.request_context.session must be a ServerSession")
+
+            if not server.request_context.session.check_client_capability(
+                ClientCapabilities(roots=RootsCapability())
+            ):
+                return []
+
+            roots_result: ListRootsResult = await server.request_context.session.list_roots()
+            logger.debug(f"Roots result: {roots_result}")
+            repo_paths = []
+            for root in roots_result.roots:
+                path = root.uri.path
+                try:
+                    git.Repo(path)
+                    repo_paths.append(str(path))
+                except git.InvalidGitRepositoryError:
+                    pass
+            return repo_paths
+
+        def by_commandline() -> Sequence[str]:
+            return [str(repository)] if repository is not None else []
+
+        cmd_repos = by_commandline()
+        root_repos = await by_roots()
+        return [*root_repos, *cmd_repos]
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
@@ -439,21 +546,21 @@ async def serve(repository: Path | None) -> None:
                     )]
 
                 case GitTools.DIFF_UNSTAGED:
-                    diff = git_server.git_diff_unstaged(repo)
+                    diff = git_server.git_diff_unstaged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
                     return [TextContent(
                         type="text",
                         text=f"Unstaged changes:\n{diff}"
                     )]
 
                 case GitTools.DIFF_STAGED:
-                    diff = git_server.git_diff_staged(repo)
+                    diff = git_server.git_diff_staged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
                     return [TextContent(
                         type="text",
                         text=f"Staged changes:\n{diff}"
                     )]
 
                 case GitTools.DIFF:
-                    diff = git_server.git_diff(repo, arguments["target"])
+                    diff = git_server.git_diff(repo, arguments["target"], arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
                     return [TextContent(
                         type="text",
                         text=f"Diff with {arguments['target']}:\n{diff}"
@@ -507,6 +614,18 @@ async def serve(repository: Path | None) -> None:
 
                 case GitTools.SHOW:
                     result = git_server.git_show(repo, arguments["revision"])
+                    return [TextContent(
+                        type="text",
+                        text=result
+                    )]
+
+                case GitTools.BRANCH:
+                    result = git_server.git_branch(
+                        repo,
+                        arguments.get("branch_type", 'local'),
+                        arguments.get("contains", None),
+                        arguments.get("not_contains", None),
+                    )
                     return [TextContent(
                         type="text",
                         text=result

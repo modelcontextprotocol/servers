@@ -27,14 +27,16 @@ This makes it safe to expose the server to untrusted clients while maintaining c
 
 2. `git_diff_unstaged`
    - Shows changes in working directory not yet staged
-   - Input:
+   - Inputs:
      - `repo_path` (string): Path to Git repository
+     - `context_lines` (number, optional): Number of context lines to show (default: 3)
    - Returns: Diff output of unstaged changes
 
 3. `git_diff_staged`
    - Shows changes that are staged for commit
-   - Input:
+   - Inputs:
      - `repo_path` (string): Path to Git repository
+     - `context_lines` (number, optional): Number of context lines to show (default: 3)
    - Returns: Diff output of staged changes
 
 4. `git_diff`
@@ -42,6 +44,7 @@ This makes it safe to expose the server to untrusted clients while maintaining c
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `target` (string): Target branch or commit to compare with
+     - `context_lines` (number, optional): Number of context lines to show (default: 3)
    - Returns: Diff output comparing current state with target
 
 5. `git_commit`
@@ -95,6 +98,15 @@ This makes it safe to expose the server to untrusted clients while maintaining c
    - Inputs:
      - `repo_path` (string): Path to directory to initialize git repo
    - Returns: Confirmation of repository initialization
+
+13. `git_branch`
+   - List Git branches
+   - Inputs:
+     - `repo_path` (string): Path to the Git repository.
+     - `branch_type` (string): Whether to list local branches ('local'), remote branches ('remote') or all branches('all').
+     - `contains` (string, optional): The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified
+     - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
+   - Returns: List of branches
 
 ## Installation
 
@@ -163,6 +175,54 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 </details>
+
+### Usage with VS Code
+
+For quick installation, use one of the one-click install buttons below...
+
+[![Install with UV in VS Code](https://img.shields.io/badge/VS_Code-UV-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=git&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22mcp-server-git%22%5D%7D) [![Install with UV in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-UV-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=git&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22mcp-server-git%22%5D%7D&quality=insiders)
+
+[![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=git&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22--rm%22%2C%22-i%22%2C%22--mount%22%2C%22type%3Dbind%2Csrc%3D%24%7BworkspaceFolder%7D%2Cdst%3D%2Fworkspace%22%2C%22mcp%2Fgit%22%5D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=git&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22--rm%22%2C%22-i%22%2C%22--mount%22%2C%22type%3Dbind%2Csrc%3D%24%7BworkspaceFolder%7D%2Cdst%3D%2Fworkspace%22%2C%22mcp%2Fgit%22%5D%7D&quality=insiders)
+
+For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open Settings (JSON)`.
+
+Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others. 
+
+> Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "git": {
+        "command": "uvx",
+        "args": ["mcp-server-git"]
+      }
+    }
+  }
+}
+```
+
+For Docker installation:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "git": {
+        "command": "docker",
+        "args": [
+          "run",
+          "--rm",
+          "-i",
+          "--mount", "type=bind,src=${workspaceFolder},dst=/workspace",
+          "mcp/git"
+        ]
+      }
+    }
+  }
+}
+```
 
 ### Usage with [Zed](https://github.com/zed-industries/zed)
 
@@ -251,12 +311,13 @@ If you are doing local development, there are two ways to test your changes:
 "mcpServers": {
   "git": {
     "command": "uv",
-    "args": [ 
+    "args": [
       "--directory",
       "/<path to mcp-servers>/mcp-servers/src/git",
       "run",
       "mcp-server-git"
     ]
+    }
   }
 }
 ```
