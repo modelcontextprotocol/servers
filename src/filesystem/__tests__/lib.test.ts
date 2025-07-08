@@ -9,6 +9,7 @@ import {
   createUnifiedDiff,
   // Security & validation functions
   validatePath,
+  setAllowedDirectories,
   // File operations
   getFileStats,
   readFileContent,
@@ -28,10 +29,15 @@ const mockFs = fs as jest.Mocked<typeof fs>;
 describe('Lib Functions', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Set up allowed directories for tests
+    const allowedDirs = process.platform === 'win32' ? ['C:\\Users\\test', 'C:\\temp', 'C:\\allowed'] : ['/home/user', '/tmp', '/allowed'];
+    setAllowedDirectories(allowedDirs);
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
+    // Clear allowed directories after tests
+    setAllowedDirectories([]);
   });
 
   describe('Pure Utility Functions', () => {
@@ -170,8 +176,12 @@ describe('Lib Functions', () => {
         const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\newfile.txt' : '/home/user/newfile.txt';
         const parentPath = process.platform === 'win32' ? 'C:\\Users\\test' : '/home/user';
         
+        // Create an error with the ENOENT code that the implementation checks for
+        const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError.code = 'ENOENT';
+        
         mockFs.realpath
-          .mockRejectedValueOnce(new Error('ENOENT'))
+          .mockRejectedValueOnce(enoentError)
           .mockResolvedValueOnce(parentPath);
         
         const result = await validatePath(newFilePath);
@@ -181,9 +191,15 @@ describe('Lib Functions', () => {
       it('rejects when parent directory does not exist', async () => {
         const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\nonexistent\\newfile.txt' : '/home/user/nonexistent/newfile.txt';
         
+        // Create errors with the ENOENT code
+        const enoentError1 = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError1.code = 'ENOENT';
+        const enoentError2 = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError2.code = 'ENOENT';
+        
         mockFs.realpath
-          .mockRejectedValueOnce(new Error('ENOENT'))
-          .mockRejectedValueOnce(new Error('ENOENT'));
+          .mockRejectedValueOnce(enoentError1)
+          .mockRejectedValueOnce(enoentError2);
         
         await expect(validatePath(newFilePath))
           .rejects.toThrow('Parent directory does not exist');
@@ -266,7 +282,7 @@ describe('Lib Functions', () => {
         
         await writeFileContent('/test/file.txt', 'new content');
         
-        expect(mockFs.writeFile).toHaveBeenCalledWith('/test/file.txt', 'new content', 'utf-8');
+        expect(mockFs.writeFile).toHaveBeenCalledWith('/test/file.txt', 'new content', { encoding: "utf-8", flag: 'wx' });
       });
     });
 
@@ -290,6 +306,13 @@ describe('Lib Functions', () => {
         
         const testDir = process.platform === 'win32' ? 'C:\\allowed\\dir' : '/allowed/dir';
         const allowedDirs = process.platform === 'win32' ? ['C:\\allowed'] : ['/allowed'];
+        
+        // Mock realpath to return the same path for validation to pass
+        mockFs.realpath.mockImplementation(async (inputPath: any) => {
+          const pathStr = inputPath.toString();
+          // Return the path as-is for validation
+          return pathStr;
+        });
         
         const result = await searchFilesWithValidation(
           testDir,
@@ -376,13 +399,20 @@ describe('Lib Functions', () => {
           { oldText: 'line2', newText: 'modified line2' }
         ];
         
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        
         const result = await applyFileEdits('/test/file.txt', edits, false);
         
         expect(result).toContain('modified line2');
+        // Should write to temporary file then rename
         expect(mockFs.writeFile).toHaveBeenCalledWith(
-          '/test/file.txt',
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
           'line1\nmodified line2\nline3\n',
           'utf-8'
+        );
+        expect(mockFs.rename).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          '/test/file.txt'
         );
       });
 
@@ -403,12 +433,18 @@ describe('Lib Functions', () => {
           { oldText: 'line3', newText: 'third line' }
         ];
         
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        
         await applyFileEdits('/test/file.txt', edits, false);
         
         expect(mockFs.writeFile).toHaveBeenCalledWith(
-          '/test/file.txt',
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
           'first line\nline2\nthird line\n',
           'utf-8'
+        );
+        expect(mockFs.rename).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          '/test/file.txt'
         );
       });
 
@@ -419,12 +455,18 @@ describe('Lib Functions', () => {
           { oldText: 'line2', newText: 'modified line2' }
         ];
         
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        
         await applyFileEdits('/test/file.txt', edits, false);
         
         expect(mockFs.writeFile).toHaveBeenCalledWith(
-          '/test/file.txt',
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
           '  line1\n    modified line2\n  line3\n',
           'utf-8'
+        );
+        expect(mockFs.rename).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          '/test/file.txt'
         );
       });
 
@@ -447,12 +489,18 @@ describe('Lib Functions', () => {
           }
         ];
         
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        
         await applyFileEdits('/test/file.js', edits, false);
         
         expect(mockFs.writeFile).toHaveBeenCalledWith(
-          '/test/file.js',
+          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
           'function test() {\n  console.log("world");\n  console.log("test");\n  return false;\n}',
           'utf-8'
+        );
+        expect(mockFs.rename).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
+          '/test/file.js'
         );
       });
 
@@ -466,12 +514,18 @@ describe('Lib Functions', () => {
           }
         ];
         
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        
         await applyFileEdits('/test/file.js', edits, false);
         
         expect(mockFs.writeFile).toHaveBeenCalledWith(
-          '/test/file.js',
+          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
           '    if (condition) {\n        doSomethingElse();\n        doAnotherThing();\n    }',
           'utf-8'
+        );
+        expect(mockFs.rename).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
+          '/test/file.js'
         );
       });
 
@@ -482,12 +536,18 @@ describe('Lib Functions', () => {
           { oldText: 'line2', newText: 'modified line2' }
         ];
         
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        
         await applyFileEdits('/test/file.txt', edits, false);
         
         expect(mockFs.writeFile).toHaveBeenCalledWith(
-          '/test/file.txt',
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
           'line1\nmodified line2\nline3\n',
           'utf-8'
+        );
+        expect(mockFs.rename).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          '/test/file.txt'
         );
       });
     });
