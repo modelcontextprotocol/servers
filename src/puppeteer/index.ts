@@ -109,9 +109,55 @@ let page: Page | null;
 const consoleLogs: string[] = [];
 const screenshots = new Map<string, string>();
 let previousLaunchOptions: any = null;
+let browserLaunching = false; // Prevent concurrent browser launches
 
-async function ensureBrowser({ launchOptions, allowDangerous }: any) {
+// Clean up orphaned Chrome processes
+async function cleanupChromeProcesses(): Promise<void> {
+  try {
+    // Kill orphaned Chrome processes on macOS
+    const { exec } = await import('child_process');
+    await new Promise<void>((resolve) => {
+      exec('pkill -f "Chrome.*--remote-debugging-port"', (error) => {
+        // Ignore errors - processes might not exist
+        resolve();
+      });
+    });
+  } catch (error: any) {
+    console.warn('Failed to cleanup Chrome processes:', error.message);
+  }
+}
 
+// Check if browser is healthy and connected
+async function isBrowserHealthy(browser: Browser | null): Promise<boolean> {
+  if (!browser) return false;
+  try {
+    const isConnected = browser.connected;
+    if (!isConnected) return false;
+    
+    // Try to get pages to verify browser is responsive
+    const pages = await Promise.race([
+      browser.pages(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+    ]);
+    return Array.isArray(pages);
+  } catch (error) {
+    return false;
+  }
+}
+
+async function ensureBrowser({ launchOptions, allowDangerous }: any): Promise<Page> {
+  // Prevent concurrent browser launches
+  if (browserLaunching) {
+    // Wait for ongoing launch to complete
+    while (browserLaunching) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    // If browser is now available and healthy, return it
+    if (await isBrowserHealthy(browser)) {
+      return page!;
+    }
+  }
+  
   const DANGEROUS_ARGS = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -122,7 +168,7 @@ async function ensureBrowser({ launchOptions, allowDangerous }: any) {
     '--disable-site-isolation-trials',
     '--allow-running-insecure-content'
   ];
-
+  
   // Parse environment config safely
   let envConfig = {};
   try {
@@ -130,51 +176,75 @@ async function ensureBrowser({ launchOptions, allowDangerous }: any) {
   } catch (error: any) {
     console.warn('Failed to parse PUPPETEER_LAUNCH_OPTIONS:', error?.message || error);
   }
-
+  
   // Deep merge environment config with user-provided options
   const mergedConfig = deepMerge(envConfig, launchOptions || {});
-
+  
   // Security validation for merged config
   if (mergedConfig?.args) {
     const dangerousArgs = mergedConfig.args?.filter?.((arg: string) => DANGEROUS_ARGS.some((dangerousArg: string) => arg.startsWith(dangerousArg)));
     if (dangerousArgs?.length > 0 && !(allowDangerous || (process.env.ALLOW_DANGEROUS === 'true'))) {
-      throw new Error(`Dangerous browser arguments detected: ${dangerousArgs.join(', ')}. Fround from environment variable and tool call argument. ` +
+      throw new Error(`Dangerous browser arguments detected: ${dangerousArgs.join(', ')}. Found from environment variable and tool call argument. ` +
         'Set allowDangerous: true in the tool call arguments to override.');
     }
   }
-
-  try {
-    if ((browser && !browser.connected) ||
-      (launchOptions && (JSON.stringify(launchOptions) != JSON.stringify(previousLaunchOptions)))) {
-      await browser?.close();
+  
+  // Check if we need to restart browser
+  const needsRestart = !await isBrowserHealthy(browser) || 
+    (launchOptions && (JSON.stringify(launchOptions) !== JSON.stringify(previousLaunchOptions)));
+  
+  if (needsRestart) {
+    browserLaunching = true;
+    try {
+      // Close existing browser gracefully
+      if (browser) {
+        try {
+          await Promise.race([
+            browser.close(),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Close timeout')), 5000))
+          ]);
+        } catch (error: any) {
+          console.warn('Failed to close browser gracefully:', error.message);
+          // Force cleanup orphaned processes
+          await cleanupChromeProcesses();
+        }
+      }
       browser = null;
+      page = null;
+      
+      // Wait a moment for cleanup
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Launch new browser
+      const npx_args = { headless: false };
+      const docker_args = { headless: true, args: ["--no-sandbox", "--single-process", "--no-zygote"] };
+      
+      console.log('Launching new browser instance...');
+      browser = await puppeteer.launch(deepMerge(
+        process.env.DOCKER_CONTAINER ? docker_args : npx_args,
+        mergedConfig
+      ));
+      
+      const pages = await browser.pages();
+      page = pages[0];
+      
+      // Set up console logging
+      page.on("console", (msg) => {
+        const logEntry = `[${msg.type()}] ${msg.text()}`;
+        consoleLogs.push(logEntry);
+        server.notification({
+          method: "notifications/resources/updated",
+          params: { uri: "console://logs" },
+        });
+      });
+      
+      console.log('Browser launched successfully');
+      previousLaunchOptions = launchOptions;
+    } finally {
+      browserLaunching = false;
     }
   }
-  catch (error) {
-    browser = null;
-  }
-
-  previousLaunchOptions = launchOptions;
-
-  if (!browser) {
-    const npx_args = { headless: false }
-    const docker_args = { headless: true, args: ["--no-sandbox", "--single-process", "--no-zygote"] }
-    browser = await puppeteer.launch(deepMerge(
-      process.env.DOCKER_CONTAINER ? docker_args : npx_args,
-      mergedConfig
-    ));
-    const pages = await browser.pages();
-    page = pages[0];
-
-    page.on("console", (msg) => {
-      const logEntry = `[${msg.type()}] ${msg.text()}`;
-      consoleLogs.push(logEntry);
-      server.notification({
-        method: "notifications/resources/updated",
-        params: { uri: "console://logs" },
-      });
-    });
-  }
+  
   return page!;
 }
 
@@ -483,7 +553,33 @@ async function runServer() {
 
 runServer().catch(console.error);
 
-process.stdin.on("close", () => {
-  console.error("Puppeteer MCP Server closed");
+// Graceful shutdown handling
+async function gracefulShutdown(): Promise<void> {
+  console.log("Shutting down Puppeteer MCP Server...");
+  try {
+    if (browser) {
+      await Promise.race([
+        browser.close(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Shutdown timeout')), 5000))
+      ]);
+    }
+    await cleanupChromeProcesses();
+  } catch (error: any) {
+    console.warn('Error during shutdown:', error.message);
+    await cleanupChromeProcesses(); // Force cleanup
+  }
   server.close();
+  process.exit(0);
+}
+
+// Handle various process signals
+process.stdin.on("close", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGHUP", gracefulShutdown);
+
+// Handle uncaught exceptions
+process.on("uncaughtException", async (error: Error) => {
+  console.error("Uncaught exception:", error);
+  await gracefulShutdown();
 });
