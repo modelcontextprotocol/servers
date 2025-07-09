@@ -16,14 +16,16 @@ Please note that mcp-server-git is currently in early development. The functiona
 
 2. `git_diff_unstaged`
    - Shows changes in working directory not yet staged
-   - Input:
+   - Inputs:
      - `repo_path` (string): Path to Git repository
+     - `context_lines` (number, optional): Number of context lines to show (default: 3)
    - Returns: Diff output of unstaged changes
 
 3. `git_diff_staged`
    - Shows changes that are staged for commit
-   - Input:
+   - Inputs:
      - `repo_path` (string): Path to Git repository
+     - `context_lines` (number, optional): Number of context lines to show (default: 3)
    - Returns: Diff output of staged changes
 
 4. `git_diff`
@@ -31,6 +33,7 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `target` (string): Target branch or commit to compare with
+     - `context_lines` (number, optional): Number of context lines to show (default: 3)
    - Returns: Diff output comparing current state with target
 
 5. `git_commit`
@@ -84,6 +87,15 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to directory to initialize git repo
    - Returns: Confirmation of repository initialization
+
+13. `git_branch`
+   - List Git branches
+   - Inputs:
+     - `repo_path` (string): Path to the Git repository.
+     - `branch_type` (string): Whether to list local branches ('local'), remote branches ('remote') or all branches('all').
+     - `contains` (string, optional): The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified
+     - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
+   - Returns: List of branches
 
 ## Installation
 
