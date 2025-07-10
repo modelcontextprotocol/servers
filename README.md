@@ -825,7 +825,8 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[SoccerDataAPI](https://github.com/yeonupark/mcp-soccer-data)** - This MCP server provides real-time football match data based on the SoccerDataAPI.
 - **[Solana Agent Kit](https://github.com/sendaifun/solana-agent-kit/tree/main/examples/agent-kit-mcp-server)** - This MCP server enables LLMs to interact with the Solana blockchain with help of Solana Agent Kit by SendAI, allowing for 40+ protcool actions and growing
 - **[Solr MCP](https://github.com/mjochum64/mcp-solr-search)** - This MCP server offers a basic functionality to perform a search on Solr servers.
-- **[Solver](https://github.com/szeider/mcp-solver)** - Solves constraint satisfaction and optimization problems . 
+- **[Solver](https://github.com/szeider/mcp-solver)** - Solves constraint satisfaction and optimization problems .
+- **[Specbridge](https://github.com/TBosak/specbridge)** - Easily turn your OpenAPI specs into MCP Tools.
 - **[Splunk](https://github.com/jkosik/mcp-server-splunk)** - Golang MCP server for Splunk (lists saved searches, alerts, indexes, macros...). Supports SSE and STDIO.
 - **[Spotify](https://github.com/varunneal/spotify-mcp)** - This MCP allows an LLM to play and use Spotify.
 - **[Spring Initializr](https://github.com/hpalma/springinitializr-mcp)** - This MCP allows an LLM to create Spring Boot projects with custom configurations. Instead of manually visiting start.spring.io, you can now ask your AI assistant to generate projects with specific dependencies, Java versions, and project structures.
