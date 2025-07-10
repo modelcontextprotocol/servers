@@ -3,7 +3,6 @@ from pathlib import Path
 import git
 from mcp_server_git.server import git_checkout, GitServer, Server
 import shutil
-import asyncio
 from mcp.types import TextContent
 
 @pytest.fixture
@@ -48,8 +47,7 @@ def test_path_validator_accepts_inside_path(git_server_with_repo, test_repositor
     assert validated.exists()
     assert validated.is_file()
 
-@pytest.mark.asyncio
-async def test_call_tool_uses_configured_repo(test_repository):
+def test_call_tool_uses_configured_repo(test_repository):
     # Create a git_server with configured repository
     git_server = GitServer(test_repository.working_dir)
     
