@@ -923,6 +923,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
 - **[Youtube Uploader MCP](https://github.com/anwerj/youtube-uploader-mcp)** - AI‑powered YouTube uploader—no CLI, no YouTube Studio.
 - **[YouTube Video Summarizer](https://github.com/nabid-pf/youtube-video-summarizer-mcp)** - Summarize lengthy youtube videos.
+- **[ZapCap](https://github.com/bogdan01m/zapcap-mcp-server)** - MCP server for ZapCap API providing video caption and B-roll generation via natural language
 - **[Zoom](https://github.com/Prathamesh0901/zoom-mcp-server/tree/main)** - Create, update, read and delete your zoom meetings.
 
 ## 📚 Frameworks
