@@ -511,6 +511,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Eunomia](https://github.com/whataboutyou-ai/eunomia-MCP-server)** - Extension of the Eunomia framework that connects Eunomia instruments with MCP servers
 - **[Everything Search](https://github.com/mamertofabian/mcp-everything-search)** - Fast file searching capabilities across Windows (using [Everything SDK](https://www.voidtools.com/support/everything/sdk/)), macOS (using mdfind command), and Linux (using locate/plocate command).
 - **[EVM MCP Server](https://github.com/mcpdotdirect/evm-mcp-server)** - Comprehensive blockchain services for 30+ EVM networks, supporting native tokens, ERC20, NFTs, smart contracts, transactions, and ENS resolution.
+- **[Extended Memory](https://github.com/ssmirnovpro/extended-memory-mcp)** - Persistent memory across Claude conversations with multi-project support, automatic importance scoring, and tag-based organization. Production-ready with 400+ tests.
 - **[Excel](https://github.com/haris-musa/excel-mcp-server)** - Excel manipulation including data reading/writing, worksheet management, formatting, charts, and pivot table.
 - **[F1](https://github.com/AbhiJ2706/f1-mcp/tree/main)** - Access to Formula 1 data including race results, driver information, lap times, telemetry, and circuit details.
 - **[Fabric MCP](https://github.com/aci-labs/ms-fabric-mcp)** - Microsoft Fabric MCP server to accelerate working in your Fabric Tenant with the help of your favorite LLM models.
