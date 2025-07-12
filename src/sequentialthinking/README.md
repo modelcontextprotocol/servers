@@ -97,6 +97,8 @@ Add the configuration to your user-level MCP configuration file. Open the Comman
 Alternatively, you can add the configuration to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
 
 > Note that the `servers` object should be at the root level in `mcp.json` files (no `mcp` wrapper key).
+> 
+> For more details about MCP configuration in VS Code, see the [official VS Code MCP documentation](https://code.visualstudio.com/docs/copilot/mcp).
 
 For NPX installation:
 
