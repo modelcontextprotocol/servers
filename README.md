@@ -442,6 +442,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[CipherTrust Manager](https://github.com/sanyambassi/ciphertrust-manager-mcp-server)** - MCP server for Thales CipherTrust Manager integration, enabling secure key management and cryptographic operations.
 - **[Claude Thread Continuity](https://github.com/peless/claude-thread-continuity)** - Persistent memory system enabling Claude Desktop conversations to resume with full context across sessions. Maintains conversation history, project states, and user preferences for seamless multi-session workflows.
 - **[ClaudePost](https://github.com/ZilongXue/claude-post)** - ClaudePost enables seamless email management for Gmail, offering secure features like email search, reading, and sending.
+- **[ClearML MCP](https://github.com/prassanna-ravishankar/clearml-mcp)** - Get comprehensive ML experiment context and analysis directly from [ClearML](https://clear.ml) in your AI conversations.
 - **[ClickUp](https://github.com/TaazKareem/clickup-mcp-server)** - MCP server for ClickUp task management, supporting task creation, updates, bulk operations, and markdown descriptions.
 - **[Cloudinary](https://github.com/felores/cloudinary-mcp-server)** - Cloudinary Model Context Protocol Server to upload media to Cloudinary and get back the media link and details.
 - **[Coda](https://github.com/universal-mcp/coda)** - Coda.io MCP server from **[agentr](https://agentr.dev/)** that provides support for reading and writing data to Coda docs and tables.
