@@ -164,6 +164,24 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 ```
 </details>
 
+### Configure for Zencoder
+
+1. Go to the Zencoder menu (...)
+2. From the dropdown menu, select `Agent Tools`
+3. Click on the `Add Custom MCP`
+4. Add the name and server configuration from below, and make sure to hit the `Install` button
+
+<details>
+<summary>Using uvx</summary>
+
+```json
+{
+    "command": "uvx",
+    "args": ["mcp-server-time"]
+  }
+```
+</details>
+
 ### Customization - System Timezone
 
 By default, the server automatically detects your system's timezone. You can override this by adding the argument `--local-timezone` to the `args` list in the configuration.
