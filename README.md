@@ -784,7 +784,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Netbird](https://github.com/aantti/mcp-netbird)** - List and analyze Netbird network peers, groups, policies, and more.
 - **[NetMind ParsePro](https://github.com/protagolabs/Netmind-Parse-PDF-MCP)** - The PDF Parser AI service, built and customized by the [NetMind](https://www.netmind.ai/) team.
 - **[NocoDB](https://github.com/edwinbernadus/nocodb-mcp-server)** - Read and write access to NocoDB database.
-- **[Node code sandbox](https://github.com/alfonsograziano/node-code-sandbox-mcp)** – A Node.js MCP server that spins up isolated Docker - based sandboxes for executing JavaScript snippets with on-the-fly npm dependency installation
+- **[Node Code Sandbox](https://github.com/alfonsograziano/node-code-sandbox-mcp)** – A Node.js MCP server that spins up isolated Docker - based sandboxes for executing JavaScript snippets with on-the-fly npm dependency installation
 - **[nomad-mcp](https://github.com/kocierik/mcp-nomad)** - A server that provides a set of tools for managing Nomad clusters through the MCP.
 - **[Notion](https://github.com/suekou/mcp-notion-server)** (by suekou) - Interact with Notion API.
 - **[Notion](https://github.com/v-3/notion-server)** (by v-3) - Notion MCP integration. Search, Read, Update, and Create pages through Claude chat.
