@@ -731,6 +731,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[medRxiv](https://github.com/JackKuo666/medRxiv-MCP-Server)** - Enable AI assistants to search and access medRxiv papers through a simple MCP interface.
 - **[mem0-mcp](https://github.com/mem0ai/mem0-mcp)** - A Model Context Protocol server for Mem0, which helps with managing coding preferences.
 - **[Membase](https://github.com/unibaseio/membase-mcp)** - Save and query your agent memory in distributed way by Membase.
+- **[Meta Ads Remote MCP](https://github.com/pipeboard-co/meta-ads-mcp)** - Remote MCP server to interact with Meta Ads API - access, analyze, and manage Facebook, Instagram, and other Meta platforms advertising campaigns.
 - **[Meme MCP](https://github.com/lidorshimoni/meme-mcp)** - Generate memes via AI using the Imgflip API through the Model Context Protocol.
 - **[memento-mcp](https://github.com/gannonh/memento-mcp)** - Knowledge graph memory system built on Neo4j with semantic search, temporal awareness.
 - **[MetaTrader MCP](https://github.com/ariadng/metatrader-mcp-server)** - Enable AI LLMs to execute trades using MetaTrader 5 platform.
