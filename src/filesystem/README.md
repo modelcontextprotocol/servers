@@ -80,7 +80,8 @@ The server's directory access control follows this flow:
 
 - **read_media_file**
   - Read an image or audio file
-  - Input: `path` (string)
+  - Inputs:
+    - `path` (string)
   - Streams the file and returns base64 data with the corresponding MIME type
 
 - **read_multiple_files**
