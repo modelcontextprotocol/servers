@@ -265,7 +265,7 @@ Follow these steps for each interaction:
    - If any new information was gathered during the interaction, update your memory as follows:
      a) Create entities for recurring organizations, people, and significant events
      b) Connect them to the current entities using relations
-     b) Store facts about them as observations
+     c) Store facts about them as observations
 ```
 
 ## Building
