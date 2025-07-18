@@ -10,6 +10,7 @@ import {
   type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
+import { createReadStream } from "fs";
 import path from "path";
 import os from 'os';
 import { randomBytes } from 'crypto';
@@ -475,6 +476,21 @@ async function headFile(filePath: string, numLines: number): Promise<string> {
   }
 }
 
+// Stream a file and return its Base64 representation without loading the
+// entire file into memory at once. Chunks are encoded individually and
+// concatenated into the final string.
+async function readFileAsBase64Stream(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stream = createReadStream(filePath, { encoding: 'base64' });
+    let data = '';
+    stream.on('data', (chunk) => {
+      data += chunk;
+    });
+    stream.on('end', () => resolve(data));
+    stream.on('error', (err) => reject(err));
+  });
+}
+
 // Tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -663,7 +679,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ".flac": "audio/flac",
         };
         const mimeType = mimeTypes[extension] || "application/octet-stream";
-        const data = (await fs.readFile(validPath)).toString("base64");
+        const data = await readFileAsBase64Stream(validPath);
         const type = mimeType.startsWith("image/")
           ? "image"
           : mimeType.startsWith("audio/")
