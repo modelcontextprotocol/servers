@@ -365,6 +365,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://cdn.zapier.com/zapier/images/favicon.ico" alt="Zapier Logo" /> **[Zapier](https://zapier.com/mcp)** - Connect your AI Agents to 8,000 apps instantly.
 - **[ZenML](https://github.com/zenml-io/mcp-zenml)** - Interact with your MLOps and LLMOps pipelines through your [ZenML](https://www.zenml.io) MCP server
 - <img height="12" width="12" src="https://zizai.work/images/logo.jpg" alt="ZIZAI Logo" /> **[ZIZAI Recruitment](https://github.com/zaiwork/mcp)** - Interact with the next-generation intelligent recruitment platform for employees and employers, powered by [ZIZAI Recruitment](https://zizai.work).
+- <img height="32" width="32" src="https://www.bitcoin.com/favicon-32x32.png" alt="Bitcoin.com" /> **[Bitcoin.com](https://mcp.bitcoin.com/sse)** - A comprehensive Model Context Protocol (MCP) server for serving Bitcoin.com's gambling/betting content with advanced i18n support, content discovery, and navigation tools.
 
 ### 🌎 Community Servers
 
