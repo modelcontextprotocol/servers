@@ -247,6 +247,24 @@ Add to your Zed settings.json:
 ```
 </details>
 
+### Usage with [Zencoder](https://zencoder.ai)
+
+1. Go to the Zencoder menu (...)
+2. From the dropdown menu, select `Agent Tools`
+3. Click on the `Add Custom MCP`
+4. Add the name (i.e. git) and server configuration from below, and make sure to hit the `Install` button
+
+<details>
+<summary>Using uvx</summary>
+
+```json
+{
+    "command": "uvx",
+    "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
+}
+```
+</details>
+
 ## Debugging
 
 You can use the MCP inspector to debug the server. For uvx installations:
