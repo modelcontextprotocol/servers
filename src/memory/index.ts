@@ -181,6 +181,30 @@ class KnowledgeGraphManager {
   
     return filteredGraph;
   }
+
+  async getNodeRelations(nodeName: string): Promise<{
+    outgoing: Relation[],
+    incoming: Relation[],
+    connected_entities: string[]
+  }> {
+    const graph = await this.loadGraph();
+    
+    // Find all outgoing relations (where this node is the source)
+    const outgoing = graph.relations.filter(r => r.from === nodeName);
+    
+    // Find all incoming relations (where this node is the target)
+    const incoming = graph.relations.filter(r => r.to === nodeName);
+    
+    // Get all connected entity names (removing duplicates)
+    const connected_entities = [
+      ...new Set([
+        ...outgoing.map(r => r.to),
+        ...incoming.map(r => r.from)
+      ])
+    ];
+    
+    return { outgoing, incoming, connected_entities };
+  }
 }
 
 const knowledgeGraphManager = new KnowledgeGraphManager();
@@ -369,6 +393,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["names"],
         },
       },
+      {
+        name: "get_node_relations",
+        description: "Get all relations for a specific node, including incoming and outgoing connections",
+        inputSchema: {
+          type: "object",
+          properties: {
+            nodeName: {
+              type: "string",
+              description: "The name of the entity to get relations for",
+            },
+          },
+          required: ["nodeName"],
+        },
+      },
     ],
   };
 });
@@ -402,6 +440,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.searchNodes(args.query as string), null, 2) }] };
     case "open_nodes":
       return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.openNodes(args.names as string[]), null, 2) }] };
+    case "get_node_relations":
+      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.getNodeRelations(args.nodeName as string), null, 2) }] };
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
