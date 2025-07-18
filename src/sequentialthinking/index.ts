@@ -25,6 +25,11 @@ interface ThoughtData {
 class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
+  private disableThoughtLogging: boolean;
+
+  constructor() {
+    this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
+  }
 
   private validateThoughtData(input: unknown): ThoughtData {
     const data = input as Record<string, unknown>;
@@ -100,8 +105,10 @@ class SequentialThinkingServer {
         this.branches[validatedInput.branchId].push(validatedInput);
       }
 
-      const formattedThought = this.formatThought(validatedInput);
-      console.error(formattedThought);
+      if (!this.disableThoughtLogging) {
+        const formattedThought = this.formatThought(validatedInput);
+        console.error(formattedThought);
+      }
 
       return {
         content: [{
