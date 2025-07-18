@@ -116,10 +116,14 @@ async function validatePath(requestedPath: string): Promise<string> {
 }
 
 // Schema definitions
-const ReadFileArgsSchema = z.object({
+const ReadTextFileArgsSchema = z.object({
   path: z.string(),
   tail: z.number().optional().describe('If provided, returns only the last N lines of the file'),
   head: z.number().optional().describe('If provided, returns only the first N lines of the file')
+});
+
+const ReadMediaFileArgsSchema = z.object({
+  path: z.string()
 });
 
 const ReadMultipleFilesArgsSchema = z.object({
@@ -476,15 +480,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "read_file",
+        name: "read_text_file",
         description:
-          "Read the complete contents of a file from the file system. " +
+          "Read the complete contents of a file from the file system as text. " +
           "Handles various text encodings and provides detailed error messages " +
           "if the file cannot be read. Use this tool when you need to examine " +
           "the contents of a single file. Use the 'head' parameter to read only " +
           "the first N lines of a file, or the 'tail' parameter to read only " +
-          "the last N lines of a file. Only works within allowed directories.",
-        inputSchema: zodToJsonSchema(ReadFileArgsSchema) as ToolInput,
+          "the last N lines of a file. Operates on the file as text regardless of extension. " +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(ReadTextFileArgsSchema) as ToolInput,
+      },
+      {
+        name: "read_media_file",
+        description:
+          "Read an image or audio file. Returns the base64 encoded data and MIME type. " +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(ReadMediaFileArgsSchema) as ToolInput,
       },
       {
         name: "read_multiple_files",
@@ -597,10 +609,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     switch (name) {
-      case "read_file": {
-        const parsed = ReadFileArgsSchema.safeParse(args);
+      case "read_text_file": {
+        const parsed = ReadTextFileArgsSchema.safeParse(args);
         if (!parsed.success) {
-          throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
+          throw new Error(`Invalid arguments for read_text_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
         
@@ -627,6 +639,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const content = await fs.readFile(validPath, "utf-8");
         return {
           content: [{ type: "text", text: content }],
+        };
+      }
+
+      case "read_media_file": {
+        const parsed = ReadMediaFileArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for read_media_file: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const extension = path.extname(validPath).toLowerCase();
+        const mimeTypes: Record<string, string> = {
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".gif": "image/gif",
+          ".webp": "image/webp",
+          ".bmp": "image/bmp",
+          ".svg": "image/svg+xml",
+          ".mp3": "audio/mpeg",
+          ".wav": "audio/wav",
+          ".ogg": "audio/ogg",
+          ".flac": "audio/flac",
+        };
+        const mimeType = mimeTypes[extension] || "application/octet-stream";
+        const data = (await fs.readFile(validPath)).toString("base64");
+        const type = mimeType.startsWith("image/")
+          ? "image"
+          : mimeType.startsWith("audio/")
+            ? "audio"
+            : "blob";
+        return {
+          content: [{ type, data, mimeType } as any],
         };
       }
 
