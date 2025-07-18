@@ -45,6 +45,41 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
    - No inputs required
    - Returns: JSON string of all environment variables
 
+7. `annotatedMessage`
+   - Demonstrates how annotations can be used to provide metadata about content
+   - Inputs:
+     - `messageType` (enum: "error" | "success" | "debug"): Type of message to demonstrate different annotation patterns
+     - `includeImage` (boolean, default: false): Whether to include an example image
+   - Returns: Content with varying annotations:
+     - Error messages: High priority (1.0), visible to both user and assistant
+     - Success messages: Medium priority (0.7), user-focused
+     - Debug messages: Low priority (0.3), assistant-focused
+     - Optional image: Medium priority (0.5), user-focused
+   - Example annotations:
+     ```json
+     {
+       "priority": 1.0,
+       "audience": ["user", "assistant"]
+     }
+     ```
+
+8. `getResourceReference`
+   - Returns a resource reference that can be used by MCP clients
+   - Inputs:
+     - `resourceId` (number, 1-100): ID of the resource to reference
+   - Returns: A resource reference with:
+     - Text introduction
+     - Embedded resource with `type: "resource"`
+     - Text instruction for using the resource URI
+
+9. `startElicitation`
+   - Initiates an elicitation (interaction) within the MCP client.
+   - Inputs:
+      - `color` (string): Favorite color
+      - `number` (number, 1-100): Favorite number
+      - `pets` (enum): Favorite pet
+   - Returns: Confirmation of the elicitation demo with selection summary.
+
 ### Resources
 
 The server provides 100 test resources in two formats:
@@ -78,7 +113,28 @@ Resource features:
      - `style` (string): Output style preference
    - Returns: Multi-turn conversation with images
 
-## Usage with Claude Desktop
+3. `resource_prompt`
+   - Demonstrates embedding resource references in prompts
+   - Required arguments:
+     - `resourceId` (number): ID of the resource to embed (1-100)
+   - Returns: Multi-turn conversation with an embedded resource reference
+   - Shows how to include resources directly in prompt messages
+
+### Logging
+
+The server sends random-leveled log messages every 15 seconds, e.g.:
+
+```json
+{
+  "method": "notifications/message",
+  "params": {
+	"level": "info",
+	"data": "Info-level message"
+  }
+}
+```
+
+## Usage with Claude Desktop (uses [stdio Transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#stdio))
 
 Add to your `claude_desktop_config.json`:
 
@@ -95,3 +151,75 @@ Add to your `claude_desktop_config.json`:
   }
 }
 ```
+
+## Usage with VS Code
+
+For quick installation, use of of the one-click install buttons below...
+
+[![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-NPM-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=everything&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-everything%22%5D%7D) [![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-NPM-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=everything&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-everything%22%5D%7D&quality=insiders)
+
+[![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=everything&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22mcp%2Feverything%22%5D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=everything&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22mcp%2Feverything%22%5D%7D&quality=insiders)
+
+For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open User Settings (JSON)`.
+
+Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+
+> Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
+
+#### NPX
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "everything": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-everything"]
+      }
+    }
+  }
+}
+```
+
+## Running from source with [HTTP+SSE Transport](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#http-with-sse) (deprecated as of [2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports))
+
+```shell
+cd src/everything
+npm install
+npm run start:sse
+```
+
+## Run from source with [Streamable HTTP Transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http)
+
+```shell
+cd src/everything
+npm install
+npm run start:streamableHttp
+```
+
+## Running as an installed package
+### Install 
+```shell
+npm install -g @modelcontextprotocol/server-everything@latest
+````
+
+### Run the default (stdio) server
+```shell
+npx @modelcontextprotocol/server-everything
+```
+
+### Or specify stdio explicitly
+```shell
+npx @modelcontextprotocol/server-everything stdio
+```
+
+### Run the SSE server
+```shell
+npx @modelcontextprotocol/server-everything sse
+```
+
+### Run the streamable HTTP server
+```shell
+npx @modelcontextprotocol/server-everything streamableHttp
+```
+
