@@ -12,7 +12,8 @@ Typically, each MCP server is implemented with an MCP SDK:
 - [Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk)
 - [Typescript MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 
-> Note: Lists in this README are maintained in alphabetical order to minimize merge conflicts when adding new items.
+> [!NOTE]
+> Lists in this README are maintained in alphabetical order to minimize merge conflicts when adding new items.
 
 ## 🌟 Reference Servers
 
@@ -372,7 +373,9 @@ Official integrations are maintained by companies building production ready MCP 
 
 A growing set of community-developed and maintained servers demonstrates various applications of MCP across different domains.
 
-> **Note:** Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
+> [!NOTE]
+> Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
+
 - **[1Panel](https://github.com/1Panel-dev/mcp-1panel)** - MCP server implementation that provides 1Panel interaction.
 - **[A2A](https://github.com/GongRzhe/A2A-MCP-Server)** - An MCP server that bridges the Model Context Protocol (MCP) with the Agent-to-Agent (A2A) protocol, enabling MCP-compatible AI assistants (like Claude) to seamlessly interact with A2A agents.
 - **[Ableton Live](https://github.com/Simon-Kansara/ableton-live-mcp-server)** - an MCP server to control Ableton Live.
