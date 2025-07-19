@@ -844,7 +844,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Stripe](https://github.com/atharvagupta2003/mcp-stripe)** - This MCP allows integration with Stripe for handling payments, customers, and refunds.
 - **[Substack/Medium](https://github.com/jonathan-politzki/mcp-writer-substack)** - Connect Claude to your Substack/Medium writing, enabling semantic search and analysis of your published content.
 - **[System Health](https://github.com/thanhtung0201/mcp-remote-system-health)** - The MCP (Multi-Channel Protocol) System Health Monitoring is a robust, real-time monitoring solution designed to provide comprehensive health metrics and alerts for remote Linux servers.
-- **[SystemSage](https://github.com/Tarusharma1/SystemSage): A powerful, cross-platform system management and monitoring tool for Windows, Linux, and macOS.
+- **[SystemSage](https://github.com/Tarusharma1/SystemSage)** - A powerful, cross-platform system management and monitoring tool for Windows, Linux, and macOS.
 - **[Talk To Figma](https://github.com/sonnylazuardi/cursor-talk-to-figma-mcp)** - This MCP server enables LLMs to interact with Figma, allowing them to read and modify designs programmatically.
 - **[Talk To Figma via Claude](https://github.com/gaganmanku96/talk-with-figma-claude)** - TMCP server that provides seamless Figma integration specifically for Claude Desktop, enabling design creation, modification, and real-time collaboration through natural language commands.
 - **[TAM MCP Server](https://github.com/gvaibhav/TAM-MCP-Server)** - Market research and business intelligence with TAM/SAM calculations and integration across 8 economic data sources: Alpha Vantage, BLS, Census Bureau, FRED, IMF, Nasdaq Data Link, OECD, and World Bank.
