@@ -16,7 +16,19 @@ def test_repository(tmp_path: Path):
 
     yield test_repo
 
-    shutil.rmtree(repo_path)
+    # Ensure the repo is closed before attempting to remove the directory
+    test_repo.close()
+
+    import os
+    import time
+    def on_rm_error(func, path, exc_info):
+        try:
+            os.chmod(path, 0o777)
+            func(path)
+        except Exception:
+            time.sleep(0.1)
+            func(path)
+    shutil.rmtree(repo_path, onerror=on_rm_error)
 
 @pytest.fixture
 def git_server_with_repo(test_repository):
