@@ -853,6 +853,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Quarkus](https://github.com/quarkiverse/quarkus-mcp-servers)** - MCP servers for the Quarkus Java framework.
 - **[QuickChart](https://github.com/GongRzhe/Quickchart-MCP-Server)** - A Model Context Protocol server for generating charts using QuickChart.io
 - **[Qwen_Max](https://github.com/66julienmartin/MCP-server-Qwen_Max)** - A Model Context Protocol (MCP) server implementation for the Qwen models.
+- **[R](https://github.com/posit-dev/mcptools)** - An R SDK for creating R-based MCP servers and retrieving functionality from third-party MCP servers as R functions.
 - **[RabbitMQ](https://github.com/kenliao94/mcp-server-rabbitmq)** - The MCP server that interacts with RabbitMQ to publish and consume messages.
 - **[RAE](https://github.com/rae-api-com/rae-mcp)** - MPC Server to connect your preferred model with rae-api.com, Roya Academy of Spanish Dictionary
 - **[RAG Local](https://github.com/renl/mcp-rag-local)** - This MCP server for storing and retrieving text passages locally based on their semantic meaning.
