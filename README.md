@@ -883,6 +883,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[QGIS](https://github.com/jjsantos01/qgis_mcp)** - connects QGIS to Claude AI through the MCP. This integration enables prompt-assisted project creation, layer loading, code execution, and more.
 - **[Qiniu MCP Server](https://github.com/qiniu/qiniu-mcp-server)** - The Model Context Protocol (MCP) Server built on Qiniu Cloud products supports users in accessing Qiniu Cloud Storage, intelligent multimedia services, and more through this MCP Server within the context of AI large model clients.
 - **[Quarkus](https://github.com/quarkiverse/quarkus-mcp-servers)** - MCP servers for the Quarkus Java framework.
+- **[QuantConnect](https://github.com/taylorwilsdon/quantconnect-mcp)** - QuantConnect Algorithmic Trading Platform Orchestration MCP - Agentic LLM Driven Trading Strategy Design, Research & Implementation.
 - **[QuickChart](https://github.com/GongRzhe/Quickchart-MCP-Server)** - A Model Context Protocol server for generating charts using QuickChart.io
 - **[Qwen_Max](https://github.com/66julienmartin/MCP-server-Qwen_Max)** - A Model Context Protocol (MCP) server implementation for the Qwen models.
 - **[RabbitMQ](https://github.com/kenliao94/mcp-server-rabbitmq)** - The MCP server that interacts with RabbitMQ to publish and consume messages.
