@@ -442,6 +442,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[bioRxiv](https://github.com/JackKuo666/bioRxiv-MCP-Server)** - 🔍 Enable AI assistants to search and access bioRxiv papers through a simple MCP interface.
 - **[Bitable MCP](https://github.com/lloydzhou/bitable-mcp)** (by lloydzhou) - MCP server provides access to Lark Bitable through the Model Context Protocol. It allows users to interact with Bitable tables using predefined tools.
 - **[Blender](https://github.com/ahujasid/blender-mcp)** (by ahujasid) - Blender integration allowing prompt enabled 3D scene creation, modeling and manipulation.
+- **[Blender MCP](https://github.com/pranav-deshmukh/blender-mcp)** - MCP server to create professional like 3d scenes on blender using natural language.
 - **[Blockchain MCP](https://github.com/tatumio/blockchain-mcp)** - MCP Server for Blockchain Data from **[Tatum](http://tatum.io/mcp)** that instantly unlocks blockchain access for your AI agents. This official Tatum MCP server connects to any LLM in seconds.
 - **[Bluesky](https://github.com/semioz/bluesky-mcp)** (by semioz) - An MCP server for Bluesky, a decentralized social network. It enables automated interactions with the AT Protocol, supporting features like posting, liking, reposting, timeline management, and profile operations.
 - **[Bluetooth MCP Server](https://github.com/Hypijump31/bluetooth-mcp-server)** - Control Bluetooth devices and manage connections through natural language commands, including device discovery, pairing, and audio controls.
