@@ -401,6 +401,7 @@ Official integrations are maintained by companies building production ready MCP 
 A growing set of community-developed and maintained servers demonstrates various applications of MCP across different domains.
 
 > **Note:** Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
+
 - **[1Panel](https://github.com/1Panel-dev/mcp-1panel)** - MCP server implementation that provides 1Panel interaction.
 - **[A2A](https://github.com/GongRzhe/A2A-MCP-Server)** - An MCP server that bridges the Model Context Protocol (MCP) with the Agent-to-Agent (A2A) protocol, enabling MCP-compatible AI assistants (like Claude) to seamlessly interact with A2A agents.
 - **[Ableton Live](https://github.com/Simon-Kansara/ableton-live-mcp-server)** - an MCP server to control Ableton Live.
@@ -495,6 +496,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[CLDGeminiPDF Analyzer](https://github.com/tfll37/CLDGeminiPDF-Analyzer)** - MCP server tool enabling sharing large PDF files to Google LLMs via API for further/additional analysis and response retrieval to Claude Desktop.
 - **[ClearML MCP](https://github.com/prassanna-ravishankar/clearml-mcp)** - Get comprehensive ML experiment context and analysis directly from [ClearML](https://clear.ml) in your AI conversations.
 - **[ClickUp](https://github.com/TaazKareem/clickup-mcp-server)** - MCP server for ClickUp task management, supporting task creation, updates, bulk operations, and markdown descriptions.
+- **[ClaudePost](https://github.com/ZilongXue/claude-post)** - ClaudePost enables seamless email management for Gmail, offering secure features like email search, reading, and sending.
 - **[Cloudinary](https://github.com/felores/cloudinary-mcp-server)** - Cloudinary Model Context Protocol Server to upload media to Cloudinary and get back the media link and details.
 - **[CockroachDB](https://github.com/amineelkouhen/mcp-cockroachdb)** - MCP server enabling AI agents and LLMs to manage, monitor, and query **[CockroachDB](https://www.cockroachlabs.com/)** using natural language.
 - **[CockroachDB MCP Server](https://github.com/viragtripathi/cockroachdb-mcp-server)** – Full - featured MCP implementation built with FastAPI and CockroachDB. Supports schema bootstrapping, JSONB storage, LLM-ready CLI, and optional `/debug` endpoints.
@@ -527,7 +529,9 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Databricks Genie](https://github.com/yashshingvi/databricks-genie-MCP)** - A server that connects to the Databricks Genie, allowing LLMs to ask natural language questions, run SQL queries, and interact with Databricks conversational agents.
 - **[Databricks Smart SQL](https://github.com/RafaelCartenet/mcp-databricks-server)** - Leveraging Databricks Unity Catalog metadata, perform smart efficient SQL queries to solve Ad-hoc queries and explore data.
 - **[Datadog](https://github.com/GeLi2001/datadog-mcp-server)** - Datadog MCP Server for application tracing, monitoring, dashboard, incidents queries built on official datadog api.
+- **[Data Exploration](https://github.com/reading-plus-ai/mcp-server-data-exploration)** - MCP server for autonomous data exploration on .csv-based datasets, providing intelligent insights with minimal effort. NOTE: Will execute arbitrary Python code on your machine, please use with caution!
 - **[Dataset Viewer](https://github.com/privetin/dataset-viewer)** - Browse and analyze Hugging Face datasets with features like search, filtering, statistics, and data export
+- **[DataWorks](https://github.com/aliyun/alibabacloud-dataworks-mcp-server)** - A Model Context Protocol (MCP) server that provides tools for AI, allowing it to interact with the [DataWorks](https://www.alibabacloud.com/help/en/dataworks/) Open API through a standardized interface. This implementation is based on the Alibaba Cloud Open API and enables AI agents to perform cloud resources operations seamlessly.
 - **[DaVinci Resolve](https://github.com/samuelgursky/davinci-resolve-mcp)** - MCP server integration for DaVinci Resolve providing powerful tools for video editing, color grading, media management, and project control.
 - **[DBHub](https://github.com/bytebase/dbhub/)** - Universal database MCP server connecting to MySQL, MariaDB, PostgreSQL, and SQL Server.
 - **[Deebo](https://github.com/snagasuri/deebo-prototype)** – Agentic debugging MCP server that helps AI coding agents delegate and fix hard bugs through isolated multi-agent hypothesis testing.
@@ -600,6 +604,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[FrankfurterMCP](https://github.com/anirbanbasu/frankfurtermcp)** - MCP server acting as an interface to the [Frankfurter API](https://frankfurter.dev/) for currency exchange data.
 - **[freqtrade-mcp](https://github.com/kukapay/freqtrade-mcp)** - An MCP server that integrates with the Freqtrade cryptocurrency trading bot.
 - **[GDB](https://github.com/pansila/mcp_server_gdb)** - A GDB/MI protocol server based on the MCP protocol, providing remote application debugging capabilities with AI assistants.
+- **[Generic SQLAlchemy Object-Relational Database Connectivity for pyODBC](https://github.com/OpenLinkSoftware/mcp-sqlalchemy-server)** -- Generic Database Management System (DBMS) access via SQLAlchemy (pyodbc) Connectors (Drivers)
 - **[ggRMCP](https://github.com/aalobaidi/ggRMCP)** - A Go gateway that converts gRPC services into MCP-compatible tools, allowing AI models like Claude to directly call your gRPC services.
 - **[Ghost](https://github.com/MFYDev/ghost-mcp)** - A Model Context Protocol (MCP) server for interacting with Ghost CMS through LLM interfaces like Claude.
 - **[Git](https://github.com/geropl/git-mcp-go)** - Allows LLM to interact with a local git repository, incl. optional push support.
@@ -617,6 +622,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Gnuradio](https://github.com/yoelbassin/gnuradioMCP)** - An MCP server for GNU Radio that enables LLMs to autonomously create and modify RF .grc flowcharts.
 - **[Goal Story](https://github.com/hichana/goalstory-mcp)** - a Goal Tracker and Visualization Tool for personal and professional development.
 - **[GOAT](https://github.com/goat-sdk/goat/tree/main/typescript/examples/by-framework/model-context-protocol)** - Run more than +200 onchain actions on any blockchain including Ethereum, Solana and Base.
+- **[Goal Story](https://github.com/hichana/goalstory-mcp)** - a Goal Tracker and Visualization Tool for personal and professional development.
 - **[Godot](https://github.com/Coding-Solo/godot-mcp)** - A MCP server providing comprehensive Godot engine integration for project editing, debugging, and scene management.
 - **[Golang Filesystem Server](https://github.com/mark3labs/mcp-filesystem-server)** - Secure file operations with configurable access controls built with Go!
 - **[Goodnews](https://github.com/VectorInstitute/mcp-goodnews)** - A simple MCP server that delivers curated positive and uplifting news stories.
@@ -801,6 +807,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[NASA](https://github.com/ProgramComputer/NASA-MCP-server)** (by ProgramComputer) - Access to a unified gateway of NASA's data sources including but not limited to APOD, NEO, EPIC, GIBS.
 - **[NASA Image MCP Server](https://github.com/adithya1012/NASA-MCP-Server/blob/main/README.md)** - MCP server providing access to NASA's visual data APIs including Mars Rover photos, Earth satellite imagery (EPIC/GIBS), and Astronomy picture of the day. Features built-in image analysis tools with automatic format detection, compression, and base64 conversion for LLM integration.
 - **[Nasdaq Data Link](https://github.com/stefanoamorelli/nasdaq-data-link-mcp)** (by stefanoamorelli) - An MCP server to access, explore, and interact with Nasdaq Data Link's extensive and valuable financial and economic datasets.
+- **[NASA](https://github.com/ProgramComputer/NASA-MCP-server)** (by ProgramComputer) - Access to a unified gateway of NASA's data sources including but not limited to APOD, NEO, EPIC, GIBS.
 - **[National Parks](https://github.com/KyrieTangSheng/mcp-server-nationalparks)** - The server provides latest information of park details, alerts, visitor centers, campgrounds, hiking trails, and events for U.S. National Parks.
 - **[NAVER](https://github.com/pfldy2850/py-mcp-naver)** (by pfldy2850) - This MCP server provides tools to interact with various Naver services, such as searching blogs, news, books, and more.
 - **[Naver](https://github.com/isnow890/naver-search-mcp)** (by isnow890) - MCP server for Naver Search API integration, supporting blog, news, shopping search and DataLab analytics features.
@@ -839,6 +846,9 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[OpenCTI](https://github.com/Spathodea-Network/opencti-mcp)** - Interact with OpenCTI platform to retrieve threat intelligence data including reports, indicators, malware and threat actors.
 - **[OpenCV](https://github.com/GongRzhe/opencv-mcp-server)** - A MCP server providing OpenCV computer vision capabilities. This allows AI assistants and language models to access powerful computer vision tools.
 - **[OpenDota](https://github.com/asusevski/opendota-mcp-server)** - Interact with OpenDota API to retrieve Dota 2 match data, player statistics, and more.
+- **[OpenLink Generic Java Database Connectivity](https://github.com/OpenLinkSoftware/mcp-jdbc-server)** -- Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers)
+- **[OpenLink Generic Open Database Connectivity](https://github.com/OpenLinkSoftware/mcp-odbc-server)** -- Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers)
+- **[OpenLink Generic Python Open Database Connectivity](https://github.com/OpenLinkSoftware/mcp-pyodbc-server)** -- Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers) for pyODBC
 - **[OpenMetadata](https://github.com/yangkyeongmo/mcp-server-openmetadata)** - MCP Server for OpenMetadata, an open-source metadata management platform.
 - **[OpenRPC](https://github.com/shanejonas/openrpc-mpc-server)** - Interact with and discover JSON-RPC APIs via [OpenRPC](https://open-rpc.org).
 - **[OpenStack](https://github.com/wangsqly0407/openstack-mcp-server)** - MCP server implementation that provides OpenStack interaction.
@@ -1050,6 +1060,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[yutu](https://github.com/eat-pray-ai/yutu)** - A fully functional MCP server and CLI for YouTube to automate YouTube operation.
 - **[ZapCap](https://github.com/bogdan01m/zapcap-mcp-server)** - MCP server for ZapCap API providing video caption and B-roll generation via natural language
 - **[Zoom](https://github.com/Prathamesh0901/zoom-mcp-server/tree/main)** - Create, update, read and delete your zoom meetings.
+
 ## 📚 Frameworks
 
 These are high-level frameworks that make it easier to build MCP servers or clients.
