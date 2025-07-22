@@ -32,5 +32,8 @@ COPY --from=uv --chown=app:app /app/.venv /app/.venv
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 
-# when running the container, add --db-path and a bind mount to the host's db file
-ENTRYPOINT ["mcp-server-time"]
+# Set the LOCAL_TIMEZONE environment variable
+ENV LOCAL_TIMEZONE=${LOCAL_TIMEZONE:-"UTC"}
+
+# when running the container, add --local-timezone and a bind mount to the host's db file
+ENTRYPOINT ["mcp-server-time", "--local-timezone", "${LOCAL_TIMEZONE}"]
