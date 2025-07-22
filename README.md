@@ -692,6 +692,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[MariaDB](https://github.com/abel9851/mcp-server-mariadb)** - MariaDB database integration with configurable access controls in Python.
 - **[Markdown2doc](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/pandoc)** - Convert between various file formats using Pandoc
 - **[Markdownify](https://github.com/zcaceres/mcp-markdownify-server)** - MCP to convert almost anything to Markdown (PPTX, HTML, PDF, Youtube Transcripts and more)
+- **[market-fiyati](https://github.com/mtcnbzks/market-fiyati-mcp-server)** - The MCP server for marketfiyati.org.tr, offering grocery price search and comparison across Turkish markets.)
 - **[Markitdown](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/markitdown)** - Convert files to Markdown
 - **[Masquerade](https://github.com/postralai/masquerade)** - Redact sensitive information from your PDF documents before sending them to Claude. Masquerade serves as a privacy firewall for LLMs.
 - **[MasterGo](https://github.com/mastergo-design/mastergo-magic-mcp)** - The server designed to connect MasterGo design tools with AI models. It enables AI models to directly retrieve DSL data from MasterGo design files.
