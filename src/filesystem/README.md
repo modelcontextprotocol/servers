@@ -9,8 +9,58 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Move files/directories
 - Search files
 - Get file metadata
+- Dynamic directory access control via [Roots](https://modelcontextprotocol.io/docs/concepts/roots)
 
-**Note**: The server will only allow operations within directories specified via `args`.
+## Directory Access Control
+
+The server uses a flexible directory access control system. Directories can be specified via command-line arguments or dynamically via [Roots](https://modelcontextprotocol.io/docs/concepts/roots).
+
+### Method 1: Command-line Arguments
+Specify Allowed directories when starting the server:
+```bash
+mcp-server-filesystem /path/to/dir1 /path/to/dir2
+```
+
+### Method 2: MCP Roots (Recommended)
+MCP clients that support [Roots](https://modelcontextprotocol.io/docs/concepts/roots) can dynamically update the Allowed directories. 
+
+Roots notified by Client to Server, completely replace any server-side Allowed directories when provided.
+
+**Important**: If server starts without command-line arguments AND client doesn't support roots protocol (or provides empty roots), the server will throw an error during initialization.
+
+This is the recommended method, as this enables runtime directory updates via `roots/list_changed` notifications without server restart, providing a more flexible and modern integration experience.
+
+### How It Works
+
+The server's directory access control follows this flow:
+
+1. **Server Startup**
+   - Server starts with directories from command-line arguments (if provided)
+   - If no arguments provided, server starts with empty allowed directories
+
+2. **Client Connection & Initialization**
+   - Client connects and sends `initialize` request with capabilities
+   - Server checks if client supports roots protocol (`capabilities.roots`)
+   
+3. **Roots Protocol Handling** (if client supports roots)
+   - **On initialization**: Server requests roots from client via `roots/list`
+   - Client responds with its configured roots
+   - Server replaces ALL allowed directories with client's roots
+   - **On runtime updates**: Client can send `notifications/roots/list_changed`
+   - Server requests updated roots and replaces allowed directories again
+
+4. **Fallback Behavior** (if client doesn't support roots)
+   - Server continues using command-line directories only
+   - No dynamic updates possible
+
+5. **Access Control**
+   - All filesystem operations are restricted to allowed directories
+   - Use `list_allowed_directories` tool to see current directories
+   - Server requires at least ONE allowed directory to operate
+
+**Note**: The server will only allow operations within directories specified either via `args` or via Roots.
+
+
 
 ## API
 
@@ -138,6 +188,64 @@ Note: all directories must be mounted to `/projects` by default.
         "/Users/username/Desktop",
         "/path/to/other/allowed/dir"
       ]
+    }
+  }
+}
+```
+
+## Usage with VS Code
+
+For quick installation, click the installation buttons below...
+
+[![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-NPM-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=filesystem&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-filesystem%22%2C%22%24%7BworkspaceFolder%7D%22%5D%7D) [![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-NPM-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=filesystem&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-filesystem%22%2C%22%24%7BworkspaceFolder%7D%22%5D%7D&quality=insiders)
+
+[![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=filesystem&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22--mount%22%2C%22type%3Dbind%2Csrc%3D%24%7BworkspaceFolder%7D%2Cdst%3D%2Fprojects%2Fworkspace%22%2C%22mcp%2Ffilesystem%22%2C%22%2Fprojects%22%5D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=filesystem&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22--mount%22%2C%22type%3Dbind%2Csrc%3D%24%7BworkspaceFolder%7D%2Cdst%3D%2Fprojects%2Fworkspace%22%2C%22mcp%2Ffilesystem%22%2C%22%2Fprojects%22%5D%7D&quality=insiders)
+
+For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open Settings (JSON)`.
+
+Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+
+> Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
+
+You can provide sandboxed directories to the server by mounting them to `/projects`. Adding the `ro` flag will make the directory readonly by the server.
+
+### Docker
+Note: all directories must be mounted to `/projects` by default. 
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "filesystem": {
+        "command": "docker",
+        "args": [
+          "run",
+          "-i",
+          "--rm",
+          "--mount", "type=bind,src=${workspaceFolder},dst=/projects/workspace",
+          "mcp/filesystem",
+          "/projects"
+        ]
+      }
+    }
+  }
+}
+```
+
+### NPX
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "filesystem": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-filesystem",
+          "${workspaceFolder}"
+        ]
+      }
     }
   }
 }
