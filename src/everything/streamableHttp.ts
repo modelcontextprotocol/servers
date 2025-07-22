@@ -8,9 +8,7 @@ console.error('Starting Streamable HTTP server...');
 
 const app = express();
 
-const { server, cleanup } = createServer();
-
-const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
+const transports: Map<string, StreamableHTTPServerTransport> = new Map<string, StreamableHTTPServerTransport>();
 
 app.post('/mcp', async (req: Request, res: Response) => {
   console.error('Received MCP POST request');
@@ -19,10 +17,13 @@ app.post('/mcp', async (req: Request, res: Response) => {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
     let transport: StreamableHTTPServerTransport;
 
-    if (sessionId && transports[sessionId]) {
+    if (sessionId && transports.has(sessionId)) {
       // Reuse existing transport
-      transport = transports[sessionId];
+      transport = transports.get(sessionId)!;
     } else if (!sessionId) {
+
+      const { server, cleanup } = createServer();
+
       // New initialization request
       const eventStore = new InMemoryEventStore();
       transport = new StreamableHTTPServerTransport({
@@ -32,16 +33,18 @@ app.post('/mcp', async (req: Request, res: Response) => {
           // Store the transport by session ID when session is initialized
           // This avoids race conditions where requests might come in before the session is stored
           console.error(`Session initialized with ID: ${sessionId}`);
-          transports[sessionId] = transport;
+          transports.set(sessionId, transport);
         }
       });
 
+
       // Set up onclose handler to clean up transport when closed
-      transport.onclose = () => {
+      server.onclose = async () => {
         const sid = transport.sessionId;
-        if (sid && transports[sid]) {
+        if (sid && transports.has(sid)) {
           console.error(`Transport closed for session ${sid}, removing from transports map`);
-          delete transports[sid];
+          transports.delete(sid);
+          await cleanup();
         }
       };
 
@@ -87,7 +90,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
 app.get('/mcp', async (req: Request, res: Response) => {
   console.error('Received MCP GET request');
   const sessionId = req.headers['mcp-session-id'] as string | undefined;
-  if (!sessionId || !transports[sessionId]) {
+  if (!sessionId || !transports.has(sessionId)) {
     res.status(400).json({
       jsonrpc: '2.0',
       error: {
@@ -107,14 +110,14 @@ app.get('/mcp', async (req: Request, res: Response) => {
     console.error(`Establishing new SSE stream for session ${sessionId}`);
   }
 
-  const transport = transports[sessionId];
-  await transport.handleRequest(req, res);
+  const transport = transports.get(sessionId);
+  await transport!.handleRequest(req, res);
 });
 
 // Handle DELETE requests for session termination (according to MCP spec)
 app.delete('/mcp', async (req: Request, res: Response) => {
   const sessionId = req.headers['mcp-session-id'] as string | undefined;
-  if (!sessionId || !transports[sessionId]) {
+  if (!sessionId || !transports.has(sessionId)) {
     res.status(400).json({
       jsonrpc: '2.0',
       error: {
@@ -129,8 +132,8 @@ app.delete('/mcp', async (req: Request, res: Response) => {
   console.error(`Received session termination request for session ${sessionId}`);
 
   try {
-    const transport = transports[sessionId];
-    await transport.handleRequest(req, res);
+    const transport = transports.get(sessionId);
+    await transport!.handleRequest(req, res);
   } catch (error) {
     console.error('Error handling session termination:', error);
     if (!res.headersSent) {
@@ -161,14 +164,13 @@ process.on('SIGINT', async () => {
   for (const sessionId in transports) {
     try {
       console.error(`Closing transport for session ${sessionId}`);
-      await transports[sessionId].close();
-      delete transports[sessionId];
+      await transports.get(sessionId)!.close();
+      transports.delete(sessionId);
     } catch (error) {
       console.error(`Error closing transport for session ${sessionId}:`, error);
     }
   }
-  await cleanup();
-  await server.close();
+
   console.error('Server shutdown complete');
   process.exit(0);
 });
