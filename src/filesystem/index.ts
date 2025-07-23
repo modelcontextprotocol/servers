@@ -22,13 +22,34 @@ import { getValidRootDirectories } from './roots-utils.js';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
+
 if (args.length === 0) {
   console.error("Usage: mcp-server-filesystem [allowed-directory] [additional-directories...]");
   console.error("Note: Allowed directories can be provided via:");
   console.error("  1. Command-line arguments (shown above)");
   console.error("  2. MCP roots protocol (if client supports it)");
   console.error("At least one directory must be provided by EITHER method for the server to operate.");
+
 }
+
+// Support: mcp-server-filesystem <allowed-directory> [additional-directories...] [--ignore-write <pattern1> <pattern2> ...]
+let allowedDirs: string[] = [];
+let ignoreWritePatterns: string[] = [];
+
+const ignoreFlagIndex = args.indexOf('--ignore-write');
+if (ignoreFlagIndex !== -1) {
+  allowedDirs = args.slice(0, ignoreFlagIndex);
+  ignoreWritePatterns = args.slice(ignoreFlagIndex + 1);
+} else {
+  allowedDirs = args;
+}
+
+if (allowedDirs.length === 0) {
+  console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...] [--ignore-write <pattern1> <pattern2> ...]");
+  process.exit(1);
+}
+
+
 
 // Normalize all paths consistently
 function normalizePath(p: string): string {
@@ -57,6 +78,7 @@ let allowedDirectories = await Promise.all(
       return normalizePath(absolute);
     }
   })
+
 );
 
 // Validate that all directories exist and are accessible
@@ -659,35 +681,50 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const validPath = await validatePath(parsed.data.path);
 
-        try {
-          // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
-          // preventing writes through pre-existing symlinks
-          await fs.writeFile(validPath, parsed.data.content, { encoding: "utf-8", flag: 'wx' });
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-            // Security: Use atomic rename to prevent race conditions where symlinks
-            // could be created between validation and write. Rename operations
-            // replace the target file atomically and don't follow symlinks.
-            const tempPath = `${validPath}.${randomBytes(16).toString('hex')}.tmp`;
-            try {
-              await fs.writeFile(tempPath, parsed.data.content, 'utf-8');
-              await fs.rename(tempPath, validPath);
-            } catch (renameError) {
-              try {
-                await fs.unlink(tempPath);
-              } catch {}
-              throw renameError;
-            }
-          } else {
-            throw error;
-          }
+        // Prevent writing to files matching ignoreWritePatterns
+        const baseName = path.basename(validPath);
+        const shouldIgnore = ignoreWritePatterns.some(pattern => {
+        // Simple glob-like match: support *.env, .env, .env.*, etc.
+        if (pattern.includes('*')) {
+           // Convert pattern to regex
+            const regex = new RegExp('^' + pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+            return regex.test(baseName);
+        }
+        return baseName === pattern;
+        }) ;
+        if (shouldIgnore) {
+           throw new Error(`Write operation to file '${baseName}' is not allowed by server policy (matched ignore pattern).`);
         }
 
-        return {
-          content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
-        };
-      }
+       try {
+        // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
+        // preventing writes through pre-existing symlinks
+        await fs.writeFile(validPath, parsed.data.content, { encoding: "utf-8", flag: 'wx' });
+      } catch (error) {
+           if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+              // Security: Use atomic rename to prevent race conditions where symlinks
+              // could be created between validation and write. Rename operations
+              // replace the target file atomically and don't follow symlinks.
+              const tempPath = `${validPath}.${randomBytes(16).toString('hex')}.tmp`;
+              try {
+                await fs.writeFile(tempPath, parsed.data.content, 'utf-8');
+                await fs.rename(tempPath, validPath);
+              } catch (renameError) {
+                try {
+                  await fs.unlink(tempPath);
+                } catch {}
+                throw renameError;
+              }
+            } else {
+              throw error;
+            }
+          }
 
+          return {
+            content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
+          };
+      }  
+       
       case "edit_file": {
         const parsed = EditFileArgsSchema.safeParse(args);
         if (!parsed.success) {
