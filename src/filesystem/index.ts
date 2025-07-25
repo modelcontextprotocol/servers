@@ -499,6 +499,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
+        name: "read_file",
+        description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
+        inputSchema: zodToJsonSchema(ReadTextFileArgsSchema) as ToolInput,
+      },
+      {
         name: "read_text_file",
         description:
           "Read the complete contents of a file from the file system as text. " +
@@ -628,6 +633,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     switch (name) {
+      case "read_file":
       case "read_text_file": {
         const parsed = ReadTextFileArgsSchema.safeParse(args);
         if (!parsed.success) {
