@@ -6,6 +6,17 @@ A Model Context Protocol server for Git repository interaction and automation. T
 
 Please note that mcp-server-git is currently in early development. The functionality and available tools are subject to change and expansion as we continue to develop and improve the server.
 
+### Repository Path Security
+
+When running the server with the `--repository` flag, all Git operations are restricted to that specific repository path, regardless of any `repo_path` values provided in tool calls. This provides an important security boundary:
+
+- The server will reject any attempts to access paths outside the configured repository
+- All tool operations that accept a `repo_path` parameter will ignore it and use the configured repository instead
+- Path traversal attempts (e.g., using `../`) are blocked
+- If no repository is configured, the server requires explicit repository paths for each operation
+
+This makes it safe to expose the server to untrusted clients while maintaining control over which repositories they can access.
+
 ### Tools
 
 1. `git_status`
@@ -68,7 +79,7 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of the new branch
-     - `start_point` (string, optional): Starting point for the new branch
+     - `base_branch` (string, optional): Starting point (branch name or commit hash) for the new branch. Defaults to the current active branch.
    - Returns: Confirmation of branch creation
 10. `git_checkout`
    - Switches branches
@@ -338,6 +349,45 @@ cd src/git
 docker build -t mcp/git .
 ```
 
+### Testing
+
+This server includes a comprehensive test suite to verify its functionality, security, and path validation logic.
+
+#### Requirements
+
+To run the tests, you will need to have the following installed:
+*   Python (version 3.8+ recommended)
+*   `pip` or `uv` for package management
+*   Git CLI available in your PATH
+
+#### Setup and Running Tests
+
+1. **Install the package with development dependencies**:
+
+Using pip:
+```bash
+pip install -e .
+pip install pytest
+```
+
+Using uv:
+```bash
+uv pip install -e ".[dev]"
+```
+
+2. **Run the complete test suite**:
+```bash
+pytest
+```
+
+3. **Run with verbose output**:
+```bash
+pytest -v
+```
+
+This will automatically discover and execute the tests located in the `tests/test_server.py` file, which cover path safety, repository validation, and various tool operations.
+
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
+
