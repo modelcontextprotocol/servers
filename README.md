@@ -555,6 +555,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Drupal](https://github.com/Omedia/mcp-server-drupal)** - Server for interacting with [Drupal](https://www.drupal.org/project/mcp) using STDIO transport layer.
 - **[dune-analytics-mcp](https://github.com/kukapay/dune-analytics-mcp)** -  A mcp server that bridges Dune Analytics data to AI agents.
 - **[DynamoDB-Toolbox](https://www.dynamodbtoolbox.com/docs/databases/actions/mcp-toolkit)** - Leverages your Schemas and Access Patterns to interact with your [DynamoDB](https://aws.amazon.com/dynamodb) Database using natural language.
+- **[ECharts MCP Server](https://github.com/hustcc/mcp-echarts)** - Generate visual charts using ECharts with AI MCP dynamically, used for chart generation and data analysis.
 - **[eBook-mcp](https://github.com/onebirdrocks/ebook-mcp)** - A lightweight MCP server that allows LLMs to read and interact with your personal PDF and EPUB ebooks. Ideal for building AI reading assistants or chat-based ebook interfaces.
 - **[EdgeOne Pages MCP](https://github.com/TencentEdgeOne/edgeone-pages-mcp)** - An MCP service for deploying HTML content to EdgeOne Pages and obtaining a publicly accessible URL.
 - **[Edwin](https://github.com/edwin-finance/edwin/tree/main/examples/mcp-server)** - MCP server for edwin SDK - enabling AI agents to interact with DeFi protocols across EVM, Solana and other blockchains.
