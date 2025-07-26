@@ -425,6 +425,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Any Chat Completions](https://github.com/pyroprompts/any-chat-completions-mcp)** - Interact with any OpenAI SDK Compatible Chat Completions API like OpenAI, Perplexity, Groq, xAI and many more.
 - **[Apache Gravitino(incubating)](https://github.com/datastrato/mcp-server-gravitino)** - Allow LLMs to explore metadata of structured data and unstructured data with Gravitino, and perform data governance tasks including tagging/classification.
 - **[APIWeaver](https://github.com/GongRzhe/APIWeaver)** - An MCP server that dynamically creates MCP  servers from web API configurations. This allows you to easily integrate any REST API, GraphQL endpoint, or web service into an MCP-compatible tool that can be used by AI assistants like Claude.
+- **[Apollo IO MCP Server](https://github.com/AgentX-ai/apollo-io-mcp-server)** - apollo.io mcp server. Get/enrich contact data for people and organizations agentically.
 - **[Apple Books](https://github.com/vgnshiyer/apple-books-mcp)** - Interact with your library on Apple Books, manage your book collection, summarize highlights, notes, and much more.
 - **[Apple Calendar](https://github.com/Omar-v2/mcp-ical)** - An MCP server that allows you to interact with your MacOS Calendar through natural language, including features such as event creation, modification, schedule listing, finding free time slots etc.
 - **[Apple Docs](https://github.com/kimsungwhee/apple-docs-mcp)** - A powerful Model Context Protocol (MCP) server that provides seamless access to Apple Developer Documentation through natural language queries. Search, explore, and get detailed information about Apple frameworks, APIs, sample code, and more directly in your AI-powered development environment.
@@ -719,6 +720,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[LunarCrush Remote MCP](https://github.com/lunarcrush/mcp-server)** - Get the latest social metrics and posts for both current live social context as well as historical metrics in LLM and token optimized outputs. Ideal for automated trading / financial advisory.
 - **[mac-messages-mcp](https://github.com/carterlasalle/mac_messages_mcp)** - An MCP server that securely interfaces with your iMessage database via the Model Context Protocol (MCP), allowing LLMs to query and analyze iMessage conversations. It includes robust phone number validation, attachment processing, contact management, group chat handling, and full support for sending and receiving messages.
 - **[Maestro MCP](https://github.com/maestro-org/maestro-mcp)** - An MCP server for interacting with Bitcoin via the Maestro RPC API.
+- **[Mailchimp MCP](https://github.com/AgentX-ai/mailchimp-mcp)** - Allows AI agents to interact with the Mailchimp API (read-only)
 - **[MalwareBazaar_MCP](https://github.com/mytechnotalent/MalwareBazaar_MCP)** (by Kevin Thomas) - An AI-driven MCP server that autonomously interfaces with MalwareBazaar, delivering real-time threat intel and sample metadata for authorized cybersecurity research workflows.
 - **[man-mcp-server](https://github.com/guyru/man-mcp-server)** - MCP to search and access man pages on the local machine.
 - **[MariaDB](https://github.com/abel9851/mcp-server-mariadb)** - MariaDB database integration with configurable access controls in Python.
@@ -1040,11 +1042,13 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Xero-mcp-server](https://github.com/john-zhang-dev/xero-mcp)** - Enabling clients to interact with Xero system for streamlined accounting, invoicing, and business operations.
 - **[XiYan](https://github.com/XGenerationLab/xiyan_mcp_server)** - 🗄️ An MCP server that supports fetching data from a database using natural language queries, powered by XiyanSQL as the text-to-SQL LLM.
 - **[XMind](https://github.com/apeyroux/mcp-xmind)** - Read and search through your XMind directory containing XMind files.
+- **[Yahoo finance](https://github.com/AgentX-ai/yahoo-finance-server)** - 📈 Lets your AI interact with Yahoo Finance to get comprehensive stock market data, news, financials, and more. Proxy supported.
 - **[yfinance](https://github.com/Adity-star/mcp-yfinance-server)** -💹The MCP YFinance Stock Server provides real-time and historical stock data in a standard format, powering dashboards, AI agents,and research tools with seamless financial insights.
 - **[YNAB](https://github.com/ChuckBryan/ynabmcpserver)** - A Model Context Protocol (MCP) server for integrating with YNAB (You Need A Budget), allowing AI assistants to securely access and analyze your financial data.
 - **[YouTrack](https://github.com/tonyzorin/youtrack-mcp)** - A Model Context Protocol (MCP) server implementation for JetBrains YouTrack, allowing AI assistants to interact with YouTrack issue tracking system.
 - **[YouTube](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/youtube)** - Extract Youtube video information (with proxies support).
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
+- **[YouTube DLP](https://github.com/AgentX-ai/youtube-dlp-server)** - Retrieve video information, subtitles, and top comments with proxies.
 - **[Youtube Uploader MCP](https://github.com/anwerj/youtube-uploader-mcp)** - AI‑powered YouTube uploader—no CLI, no YouTube Studio.
 - **[YouTube Video Summarizer](https://github.com/nabid-pf/youtube-video-summarizer-mcp)** - Summarize lengthy youtube videos.
 - **[yutu](https://github.com/eat-pray-ai/yutu)** - A fully functional MCP server and CLI for YouTube to automate YouTube operation.
