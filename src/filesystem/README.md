@@ -70,10 +70,19 @@ The server's directory access control follows this flow:
 
 ### Tools
 
-- **read_file**
-  - Read complete contents of a file
-  - Input: `path` (string)
-  - Reads complete file contents with UTF-8 encoding
+- **read_text_file**
+  - Read complete contents of a file as text
+  - Inputs:
+    - `path` (string)
+    - `head` (number, optional): First N lines
+    - `tail` (number, optional): Last N lines
+  - Always treats the file as UTF-8 text regardless of extension
+
+- **read_media_file**
+  - Read an image or audio file
+  - Inputs:
+    - `path` (string)
+  - Streams the file and returns base64 data with the corresponding MIME type
 
 - **read_multiple_files**
   - Read multiple files simultaneously
