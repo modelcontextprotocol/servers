@@ -27,23 +27,23 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
    - Returns: Completion message with duration and steps
    - Sends progress notifications during execution
 
-4. `sampleLLM`
+4. `printEnv`
+   - Prints all environment variables
+   - Useful for debugging MCP server configuration
+   - No inputs required
+   - Returns: JSON string of all environment variables
+
+5. `sampleLLM`
    - Demonstrates LLM sampling capability using MCP sampling feature
    - Inputs:
      - `prompt` (string): The prompt to send to the LLM
      - `maxTokens` (number, default: 100): Maximum tokens to generate
    - Returns: Generated LLM response
 
-5. `getTinyImage`
+6. `getTinyImage`
    - Returns a small test image
    - No inputs required
    - Returns: Base64 encoded PNG image data
-
-6. `printEnv`
-   - Prints all environment variables
-   - Useful for debugging MCP server configuration
-   - No inputs required
-   - Returns: JSON string of all environment variables
 
 7. `annotatedMessage`
    - Demonstrates how annotations can be used to provide metadata about content
@@ -79,6 +79,15 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
       - `number` (number, 1-100): Favorite number
       - `pets` (enum): Favorite pet
    - Returns: Confirmation of the elicitation demo with selection summary.
+
+10. `structuredContent`
+   - Demonstrates a tool returning structured content using the example in the specification
+   - Provides an output schema to allow testing of client SHOULD advisory to validate the result using the schema
+   - Inputs:
+     - `location` (string): A location or ZIP code, mock data is returned regardless of value
+   - Returns: a response with
+     - `structuredContent` field conformant to the output schema
+     - A backward compatible Text Content field, a SHOULD advisory in the specification
 
 ### Resources
 
