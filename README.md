@@ -5,12 +5,16 @@ to community built servers and additional resources.
 
 The servers in this repository showcase the versatility and extensibility of MCP, demonstrating how it can be used to give Large Language Models (LLMs) secure, controlled access to tools and data sources.
 Typically, each MCP server is implemented with an MCP SDK:
+
 - [C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk)
 - [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk)
 - [Java MCP SDK](https://github.com/modelcontextprotocol/java-sdk)
 - [Kotlin MCP SDK](https://github.com/modelcontextprotocol/kotlin-sdk)
 - [Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk)
-- [Typescript MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk)
+- [Ruby MCP SDK](https://github.com/modelcontextprotocol/ruby-sdk)
+- [Rust MCP SDK](https://github.com/modelcontextprotocol/rust-sdk)
+- [Swift MCP SDK](https://github.com/modelcontextprotocol/swift-sdk)
+- [TypeScript MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 
 > Note: Lists in this README are maintained in alphabetical order to minimize merge conflicts when adding new items.
 
