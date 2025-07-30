@@ -113,6 +113,15 @@ The server's directory access control follows this flow:
   - Returns detailed diff and match information for dry runs, otherwise applies changes
   - Best Practice: Always use dryRun first to preview changes before applying them
 
+- **append_file**
+  - Append content to existing file or create new file if it doesn't exist
+  - Inputs:
+    - `path` (string): File location
+    - `content` (string): Content to append
+  - Features:
+    - Creates file if it doesn't exist
+    - Appends content to the end of the file
+
 - **create_directory**
   - Create new directory or ensure it exists
   - Input: `path` (string)
