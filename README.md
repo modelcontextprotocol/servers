@@ -675,6 +675,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[JMeter](https://github.com/QAInsights/jmeter-mcp-server)** - Run load testing using Apache JMeter via MCP-compliant tools.
 - **[Job Searcher](https://github.com/0xDAEF0F/job-searchoor)** - A FastMCP server that provides tools for retrieving and filtering job listings based on time period, keywords, and remote work preferences.
 - **[jobswithgpt](https://github.com/jobswithgpt/mcp)** - Job search MCP using jobswithgpt which indexes 500K+ public job listings and refreshed continously.
+- **[joinly](https://github.com/joinly-ai/joinly)** - MCP server to interact with browser-based meeting platforms (Zoom, Teams, Google Meet). Enables AI agents to send bots to online meetings, gather live transcripts, speak text, and send messages in the meeting chat. 
 - **[JSON](https://github.com/GongRzhe/JSON-MCP-Server)** - JSON handling and processing server with advanced query capabilities using JSONPath syntax and support for array, string, numeric, and date operations.
 - **[JSON2Video MCP](https://github.com/omergocmen/json2video-mcp-server)** - A Model Context Protocol (MCP) server implementation for programmatically generating videos using the json2video API. This server exposes powerful video generation and status-checking tools for use with LLMs, agents, or any MCP-compatible client.
 - **[jupiter-mcp](https://github.com/kukapay/jupiter-mcp)** - An MCP server for executing token swaps on the Solana blockchain using Jupiter's new Ultra API.
