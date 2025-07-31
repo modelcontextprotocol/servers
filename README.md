@@ -427,7 +427,8 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[browser-use](https://github.com/co-browser/browser-use-mcp-server)** (by co-browser) - browser-use MCP server with dockerized playwright + chromium + vnc. supports stdio & resumable http.
 - **[BrowserLoop](https://github.com/mattiasw/browserloop)** - An MCP server for taking screenshots of web pages using Playwright. Supports high-quality capture with configurable formats, viewport sizes, cookie-based authentication, and both full page and element-specific screenshots.
 - **[Bsc-mcp](https://github.com/TermiX-official/bsc-mcp)** The first MCP server that serves as the bridge between AI and BNB Chain, enabling AI agents to execute complex on-chain operations through seamless integration with the BNB Chain, including transfer, swap, launch, security check on any token and even more.
-- **[BVG MCP Server - (Unofficial) ](https://github.com/svkaizoku/mcp-bvg)** - Unofficial MCP server for Berliner Verkehrsbetriebe Api. 
+- **[BVG MCP Server - (Unofficial) ](https://github.com/svkaizoku/mcp-bvg)** - Unofficial MCP server for Berliner Verkehrsbetriebe Api.
+- **[Bybit](https://github.com/ethancod1ng/bybit-mcp-server)** - A Model Context Protocol (MCP) server for integrating AI assistants with Bybit cryptocurrency exchange APIs, enabling automated trading, market data access, and account management. 
 - **[Calculator](https://github.com/githejie/mcp-server-calculator)** - This server enables LLMs to use calculator for precise numerical calculations.
 - **[CalDAV MCP](https://github.com/dominik1001/caldav-mcp)** - A CalDAV MCP server to expose calendar operations as tools for AI assistants.
 - **[Calendly](https://github.com/universal-mcp/calendly)** - Calendly MCP server from **[agentr](https://agentr.dev/)** that provides support for managing events and scheduling via Calendly.
