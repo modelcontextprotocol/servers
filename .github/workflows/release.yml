@@ -104,6 +104,7 @@ jobs:
 
   publish-pypi:
     needs: [update-packages, create-metadata]
+    if: ${{ needs.create-metadata.outputs.pypi_packages != '[]' && needs.create-metadata.outputs.pypi_packages != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -145,6 +146,7 @@ jobs:
 
   publish-npm:
     needs: [update-packages, create-metadata]
+    if: ${{ needs.create-metadata.outputs.npm_packages != '[]' && needs.create-metadata.outputs.npm_packages != '' }}
     strategy:
       fail-fast: false
       matrix:
