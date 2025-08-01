@@ -977,6 +977,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[thegraph-mcp](https://github.com/kukapay/thegraph-mcp)** - An MCP server that powers AI agents with indexed blockchain data from The Graph.
 - **[Things3 MCP](https://github.com/urbanogardun/things3-mcp)** - Things3 task management integration for macOS with comprehensive TODO, project, and tag management.
 - **[Think MCP](https://github.com/Rai220/think-mcp)** - Enhances any agent's reasoning capabilities by integrating the think-tools, as described in [Anthropic's article](https://www.anthropic.com/engineering/claude-think-tool).
+- **[Think Node MCP](https://github.com/abhinav-mangla/think-tool-mcp)** - Enhances any agent's reasoning capabilities by integrating the think-tools, as described in [Anthropic's article](https://www.anthropic.com/engineering/claude-think-tool). (Works with Node)
 - **[Ticketmaster](https://github.com/delorenj/mcp-server-ticketmaster)** - Search for events, venues, and attractions through the Ticketmaster Discovery API
 - **[TickTick](https://github.com/alexarevalo9/ticktick-mcp-server)** - A Model Context Protocol (MCP) server designed to integrate with the TickTick task management platform, enabling intelligent context-aware task operations and automation.
 - **[TigerGraph](https://github.com/custom-discoveries/TigerGraph_MCP)** - A community built MCP server that interacts with TigerGraph Graph Database.
