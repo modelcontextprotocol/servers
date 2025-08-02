@@ -510,7 +510,8 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[cognee-mcp](https://github.com/topoteretes/cognee/tree/main/cognee-mcp)** - GraphRAG memory server with customizable ingestion, data processing and search
 - **[coin_api_mcp](https://github.com/longmans/coin_api_mcp)** - Provides access to [coinmarketcap](https://coinmarketcap.com/) cryptocurrency data.
 - **[CoinMarketCap](https://github.com/shinzo-labs/coinmarketcap-mcp)** - Implements the complete [CoinMarketCap](https://coinmarketcap.com/) API for accessing cryptocurrency market data, exchange information, and other blockchain-related metrics.
-- <img height="12" width="12" src="https://platform.composio.dev/favicon.ico" alt="Composio Logo" /> **[Composio](https://composio.dev)** – Connect 100+ tools. Zero setup. Auth built-in. Made for agents, works for humans. [Setup and learn more.](https://docs.composio.dev/docs/mcp-overview#-getting-started)
+- <img height="12" width="12" src="https://platform.composio.dev/favicon.ico" alt="Composio Logo" /> **[Composio](https://composio.dev)** – Connect 100+ tools. Zero setup. Auth built-in. Made for agents, works for humans.  
+  → [Setup and learn more.](https://docs.composio.dev/docs/mcp-overview#-getting-started)
 - **[commands](https://github.com/g0t4/mcp-server-commands)** - Run commands and scripts. Just like in a terminal.
 - **[computer-control-mcp](https://github.com/AB498/computer-control-mcp)** - MCP server that provides computer control capabilities, like mouse, keyboard, OCR, etc. using PyAutoGUI, RapidOCR, ONNXRuntime Without External Dependencies.
 - **[Computer-Use - Remote MacOS Use](https://github.com/baryhuang/mcp-remote-macos-use)** - Open-source out-of-the-box alternative to OpenAI Operator, providing a full desktop experience and optimized for using remote macOS machines as autonomous AI agents.
