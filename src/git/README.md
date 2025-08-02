@@ -285,13 +285,29 @@ help you debug any issues.
 
 ## Development
 
-If you are doing local development, there are two ways to test your changes:
+### Building
 
-1. Run the MCP inspector to test your changes. See [Debugging](#debugging) for run instructions.
+[`uv`](https://docs.astral.sh/uv/) is used for development. 
 
-2. Test using the Claude desktop app. Add the following to your `claude_desktop_config.json`:
+Start by creating a fresh virtual environment:
 
-### Docker
+```bash
+uv venv
+source .venv/bin/activate
+```
+To run the tests, type `uv run pytest`, to run the server from source use `uv run src/mcp_server_git/`. 
+
+To build, type `uv build`. You can then now run `mcp-server-git` command directly. Open with the inspector using `npx @modelcontextprotocol/inspector@latest mcp-server-git`.
+
+To specify the Python version type `uv python pin <version>` (useful if you want to use a more recent version than the default).
+
+To create the Docker container use
+
+```bash
+docker build -t mcp/git .
+```
+
+An example showing how to run via the Docker container is below:
 
 ```json
 {
@@ -310,32 +326,6 @@ If you are doing local development, there are two ways to test your changes:
     }
   }
 }
-```
-
-### UVX
-```json
-{
-"mcpServers": {
-  "git": {
-    "command": "uv",
-    "args": [
-      "--directory",
-      "/<path to mcp-servers>/mcp-servers/src/git",
-      "run",
-      "mcp-server-git"
-    ]
-    }
-  }
-}
-```
-
-## Build
-
-Docker build:
-
-```bash
-cd src/git
-docker build -t mcp/git .
 ```
 
 ## License

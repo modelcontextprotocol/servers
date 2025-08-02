@@ -12,6 +12,9 @@ def test_repository(tmp_path: Path):
     Path(repo_path / "test.txt").write_text("test")
     test_repo.index.add(["test.txt"])
     test_repo.index.commit("initial commit")
+    
+    # Store the default branch name on the repo object for tests to use
+    test_repo.default_branch = test_repo.active_branch.name
 
     yield test_repo
 
@@ -51,11 +54,11 @@ def test_git_branch_contains(test_repository):
     Path(test_repository.working_dir / Path("feature.txt")).write_text("feature content")
     test_repository.index.add(["feature.txt"])
     commit = test_repository.index.commit("feature commit")
-    test_repository.git.checkout("master")
+    test_repository.git.checkout(test_repository.default_branch)
 
     result = git_branch(test_repository, "local", contains=commit.hexsha)
     assert "feature-branch" in result
-    assert "master" not in result
+    assert test_repository.default_branch not in result
 
 def test_git_branch_not_contains(test_repository):
     # Create a new branch and commit to it
@@ -63,8 +66,8 @@ def test_git_branch_not_contains(test_repository):
     Path(test_repository.working_dir / Path("another_feature.txt")).write_text("another feature content")
     test_repository.index.add(["another_feature.txt"])
     commit = test_repository.index.commit("another feature commit")
-    test_repository.git.checkout("master")
+    test_repository.git.checkout(test_repository.default_branch)
 
     result = git_branch(test_repository, "local", not_contains=commit.hexsha)
     assert "another-feature-branch" not in result
-    assert "master" in result
+    assert test_repository.default_branch in result
