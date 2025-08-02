@@ -296,13 +296,29 @@ help you debug any issues.
 
 ## Development
 
-If you are doing local development, there are two ways to test your changes:
+### Building
 
-1. Run the MCP inspector to test your changes. See [Debugging](#debugging) for run instructions.
+[`uv`](https://docs.astral.sh/uv/) is used for development. 
 
-2. Test using the Claude desktop app. Add the following to your `claude_desktop_config.json`:
+Start by creating a fresh virtual environment:
 
-### Docker
+```bash
+uv venv
+source .venv/bin/activate
+```
+To run the tests, type `uv run pytest`, to run the server from source use `uv run src/mcp_server_git/`. 
+
+To build, type `uv build`. You can then now run `mcp-server-git` command directly. Open with the inspector using `npx @modelcontextprotocol/inspector@latest mcp-server-git`.
+
+To specify the Python version type `uv python pin <version>` (useful if you want to use a more recent version than the default).
+
+To create the Docker container use
+
+```bash
+docker build -t mcp/git .
+```
+
+An example showing how to run via the Docker container is below:
 
 ```json
 {
@@ -321,71 +337,7 @@ If you are doing local development, there are two ways to test your changes:
     }
   }
 }
-```
 
-### UVX
-```json
-{
-"mcpServers": {
-  "git": {
-    "command": "uv",
-    "args": [
-      "--directory",
-      "/<path to mcp-servers>/mcp-servers/src/git",
-      "run",
-      "mcp-server-git"
-    ]
-    }
-  }
-}
-```
-
-## Build
-
-Docker build:
-
-```bash
-cd src/git
-docker build -t mcp/git .
-```
-
-### Testing
-
-This server includes a comprehensive test suite to verify its functionality, security, and path validation logic.
-
-#### Requirements
-
-To run the tests, you will need to have the following installed:
-*   Python (version 3.8+ recommended)
-*   `pip` or `uv` for package management
-*   Git CLI available in your PATH
-
-#### Setup and Running Tests
-
-1. **Install the package with development dependencies**:
-
-Using pip:
-```bash
-pip install -e .
-pip install pytest
-```
-
-Using uv:
-```bash
-uv pip install -e ".[dev]"
-```
-
-2. **Run the complete test suite**:
-```bash
-pytest
-```
-
-3. **Run with verbose output**:
-```bash
-pytest -v
-```
-
-This will automatically discover and execute the tests located in the `tests/test_server.py` file, which cover path safety, repository validation, and various tool operations.
 
 ## License
 
