@@ -498,7 +498,6 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[ChessPal Chess Engine (stockfish)](https://github.com/wilson-urdaneta/chesspal-mcp-engine)** - A Stockfish-powered chess engine exposed as an MCP server. Calculates best moves and supports both HTTP/SSE and stdio transports.
 - **[Chroma](https://github.com/privetin/chroma)** - Vector database server for semantic document search and metadata filtering, built on Chroma
 - **[Chrome history](https://github.com/vincent-pli/chrome-history-mcp)** - Talk with AI about your browser history, get fun ^_^
-- **[CipherTrust Manager](https://github.com/sanyambassi/ciphertrust-manager-mcp-server)** - MCP server for Thales CipherTrust Manager integration, enabling secure key management and cryptographic operations.
 - **[Claude Thread Continuity](https://github.com/peless/claude-thread-continuity)** - Persistent memory system enabling Claude Desktop conversations to resume with full context across sessions. Maintains conversation history, project states, and user preferences for seamless multi-session workflows.
 - **[ClaudePost](https://github.com/ZilongXue/claude-post)** - ClaudePost enables seamless email management for Gmail, offering secure features like email search, reading, and sending.
 - **[CLDGeminiPDF Analyzer](https://github.com/tfll37/CLDGeminiPDF-Analyzer)** - MCP server tool enabling sharing large PDF files to Google LLMs via API for further/additional analysis and response retrieval to Claude Desktop.
