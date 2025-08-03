@@ -209,18 +209,6 @@ export const createServer = () => {
   }, 20000);
 
 
-  // Set up update interval for stderr messages
-  stdErrUpdateInterval = setInterval(() => {
-    const shortTimestamp = new Date().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    });
-    server.notification({
-      method: "notifications/stderr",
-      params: { content: `${shortTimestamp}: A stderr message` },
-    });
-  }, 30000);
 
   // Helper method to request sampling from client
   const requestSampling = async (
