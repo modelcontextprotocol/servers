@@ -914,6 +914,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[SchemaCrawler](https://github.com/schemacrawler/SchemaCrawler-MCP-Server-Usage)** - Connect to any relational database, and be able to get valid SQL, and ask questions like what does a certain column prefix mean.
 - **[SchemaFlow](https://github.com/CryptoRadi/schemaflow-mcp-server)** - Real-time PostgreSQL & Supabase database schema access for AI-IDEs via Model Context Protocol. Provides live database context through secure SSE connections with three powerful tools: get_schema, analyze_database, and check_schema_alignment. [SchemaFlow](https://schemaflow.dev)
 - **[Scholarly](https://github.com/adityak74/mcp-scholarly)** - A MCP server to search for scholarly and academic articles.
+- **[ScriptFlow](https://github.com/yanmxa/scriptflow-mcp)** - Transform complex, repetitive AI interactions into persistent, executable scripts with comprehensive script management (add, edit, remove, list, search, execute) and multi-language support (Bash, Python, Node.js, TypeScript).
 - **[scrapling-fetch](https://github.com/cyberchitta/scrapling-fetch-mcp)** - Access text content from bot-protected websites. Fetches HTML/markdown from sites with anti-automation measures using Scrapling.
 - **[Screeny](https://github.com/rohanrav/screeny)** - Privacy-first macOS MCP server that provides visual context for AI agents through window screenshots
 - **[SearXNG](https://github.com/ihor-sokoliuk/mcp-searxng)** - A Model Context Protocol Server for [SearXNG](https://docs.searxng.org)
