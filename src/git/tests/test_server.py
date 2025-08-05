@@ -77,7 +77,7 @@ def test_git_add_all_files(test_repository):
 
     staged_files = [item.a_path for item in test_repository.index.diff("HEAD")]
     assert "all_file.txt" in staged_files
-    assert result == "Files staged sucessfully"
+    assert result == "Files staged successfully"
 
 def test_git_add_specific_files(test_repository):
     file1 = Path(test_repository.working_dir) / "file1.txt"
