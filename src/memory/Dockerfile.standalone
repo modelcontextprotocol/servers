@@ -1,0 +1,82 @@
+# Standalone Dockerfile for memory server
+# Build from the memory directory: docker build -f Dockerfile.standalone -t mcp-memory-enhanced .
+
+# Stage 1: Dependencies
+FROM node:20-alpine AS deps
+WORKDIR /app
+
+# Install build dependencies for better-sqlite3
+RUN apk add --no-cache python3 make g++ sqlite-dev
+
+# Copy package files
+COPY package.json ./
+
+# Install dependencies (skip prepare script since we'll build in next stage)
+RUN npm install --ignore-scripts
+
+# Stage 2: Builder
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++ sqlite-dev
+
+# Copy dependencies
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy source files
+COPY . .
+
+# Rebuild better-sqlite3 for the current platform
+RUN npm rebuild better-sqlite3
+
+# Build the application with Docker-specific tsconfig
+RUN npm install --save-dev typescript shx && \
+    npx tsc -p tsconfig.docker.json && \
+    npx shx chmod +x dist/*.js
+
+# Stage 3: Runner
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apk add --no-cache sqlite-libs dumb-init
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Copy necessary files
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY package.json ./
+
+# Create data directory with proper permissions
+RUN mkdir -p /data && \
+    chown -R nodejs:nodejs /data && \
+    chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
+# Environment variables
+ENV NODE_ENV=production
+ENV STORAGE_TYPE=sqlite
+ENV STORAGE_PATH=/data
+ENV PORT=6970
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:6970/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))"
+
+# Expose port
+EXPOSE 6970
+
+# Volume for persistent data
+VOLUME ["/data"]
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the server
+CMD ["node", "dist/index.js"]
