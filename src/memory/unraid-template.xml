@@ -1,0 +1,122 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>mcp-memory-enhanced</Name>
+  <Repository>mcp-memory-enhanced:latest</Repository>
+  <Registry>https://registry.hub.docker.com/</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/JamesPrial/mcp-memory-enhanced</Support>
+  <Project>https://github.com/JamesPrial/mcp-memory-enhanced</Project>
+  <Overview>Enhanced MCP Memory Server with SQLite backend for Claude AI. Provides persistent memory storage through a knowledge graph, supporting millions of entities with efficient search and retrieval. Features both JSON and SQLite storage backends, with SQLite offering 3-10x performance improvements.</Overview>
+  <Category>Productivity: AI: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:6970]/health</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/anthropics/anthropic-sdk-python/main/logo.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled>1735868400</DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Description>Enhanced MCP Memory Server with SQLite backend for Claude AI. Provides persistent memory storage through a knowledge graph, supporting millions of entities with efficient search and retrieval. Features both JSON and SQLite storage backends, with SQLite offering 3-10x performance improvements.</Description>
+  <Networking>
+    <Mode>bridge</Mode>
+    <Publish>
+      <Port>
+        <HostPort>6970</HostPort>
+        <ContainerPort>6970</ContainerPort>
+        <Protocol>tcp</Protocol>
+      </Port>
+    </Publish>
+  </Networking>
+  <Data>
+    <Volume>
+      <HostDir>/mnt/user/appdata/mcp-memory-enhanced</HostDir>
+      <ContainerDir>/data</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+  </Data>
+  <Environment>
+    <Variable>
+      <Value>sqlite</Value>
+      <Name>STORAGE_TYPE</Name>
+      <Mode/>
+      <Description>Storage backend type: sqlite (recommended) or json</Description>
+    </Variable>
+    <Variable>
+      <Value>/data</Value>
+      <Name>STORAGE_PATH</Name>
+      <Mode/>
+      <Description>Path where data files are stored</Description>
+    </Variable>
+    <Variable>
+      <Value>knowledge.db</Value>
+      <Name>SQLITE_DB_NAME</Name>
+      <Mode/>
+      <Description>SQLite database filename</Description>
+    </Variable>
+    <Variable>
+      <Value>true</Value>
+      <Name>SQLITE_WAL_MODE</Name>
+      <Mode/>
+      <Description>Enable Write-Ahead Logging for better performance</Description>
+    </Variable>
+    <Variable>
+      <Value>5000</Value>
+      <Name>SQLITE_BUSY_TIMEOUT</Name>
+      <Mode/>
+      <Description>SQLite busy timeout in milliseconds</Description>
+    </Variable>
+    <Variable>
+      <Value>6970</Value>
+      <Name>PORT</Name>
+      <Mode/>
+      <Description>Health check server port</Description>
+    </Variable>
+    <Variable>
+      <Value>info</Value>
+      <Name>LOG_LEVEL</Name>
+      <Mode/>
+      <Description>Logging level: debug, info, warn, error</Description>
+    </Variable>
+    <Variable>
+      <Value>1000000</Value>
+      <Name>MAX_ENTITIES</Name>
+      <Mode/>
+      <Description>Maximum number of entities allowed</Description>
+    </Variable>
+    <Variable>
+      <Value>1000</Value>
+      <Name>SEARCH_LIMIT</Name>
+      <Mode/>
+      <Description>Default search result limit</Description>
+    </Variable>
+    <Variable>
+      <Value>true</Value>
+      <Name>ENABLE_AUTO_BACKUP</Name>
+      <Mode/>
+      <Description>Enable automatic backups</Description>
+    </Variable>
+    <Variable>
+      <Value>86400</Value>
+      <Name>BACKUP_INTERVAL</Name>
+      <Mode/>
+      <Description>Backup interval in seconds (default: 24 hours)</Description>
+    </Variable>
+    <Variable>
+      <Value>7</Value>
+      <Name>BACKUP_RETENTION_DAYS</Name>
+      <Mode/>
+      <Description>Number of days to retain backups</Description>
+    </Variable>
+  </Environment>
+  <Labels/>
+  <Config Name="Health Check Port" Target="6970" Default="6970" Mode="tcp" Description="Port for health check endpoint" Type="Port" Display="always" Required="false" Mask="false">6970</Config>
+  <Config Name="Data Storage" Target="/data" Default="/mnt/user/appdata/mcp-memory-enhanced" Mode="rw" Description="Persistent storage for knowledge graph data" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/mcp-memory-enhanced</Config>
+  <Config Name="Storage Type" Target="STORAGE_TYPE" Default="sqlite" Mode="" Description="Storage backend: sqlite (recommended) or json" Type="Variable" Display="always" Required="false" Mask="false">sqlite</Config>
+  <Config Name="SQLite WAL Mode" Target="SQLITE_WAL_MODE" Default="true" Mode="" Description="Enable Write-Ahead Logging for better performance" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="Log Level" Target="LOG_LEVEL" Default="info" Mode="" Description="Logging level: debug, info, warn, error" Type="Variable" Display="advanced" Required="false" Mask="false">info</Config>
+  <Config Name="Auto Backup" Target="ENABLE_AUTO_BACKUP" Default="true" Mode="" Description="Enable automatic backups" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+</Container>

@@ -6,6 +6,11 @@
     },
     "include": [
       "./**/*.ts"
+    ],
+    "exclude": [
+      "./test/**/*",
+      "./dist/**/*",
+      "./node_modules/**/*"
     ]
   }
   

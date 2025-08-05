@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  mcp-memory-enhanced:
+    build:
+      context: src/memory
+      dockerfile: Dockerfile.standalone
+    image: mcp-memory-enhanced:latest
+    container_name: mcp-memory-enhanced
+    restart: unless-stopped
+    ports:
+      - "6970:6970"
+    environment:
+      # Storage configuration
+      - STORAGE_TYPE=sqlite           # Options: json, sqlite
+      - STORAGE_PATH=/data           # Data directory inside container
+      
+      # SQLite specific settings
+      - SQLITE_DB_NAME=knowledge.db  # Database filename
+      - SQLITE_WAL_MODE=true         # Enable Write-Ahead Logging
+      - SQLITE_BUSY_TIMEOUT=5000     # Busy timeout in ms
+      
+      # JSON specific settings (if using JSON storage)
+      - JSON_FILE_NAME=knowledge-graph.jsonl  # JSON Lines filename
+      
+      # Server configuration
+      - PORT=6970                    # Server port
+      - NODE_ENV=production          # Node environment
+      - LOG_LEVEL=info              # Logging level: debug, info, warn, error
+      
+      # Performance settings
+      - MAX_ENTITIES=1000000         # Maximum entities allowed
+      - SEARCH_LIMIT=1000           # Default search result limit
+      - BATCH_SIZE=1000             # Batch size for bulk operations
+      
+      # Backup settings
+      - ENABLE_AUTO_BACKUP=true      # Enable automatic backups
+      - BACKUP_INTERVAL=86400        # Backup interval in seconds (24 hours)
+      - BACKUP_RETENTION_DAYS=7      # Keep backups for N days
+    volumes:
+      - ./data:/data                 # Persistent storage
+      - ./backups:/backups          # Backup directory (optional)
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:6970/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Resource limits (adjust as needed)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+# Volumes for persistent data
+volumes:
+  data:
+    driver: local
+  backups:
+    driver: local

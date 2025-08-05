@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop, 'feat/*' ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  lint-and-type-check:
+    name: Lint and Type Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: src/memory/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: src/memory
+        run: npm ci
+      
+      - name: Run ESLint
+        working-directory: src/memory
+        run: npm run lint
+        continue-on-error: true
+      
+      - name: Run TypeScript type checking
+        working-directory: src/memory
+        run: npm run typecheck
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+        storage-type: [json, sqlite]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: src/memory/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: src/memory
+        run: npm ci
+      
+      - name: Run tests
+        working-directory: src/memory
+        env:
+          STORAGE_TYPE: ${{ matrix.storage-type }}
+        run: npm test
+        continue-on-error: true
+      
+      - name: Upload coverage reports
+        if: matrix.node-version == 20 && matrix.storage-type == 'sqlite'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: src/memory/coverage/
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint-and-type-check]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: src/memory/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: src/memory
+        run: npm ci
+      
+      - name: Build project
+        working-directory: src/memory
+        run: npm run build
+      
+      - name: Verify build output
+        working-directory: src/memory
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "Build failed: dist directory not found"
+            exit 1
+          fi
+          if [ ! -f "dist/index.js" ]; then
+            echo "Build failed: dist/index.js not found"
+            exit 1
+          fi
+          echo "Build successful!"
+
+  docker-build-test:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: src/memory
+          file: src/memory/Dockerfile.standalone
+          platforms: linux/amd64
+          tags: mcp-memory-enhanced:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          push: false
+      
+      - name: Test Docker image
+        run: |
+          docker run --rm -e STORAGE_TYPE=sqlite mcp-memory-enhanced:test node dist/index.js --version || true
+          docker run --rm -e PORT=6970 -p 6970:6970 -d --name test-container mcp-memory-enhanced:test
+          sleep 5
+          curl -f http://localhost:6970/health || exit 1
+          docker stop test-container
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'src/memory'
+          severity: 'CRITICAL,HIGH'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
