@@ -265,7 +265,7 @@ Follow these steps for each interaction:
    - If any new information was gathered during the interaction, update your memory as follows:
      a) Create entities for recurring organizations, people, and significant events
      b) Connect them to the current entities using relations
-     b) Store facts about them as observations
+     c) Store facts about them as observations
 ```
 
 ## Building
@@ -275,6 +275,8 @@ Docker:
 ```sh
 docker build -t mcp/memory -f src/memory/Dockerfile . 
 ```
+
+For Awareness: a prior mcp/memory volume contains an index.js file that could be overwritten by the new container. If you are using a docker volume for storage, delete the old docker volume's `index.js` file before starting the new container.
 
 ## License
 
