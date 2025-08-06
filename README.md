@@ -939,7 +939,6 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Revit MCP](https://github.com/revit-mcp)** - A service implementing the MCP protocol for Autodesk Revit.
 - **[Rijksmuseum](https://github.com/r-huijts/rijksmuseum-mcp)** - Interface with the Rijksmuseum API to search artworks, retrieve artwork details, access image tiles, and explore user collections.
 - **[Riot Games](https://github.com/jifrozen0110/mcp-riot)** - MCP server for League of Legends – fetch player info, ranks, champion stats, and match history via Riot API.
-- **[Robert Bell Music](https://robertbellmcp.netlify.app/mcp)** - A work-in-progress experiment by [Robert Bell, musician](https://bellrobert.com/).  Testing using a serverless resource-only MCP server to facilitate search and research MCP clients understanding a small business's offerings, much the way Schema.org is currently used within web site DOMs.
 - **[Rquest](https://github.com/xxxbrian/mcp-rquest)** - An MCP server providing realistic browser-like HTTP request capabilities with accurate TLS/JA3/JA4 fingerprints for bypassing anti-bot measures.
 - **[Rust MCP Filesystem](https://github.com/rust-mcp-stack/rust-mcp-filesystem)** - Fast, asynchronous MCP server for efficient handling of various filesystem operations built with the power of Rust.
 - **[SafetySearch](https://github.com/surabhya/SafetySearch)** - Real-time FDA food safety data: recalls, adverse events, analysis.
