@@ -1053,6 +1053,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[yutu](https://github.com/eat-pray-ai/yutu)** - A fully functional MCP server and CLI for YouTube to automate YouTube operation.
 - **[ZapCap](https://github.com/bogdan01m/zapcap-mcp-server)** - MCP server for ZapCap API providing video caption and B-roll generation via natural language
 - **[Zoom](https://github.com/Prathamesh0901/zoom-mcp-server/tree/main)** - Create, update, read and delete your zoom meetings.
+- **[Ambari-API](https://github.com/call518/MCP-Ambari-API)** - Model Context Protocol (MCP) server for Apache Ambari API integration. This project provides tools for managing Hadoop clusters, including service operations, configuration management, status monitoring, and request tracking.
 ## 📚 Frameworks
 
 These are high-level frameworks that make it easier to build MCP servers or clients.
