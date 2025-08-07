@@ -1053,6 +1053,8 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[yutu](https://github.com/eat-pray-ai/yutu)** - A fully functional MCP server and CLI for YouTube to automate YouTube operation.
 - **[ZapCap](https://github.com/bogdan01m/zapcap-mcp-server)** - MCP server for ZapCap API providing video caption and B-roll generation via natural language
 - **[Zoom](https://github.com/Prathamesh0901/zoom-mcp-server/tree/main)** - Create, update, read and delete your zoom meetings.
+- **[kwrds.ai](https://github.com/mkotsollaris/kwrds_ai_mcp)** - Keyword research, people also ask, SERP and other SEO tools for [kwrds.ai](https://www.kwrds.ai/)
+
 ## 📚 Frameworks
 
 These are high-level frameworks that make it easier to build MCP servers or clients.
