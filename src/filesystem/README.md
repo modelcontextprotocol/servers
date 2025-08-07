@@ -9,11 +9,11 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Move files/directories
 - Search files
 - Get file metadata
-- Dynamic directory access control via [Roots](https://modelcontextprotocol.io/docs/concepts/roots)
+- Dynamic directory access control via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots)
 
 ## Directory Access Control
 
-The server uses a flexible directory access control system. Directories can be specified via command-line arguments or dynamically via [Roots](https://modelcontextprotocol.io/docs/concepts/roots).
+The server uses a flexible directory access control system. Directories can be specified via command-line arguments or dynamically via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots).
 
 ### Method 1: Command-line Arguments
 Specify Allowed directories when starting the server:
@@ -22,7 +22,7 @@ mcp-server-filesystem /path/to/dir1 /path/to/dir2
 ```
 
 ### Method 2: MCP Roots (Recommended)
-MCP clients that support [Roots](https://modelcontextprotocol.io/docs/concepts/roots) can dynamically update the Allowed directories. 
+MCP clients that support [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories. 
 
 Roots notified by Client to Server, completely replace any server-side Allowed directories when provided.
 
@@ -70,10 +70,19 @@ The server's directory access control follows this flow:
 
 ### Tools
 
-- **read_file**
-  - Read complete contents of a file
-  - Input: `path` (string)
-  - Reads complete file contents with UTF-8 encoding
+- **read_text_file**
+  - Read complete contents of a file as text
+  - Inputs:
+    - `path` (string)
+    - `head` (number, optional): First N lines
+    - `tail` (number, optional): Last N lines
+  - Always treats the file as UTF-8 text regardless of extension
+
+- **read_media_file**
+  - Read an image or audio file
+  - Inputs:
+    - `path` (string)
+  - Streams the file and returns base64 data with the corresponding MIME type
 
 - **read_multiple_files**
   - Read multiple files simultaneously
