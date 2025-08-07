@@ -907,6 +907,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[pancakeswap-poolspy-mcp](https://github.com/kukapay/pancakeswap-poolspy-mcp)** - An MCP server that tracks newly created liquidity pools on Pancake Swap.
 - **[Pandoc](https://github.com/vivekVells/mcp-pandoc)** - MCP server for seamless document format conversion using Pandoc, supporting Markdown, HTML, PDF, DOCX (.docx), csv and more.
 - **[Paradex MCP](https://github.com/sv/mcp-paradex-py)** - MCP native server for interacting with Paradex platform, including fully features trading.
+- **[Parliament MCP]([https://github.com/sv/mcp-paradex-py](https://github.com/i-dot-ai/parliament-mcp))** - MCP server for querying UK parliamentary data.
 - **[PDF reader MCP](https://github.com/gpetraroli/mcp_pdf_reader)** - MCP server to read and search text in a local PDF file.
 - **[PDF Tools MCP](https://github.com/Sohaib-2/pdf-mcp-server)** - Comprehensive PDF manipulation toolkit (merge, split, encrypt, optimize and much more)
 - **[Peacock for VS Code](https://github.com/johnpapa/peacock-mcp)** - MCP Server for the Peacock extension for VS Code, coloring your world, one Code editor at a time. The main goal of the project is to show how an MCP server can be used to interact with APIs.
