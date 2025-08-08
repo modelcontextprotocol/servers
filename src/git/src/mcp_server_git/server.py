@@ -169,7 +169,11 @@ def git_show(repo: git.Repo, revision: str) -> str:
         diff = commit.diff(git.NULL_TREE, create_patch=True)
     for d in diff:
         output.append(f"\n--- {d.a_path}\n+++ {d.b_path}\n")
-        output.append(d.diff.decode('utf-8'))
+        if d.diff is not None:
+            if isinstance(d.diff, bytes):
+                output.append(d.diff.decode('utf-8'))
+            else:
+                output.append(d.diff)
     return "".join(output)
 
 def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, not_contains: str | None = None) -> str:
