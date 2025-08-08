@@ -13,7 +13,7 @@ import fs from "fs/promises";
 import { createReadStream } from "fs";
 import path from "path";
 import os from 'os';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash, getHashes } from 'crypto';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
@@ -177,6 +177,12 @@ const SearchFilesArgsSchema = z.object({
 
 const GetFileInfoArgsSchema = z.object({
   path: z.string(),
+});
+
+const GetFileHashArgsSchema = z.object({
+  path: z.string(),
+  algorithm: z.enum(['md5', 'sha1', 'sha256']).default('sha256').describe('Hash algorithm to use'),
+  encoding: z.enum(['hex', 'base64']).default('hex').describe('Digest encoding')
 });
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
@@ -373,6 +379,45 @@ async function applyFileEdits(
   }
 
   return formattedDiff;
+}
+
+// Hashing utility
+type HashAlgorithm = "md5" | "sha1" | "sha256";
+export async function getFileHash(
+  filePath: string,
+  algorithm: HashAlgorithm,
+  encoding: "hex" | "base64" = "hex"
+): Promise<string> {
+  const algo = algorithm.toLowerCase() as HashAlgorithm;
+
+  // Fail early if Node/OpenSSL is not supported (FIPS/Builds)
+  const available = new Set(getHashes().map(h => h.toLowerCase()));
+  if (!available.has(algo)) {
+    throw new Error(
+      `Algorithm '${algo}' is not available in this Node/OpenSSL build (FIPS or policy may disable it).`
+    );
+  }
+
+  // Allow only regular files (throw a clear error if not)
+  const st = await fs.stat(filePath);
+  if (!st.isFile()) {
+    throw new Error(`Path is not a regular file: ${filePath}`);
+  }
+
+  const hash = createHash(algo);
+  const stream = createReadStream(filePath, { highWaterMark: 1024 * 1024 }); // 1 MiB
+
+  return await new Promise<string>((resolve, reject) => {
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", (err) => reject(err));
+    stream.on("end", () => {
+      try {
+        resolve(hash.digest(encoding));
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
 }
 
 // Helper functions
@@ -623,6 +668,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: [],
         },
       },
+      {
+        name: "get_file_hash",
+        description:
+          "Compute the cryptographic hash of a file (md5, sha1, or sha256). Returns the digest for the file’s contents." +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(GetFileHashArgsSchema) as ToolInput,
+      }
     ],
   };
 });
@@ -942,6 +994,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             .map(([key, value]) => `${key}: ${value}`)
             .join("\n") }],
         };
+      }
+
+      case "get_file_hash": {
+        const parsed = GetFileHashArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for get_file_hash: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const hash = await getFileHash(validPath, parsed.data.algorithm, parsed.data.encoding);
+        return {
+          content: [{
+            type: "text",
+            text: `algorithm: ${parsed.data.algorithm}\nencoding: ${parsed.data.encoding}\npath: ${parsed.data.path}\ndigest: ${hash}`
+          }],
+   };
       }
 
       case "list_allowed_directories": {
