@@ -6,6 +6,17 @@ A Model Context Protocol server for Git repository interaction and automation. T
 
 Please note that mcp-server-git is currently in early development. The functionality and available tools are subject to change and expansion as we continue to develop and improve the server.
 
+### Repository Path Security
+
+When running the server with the `--repository` flag, all Git operations are restricted to that specific repository path, regardless of any `repo_path` values provided in tool calls. This provides an important security boundary:
+
+- The server will reject any attempts to access paths outside the configured repository
+- All tool operations that accept a `repo_path` parameter will ignore it and use the configured repository instead
+- Path traversal attempts (e.g., using `../`) are blocked
+- If no repository is configured, the server requires explicit repository paths for each operation
+
+This makes it safe to expose the server to untrusted clients while maintaining control over which repositories they can access.
+
 ### Tools
 
 1. `git_status`
@@ -68,7 +79,7 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of the new branch
-     - `start_point` (string, optional): Starting point for the new branch
+     - `base_branch` (string, optional): Starting point (branch name or commit hash) for the new branch. Defaults to the current active branch.
    - Returns: Confirmation of branch creation
 10. `git_checkout`
    - Switches branches
@@ -287,13 +298,29 @@ help you debug any issues.
 
 ## Development
 
-If you are doing local development, there are two ways to test your changes:
+### Building
 
-1. Run the MCP inspector to test your changes. See [Debugging](#debugging) for run instructions.
+[`uv`](https://docs.astral.sh/uv/) is used for development. 
 
-2. Test using the Claude desktop app. Add the following to your `claude_desktop_config.json`:
+Start by creating a fresh virtual environment:
 
-### Docker
+```bash
+uv venv
+source .venv/bin/activate
+```
+To run the tests, type `uv run pytest`, to run the server from source use `uv run src/mcp_server_git/`. 
+
+To build, type `uv build`. You can then now run `mcp-server-git` command directly. Open with the inspector using `npx @modelcontextprotocol/inspector@latest mcp-server-git`.
+
+To specify the Python version type `uv python pin <version>` (useful if you want to use a more recent version than the default).
+
+To create the Docker container use
+
+```bash
+docker build -t mcp/git .
+```
+
+An example showing how to run via the Docker container is below:
 
 ```json
 {
@@ -312,34 +339,9 @@ If you are doing local development, there are two ways to test your changes:
     }
   }
 }
-```
 
-### UVX
-```json
-{
-"mcpServers": {
-  "git": {
-    "command": "uv",
-    "args": [
-      "--directory",
-      "/<path to mcp-servers>/mcp-servers/src/git",
-      "run",
-      "mcp-server-git"
-    ]
-    }
-  }
-}
-```
-
-## Build
-
-Docker build:
-
-```bash
-cd src/git
-docker build -t mcp/git .
-```
 
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
+
