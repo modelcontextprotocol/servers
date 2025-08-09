@@ -741,6 +741,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Lark(Feishu)](https://github.com/kone-net/mcp_server_lark)** - A Model Context Protocol(MCP) server for Lark(Feishu) sheet, message, doc and etc.
 - **[Lazy Toggl MCP](https://github.com/movstox/lazy-toggl-mcp)** - Simple unofficial MCP server to track time via Toggl API
 - **[lean-lsp-mcp](https://github.com/oOo0oOo/lean-lsp-mcp)** - Interact with the [Lean theorem prover](https://lean-lang.org/) via the Language Server Protocol.
+- **[librenms-mcp](https://github.com/mhajder/librenms-mcp)** - MCP server for [LibreNMS](https://www.librenms.org/) management
 - **[libvirt-mcp](https://github.com/MatiasVara/libvirt-mcp)** - Allows LLM to interact with libvirt thus enabling to create, destroy or list the Virtual Machines in a system.
 - **[Lightdash](https://github.com/syucream/lightdash-mcp-server)** - Interact with [Lightdash](https://www.lightdash.com/), a BI tool.
 - **[LINE](https://github.com/amornpan/py-mcp-line)** (by amornpan) - Implementation for LINE Bot integration that enables Language Models to read and analyze LINE conversations through a standardized interface. Features asynchronous operation, comprehensive logging, webhook event handling, and support for various message types.
