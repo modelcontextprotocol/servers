@@ -20,6 +20,7 @@ import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
 import { getValidRootDirectories } from './roots-utils.js';
+import { getFileHash } from "./file-hash.js";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -381,7 +382,7 @@ async function applyFileEdits(
   return formattedDiff;
 }
 
-// Hashing utility
+/* // Hashing utility
 type HashAlgorithm = "md5" | "sha1" | "sha256";
 export async function getFileHash(
   filePath: string,
@@ -418,7 +419,7 @@ export async function getFileHash(
       }
     });
   });
-}
+} */
 
 // Helper functions
 function formatSize(bytes: number): string {
