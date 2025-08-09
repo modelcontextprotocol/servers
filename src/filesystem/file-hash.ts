@@ -10,7 +10,11 @@ export async function getFileHash(
   encoding: "hex" | "base64" = "hex"
 ): Promise<string> {
   const algo = algorithm.toLowerCase() as HashAlgorithm;
-  
+  // Policy gate: allow only md5|sha1|sha256 (for DFIR interoperability)
+  if (!["md5","sha1","sha256"].includes(algo)) {
+    throw new Error(`Unsupported hash algorithm: ${algorithm}`);
+    }
+
   // Fail early if Node/OpenSSL is not supported (FIPS/Builds)
   const available = new Set(getHashes().map(h => h.toLowerCase()));
   if (!available.has(algo)) {
