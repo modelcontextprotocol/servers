@@ -611,6 +611,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Facebook Ads 10xeR](https://github.com/fortytwode/10xer)** - Advanced Facebook Ads MCP server with enhanced creative insights, multi-dimensional breakdowns, and comprehensive ad performance analytics.
 - **[Facebook Ads Library](https://github.com/trypeggy/facebook-ads-library-mcp)** - Get any answer from the Facebook Ads Library, conduct deep research including messaging, creative testing and comparisons in seconds.
 - **[Fantasy PL](https://github.com/rishijatia/fantasy-pl-mcp)** - Give your coding agent direct access to up-to date Fantasy Premier League data
+- **[Fastmail MCP](https://github.com/MadLlama25/fastmail-mcp)** - Access Fastmail via JMAP: list/search emails, send and move mail, handle attachments/threads, plus contacts and calendar tools.
 - **[fastn.ai – Unified API MCP Server](https://github.com/fastnai/mcp-fastn)** - A remote, dynamic MCP server with a unified API that connects to 1,000+ tools, actions, and workflows, featuring built-in authentication and monitoring.
 - **[FDIC BankFind MCP Server - (Unofficial)](https://github.com/clafollett/fdic-bank-find-mcp-server)** - The is a MCPserver that brings the power of FDIC BankFind APIs straight to your AI tools and workflows. Structured U.S. banking data, delivered with maximum vibes. 😎📊
 - **[Federal Reserve Economic Data (FRED)](https://github.com/stefanoamorelli/fred-mcp-server)** (by Stefano Amorelli) - Community developed MCP server to interact with the Federal Reserve Economic Data.
