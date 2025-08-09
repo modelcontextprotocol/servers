@@ -631,12 +631,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
-        name: "get_file_hash",
-        description:
-          "Compute the cryptographic hash of a file (md5, sha1, or sha256). Returns the digest for the file’s contents." +
-          "Only works within allowed directories.",
-        inputSchema: zodToJsonSchema(GetFileHashArgsSchema) as ToolInput,
-      }
+  name: "get_file_hash",
+  description:
+    "Compute the cryptographic hash of a file for integrity verification. " +
+    "Use only for regular files within allowed directories (not directories/devices). " +
+    "Inputs: { path: absolute path, algorithm: \"md5\"|\"sha1\"|\"sha256\", " +
+    "encoding: \"hex\"|\"base64\" (optional, default \"hex\") }. " +
+    "Return only the digest string. Call when verifying file integrity or comparing files.",
+  inputSchema: zodToJsonSchema(GetFileHashArgsSchema) as ToolInput,
+  }
     ],
   };
 });
@@ -964,11 +967,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for get_file_hash: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const hash = await getFileHash(validPath, parsed.data.algorithm, parsed.data.encoding);
+        const encoding = parsed.data.encoding ?? "hex";
+        const hash = await getFileHash(validPath, parsed.data.algorithm, encoding);
         return {
           content: [{
             type: "text",
-            text: `algorithm: ${parsed.data.algorithm}\nencoding: ${parsed.data.encoding}\npath: ${parsed.data.path}\ndigest: ${hash}`
+            text: `algorithm: ${parsed.data.algorithm}\nencoding: ${encoding}\npath: ${parsed.data.path}\ndigest: ${hash}`
           }],
    };
       }
