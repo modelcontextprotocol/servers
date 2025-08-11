@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 import git
-from mcp_server_git.server import git_checkout, git_branch
+from mcp_server_git.server import git_checkout, git_branch, git_add
 import shutil
 
 @pytest.fixture
@@ -68,3 +68,26 @@ def test_git_branch_not_contains(test_repository):
     result = git_branch(test_repository, "local", not_contains=commit.hexsha)
     assert "another-feature-branch" not in result
     assert "master" in result
+
+def test_git_add_all_files(test_repository):
+    file_path = Path(test_repository.working_dir) / "all_file.txt"
+    file_path.write_text("adding all")
+
+    result = git_add(test_repository, ["."])
+
+    staged_files = [item.a_path for item in test_repository.index.diff("HEAD")]
+    assert "all_file.txt" in staged_files
+    assert result == "Files staged successfully"
+
+def test_git_add_specific_files(test_repository):
+    file1 = Path(test_repository.working_dir) / "file1.txt"
+    file2 = Path(test_repository.working_dir) / "file2.txt"
+    file1.write_text("file 1 content")
+    file2.write_text("file 2 content")
+
+    result = git_add(test_repository, ["file1.txt"])
+
+    staged_files = [item.a_path for item in test_repository.index.diff("HEAD")]
+    assert "file1.txt" in staged_files
+    assert "file2.txt" not in staged_files
+    assert result == "Files staged successfully"
