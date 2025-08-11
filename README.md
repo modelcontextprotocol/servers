@@ -764,6 +764,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Maestro MCP](https://github.com/maestro-org/maestro-mcp)** - An MCP server for interacting with Bitcoin via the Maestro RPC API.
 - **[Magg: The MCP Aggregator](https://github.com/sitbon/magg)** - A meta-MCP server that acts as a universal hub, allowing LLMs to autonomously discover, install, and orchestrate multiple MCP servers - essentially giving AI assistants the power to extend their own capabilities on-demand. Includes `mbro`, a powerful CLI MCP server browser with scripting capability.
 - **[Mailchimp MCP](https://github.com/AgentX-ai/mailchimp-mcp)** - Allows AI agents to interact with the Mailchimp API (read-only)
+- **[Maven Tools MCP](https://github.com/arvindand/maven-tools-mcp)** - Maven Central dependency intelligence for JVM build tools. Supports all build tools (Maven, Gradle, SBT, Mill) with Context7 integration for documentation support.
 - **[MalwareBazaar_MCP](https://github.com/mytechnotalent/MalwareBazaar_MCP)** (by Kevin Thomas) - An AI-driven MCP server that autonomously interfaces with MalwareBazaar, delivering real-time threat intel and sample metadata for authorized cybersecurity research workflows.
 - **[man-mcp-server](https://github.com/guyru/man-mcp-server)** - MCP to search and access man pages on the local machine.
 - **[MariaDB](https://github.com/abel9851/mcp-server-mariadb)** - MariaDB database integration with configurable access controls in Python.
