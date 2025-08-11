@@ -634,7 +634,6 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[FrankfurterMCP](https://github.com/anirbanbasu/frankfurtermcp)** - MCP server acting as an interface to the [Frankfurter API](https://frankfurter.dev/) for currency exchange data.
 - **[freqtrade-mcp](https://github.com/kukapay/freqtrade-mcp)** - An MCP server that integrates with the Freqtrade cryptocurrency trading bot.
 - **[GDB](https://github.com/pansila/mcp_server_gdb)** - A GDB/MI protocol server based on the MCP protocol, providing remote application debugging capabilities with AI assistants.
-- **[Generic SQLAlchemy Object-Relational Database Connectivity for pyODBC](https://github.com/OpenLinkSoftware/mcp-sqlalchemy-server)** - - Generic Database Management System (DBMS) access via SQLAlchemy (pyodbc) Connectors (Drivers)
 - **[ggRMCP](https://github.com/aalobaidi/ggRMCP)** - A Go gateway that converts gRPC services into MCP-compatible tools, allowing AI models like Claude to directly call your gRPC services.
 - **[Ghost](https://github.com/MFYDev/ghost-mcp)** - A Model Context Protocol (MCP) server for interacting with Ghost CMS through LLM interfaces like Claude.
 - **[Git](https://github.com/geropl/git-mcp-go)** - Allows LLM to interact with a local git repository, incl. optional push support.
@@ -889,9 +888,10 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[OpenCTI](https://github.com/Spathodea-Network/opencti-mcp)** - Interact with OpenCTI platform to retrieve threat intelligence data including reports, indicators, malware and threat actors.
 - **[OpenCV](https://github.com/GongRzhe/opencv-mcp-server)** - A MCP server providing OpenCV computer vision capabilities. This allows AI assistants and language models to access powerful computer vision tools.
 - **[OpenDota](https://github.com/asusevski/opendota-mcp-server)** - Interact with OpenDota API to retrieve Dota 2 match data, player statistics, and more.
-- **[OpenLink Generic Java Database Connectivity](https://github.com/OpenLinkSoftware/mcp-jdbc-server)** - - Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers)
-- **[OpenLink Generic Open Database Connectivity](https://github.com/OpenLinkSoftware/mcp-odbc-server)** - - Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers)
-- **[OpenLink Generic Python Open Database Connectivity](https://github.com/OpenLinkSoftware/mcp-pyodbc-server)** - - Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers) for pyODBC
+- **[OpenLink Generic Java Database Connectivity](https://github.com/OpenLinkSoftware/mcp-jdbc-server)** - Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers)
+- **[OpenLink Generic Open Database Connectivity](https://github.com/OpenLinkSoftware/mcp-odbc-server)** - Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers)
+- **[OpenLink Generic Python Open Database Connectivity](https://github.com/OpenLinkSoftware/mcp-pyodbc-server)** - Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers) for PyODBC
+- **[OpenLink Generic SQLAlchemy Object-Relational Database Connectivity for PyODBC](https://github.com/OpenLinkSoftware/mcp-sqlalchemy-server)** - Generic Database Management System (DBMS) access via SQLAlchemy (PyODBC) Connectors (Drivers)
 - **[OpenMetadata](https://github.com/yangkyeongmo/mcp-server-openmetadata)** - MCP Server for OpenMetadata, an open-source metadata management platform.
 - **[OpenRPC](https://github.com/shanejonas/openrpc-mpc-server)** - Interact with and discover JSON-RPC APIs via [OpenRPC](https://open-rpc.org).
 - **[OpenStack](https://github.com/wangsqly0407/openstack-mcp-server)** - MCP server implementation that provides OpenStack interaction.
