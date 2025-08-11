@@ -450,7 +450,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[APIWeaver](https://github.com/GongRzhe/APIWeaver)** - An MCP server that dynamically creates MCP  servers from web API configurations. This allows you to easily integrate any REST API, GraphQL endpoint, or web service into an MCP-compatible tool that can be used by AI assistants like Claude.
 - **[Apollo IO MCP Server](https://github.com/AgentX-ai/apollo-io-mcp-server)** - apollo.io mcp server. Get/enrich contact data for people and organizations agentically.
 - **[Apple Books](https://github.com/vgnshiyer/apple-books-mcp)** - Interact with your library on Apple Books, manage your book collection, summarize highlights, notes, and much more.
-- **[Apple Calendar](https://github.com/Omar-v2/mcp-ical)** - An MCP server that allows you to interact with your MacOS Calendar through natural language, including features such as event creation, modification, schedule listing, finding free time slots etc.
+- **[Apple Calendar](https://github.com/Omar-v2/mcp-ical)** - An MCP server that allows you to interact with your macOS Calendar through natural language, including features such as event creation, modification, schedule listing, finding free time slots etc.
 - **[Apple Docs](https://github.com/kimsungwhee/apple-docs-mcp)** - A powerful Model Context Protocol (MCP) server that provides seamless access to Apple Developer Documentation through natural language queries. Search, explore, and get detailed information about Apple frameworks, APIs, sample code, and more directly in your AI-powered development environment.
 - **[Apple Script](https://github.com/peakmojo/applescript-mcp)** - MCP server that lets LLM run AppleScript code to to fully control anything on Mac, no setup needed.
 - **[APT MCP](https://github.com/GdMacmillan/apt-mcp-server)** - MCP server which runs debian package manager (apt) commands for you using ai agents.
@@ -1176,7 +1176,7 @@ Additional resources on MCP.
 - **[MCP Badges](https://github.com/mcpx-dev/mcp-badges)** – Quickly highlight your MCP project with clear, eye-catching badges, by **[Ironben](https://github.com/nanbingxyz)**
 - **[MCPRepository.com](https://mcprepository.com/)** - A repository that indexes and organizes all MCP servers for easy discovery.
 - **[mcp-cli](https://github.com/wong2/mcp-cli)** - A CLI inspector for the Model Context Protocol by **[wong2](https://github.com/wong2)**
-- **[mcp-dockmaster](https://mcp-dockmaster.com)** - An Open-Sourced UI to install and manage MCP servers for Windows, Linux and MacOS.
+- **[mcp-dockmaster](https://mcp-dockmaster.com)** - An Open-Sourced UI to install and manage MCP servers for Windows, Linux and macOS.
 - **[mcp-get](https://mcp-get.com)** - Command line tool for installing and managing MCP servers by **[Michael Latman](https://github.com/michaellatman)**
 - **[mcp-guardian](https://github.com/eqtylab/mcp-guardian)** - GUI application + tools for proxying / managing control of MCP servers by **[EQTY Lab](https://eqtylab.io)**
 - **[MCP Linker](https://github.com/milisp/mcp-linker)** - A cross-platform Tauri GUI tool for one-click setup and management of MCP servers, supporting Claude Desktop, Cursor, Windsurf, VS Code, Cline, and Neovim.
