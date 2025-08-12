@@ -74,6 +74,18 @@ await Promise.all(args.map(async (dir) => {
   }
 }));
 
+async function getConsistentRealPath(inputPath: string) {
+    let resolvedPath = await fs.realpath(inputPath);
+  
+    // Check if in Windows and the path is like "X:"
+    if (process.platform === 'win32' && /^[a-zA-Z]:$/.test(resolvedPath)) {
+      // add path separator '\'
+      resolvedPath += path.sep;
+    }
+  
+    return resolvedPath;
+}
+
 // Security utilities
 async function validatePath(requestedPath: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
@@ -91,7 +103,7 @@ async function validatePath(requestedPath: string): Promise<string> {
 
   // Handle symlinks by checking their real path
   try {
-    const realPath = await fs.realpath(absolute);
+    const realPath = await getConsistentRealPath(absolute);
     const normalizedReal = normalizePath(realPath);
     if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
       throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
@@ -102,7 +114,7 @@ async function validatePath(requestedPath: string): Promise<string> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       const parentDir = path.dirname(absolute);
       try {
-        const realParentPath = await fs.realpath(parentDir);
+        const realParentPath = await getConsistentRealPath(parentDir);
         const normalizedParent = normalizePath(realParentPath);
         if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
           throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
