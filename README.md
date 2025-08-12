@@ -750,6 +750,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Linear (Go)](https://github.com/geropl/linear-mcp-go)** - Allows LLM to interact with Linear's API via a single static binary.
 - **[Linear MCP](https://github.com/anoncam/linear-mcp)** - Full blown implementation of the Linear SDK to support comprehensive Linear management of projects, initiatives, issues, users, teams and states.
 - **[LlamaCloud](https://github.com/run-llama/mcp-server-llamacloud)** (by marcusschiesser) - Integrate the data stored in a managed index on [LlamaCloud](https://cloud.llamaindex.ai/)
+- **[Listmonk MCP Server](https://github.com/rhnvrm/listmonk-mcp)** (by rhnvrm) - Full API coverage of [Listmonk](https://github.com/knadh/listmonk) email marketing FOSS.
 - **[lldb-mcp](https://github.com/stass/lldb-mcp)** - A Model Context Protocol server for LLDB that provides LLM-driven debugging.
 - **[llm-context](https://github.com/cyberchitta/llm-context.py)** - Provides a repo-packing MCP tool with configurable profiles that specify file inclusion/exclusion patterns and optional prompts.
 - **[Locust](https://github.com/QAInsights/locust-mcp-server)** - Allows running and analyzing Locust tests using MCP compatible clients.
