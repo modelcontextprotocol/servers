@@ -18,6 +18,7 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
+import { createInterface } from 'readline';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
 import { getValidRootDirectories } from './roots-utils.js';
 
@@ -129,6 +130,12 @@ const ReadMediaFileArgsSchema = z.object({
 
 const ReadMultipleFilesArgsSchema = z.object({
   paths: z.array(z.string()),
+});
+
+const ReadFileLinesArgsSchema = z.object({
+  path: z.string(),
+  offset: z.number().int().min(0).describe('The starting line number (0-indexed).'),
+  limit: z.number().int().min(1).describe('The maximum number of lines to read.')
 });
 
 const WriteFileArgsSchema = z.object({
@@ -523,6 +530,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(ReadMediaFileArgsSchema) as ToolInput,
       },
       {
+        name: "read_file_lines",
+        description:
+          "Reads a specified number of lines from a file, given a file path, line offset, and line limit. " +
+          "Has a default timeout of 20 seconds. " +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(ReadFileLinesArgsSchema) as ToolInput,
+      },
+      {
         name: "read_multiple_files",
         description:
           "Read the contents of multiple files simultaneously. This is more " +
@@ -719,6 +734,63 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{ type: "text", text: results.join("\n---\n") }],
         };
+      }
+
+      case "read_file_lines": {
+        const parsed = ReadFileLinesArgsSchema.safeParse(args);
+
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for read_file_lines: ${parsed.error}`);
+        }
+
+        const resolvedPath = await validatePath(parsed.data.path);
+        const fileHandle = await fs.open(resolvedPath, 'r');
+        const readStream = fileHandle.createReadStream();
+        const rl = createInterface({
+          input: readStream,
+          crlfDelay: Infinity,
+        })
+
+        try {
+          const timeout = setTimeout(() => {
+            throw new Error(`Timeout reading file: ${parsed.data.path}`);
+          }, 20000);
+
+          try {
+            let data = '';
+            let lineCount = 0;
+
+            for await (const line of rl) {
+              if (lineCount >= parsed.data.offset && lineCount < parsed.data.offset + parsed.data.limit) {
+                data += line + '\n';
+              } else if (lineCount >= parsed.data.offset + parsed.data.limit) {
+                break;
+              }
+
+              lineCount += 1;
+            }
+
+            clearTimeout(timeout);
+            return { content: [{ type: "text", text: data }] };
+          } finally {
+            clearTimeout(timeout);
+          }
+        } catch (error) {
+          if (error instanceof Error && error.name === 'ENOENT') {
+            throw new Error(`File not found: ${parsed.data.path}`);
+          }
+
+          throw new Error(`Error reading file: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+          if (fileHandle) {
+            readStream.close();
+            readStream.push(null);
+            readStream.read(0);
+
+            rl.close();
+            await fileHandle.close();
+          }
+        }
       }
 
       case "write_file": {
