@@ -910,6 +910,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Paradex MCP](https://github.com/sv/mcp-paradex-py)** - MCP native server for interacting with Paradex platform, including fully features trading.
 - **[PDF reader MCP](https://github.com/gpetraroli/mcp_pdf_reader)** - MCP server to read and search text in a local PDF file.
 - **[PDF Tools MCP](https://github.com/Sohaib-2/pdf-mcp-server)** - Comprehensive PDF manipulation toolkit (merge, split, encrypt, optimize and much more)
+- **[PDMT](https://github.com/paiml/pdmt)** - Pragmatic Deterministic MCP Templating - High-performance deterministic templating library with comprehensive todo validation, quality enforcement, and 0.0 temperature generation for reproducible outputs.
 - **[Peacock for VS Code](https://github.com/johnpapa/peacock-mcp)** - MCP Server for the Peacock extension for VS Code, coloring your world, one Code editor at a time. The main goal of the project is to show how an MCP server can be used to interact with APIs.
 - **[persistproc](https://github.com/irskep/persistproc)** - MCP server + command line tool that allows agents to see & control long-running processes like web servers.
 - **[Phone MCP](https://github.com/hao-cyber/phone-mcp)** - 📱 A powerful plugin that lets you control your Android phone. Enables AI agents to perform complex tasks like automatically playing music based on weather or making calls and sending texts.
