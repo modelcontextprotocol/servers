@@ -901,6 +901,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[OPNSense MCP](https://github.com/vespo92/OPNSenseMCP)** - MCP Server for OPNSense Firewall Management and API access
 - **[Optimade MCP](https://github.com/dianfengxiaobo/optimade-mcp-server)** - An MCP server conducts real-time material science data queries with the Optimade database (for example, elemental composition, crystal structure).
 - **[Oracle](https://github.com/marcelo-ochoa/servers)** (by marcelo-ochoa) - Oracle Database integration in NodeJS with configurable access controls, query explain, stats and schema inspection
+- **[Oracle Cloud Infrastructure (OCI)](https://github.com/karthiksuku/oci-mcp)** (by karthiksukumar) - Python MCP server for OCI infrastructure (Compute, Autonomous Database, Object Storage). Read-heavy by default with safe instance actions (start/stop/reset). Includes Claude Desktop config and `.env` compartment scoping.
 - **[Oura MCP server](https://github.com/tomekkorbak/oura-mcp-server)** - MCP server for Oura API to retrieve one's sleep data
 - **[Oura Ring](https://github.com/rajvirtual/oura-mcp-server)** (by Rajesh Vijay) - MCP Server to access and analyze your Oura Ring data. It provides a structured way to fetch and understand your health metrics.
 - **[Outline](https://github.com/Vortiago/mcp-outline)** - MCP Server to interact with [Outline](https://www.getoutline.com) knowledge base to search, read, create, and manage documents and their content, access collections, add comments, and manage document backlinks.
