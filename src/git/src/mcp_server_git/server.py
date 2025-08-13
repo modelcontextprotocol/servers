@@ -115,7 +115,10 @@ def git_commit(repo: git.Repo, message: str) -> str:
     return f"Changes committed successfully with hash {commit.hexsha}"
 
 def git_add(repo: git.Repo, files: list[str]) -> str:
-    repo.index.add(files)
+    if files == ["."]:
+        repo.git.add(".")
+    else:
+        repo.index.add(files)
     return "Files staged successfully"
 
 def git_reset(repo: git.Repo) -> str:
