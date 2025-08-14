@@ -33,7 +33,7 @@
     "learning-analytics"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.0.1"
+    "@modelcontextprotocol/sdk": "^1.17.0"
   },
   "devDependencies": {
     "@types/node": "^22",
