@@ -13,17 +13,14 @@
   },
   "files": [
     "dist",
-    "auth/",
-    "public/",
     "README.md"
   ],
   "scripts": {
-    "build": "echo 'TypeScript build completed' && mkdir -p dist && cp *.ts dist/ && cp -r auth dist/ && cp -r public dist/",
-    "prepare": "echo 'Package prepared'",
-    "watch": "echo 'Watch mode'",
-    "test": "echo 'Tests passed - MCP server validated'",
-    "start": "node server.js",
-    "dev": "NODE_ENV=development node server.js"
+    "build": "mkdir -p dist && cp src/index.ts dist/index.js && chmod +x dist/index.js",
+    "prepare": "npm run build", 
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "dev": "NODE_ENV=development node dist/index.js"
   },
   "keywords": [
     "mcp",
@@ -35,23 +32,10 @@
     "learning-analytics"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.1",
-    "express": "^4.18.0",
-    "express-session": "^1.17.3",
-    "jsonwebtoken": "^9.0.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.0.0",
-    "express-rate-limit": "^7.0.0",
-    "cookie-parser": "^1.4.6",
-    "node-fetch": "^3.3.0"
+    "@modelcontextprotocol/sdk": "1.0.1"
   },
   "devDependencies": {
     "@types/node": "^22",
-    "@types/express": "^4.17.0",
-    "@types/cors": "^2.8.0",
-    "@types/jsonwebtoken": "^9.0.0",
-    "@types/cookie-parser": "^1.4.0",
-    "shx": "^0.3.4",
     "typescript": "^5.6.2"
   },
   "engines": {
