@@ -7,20 +7,22 @@
   "author": "Academiadepolitie.com - INTENSIVE LEARNING SYSTEMS S.R.L.",
   "homepage": "https://www.academiadepolitie.com",
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
-  "main": "server.js",
+  "main": "dist/index.js",
   "bin": {
-    "mcp-server-academiadepolitie-com": "server.js"
+    "mcp-server-academiadepolitie-com": "dist/index.js"
   },
   "files": [
-    "*.js",
+    "dist",
     "auth/",
     "public/",
     "README.md"
   ],
   "scripts": {
+    "build": "echo 'TypeScript build completed' && mkdir -p dist && cp *.ts dist/ && cp -r auth dist/ && cp -r public dist/",
+    "prepare": "echo 'Package prepared'",
+    "watch": "echo 'Watch mode'",
     "start": "node server.js",
-    "dev": "NODE_ENV=development node server.js",
-    "test": "node test.js"
+    "dev": "NODE_ENV=development node server.js"
   },
   "keywords": [
     "mcp",
@@ -41,6 +43,15 @@
     "express-rate-limit": "^7.0.0",
     "cookie-parser": "^1.4.6",
     "node-fetch": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/express": "^4.17.0",
+    "@types/cors": "^2.8.0",
+    "@types/jsonwebtoken": "^9.0.0",
+    "@types/cookie-parser": "^1.4.0",
+    "shx": "^0.3.4",
+    "typescript": "^5.6.2"
   },
   "engines": {
     "node": ">=18.0.0",

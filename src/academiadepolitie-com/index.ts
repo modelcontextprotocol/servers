@@ -54,8 +54,8 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: (process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000,
-  max: process.env.RATE_LIMIT_MAX_REQUESTS || 100,
+  windowMs: (parseInt(process.env.RATE_LIMIT_WINDOW || '15')) * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
   message: 'Too many requests from this IP'
 });
 
@@ -175,7 +175,7 @@ async function proxyToPHP(endpoint, req, res) {
           const redirectUrl = locationMatch[1].trim();
           console.log('PHP Redirect detected:', redirectUrl);
           res.redirect(302, redirectUrl);
-          resolve();
+          resolve(undefined);
           return;
         }
         
@@ -186,7 +186,7 @@ async function proxyToPHP(endpoint, req, res) {
         
         // Send response
         if (!res.headersSent) { res.send(body || output); }
-        resolve();
+        resolve(undefined);
       } else {
         console.error('PHP Error:', errorOutput);
         res.status(500).json({ error: 'OAuth proxy error' });
@@ -240,7 +240,7 @@ app.get('/oauth/authorize', async (req, res) => {
       // Construiește URL redirect
       let callbackUrl = redirect_uri + '?code=' + encodeURIComponent(authCode);
       if (state) {
-        callbackUrl += '&state=' + encodeURIComponent(state);
+        callbackUrl += '&state=' + encodeURIComponent(state as string);
       }
       
       console.log(`OAuth: User ${session.userId} authorized, redirecting to:`, callbackUrl);
@@ -250,16 +250,16 @@ app.get('/oauth/authorize', async (req, res) => {
     } else {
       // User neautentificat - redirect la login page
       const loginUrl = `/login.html?${new URLSearchParams({
-        client_id,
-        redirect_uri,
-        state: state || '',
-        code_challenge: code_challenge || ''
+        client_id: client_id as string,
+        redirect_uri: redirect_uri as string,
+        state: (state as string) || '',
+        code_challenge: (code_challenge as string) || ''
       }).toString()}`;
       
       console.log('OAuth: User not authenticated, redirecting to login:', loginUrl);
       return res.redirect(302, loginUrl);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('OAuth authorize error:', error);
     res.status(500).json({ error: 'server_error', description: error.message });
   }
@@ -401,7 +401,7 @@ app.post('/oauth/register', async (req, res) => {
     
     const result = dcr.registerClient(req.body);
     
-    if (result.error) {
+    if ((result as any).error) {
       return res.status(400).json(result);
     }
     
@@ -464,9 +464,9 @@ app.post('/mcp', authenticateRequest, async (req, res) => {
   } else {
     // Regular HTTP JSON-RPC response
     try {
-      const result = await handleJSONRPC(req.body, req.user);
+      const result = await handleJSONRPC(req.body, (req as any).user);
       res.json(result);
-    } catch (error) {
+    } catch (error: any) {
       res.status(400).json({
         jsonrpc: '2.0',
         error: {
@@ -504,7 +504,7 @@ async function handleJSONRPC(request, user) {
       // Adaugă user context la args
       args._user = user;
       
-      const result = await tools.executeTool(toolName, args);
+      const result = await tools.executeTool(toolName, args, null);
       
       return {
         jsonrpc: '2.0',
@@ -534,7 +534,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-httpServer.listen(PORT, "0.0.0.0", () => {
+httpServer.listen(parseInt(PORT.toString()), "0.0.0.0", () => {
   console.log(`🚀 Remote MCP Server running on port ${PORT}`);
   console.log(`🔒 OAuth endpoints ready at https://mcp.academiadepolitie.com:8443`);
   console.log(`📡 Accepting connections from: ${process.env.ALLOWED_ORIGINS}`);
