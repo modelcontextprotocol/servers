@@ -1,0 +1,49 @@
+{
+  "name": "@modelcontextprotocol/server-academiadepolitie-com",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "MCP server for Romanian Ministry of Internal Affairs educational institutions entrance exam preparation",
+  "license": "MIT",
+  "author": "Academiadepolitie.com - INTENSIVE LEARNING SYSTEMS S.R.L.",
+  "homepage": "https://www.academiadepolitie.com",
+  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "main": "server.js",
+  "bin": {
+    "mcp-server-academiadepolitie-com": "server.js"
+  },
+  "files": [
+    "*.js",
+    "auth/",
+    "public/",
+    "README.md"
+  ],
+  "scripts": {
+    "start": "node server.js",
+    "dev": "NODE_ENV=development node server.js",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol", 
+    "claude",
+    "ai-tutoring",
+    "education",
+    "romania",
+    "learning-analytics"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "express": "^4.18.0",
+    "express-session": "^1.17.3",
+    "jsonwebtoken": "^9.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.0",
+    "express-rate-limit": "^7.0.0",
+    "cookie-parser": "^1.4.6",
+    "node-fetch": "^3.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}
