@@ -60,6 +60,7 @@ A growing set of community-developed and maintained servers demonstrates various
 
 > **Note:** Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
 
+- **[Academiadepolitie.com](https://github.com/razvan1326/mcp-server)** - AI tutoring platform for Romanian police academy entrance exam preparation serving 50,000+ students with personalized learning analytics and quiz generation.
 - **[MCP Installer](https://github.com/anaisbetts/mcp-installer)** - This server is a server that installs other MCP servers for you.
 - **[NS Travel Information](https://github.com/r-huijts/ns-mcp-server)** - Access Dutch Railways (NS) real-time train travel information and disruptions through the official NS API.
 - **[Spotify](https://github.com/varunneal/spotify-mcp)** - This MCP allows an LLM to play and use Spotify. 
