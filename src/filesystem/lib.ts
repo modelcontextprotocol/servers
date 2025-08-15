@@ -47,10 +47,8 @@ export function formatSize(bytes: number): string {
   
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   
-  // Handle numbers less than 1 byte (should stay in bytes)
   if (i < 0 || i === 0) return `${bytes} ${units[0]}`;
   
-  // Clamp to the largest unit if the number is too large
   const unitIndex = Math.min(i, units.length - 1);
   return `${(bytes / Math.pow(1024, unitIndex)).toFixed(2)} ${units[unitIndex]}`;
 }
@@ -161,54 +159,6 @@ export async function writeFileContent(filePath: string, content: string): Promi
       throw error;
     }
   }
-}
-
-
-// Search & Filtering Functions
-export async function searchFiles(
-  rootPath: string,
-  pattern: string,
-  excludePatterns: string[] = []
-): Promise<string[]> {
-  const results: string[] = [];
-
-  async function search(currentPath: string) {
-    const entries = await fs.readdir(currentPath, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(currentPath, entry.name);
-
-      try {
-        // Security: Validate each path before processing to ensure it's within allowed directories
-        await validatePath(fullPath);
-
-        // Check if path matches any exclude pattern
-        const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(pattern => {
-          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
-          return minimatch(relativePath, globPattern, { dot: true });
-        });
-
-        if (shouldExclude) {
-          continue;
-        }
-
-        if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
-          results.push(fullPath);
-        }
-
-        if (entry.isDirectory()) {
-          await search(fullPath);
-        }
-      } catch (error) {
-        // Skip invalid paths during search
-        continue;
-      }
-    }
-  }
-
-  await search(rootPath);
-  return results;
 }
 
 
@@ -398,7 +348,6 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
   }
 }
 
-// Wrapper function for searchFiles that includes allowedDirectories parameter
 export async function searchFilesWithValidation(
   rootPath: string,
   pattern: string,
@@ -415,19 +364,15 @@ export async function searchFilesWithValidation(
       const fullPath = path.join(currentPath, entry.name);
 
       try {
-        // Security: Validate each path before processing to ensure it's within allowed directories
         await validatePath(fullPath);
 
-        // Check if path matches any exclude pattern
         const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(pattern => {
-          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
+        const shouldExclude = excludePatterns.some(excludePattern => {
+          const globPattern = excludePattern.includes('*') ? excludePattern : `**/${excludePattern}/**`;
           return minimatch(relativePath, globPattern, { dot: true });
         });
 
-        if (shouldExclude) {
-          continue;
-        }
+        if (shouldExclude) continue;
 
         if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
           results.push(fullPath);
@@ -436,8 +381,7 @@ export async function searchFilesWithValidation(
         if (entry.isDirectory()) {
           await search(fullPath);
         }
-      } catch (error) {
-        // Skip invalid paths during search
+      } catch {
         continue;
       }
     }
