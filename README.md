@@ -1040,6 +1040,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Ticketmaster](https://github.com/delorenj/mcp-server-ticketmaster)** - Search for events, venues, and attractions through the Ticketmaster Discovery API
 - **[TickTick](https://github.com/alexarevalo9/ticktick-mcp-server)** - A Model Context Protocol (MCP) server designed to integrate with the TickTick task management platform, enabling intelligent context-aware task operations and automation.
 - **[TigerGraph](https://github.com/custom-discoveries/TigerGraph_MCP)** - A community built MCP server that interacts with TigerGraph Graph Database.
+- **[TMD Earthquake](https://github.com/amornpan/tmd-earthquake-server-1.0)** - 🌍 Real-time earthquake monitoring from Thai Meteorological Department. Features magnitude filtering, location-based search (Thai/English), today's events tracking, dangerous earthquake alerts, and comprehensive statistics. Covers regional and global seismic activities.
 - **[tip.md](https://github.com/tipdotmd#-mcp-server-for-ai-assistants)** - An MCP server that enables AI assistants to interact with tip.md's crypto tipping functionality, allowing agents or supporters to tip registered developers directly from AI chat interfaces.
 - **[TMDB](https://github.com/Laksh-star/mcp-server-tmdb)** - This MCP server integrates with The Movie Database (TMDB) API to provide movie information, search capabilities, and recommendations.
 - **[Todoist](https://github.com/abhiz123/todoist-mcp-server)** - Interact with Todoist to manage your tasks.
