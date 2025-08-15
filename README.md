@@ -483,6 +483,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Base Free USDC Transfer](https://github.com/magnetai/mcp-free-usdc-transfer)** - Send USDC on [Base](https://base.org) for free using Claude AI! Built with [Coinbase CDP](https://docs.cdp.coinbase.com/mpc-wallet/docs/welcome).
 - **[Basic Memory](https://github.com/basicmachines-co/basic-memory)** - Local-first knowledge management system that builds a semantic graph from Markdown files, enabling persistent memory across conversations with LLMs.
 - **[BGG MCP](https://github.com/kkjdaniel/bgg-mcp)** (by kkjdaniel) - MCP to enable interaction with the BoardGameGeek API via AI tooling.
+- **[Bible](https://github.com/trevato/bible-mcp)** - Add biblical context to your generative AI applications.
 - **[BigQuery](https://github.com/LucasHild/mcp-server-bigquery)** (by LucasHild) - This server enables LLMs to inspect database schemas and execute queries on BigQuery.
 - **[BigQuery](https://github.com/ergut/mcp-bigquery-server)** (by ergut) - Server implementation for Google BigQuery integration that enables direct BigQuery database access and querying capabilities
 - **[Bilibili](https://github.com/wangshunnn/bilibili-mcp-server)** - This MCP server provides tools to fetch Bilibili user profiles, video metadata, search videos, and more.
