@@ -10,6 +10,7 @@ import {
   type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
+import { createReadStream } from "fs";
 import path from "path";
 import os from 'os';
 import { randomBytes } from 'crypto';
@@ -78,10 +79,14 @@ await Promise.all(allowedDirectories.map(async (dir) => {
 setAllowedDirectories(allowedDirectories);
 
 // Schema definitions
-const ReadFileArgsSchema = z.object({
+const ReadTextFileArgsSchema = z.object({
   path: z.string(),
   tail: z.number().optional().describe('If provided, returns only the last N lines of the file'),
   head: z.number().optional().describe('If provided, returns only the first N lines of the file')
+});
+
+const ReadMediaFileArgsSchema = z.object({
+  path: z.string()
 });
 
 const ReadMultipleFilesArgsSchema = z.object({
@@ -152,20 +157,322 @@ const server = new Server(
   },
 );
 
+// Tool implementations
+async function getFileStats(filePath: string): Promise<FileInfo> {
+  const stats = await fs.stat(filePath);
+  return {
+    size: stats.size,
+    created: stats.birthtime,
+    modified: stats.mtime,
+    accessed: stats.atime,
+    isDirectory: stats.isDirectory(),
+    isFile: stats.isFile(),
+    permissions: stats.mode.toString(8).slice(-3),
+  };
+}
+
+async function searchFiles(
+  rootPath: string,
+  pattern: string,
+  excludePatterns: string[] = []
+): Promise<string[]> {
+  const results: string[] = [];
+
+  async function search(currentPath: string) {
+    const entries = await fs.readdir(currentPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(currentPath, entry.name);
+
+      try {
+        // Validate each path before processing
+        await validatePath(fullPath);
+
+        // Check if path matches any exclude pattern
+        const relativePath = path.relative(rootPath, fullPath);
+        const shouldExclude = excludePatterns.some(pattern => {
+          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
+          return minimatch(relativePath, globPattern, { dot: true });
+        });
+
+        if (shouldExclude) {
+          continue;
+        }
+
+        if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
+          results.push(fullPath);
+        }
+
+        if (entry.isDirectory()) {
+          await search(fullPath);
+        }
+      } catch (error) {
+        // Skip invalid paths during search
+        continue;
+      }
+    }
+  }
+
+  await search(rootPath);
+  return results;
+}
+
+// file editing and diffing utilities
+function normalizeLineEndings(text: string): string {
+  return text.replace(/\r\n/g, '\n');
+}
+
+function createUnifiedDiff(originalContent: string, newContent: string, filepath: string = 'file'): string {
+  // Ensure consistent line endings for diff
+  const normalizedOriginal = normalizeLineEndings(originalContent);
+  const normalizedNew = normalizeLineEndings(newContent);
+
+  return createTwoFilesPatch(
+    filepath,
+    filepath,
+    normalizedOriginal,
+    normalizedNew,
+    'original',
+    'modified'
+  );
+}
+
+async function applyFileEdits(
+  filePath: string,
+  edits: Array<{oldText: string, newText: string}>,
+  dryRun = false
+): Promise<string> {
+  // Read file content and normalize line endings
+  const content = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
+
+  // Apply edits sequentially
+  let modifiedContent = content;
+  for (const edit of edits) {
+    const normalizedOld = normalizeLineEndings(edit.oldText);
+    const normalizedNew = normalizeLineEndings(edit.newText);
+
+    // If exact match exists, use it
+    if (modifiedContent.includes(normalizedOld)) {
+      modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
+      continue;
+    }
+
+    // Otherwise, try line-by-line matching with flexibility for whitespace
+    const oldLines = normalizedOld.split('\n');
+    const contentLines = modifiedContent.split('\n');
+    let matchFound = false;
+
+    for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
+      const potentialMatch = contentLines.slice(i, i + oldLines.length);
+
+      // Compare lines with normalized whitespace
+      const isMatch = oldLines.every((oldLine, j) => {
+        const contentLine = potentialMatch[j];
+        return oldLine.trim() === contentLine.trim();
+      });
+
+      if (isMatch) {
+        // Preserve original indentation of first line
+        const originalIndent = contentLines[i].match(/^\s*/)?.[0] || '';
+        const newLines = normalizedNew.split('\n').map((line, j) => {
+          if (j === 0) return originalIndent + line.trimStart();
+          // For subsequent lines, try to preserve relative indentation
+          const oldIndent = oldLines[j]?.match(/^\s*/)?.[0] || '';
+          const newIndent = line.match(/^\s*/)?.[0] || '';
+          if (oldIndent && newIndent) {
+            const relativeIndent = newIndent.length - oldIndent.length;
+            return originalIndent + ' '.repeat(Math.max(0, relativeIndent)) + line.trimStart();
+          }
+          return line;
+        });
+
+        contentLines.splice(i, oldLines.length, ...newLines);
+        modifiedContent = contentLines.join('\n');
+        matchFound = true;
+        break;
+      }
+    }
+
+    if (!matchFound) {
+      throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
+    }
+  }
+
+  // Create unified diff
+  const diff = createUnifiedDiff(content, modifiedContent, filePath);
+
+  // Format diff with appropriate number of backticks
+  let numBackticks = 3;
+  while (diff.includes('`'.repeat(numBackticks))) {
+    numBackticks++;
+  }
+  const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
+
+  if (!dryRun) {
+    // Security: Use atomic rename to prevent race conditions where symlinks
+    // could be created between validation and write. Rename operations
+    // replace the target file atomically and don't follow symlinks.
+    const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
+    try {
+      await fs.writeFile(tempPath, modifiedContent, 'utf-8');
+      await fs.rename(tempPath, filePath);
+    } catch (error) {
+      try {
+        await fs.unlink(tempPath);
+      } catch {}
+      throw error;
+    }
+  }
+
+  return formattedDiff;
+}
+
+// Helper functions
+function formatSize(bytes: number): string {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  if (bytes === 0) return '0 B';
+
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  if (i === 0) return `${bytes} ${units[i]}`;
+
+  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+}
+
+// Memory-efficient implementation to get the last N lines of a file
+async function tailFile(filePath: string, numLines: number): Promise<string> {
+  const CHUNK_SIZE = 1024; // Read 1KB at a time
+  const stats = await fs.stat(filePath);
+  const fileSize = stats.size;
+
+  if (fileSize === 0) return '';
+
+  // Open file for reading
+  const fileHandle = await fs.open(filePath, 'r');
+  try {
+    const lines: string[] = [];
+    let position = fileSize;
+    let chunk = Buffer.alloc(CHUNK_SIZE);
+    let linesFound = 0;
+    let remainingText = '';
+
+    // Read chunks from the end of the file until we have enough lines
+    while (position > 0 && linesFound < numLines) {
+      const size = Math.min(CHUNK_SIZE, position);
+      position -= size;
+
+      const { bytesRead } = await fileHandle.read(chunk, 0, size, position);
+      if (!bytesRead) break;
+
+      // Get the chunk as a string and prepend any remaining text from previous iteration
+      const readData = chunk.slice(0, bytesRead).toString('utf-8');
+      const chunkText = readData + remainingText;
+
+      // Split by newlines and count
+      const chunkLines = normalizeLineEndings(chunkText).split('\n');
+
+      // If this isn't the end of the file, the first line is likely incomplete
+      // Save it to prepend to the next chunk
+      if (position > 0) {
+        remainingText = chunkLines[0];
+        chunkLines.shift(); // Remove the first (incomplete) line
+      }
+
+      // Add lines to our result (up to the number we need)
+      for (let i = chunkLines.length - 1; i >= 0 && linesFound < numLines; i--) {
+        lines.unshift(chunkLines[i]);
+        linesFound++;
+      }
+    }
+
+    return lines.join('\n');
+  } finally {
+    await fileHandle.close();
+  }
+}
+
+// New function to get the first N lines of a file
+async function headFile(filePath: string, numLines: number): Promise<string> {
+  const fileHandle = await fs.open(filePath, 'r');
+  try {
+    const lines: string[] = [];
+    let buffer = '';
+    let bytesRead = 0;
+    const chunk = Buffer.alloc(1024); // 1KB buffer
+
+    // Read chunks and count lines until we have enough or reach EOF
+    while (lines.length < numLines) {
+      const result = await fileHandle.read(chunk, 0, chunk.length, bytesRead);
+      if (result.bytesRead === 0) break; // End of file
+      bytesRead += result.bytesRead;
+      buffer += chunk.slice(0, result.bytesRead).toString('utf-8');
+
+      const newLineIndex = buffer.lastIndexOf('\n');
+      if (newLineIndex !== -1) {
+        const completeLines = buffer.slice(0, newLineIndex).split('\n');
+        buffer = buffer.slice(newLineIndex + 1);
+        for (const line of completeLines) {
+          lines.push(line);
+          if (lines.length >= numLines) break;
+        }
+      }
+    }
+
+    // If there is leftover content and we still need lines, add it
+    if (buffer.length > 0 && lines.length < numLines) {
+      lines.push(buffer);
+    }
+
+    return lines.join('\n');
+  } finally {
+    await fileHandle.close();
+  }
+}
+
+// Reads a file as a stream of buffers, concatenates them, and then encodes
+// the result to a Base64 string. This is a memory-efficient way to handle
+// binary data from a stream before the final encoding.
+async function readFileAsBase64Stream(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stream = createReadStream(filePath);
+    const chunks: Buffer[] = [];
+    stream.on('data', (chunk) => {
+      chunks.push(chunk as Buffer);
+    });
+    stream.on('end', () => {
+      const finalBuffer = Buffer.concat(chunks);
+      resolve(finalBuffer.toString('base64'));
+    });
+    stream.on('error', (err) => reject(err));
+  });
+}
+
 // Tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
         name: "read_file",
+        description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
+        inputSchema: zodToJsonSchema(ReadTextFileArgsSchema) as ToolInput,
+      },
+      {
+        name: "read_text_file",
         description:
-          "Read the complete contents of a file from the file system. " +
+          "Read the complete contents of a file from the file system as text. " +
           "Handles various text encodings and provides detailed error messages " +
           "if the file cannot be read. Use this tool when you need to examine " +
           "the contents of a single file. Use the 'head' parameter to read only " +
           "the first N lines of a file, or the 'tail' parameter to read only " +
-          "the last N lines of a file. Only works within allowed directories.",
-        inputSchema: zodToJsonSchema(ReadFileArgsSchema) as ToolInput,
+          "the last N lines of a file. Operates on the file as text regardless of extension. " +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(ReadTextFileArgsSchema) as ToolInput,
+      },
+      {
+        name: "read_media_file",
+        description:
+          "Read an image or audio file. Returns the base64 encoded data and MIME type. " +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(ReadMediaFileArgsSchema) as ToolInput,
       },
       {
         name: "read_multiple_files",
@@ -278,17 +585,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     switch (name) {
-      case "read_file": {
-        const parsed = ReadFileArgsSchema.safeParse(args);
+      case "read_file":
+      case "read_text_file": {
+        const parsed = ReadTextFileArgsSchema.safeParse(args);
         if (!parsed.success) {
-          throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
+          throw new Error(`Invalid arguments for read_text_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        
+
         if (parsed.data.head && parsed.data.tail) {
           throw new Error("Cannot specify both head and tail parameters simultaneously");
         }
-        
+
         if (parsed.data.tail) {
           // Use memory-efficient tail implementation for large files
           const tailContent = await tailFile(validPath, parsed.data.tail);
@@ -296,7 +604,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [{ type: "text", text: tailContent }],
           };
         }
-        
+
         if (parsed.data.head) {
           // Use memory-efficient head implementation for large files
           const headContent = await headFile(validPath, parsed.data.head);
@@ -304,10 +612,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [{ type: "text", text: headContent }],
           };
         }
-        
         const content = await readFileContent(validPath);
         return {
           content: [{ type: "text", text: content }],
+        };
+      }
+
+      case "read_media_file": {
+        const parsed = ReadMediaFileArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for read_media_file: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const extension = path.extname(validPath).toLowerCase();
+        const mimeTypes: Record<string, string> = {
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".gif": "image/gif",
+          ".webp": "image/webp",
+          ".bmp": "image/bmp",
+          ".svg": "image/svg+xml",
+          ".mp3": "audio/mpeg",
+          ".wav": "audio/wav",
+          ".ogg": "audio/ogg",
+          ".flac": "audio/flac",
+        };
+        const mimeType = mimeTypes[extension] || "application/octet-stream";
+        const data = await readFileAsBase64Stream(validPath);
+        const type = mimeType.startsWith("image/")
+          ? "image"
+          : mimeType.startsWith("audio/")
+            ? "audio"
+            : "blob";
+        return {
+          content: [{ type, data, mimeType }],
         };
       }
 
@@ -391,7 +730,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const validPath = await validatePath(parsed.data.path);
         const entries = await fs.readdir(validPath, { withFileTypes: true });
-        
+
         // Get detailed information for each entry
         const detailedEntries = await Promise.all(
           entries.map(async (entry) => {
@@ -414,7 +753,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
           })
         );
-        
+
         // Sort entries based on sortBy parameter
         const sortedEntries = [...detailedEntries].sort((a, b) => {
           if (parsed.data.sortBy === 'size') {
@@ -423,29 +762,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // Default sort by name
           return a.name.localeCompare(b.name);
         });
-        
+
         // Format the output
-        const formattedEntries = sortedEntries.map(entry => 
+        const formattedEntries = sortedEntries.map(entry =>
           `${entry.isDirectory ? "[DIR]" : "[FILE]"} ${entry.name.padEnd(30)} ${
             entry.isDirectory ? "" : formatSize(entry.size).padStart(10)
           }`
         );
-        
+
         // Add summary
         const totalFiles = detailedEntries.filter(e => !e.isDirectory).length;
         const totalDirs = detailedEntries.filter(e => e.isDirectory).length;
         const totalSize = detailedEntries.reduce((sum, entry) => sum + (entry.isDirectory ? 0 : entry.size), 0);
-        
+
         const summary = [
           "",
           `Total: ${totalFiles} files, ${totalDirs} directories`,
           `Combined size: ${formatSize(totalSize)}`
         ];
-        
+
         return {
-          content: [{ 
-            type: "text", 
-            text: [...formattedEntries, ...summary].join("\n") 
+          content: [{
+            type: "text",
+            text: [...formattedEntries, ...summary].join("\n")
           }],
         };
       }
