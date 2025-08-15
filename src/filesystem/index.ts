@@ -884,8 +884,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 for (const entry of entries) {
                     const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
                     const shouldExclude = excludePatterns.some(pattern => {
-                        const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
-                        return minimatch(relativePath, globPattern, {dot: true});
+                        if (pattern.includes('*')) {
+                            return minimatch(relativePath, pattern, {dot: true});
+                        }
+                        // For files: match exact name or as part of path
+                        // For directories: match as directory path
+                        return minimatch(relativePath, pattern, {dot: true}) ||
+                               minimatch(relativePath, `**/${pattern}`, {dot: true}) ||
+                               minimatch(relativePath, `**/${pattern}/**`, {dot: true});
                     });
                     if (shouldExclude)
                         continue;
