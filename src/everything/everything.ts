@@ -20,9 +20,19 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const instructions = readFileSync(join(__dirname, "instructions.md"), "utf-8");
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
+
+const ToolOutputSchema = ToolSchema.shape.outputSchema;
+type ToolOutput = z.infer<typeof ToolOutputSchema>;
 
 /* Input schemas for tools implemented in this server */
 const EchoSchema = z.object({
@@ -39,7 +49,10 @@ const LongRunningOperationSchema = z.object({
     .number()
     .default(10)
     .describe("Duration of the operation in seconds"),
-  steps: z.number().default(5).describe("Number of steps in the operation"),
+  steps: z
+    .number()
+    .default(5)
+    .describe("Number of steps in the operation"),
 });
 
 const PrintEnvSchema = z.object({});
@@ -51,13 +64,6 @@ const SampleLLMSchema = z.object({
     .default(100)
     .describe("Maximum number of tokens to generate"),
 });
-
-// Example completion values
-const EXAMPLE_COMPLETIONS = {
-  style: ["casual", "formal", "technical", "friendly"],
-  temperature: ["0", "0.5", "0.7", "1.0"],
-  resourceId: ["1", "2", "3", "4", "5"],
-};
 
 const GetTinyImageSchema = z.object({});
 
@@ -79,6 +85,39 @@ const GetResourceReferenceSchema = z.object({
     .describe("ID of the resource to reference (1-100)"),
 });
 
+const ElicitationSchema = z.object({});
+
+const GetResourceLinksSchema = z.object({
+  count: z
+    .number()
+    .min(1)
+    .max(10)
+    .default(3)
+    .describe("Number of resource links to return (1-10)"),
+});
+
+const StructuredContentSchema = {
+  input: z.object({
+    location: z
+      .string()
+      .trim()
+      .min(1)
+      .describe("City name or zip code"),
+  }),
+
+  output: z.object({
+    temperature: z
+      .number()
+      .describe("Temperature in celsius"),
+    conditions: z
+      .string()
+      .describe("Weather conditions description"),
+    humidity: z
+      .number()
+      .describe("Humidity percentage"),
+  })
+};
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -88,6 +127,9 @@ enum ToolName {
   GET_TINY_IMAGE = "getTinyImage",
   ANNOTATED_MESSAGE = "annotatedMessage",
   GET_RESOURCE_REFERENCE = "getResourceReference",
+  ELICITATION = "startElicitation",
+  GET_RESOURCE_LINKS = "getResourceLinks",
+  STRUCTURED_CONTENT = "structuredContent"
 }
 
 enum PromptName {
@@ -96,10 +138,18 @@ enum PromptName {
   RESOURCE = "resource_prompt",
 }
 
+// Example completion values
+const EXAMPLE_COMPLETIONS = {
+  style: ["casual", "formal", "technical", "friendly"],
+  temperature: ["0", "0.5", "0.7", "1.0"],
+  resourceId: ["1", "2", "3", "4", "5"],
+};
+
 export const createServer = () => {
   const server = new Server(
     {
       name: "example-servers/everything",
+      title: "Everything Example Server",
       version: "1.0.0",
     },
     {
@@ -109,7 +159,9 @@ export const createServer = () => {
         tools: {},
         logging: {},
         completions: {},
+        elicitation: {},
       },
+      instructions
     }
   );
 
@@ -157,18 +209,6 @@ export const createServer = () => {
   }, 20000);
 
 
-  // Set up update interval for stderr messages
-  stdErrUpdateInterval = setInterval(() => {
-    const shortTimestamp = new Date().toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-    server.notification({
-      method: "notifications/stderr",
-      params: { content: `${shortTimestamp}: A stderr message` },
-    });
-  }, 30000);
 
   // Helper method to request sampling from client
   const requestSampling = async (
@@ -196,6 +236,21 @@ export const createServer = () => {
     };
 
     return await server.request(request, CreateMessageResultSchema);
+  };
+
+  const requestElicitation = async (
+    message: string,
+    requestedSchema: any
+  ) => {
+    const request = {
+      method: 'elicitation/create',
+      params: {
+        message,
+        requestedSchema
+      }
+    };
+
+    return await server.request(request, z.any());
   };
 
   const ALL_RESOURCES: Resource[] = Array.from({ length: 100 }, (_, i) => {
@@ -418,16 +473,16 @@ export const createServer = () => {
         inputSchema: zodToJsonSchema(AddSchema) as ToolInput,
       },
       {
-        name: ToolName.PRINT_ENV,
-        description:
-          "Prints all environment variables, helpful for debugging MCP server configuration",
-        inputSchema: zodToJsonSchema(PrintEnvSchema) as ToolInput,
-      },
-      {
         name: ToolName.LONG_RUNNING_OPERATION,
         description:
           "Demonstrates a long running operation with progress updates",
         inputSchema: zodToJsonSchema(LongRunningOperationSchema) as ToolInput,
+      },
+      {
+        name: ToolName.PRINT_ENV,
+        description:
+          "Prints all environment variables, helpful for debugging MCP server configuration",
+        inputSchema: zodToJsonSchema(PrintEnvSchema) as ToolInput,
       },
       {
         name: ToolName.SAMPLE_LLM,
@@ -450,6 +505,24 @@ export const createServer = () => {
         description:
           "Returns a resource reference that can be used by MCP clients",
         inputSchema: zodToJsonSchema(GetResourceReferenceSchema) as ToolInput,
+      },
+      {
+        name: ToolName.ELICITATION,
+        description: "Demonstrates the Elicitation feature by asking the user to provide information about their favorite color, number, and pets.",
+        inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
+      },
+      {
+        name: ToolName.GET_RESOURCE_LINKS,
+        description:
+          "Returns multiple resource links that reference different types of resources",
+        inputSchema: zodToJsonSchema(GetResourceLinksSchema) as ToolInput,
+      },
+      {
+        name: ToolName.STRUCTURED_CONTENT,
+        description:
+          "Returns structured content along with an output schema for client data validation",
+        inputSchema: zodToJsonSchema(StructuredContentSchema.input) as ToolInput,
+        outputSchema: zodToJsonSchema(StructuredContentSchema.output) as ToolOutput,
       },
     ];
 
@@ -560,35 +633,6 @@ export const createServer = () => {
       };
     }
 
-    if (name === ToolName.GET_RESOURCE_REFERENCE) {
-      const validatedArgs = GetResourceReferenceSchema.parse(args);
-      const resourceId = validatedArgs.resourceId;
-
-      const resourceIndex = resourceId - 1;
-      if (resourceIndex < 0 || resourceIndex >= ALL_RESOURCES.length) {
-        throw new Error(`Resource with ID ${resourceId} does not exist`);
-      }
-
-      const resource = ALL_RESOURCES[resourceIndex];
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Returning resource reference for Resource ${resourceId}:`,
-          },
-          {
-            type: "resource",
-            resource: resource,
-          },
-          {
-            type: "text",
-            text: `You can access this resource using the URI: ${resource.uri}`,
-          },
-        ],
-      };
-    }
-
     if (name === ToolName.ANNOTATED_MESSAGE) {
       const { messageType, includeImage } = AnnotatedMessageSchema.parse(args);
 
@@ -638,6 +682,141 @@ export const createServer = () => {
       }
 
       return { content };
+    }
+
+    if (name === ToolName.GET_RESOURCE_REFERENCE) {
+      const validatedArgs = GetResourceReferenceSchema.parse(args);
+      const resourceId = validatedArgs.resourceId;
+
+      const resourceIndex = resourceId - 1;
+      if (resourceIndex < 0 || resourceIndex >= ALL_RESOURCES.length) {
+        throw new Error(`Resource with ID ${resourceId} does not exist`);
+      }
+
+      const resource = ALL_RESOURCES[resourceIndex];
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Returning resource reference for Resource ${resourceId}:`,
+          },
+          {
+            type: "resource",
+            resource: resource,
+          },
+          {
+            type: "text",
+            text: `You can access this resource using the URI: ${resource.uri}`,
+          },
+        ],
+      };
+    }
+
+    if (name === ToolName.ELICITATION) {
+      ElicitationSchema.parse(args);
+
+      const elicitationResult = await requestElicitation(
+        'What are your favorite things?',
+        {
+          type: 'object',
+          properties: {
+            color: { type: 'string', description: 'Favorite color' },
+            number: { type: 'integer', description: 'Favorite number', minimum: 1, maximum: 100 },
+            pets: { 
+              type: 'string', 
+              enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'], 
+              description: 'Favorite pets' 
+            },
+          }
+        }
+      );
+
+      // Handle different response actions
+      const content = [];
+
+      if (elicitationResult.action === 'accept' && elicitationResult.content) {
+        content.push({
+          type: "text",
+          text: `✅ User provided their favorite things!`,
+        });
+
+        // Only access elicitationResult.content when action is accept
+        const { color, number, pets } = elicitationResult.content;
+        content.push({
+          type: "text",
+          text: `Their favorites are:\n- Color: ${color || 'not specified'}\n- Number: ${number || 'not specified'}\n- Pets: ${pets || 'not specified'}`,
+        });
+      } else if (elicitationResult.action === 'decline') {
+        content.push({
+          type: "text",
+          text: `❌ User declined to provide their favorite things.`,
+        });
+      } else if (elicitationResult.action === 'cancel') {
+        content.push({
+          type: "text",
+          text: `⚠️ User cancelled the elicitation dialog.`,
+        });
+      }
+
+      // Include raw result for debugging
+      content.push({
+        type: "text",
+        text: `\nRaw result: ${JSON.stringify(elicitationResult, null, 2)}`,
+      });
+
+      return { content };
+    }
+
+    if (name === ToolName.GET_RESOURCE_LINKS) {
+      const { count } = GetResourceLinksSchema.parse(args);
+      const content = [];
+
+      // Add intro text
+      content.push({
+        type: "text",
+        text: `Here are ${count} resource links to resources available in this server (see full output in tool response if your client does not support resource_link yet):`,
+      });
+
+      // Return resource links to actual resources from ALL_RESOURCES
+      const actualCount = Math.min(count, ALL_RESOURCES.length);
+      for (let i = 0; i < actualCount; i++) {
+        const resource = ALL_RESOURCES[i];
+        content.push({
+          type: "resource_link",
+          uri: resource.uri,
+          name: resource.name,
+          description: `Resource ${i + 1}: ${
+            resource.mimeType === "text/plain"
+              ? "plaintext resource"
+              : "binary blob resource"
+          }`,
+          mimeType: resource.mimeType,
+        });
+      }
+
+      return { content };
+    }
+
+    if (name === ToolName.STRUCTURED_CONTENT) {
+      // The same response is returned for every input.
+      const validatedArgs = StructuredContentSchema.input.parse(args);
+
+      const weather = {
+        temperature: 22.5,
+        conditions: "Partly cloudy",
+        humidity: 65
+      }
+
+      const backwardCompatiblecontent = {
+        type: "text",
+        text: JSON.stringify(weather)
+      }
+
+      return {
+        content: [ backwardCompatiblecontent ],
+        structuredContent: weather
+      };
     }
 
     throw new Error(`Unknown tool: ${name}`);
