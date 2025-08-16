@@ -6,8 +6,11 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ToolSchema,
+  RootsListChangedNotificationSchema,
+  type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
+import { createReadStream } from "fs";
 import path from "path";
 import os from 'os';
 import { randomBytes } from 'crypto';
@@ -16,12 +19,16 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
+import { getValidRootDirectories } from './roots-utils.js';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
 if (args.length === 0) {
-  console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
-  process.exit(1);
+  console.error("Usage: mcp-server-filesystem [allowed-directory] [additional-directories...]");
+  console.error("Note: Allowed directories can be provided via:");
+  console.error("  1. Command-line arguments (shown above)");
+  console.error("  2. MCP roots protocol (if client supports it)");
+  console.error("At least one directory must be provided by EITHER method for the server to operate.");
 }
 
 // Normalize all paths consistently
@@ -37,7 +44,7 @@ function expandHome(filepath: string): string {
 }
 
 // Store allowed directories in normalized and resolved form
-const allowedDirectories = await Promise.all(
+let allowedDirectories = await Promise.all(
   args.map(async (dir) => {
     const expanded = expandHome(dir);
     const absolute = path.resolve(expanded);
@@ -110,10 +117,14 @@ async function validatePath(requestedPath: string): Promise<string> {
 }
 
 // Schema definitions
-const ReadFileArgsSchema = z.object({
+const ReadTextFileArgsSchema = z.object({
   path: z.string(),
   tail: z.number().optional().describe('If provided, returns only the last N lines of the file'),
   head: z.number().optional().describe('If provided, returns only the first N lines of the file')
+});
+
+const ReadMediaFileArgsSchema = z.object({
+  path: z.string()
 });
 
 const ReadMultipleFilesArgsSchema = z.object({
@@ -368,10 +379,10 @@ async function applyFileEdits(
 function formatSize(bytes: number): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   if (bytes === 0) return '0 B';
-  
+
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   if (i === 0) return `${bytes} ${units[i]}`;
-  
+
   return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
 }
 
@@ -380,9 +391,9 @@ async function tailFile(filePath: string, numLines: number): Promise<string> {
   const CHUNK_SIZE = 1024; // Read 1KB at a time
   const stats = await fs.stat(filePath);
   const fileSize = stats.size;
-  
+
   if (fileSize === 0) return '';
-  
+
   // Open file for reading
   const fileHandle = await fs.open(filePath, 'r');
   try {
@@ -391,36 +402,36 @@ async function tailFile(filePath: string, numLines: number): Promise<string> {
     let chunk = Buffer.alloc(CHUNK_SIZE);
     let linesFound = 0;
     let remainingText = '';
-    
+
     // Read chunks from the end of the file until we have enough lines
     while (position > 0 && linesFound < numLines) {
       const size = Math.min(CHUNK_SIZE, position);
       position -= size;
-      
+
       const { bytesRead } = await fileHandle.read(chunk, 0, size, position);
       if (!bytesRead) break;
-      
+
       // Get the chunk as a string and prepend any remaining text from previous iteration
       const readData = chunk.slice(0, bytesRead).toString('utf-8');
       const chunkText = readData + remainingText;
-      
+
       // Split by newlines and count
       const chunkLines = normalizeLineEndings(chunkText).split('\n');
-      
+
       // If this isn't the end of the file, the first line is likely incomplete
       // Save it to prepend to the next chunk
       if (position > 0) {
         remainingText = chunkLines[0];
         chunkLines.shift(); // Remove the first (incomplete) line
       }
-      
+
       // Add lines to our result (up to the number we need)
       for (let i = chunkLines.length - 1; i >= 0 && linesFound < numLines; i--) {
         lines.unshift(chunkLines[i]);
         linesFound++;
       }
     }
-    
+
     return lines.join('\n');
   } finally {
     await fileHandle.close();
@@ -435,14 +446,14 @@ async function headFile(filePath: string, numLines: number): Promise<string> {
     let buffer = '';
     let bytesRead = 0;
     const chunk = Buffer.alloc(1024); // 1KB buffer
-    
+
     // Read chunks and count lines until we have enough or reach EOF
     while (lines.length < numLines) {
       const result = await fileHandle.read(chunk, 0, chunk.length, bytesRead);
       if (result.bytesRead === 0) break; // End of file
       bytesRead += result.bytesRead;
       buffer += chunk.slice(0, result.bytesRead).toString('utf-8');
-      
+
       const newLineIndex = buffer.lastIndexOf('\n');
       if (newLineIndex !== -1) {
         const completeLines = buffer.slice(0, newLineIndex).split('\n');
@@ -453,16 +464,34 @@ async function headFile(filePath: string, numLines: number): Promise<string> {
         }
       }
     }
-    
+
     // If there is leftover content and we still need lines, add it
     if (buffer.length > 0 && lines.length < numLines) {
       lines.push(buffer);
     }
-    
+
     return lines.join('\n');
   } finally {
     await fileHandle.close();
   }
+}
+
+// Reads a file as a stream of buffers, concatenates them, and then encodes
+// the result to a Base64 string. This is a memory-efficient way to handle
+// binary data from a stream before the final encoding.
+async function readFileAsBase64Stream(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stream = createReadStream(filePath);
+    const chunks: Buffer[] = [];
+    stream.on('data', (chunk) => {
+      chunks.push(chunk as Buffer);
+    });
+    stream.on('end', () => {
+      const finalBuffer = Buffer.concat(chunks);
+      resolve(finalBuffer.toString('base64'));
+    });
+    stream.on('error', (err) => reject(err));
+  });
 }
 
 // Tool handlers
@@ -471,14 +500,27 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "read_file",
+        description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
+        inputSchema: zodToJsonSchema(ReadTextFileArgsSchema) as ToolInput,
+      },
+      {
+        name: "read_text_file",
         description:
-          "Read the complete contents of a file from the file system. " +
+          "Read the complete contents of a file from the file system as text. " +
           "Handles various text encodings and provides detailed error messages " +
           "if the file cannot be read. Use this tool when you need to examine " +
           "the contents of a single file. Use the 'head' parameter to read only " +
           "the first N lines of a file, or the 'tail' parameter to read only " +
-          "the last N lines of a file. Only works within allowed directories.",
-        inputSchema: zodToJsonSchema(ReadFileArgsSchema) as ToolInput,
+          "the last N lines of a file. Operates on the file as text regardless of extension. " +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(ReadTextFileArgsSchema) as ToolInput,
+      },
+      {
+        name: "read_media_file",
+        description:
+          "Read an image or audio file. Returns the base64 encoded data and MIME type. " +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(ReadMediaFileArgsSchema) as ToolInput,
       },
       {
         name: "read_multiple_files",
@@ -573,8 +615,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "list_allowed_directories",
         description:
-          "Returns the list of directories that this server is allowed to access. " +
-          "Use this to understand which directories are available before trying to access files.",
+          "Returns the list of root directories that this server is allowed to access. " +
+          "Use this to understand which directories are available before trying to access files. ",
         inputSchema: {
           type: "object",
           properties: {},
@@ -591,17 +633,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     switch (name) {
-      case "read_file": {
-        const parsed = ReadFileArgsSchema.safeParse(args);
+      case "read_file":
+      case "read_text_file": {
+        const parsed = ReadTextFileArgsSchema.safeParse(args);
         if (!parsed.success) {
-          throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
+          throw new Error(`Invalid arguments for read_text_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        
+
         if (parsed.data.head && parsed.data.tail) {
           throw new Error("Cannot specify both head and tail parameters simultaneously");
         }
-        
+
         if (parsed.data.tail) {
           // Use memory-efficient tail implementation for large files
           const tailContent = await tailFile(validPath, parsed.data.tail);
@@ -609,7 +652,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [{ type: "text", text: tailContent }],
           };
         }
-        
+
         if (parsed.data.head) {
           // Use memory-efficient head implementation for large files
           const headContent = await headFile(validPath, parsed.data.head);
@@ -617,10 +660,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [{ type: "text", text: headContent }],
           };
         }
-        
+
         const content = await fs.readFile(validPath, "utf-8");
         return {
           content: [{ type: "text", text: content }],
+        };
+      }
+
+      case "read_media_file": {
+        const parsed = ReadMediaFileArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for read_media_file: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const extension = path.extname(validPath).toLowerCase();
+        const mimeTypes: Record<string, string> = {
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".gif": "image/gif",
+          ".webp": "image/webp",
+          ".bmp": "image/bmp",
+          ".svg": "image/svg+xml",
+          ".mp3": "audio/mpeg",
+          ".wav": "audio/wav",
+          ".ogg": "audio/ogg",
+          ".flac": "audio/flac",
+        };
+        const mimeType = mimeTypes[extension] || "application/octet-stream";
+        const data = await readFileAsBase64Stream(validPath);
+        const type = mimeType.startsWith("image/")
+          ? "image"
+          : mimeType.startsWith("audio/")
+            ? "audio"
+            : "blob";
+        return {
+          content: [{ type, data, mimeType }],
         };
       }
 
@@ -728,7 +803,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         const validPath = await validatePath(parsed.data.path);
         const entries = await fs.readdir(validPath, { withFileTypes: true });
-        
+
         // Get detailed information for each entry
         const detailedEntries = await Promise.all(
           entries.map(async (entry) => {
@@ -751,7 +826,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
           })
         );
-        
+
         // Sort entries based on sortBy parameter
         const sortedEntries = [...detailedEntries].sort((a, b) => {
           if (parsed.data.sortBy === 'size') {
@@ -760,29 +835,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // Default sort by name
           return a.name.localeCompare(b.name);
         });
-        
+
         // Format the output
-        const formattedEntries = sortedEntries.map(entry => 
+        const formattedEntries = sortedEntries.map(entry =>
           `${entry.isDirectory ? "[DIR]" : "[FILE]"} ${entry.name.padEnd(30)} ${
             entry.isDirectory ? "" : formatSize(entry.size).padStart(10)
           }`
         );
-        
+
         // Add summary
         const totalFiles = detailedEntries.filter(e => !e.isDirectory).length;
         const totalDirs = detailedEntries.filter(e => e.isDirectory).length;
         const totalSize = detailedEntries.reduce((sum, entry) => sum + (entry.isDirectory ? 0 : entry.size), 0);
-        
+
         const summary = [
           "",
           `Total: ${totalFiles} files, ${totalDirs} directories`,
           `Combined size: ${formatSize(totalSize)}`
         ];
-        
+
         return {
-          content: [{ 
-            type: "text", 
-            text: [...formattedEntries, ...summary].join("\n") 
+          content: [{
+            type: "text",
+            text: [...formattedEntries, ...summary].join("\n")
           }],
         };
       }
@@ -890,12 +965,62 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+// Updates allowed directories based on MCP client roots
+async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
+  const validatedRootDirs = await getValidRootDirectories(requestedRoots);
+  if (validatedRootDirs.length > 0) {
+    allowedDirectories = [...validatedRootDirs];
+    console.error(`Updated allowed directories from MCP roots: ${validatedRootDirs.length} valid directories`);
+  } else {
+    console.error("No valid root directories provided by client");
+  }
+}
+
+// Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
+server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+  try {
+    // Request the updated roots list from the client
+    const response = await server.listRoots();
+    if (response && 'roots' in response) {
+      await updateAllowedDirectoriesFromRoots(response.roots);
+    }
+  } catch (error) {
+    console.error("Failed to request roots from client:", error instanceof Error ? error.message : String(error));
+  }
+});
+
+// Handles post-initialization setup, specifically checking for and fetching MCP roots.
+server.oninitialized = async () => {
+  const clientCapabilities = server.getClientCapabilities();
+
+  if (clientCapabilities?.roots) {
+    try {
+      const response = await server.listRoots();
+      if (response && 'roots' in response) {
+        await updateAllowedDirectoriesFromRoots(response.roots);
+      } else {
+        console.error("Client returned no roots set, keeping current settings");
+      }
+    } catch (error) {
+      console.error("Failed to request initial roots from client:", error instanceof Error ? error.message : String(error));
+    }
+  } else {
+    if (allowedDirectories.length > 0) {
+      console.error("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
+    }else{
+      throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
+    }
+  }
+};
+
 // Start server
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Secure MCP Filesystem Server running on stdio");
-  console.error("Allowed directories:", allowedDirectories);
+  if (allowedDirectories.length === 0) {
+    console.error("Started without allowed directories - waiting for client to provide roots via MCP protocol");
+  }
 }
 
 runServer().catch((error) => {
