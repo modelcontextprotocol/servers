@@ -89,6 +89,16 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
      - `structuredContent` field conformant to the output schema
      - A backward compatible Text Content field, a SHOULD advisory in the specification
 
+11. `writeFile`
+   - Writes text content to a file on disk within a safe base directory
+   - Base directory: `MCP_WRITE_BASE_DIR` env var if set, otherwise the server's current working directory
+   - Inputs:
+     - `path` (string): Relative path under the base directory
+     - `content` (string, default ""): Text to write
+     - `append` (boolean, default false): Append instead of overwrite
+     - `ensureDir` (boolean, default true): Create parent directories as needed
+   - Safety: rejects paths that escape the base directory
+
 ### Resources
 
 The server provides 100 test resources in two formats:

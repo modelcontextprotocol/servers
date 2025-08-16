@@ -20,9 +20,9 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { dirname, join, resolve, relative, isAbsolute } from "path";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -118,6 +118,21 @@ const StructuredContentSchema = {
   })
 };
 
+const WriteFileSchema = z.object({
+  path: z
+    .string()
+    .min(1)
+    .describe(
+      "Relative file path to write under the base directory (defaults to process.cwd or MCP_WRITE_BASE_DIR)"
+    ),
+  content: z.string().default("").describe("Text content to write"),
+  append: z.boolean().default(false).describe("Append to file if true"),
+  ensureDir: z
+    .boolean()
+    .default(true)
+    .describe("Create parent directories if they do not exist"),
+});
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -129,7 +144,9 @@ enum ToolName {
   GET_RESOURCE_REFERENCE = "getResourceReference",
   ELICITATION = "startElicitation",
   GET_RESOURCE_LINKS = "getResourceLinks",
-  STRUCTURED_CONTENT = "structuredContent"
+  STRUCTURED_CONTENT = "structuredContent",
+  WRITE_FILE = "writeFile",
+  WRITE_FILE_SNAKE = "write_file",
 }
 
 enum PromptName {
@@ -524,6 +541,18 @@ export const createServer = () => {
         inputSchema: zodToJsonSchema(StructuredContentSchema.input) as ToolInput,
         outputSchema: zodToJsonSchema(StructuredContentSchema.output) as ToolOutput,
       },
+      {
+        name: ToolName.WRITE_FILE,
+        description:
+          "Writes text content to a file under a safe base directory (defaults to process.cwd or MCP_WRITE_BASE_DIR)",
+        inputSchema: zodToJsonSchema(WriteFileSchema) as ToolInput,
+      },
+      {
+        name: ToolName.WRITE_FILE_SNAKE,
+        description:
+          "Alias of writeFile. Writes text content to a file under a safe base directory (defaults to process.cwd or MCP_WRITE_BASE_DIR)",
+        inputSchema: zodToJsonSchema(WriteFileSchema) as ToolInput,
+      },
     ];
 
     return { tools };
@@ -816,6 +845,44 @@ export const createServer = () => {
       return {
         content: [ backwardCompatiblecontent ],
         structuredContent: weather
+      };
+    }
+
+    if (name === ToolName.WRITE_FILE || name === ToolName.WRITE_FILE_SNAKE) {
+      const argsValidated = WriteFileSchema.parse(args);
+      const baseDirEnv = process.env.MCP_WRITE_BASE_DIR;
+      const resolvedBaseDir = resolve(baseDirEnv ? baseDirEnv : process.cwd());
+      const resolvedTargetPath = resolve(resolvedBaseDir, argsValidated.path);
+      const rel = relative(resolvedBaseDir, resolvedTargetPath);
+
+      // Prevent path traversal outside base directory
+      if (rel.startsWith("..") || isAbsolute(rel)) {
+        throw new Error(
+          `Invalid path: ${argsValidated.path}. Path must stay within base directory: ${resolvedBaseDir}`
+        );
+      }
+
+      if (argsValidated.ensureDir) {
+        mkdirSync(dirname(resolvedTargetPath), { recursive: true });
+      }
+
+      if (argsValidated.append) {
+        appendFileSync(resolvedTargetPath, argsValidated.content, {
+          encoding: "utf-8",
+        });
+      } else {
+        writeFileSync(resolvedTargetPath, argsValidated.content, {
+          encoding: "utf-8",
+        });
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Wrote ${argsValidated.append ? "(appended) " : ""}${argsValidated.content.length} bytes to ${resolvedTargetPath}`,
+          },
+        ],
       };
     }
 
