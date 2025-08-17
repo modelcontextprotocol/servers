@@ -53,6 +53,7 @@ The following reference servers are now archived and can be found at [servers-ar
 ### 🎖️ Official Integrations
 
 Official integrations are maintained by companies building production ready MCP servers for their platforms.
+
 - <img height="12" width="12" src="https://www.21st.dev/favicon.ico" alt="21st.dev Logo" /> **[21st.dev Magic](https://github.com/21st-dev/magic-mcp)** - Create crafted UI components inspired by the best 21st.dev design engineers.
 - <img height="12" width="12" src="https://framerusercontent.com/images/LpSK1tSZweomrAHOMAj9Gea96lA.svg" alt="Paragon Logo" /> **[ActionKit by Paragon](https://github.com/useparagon/paragon-mcp)** - Connect to 130+ SaaS integrations (e.g. Slack, Salesforce, Gmail) with Paragon’s [ActionKit](https://www.useparagon.com/actionkit) API.
 - <img height="12" width="12" src="https://invoxx-public-bucket.s3.eu-central-1.amazonaws.com/frontend-resources/adfin-logo-small.svg" alt="Adfin Logo" /> **[Adfin](https://github.com/Adfin-Engineering/mcp-server-adfin)** - The only platform you need to get paid - all payments in one place, invoicing and accounting reconciliations with [Adfin](https://www.adfin.com/).
@@ -444,7 +445,7 @@ A growing set of community-developed and maintained servers demonstrates various
 > [!NOTE]
 > Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
 
-- **[1mcpserver](https://github.com/particlefuture/1mcpserver)** - MCP of MCPs. Automatic discover, configure, and add MCP servers on your local machine.
+- **[1mcpserver](https://github.com/particlefuture/1mcpserver)** - MCP of MCPs. Automatically discover, configure, and add MCP servers on your local machine.
 - **[1Panel](https://github.com/1Panel-dev/mcp-1panel)** - MCP server implementation that provides 1Panel interaction.
 - **[A2A](https://github.com/GongRzhe/A2A-MCP-Server)** - An MCP server that bridges the Model Context Protocol (MCP) with the Agent-to-Agent (A2A) protocol, enabling MCP-compatible AI assistants (like Claude) to seamlessly interact with A2A agents.
 - **[Ableton Live](https://github.com/Simon-Kansara/ableton-live-mcp-server)** - an MCP server to control Ableton Live.
