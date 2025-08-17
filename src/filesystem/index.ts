@@ -615,8 +615,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "list_allowed_directories",
         description:
-          "Returns the list of root directories that this server is allowed to access. " +
-          "Use this to understand which directories are available before trying to access files. ",
+          "Returns the list of directories that this server is allowed to access. " +
+          "Subdirectories within these allowed directories are also accessible. " +
+          "Use this to understand which directories and their nested paths are available " +
+          "before trying to access files.",
         inputSchema: {
           type: "object",
           properties: {},
