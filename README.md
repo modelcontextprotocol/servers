@@ -15,7 +15,8 @@ Typically, each MCP server is implemented with an MCP SDK:
 - [Swift MCP SDK](https://github.com/modelcontextprotocol/swift-sdk)
 - [TypeScript MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 
-> Note: Lists in this README are maintained in alphabetical order to minimize merge conflicts when adding new items.
+> [!NOTE]
+> Lists in this README are maintained in alphabetical order to minimize merge conflicts when adding new items.
 
 ## 🌟 Reference Servers
 
@@ -123,6 +124,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://play.cartesia.ai/icon.png" alt="Cartesia logo" /> **[Cartesia](https://github.com/cartesia-ai/cartesia-mcp)** - Connect to the [Cartesia](https://cartesia.ai/) voice platform to perform text-to-speech, voice cloning etc.
 - <img height="12" width="12" src="https://www.cashfree.com/favicon.ico" alt="Cashfree logo" /> **[Cashfree](https://github.com/cashfree/cashfree-mcp)** - [Cashfree Payments](https://www.cashfree.com/) official MCP server.
 - **[CB Insights](https://github.com/cbinsights/cbi-mcp-server)** - Use the [CB Insights](https://www.cbinsights.com) MCP Server to connect to [ChatCBI](https://www.cbinsights.com/chatcbi/)
+- <img height="12" width="12" src="https://cleanupcrew.ai/favicon-light.png" alt="Cleanup Crew logo" /> **[Cleanup Crew](https://cleanupcrew.ai/install)** - Real-time human support service for non-technical founders using AI coding tools. When AI hits a wall, request instant human help directly from your IDE.
 - <img height="12" width="12" src="https://www.chargebee.com/static/resources/brand/favicon.png" alt="Chargebee Logo" /> **[Chargebee](https://github.com/chargebee/agentkit/tree/main/modelcontextprotocol)** - MCP Server that connects AI agents to [Chargebee platform](https://www.chargebee.com).
 - <img height="12" width="12" src="https://cheqd.io/wp-content/uploads/2023/03/logo_cheqd_favicon.png" alt="Cheqd Logo" /> **[Cheqd](https://github.com/cheqd/mcp-toolkit)** - Enable AI Agents to be trusted, verified, prevent fraud, protect your reputation, and more through [cheqd's](https://cheqd.io) Trust Registries and Credentials.
 - <img height="12" width="12" src="https://cdn.chiki.studio/brand/logo.png" alt="Chiki StudIO Logo" /> **[Chiki StudIO](https://chiki.studio/galimybes/mcp/)** - Create your own configurable MCP servers purely via configuration (no code), with instructions, prompts, and tools support.
@@ -321,6 +323,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://paiml.com/favicon.ico" alt="PAIML Logo" /> **[PAIML MCP Agent Toolkit](https://github.com/paiml/paiml-mcp-agent-toolkit)** - Professional project scaffolding toolkit with zero-configuration AI context generation, template generation for Rust/Deno/Python projects, and hybrid neuro-symbolic code analysis.
 - <img height="12" width="12" src="https://app.paperinvest.io/favicon.svg" alt="Paper Logo" /> **[Paper](https://github.com/paperinvest/mcp-server)** - Realistic paper trading platform with market simulation, 22 broker emulations, and professional tools for risk-free trading practice. First trading platform with MCP integration.
 - **[Patronus AI](https://github.com/patronus-ai/patronus-mcp-server)** - Test, evaluate, and optimize AI agents and RAG apps
+- <img height="12" width="12" src="https://mcp.paubox.com/paubox.png" alt="Paubox Logo" />**[Paubox](https://mcp.paubox.com)** - Official MCP server which allows AI agents to interact with Paubox Email API. HITRUST certified.
 - <img height="12" width="12" src="https://www.paypalobjects.com/webstatic/icon/favicon.ico" alt="PayPal Logo" /> **[PayPal](https://mcp.paypal.com)** - PayPal's official MCP server.
 - <img height="12" width="12" src="https://ww2-secure.pearl.com/static/pearl/pearl-logo.svg" alt="Pearl Logo" /> **[Pearl](https://github.com/Pearl-com/pearl_mcp_server)** - Official MCP Server to interact with Pearl API. Connect your AI Agents with 12,000+ certified experts instantly.
 - <img height="12" width="12" src="https://www.perplexity.ai/favicon.ico" alt="Perplexity Logo" /> **[Perplexity](https://github.com/ppl-ai/modelcontextprotocol)** - An MCP server that connects to Perplexity's Sonar API, enabling real-time web-wide research in conversational AI.
@@ -336,6 +339,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://powerdrill.ai/_next/static/media/powerdrill.0fa27d00.webp" alt="Powerdrill Logo" /> **[Powerdrill](https://github.com/powerdrillai/powerdrill-mcp)** - An MCP server that provides tools to interact with Powerdrill datasets, enabling smart AI data analysis and insights.
 - <img height="12" width="12" src="https://www.prisma.io/images/favicon-32x32.png" alt="Prisma Logo" /> **[Prisma](https://www.prisma.io/docs/postgres/mcp-server)** - Create and manage Prisma Postgres databases
 - <img height="12" width="12" src="https://probe.dev/favicon.ico" alt="Probe.dev Logo" /> **[Probe.dev](https://docs.probe.dev/guides/mcp-integration)** - Comprehensive media analysis and validation powered by [Probe.dev](https://probe.dev). Hosted MCP server with FFprobe, MediaInfo, and Probe Report analysis capabilities.
+- <img height="12" width="12" src="https://framerusercontent.com/images/FGzpihs4MxmSJhyGZ6n7f2Xj0.png" alt="Prode.ai Logo" /> **[ProdE](https://github.com/CuriousBox-AI/ProdE-mcp)** - Your 24/7 production engineer that preserves context across multiple codebases.
 - <img height="12" width="12" src="https://github.com/newtype-01/prompthouse-mcp/raw/main/prompthouse-logo-12x12.png" alt="PromptHouse Logo" /> **[PromptHouse](https://github.com/newtype-01/prompthouse-mcp)** - Personal prompt library with MCP integration for AI clients.
 - <img height="12" width="12" src="https://docs.speedscale.com/img/favicon.ico" alt="proxymock Logo" /> **[proxymock](https://docs.speedscale.com/proxymock/reference/mcp/)** - An MCP server that automatically generates tests and mocks by recording a live app.
 - <img src="https://www.pubnub.com/favicon/favicon-32x32.png" alt="PubNub" width="12" height="12"> **[PubNub](https://github.com/pubnub/pubnub-mcp-server)** - Retrieves context for developing with PubNub SDKs and calling APIs.
@@ -441,7 +445,10 @@ Official integrations are maintained by companies building production ready MCP 
 
 A growing set of community-developed and maintained servers demonstrates various applications of MCP across different domains.
 
-> **Note:** Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
+> [!NOTE]
+> Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
+
+- **[1mcpserver](https://github.com/particlefuture/1mcpserver)** - MCP of MCPs. Automatically discover, configure, and add MCP servers on your local machine.
 - **[1Panel](https://github.com/1Panel-dev/mcp-1panel)** - MCP server implementation that provides 1Panel interaction.
 - **[A2A](https://github.com/GongRzhe/A2A-MCP-Server)** - An MCP server that bridges the Model Context Protocol (MCP) with the Agent-to-Agent (A2A) protocol, enabling MCP-compatible AI assistants (like Claude) to seamlessly interact with A2A agents.
 - **[Ableton Live](https://github.com/Simon-Kansara/ableton-live-mcp-server)** - an MCP server to control Ableton Live.
@@ -513,6 +520,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Bitable MCP](https://github.com/lloydzhou/bitable-mcp)** (by lloydzhou) - MCP server provides access to Lark Bitable through the Model Context Protocol. It allows users to interact with Bitable tables using predefined tools.
 - **[Blender](https://github.com/ahujasid/blender-mcp)** (by ahujasid) - Blender integration allowing prompt enabled 3D scene creation, modeling and manipulation.
 - **[Blender MCP](https://github.com/pranav-deshmukh/blender-mcp)** - MCP server to create professional like 3d scenes on blender using natural language.
+- **[Blockbench MCP Plugin](https://github.com/jasonjgardner/blockbench-mcp-plugin)** (by jasonjgardner) - Blockbench plugin to connect AI agents to Blockbench's JavaScript API. Allows for creating and editing 3D models or pixel art textures with AI in Blockbench.
 - **[Blockchain MCP](https://github.com/tatumio/blockchain-mcp)** - MCP Server for Blockchain Data from **[Tatum](http://tatum.io/mcp)** that instantly unlocks blockchain access for your AI agents. This official Tatum MCP server connects to any LLM in seconds.
 - **[Bluesky](https://github.com/semioz/bluesky-mcp)** (by semioz) - An MCP server for Bluesky, a decentralized social network. It enables automated interactions with the AT Protocol, supporting features like posting, liking, reposting, timeline management, and profile operations.
 - **[Bluetooth MCP Server](https://github.com/Hypijump31/bluetooth-mcp-server)** - Control Bluetooth devices and manage connections through natural language commands, including device discovery, pairing, and audio controls.
@@ -591,6 +599,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[DeepSeek MCP Server](https://github.com/DMontgomery40/deepseek-mcp-server)** - Model Context Protocol server integrating DeepSeek's advanced language models, in addition to [other useful API endpoints](https://github.com/DMontgomery40/deepseek-mcp-server?tab=readme-ov-file#features)
 - **[deepseek-thinker-mcp](https://github.com/ruixingshi/deepseek-thinker-mcp)** - A MCP (Model Context Protocol) provider Deepseek reasoning content to MCP-enabled AI Clients, like Claude Desktop. Supports access to Deepseek's thought processes from the Deepseek API service or from a local Ollama server.
 - **[Deepseek_R1](https://github.com/66julienmartin/MCP-server-Deepseek_R1)** - A Model Context Protocol (MCP) server implementation connecting Claude Desktop with DeepSeek's language models (R1/V3)
+- **[Depyler](https://github.com/paiml/depyler/blob/main/docs/mcp-integration.md)** - Energy-efficient Python-to-Rust transpiler with progressive verification, enabling AI assistants to convert Python code to safe, performant Rust while reducing energy consumption by 75-85%.
 - **[deploy-mcp](https://github.com/alexpota/deploy-mcp)** - Universal deployment tracker for AI assistants with live status badges and deployment monitoring.
 - **[Descope](https://github.com/descope-sample-apps/descope-mcp-server)** - An MCP server to integrate with [Descope](https://descope.com) to search audit logs, manage users, and more.
 - **[DesktopCommander](https://github.com/wonderwhy-er/DesktopCommanderMCP)** - Let AI edit and manage files on your computer, run terminal commands, and connect to remote servers via SSH - all powered by one of the most popular local MCP servers.
@@ -617,6 +626,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[DynamoDB-Toolbox](https://www.dynamodbtoolbox.com/docs/databases/actions/mcp-toolkit)** - Leverages your Schemas and Access Patterns to interact with your [DynamoDB](https://aws.amazon.com/dynamodb) Database using natural language.
 - **[eBook-mcp](https://github.com/onebirdrocks/ebook-mcp)** - A lightweight MCP server that allows LLMs to read and interact with your personal PDF and EPUB ebooks. Ideal for building AI reading assistants or chat-based ebook interfaces.
 - **[ECharts MCP Server](https://github.com/hustcc/mcp-echarts)** - Generate visual charts using ECharts with AI MCP dynamically, used for chart generation and data analysis.
+- **[EDA MCP Server](https://github.com/NellyW8/mcp-EDA)** - A comprehensive Model Context Protocol server for Electronic Design Automation tools, enabling AI assistants to synthesize Verilog with Yosys, simulate designs with Icarus Verilog, run complete ASIC flows with OpenLane, and view results with GTKWave and KLayout.
 - **[EdgeOne Pages MCP](https://github.com/TencentEdgeOne/edgeone-pages-mcp)** - An MCP service for deploying HTML content to EdgeOne Pages and obtaining a publicly accessible URL.
 - **[Edwin](https://github.com/edwin-finance/edwin/tree/main/examples/mcp-server)** - MCP server for edwin SDK - enabling AI agents to interact with DeFi protocols across EVM, Solana and other blockchains.
 - **[eechat](https://github.com/Lucassssss/eechat)** - An open-source, cross-platform desktop application that seamlessly connects with MCP servers, across Linux, macOS, and Windows.
@@ -674,6 +684,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[GitHub Actions](https://github.com/ko1ynnky/github-actions-mcp-server)** - A Model Context Protocol (MCP) server for interacting with GitHub Actions.
 - **[GitHub Enterprise MCP](https://github.com/ddukbg/github-enterprise-mcp)** - A Model Context Protocol (MCP) server for interacting with GitHub Enterprise.
 - **[GitHub GraphQL](https://github.com/QuentinCody/github-graphql-mcp-server)** - Unofficial GitHub MCP server that provides access to GitHub's GraphQL API, enabling more powerful and flexible queries for repository data, issues, pull requests, and other GitHub resources.
+- **[GitHub Projects](https://github.com/redducklabs/github-projects-mcp)** — Manage GitHub Projects with full GraphQL API access including items, fields, and milestones.
 - **[GitHub Repos Manager MCP Server](https://github.com/kurdin/github-repos-manager-mcp)** - Token-based GitHub automation management. No Docker, Flexible configuration, 80+ tools with direct API integration.
 - **[GitMCP](https://github.com/idosal/git-mcp)** - gitmcp.io is a generic remote MCP server to connect to ANY GitHub repository or project documentation effortlessly
 - **[Glean](https://github.com/longyi1207/glean-mcp-server)** - A server that uses Glean API to search and chat.
@@ -700,6 +711,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Google Workspace](https://github.com/taylorwilsdon/google_workspace_mcp)** - Comprehensive Google Workspace MCP with full support for Calendar, Drive, Gmail, and Docs using Streamable HTTP or SSE transport.
 - **[Google-Scholar](https://github.com/JackKuo666/Google-Scholar-MCP-Server)** - Enable AI assistants to search and access Google Scholar papers through a simple MCP interface.
 - **[Google-Scholar](https://github.com/mochow13/google-scholar-mcp)** - An MCP server for Google Scholar written in TypeScript with Streamable HTTP transport, along with a `client` implementations that integrates with the server and interacts with `gemini-2.5-flash`.
+- **[gx-mcp-server](https://github.com/davidf9999/gx-mcp-server)** - Expose Great Expectations data validation and quality checks as MCP tools for AI agents.
 - **[Gralio SaaS Database](https://github.com/tymonTe/gralio-mcp)** - Find and compare SaaS products, including data from G2 reviews, Trustpilot, Crunchbase, Linkedin, pricing, features and more, using [Gralio MCP](https://gralio.ai/mcp) server
 - **[GraphQL](https://github.com/drestrepom/mcp_graphql)** - Comprehensive GraphQL API integration that automatically exposes each GraphQL query as a separate tool.
 - **[GraphQL Schema](https://github.com/hannesj/mcp-graphql-schema)** - Allow LLMs to explore large GraphQL schemas without bloating the context.
@@ -804,6 +816,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Magg: The MCP Aggregator](https://github.com/sitbon/magg)** - A meta-MCP server that acts as a universal hub, allowing LLMs to autonomously discover, install, and orchestrate multiple MCP servers - essentially giving AI assistants the power to extend their own capabilities on-demand. Includes `mbro`, a powerful CLI MCP server browser with scripting capability.
 - **[Mailchimp MCP](https://github.com/AgentX-ai/mailchimp-mcp)** - Allows AI agents to interact with the Mailchimp API (read-only)
 - **[MalwareBazaar_MCP](https://github.com/mytechnotalent/MalwareBazaar_MCP)** (by Kevin Thomas) - An AI-driven MCP server that autonomously interfaces with MalwareBazaar, delivering real-time threat intel and sample metadata for authorized cybersecurity research workflows.
+- **[Matrix](https://github.com/mjknowles/matrix-mcp-server)** - Interact with a Matrix homeserver.
 - **[man-mcp-server](https://github.com/guyru/man-mcp-server)** - MCP to search and access man pages on the local machine.
 - **[MariaDB](https://github.com/abel9851/mcp-server-mariadb)** - MariaDB database integration with configurable access controls in Python.
 - **[Markdown2doc](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/pandoc)** - Convert between various file formats using Pandoc
@@ -815,6 +828,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Matlab-MCP-Tools](https://github.com/neuromechanist/matlab-mcp-tools)** - An MCP to write and execute MATLAB scripts, maintain workspace context between MCP calls, visualize plots, and perform section-by-section analysis of MATLAB code with full access to MATLAB's computational capabilities.
 - **[Maton](https://github.com/maton-ai/agent-toolkit/tree/main/modelcontextprotocol)** - Connect to your SaaS tools like HubSpot, Salesforce, and more.
 - **[Maven Tools MCP](https://github.com/arvindand/maven-tools-mcp)** - Maven Central dependency intelligence for JVM build tools. Supports all build tools (Maven, Gradle, SBT, Mill) with Context7 integration for documentation support.
+- **[MCP-Airflow-API](https://github.com/call518/MCP-Airflow-API)** - Model Context Protocol (MCP) server for Apache Airflow API integration. Provides comprehensive tools for managing Airflow clusters including service operations, configuration management, status monitoring, and request tracking.
 - **[MCP Compass](https://github.com/liuyoshio/mcp-compass)** - Suggest the right MCP server for your needs
 - **[MCP Create](https://github.com/tesla0225/mcp-create)** - A dynamic MCP server management service that creates, runs, and manages Model Context Protocol servers on-the-fly.
 - **[MCP Documentation Server](https://github.com/andrea9293/mcp-documentation-server)** - Server that provides local document management and semantic search capabilities. Upload documents, search them with AI embeddings, and integrate seamlessly with MCP clients like Claude Desktop and vs code.
@@ -905,6 +919,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[nomad-mcp](https://github.com/kocierik/mcp-nomad)** - A server that provides a set of tools for managing Nomad clusters through the MCP.
 - **[Notion](https://github.com/suekou/mcp-notion-server)** (by suekou) - Interact with Notion API.
 - **[Notion](https://github.com/v-3/notion-server)** (by v-3) - Notion MCP integration. Search, Read, Update, and Create pages through Claude chat.
+- **[NPM Plus](https://github.com/shacharsol/js-package-manager-mcp)** - AI-powered JavaScript package management with security scanning, bundle analysis, and intelligent dependency management for MCP-compatible editors.
 - **[NS Travel Information](https://github.com/r-huijts/ns-mcp-server)** - Access Dutch Railways (NS) real-time train travel information and disruptions through the official NS API.
 - **[ntfy-mcp](https://github.com/teddyzxcv/ntfy-mcp)** (by teddyzxcv) - The MCP server that keeps you informed by sending the notification on phone using ntfy
 - **[ntfy-me-mcp](https://github.com/gitmotion/ntfy-me-mcp)** (by gitmotion) - An ntfy MCP server for sending/fetching ntfy notifications to your self-hosted ntfy server from AI Agents 📤 (supports secure token auth & more - use with npx or docker!)
@@ -953,6 +968,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[pancakeswap-poolspy-mcp](https://github.com/kukapay/pancakeswap-poolspy-mcp)** - An MCP server that tracks newly created liquidity pools on Pancake Swap.
 - **[Pandoc](https://github.com/vivekVells/mcp-pandoc)** - MCP server for seamless document format conversion using Pandoc, supporting Markdown, HTML, PDF, DOCX (.docx), csv and more.
 - **[Paradex MCP](https://github.com/sv/mcp-paradex-py)** - MCP native server for interacting with Paradex platform, including fully features trading.
+- **[Parliament MCP]([https://github.com/sv/mcp-paradex-py](https://github.com/i-dot-ai/parliament-mcp))** - MCP server for querying UK parliamentary data.
 - **[PDF reader MCP](https://github.com/gpetraroli/mcp_pdf_reader)** - MCP server to read and search text in a local PDF file.
 - **[PDF Tools MCP](https://github.com/Sohaib-2/pdf-mcp-server)** - Comprehensive PDF manipulation toolkit (merge, split, encrypt, optimize and much more)
 - **[PDMT](https://github.com/paiml/pdmt)** - Pragmatic Deterministic MCP Templating - High-performance deterministic templating library with comprehensive todo validation, quality enforcement, and 0.0 temperature generation for reproducible outputs.
@@ -1110,6 +1126,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[TuriX Computer Automation MCP](https://github.com/TurixAI/TuriX-CUA/tree/mac_mcp)** - MCP server for helping automation control your computer complete your pre-setting task.
 - **[Tyk API Management](https://github.com/TykTechnologies/tyk-dashboard-mcp)** - Chat with all of your organization's managed APIs and perform other API lifecycle operations, managing tokens, users, analytics, and more.
 - **[Typesense](https://github.com/suhail-ak-s/mcp-typesense-server)** - A Model Context Protocol (MCP) server implementation that provides AI models with access to Typesense search capabilities. This server enables LLMs to discover, search, and analyze data stored in Typesense collections.
+- **[UniFi Dream Machine](https://github.com/sabler/mcp-unifi)** An MCP server that gets your network telemetry from the UniFi Site Manager and your local UniFi router.
 - **[uniswap-poolspy-mcp](https://github.com/kukapay/uniswap-poolspy-mcp)** - An MCP server that tracks newly created liquidity pools on Uniswap across nine blockchain networks.
 - **[uniswap-trader-mcp](https://github.com/kukapay/uniswap-trader-mcp)** -An MCP server for AI agents to automate token swaps on Uniswap DEX across multiple blockchains.
 - **[Unity Catalog](https://github.com/ognis1205/mcp-server-unitycatalog)** - An MCP server that enables LLMs to interact with Unity Catalog AI, supporting CRUD operations on Unity Catalog Functions and executing them as MCP tools.
@@ -1148,6 +1165,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[WildFly MCP](https://github.com/wildfly-extras/wildfly-mcp)** - WildFly MCP server that enables LLM to interact with running WildFly servers (retrieve metrics, logs, invoke operations, ...).
 - **[Windows CLI](https://github.com/SimonB97/win-cli-mcp-server)** - MCP server for secure command-line interactions on Windows systems, enabling controlled access to PowerShell, CMD, and Git Bash shells.
 - **[Windsor](https://github.com/windsor-ai/windsor_mcp)** - Windsor MCP (Model Context Protocol) enables your LLM to query, explore, and analyze your full-stack business data integrated into Windsor.ai with zero SQL writing or custom scripting.
+- **[Wordle MCP](https://github.com/cr2007/mcp-wordle-python)** - MCP Server that gets the Wordle Solution for a particular date.
 - **[WordPress MCP](https://github.com/Automattic/wordpress-mcp)** - Make your WordPress site into a simple MCP server, exposing functionality to LLMs and AI agents.
 - **[Workflowy](https://github.com/danield137/mcp-workflowy)** - A server that interacts with [workflowy](https://workflowy.com/).
 - **[World Bank data API](https://github.com/anshumax/world_bank_mcp_server)** - A server that fetches data indicators available with the World Bank as part of their data API
@@ -1189,6 +1207,7 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 * **[MCP-Framework](https://mcp-framework.com)** Build MCP servers with elegance and speed in TypeScript. Comes with a CLI to create your project with `mcp create app`. Get started with your first server in under 5 minutes by **[Alex Andru](https://github.com/QuantGeekDev)**
 * **[MCP Plexus](https://github.com/Super-I-Tech/mcp_plexus)**: A secure, **multi-tenant** and Multi-user MCP python server framework built to integrate easily with external services via OAuth 2.1, offering scalable and robust solutions for managing complex AI applications.
 * **[mcp_sse (Elixir)](https://github.com/kEND/mcp_sse)** An SSE implementation in Elixir for rapidly creating MCP servers.
+* **[mxcp](https://github.com/raw-labs/mxcp)** (Python) - Open-source framework for building enterprise-grade MCP servers using just YAML, SQL, and Python, with built-in auth, monitoring, ETL and policy enforcement.
 * **[Next.js MCP Server Template](https://github.com/vercel-labs/mcp-for-next.js)** (Typescript) - A starter Next.js project that uses the MCP Adapter to allow MCP clients to connect and access resources.
 * **[PayMCP](https://github.com/blustAI/paymcp)** (Python & TypeScript) - Lightweight payments layer for MCP servers: turn tools into paid endpoints with a two-line decorator. [PyPI](https://pypi.org/project/paymcp/) · [npm](https://www.npmjs.com/package/paymcp) · [TS repo](https://github.com/blustAI/paymcp-ts)
 * **[Perl SDK](https://github.com/mojolicious/mojo-mcp)** - An SDK for building MCP servers and clients with the Perl programming language.
@@ -1201,7 +1220,6 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 * **[Vercel MCP Adapter](https://github.com/vercel/mcp-adapter)** (TypeScript) - A simple package to start serving an MCP server on most major JS meta-frameworks including Next, Nuxt, Svelte, and more.
 * **[Hermes MCP](https://github.com/cloudwalk/hermes-mcp)** (Elixir) - A high-performance and high-level Model Context Protocol (MCP) implementation in Elixir. Think like "Live View" for MCP.
 * **[PHP MCP Server](https://github.com/php-mcp/server)** (PHP) - Core PHP implementation for the Model Context Protocol (MCP) server
-
 
 ### For clients
 
