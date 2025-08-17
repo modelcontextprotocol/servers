@@ -104,6 +104,7 @@ jobs:
 
   publish-pypi:
     needs: [update-packages, create-metadata]
+    if: ${{ needs.create-metadata.outputs.pypi_packages != '[]' && needs.create-metadata.outputs.pypi_packages != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -145,6 +146,7 @@ jobs:
 
   publish-npm:
     needs: [update-packages, create-metadata]
+    if: ${{ needs.create-metadata.outputs.npm_packages != '[]' && needs.create-metadata.outputs.npm_packages != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -212,10 +214,3 @@ jobs:
             --title "Release $VERSION" \
             --notes-file RELEASE_NOTES.md
 
-      - name: Docker MCP images
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.DOCKER_TOKEN }}
-          repository: docker/labs-ai-tools-for-devs
-          event-type: build-mcp-images
-          client-payload: '{"ref": "${{ needs.create-metadata.outputs.version }}"}'
