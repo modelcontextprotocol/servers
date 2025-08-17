@@ -605,6 +605,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[DesktopCommander](https://github.com/wonderwhy-er/DesktopCommanderMCP)** - Let AI edit and manage files on your computer, run terminal commands, and connect to remote servers via SSH - all powered by one of the most popular local MCP servers.
 - **[Devcontainer](https://github.com/AI-QL/mcp-devcontainers)** - An MCP server for devcontainer to generate and configure development containers directly from devcontainer configuration files.
 - **[DevDb](https://github.com/damms005/devdb-vscode?tab=readme-ov-file#mcp-configuration)** - An MCP server that runs right inside the IDE, for connecting to MySQL, Postgres, SQLite, and MSSQL databases.
+- **[DevOps AI Toolkit](https://github.com/vfarcic/dot-ai)** - AI-powered development productivity platform that enhances software development workflows through intelligent automation and AI-driven assistance.
 - **[DevOps-MCP](https://github.com/wangkanai/devops-mcp)** - Dynamic Azure DevOps MCP server with directory-based authentication switching, supporting work items, repositories, builds, pipelines, and multi-project management with local configuration files.
 - **[Dicom](https://github.com/ChristianHinge/dicom-mcp)** - An MCP server to query and retrieve medical images and for parsing and reading dicom-encapsulated documents (pdf etc.). 
 - **[Dify](https://github.com/YanxingLiu/dify-mcp-server)** - A simple implementation of an MCP server for dify workflows.
