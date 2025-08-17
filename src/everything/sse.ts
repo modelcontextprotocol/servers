@@ -10,7 +10,7 @@ const transports: Map<string, SSEServerTransport> = new Map<string, SSEServerTra
 
 app.get("/sse", async (req, res) => {
   let transport: SSEServerTransport;
-  const { server, cleanup } = createServer();
+  const { server, cleanup, startNotificationIntervals } = createServer();
 
   if (req?.query?.sessionId) {
     const sessionId = (req?.query?.sessionId as string);
@@ -24,6 +24,9 @@ app.get("/sse", async (req, res) => {
     // Connect server to transport
     await server.connect(transport);
     console.error("Client Connected: ", transport.sessionId);
+
+    // Start notification intervals after client connects
+    startNotificationIntervals();
 
     // Handle close of connection
     server.onclose = async () => {
