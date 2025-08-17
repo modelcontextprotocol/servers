@@ -807,6 +807,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Local History](https://github.com/xxczaki/local-history-mcp)** – MCP server for accessing VS Code/Cursor's Local History.
 - **[Locust](https://github.com/QAInsights/locust-mcp-server)** - Allows running and analyzing Locust tests using MCP compatible clients.
 - **[Loki](https://github.com/scottlepp/loki-mcp)** - Golang based MCP Server to query logs from [Grafana Loki](https://github.com/grafana/loki).
+- **[Loki MCP Server](https://github.com/mo-silent/loki-mcp-server)** - Python based MCP Server for querying and analyzing logs from Grafana Loki with advanced filtering and authentication support.
 - **[LottieFiles](https://github.com/junmer/mcp-server-lottiefiles)** - Searching and retrieving Lottie animations from [LottieFiles](https://lottiefiles.com/)
 - **[lsp-mcp](https://github.com/Tritlo/lsp-mcp)** - Interact with Language Servers usint the Language Server Protocol to provide additional context information via hover, code actions and completions.
 - **[Lspace](https://github.com/Lspace-io/lspace-server)** - Turn scattered ChatGPT/Claude/Cursor conversations into persistent, searchable knowledge.
