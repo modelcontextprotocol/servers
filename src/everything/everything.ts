@@ -169,16 +169,6 @@ export const createServer = () => {
   let subsUpdateInterval: NodeJS.Timeout | undefined;
   let stdErrUpdateInterval: NodeJS.Timeout | undefined;
 
-  // Set up update interval for subscribed resources
-  subsUpdateInterval = setInterval(() => {
-    for (const uri of subscriptions) {
-      server.notification({
-        method: "notifications/resources/updated",
-        params: { uri },
-      });
-    }
-  }, 10000);
-
   let logLevel: LoggingLevel = "debug";
   let logsUpdateInterval: NodeJS.Timeout | undefined;
   const messages = [
@@ -198,15 +188,30 @@ export const createServer = () => {
     return messageLevel < currentLevel;
   };
 
-  // Set up update interval for random log messages
-  logsUpdateInterval = setInterval(() => {
-    let message = {
-      method: "notifications/message",
-      params: messages[Math.floor(Math.random() * messages.length)],
-    };
-    if (!isMessageIgnored(message.params.level as LoggingLevel))
-      server.notification(message);
-  }, 20000);
+  // Function to start notification intervals when a client connects
+  const startNotificationIntervals = () => {
+    if (!subsUpdateInterval) {
+      subsUpdateInterval = setInterval(() => {
+        for (const uri of subscriptions) {
+          server.notification({
+            method: "notifications/resources/updated",
+            params: { uri },
+          });
+        }
+      }, 10000);
+    }
+
+    if (!logsUpdateInterval) {
+      logsUpdateInterval = setInterval(() => {
+        let message = {
+          method: "notifications/message",
+          params: messages[Math.floor(Math.random() * messages.length)],
+        };
+        if (!isMessageIgnored(message.params.level as LoggingLevel))
+          server.notification(message);
+      }, 20000);
+    }
+  };
 
 
 
@@ -874,7 +879,7 @@ export const createServer = () => {
     if (stdErrUpdateInterval) clearInterval(stdErrUpdateInterval);
   };
 
-  return { server, cleanup };
+  return { server, cleanup, startNotificationIntervals };
 };
 
 const MCP_TINY_IMAGE =
