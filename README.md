@@ -620,6 +620,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[DynamoDB-Toolbox](https://www.dynamodbtoolbox.com/docs/databases/actions/mcp-toolkit)** - Leverages your Schemas and Access Patterns to interact with your [DynamoDB](https://aws.amazon.com/dynamodb) Database using natural language.
 - **[eBook-mcp](https://github.com/onebirdrocks/ebook-mcp)** - A lightweight MCP server that allows LLMs to read and interact with your personal PDF and EPUB ebooks. Ideal for building AI reading assistants or chat-based ebook interfaces.
 - **[ECharts MCP Server](https://github.com/hustcc/mcp-echarts)** - Generate visual charts using ECharts with AI MCP dynamically, used for chart generation and data analysis.
+- **[EDA MCP Server](https://github.com/NellyW8/mcp-EDA)** - A comprehensive Model Context Protocol server for Electronic Design Automation tools, enabling AI assistants to synthesize Verilog with Yosys, simulate designs with Icarus Verilog, run complete ASIC flows with OpenLane, and view results with GTKWave and KLayout.
 - **[EdgeOne Pages MCP](https://github.com/TencentEdgeOne/edgeone-pages-mcp)** - An MCP service for deploying HTML content to EdgeOne Pages and obtaining a publicly accessible URL.
 - **[Edwin](https://github.com/edwin-finance/edwin/tree/main/examples/mcp-server)** - MCP server for edwin SDK - enabling AI agents to interact with DeFi protocols across EVM, Solana and other blockchains.
 - **[eechat](https://github.com/Lucassssss/eechat)** - An open-source, cross-platform desktop application that seamlessly connects with MCP servers, across Linux, macOS, and Windows.
@@ -1205,7 +1206,6 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 * **[Vercel MCP Adapter](https://github.com/vercel/mcp-adapter)** (TypeScript) - A simple package to start serving an MCP server on most major JS meta-frameworks including Next, Nuxt, Svelte, and more.
 * **[Hermes MCP](https://github.com/cloudwalk/hermes-mcp)** (Elixir) - A high-performance and high-level Model Context Protocol (MCP) implementation in Elixir. Think like "Live View" for MCP.
 * **[PHP MCP Server](https://github.com/php-mcp/server)** (PHP) - Core PHP implementation for the Model Context Protocol (MCP) server
-
 
 ### For clients
 
