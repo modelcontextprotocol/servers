@@ -16,10 +16,20 @@ import os from 'os';
 import { randomBytes } from 'crypto';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { diffLines, createTwoFilesPatch } from 'diff';
+import { createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
 import { getValidRootDirectories } from './roots-utils.js';
+
+// Constants and config
+const DEFAULT_MAX_LINES = 5000;
+const DEFAULT_CHUNK_SIZE = 1024;
+const config = {
+  maxLines: process.env.MCP_FILESYSTEM_MAX_LINES ? 
+    parseInt(process.env.MCP_FILESYSTEM_MAX_LINES, 10) : DEFAULT_MAX_LINES,
+  chunkSize: process.env.MCP_FILESYSTEM_CHUNK_SIZE ? 
+    parseInt(process.env.MCP_FILESYSTEM_CHUNK_SIZE, 10) : DEFAULT_CHUNK_SIZE
+};
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -119,8 +129,12 @@ async function validatePath(requestedPath: string): Promise<string> {
 // Schema definitions
 const ReadTextFileArgsSchema = z.object({
   path: z.string(),
-  tail: z.number().optional().describe('If provided, returns only the last N lines of the file'),
-  head: z.number().optional().describe('If provided, returns only the first N lines of the file')
+  tail: z.number().optional()
+    .describe('If provided, returns only the last N lines of the file')
+    .refine(n => n === undefined || n <= config.maxLines, `Maximum of ${config.maxLines} lines allowed`),
+  head: z.number().optional()
+    .describe('If provided, returns only the first N lines of the file')
+    .refine(n => n === undefined || n <= config.maxLines, `Maximum of ${config.maxLines} lines allowed`)
 });
 
 const ReadMediaFileArgsSchema = z.object({
@@ -388,7 +402,6 @@ function formatSize(bytes: number): string {
 
 // Memory-efficient implementation to get the last N lines of a file
 async function tailFile(filePath: string, numLines: number): Promise<string> {
-  const CHUNK_SIZE = 1024; // Read 1KB at a time
   const stats = await fs.stat(filePath);
   const fileSize = stats.size;
 
@@ -399,13 +412,13 @@ async function tailFile(filePath: string, numLines: number): Promise<string> {
   try {
     const lines: string[] = [];
     let position = fileSize;
-    let chunk = Buffer.alloc(CHUNK_SIZE);
+    let chunk = Buffer.alloc(config.chunkSize);
     let linesFound = 0;
     let remainingText = '';
 
     // Read chunks from the end of the file until we have enough lines
     while (position > 0 && linesFound < numLines) {
-      const size = Math.min(CHUNK_SIZE, position);
+      const size = Math.min(config.chunkSize, position);
       position -= size;
 
       const { bytesRead } = await fileHandle.read(chunk, 0, size, position);
@@ -445,8 +458,8 @@ async function headFile(filePath: string, numLines: number): Promise<string> {
     const lines: string[] = [];
     let buffer = '';
     let bytesRead = 0;
-    const chunk = Buffer.alloc(1024); // 1KB buffer
-
+    const chunk = Buffer.alloc(config.chunkSize);
+    
     // Read chunks and count lines until we have enough or reach EOF
     while (lines.length < numLines) {
       const result = await fileHandle.read(chunk, 0, chunk.length, bytesRead);

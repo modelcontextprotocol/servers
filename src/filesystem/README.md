@@ -62,6 +62,22 @@ The server's directory access control follows this flow:
 
 
 
+## Environment Variables
+
+- `MCP_FILESYSTEM_MAX_LINES`: Maximum number of lines for head/tail operations (default: 5000)
+- `MCP_FILESYSTEM_CHUNK_SIZE`: Chunk size in bytes for file reading operations (default: 1024)
+
+### Example Usage with Environment Variables
+
+```bash
+# Set custom limits
+export MCP_FILESYSTEM_MAX_LINES=10000
+export MCP_FILESYSTEM_CHUNK_SIZE=2048
+
+# Run the server
+npx @modelcontextprotocol/server-filesystem /path/to/directory
+```
+
 ## API
 
 ### Resources
