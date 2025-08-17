@@ -13,13 +13,14 @@ import fs from "fs/promises";
 import { createReadStream } from "fs";
 import path from "path";
 import os from 'os';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash, getHashes } from 'crypto';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
 import { getValidRootDirectories } from './roots-utils.js';
+import { getFileHash } from "./file-hash.js";
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -177,6 +178,12 @@ const SearchFilesArgsSchema = z.object({
 
 const GetFileInfoArgsSchema = z.object({
   path: z.string(),
+});
+
+const GetFileHashArgsSchema = z.object({
+  path: z.string(),
+  algorithm: z.enum(['md5', 'sha1', 'sha256']).default('sha256').describe('Hash algorithm to use'),
+  encoding: z.enum(['hex', 'base64']).default('hex').describe('Digest encoding')
 });
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
@@ -623,6 +630,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: [],
         },
       },
+      {
+  name: "get_file_hash",
+  description:
+    "Compute the cryptographic hash of a file for integrity verification. " +
+    "Use only for regular files within allowed directories (not directories/devices). " +
+    "Inputs: { path: absolute path, algorithm: \"md5\"|\"sha1\"|\"sha256\", " +
+    "encoding: \"hex\"|\"base64\" (optional, default \"hex\") }. " +
+    "Return only the digest string. Call when verifying file integrity or comparing files.",
+  inputSchema: zodToJsonSchema(GetFileHashArgsSchema) as ToolInput,
+  }
     ],
   };
 });
@@ -942,6 +959,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             .map(([key, value]) => `${key}: ${value}`)
             .join("\n") }],
         };
+      }
+
+      case "get_file_hash": {
+        const parsed = GetFileHashArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for get_file_hash: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const encoding = parsed.data.encoding ?? "hex";
+        const hash = await getFileHash(validPath, parsed.data.algorithm, encoding);
+        return {
+          content: [{
+            type: "text",
+            text: `algorithm: ${parsed.data.algorithm}\nencoding: ${encoding}\npath: ${parsed.data.path}\ndigest: ${hash}`
+          }],
+   };
       }
 
       case "list_allowed_directories": {

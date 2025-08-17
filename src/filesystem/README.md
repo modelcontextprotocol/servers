@@ -9,6 +9,7 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Move files/directories
 - Search files
 - Get file metadata
+- Get file digest (md5, sha1, sha256)
 - Dynamic directory access control via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots)
 
 ## Directory Access Control
@@ -149,6 +150,21 @@ The server's directory access control follows this flow:
     - Access time
     - Type (file/directory)
     - Permissions
+
+- **get_file_hash**
+
+  - Compute the cryptographic hash of a regular file (md5, sha1, or sha256)
+  - Inputs:
+    - `path` (string): File to hash
+    - `algorithm` (`"md5" | "sha1" | "sha256"`, optional): Defaults to `"sha256"`
+    - `encoding` (`"hex" | "base64"`, optional): Digest encoding, defaults to `"hex"`
+  - Streams file contents for memory-efficient hashing
+  - Only operates within allowed directories
+  - Returns the digest as a string
+  - Notes:
+    - Fails if the path is not a regular file
+    - May error if the requested algorithm is unavailable in the current Node/OpenSSL build (e.g., FIPS mode)
+    - Digest encodings (`hex`, `base64`) are supported by Node’s `crypto` `Hash#digest`, and the filesystem server restricts operations to configured allowed directories.
 
 - **list_allowed_directories**
   - List all directories the server is allowed to access
