@@ -12,14 +12,23 @@ import {
 import fs from "fs/promises";
 import { createReadStream } from "fs";
 import path from "path";
-import os from 'os';
-import { randomBytes } from 'crypto';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { diffLines, createTwoFilesPatch } from 'diff';
-import { minimatch } from 'minimatch';
-import { isPathWithinAllowedDirectories } from './path-validation.js';
+import { normalizePath, expandHome } from './path-utils.js';
 import { getValidRootDirectories } from './roots-utils.js';
+import {
+  // Function imports
+  formatSize,
+  validatePath,
+  getFileStats,
+  readFileContent,
+  writeFileContent,
+  searchFilesWithValidation,
+  applyFileEdits,
+  tailFile,
+  headFile,
+  setAllowedDirectories,
+} from './lib.js';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -31,25 +40,14 @@ if (args.length === 0) {
   console.error("At least one directory must be provided by EITHER method for the server to operate.");
 }
 
-// Normalize all paths consistently
-function normalizePath(p: string): string {
-  return path.normalize(p);
-}
-
-function expandHome(filepath: string): string {
-  if (filepath.startsWith('~/') || filepath === '~') {
-    return path.join(os.homedir(), filepath.slice(1));
-  }
-  return filepath;
-}
-
 // Store allowed directories in normalized and resolved form
 let allowedDirectories = await Promise.all(
   args.map(async (dir) => {
     const expanded = expandHome(dir);
     const absolute = path.resolve(expanded);
     try {
-      // Resolve symlinks in allowed directories during startup
+      // Security: Resolve symlinks in allowed directories during startup
+      // This ensures we know the real paths and can validate against them later
       const resolved = await fs.realpath(absolute);
       return normalizePath(resolved);
     } catch (error) {
@@ -61,9 +59,9 @@ let allowedDirectories = await Promise.all(
 );
 
 // Validate that all directories exist and are accessible
-await Promise.all(args.map(async (dir) => {
+await Promise.all(allowedDirectories.map(async (dir) => {
   try {
-    const stats = await fs.stat(expandHome(dir));
+    const stats = await fs.stat(dir);
     if (!stats.isDirectory()) {
       console.error(`Error: ${dir} is not a directory`);
       process.exit(1);
@@ -74,47 +72,8 @@ await Promise.all(args.map(async (dir) => {
   }
 }));
 
-// Security utilities
-async function validatePath(requestedPath: string): Promise<string> {
-  const expandedPath = expandHome(requestedPath);
-  const absolute = path.isAbsolute(expandedPath)
-    ? path.resolve(expandedPath)
-    : path.resolve(process.cwd(), expandedPath);
-
-  const normalizedRequested = normalizePath(absolute);
-
-  // Check if path is within allowed directories
-  const isAllowed = isPathWithinAllowedDirectories(normalizedRequested, allowedDirectories);
-  if (!isAllowed) {
-    throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
-  }
-
-  // Handle symlinks by checking their real path
-  try {
-    const realPath = await fs.realpath(absolute);
-    const normalizedReal = normalizePath(realPath);
-    if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
-      throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
-    }
-    return realPath;
-  } catch (error) {
-    // For new files that don't exist yet, verify parent directory
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      const parentDir = path.dirname(absolute);
-      try {
-        const realParentPath = await fs.realpath(parentDir);
-        const normalizedParent = normalizePath(realParentPath);
-        if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
-        }
-        return absolute;
-      } catch {
-        throw new Error(`Parent directory does not exist: ${parentDir}`);
-      }
-    }
-    throw error;
-  }
-}
+// Initialize the global allowedDirectories in lib.ts
+setAllowedDirectories(allowedDirectories);
 
 // Schema definitions
 const ReadTextFileArgsSchema = z.object({
@@ -182,16 +141,6 @@ const GetFileInfoArgsSchema = z.object({
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
-interface FileInfo {
-  size: number;
-  created: Date;
-  modified: Date;
-  accessed: Date;
-  isDirectory: boolean;
-  isFile: boolean;
-  permissions: string;
-}
-
 // Server setup
 const server = new Server(
   {
@@ -204,277 +153,6 @@ const server = new Server(
     },
   },
 );
-
-// Tool implementations
-async function getFileStats(filePath: string): Promise<FileInfo> {
-  const stats = await fs.stat(filePath);
-  return {
-    size: stats.size,
-    created: stats.birthtime,
-    modified: stats.mtime,
-    accessed: stats.atime,
-    isDirectory: stats.isDirectory(),
-    isFile: stats.isFile(),
-    permissions: stats.mode.toString(8).slice(-3),
-  };
-}
-
-async function searchFiles(
-  rootPath: string,
-  pattern: string,
-  excludePatterns: string[] = []
-): Promise<string[]> {
-  const results: string[] = [];
-
-  async function search(currentPath: string) {
-    const entries = await fs.readdir(currentPath, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(currentPath, entry.name);
-
-      try {
-        // Validate each path before processing
-        await validatePath(fullPath);
-
-        // Check if path matches any exclude pattern
-        const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(pattern => {
-          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
-          return minimatch(relativePath, globPattern, { dot: true });
-        });
-
-        if (shouldExclude) {
-          continue;
-        }
-
-        if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
-          results.push(fullPath);
-        }
-
-        if (entry.isDirectory()) {
-          await search(fullPath);
-        }
-      } catch (error) {
-        // Skip invalid paths during search
-        continue;
-      }
-    }
-  }
-
-  await search(rootPath);
-  return results;
-}
-
-// file editing and diffing utilities
-function normalizeLineEndings(text: string): string {
-  return text.replace(/\r\n/g, '\n');
-}
-
-function createUnifiedDiff(originalContent: string, newContent: string, filepath: string = 'file'): string {
-  // Ensure consistent line endings for diff
-  const normalizedOriginal = normalizeLineEndings(originalContent);
-  const normalizedNew = normalizeLineEndings(newContent);
-
-  return createTwoFilesPatch(
-    filepath,
-    filepath,
-    normalizedOriginal,
-    normalizedNew,
-    'original',
-    'modified'
-  );
-}
-
-async function applyFileEdits(
-  filePath: string,
-  edits: Array<{oldText: string, newText: string}>,
-  dryRun = false
-): Promise<string> {
-  // Read file content and normalize line endings
-  const content = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
-
-  // Apply edits sequentially
-  let modifiedContent = content;
-  for (const edit of edits) {
-    const normalizedOld = normalizeLineEndings(edit.oldText);
-    const normalizedNew = normalizeLineEndings(edit.newText);
-
-    // If exact match exists, use it
-    if (modifiedContent.includes(normalizedOld)) {
-      modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
-      continue;
-    }
-
-    // Otherwise, try line-by-line matching with flexibility for whitespace
-    const oldLines = normalizedOld.split('\n');
-    const contentLines = modifiedContent.split('\n');
-    let matchFound = false;
-
-    for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
-      const potentialMatch = contentLines.slice(i, i + oldLines.length);
-
-      // Compare lines with normalized whitespace
-      const isMatch = oldLines.every((oldLine, j) => {
-        const contentLine = potentialMatch[j];
-        return oldLine.trim() === contentLine.trim();
-      });
-
-      if (isMatch) {
-        // Preserve original indentation of first line
-        const originalIndent = contentLines[i].match(/^\s*/)?.[0] || '';
-        const newLines = normalizedNew.split('\n').map((line, j) => {
-          if (j === 0) return originalIndent + line.trimStart();
-          // For subsequent lines, try to preserve relative indentation
-          const oldIndent = oldLines[j]?.match(/^\s*/)?.[0] || '';
-          const newIndent = line.match(/^\s*/)?.[0] || '';
-          if (oldIndent && newIndent) {
-            const relativeIndent = newIndent.length - oldIndent.length;
-            return originalIndent + ' '.repeat(Math.max(0, relativeIndent)) + line.trimStart();
-          }
-          return line;
-        });
-
-        contentLines.splice(i, oldLines.length, ...newLines);
-        modifiedContent = contentLines.join('\n');
-        matchFound = true;
-        break;
-      }
-    }
-
-    if (!matchFound) {
-      throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
-    }
-  }
-
-  // Create unified diff
-  const diff = createUnifiedDiff(content, modifiedContent, filePath);
-
-  // Format diff with appropriate number of backticks
-  let numBackticks = 3;
-  while (diff.includes('`'.repeat(numBackticks))) {
-    numBackticks++;
-  }
-  const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
-
-  if (!dryRun) {
-    // Security: Use atomic rename to prevent race conditions where symlinks
-    // could be created between validation and write. Rename operations
-    // replace the target file atomically and don't follow symlinks.
-    const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-    try {
-      await fs.writeFile(tempPath, modifiedContent, 'utf-8');
-      await fs.rename(tempPath, filePath);
-    } catch (error) {
-      try {
-        await fs.unlink(tempPath);
-      } catch {}
-      throw error;
-    }
-  }
-
-  return formattedDiff;
-}
-
-// Helper functions
-function formatSize(bytes: number): string {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  if (bytes === 0) return '0 B';
-
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  if (i === 0) return `${bytes} ${units[i]}`;
-
-  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
-}
-
-// Memory-efficient implementation to get the last N lines of a file
-async function tailFile(filePath: string, numLines: number): Promise<string> {
-  const CHUNK_SIZE = 1024; // Read 1KB at a time
-  const stats = await fs.stat(filePath);
-  const fileSize = stats.size;
-
-  if (fileSize === 0) return '';
-
-  // Open file for reading
-  const fileHandle = await fs.open(filePath, 'r');
-  try {
-    const lines: string[] = [];
-    let position = fileSize;
-    let chunk = Buffer.alloc(CHUNK_SIZE);
-    let linesFound = 0;
-    let remainingText = '';
-
-    // Read chunks from the end of the file until we have enough lines
-    while (position > 0 && linesFound < numLines) {
-      const size = Math.min(CHUNK_SIZE, position);
-      position -= size;
-
-      const { bytesRead } = await fileHandle.read(chunk, 0, size, position);
-      if (!bytesRead) break;
-
-      // Get the chunk as a string and prepend any remaining text from previous iteration
-      const readData = chunk.slice(0, bytesRead).toString('utf-8');
-      const chunkText = readData + remainingText;
-
-      // Split by newlines and count
-      const chunkLines = normalizeLineEndings(chunkText).split('\n');
-
-      // If this isn't the end of the file, the first line is likely incomplete
-      // Save it to prepend to the next chunk
-      if (position > 0) {
-        remainingText = chunkLines[0];
-        chunkLines.shift(); // Remove the first (incomplete) line
-      }
-
-      // Add lines to our result (up to the number we need)
-      for (let i = chunkLines.length - 1; i >= 0 && linesFound < numLines; i--) {
-        lines.unshift(chunkLines[i]);
-        linesFound++;
-      }
-    }
-
-    return lines.join('\n');
-  } finally {
-    await fileHandle.close();
-  }
-}
-
-// New function to get the first N lines of a file
-async function headFile(filePath: string, numLines: number): Promise<string> {
-  const fileHandle = await fs.open(filePath, 'r');
-  try {
-    const lines: string[] = [];
-    let buffer = '';
-    let bytesRead = 0;
-    const chunk = Buffer.alloc(1024); // 1KB buffer
-
-    // Read chunks and count lines until we have enough or reach EOF
-    while (lines.length < numLines) {
-      const result = await fileHandle.read(chunk, 0, chunk.length, bytesRead);
-      if (result.bytesRead === 0) break; // End of file
-      bytesRead += result.bytesRead;
-      buffer += chunk.slice(0, result.bytesRead).toString('utf-8');
-
-      const newLineIndex = buffer.lastIndexOf('\n');
-      if (newLineIndex !== -1) {
-        const completeLines = buffer.slice(0, newLineIndex).split('\n');
-        buffer = buffer.slice(newLineIndex + 1);
-        for (const line of completeLines) {
-          lines.push(line);
-          if (lines.length >= numLines) break;
-        }
-      }
-    }
-
-    // If there is leftover content and we still need lines, add it
-    if (buffer.length > 0 && lines.length < numLines) {
-      lines.push(buffer);
-    }
-
-    return lines.join('\n');
-  } finally {
-    await fileHandle.close();
-  }
-}
 
 // Reads a file as a stream of buffers, concatenates them, and then encodes
 // the result to a Base64 string. This is a memory-efficient way to handle
@@ -662,8 +340,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [{ type: "text", text: headContent }],
           };
         }
-
-        const content = await fs.readFile(validPath, "utf-8");
+        const content = await readFileContent(validPath);
         return {
           content: [{ type: "text", text: content }],
         };
@@ -710,7 +387,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           parsed.data.paths.map(async (filePath: string) => {
             try {
               const validPath = await validatePath(filePath);
-              const content = await fs.readFile(validPath, "utf-8");
+              const content = await readFileContent(validPath);
               return `${filePath}:\n${content}\n`;
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
@@ -729,31 +406,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-
-        try {
-          // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
-          // preventing writes through pre-existing symlinks
-          await fs.writeFile(validPath, parsed.data.content, { encoding: "utf-8", flag: 'wx' });
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-            // Security: Use atomic rename to prevent race conditions where symlinks
-            // could be created between validation and write. Rename operations
-            // replace the target file atomically and don't follow symlinks.
-            const tempPath = `${validPath}.${randomBytes(16).toString('hex')}.tmp`;
-            try {
-              await fs.writeFile(tempPath, parsed.data.content, 'utf-8');
-              await fs.rename(tempPath, validPath);
-            } catch (renameError) {
-              try {
-                await fs.unlink(tempPath);
-              } catch {}
-              throw renameError;
-            }
-          } else {
-            throw error;
-          }
-        }
-
+        await writeFileContent(validPath, parsed.data.content);
         return {
           content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
         };
@@ -870,42 +523,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
         }
 
-            interface TreeEntry {
-                name: string;
-                type: 'file' | 'directory';
-                children?: TreeEntry[];
-            }
+        interface TreeEntry {
+            name: string;
+            type: 'file' | 'directory';
+            children?: TreeEntry[];
+        }
 
-            async function buildTree(currentPath: string): Promise<TreeEntry[]> {
-                const validPath = await validatePath(currentPath);
-                const entries = await fs.readdir(validPath, {withFileTypes: true});
-                const result: TreeEntry[] = [];
+        async function buildTree(currentPath: string): Promise<TreeEntry[]> {
+            const validPath = await validatePath(currentPath);
+            const entries = await fs.readdir(validPath, {withFileTypes: true});
+            const result: TreeEntry[] = [];
 
-                for (const entry of entries) {
-                    const entryData: TreeEntry = {
-                        name: entry.name,
-                        type: entry.isDirectory() ? 'directory' : 'file'
-                    };
+            for (const entry of entries) {
+                const entryData: TreeEntry = {
+                    name: entry.name,
+                    type: entry.isDirectory() ? 'directory' : 'file'
+                };
 
-                    if (entry.isDirectory()) {
-                        const subPath = path.join(currentPath, entry.name);
-                        entryData.children = await buildTree(subPath);
-                    }
-
-                    result.push(entryData);
+                if (entry.isDirectory()) {
+                    const subPath = path.join(currentPath, entry.name);
+                    entryData.children = await buildTree(subPath);
                 }
 
-                return result;
+                result.push(entryData);
             }
 
-            const treeData = await buildTree(parsed.data.path);
-            return {
-                content: [{
-                    type: "text",
-                    text: JSON.stringify(treeData, null, 2)
-                }],
-            };
+            return result;
         }
+
+        const treeData = await buildTree(parsed.data.path);
+        return {
+            content: [{
+                type: "text",
+                text: JSON.stringify(treeData, null, 2)
+            }],
+        };
+      }
 
       case "move_file": {
         const parsed = MoveFileArgsSchema.safeParse(args);
@@ -926,7 +579,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
+        const results = await searchFilesWithValidation(validPath, parsed.data.pattern, allowedDirectories, { excludePatterns: parsed.data.excludePatterns });
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };
@@ -972,6 +625,7 @@ async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
   const validatedRootDirs = await getValidRootDirectories(requestedRoots);
   if (validatedRootDirs.length > 0) {
     allowedDirectories = [...validatedRootDirs];
+    setAllowedDirectories(allowedDirectories); // Update the global state in lib.ts
     console.error(`Updated allowed directories from MCP roots: ${validatedRootDirs.length} valid directories`);
   } else {
     console.error("No valid root directories provided by client");
