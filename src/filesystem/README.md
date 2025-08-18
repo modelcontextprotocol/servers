@@ -64,10 +64,6 @@ The server's directory access control follows this flow:
 
 ## API
 
-### Resources
-
-- `file://system`: File system operations interface
-
 ### Tools
 
 - **read_text_file**
