@@ -993,6 +993,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Prefect](https://github.com/allen-munsch/mcp-prefect)** - MCP Server for workflow orchestration and ELT/ETL with Prefect Server, and Prefect Cloud [https://www.prefect.io/] using the `prefect` python client.
 - **[Productboard](https://github.com/kenjihikmatullah/productboard-mcp)** - Integrate the Productboard API into agentic workflows via MCP.
 - **[Prometheus](https://github.com/pab1it0/prometheus-mcp-server)** - Query and analyze Prometheus - open-source monitoring system.
+- **[Prometheus (TypeScript)](https://github.com/yanmxa/prometheus-mcp-server)** - Enable AI assistants to query Prometheus using natural language with TypeScript implementation.
 - **[PubChem](https://github.com/sssjiang/pubchem_mcp_server)** - extract drug information from pubchem API.
 - **[PubMed](https://github.com/JackKuo666/PubMed-MCP-Server)** - Enable AI assistants to search, access, and analyze PubMed articles through a simple MCP interface.
 - **[Pulumi](https://github.com/dogukanakkaya/pulumi-mcp-server)** - MCP Server to Interact with Pulumi API, creates and lists Stacks
