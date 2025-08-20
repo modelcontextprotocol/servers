@@ -664,6 +664,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Figma](https://github.com/paulvandermeijs/figma-mcp)** - A blazingly fast MCP server to read and export your Figma design files.
 - **[Files](https://github.com/flesler/mcp-files)** - Enables agents to quickly find and edit code in a codebase with surgical precision. Find symbols, edit them everywhere.
 - **[FileSystem Server](https://github.com/Oncorporation/filesystem_server)** - Local MCP server for Visual Studio 2022 that provides code-workspace functionality by giving AI agents selective access to project folders and files
+- **[finmap.org](https://github.com/finmap-org/mcp-server)** MCP server provides comprehensive historical data from the US, UK, Russian and Turkish stock exchanges. Access sectors, tickers, company profiles, market cap, volume, value, and trade counts, as well as treemap and histogram visualizations.
 - **[Firebase](https://github.com/gannonh/firebase-mcp)** - Server to interact with Firebase services including Firebase Authentication, Firestore, and Firebase Storage.
 - **[FireCrawl](https://github.com/vrknetha/mcp-server-firecrawl)** - Advanced web scraping with JavaScript rendering, PDF support, and smart rate limiting
 - **[Fish Audio](https://github.com/da-okazaki/mcp-fish-audio-server)** - Text-to-Speech integration with Fish Audio's API, supporting multiple voices, streaming, and real-time playback
