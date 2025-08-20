@@ -57,10 +57,12 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Returns: Confirmation of reset operation
 
 8. `git_log`
-   - Shows the commit logs
+   - Shows the commit logs with optional date filtering
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `max_count` (number, optional): Maximum number of commits to show (default: 10)
+     - `start_timestamp` (string, optional): Start timestamp for filtering commits (ISO format or git-compatible date string)
+     - `end_timestamp` (string, optional): End timestamp for filtering commits (ISO format or git-compatible date string)
    - Returns: Array of commit entries with hash, author, date, and message
 
 9. `git_create_branch`
@@ -87,19 +89,6 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to directory to initialize git repo
    - Returns: Confirmation of repository initialization
-13. `git_log_date_range`
-   - Retrieve git commits within a specified date range
-   - Inputs:
-     - `repo_path` (string): Path to Git repository
-     - `start_date` (string): Start date for the range
-     - `end_date` (string): End date for the range
-   - Returns: Commits within a date range
-14. `git_log_by_date`
-   - Retrieve git commits for a specific date
-   - Inputs:
-     - `repo_path` (string): Path to Git repository
-     - `date` (string): The specific date to get commits for
-   - Returns: commits for the specified date
 
 13. `git_branch`
    - List Git branches
