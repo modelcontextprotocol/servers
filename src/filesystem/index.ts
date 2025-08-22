@@ -88,7 +88,10 @@ const ReadMediaFileArgsSchema = z.object({
 });
 
 const ReadMultipleFilesArgsSchema = z.object({
-  paths: z.array(z.string()),
+  paths: z
+    .array(z.string())
+    .min(1, "At least one file path must be provided")
+    .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories."),
 });
 
 const WriteFileArgsSchema = z.object({
