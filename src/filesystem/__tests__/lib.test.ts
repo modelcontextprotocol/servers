@@ -316,7 +316,7 @@ describe('Lib Functions', () => {
         
         const result = await searchFilesWithValidation(
           testDir,
-          'test',
+          '*test*',
           allowedDirs,
           { excludePatterns: ['*.log', 'node_modules'] }
         );
@@ -346,7 +346,7 @@ describe('Lib Functions', () => {
         
         const result = await searchFilesWithValidation(
           testDir,
-          'test',
+          '*test*',
           allowedDirs,
           {}
         );
@@ -370,7 +370,7 @@ describe('Lib Functions', () => {
         
         const result = await searchFilesWithValidation(
           testDir,
-          'test',
+          '*test*',
           allowedDirs,
           { excludePatterns: ['*.backup'] }
         );
