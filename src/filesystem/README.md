@@ -145,12 +145,12 @@ The server's directory access control follows this flow:
   - Fails if destination exists
 
 - **search_files**
-  - Recursively search for files/directories
+  - Recursively search for files/directories that match or do not match patterns
   - Inputs:
     - `path` (string): Starting directory
     - `pattern` (string): Search pattern
-    - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
-  - Case-insensitive matching
+    - `excludePatterns` (string[]): Exclude any patterns.
+  - Glob-style pattern matching
   - Returns full paths to matches
 
 - **directory_tree**
