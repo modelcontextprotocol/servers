@@ -66,7 +66,7 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
 8. `getResourceReference`
    - Returns a resource reference that can be used by MCP clients
    - Inputs:
-     - `resourceId` (number, 1-100): ID of the resource to reference
+     - `resourceUri` (string): URI of the resource to reference (e.g., test://static/resource/text/{uuid})
    - Returns: A resource reference with:
      - Text introduction
      - Embedded resource with `type: "resource"`
@@ -91,18 +91,23 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
 
 ### Resources
 
-The server provides 100 test resources in two formats:
-- Even numbered resources:
-  - Plaintext format
-  - URI pattern: `test://static/resource/{even_number}`
-  - Content: Simple text description
+The server provides 100 test resources (50 text, 50 blob) using UUID-based identifiers:
 
-- Odd numbered resources:
+- Text resources:
+  - Plaintext format
+  - URI pattern: `test://static/resource/text/{uuid}`
+  - Content: Simple text description with UUID
+  - Names: "Text Resource 1" through "Text Resource 50"
+
+- Blob resources:
   - Binary blob format
-  - URI pattern: `test://static/resource/{odd_number}`
-  - Content: Base64 encoded binary data
+  - URI pattern: `test://static/resource/blob/{uuid}`
+  - Content: Base64 encoded binary data with UUID
+  - Names: "Blob Resource 1" through "Blob Resource 50"
 
 Resource features:
+- UUID-based identifiers eliminate index/URI confusion
+- Semantic paths clearly indicate resource type (text vs blob)
 - Supports pagination (10 items per page)
 - Allows subscribing to resource updates
 - Demonstrates resource templates
@@ -125,7 +130,7 @@ Resource features:
 3. `resource_prompt`
    - Demonstrates embedding resource references in prompts
    - Required arguments:
-     - `resourceId` (number): ID of the resource to embed (1-100)
+     - `resourceUri` (string): URI of the resource to embed (e.g., test://static/resource/text/{uuid})
    - Returns: Multi-turn conversation with an embedded resource reference
    - Shows how to include resources directly in prompt messages
 

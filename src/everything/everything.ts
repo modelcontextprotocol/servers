@@ -23,6 +23,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { randomUUID } from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -78,11 +79,9 @@ const AnnotatedMessageSchema = z.object({
 });
 
 const GetResourceReferenceSchema = z.object({
-  resourceId: z
-    .number()
-    .min(1)
-    .max(100)
-    .describe("ID of the resource to reference (1-100)"),
+  resourceUri: z
+    .string()
+    .describe("URI of the resource to reference (e.g., test://static/resource/text/{uuid})"),
 });
 
 const ElicitationSchema = z.object({});
@@ -91,9 +90,9 @@ const GetResourceLinksSchema = z.object({
   count: z
     .number()
     .min(1)
-    .max(10)
-    .default(3)
-    .describe("Number of resource links to return (1-10)"),
+    .max(100)
+    .default(5)
+    .describe("Number of resource links to return (1-100)"),
 });
 
 const StructuredContentSchema = {
@@ -138,11 +137,11 @@ enum PromptName {
   RESOURCE = "resource_prompt",
 }
 
-// Example completion values
-const EXAMPLE_COMPLETIONS = {
-  style: ["casual", "formal", "technical", "friendly"],
-  temperature: ["0", "0.5", "0.7", "1.0"],
-  resourceId: ["1", "2", "3", "4", "5"],
+// Example completion values - initialized after ALL_RESOURCES is defined
+let EXAMPLE_COMPLETIONS: {
+  style: string[];
+  temperature: string[];
+  resourceUri: string[];
 };
 
 export const createServer = () => {
@@ -258,27 +257,35 @@ export const createServer = () => {
     return await server.request(request, z.any());
   };
 
-  const ALL_RESOURCES: Resource[] = Array.from({ length: 100 }, (_, i) => {
-    const uri = `test://static/resource/${i + 1}`;
-    if (i % 2 === 0) {
-      return {
-        uri,
-        name: `Resource ${i + 1}`,
-        mimeType: "text/plain",
-        text: `Resource ${i + 1}: This is a plaintext resource`,
-      };
-    } else {
-      const buffer = Buffer.from(`Resource ${i + 1}: This is a base64 blob`);
-      return {
-        uri,
-        name: `Resource ${i + 1}`,
-        mimeType: "application/octet-stream",
-        blob: buffer.toString("base64"),
-      };
-    }
-  });
+  // Generate UUIDs for resources (50 text, 50 blob)
+  const TEXT_RESOURCE_UUIDS = Array.from({ length: 50 }, () => randomUUID());
+  const BLOB_RESOURCE_UUIDS = Array.from({ length: 50 }, () => randomUUID());
+
+  const ALL_RESOURCES: Resource[] = [
+    // Text resources
+    ...TEXT_RESOURCE_UUIDS.map((uuid, i) => ({
+      uri: `test://static/resource/text/${uuid}`,
+      name: `Text Resource ${i + 1}`,
+      mimeType: "text/plain",
+      text: `Text Resource ${i + 1}: This is a plaintext resource with UUID ${uuid}`,
+    } as Resource)),
+    // Blob resources
+    ...BLOB_RESOURCE_UUIDS.map((uuid, i) => ({
+      uri: `test://static/resource/blob/${uuid}`,
+      name: `Blob Resource ${i + 1}`,
+      mimeType: "application/octet-stream",
+      blob: Buffer.from(`Blob Resource ${i + 1}: This is a base64 blob with UUID ${uuid}`).toString("base64"),
+    } as Resource)),
+  ];
 
   const PAGE_SIZE = 10;
+
+  // Initialize completion values after ALL_RESOURCES is defined
+  EXAMPLE_COMPLETIONS = {
+    style: ["casual", "formal", "technical", "friendly"],
+    temperature: ["0", "0.5", "0.7", "1.0"],
+    resourceUri: ALL_RESOURCES.slice(0, 5).map(r => r.uri),
+  };
 
   server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
     const cursor = request.params?.cursor;
@@ -309,9 +316,14 @@ export const createServer = () => {
     return {
       resourceTemplates: [
         {
-          uriTemplate: "test://static/resource/{id}",
-          name: "Static Resource",
-          description: "A static resource with a numeric ID",
+          uriTemplate: "test://static/resource/text/{uuid}",
+          name: "Text Resource",
+          description: "A static text resource with a UUID",
+        },
+        {
+          uriTemplate: "test://static/resource/blob/{uuid}",
+          name: "Blob Resource",
+          description: "A static blob resource with a UUID",
         },
       ],
     };
@@ -321,9 +333,8 @@ export const createServer = () => {
     const uri = request.params.uri;
 
     if (uri.startsWith("test://static/resource/")) {
-      const index = parseInt(uri.split("/").pop() ?? "", 10) - 1;
-      if (index >= 0 && index < ALL_RESOURCES.length) {
-        const resource = ALL_RESOURCES[index];
+      const resource = ALL_RESOURCES.find(r => r.uri === uri);
+      if (resource) {
         return {
           contents: [resource],
         };
@@ -375,8 +386,8 @@ export const createServer = () => {
           description: "A prompt that includes an embedded resource reference",
           arguments: [
             {
-              name: "resourceId",
-              description: "Resource ID to include (1-100)",
+              name: "resourceUri",
+              description: "Resource URI to include (e.g., test://static/resource/text/{uuid})",
               required: true,
             },
           ],
@@ -432,15 +443,17 @@ export const createServer = () => {
     }
 
     if (name === PromptName.RESOURCE) {
-      const resourceId = parseInt(args?.resourceId as string, 10);
-      if (isNaN(resourceId) || resourceId < 1 || resourceId > 100) {
+      const resourceUri = args?.resourceUri as string;
+      if (!resourceUri) {
         throw new Error(
-          `Invalid resourceId: ${args?.resourceId}. Must be a number between 1 and 100.`
+          `Invalid resourceUri: ${args?.resourceUri}. Must be a valid resource URI.`
         );
       }
 
-      const resourceIndex = resourceId - 1;
-      const resource = ALL_RESOURCES[resourceIndex];
+      const resource = ALL_RESOURCES.find(r => r.uri === resourceUri);
+      if (!resource) {
+        throw new Error(`Resource with URI ${resourceUri} does not exist`);
+      }
 
       return {
         messages: [
@@ -448,7 +461,7 @@ export const createServer = () => {
             role: "user",
             content: {
               type: "text",
-              text: `This prompt includes Resource ${resourceId}. Please analyze the following resource:`,
+              text: `This prompt includes ${resource.name}. Please analyze the following resource:`,
             },
           },
           {
@@ -691,20 +704,18 @@ export const createServer = () => {
 
     if (name === ToolName.GET_RESOURCE_REFERENCE) {
       const validatedArgs = GetResourceReferenceSchema.parse(args);
-      const resourceId = validatedArgs.resourceId;
+      const resourceUri = validatedArgs.resourceUri;
 
-      const resourceIndex = resourceId - 1;
-      if (resourceIndex < 0 || resourceIndex >= ALL_RESOURCES.length) {
-        throw new Error(`Resource with ID ${resourceId} does not exist`);
+      const resource = ALL_RESOURCES.find(r => r.uri === resourceUri);
+      if (!resource) {
+        throw new Error(`Resource with URI ${resourceUri} does not exist`);
       }
-
-      const resource = ALL_RESOURCES[resourceIndex];
 
       return {
         content: [
           {
             type: "text",
-            text: `Returning resource reference for Resource ${resourceId}:`,
+            text: `Returning resource reference for ${resource.name}:`,
           },
           {
             type: "resource",
@@ -791,10 +802,10 @@ export const createServer = () => {
           type: "resource_link",
           uri: resource.uri,
           name: resource.name,
-          description: `Resource ${i + 1}: ${
+          description: `${resource.name}: ${
             resource.mimeType === "text/plain"
-              ? "plaintext resource"
-              : "binary blob resource"
+              ? "plaintext resource with UUID"
+              : "binary blob resource with UUID"
           }`,
           mimeType: resource.mimeType,
         });
@@ -831,12 +842,9 @@ export const createServer = () => {
     const { ref, argument } = request.params;
 
     if (ref.type === "ref/resource") {
-      const resourceId = ref.uri.split("/").pop();
-      if (!resourceId) return { completion: { values: [] } };
-
-      // Filter resource IDs that start with the input value
-      const values = EXAMPLE_COMPLETIONS.resourceId.filter((id) =>
-        id.startsWith(argument.value)
+      // Filter resource URIs that contain the input value
+      const values = EXAMPLE_COMPLETIONS.resourceUri.filter((uri) =>
+        uri.toLowerCase().includes(argument.value.toLowerCase())
       );
       return { completion: { values, hasMore: false, total: values.length } };
     }
@@ -848,7 +856,7 @@ export const createServer = () => {
       if (!completions) return { completion: { values: [] } };
 
       const values = completions.filter((value) =>
-        value.startsWith(argument.value)
+        value.toLowerCase().includes(argument.value.toLowerCase())
       );
       return { completion: { values, hasMore: false, total: values.length } };
     }
