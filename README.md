@@ -575,6 +575,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[coin_api_mcp](https://github.com/longmans/coin_api_mcp)** - Provides access to [coinmarketcap](https://coinmarketcap.com/) cryptocurrency data.
 - **[CoinMarketCap](https://github.com/shinzo-labs/coinmarketcap-mcp)** - Implements the complete [CoinMarketCap](https://coinmarketcap.com/) API for accessing cryptocurrency market data, exchange information, and other blockchain-related metrics.
 - **[commands](https://github.com/g0t4/mcp-server-commands)** - Run commands and scripts. Just like in a terminal.
+- **[Companies House MCP](https://github.com/stefanoamorelli/companies-house-mcp)** (by Stefano Amorelli) - MCP server to connect with the UK Companies House API.
 - **[computer-control-mcp](https://github.com/AB498/computer-control-mcp)** - MCP server that provides computer control capabilities, like mouse, keyboard, OCR, etc. using PyAutoGUI, RapidOCR, ONNXRuntime Without External Dependencies.
 - **[Computer-Use - Remote MacOS Use](https://github.com/baryhuang/mcp-remote-macos-use)** - Open-source out-of-the-box alternative to OpenAI Operator, providing a full desktop experience and optimized for using remote macOS machines as autonomous AI agents.
 - **[Congress.gov API](https://github.com/AshwinSundar/congress_gov_mcp)** - An MCP server to interact with real-time data from the Congress.gov API, which is the official API for the United States Congress.
