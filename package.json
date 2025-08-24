@@ -19,6 +19,7 @@
     "link-all": "npm link --workspaces"
   },
   "dependencies": {
+    "@modelcontextprotocol/server-academiadepolitie-com": "*",
     "@modelcontextprotocol/server-everything": "*",
     "@modelcontextprotocol/server-memory": "*",
     "@modelcontextprotocol/server-filesystem": "*",
