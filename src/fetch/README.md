@@ -96,6 +96,66 @@ Add to your Claude settings:
 ```
 </details>
 
+### Configure for Amazon Q CLI
+
+Configure your mcp servers at ~/.aws/amazonq/cli-agents/default.json 
+See full configuration settings here : https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-mcp-config-CLI.html
+Make sure you have uvx installed 
+
+<details>
+<summary>Using uvx</summary>
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using docker</summary>
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "mcp/fetch"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using pip installation</summary>
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "python",
+      "args": ["-m", "mcp_server_fetch"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>Troubleshooting fetch MCP setup with Q CLI</summary>
+
+If you run into os error 2, it could be because uvx is not setup or Q CLI is not able to find the correct uvx package path in your system.
+
+Make sure you have correctly setup uvx and its available globally in your system. See https://github.com/modelcontextprotocol/servers/issues/1065 for debug options
+</details>
+
+
 ### Configure for VS Code
 
 For quick installation, use one of the one-click install buttons below...
