@@ -61,8 +61,8 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `max_count` (number, optional): Maximum number of commits to show (default: 10)
-     - `start_timestamp` (string, optional): Start timestamp for filtering commits (ISO format or git-compatible date string)
-     - `end_timestamp` (string, optional): End timestamp for filtering commits (ISO format or git-compatible date string)
+     - `start_timestamp` (string, optional): Start timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
+     - `end_timestamp` (string, optional): End timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
    - Returns: Array of commit entries with hash, author, date, and message
 
 9. `git_create_branch`
