@@ -68,6 +68,29 @@ Discover thoughts connected through references, branches, or shared tags.
 ### 5. `synthesize_thoughts`
 Generate comprehensive analysis with decisions, risks, actions, and insights.
 
+### 6. `auto_think` ✨ NEW
+**Autonomous thought generation using MCP sampling for self-driven reasoning.**
+
+Leverages Claude's reasoning capabilities through MCP sampling to:
+- Analyze current thought history and identify next logical steps
+- Generate intelligent, contextually-aware thoughts automatically
+- Auto-enhance thoughts with confidence, tags, evidence, and references
+- Continue iteratively until problem resolution or max iterations reached
+
+**Inputs:**
+- `maxIterations` (integer, 1-10, default: 3): Maximum autonomous thoughts to generate
+
+**Key Features:**
+- **Smart Context Analysis**: Analyzes problem domains, confidence gaps, and reasoning chains
+- **Intelligent Prompting**: Generates contextual prompts based on thought history and gaps
+- **Auto-Enhancement**: Automatically estimates confidence, extracts evidence, adds tags
+- **Reference Detection**: Identifies connections to previous thoughts
+- **Adaptive Stopping**: Recognizes completion signals or continuation needs
+
+**Requirements:**
+- At least one manual thought must exist first
+- MCP client must support sampling functionality
+
 ## 🚀 Usage Scenarios
 
 ### Enhanced Problem-Solving
@@ -117,6 +140,30 @@ Generate comprehensive analysis with decisions, risks, actions, and insights.
 // Generate synthesis
 {} // No parameters needed - analyzes all thoughts
 ```
+
+### Autonomous Thinking ✨ NEW
+```json
+// Start with a manual thought
+{
+  "thought": "Need to optimize our API response times for mobile users",
+  "thoughtNumber": 1,
+  "totalThoughts": 3,
+  "nextThoughtNeeded": true,
+  "tags": ["performance", "api"],
+  "confidence": 0.6,
+  "evidence": ["Mobile users report 2-3 second delays"]
+}
+
+// Let the server continue thinking autonomously
+{"maxIterations": 4}
+```
+
+**Auto-Think will:**
+1. Analyze the performance/API context
+2. Generate logical next steps (caching, database optimization, etc.)
+3. Auto-enhance with confidence scores and evidence
+4. Continue until reaching a solution or max iterations
+5. Return complete thought chain with synthesis
 
 ## Configuration
 

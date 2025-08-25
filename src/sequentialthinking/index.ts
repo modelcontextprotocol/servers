@@ -6,6 +6,8 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   Tool,
+  CreateMessageRequest,
+  CreateMessageResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 // Fixed chalk import for ESM
 import chalk from 'chalk';
@@ -92,9 +94,14 @@ class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
   private disableThoughtLogging: boolean;
+  private server: Server | null = null;
 
   constructor() {
     this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
+  }
+
+  public setServer(server: Server) {
+    this.server = server;
   }
 
   private validateThoughtData(input: unknown): ThoughtData {
@@ -383,6 +390,323 @@ class SequentialThinkingServer {
       evidenceCoverage,
       overallQuality
     };
+  }
+
+  /**
+   * Auto-thinking methods for autonomous thought generation
+   */
+  
+  private async requestSampling(prompt: string, maxTokens: number = 500): Promise<string> {
+    if (!this.server) {
+      throw new Error("Server not initialized for sampling");
+    }
+
+    const request: CreateMessageRequest = {
+      method: "sampling/createMessage",
+      params: {
+        messages: [
+          {
+            role: "user", 
+            content: {
+              type: "text",
+              text: prompt,
+            },
+          },
+        ],
+        maxTokens,
+        modelPreferences: {
+          intelligencePriority: 0.8, // Prefer higher intelligence models for reasoning
+        },
+      },
+    };
+
+    try {
+      const result = await this.server.request(request, CreateMessageResultSchema);
+      return (result as any).content?.text || "No response generated";
+    } catch (error) {
+      throw new Error(`Sampling failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private generateContextPrompt(): string {
+    const thoughtCount = this.thoughtHistory.length;
+    const lastThought = this.thoughtHistory[this.thoughtHistory.length - 1];
+    
+    // Extract current problem domains from tags
+    const allTags = this.thoughtHistory.flatMap(t => t.tags || []);
+    const tagCounts = allTags.reduce((acc, tag) => {
+      acc[tag] = (acc[tag] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const dominantTags = Object.entries(tagCounts)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 3)
+      .map(([tag]) => tag);
+
+    // Identify areas needing attention
+    const lowConfidenceThoughts = this.getLowConfidenceThoughts();
+    const assumptionChains = this.getAssumptionChains().filter(chain => chain.riskLevel === 'high');
+    
+    let contextSummary = `Current thinking session context:
+- Total thoughts so far: ${thoughtCount}
+- Problem domains: ${dominantTags.length > 0 ? dominantTags.join(', ') : 'general'}`;
+
+    if (lastThought) {
+      contextSummary += `
+- Last thought (#${lastThought.thoughtNumber}): "${lastThought.thought.substring(0, 150)}${lastThought.thought.length > 150 ? '...' : ''}"`;
+      if (lastThought.confidence !== undefined) {
+        contextSummary += `
+- Last thought confidence: ${Math.round(lastThought.confidence * 100)}%`;
+      }
+    }
+
+    if (lowConfidenceThoughts.length > 0) {
+      contextSummary += `
+- ${lowConfidenceThoughts.length} low-confidence thoughts need strengthening`;
+    }
+
+    if (assumptionChains.length > 0) {
+      contextSummary += `
+- ${assumptionChains.length} high-risk assumption chains identified`;
+    }
+
+    return contextSummary;
+  }
+
+  private generateNextStepPrompt(): string {
+    const contextPrompt = this.generateContextPrompt();
+    const lastThought = this.thoughtHistory[this.thoughtHistory.length - 1];
+    
+    let nextStepPrompt = `${contextPrompt}
+
+Based on this thinking session, generate the next logical thought step. Your response should be a single coherent thought that advances the reasoning.
+
+Consider:
+- What logical next step would strengthen the analysis?
+- Are there gaps in reasoning that need addressing?
+- Do any low-confidence areas need more evidence?
+- Are there unstated assumptions that should be explored?
+- What would move us closer to a solution or conclusion?
+
+Respond with just the thought content - I will handle the metadata.`;
+
+    if (lastThought?.nextThoughtNeeded) {
+      nextStepPrompt += `\n\nThe previous thought indicated more thinking was needed. Build on this direction.`;
+    }
+
+    return nextStepPrompt;
+  }
+
+  private async autoEnhanceThought(rawThought: string, thoughtNumber: number): Promise<Partial<ThoughtData>> {
+    const enhancementPrompt = `Analyze this reasoning step and provide metadata:
+
+Thought: "${rawThought}"
+
+Provide a JSON response with:
+{
+  "confidence": 0.0-1.0 (how certain/supported is this reasoning?),
+  "tags": ["tag1", "tag2"] (2-4 relevant categorization tags),
+  "evidence": ["evidence1", "evidence2"] (supporting evidence mentioned or implied),
+  "assumptions": ["assumption1"] (underlying assumptions),
+  "references": [1, 2] (which previous thought numbers does this build on, if any?)
+}
+
+Base confidence on:
+- Certainty of language used
+- Quality of evidence provided
+- Logical soundness
+- Specificity vs vagueness
+
+Use tags like: analysis, problem-solving, planning, risk-assessment, decision, hypothesis, evaluation, research, etc.`;
+
+    try {
+      const response = await this.requestSampling(enhancementPrompt, 300);
+      const enhancementData = JSON.parse(response);
+      
+      // Validate and clean the enhancement data
+      const enhancement: Partial<ThoughtData> = {};
+      
+      if (typeof enhancementData.confidence === 'number' && 
+          enhancementData.confidence >= 0 && enhancementData.confidence <= 1) {
+        enhancement.confidence = enhancementData.confidence;
+      }
+      
+      if (Array.isArray(enhancementData.tags)) {
+        enhancement.tags = enhancementData.tags
+          .filter((tag: any) => typeof tag === 'string')
+          .map((tag: string) => tag.toLowerCase().trim())
+          .slice(0, 4);
+      }
+      
+      if (Array.isArray(enhancementData.evidence)) {
+        enhancement.evidence = enhancementData.evidence
+          .filter((item: any) => typeof item === 'string' && item.trim().length > 0)
+          .slice(0, 5);
+      }
+      
+      if (Array.isArray(enhancementData.assumptions)) {
+        enhancement.assumptions = enhancementData.assumptions
+          .filter((item: any) => typeof item === 'string' && item.trim().length > 0)
+          .slice(0, 3);
+      }
+      
+      if (Array.isArray(enhancementData.references)) {
+        enhancement.references = enhancementData.references
+          .filter((ref: any) => typeof ref === 'number' && ref > 0 && ref < thoughtNumber)
+          .slice(0, 3);
+      }
+      
+      return enhancement;
+    } catch (error) {
+      // If enhancement fails, provide basic defaults
+      return {
+        confidence: 0.5,
+        tags: ['auto-generated'],
+        evidence: [],
+        assumptions: [],
+        references: []
+      };
+    }
+  }
+
+  public async autoThink(maxIterations: number = 3): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+    if (!this.server) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: "Server not initialized for auto-thinking",
+            status: 'failed'
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+
+    if (this.thoughtHistory.length === 0) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: "No existing thoughts to build upon. Start with manual thoughts first.",
+            status: 'failed'
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+
+    const results = [];
+    let iteration = 0;
+
+    try {
+      while (iteration < maxIterations) {
+        iteration++;
+        
+        // Generate next thought
+        const nextStepPrompt = this.generateNextStepPrompt();
+        const rawThought = await this.requestSampling(nextStepPrompt, 400);
+        
+        if (!rawThought || rawThought.trim().length === 0) {
+          break;
+        }
+        
+        // Determine thought number and total
+        const thoughtNumber = this.thoughtHistory.length + 1;
+        const totalThoughts = Math.max(thoughtNumber + 1, this.thoughtHistory[0]?.totalThoughts || thoughtNumber + 1);
+        
+        // Auto-enhance the thought
+        const enhancement = await this.autoEnhanceThought(rawThought, thoughtNumber);
+        
+        // Determine if more thinking is needed based on the content and current state
+        const needsMoreThinking = this.assessNeedsMoreThinking(rawThought, iteration, maxIterations);
+        
+        // Create the complete thought data
+        const thoughtData: ThoughtData = {
+          thought: rawThought.trim(),
+          thoughtNumber,
+          totalThoughts,
+          nextThoughtNeeded: needsMoreThinking,
+          ...enhancement
+        };
+        
+        // Process the thought
+        const result = this.processThought(thoughtData);
+        results.push({
+          iteration,
+          thoughtNumber,
+          result: JSON.parse(result.content[0].text)
+        });
+        
+        // Check if we should continue
+        if (!needsMoreThinking) {
+          break;
+        }
+        
+        // Small delay to prevent overwhelming the sampling
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            status: 'completed',
+            iterations: iteration,
+            autoGeneratedThoughts: results.length,
+            thoughtsGenerated: results,
+            message: `Generated ${results.length} autonomous thoughts in ${iteration} iterations`,
+            nextSteps: this.thoughtHistory.length > 0 ? this.generateNextSteps() : []
+          }, null, 2)
+        }]
+      };
+      
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+            status: 'failed',
+            completedIterations: results.length,
+            partialResults: results
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  private assessNeedsMoreThinking(thought: string, currentIteration: number, maxIterations: number): boolean {
+    // Don't continue if we're at max iterations
+    if (currentIteration >= maxIterations) {
+      return false;
+    }
+    
+    // Check if the thought indicates completion
+    const completionPatterns = [
+      /\b(?:conclusion|final|complete|finished|done|solved)\b/i,
+      /\b(?:therefore|thus|in summary|to conclude)\b/i,
+      /\b(?:answer is|solution is|result is)\b/i
+    ];
+    
+    if (completionPatterns.some(pattern => pattern.test(thought))) {
+      return false;
+    }
+    
+    // Check if the thought indicates more work needed
+    const continuationPatterns = [
+      /\b(?:need to|should|must|next|however|but|although)\b/i,
+      /\b(?:unclear|uncertain|question|investigate|explore)\b/i,
+      /\b(?:more|further|additional|deeper|better)\b/i
+    ];
+    
+    if (continuationPatterns.some(pattern => pattern.test(thought))) {
+      return true;
+    }
+    
+    // Default: continue for a few iterations unless explicitly stopping
+    return currentIteration < Math.min(2, maxIterations);
   }
 
   // Synthesis methods
@@ -1103,6 +1427,50 @@ No parameters are required - it analyzes all thoughts in the current session.`,
   }
 };
 
+const AUTO_THINK_TOOL: Tool = {
+  name: "auto_think",
+  description: `Autonomous thought generation using MCP sampling to drive the thinking process forward.
+
+This tool uses Claude's reasoning capabilities through MCP sampling to:
+- Analyze current thought history and identify next logical steps
+- Generate intelligent, contextually-aware thoughts
+- Automatically enhance thoughts with confidence, tags, evidence, and references
+- Continue iteratively until problem resolution or max iterations reached
+
+Key features:
+- Smart prompt generation based on problem domain and confidence gaps
+- Automatic confidence estimation based on language certainty
+- Intelligent tagging based on content analysis
+- Reference detection when thoughts relate to previous ones
+- Evidence extraction from generated content
+- Adaptive stopping based on completion signals in thought content
+
+Use this tool when:
+- You want to continue thinking automatically from where you left off
+- You need to explore different reasoning paths without manual input
+- You want to strengthen low-confidence areas through autonomous analysis
+- You need to generate follow-up thoughts after manual reasoning
+- You want to see how an AI would continue your thought process
+
+Requirements:
+- At least one manual thought must exist before using auto-thinking
+- The MCP client must support sampling for this tool to work
+- The tool will generate 1-5 thoughts per call depending on the maxIterations parameter`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      maxIterations: {
+        type: "integer",
+        minimum: 1,
+        maximum: 10,
+        default: 3,
+        description: "Maximum number of autonomous thoughts to generate (1-10, default: 3)"
+      }
+    },
+    additionalProperties: false
+  }
+};
+
 const server = new Server(
   {
     name: "sequential-thinking-server",
@@ -1116,9 +1484,10 @@ const server = new Server(
 );
 
 const thinkingServer = new SequentialThinkingServer();
+thinkingServer.setServer(server);
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [SEQUENTIAL_THINKING_TOOL, GET_THOUGHT_TOOL, SEARCH_THOUGHTS_TOOL, GET_RELATED_THOUGHTS_TOOL, SYNTHESIZE_THOUGHTS_TOOL],
+  tools: [SEQUENTIAL_THINKING_TOOL, GET_THOUGHT_TOOL, SEARCH_THOUGHTS_TOOL, GET_RELATED_THOUGHTS_TOOL, SYNTHESIZE_THOUGHTS_TOOL, AUTO_THINK_TOOL],
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -1208,6 +1577,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           isError: true
         };
       }
+    }
+
+    if (name === "auto_think") {
+      const { maxIterations = 3 } = args as { maxIterations?: number };
+      return await thinkingServer.autoThink(maxIterations);
     }
 
     return {
