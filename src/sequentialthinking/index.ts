@@ -89,6 +89,33 @@ interface SynthesisResult {
   nextSteps: string[];
 }
 
+// Subagent interfaces
+interface SubagentPrompt {
+  subagentType: string;
+  prompt: string;
+  context: {
+    problemDomain: string[];
+    totalThoughts: number;
+    confidenceGaps: Array<{
+      thoughtNumber: number;
+      confidence: number;
+      issue: string;
+    }>;
+    evidenceNeeds: string[];
+    assumptionRisks: Array<{
+      assumption: string;
+      dependentThoughts: number[];
+      riskLevel: 'low' | 'medium' | 'high';
+    }>;
+    nextLogicalSteps: string[];
+  };
+  expectedOutput: {
+    format: string;
+    requirements: string[];
+    thoughtCount: number;
+  };
+}
+
 class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
@@ -395,6 +422,411 @@ class SequentialThinkingServer {
    * Auto-thinking methods for autonomous thought generation
    */
   
+  private generateSubagentPrompt(): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    try {
+      const contextAnalysis = this.analyzeContextForSubagent();
+      const subagentRecommendation = this.recommendSubagentType(contextAnalysis);
+      const structuredPrompt = this.buildSubagentPrompt(subagentRecommendation, contextAnalysis);
+      
+      const response: SubagentPrompt = {
+        subagentType: subagentRecommendation,
+        prompt: structuredPrompt,
+        context: {
+          problemDomain: contextAnalysis.domains,
+          totalThoughts: this.thoughtHistory.length,
+          confidenceGaps: contextAnalysis.confidenceGaps,
+          evidenceNeeds: contextAnalysis.evidenceNeeds,
+          assumptionRisks: contextAnalysis.assumptionRisks,
+          nextLogicalSteps: contextAnalysis.nextSteps
+        },
+        expectedOutput: {
+          format: "Sequential thoughts in ThoughtData format",
+          requirements: [
+            "Each thought must have confidence, tags, evidence, and assumptions",
+            "Reference previous thoughts where relevant",
+            "Address identified confidence gaps and evidence needs",
+            "Build logically on existing analysis",
+            "Mark final thought with nextThoughtNeeded: false if reasoning is complete"
+          ],
+          thoughtCount: Math.min(contextAnalysis.recommendedThoughtCount, 5)
+        }
+      };
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(response, null, 2)
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+            status: 'failed',
+            mode: 'subagent'
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  private analyzeContextForSubagent(): {
+    domains: string[];
+    confidenceGaps: Array<{
+      thoughtNumber: number;
+      confidence: number;
+      issue: string;
+    }>;
+    evidenceNeeds: string[];
+    assumptionRisks: Array<{
+      assumption: string;
+      dependentThoughts: number[];
+      riskLevel: 'low' | 'medium' | 'high';
+    }>;
+    nextSteps: string[];
+    recommendedThoughtCount: number;
+    complexity: 'low' | 'medium' | 'high';
+  } {
+    // Analyze problem domains from tags
+    const allTags = this.thoughtHistory.flatMap(t => t.tags || []);
+    const tagCounts = allTags.reduce((acc, tag) => {
+      acc[tag] = (acc[tag] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const domains = Object.entries(tagCounts)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 5)
+      .map(([tag]) => tag);
+
+    // Identify confidence gaps
+    const confidenceGaps = this.thoughtHistory
+      .filter(t => t.confidence !== undefined && t.confidence < 0.6)
+      .map(t => ({
+        thoughtNumber: t.thoughtNumber,
+        confidence: t.confidence || 0,
+        issue: this.diagnoseConfidenceIssue(t)
+      }));
+
+    // Identify evidence needs
+    const evidenceNeeds = this.identifyEvidenceNeeds();
+    
+    // Get assumption risks
+    const assumptionChains = this.getAssumptionChains();
+    const assumptionRisks = assumptionChains.filter(chain => chain.riskLevel !== 'low');
+    
+    // Determine next logical steps
+    const nextSteps = this.identifyNextLogicalSteps();
+    
+    // Assess complexity
+    const complexity = this.assessReasoningComplexity();
+    
+    // Recommend thought count based on gaps and complexity
+    const baseCount = 2;
+    const gapBonus = Math.min(confidenceGaps.length, 2);
+    const complexityBonus = complexity === 'high' ? 2 : complexity === 'medium' ? 1 : 0;
+    const recommendedThoughtCount = baseCount + gapBonus + complexityBonus;
+    
+    return {
+      domains,
+      confidenceGaps,
+      evidenceNeeds,
+      assumptionRisks,
+      nextSteps,
+      recommendedThoughtCount,
+      complexity
+    };
+  }
+
+  private recommendSubagentType(context: ReturnType<typeof this.analyzeContextForSubagent>): string {
+    const { domains, confidenceGaps, complexity } = context;
+    
+    // Determine subagent based on problem domains and needs
+    if (domains.includes('code') || domains.includes('technical') || domains.includes('architecture')) {
+      return 'technical-analyst';
+    }
+    
+    if (domains.includes('research') || domains.includes('analysis') || domains.includes('investigation')) {
+      return 'research-specialist';
+    }
+    
+    if (domains.includes('risk') || domains.includes('security') || domains.includes('validation')) {
+      return 'risk-assessor';
+    }
+    
+    if (domains.includes('planning') || domains.includes('strategy') || domains.includes('design')) {
+      return 'strategic-planner';
+    }
+    
+    if (domains.includes('review') || domains.includes('evaluation') || domains.includes('quality')) {
+      return 'quality-reviewer';
+    }
+    
+    if (confidenceGaps.length > 3 || complexity === 'high') {
+      return 'deep-reasoner';
+    }
+    
+    // Default to general purpose
+    return 'general-reasoner';
+  }
+
+  private buildSubagentPrompt(subagentType: string, context: ReturnType<typeof this.analyzeContextForSubagent>): string {
+    const lastThought = this.thoughtHistory[this.thoughtHistory.length - 1];
+    const thoughtSummary = this.generateThoughtsSummary();
+    
+    let roleDescription = '';
+    let specialInstructions = '';
+    
+    switch (subagentType) {
+      case 'technical-analyst':
+        roleDescription = 'You are a technical analysis specialist with deep expertise in architecture, code quality, and technical problem-solving.';
+        specialInstructions = 'Focus on technical feasibility, implementation details, architecture patterns, and code quality considerations.';
+        break;
+      case 'research-specialist':
+        roleDescription = 'You are a research specialist skilled in investigation, evidence gathering, and analytical reasoning.';
+        specialInstructions = 'Prioritize evidence collection, fact verification, source evaluation, and comprehensive analysis.';
+        break;
+      case 'risk-assessor':
+        roleDescription = 'You are a risk assessment specialist focused on identifying, analyzing, and mitigating potential issues.';
+        specialInstructions = 'Identify failure points, assess probability and impact, suggest mitigation strategies, and validate assumptions.';
+        break;
+      case 'strategic-planner':
+        roleDescription = 'You are a strategic planning specialist skilled in long-term thinking, goal alignment, and systematic approach design.';
+        specialInstructions = 'Focus on strategic alignment, long-term implications, systematic approaches, and goal optimization.';
+        break;
+      case 'quality-reviewer':
+        roleDescription = 'You are a quality review specialist focused on thoroughness, accuracy, and process improvement.';
+        specialInstructions = 'Review for completeness, accuracy, logical consistency, and identify areas needing improvement.';
+        break;
+      case 'deep-reasoner':
+        roleDescription = 'You are a deep reasoning specialist capable of handling complex, multi-layered problems requiring sophisticated analysis.';
+        specialInstructions = 'Apply advanced reasoning techniques, explore multiple perspectives, and strengthen weak reasoning chains.';
+        break;
+      default:
+        roleDescription = 'You are a general reasoning specialist capable of systematic problem-solving and analysis.';
+        specialInstructions = 'Apply clear logical reasoning, maintain systematic approach, and address identified gaps.';
+    }
+
+    const prompt = `${roleDescription}
+
+## Current Thinking Context
+
+**Problem Domains:** ${context.domains.join(', ') || 'General'}
+
+**Existing Analysis Summary:**
+${thoughtSummary}
+
+**Current Status:**
+- Total thoughts analyzed: ${this.thoughtHistory.length}
+- Last thought (#${lastThought.thoughtNumber}): "${lastThought.thought.substring(0, 200)}${lastThought.thought.length > 200 ? '...' : ''}"
+- Overall reasoning complexity: ${context.complexity}
+
+## Critical Issues to Address
+
+**Confidence Gaps:** ${context.confidenceGaps.length} identified
+${context.confidenceGaps.map(gap => 
+  `- Thought #${gap.thoughtNumber} (${Math.round(gap.confidence * 100)}% confidence): ${gap.issue}`
+).join('\n')}
+
+**Evidence Needs:**
+${context.evidenceNeeds.map(need => `- ${need}`).join('\n')}
+
+**Assumption Risks:**
+${context.assumptionRisks.map(risk => 
+  `- ${risk.assumption} (${risk.riskLevel} risk, affects thoughts: ${risk.dependentThoughts.join(', ')})`
+).join('\n')}
+
+**Suggested Next Steps:**
+${context.nextSteps.map(step => `- ${step}`).join('\n')}
+
+## Your Task
+
+${specialInstructions}
+
+Generate ${context.recommendedThoughtCount} sequential reasoning steps that:
+
+1. **Address identified gaps:** Strengthen low-confidence areas with evidence and validation
+2. **Build logically:** Reference and build upon existing thoughts using the references array
+3. **Provide enhanced metadata:** Include confidence levels, supporting evidence, assumptions, and relevant tags
+4. **Maintain focus:** Stay aligned with the problem domains and current analysis direction
+5. **Drive toward resolution:** Move the reasoning toward actionable conclusions or next steps
+
+## Output Format
+
+Return a JSON array of ThoughtData objects with this exact structure:
+
+\`\`\`json
+[
+  {
+    "thought": "Your reasoning step here",
+    "thoughtNumber": ${this.thoughtHistory.length + 1},
+    "totalThoughts": ${Math.max(this.thoughtHistory.length + context.recommendedThoughtCount, this.thoughtHistory[0]?.totalThoughts || this.thoughtHistory.length + context.recommendedThoughtCount)},
+    "nextThoughtNeeded": true/false,
+    "confidence": 0.0-1.0,
+    "tags": ["relevant", "tags"],
+    "evidence": ["supporting", "evidence"],
+    "assumptions": ["key", "assumptions"],
+    "references": [previous_thought_numbers]
+  }
+]
+\`\`\`
+
+Begin your enhanced reasoning analysis now.`;
+
+    return prompt;
+  }
+
+  private diagnoseConfidenceIssue(thought: ThoughtData): string {
+    const thoughtText = thought.thought.toLowerCase();
+    
+    if (!thought.evidence || thought.evidence.length === 0) {
+      return 'lacks supporting evidence';
+    }
+    if (thoughtText.includes('unsure') || thoughtText.includes('uncertain')) {
+      return 'expresses uncertainty';
+    }
+    if (!thought.assumptions || thought.assumptions.length > 3) {
+      return 'relies on many untested assumptions';
+    }
+    if (thoughtText.includes('might') || thoughtText.includes('perhaps') || thoughtText.includes('maybe')) {
+      return 'uses tentative language indicating uncertainty';
+    }
+    
+    return 'needs validation or stronger reasoning';
+  }
+
+  private identifyEvidenceNeeds(): string[] {
+    const needs: string[] = [];
+    
+    // Look for thoughts that mention needing evidence
+    const evidenceThoughts = this.thoughtHistory.filter(t => 
+      t.thought.toLowerCase().includes('evidence') || 
+      t.thought.toLowerCase().includes('validate') ||
+      t.thought.toLowerCase().includes('verify')
+    );
+    
+    if (evidenceThoughts.length > 0) {
+      needs.push('Validation of claims made in previous thoughts');
+    }
+    
+    // Look for assumptions that need supporting evidence
+    const assumptionCount = this.thoughtHistory.reduce((sum, t) => sum + (t.assumptions?.length || 0), 0);
+    if (assumptionCount > 5) {
+      needs.push('Evidence to support or refute key assumptions');
+    }
+    
+    // Look for low-confidence thoughts that need evidence
+    const lowConfidenceCount = this.getLowConfidenceThoughts().length;
+    if (lowConfidenceCount > 2) {
+      needs.push('Strengthen low-confidence reasoning with additional support');
+    }
+    
+    if (needs.length === 0) {
+      needs.push('Comprehensive validation of current analysis');
+    }
+    
+    return needs;
+  }
+
+  private identifyNextLogicalSteps(): string[] {
+    const steps: string[] = [];
+    const lastThought = this.thoughtHistory[this.thoughtHistory.length - 1];
+    
+    if (lastThought?.nextThoughtNeeded) {
+      steps.push('Continue the reasoning process as indicated by the last thought');
+    }
+    
+    const lowConfThoughts = this.getLowConfidenceThoughts();
+    if (lowConfThoughts.length > 0) {
+      steps.push('Address and strengthen low-confidence areas');
+    }
+    
+    const assumptionChains = this.getAssumptionChains().filter(chain => chain.riskLevel === 'high');
+    if (assumptionChains.length > 0) {
+      steps.push('Validate high-risk assumptions that could affect conclusions');
+    }
+    
+    // Look for decision points that need resolution
+    const decisionThoughts = this.thoughtHistory.filter(t => 
+      t.thought.toLowerCase().includes('decide') || 
+      t.thought.toLowerCase().includes('choose') ||
+      t.thought.toLowerCase().includes('option')
+    );
+    
+    if (decisionThoughts.length > 0 && !this.hasReachedConclusion()) {
+      steps.push('Resolve pending decisions and choose optimal approach');
+    }
+    
+    if (!this.hasReachedConclusion()) {
+      steps.push('Synthesize findings and move toward actionable conclusions');
+    }
+    
+    if (steps.length === 0) {
+      steps.push('Deepen analysis and explore additional perspectives');
+    }
+    
+    return steps;
+  }
+
+  private assessReasoningComplexity(): 'low' | 'medium' | 'high' {
+    const factors = {
+      thoughtCount: this.thoughtHistory.length,
+      branchCount: Object.keys(this.branches).length,
+      revisionCount: this.thoughtHistory.filter(t => t.isRevision).length,
+      assumptionCount: this.thoughtHistory.reduce((sum, t) => sum + (t.assumptions?.length || 0), 0),
+      lowConfidenceCount: this.getLowConfidenceThoughts().length,
+      domainCount: new Set(this.thoughtHistory.flatMap(t => t.tags || [])).size
+    };
+    
+    let complexityScore = 0;
+    
+    if (factors.thoughtCount > 8) complexityScore += 2;
+    else if (factors.thoughtCount > 4) complexityScore += 1;
+    
+    if (factors.branchCount > 2) complexityScore += 2;
+    else if (factors.branchCount > 0) complexityScore += 1;
+    
+    if (factors.revisionCount > 2) complexityScore += 1;
+    if (factors.assumptionCount > 10) complexityScore += 1;
+    if (factors.lowConfidenceCount > 3) complexityScore += 1;
+    if (factors.domainCount > 5) complexityScore += 1;
+    
+    if (complexityScore >= 6) return 'high';
+    if (complexityScore >= 3) return 'medium';
+    return 'low';
+  }
+
+  private generateThoughtsSummary(): string {
+    if (this.thoughtHistory.length === 0) return 'No thoughts yet.';
+    
+    let summary = this.thoughtHistory.slice(0, 3).map((thought, index) => {
+      const confidence = thought.confidence ? ` (${Math.round(thought.confidence * 100)}% confident)` : '';
+      const tags = thought.tags ? ` [${thought.tags.join(', ')}]` : '';
+      return `${index + 1}. ${thought.thought.substring(0, 150)}${thought.thought.length > 150 ? '...' : ''}${confidence}${tags}`;
+    }).join('\n');
+    
+    if (this.thoughtHistory.length > 3) {
+      summary += `\n... (${this.thoughtHistory.length - 3} more thoughts)`;
+    }
+    
+    return summary;
+  }
+
+  private hasReachedConclusion(): boolean {
+    const lastThought = this.thoughtHistory[this.thoughtHistory.length - 1];
+    if (!lastThought) return false;
+    
+    const conclusionPatterns = [
+      /\b(therefore|thus|in conclusion|finally|ultimately|result|answer|solution)\b/i,
+      /\b(complete|finished|done|resolved|decided)\b/i
+    ];
+    
+    return conclusionPatterns.some(pattern => pattern.test(lastThought.thought)) && !lastThought.nextThoughtNeeded;
+  }
+  
   private async requestSampling(prompt: string, maxTokens: number = 500): Promise<string> {
     if (!this.server) {
       throw new Error("Server not initialized for sampling");
@@ -571,7 +1003,7 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
     }
   }
 
-  public async autoThink(maxIterations: number = 3): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+  public async autoThink(maxIterations: number = 3, useSubagent: boolean = false): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
     if (this.thoughtHistory.length === 0) {
       return {
         content: [{
@@ -583,6 +1015,11 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
         }],
         isError: true
       };
+    }
+
+    // If subagent mode is enabled, return structured prompts instead of generating thoughts
+    if (useSubagent) {
+      return this.generateSubagentPrompt();
     }
 
     // Check if MCP sampling is available
@@ -1632,7 +2069,10 @@ const AUTO_THINK_TOOL: Tool = {
   name: "auto_think",
   description: `Autonomous thought generation using MCP sampling or rule-based fallback to drive the thinking process forward.
 
-This tool uses Claude's reasoning capabilities through MCP sampling when available, or falls back to rule-based reasoning:
+This tool operates in two modes:
+
+**Direct Mode (useSubagent=false, default):**
+Uses Claude's reasoning capabilities through MCP sampling when available, or falls back to rule-based reasoning:
 
 MCP Sampling Mode (when client supports sampling):
 - Analyze current thought history and identify next logical steps
@@ -1646,13 +2086,31 @@ Fallback Rule-Based Mode (when sampling unavailable):
 - Applies heuristic-based tagging, evidence extraction, and reference linking
 - Provides structured autonomous reasoning without requiring external LLM calls
 
+**Subagent Mode (useSubagent=true):**
+Meta-reasoning system that analyzes the current thinking context and returns structured prompts for launching specialized thinking subagents:
+
+- Analyzes problem domain, confidence gaps, and evidence needs
+- Recommends appropriate subagent type (technical-analyst, research-specialist, risk-assessor, strategic-planner, quality-reviewer, deep-reasoner, or general-reasoner)
+- Generates comprehensive prompts with context, critical issues, and expected output format
+- Returns structured SubagentPrompt with subagent type, detailed prompt, context analysis, and output specifications
+
+Subagent types:
+- technical-analyst: Architecture, code quality, technical problem-solving
+- research-specialist: Investigation, evidence gathering, analytical reasoning
+- risk-assessor: Risk identification, analysis, and mitigation
+- strategic-planner: Long-term thinking, goal alignment, systematic approach design
+- quality-reviewer: Thoroughness, accuracy, process improvement
+- deep-reasoner: Complex, multi-layered problems requiring sophisticated analysis
+- general-reasoner: Systematic problem-solving and analysis
+
 Key features:
-- Automatic detection of MCP sampling capability
+- Automatic detection of MCP sampling capability (direct mode)
 - Smart prompt generation based on problem domain and confidence gaps
 - Intelligent tagging and metadata enhancement
 - Reference detection when thoughts relate to previous ones
 - Adaptive stopping based on completion signals
 - Graceful fallback when sampling is unavailable
+- Meta-reasoning for subagent coordination (subagent mode)
 
 Use this tool when:
 - You want to continue thinking automatically from where you left off
@@ -1660,11 +2118,13 @@ Use this tool when:
 - You want to strengthen low-confidence areas through autonomous analysis
 - You need to generate follow-up thoughts after manual reasoning
 - You want to see systematic follow-up analysis of your reasoning
+- You want structured prompts for launching specialized reasoning subagents
 
 Requirements:
 - At least one manual thought must exist before using auto-thinking
 - Works with or without MCP client sampling support
-- The tool will generate 1-5 thoughts per call depending on the maxIterations parameter`,
+- The tool will generate 1-5 thoughts per call depending on the maxIterations parameter (direct mode)
+- Returns structured subagent prompts with context analysis (subagent mode)`,
   inputSchema: {
     type: "object",
     properties: {
@@ -1673,7 +2133,12 @@ Requirements:
         minimum: 1,
         maximum: 10,
         default: 3,
-        description: "Maximum number of autonomous thoughts to generate (1-10, default: 3)"
+        description: "Maximum number of autonomous thoughts to generate (1-10, default: 3). Only used in direct mode."
+      },
+      useSubagent: {
+        type: "boolean",
+        default: false,
+        description: "Enable subagent mode to return structured prompts for launching specialized thinking subagents instead of generating thoughts directly"
       }
     },
     additionalProperties: false
@@ -1790,8 +2255,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     if (name === "auto_think") {
-      const { maxIterations = 3 } = args as { maxIterations?: number };
-      return await thinkingServer.autoThink(maxIterations);
+      const { maxIterations = 3, useSubagent = false } = args as { maxIterations?: number; useSubagent?: boolean };
+      return await thinkingServer.autoThink(maxIterations, useSubagent);
     }
 
     return {
