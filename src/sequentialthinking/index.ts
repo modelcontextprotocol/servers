@@ -6,7 +6,6 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   Tool,
-  CreateMessageRequest,
   CreateMessageResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 // Fixed chalk import for ESM
@@ -401,27 +400,30 @@ class SequentialThinkingServer {
       throw new Error("Server not initialized for sampling");
     }
 
-    const request: CreateMessageRequest = {
-      method: "sampling/createMessage",
-      params: {
-        messages: [
-          {
-            role: "user", 
-            content: {
-              type: "text",
-              text: prompt,
-            },
+    // Check if client supports sampling
+    const clientCapabilities = this.server.getClientCapabilities();
+    if (!clientCapabilities?.sampling) {
+      throw new Error("Client does not support MCP sampling. Auto-thinking requires an MCP client with sampling capability.");
+    }
+
+    const params = {
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: prompt,
           },
-        ],
-        maxTokens,
-        modelPreferences: {
-          intelligencePriority: 0.8, // Prefer higher intelligence models for reasoning
         },
+      ],
+      maxTokens,
+      modelPreferences: {
+        intelligencePriority: 0.8, // Prefer higher intelligence models for reasoning
       },
     };
 
     try {
-      const result = await this.server.request(request, CreateMessageResultSchema);
+      const result = await this.server.createMessage(params);
       return (result as any).content?.text || "No response generated";
     } catch (error) {
       throw new Error(`Sampling failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -570,19 +572,6 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
   }
 
   public async autoThink(maxIterations: number = 3): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
-    if (!this.server) {
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify({
-            error: "Server not initialized for auto-thinking",
-            status: 'failed'
-          }, null, 2)
-        }],
-        isError: true
-      };
-    }
-
     if (this.thoughtHistory.length === 0) {
       return {
         content: [{
@@ -594,6 +583,14 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
         }],
         isError: true
       };
+    }
+
+    // Check if MCP sampling is available
+    const hasSamplingSupport = this.server && this.server.getClientCapabilities()?.sampling;
+    
+    if (!hasSamplingSupport) {
+      // Use fallback rule-based auto-thinking
+      return this.autoThinkFallback(maxIterations);
     }
 
     const results = [];
@@ -675,6 +672,210 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
         isError: true
       };
     }
+  }
+
+  /**
+   * Fallback auto-thinking implementation when MCP sampling is not available
+   */
+  private async autoThinkFallback(maxIterations: number = 3): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+    const results = [];
+    let iteration = 0;
+
+    // Rule-based thought generation patterns
+    const followUpPatterns = [
+      "Let me analyze the assumptions I've made so far and check if they're valid.",
+      "I should consider alternative approaches to this problem.",
+      "What are the potential risks or failure points in my current reasoning?",
+      "Let me break down the problem into smaller, more manageable components.",
+      "I need to evaluate the evidence supporting my conclusions.",
+      "What questions remain unanswered from my analysis so far?",
+      "Let me consider the long-term implications of this approach.",
+      "Are there any stakeholders or perspectives I haven't considered?",
+      "What would be the next logical step to validate this reasoning?",
+      "Let me synthesize the key insights from my thinking process."
+    ];
+
+    try {
+      while (iteration < maxIterations) {
+        iteration++;
+        
+        // Generate context-aware follow-up thought
+        const lastThought = this.thoughtHistory[this.thoughtHistory.length - 1];
+        const thoughtNumber = this.thoughtHistory.length + 1;
+        const totalThoughts = Math.max(thoughtNumber + 1, this.thoughtHistory[0]?.totalThoughts || thoughtNumber + 1);
+        
+        // Select appropriate follow-up based on current context
+        let rawThought: string;
+        
+        if (lastThought?.needsMoreThoughts) {
+          rawThought = "I need to address the unresolved issues from my previous thoughts and provide more detailed analysis.";
+        } else if (this.getLowConfidenceThoughts().length > 0) {
+          rawThought = "I should strengthen my low-confidence reasoning by gathering more evidence and validating assumptions.";
+        } else if (iteration === 1) {
+          rawThought = followUpPatterns[0]; // Start with assumption analysis
+        } else if (iteration === maxIterations) {
+          rawThought = followUpPatterns[followUpPatterns.length - 1]; // End with synthesis
+        } else {
+          // Select based on what we haven't covered yet
+          const selectedPattern = followUpPatterns[Math.min(iteration, followUpPatterns.length - 1)];
+          rawThought = selectedPattern;
+        }
+        
+        // Create basic enhancement (simplified version without LLM sampling)
+        const enhancement: Partial<ThoughtData> = {
+          confidence: 0.6, // Medium confidence for rule-based thoughts
+          tags: this.generateContextualTags(rawThought),
+          evidence: this.extractImpliedEvidence(rawThought),
+          assumptions: this.extractImpliedAssumptions(rawThought),
+          references: this.findRelevantReferences(rawThought, thoughtNumber)
+        };
+        
+        // Determine if more thinking is needed
+        const needsMoreThinking = iteration < maxIterations && !rawThought.includes('synthesize');
+        
+        // Create the complete thought data
+        const thoughtData: ThoughtData = {
+          thought: rawThought.trim(),
+          thoughtNumber,
+          totalThoughts,
+          nextThoughtNeeded: needsMoreThinking,
+          ...enhancement
+        };
+        
+        // Process the thought
+        const result = this.processThought(thoughtData);
+        results.push({
+          iteration,
+          thoughtNumber,
+          result: JSON.parse(result.content[0].text)
+        });
+        
+        // Check if we should continue
+        if (!needsMoreThinking) {
+          break;
+        }
+      }
+      
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            status: 'completed',
+            method: 'fallback-rule-based',
+            iterations: iteration,
+            autoGeneratedThoughts: results.length,
+            thoughtsGenerated: results,
+            message: `Generated ${results.length} rule-based autonomous thoughts in ${iteration} iterations (MCP sampling not available)`,
+            nextSteps: this.thoughtHistory.length > 0 ? this.generateNextSteps() : []
+          }, null, 2)
+        }]
+      };
+      
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+            status: 'failed',
+            method: 'fallback-rule-based',
+            completedIterations: results.length,
+            partialResults: results
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * Generate contextual tags based on thought content (simplified heuristic approach)
+   */
+  private generateContextualTags(thought: string): string[] {
+    const tags: string[] = [];
+    const thoughtLower = thought.toLowerCase();
+    
+    if (thoughtLower.includes('assumption') || thoughtLower.includes('assume')) tags.push('assumptions');
+    if (thoughtLower.includes('alternative') || thoughtLower.includes('approach')) tags.push('alternatives');
+    if (thoughtLower.includes('risk') || thoughtLower.includes('failure')) tags.push('risk-analysis');
+    if (thoughtLower.includes('evidence') || thoughtLower.includes('validate')) tags.push('validation');
+    if (thoughtLower.includes('break') || thoughtLower.includes('component')) tags.push('decomposition');
+    if (thoughtLower.includes('implication') || thoughtLower.includes('consequence')) tags.push('implications');
+    if (thoughtLower.includes('stakeholder') || thoughtLower.includes('perspective')) tags.push('stakeholder-analysis');
+    if (thoughtLower.includes('synthesize') || thoughtLower.includes('insight')) tags.push('synthesis');
+    if (thoughtLower.includes('question') || thoughtLower.includes('unanswered')) tags.push('open-questions');
+    
+    // Add general tag if no specific ones found
+    if (tags.length === 0) tags.push('analysis');
+    
+    return tags.slice(0, 3); // Limit to 3 tags
+  }
+
+  /**
+   * Extract implied evidence from rule-based thoughts
+   */
+  private extractImpliedEvidence(thought: string): string[] {
+    const evidence: string[] = [];
+    
+    if (thought.includes('assumption')) {
+      evidence.push('Previous thoughts contain assumptions that need validation');
+    }
+    if (thought.includes('alternative')) {
+      evidence.push('Multiple approaches exist for this problem');
+    }
+    if (thought.includes('risk') || thought.includes('failure')) {
+      evidence.push('Identified potential failure points in current reasoning');
+    }
+    
+    return evidence.slice(0, 2); // Limit to 2 evidence items
+  }
+
+  /**
+   * Extract implied assumptions from rule-based thoughts
+   */
+  private extractImpliedAssumptions(thought: string): string[] {
+    const assumptions: string[] = [];
+    
+    if (thought.includes('analyze') || thought.includes('check')) {
+      assumptions.push('Current reasoning is complete enough to analyze');
+    }
+    if (thought.includes('consider') || thought.includes('alternative')) {
+      assumptions.push('Better solutions may exist beyond current approach');
+    }
+    if (thought.includes('evaluate') || thought.includes('evidence')) {
+      assumptions.push('Evidence exists to support or refute current conclusions');
+    }
+    
+    return assumptions.slice(0, 2); // Limit to 2 assumptions
+  }
+
+  /**
+   * Find relevant references to previous thoughts (simplified heuristic)
+   */
+  private findRelevantReferences(thought: string, currentThoughtNumber: number): number[] {
+    const references: number[] = [];
+    const thoughtLower = thought.toLowerCase();
+    
+    // Reference low-confidence thoughts if talking about assumptions or validation
+    if (thoughtLower.includes('assumption') || thoughtLower.includes('validate')) {
+      const lowConfThoughts = this.getLowConfidenceThoughts();
+      if (lowConfThoughts.length > 0) {
+        references.push(lowConfThoughts[0].thoughtNumber);
+      }
+    }
+    
+    // Reference recent thoughts for synthesis
+    if (thoughtLower.includes('synthesize') || thoughtLower.includes('insight')) {
+      const recent = Math.max(1, currentThoughtNumber - 2);
+      references.push(recent);
+    }
+    
+    // Reference first thought for broad analysis
+    if (thoughtLower.includes('analyze') && this.thoughtHistory.length > 1) {
+      references.push(1);
+    }
+    
+    return references.slice(0, 2); // Limit to 2 references
   }
 
   private assessNeedsMoreThinking(thought: string, currentIteration: number, maxIterations: number): boolean {
@@ -1429,32 +1630,40 @@ No parameters are required - it analyzes all thoughts in the current session.`,
 
 const AUTO_THINK_TOOL: Tool = {
   name: "auto_think",
-  description: `Autonomous thought generation using MCP sampling to drive the thinking process forward.
+  description: `Autonomous thought generation using MCP sampling or rule-based fallback to drive the thinking process forward.
 
-This tool uses Claude's reasoning capabilities through MCP sampling to:
+This tool uses Claude's reasoning capabilities through MCP sampling when available, or falls back to rule-based reasoning:
+
+MCP Sampling Mode (when client supports sampling):
 - Analyze current thought history and identify next logical steps
 - Generate intelligent, contextually-aware thoughts
 - Automatically enhance thoughts with confidence, tags, evidence, and references
 - Continue iteratively until problem resolution or max iterations reached
 
+Fallback Rule-Based Mode (when sampling unavailable):
+- Uses predefined reasoning patterns (assumption analysis, alternative approaches, risk assessment, etc.)
+- Generates contextually appropriate follow-up thoughts based on current state
+- Applies heuristic-based tagging, evidence extraction, and reference linking
+- Provides structured autonomous reasoning without requiring external LLM calls
+
 Key features:
+- Automatic detection of MCP sampling capability
 - Smart prompt generation based on problem domain and confidence gaps
-- Automatic confidence estimation based on language certainty
-- Intelligent tagging based on content analysis
+- Intelligent tagging and metadata enhancement
 - Reference detection when thoughts relate to previous ones
-- Evidence extraction from generated content
-- Adaptive stopping based on completion signals in thought content
+- Adaptive stopping based on completion signals
+- Graceful fallback when sampling is unavailable
 
 Use this tool when:
 - You want to continue thinking automatically from where you left off
 - You need to explore different reasoning paths without manual input
 - You want to strengthen low-confidence areas through autonomous analysis
 - You need to generate follow-up thoughts after manual reasoning
-- You want to see how an AI would continue your thought process
+- You want to see systematic follow-up analysis of your reasoning
 
 Requirements:
 - At least one manual thought must exist before using auto-thinking
-- The MCP client must support sampling for this tool to work
+- Works with or without MCP client sampling support
 - The tool will generate 1-5 thoughts per call depending on the maxIterations parameter`,
   inputSchema: {
     type: "object",
@@ -1479,6 +1688,7 @@ const server = new Server(
   {
     capabilities: {
       tools: {},
+      sampling: {},
     },
   }
 );
