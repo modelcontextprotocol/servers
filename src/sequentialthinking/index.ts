@@ -89,6 +89,52 @@ interface SynthesisResult {
   nextSteps: string[];
 }
 
+// Decision tree visualization interfaces
+interface TreeNode {
+  thoughtNumber: number;
+  thought: ThoughtData;
+  children: TreeNode[];
+  parent: TreeNode | null;
+  isDecisionPoint: boolean;
+  isCriticalPath: boolean;
+  depth: number;
+}
+
+interface DecisionTreeVisualization {
+  ascii: string;
+  json: TreeStructure;
+  statistics: TreeStatistics;
+}
+
+interface TreeStructure {
+  nodes: Array<{
+    thoughtNumber: number;
+    confidence: number | undefined;
+    evidenceCount: number;
+    assumptionCount: number;
+    tags: string[];
+    isDecisionPoint: boolean;
+    isCriticalPath: boolean;
+    children: number[];
+    references: number[];
+  }>;
+  branches: number;
+  depth: number;
+  criticalPath: number[];
+}
+
+interface TreeStatistics {
+  totalNodes: number;
+  decisionPoints: number;
+  averageConfidence: number | null;
+  criticalPath: number[];
+  depth: number;
+  breadth: number;
+  lowConfidenceNodes: number;
+  evidenceGaps: number;
+  assumptionRisks: number;
+}
+
 // Subagent interfaces
 interface SubagentPrompt {
   subagentType: string;
@@ -1741,6 +1787,520 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
     return nextSteps;
   }
 
+  /**
+   * Decision Tree Visualization Methods
+   */
+  
+  /**
+   * Build tree structure from thought history using references
+   */
+  private buildDecisionTree(): TreeNode[] {
+    if (this.thoughtHistory.length === 0) {
+      return [];
+    }
+
+    // Create nodes map
+    const nodeMap = new Map<number, TreeNode>();
+    
+    // Initialize all nodes
+    for (const thought of this.thoughtHistory) {
+      nodeMap.set(thought.thoughtNumber, {
+        thoughtNumber: thought.thoughtNumber,
+        thought,
+        children: [],
+        parent: null,
+        isDecisionPoint: this.isDecisionPoint(thought),
+        isCriticalPath: false, // Will be calculated later
+        depth: 0 // Will be calculated later
+      });
+    }
+
+    // Build parent-child relationships based on references and sequence
+    const rootNodes: TreeNode[] = [];
+    
+    for (const thought of this.thoughtHistory) {
+      const node = nodeMap.get(thought.thoughtNumber)!;
+      
+      if (thought.references && thought.references.length > 0) {
+        // Use the most recent reference as parent for tree structure
+        const primaryParentNum = Math.max(...thought.references);
+        const parent = nodeMap.get(primaryParentNum);
+        
+        if (parent) {
+          node.parent = parent;
+          parent.children.push(node);
+        } else {
+          rootNodes.push(node);
+        }
+      } else if (thought.branchFromThought) {
+        // Handle explicit branches
+        const parent = nodeMap.get(thought.branchFromThought);
+        if (parent) {
+          node.parent = parent;
+          parent.children.push(node);
+        } else {
+          rootNodes.push(node);
+        }
+      } else if (thought.thoughtNumber === 1 || rootNodes.length === 0) {
+        // First thought or orphaned thought becomes root
+        rootNodes.push(node);
+      } else {
+        // Default: attach to previous thought in sequence
+        const prevThought = nodeMap.get(thought.thoughtNumber - 1);
+        if (prevThought && !prevThought.children.some(child => child.thoughtNumber === thought.thoughtNumber)) {
+          node.parent = prevThought;
+          prevThought.children.push(node);
+        } else {
+          rootNodes.push(node);
+        }
+      }
+    }
+
+    // Calculate depths
+    this.calculateDepths(rootNodes);
+    
+    // Identify critical path (highest confidence path to deepest node)
+    const criticalPath = this.findCriticalPath(rootNodes);
+    this.markCriticalPath(criticalPath, nodeMap);
+
+    return rootNodes;
+  }
+
+  private calculateDepths(rootNodes: TreeNode[]): void {
+    const calculateNodeDepth = (node: TreeNode, depth: number): void => {
+      node.depth = depth;
+      for (const child of node.children) {
+        calculateNodeDepth(child, depth + 1);
+      }
+    };
+
+    for (const root of rootNodes) {
+      calculateNodeDepth(root, 0);
+    }
+  }
+
+  private findCriticalPath(rootNodes: TreeNode[]): number[] {
+    let bestPath: number[] = [];
+    let bestScore = -1;
+
+    const explorePath = (node: TreeNode, currentPath: number[]): void => {
+      const newPath = [...currentPath, node.thoughtNumber];
+      
+      // Calculate path score based on confidence and depth
+      const pathScore = this.calculatePathScore(newPath);
+      
+      if (node.children.length === 0) {
+        // Leaf node - evaluate complete path
+        if (pathScore > bestScore) {
+          bestScore = pathScore;
+          bestPath = newPath;
+        }
+      } else {
+        // Continue exploring children
+        for (const child of node.children) {
+          explorePath(child, newPath);
+        }
+      }
+    };
+
+    for (const root of rootNodes) {
+      explorePath(root, []);
+    }
+
+    return bestPath;
+  }
+
+  private calculatePathScore(path: number[]): number {
+    let totalConfidence = 0;
+    let validConfidenceCount = 0;
+
+    for (const thoughtNum of path) {
+      const thought = this.thoughtHistory.find(t => t.thoughtNumber === thoughtNum);
+      if (thought && thought.confidence !== undefined) {
+        totalConfidence += thought.confidence;
+        validConfidenceCount++;
+      }
+    }
+
+    const avgConfidence = validConfidenceCount > 0 ? totalConfidence / validConfidenceCount : 0.5;
+    const depthBonus = path.length * 0.1; // Slight bonus for deeper paths
+    
+    return avgConfidence + depthBonus;
+  }
+
+  private markCriticalPath(criticalPath: number[], nodeMap: Map<number, TreeNode>): void {
+    for (const thoughtNum of criticalPath) {
+      const node = nodeMap.get(thoughtNum);
+      if (node) {
+        node.isCriticalPath = true;
+      }
+    }
+  }
+
+  private isDecisionPoint(thought: ThoughtData): boolean {
+    const thoughtText = thought.thought.toLowerCase();
+    
+    // Decision indicators
+    const decisionPatterns = [
+      /(?:decide|decision|choose|option|alternative)/,
+      /(?:should|could|might|either|or)/,
+      /(?:consider|evaluate|compare)/
+    ];
+    
+    const hasDecisionPattern = decisionPatterns.some(pattern => pattern.test(thoughtText));
+    
+    // Also consider low confidence or branching as decision points
+    const isLowConfidence = thought.confidence !== undefined && thought.confidence < 0.6;
+    const hasBranches = thought.branchId !== undefined;
+    const needsMoreThoughts = thought.needsMoreThoughts === true;
+    
+    return hasDecisionPattern || isLowConfidence || hasBranches || needsMoreThoughts;
+  }
+
+  /**
+   * Generate ASCII visualization of the decision tree
+   */
+  private generateAsciiTree(
+    rootNodes: TreeNode[],
+    confidenceThreshold?: number,
+    focusBranch?: string,
+    showEvidence: boolean = true
+  ): string {
+    if (rootNodes.length === 0) {
+      return "No thoughts to visualize";
+    }
+
+    let output = "Decision Tree Visualization\n";
+    output += "═".repeat(50) + "\n\n";
+
+    const filteredRoots = this.filterNodes(rootNodes, confidenceThreshold, focusBranch);
+
+    for (let i = 0; i < filteredRoots.length; i++) {
+      const isLast = i === filteredRoots.length - 1;
+      output += this.renderNode(filteredRoots[i], "", isLast, showEvidence);
+    }
+
+    // Add statistics
+    const stats = this.calculateTreeStatistics(rootNodes);
+    output += "\n" + "─".repeat(50) + "\n";
+    output += `Decision Points: ${stats.decisionPoints} | Critical Path: ${stats.criticalPath.join('→')} | Avg Confidence: ${stats.averageConfidence?.toFixed(2) || 'N/A'}\n`;
+    output += `Depth: ${stats.depth} | Breadth: ${stats.breadth} | Low Confidence: ${stats.lowConfidenceNodes} | Evidence Gaps: ${stats.evidenceGaps}`;
+
+    return output;
+  }
+
+  private filterNodes(rootNodes: TreeNode[], confidenceThreshold?: number, focusBranch?: string): TreeNode[] {
+    if (!confidenceThreshold && !focusBranch) {
+      return rootNodes;
+    }
+
+    const filtered: TreeNode[] = [];
+    
+    for (const root of rootNodes) {
+      const filteredRoot = this.filterNodeRecursive(root, confidenceThreshold, focusBranch);
+      if (filteredRoot) {
+        filtered.push(filteredRoot);
+      }
+    }
+
+    return filtered;
+  }
+
+  private filterNodeRecursive(node: TreeNode, confidenceThreshold?: number, focusBranch?: string): TreeNode | null {
+    // Check confidence threshold
+    if (confidenceThreshold !== undefined && 
+        node.thought.confidence !== undefined && 
+        node.thought.confidence < confidenceThreshold) {
+      return null;
+    }
+
+    // Check branch focus
+    if (focusBranch && node.thought.branchId && node.thought.branchId !== focusBranch) {
+      return null;
+    }
+
+    // Create filtered node
+    const filteredNode: TreeNode = {
+      ...node,
+      children: []
+    };
+
+    // Recursively filter children
+    for (const child of node.children) {
+      const filteredChild = this.filterNodeRecursive(child, confidenceThreshold, focusBranch);
+      if (filteredChild) {
+        filteredChild.parent = filteredNode;
+        filteredNode.children.push(filteredChild);
+      }
+    }
+
+    return filteredNode;
+  }
+
+  private renderNode(node: TreeNode, prefix: string, isLast: boolean, showEvidence: boolean): string {
+    const thought = node.thought;
+    let output = "";
+
+    // Tree structure characters
+    const connector = isLast ? "└── " : "├── ";
+    const childPrefix = isLast ? "    " : "│   ";
+
+    // Confidence visualization
+    const confidenceBar = this.getConfidenceBar(thought.confidence);
+    const confidenceText = thought.confidence !== undefined ? 
+      ` (${(thought.confidence * 100).toFixed(0)}%)` : '';
+
+    // Decision point marker
+    const decisionMarker = node.isDecisionPoint ? "🔶 " : "";
+    
+    // Critical path marker
+    const criticalMarker = node.isCriticalPath ? "⭐ " : "";
+
+    // Tags display
+    const tagsText = thought.tags && thought.tags.length > 0 ? 
+      ` [${thought.tags.slice(0, 3).join(', ')}]` : '';
+
+    // Evidence and assumption counts
+    const evidenceCount = thought.evidence ? thought.evidence.length : 0;
+    const assumptionCount = thought.assumptions ? thought.assumptions.length : 0;
+    const metaText = showEvidence && (evidenceCount > 0 || assumptionCount > 0) ? 
+      ` +${evidenceCount}E` + (assumptionCount > 0 ? ` -${assumptionCount}A` : '') : '';
+
+    // Truncate thought text for tree display
+    const thoughtText = thought.thought.length > 40 ? 
+      thought.thought.substring(0, 37) + "..." : thought.thought;
+
+    output += `${prefix}${connector}[${thought.thoughtNumber}] ${confidenceBar} ${criticalMarker}${decisionMarker}${thoughtText}${confidenceText}${tagsText}${metaText}\n`;
+
+    // Render children
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      const isLastChild = i === node.children.length - 1;
+      output += this.renderNode(child, prefix + childPrefix, isLastChild, showEvidence);
+    }
+
+    return output;
+  }
+
+  private getConfidenceBar(confidence?: number): string {
+    if (confidence === undefined) return "░░░";
+    
+    const level = Math.round(confidence * 3);
+    switch (level) {
+      case 3: return "███"; // High confidence
+      case 2: return "██░"; // Medium-high confidence  
+      case 1: return "█░░"; // Medium-low confidence
+      case 0: return "░░░"; // Low confidence
+      default: return "░░░";
+    }
+  }
+
+  private calculateTreeStatistics(rootNodes: TreeNode[]): TreeStatistics {
+    let totalNodes = 0;
+    let decisionPoints = 0;
+    let lowConfidenceNodes = 0;
+    let evidenceGaps = 0;
+    let assumptionRisks = 0;
+    let maxDepth = 0;
+    let totalConfidence = 0;
+    let confidenceCount = 0;
+    let criticalPath: number[] = [];
+
+    // Find critical path
+    for (const root of rootNodes) {
+      const path = this.findNodeCriticalPath(root);
+      if (path.length > criticalPath.length) {
+        criticalPath = path;
+      }
+    }
+
+    // Calculate statistics recursively
+    const analyzeNode = (node: TreeNode): void => {
+      totalNodes++;
+      maxDepth = Math.max(maxDepth, node.depth);
+
+      if (node.isDecisionPoint) decisionPoints++;
+      
+      if (node.thought.confidence !== undefined) {
+        totalConfidence += node.thought.confidence;
+        confidenceCount++;
+        
+        if (node.thought.confidence < 0.6) {
+          lowConfidenceNodes++;
+        }
+      }
+
+      if (!node.thought.evidence || node.thought.evidence.length === 0) {
+        evidenceGaps++;
+      }
+
+      if (node.thought.assumptions && node.thought.assumptions.length > 2) {
+        assumptionRisks++;
+      }
+
+      for (const child of node.children) {
+        analyzeNode(child);
+      }
+    };
+
+    for (const root of rootNodes) {
+      analyzeNode(root);
+    }
+
+    // Calculate breadth (average branching factor)
+    const breadth = totalNodes > 1 ? Math.round((totalNodes - rootNodes.length) / Math.max(1, totalNodes - this.getLeafCount(rootNodes))) : 1;
+
+    return {
+      totalNodes,
+      decisionPoints,
+      averageConfidence: confidenceCount > 0 ? totalConfidence / confidenceCount : null,
+      criticalPath,
+      depth: maxDepth + 1,
+      breadth,
+      lowConfidenceNodes,
+      evidenceGaps,
+      assumptionRisks
+    };
+  }
+
+  private findNodeCriticalPath(node: TreeNode): number[] {
+    if (node.isCriticalPath) {
+      return [node.thoughtNumber];
+    }
+    
+    for (const child of node.children) {
+      const childPath = this.findNodeCriticalPath(child);
+      if (childPath.length > 0) {
+        return [node.thoughtNumber, ...childPath];
+      }
+    }
+    
+    return [];
+  }
+
+  private getLeafCount(rootNodes: TreeNode[]): number {
+    let leafCount = 0;
+    
+    const countLeaves = (node: TreeNode): void => {
+      if (node.children.length === 0) {
+        leafCount++;
+      } else {
+        for (const child of node.children) {
+          countLeaves(child);
+        }
+      }
+    };
+
+    for (const root of rootNodes) {
+      countLeaves(root);
+    }
+
+    return leafCount;
+  }
+
+  /**
+   * Generate structured JSON representation of the decision tree
+   */
+  private generateTreeStructure(rootNodes: TreeNode[]): TreeStructure {
+    const nodes: Array<{
+      thoughtNumber: number;
+      confidence: number | undefined;
+      evidenceCount: number;
+      assumptionCount: number;
+      tags: string[];
+      isDecisionPoint: boolean;
+      isCriticalPath: boolean;
+      children: number[];
+      references: number[];
+    }> = [];
+    const criticalPath: number[] = [];
+    let maxDepth = 0;
+
+    // Find critical path from the tree
+    for (const root of rootNodes) {
+      const path = this.findNodeCriticalPath(root);
+      if (path.length > criticalPath.length) {
+        criticalPath.push(...path);
+      }
+    }
+
+    const processNode = (node: TreeNode): void => {
+      maxDepth = Math.max(maxDepth, node.depth);
+      
+      nodes.push({
+        thoughtNumber: node.thoughtNumber,
+        confidence: node.thought.confidence,
+        evidenceCount: node.thought.evidence?.length || 0,
+        assumptionCount: node.thought.assumptions?.length || 0,
+        tags: node.thought.tags || [],
+        isDecisionPoint: node.isDecisionPoint,
+        isCriticalPath: node.isCriticalPath,
+        children: node.children.map(child => child.thoughtNumber),
+        references: node.thought.references || []
+      });
+
+      for (const child of node.children) {
+        processNode(child);
+      }
+    };
+
+    for (const root of rootNodes) {
+      processNode(root);
+    }
+
+    return {
+      nodes,
+      branches: this.countBranches(rootNodes),
+      depth: maxDepth + 1,
+      criticalPath
+    };
+  }
+
+  private countBranches(rootNodes: TreeNode[]): number {
+    let branches = 0;
+    
+    const countNodeBranches = (node: TreeNode): void => {
+      if (node.children.length > 1) {
+        branches += node.children.length - 1;
+      }
+      
+      for (const child of node.children) {
+        countNodeBranches(child);
+      }
+    };
+
+    for (const root of rootNodes) {
+      countNodeBranches(root);
+    }
+
+    return branches;
+  }
+
+  /**
+   * Main visualization method
+   */
+  public generateDecisionTree(
+    confidenceThreshold?: number,
+    focusBranch?: string,
+    outputFormat: 'ascii' | 'json' | 'both' = 'both',
+    showEvidence: boolean = true
+  ): DecisionTreeVisualization {
+    if (this.thoughtHistory.length === 0) {
+      throw new Error('No thoughts available for visualization. Add some thoughts first.');
+    }
+
+    const rootNodes = this.buildDecisionTree();
+    const ascii = this.generateAsciiTree(rootNodes, confidenceThreshold, focusBranch, showEvidence);
+    const json = this.generateTreeStructure(rootNodes);
+    const statistics = this.calculateTreeStatistics(rootNodes);
+
+    return {
+      ascii,
+      json,
+      statistics
+    };
+  }
+
   public processThought(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
     try {
       const validatedInput = this.validateThoughtData(input);
@@ -2145,6 +2705,90 @@ Requirements:
   }
 };
 
+const VISUALIZE_DECISION_TREE_TOOL: Tool = {
+  name: "visualize_decision_tree",
+  description: `Generate visual representations of reasoning paths and decision points in your thought process.
+
+This tool creates ASCII tree diagrams and structured JSON representations that show:
+
+**Core Visualization Features:**
+- ASCII tree diagrams showing thought relationships and hierarchy
+- Confidence levels with visual indicators (███ high, ██░ medium, █░░ low, ░░░ very low)
+- Decision points marked with 🔶 (thoughts with uncertainty, branches, or choices)
+- Critical path highlighting with ⭐ (highest confidence path to deepest reasoning)
+- Evidence counts (+3E) and assumption risks (-2A) for each thought
+- Tags and categorization displayed inline
+
+**Tree Structure Analysis:**
+- Parses thought references to build parent-child relationships
+- Identifies decision nodes based on confidence levels, branching, and content analysis
+- Calculates path weights using confidence scores and reasoning depth
+- Detects critical reasoning chains and potential bottlenecks
+- Analyzes reasoning quality through evidence gaps and assumption risks
+
+**Advanced Features:**
+- Filter by confidence thresholds to focus on high/low confidence areas
+- Focus on specific branches using branch IDs
+- Toggle evidence/assumption display for cleaner or more detailed views
+- Comprehensive statistics including depth, breadth, and decision point counts
+
+**Output Formats:**
+- ASCII tree for console display and visual analysis
+- Structured JSON for external visualization tools and programmatic analysis
+- Detailed statistics summary with key insights
+
+**Example ASCII Output:**
+\`\`\`
+Decision Tree Visualization
+══════════════════════════════════════════════════
+├── [1] ░░░ Initial Problem Analysis (40%) [problem, analysis] +1E -2A
+│   ├── [2] ███ ⭐ Technical Deep-dive (85%) [technical, validation] +3E
+│   │   └── [3] ███ ⭐ Solution Implementation (90%) [implementation] +3E
+│   └── [4] ██░ 🔶 Alternative Approach (60%) [alternative, risk] +2E -2A
+├── [5] █░░ 🔶 Risk Assessment (45%) [risk, uncertainty] +1E -3A
+──────────────────────────────────────────────────
+Decision Points: 2 | Critical Path: 1→2→3 | Avg Confidence: 0.68
+Depth: 3 | Breadth: 1.5 | Low Confidence: 2 | Evidence Gaps: 1
+\`\`\`
+
+Use this tool to:
+- Understand your reasoning structure and identify decision points
+- Find areas that need more evidence or have low confidence
+- Locate critical paths through your analysis
+- Identify gaps or weak points in your thinking process
+- Plan follow-up analysis for uncertain or risky assumptions
+- Review the overall quality and completeness of your reasoning
+
+The visualization helps you see patterns in your thinking that might not be obvious from reading thoughts sequentially, making it easier to strengthen weak areas and build upon strong reasoning chains.`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      confidenceThreshold: {
+        type: "number",
+        minimum: 0,
+        maximum: 1,
+        description: "Only show thoughts with confidence above this threshold (0.0-1.0). Useful for focusing on high or low confidence areas."
+      },
+      focusBranch: {
+        type: "string",
+        description: "Focus on a specific branch ID to see only thoughts from that reasoning path."
+      },
+      outputFormat: {
+        type: "string",
+        enum: ["ascii", "json", "both"],
+        default: "both",
+        description: "Output format: 'ascii' for tree diagram, 'json' for structured data, 'both' for complete analysis."
+      },
+      showEvidence: {
+        type: "boolean",
+        default: true,
+        description: "Show evidence counts (+3E) and assumption counts (-2A) in the tree display."
+      }
+    },
+    additionalProperties: false
+  }
+};
+
 const server = new Server(
   {
     name: "sequential-thinking-server",
@@ -2162,7 +2806,7 @@ const thinkingServer = new SequentialThinkingServer();
 thinkingServer.setServer(server);
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [SEQUENTIAL_THINKING_TOOL, GET_THOUGHT_TOOL, SEARCH_THOUGHTS_TOOL, GET_RELATED_THOUGHTS_TOOL, SYNTHESIZE_THOUGHTS_TOOL, AUTO_THINK_TOOL],
+  tools: [SEQUENTIAL_THINKING_TOOL, GET_THOUGHT_TOOL, SEARCH_THOUGHTS_TOOL, GET_RELATED_THOUGHTS_TOOL, SYNTHESIZE_THOUGHTS_TOOL, AUTO_THINK_TOOL, VISUALIZE_DECISION_TREE_TOOL],
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -2257,6 +2901,72 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === "auto_think") {
       const { maxIterations = 3, useSubagent = false } = args as { maxIterations?: number; useSubagent?: boolean };
       return await thinkingServer.autoThink(maxIterations, useSubagent);
+    }
+
+    if (name === "visualize_decision_tree") {
+      const { 
+        confidenceThreshold, 
+        focusBranch, 
+        outputFormat = 'both', 
+        showEvidence = true 
+      } = args as { 
+        confidenceThreshold?: number; 
+        focusBranch?: string; 
+        outputFormat?: 'ascii' | 'json' | 'both'; 
+        showEvidence?: boolean; 
+      };
+      
+      try {
+        const visualization = thinkingServer.generateDecisionTree(
+          confidenceThreshold,
+          focusBranch,
+          outputFormat,
+          showEvidence
+        );
+        
+        let responseData: any = {
+          outputFormat,
+          statistics: visualization.statistics
+        };
+
+        if (outputFormat === 'ascii' || outputFormat === 'both') {
+          responseData.ascii = visualization.ascii;
+        }
+        
+        if (outputFormat === 'json' || outputFormat === 'both') {
+          responseData.json = visualization.json;
+        }
+
+        // Add filtering info if applicable
+        if (confidenceThreshold !== undefined) {
+          responseData.appliedFilters = responseData.appliedFilters || {};
+          responseData.appliedFilters.confidenceThreshold = confidenceThreshold;
+        }
+        
+        if (focusBranch) {
+          responseData.appliedFilters = responseData.appliedFilters || {};
+          responseData.appliedFilters.focusBranch = focusBranch;
+        }
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(responseData, null, 2)
+          }]
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              error: error instanceof Error ? error.message : String(error),
+              status: 'failed',
+              tool: 'visualize_decision_tree'
+            }, null, 2)
+          }],
+          isError: true
+        };
+      }
     }
 
     return {
