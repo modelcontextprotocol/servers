@@ -367,14 +367,14 @@ export async function searchFilesWithValidation(
         await validatePath(fullPath);
 
         const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(excludePattern => {
-          const globPattern = excludePattern.includes('*') ? excludePattern : `**/${excludePattern}/**`;
-          return minimatch(relativePath, globPattern, { dot: true });
-        });
+        const shouldExclude = excludePatterns.some(excludePattern =>
+          minimatch(relativePath, excludePattern, { dot: true })
+        );
 
         if (shouldExclude) continue;
 
-        if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
+        // Use glob matching for the search pattern
+        if (minimatch(relativePath, pattern, { dot: true })) {
           results.push(fullPath);
         }
 

@@ -14,6 +14,7 @@ import { createReadStream } from "fs";
 import path from "path";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from './path-utils.js';
 import { getValidRootDirectories } from './roots-utils.js';
 import {
@@ -87,7 +88,10 @@ const ReadMediaFileArgsSchema = z.object({
 });
 
 const ReadMultipleFilesArgsSchema = z.object({
-  paths: z.array(z.string()),
+  paths: z
+    .array(z.string())
+    .min(1, "At least one file path must be provided")
+    .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories."),
 });
 
 const WriteFileArgsSchema = z.object({
@@ -121,6 +125,7 @@ const ListDirectoryWithSizesArgsSchema = z.object({
 
 const DirectoryTreeArgsSchema = z.object({
   path: z.string(),
+  excludePatterns: z.array(z.string()).optional().default([])
 });
 
 const MoveFileArgsSchema = z.object({
@@ -275,9 +280,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "search_files",
         description:
           "Recursively search for files and directories matching a pattern. " +
-          "Searches through all subdirectories from the starting path. The search " +
-          "is case-insensitive and matches partial names. Returns full paths to all " +
-          "matching items. Great for finding files when you don't know their exact location. " +
+          "The patterns should be glob-style patterns that match paths relative to the working directory. " +
+          "Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
+          "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
           "Only searches within allowed directories.",
         inputSchema: zodToJsonSchema(SearchFilesArgsSchema) as ToolInput,
       },
@@ -528,13 +533,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: 'file' | 'directory';
             children?: TreeEntry[];
         }
+        const rootPath = parsed.data.path;
 
-        async function buildTree(currentPath: string): Promise<TreeEntry[]> {
+        async function buildTree(currentPath: string, excludePatterns: string[] = []): Promise<TreeEntry[]> {
             const validPath = await validatePath(currentPath);
             const entries = await fs.readdir(validPath, {withFileTypes: true});
             const result: TreeEntry[] = [];
 
             for (const entry of entries) {
+                const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
+                const shouldExclude = excludePatterns.some(pattern => {
+                    if (pattern.includes('*')) {
+                        return minimatch(relativePath, pattern, {dot: true});
+                    }
+                    // For files: match exact name or as part of path
+                    // For directories: match as directory path
+                    return minimatch(relativePath, pattern, {dot: true}) ||
+                           minimatch(relativePath, `**/${pattern}`, {dot: true}) ||
+                           minimatch(relativePath, `**/${pattern}/**`, {dot: true});
+                });
+                if (shouldExclude)
+                    continue;
+
                 const entryData: TreeEntry = {
                     name: entry.name,
                     type: entry.isDirectory() ? 'directory' : 'file'
@@ -542,7 +562,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
                 if (entry.isDirectory()) {
                     const subPath = path.join(currentPath, entry.name);
-                    entryData.children = await buildTree(subPath);
+                    entryData.children = await buildTree(subPath, excludePatterns);
                 }
 
                 result.push(entryData);
@@ -551,7 +571,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             return result;
         }
 
-        const treeData = await buildTree(parsed.data.path);
+        const treeData = await buildTree(rootPath, parsed.data.excludePatterns);
         return {
             content: [{
                 type: "text",
