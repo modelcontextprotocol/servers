@@ -20,6 +20,8 @@ interface ThoughtData {
   branchId?: string;
   needsMoreThoughts?: boolean;
   nextThoughtNeeded: boolean;
+  references?: number[];
+  tags?: string[];
 }
 
 class SequentialThinkingServer {
@@ -47,6 +49,25 @@ class SequentialThinkingServer {
       throw new Error('Invalid nextThoughtNeeded: must be a boolean');
     }
 
+    // Validate references array if provided
+    let references: number[] | undefined;
+    if (data.references !== undefined) {
+      if (!Array.isArray(data.references)) {
+        throw new Error('Invalid references: must be an array of numbers');
+      }
+      references = data.references.filter(ref => typeof ref === 'number' && ref > 0);
+    }
+
+    // Validate tags array if provided
+    let tags: string[] | undefined;
+    if (data.tags !== undefined) {
+      if (!Array.isArray(data.tags)) {
+        throw new Error('Invalid tags: must be an array of strings');
+      }
+      tags = data.tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0)
+        .map(tag => tag.trim().toLowerCase());
+    }
+
     return {
       thought: data.thought,
       thoughtNumber: data.thoughtNumber,
@@ -57,11 +78,13 @@ class SequentialThinkingServer {
       branchFromThought: data.branchFromThought as number | undefined,
       branchId: data.branchId as string | undefined,
       needsMoreThoughts: data.needsMoreThoughts as boolean | undefined,
+      references,
+      tags,
     };
   }
 
   private formatThought(thoughtData: ThoughtData): string {
-    const { thoughtNumber, totalThoughts, thought, isRevision, revisesThought, branchFromThought, branchId } = thoughtData;
+    const { thoughtNumber, totalThoughts, thought, isRevision, revisesThought, branchFromThought, branchId, references, tags } = thoughtData;
 
     let prefix = '';
     let context = '';
@@ -77,7 +100,16 @@ class SequentialThinkingServer {
       context = '';
     }
 
-    const header = `${prefix} ${thoughtNumber}/${totalThoughts}${context}`;
+    // Add references and tags information
+    let metaInfo = '';
+    if (references && references.length > 0) {
+      metaInfo += ` | 🔗 References: ${references.join(', ')}`;
+    }
+    if (tags && tags.length > 0) {
+      metaInfo += ` | 🏷️ Tags: ${tags.join(', ')}`;
+    }
+
+    const header = `${prefix} ${thoughtNumber}/${totalThoughts}${context}${metaInfo}`;
     const border = '─'.repeat(Math.max(header.length, thought.length) + 4);
 
     return `
@@ -86,6 +118,65 @@ class SequentialThinkingServer {
 ├${border}┤
 │ ${thought.padEnd(border.length - 2)} │
 └${border}┘`;
+  }
+
+  public getThought(thoughtNumber: number): ThoughtData | null {
+    return this.thoughtHistory.find(thought => thought.thoughtNumber === thoughtNumber) || null;
+  }
+
+  public searchThoughts(query: string, tags?: string[]): ThoughtData[] {
+    const normalizedQuery = query.toLowerCase().trim();
+    const normalizedTags = tags?.map(tag => tag.toLowerCase().trim());
+
+    return this.thoughtHistory.filter(thought => {
+      // Check if thought content matches query
+      const contentMatch = normalizedQuery === '' || 
+        thought.thought.toLowerCase().includes(normalizedQuery);
+
+      // Check if thought has all required tags
+      const tagMatch = !normalizedTags || normalizedTags.length === 0 ||
+        (thought.tags && normalizedTags.every(tag => thought.tags!.includes(tag)));
+
+      return contentMatch && tagMatch;
+    });
+  }
+
+  public getRelatedThoughts(thoughtNumber: number): ThoughtData[] {
+    const baseThought = this.getThought(thoughtNumber);
+    if (!baseThought) {
+      return [];
+    }
+
+    const related: ThoughtData[] = [];
+
+    // Find thoughts that reference this one
+    const referencingThoughts = this.thoughtHistory.filter(thought => 
+      thought.references && thought.references.includes(thoughtNumber)
+    );
+
+    // Find thoughts that this one references
+    const referencedThoughts = baseThought.references ? 
+      baseThought.references.map(ref => this.getThought(ref)).filter(Boolean) as ThoughtData[] : [];
+
+    // Find thoughts in the same branch
+    const branchThoughts = baseThought.branchId ? 
+      this.thoughtHistory.filter(thought => thought.branchId === baseThought.branchId && thought.thoughtNumber !== thoughtNumber) : [];
+
+    // Find thoughts with similar tags
+    const similarTaggedThoughts = baseThought.tags && baseThought.tags.length > 0 ?
+      this.thoughtHistory.filter(thought => 
+        thought.thoughtNumber !== thoughtNumber &&
+        thought.tags && 
+        thought.tags.some(tag => baseThought.tags!.includes(tag))
+      ) : [];
+
+    // Combine and deduplicate
+    const allRelated = [...referencingThoughts, ...referencedThoughts, ...branchThoughts, ...similarTaggedThoughts];
+    const uniqueRelated = allRelated.filter((thought, index, arr) => 
+      arr.findIndex(t => t.thoughtNumber === thought.thoughtNumber) === index
+    );
+
+    return uniqueRelated;
   }
 
   public processThought(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
@@ -110,16 +201,27 @@ class SequentialThinkingServer {
         console.error(formattedThought);
       }
 
+      // Include references and tags in the response if they exist
+      const responseData: any = {
+        thoughtNumber: validatedInput.thoughtNumber,
+        totalThoughts: validatedInput.totalThoughts,
+        nextThoughtNeeded: validatedInput.nextThoughtNeeded,
+        branches: Object.keys(this.branches),
+        thoughtHistoryLength: this.thoughtHistory.length
+      };
+
+      if (validatedInput.references && validatedInput.references.length > 0) {
+        responseData.references = validatedInput.references;
+      }
+
+      if (validatedInput.tags && validatedInput.tags.length > 0) {
+        responseData.tags = validatedInput.tags;
+      }
+
       return {
         content: [{
           type: "text",
-          text: JSON.stringify({
-            thoughtNumber: validatedInput.thoughtNumber,
-            totalThoughts: validatedInput.totalThoughts,
-            nextThoughtNeeded: validatedInput.nextThoughtNeeded,
-            branches: Object.keys(this.branches),
-            thoughtHistoryLength: this.thoughtHistory.length
-          }, null, 2)
+          text: JSON.stringify(responseData, null, 2)
         }]
       };
     } catch (error) {
@@ -158,6 +260,10 @@ Key features:
 - You can add more thoughts even after reaching what seemed like the end
 - You can express uncertainty and explore alternative approaches
 - Not every thought needs to build linearly - you can branch or backtrack
+- Reference previous thoughts by number to build connections
+- Tag thoughts for easy categorization and retrieval
+- Search and filter thoughts by content or tags
+- Find related thoughts through references, branches, and tags
 - Generates a solution hypothesis
 - Verifies the hypothesis based on the Chain of Thought steps
 - Repeats the process until satisfied
@@ -180,6 +286,8 @@ Parameters explained:
 - branch_from_thought: If branching, which thought number is the branching point
 - branch_id: Identifier for the current branch (if any)
 - needs_more_thoughts: If reaching end but realizing more thoughts needed
+- references: Array of thought numbers that this thought builds upon or references
+- tags: Array of strings for categorizing and organizing this thought
 
 You should:
 1. Start with an initial estimate of needed thoughts, but be ready to adjust
@@ -235,9 +343,78 @@ You should:
       needsMoreThoughts: {
         type: "boolean",
         description: "If more thoughts are needed"
+      },
+      references: {
+        type: "array",
+        items: {
+          type: "integer",
+          minimum: 1
+        },
+        description: "Array of thought numbers that this thought builds upon or references"
+      },
+      tags: {
+        type: "array",
+        items: {
+          type: "string"
+        },
+        description: "Array of tags for categorizing and organizing this thought"
       }
     },
     required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"]
+  }
+};
+
+const GET_THOUGHT_TOOL: Tool = {
+  name: "getThought",
+  description: "Retrieve a specific thought by its number",
+  inputSchema: {
+    type: "object",
+    properties: {
+      thoughtNumber: {
+        type: "integer",
+        minimum: 1,
+        description: "The thought number to retrieve"
+      }
+    },
+    required: ["thoughtNumber"]
+  }
+};
+
+const SEARCH_THOUGHTS_TOOL: Tool = {
+  name: "searchThoughts",
+  description: "Search thoughts by content and/or tags",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "Search query to match against thought content (empty string searches all)"
+      },
+      tags: {
+        type: "array",
+        items: {
+          type: "string"
+        },
+        description: "Array of tags to filter by (thoughts must have all specified tags)"
+      }
+    },
+    required: ["query"]
+  }
+};
+
+const GET_RELATED_THOUGHTS_TOOL: Tool = {
+  name: "getRelatedThoughts",
+  description: "Find all thoughts related to a specific thought through references, branches, or shared tags",
+  inputSchema: {
+    type: "object",
+    properties: {
+      thoughtNumber: {
+        type: "integer",
+        minimum: 1,
+        description: "The thought number to find related thoughts for"
+      }
+    },
+    required: ["thoughtNumber"]
   }
 };
 
@@ -256,21 +433,94 @@ const server = new Server(
 const thinkingServer = new SequentialThinkingServer();
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [SEQUENTIAL_THINKING_TOOL],
+  tools: [SEQUENTIAL_THINKING_TOOL, GET_THOUGHT_TOOL, SEARCH_THOUGHTS_TOOL, GET_RELATED_THOUGHTS_TOOL],
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "sequentialthinking") {
-    return thinkingServer.processThought(request.params.arguments);
-  }
+  const { name, arguments: args } = request.params;
 
-  return {
-    content: [{
-      type: "text",
-      text: `Unknown tool: ${request.params.name}`
-    }],
-    isError: true
-  };
+  try {
+    if (name === "sequentialthinking") {
+      return thinkingServer.processThought(args);
+    }
+
+    if (name === "getThought") {
+      const { thoughtNumber } = args as { thoughtNumber: number };
+      const thought = thinkingServer.getThought(thoughtNumber);
+      
+      if (!thought) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              error: `Thought ${thoughtNumber} not found`,
+              thoughtNumber
+            }, null, 2)
+          }],
+          isError: true
+        };
+      }
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(thought, null, 2)
+        }]
+      };
+    }
+
+    if (name === "searchThoughts") {
+      const { query, tags } = args as { query: string; tags?: string[] };
+      const results = thinkingServer.searchThoughts(query, tags);
+      
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            query,
+            tags,
+            results: results.length,
+            thoughts: results
+          }, null, 2)
+        }]
+      };
+    }
+
+    if (name === "getRelatedThoughts") {
+      const { thoughtNumber } = args as { thoughtNumber: number };
+      const related = thinkingServer.getRelatedThoughts(thoughtNumber);
+      
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            thoughtNumber,
+            relatedCount: related.length,
+            relatedThoughts: related
+          }, null, 2)
+        }]
+      };
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: `Unknown tool: ${name}`
+      }],
+      isError: true
+    };
+  } catch (error) {
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          tool: name
+        }, null, 2)
+      }],
+      isError: true
+    };
+  }
 });
 
 async function runServer() {
