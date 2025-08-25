@@ -50,11 +50,11 @@ class GitLog(BaseModel):
     max_count: int = 10
     start_timestamp: Optional[str] = Field(
         None,
-        description="Start timestamp for filtering commits (ISO format or git-compatible date string)"
+        description="Start timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')"
     )
     end_timestamp: Optional[str] = Field(
         None,
-        description="End timestamp for filtering commits (ISO format or git-compatible date string)"
+        description="End timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')"
     )
 
 class GitCreateBranch(BaseModel):
