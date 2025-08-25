@@ -12,10 +12,11 @@ We welcome PRs that add links to your servers in the [README.md](./README.md)!
 
 We welcome:
 - **Bug fixes** — Help us squash those pesky bugs.
-- **Ergonomic improvements** — Making servers easier to use for humans and agents.
+- **Usability improvements** — Making servers easier to use for humans and agents.
 
 We're more selective about:
 - **New features** — Especially if they're not crucial to the server's core purpose or are highly opinionated. The existing servers are reference servers meant to inspire the community. If you need specific features, we encourage you to build enhanced versions! We think a diverse ecosystem of servers is beneficial for everyone, and would love to link to your improved server in our README.
+- **Enhancements that demonstrate MCP protocol features** — We encourage contributions that help reference servers better illustrate underutilized aspects of the MCP protocol beyond just Tools, such as Resources, Prompts, or Roots. For example, adding Roots support to filesystem-server helps showcase this important but lesser-known feature.
 
 We don't accept:
 - **New server implementations** — We encourage you to publish them yourself, and link to them from the README.
