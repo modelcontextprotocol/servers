@@ -48,6 +48,9 @@ The following reference servers are now archived and can be found at [servers-ar
 - **[Slack](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/slack)** - Channel management and messaging capabilities. Now maintained by [Zencoder](https://github.com/zencoderai/slack-mcp-server)
 - **[SQLite](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/sqlite)** - Database interaction and business intelligence capabilities.
 
+## 🤝 MCP Servers Catalog
+**[composio](https://mcp.composio.dev/)** - Listed MCP Servers catalog.
+
 ## 🤝 Third-Party Servers
 
 ### 🎖️ Official Integrations
