@@ -38,6 +38,18 @@ interface KnowledgeGraph {
   relations: Relation[];
 }
 
+interface EntitySummary {
+  name: string;
+  entityType: string;
+  observationCount: number;
+  lastObservation?: string;
+}
+
+interface KnowledgeGraphSummary {
+  entities: EntitySummary[];
+  relations: Relation[];
+}
+
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
 class KnowledgeGraphManager {
   private async loadGraph(): Promise<KnowledgeGraph> {
@@ -131,6 +143,32 @@ class KnowledgeGraphManager {
 
   async readGraph(): Promise<KnowledgeGraph> {
     return this.loadGraph();
+  }
+
+  async readGraphSummary(): Promise<KnowledgeGraphSummary> {
+    const graph = await this.loadGraph();
+    
+    // Create entity summaries without full observation arrays
+    const entitySummaries = graph.entities.map(entity => {
+      const observationCount = entity.observations.length;
+      let lastObservation: string | undefined;
+
+      if (observationCount > 0) {
+        lastObservation = entity.observations[observationCount - 1];
+      }
+
+      return {
+        name: entity.name,
+        entityType: entity.entityType,
+        observationCount,
+        lastObservation
+      };
+    });
+
+    return {
+      entities: entitySummaries,
+      relations: graph.relations // Relations are already lightweight, include them all
+    };
   }
 
   // Very basic search function
@@ -344,6 +382,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: "read_graph_summary",
+        description: "Read entity names, types, and most recent observations without full observations array for efficient context usage",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: false,
+        },
+      },
+      {
         name: "search_nodes",
         description: "Search for nodes in the knowledge graph based on a query",
         inputSchema: {
@@ -378,6 +425,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   if (name === "read_graph") {
     return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.readGraph(), null, 2) }] };
+  }
+
+  if (name === "read_graph_summary") {
+    return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.readGraphSummary(), null, 2) }] };
   }
 
   if (!args) {

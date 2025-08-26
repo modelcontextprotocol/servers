@@ -108,6 +108,18 @@ Example:
   - No input required
   - Returns complete graph structure with all entities and relations
 
+- **read_graph_summary**
+  - Read entity names, types, and basic info without full observations for efficient context usage
+  - No input required
+  - Returns:
+    - Entity summaries with:
+      - `name` (string): Entity name
+      - `entityType` (string): Entity type
+      - `observationCount` (number): Total number of observations
+      - `lastObservation` (string, optional): The most recent observation for the entity
+    - Complete relations array (unchanged from full graph)
+  - Use this instead of `read_graph` when you only need overview information to preserve context space
+
 - **search_nodes**
   - Search for nodes based on query
   - Input: `query` (string)
