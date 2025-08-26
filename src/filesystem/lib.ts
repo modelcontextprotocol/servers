@@ -455,14 +455,3 @@ export async function searchFilesByName(
 
   return results;
 }
-
-// Legacy function for backward compatibility
-export async function searchFilesWithValidation(
-  rootPath: string,
-  pattern: string,
-  allowedDirectories: string[],
-  options: SearchOptions = {}
-): Promise<string[]> {
-  const { excludePatterns = [] } = options;
-  return searchFilesByName(rootPath, pattern, excludePatterns);
-}

@@ -16,7 +16,6 @@ import {
   readFileContent,
   writeFileContent,
   // Search & filtering functions
-  searchFilesWithValidation,
   searchFilesByName,
   // File editing functions
   applyFileEdits,
@@ -310,7 +309,7 @@ describe('Lib Functions', () => {
   });
 
   describe('Search & Filtering Functions', () => {
-    describe('searchFilesWithValidation', () => {
+    describe('searchFilesByName', () => {
       beforeEach(() => {
         mockFs.realpath.mockImplementation(async (path: any) => path.toString());
       });
@@ -327,11 +326,10 @@ describe('Lib Functions', () => {
         const testDir = process.platform === 'win32' ? 'C:\\allowed\\dir' : '/allowed/dir';
         const allowedDirs = process.platform === 'win32' ? ['C:\\allowed'] : ['/allowed'];
         
-        const result = await searchFilesWithValidation(
+        const result = await searchFilesByName(
           testDir,
           '*test*',
-          allowedDirs,
-          { excludePatterns: ['*.log', 'node_modules'] }
+          ['*.log', 'node_modules']
         );
         
         const expectedResult = process.platform === 'win32' ? 'C:\\allowed\\dir\\test.txt' : '/allowed/dir/test.txt';
@@ -357,11 +355,10 @@ describe('Lib Functions', () => {
         const testDir = process.platform === 'win32' ? 'C:\\allowed\\dir' : '/allowed/dir';
         const allowedDirs = process.platform === 'win32' ? ['C:\\allowed'] : ['/allowed'];
         
-        const result = await searchFilesWithValidation(
+        const result = await searchFilesByName(
           testDir,
           '*test*',
-          allowedDirs,
-          {}
+          []
         );
         
         // Should only return the valid file, skipping the invalid one
@@ -381,11 +378,10 @@ describe('Lib Functions', () => {
         const testDir = process.platform === 'win32' ? 'C:\\allowed\\dir' : '/allowed/dir';
         const allowedDirs = process.platform === 'win32' ? ['C:\\allowed'] : ['/allowed'];
         
-        const result = await searchFilesWithValidation(
+        const result = await searchFilesByName(
           testDir,
           '*test*',
-          allowedDirs,
-          { excludePatterns: ['*.backup'] }
+          ['*.backup']
         );
         
         const expectedResults = process.platform === 'win32' ? [
