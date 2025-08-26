@@ -145,14 +145,27 @@ The server's directory access control follows this flow:
   - Fails if destination exists
 
 - **search_files**
-  - Recursively search for files/directories
+  - Recursively search for files/directories that match or do not match patterns
   - Inputs:
     - `path` (string): Starting directory
     - `pattern` (string): Search pattern
-    - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
-  - Case-insensitive matching
+    - `excludePatterns` (string[]): Exclude any patterns.
+  - Glob-style pattern matching
   - Returns full paths to matches
 
+- **directory_tree**
+  - Get recursive JSON tree structure of directory contents
+  - Inputs:
+    - `path` (string): Starting directory
+    - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
+  - Returns:
+    - JSON array where each entry contains:
+      - `name` (string): File/directory name
+      - `type` ('file'|'directory'): Entry type
+      - `children` (array): Present only for directories
+        - Empty array for empty directories
+        - Omitted for files
+    
 - **get_file_info**
   - Get detailed file/directory metadata
   - Input: `path` (string)
