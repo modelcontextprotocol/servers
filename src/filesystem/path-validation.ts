@@ -68,8 +68,17 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
     }
     
     // Special case for root directory to avoid double slash
+    // On Windows, we need to check if both paths are on the same drive
     if (normalizedDir === path.sep) {
       return normalizedPath.startsWith(path.sep);
+    }
+    
+    // On Windows, also check for drive root (e.g., "C:\")
+    if (path.sep === '\\' && normalizedDir.match(/^[A-Za-z]:\\?$/)) {
+      // Ensure both paths are on the same drive
+      const dirDrive = normalizedDir.charAt(0).toLowerCase();
+      const pathDrive = normalizedPath.charAt(0).toLowerCase();
+      return pathDrive === dirDrive && normalizedPath.startsWith(normalizedDir.replace(/\\?$/, '\\'));
     }
     
     return normalizedPath.startsWith(normalizedDir + path.sep);
