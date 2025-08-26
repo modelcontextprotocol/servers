@@ -109,7 +109,7 @@ Example:
   - Returns complete graph structure with all entities and relations
 
 - **read_graph_summary**
-  - Read entity names, types, and basic info without full observations for efficient context usage
+  - Read a summary of the knowledge graph which includes a summary of each entity and all relations.
   - No input required
   - Returns:
     - Entity summaries with:
@@ -118,7 +118,7 @@ Example:
       - `observationCount` (number): Total number of observations
       - `lastObservation` (string, optional): The most recent observation for the entity
     - Complete relations array (unchanged from full graph)
-  - Use this instead of `read_graph` when you only need overview information to preserve context space
+  - Use this to get an overview of the entire graph, then use `open_nodes` to get full details for specific entities
 
 - **search_nodes**
   - Search for nodes based on query

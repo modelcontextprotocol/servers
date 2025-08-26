@@ -383,7 +383,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "read_graph_summary",
-        description: "Read entity names, types, and most recent observations without full observations array for efficient context usage",
+        description: "Read the knowledge graph summary. Returns all entity names, types, observation counts, and most recent observations without loading full observation arrays. Use open_nodes to get complete details for specific entities.",
         inputSchema: {
           type: "object",
           properties: {},
