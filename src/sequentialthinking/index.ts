@@ -25,6 +25,11 @@ interface ThoughtData {
 class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
+  private disableThoughtLogging: boolean;
+
+  constructor() {
+    this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
+  }
 
   private validateThoughtData(input: unknown): ThoughtData {
     const data = input as Record<string, unknown>;
@@ -100,8 +105,10 @@ class SequentialThinkingServer {
         this.branches[validatedInput.branchId].push(validatedInput);
       }
 
-      const formattedThought = this.formatThought(validatedInput);
-      console.error(formattedThought);
+      if (!this.disableThoughtLogging) {
+        const formattedThought = this.formatThought(validatedInput);
+        console.error(formattedThought);
+      }
 
       return {
         content: [{
@@ -199,12 +206,12 @@ You should:
       },
       thoughtNumber: {
         type: "integer",
-        description: "Current thought number",
+        description: "Current thought number (numeric value, e.g., 1, 2, 3)",
         minimum: 1
       },
       totalThoughts: {
         type: "integer",
-        description: "Estimated total thoughts needed",
+        description: "Estimated total thoughts needed (numeric value, e.g., 5, 10)",
         minimum: 1
       },
       isRevision: {

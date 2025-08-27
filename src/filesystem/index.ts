@@ -6,43 +6,63 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ToolSchema,
+  RootsListChangedNotificationSchema,
+  type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
+import { createReadStream } from "fs";
 import path from "path";
-import os from 'os';
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { diffLines, createTwoFilesPatch } from 'diff';
-import { minimatch } from 'minimatch';
+import { minimatch } from "minimatch";
+import { normalizePath, expandHome } from './path-utils.js';
+import { getValidRootDirectories } from './roots-utils.js';
+import {
+  // Function imports
+  formatSize,
+  validatePath,
+  getFileStats,
+  readFileContent,
+  writeFileContent,
+  searchFilesWithValidation,
+  applyFileEdits,
+  tailFile,
+  headFile,
+  setAllowedDirectories,
+} from './lib.js';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
 if (args.length === 0) {
-  console.error("Usage: mcp-server-filesystem <allowed-directory> [additional-directories...]");
-  process.exit(1);
+  console.error("Usage: mcp-server-filesystem [allowed-directory] [additional-directories...]");
+  console.error("Note: Allowed directories can be provided via:");
+  console.error("  1. Command-line arguments (shown above)");
+  console.error("  2. MCP roots protocol (if client supports it)");
+  console.error("At least one directory must be provided by EITHER method for the server to operate.");
 }
 
-// Normalize all paths consistently
-function normalizePath(p: string): string {
-  return path.normalize(p);
-}
-
-function expandHome(filepath: string): string {
-  if (filepath.startsWith('~/') || filepath === '~') {
-    return path.join(os.homedir(), filepath.slice(1));
-  }
-  return filepath;
-}
-
-// Store allowed directories in normalized form
-const allowedDirectories = args.map(dir =>
-  normalizePath(path.resolve(expandHome(dir)))
+// Store allowed directories in normalized and resolved form
+let allowedDirectories = await Promise.all(
+  args.map(async (dir) => {
+    const expanded = expandHome(dir);
+    const absolute = path.resolve(expanded);
+    try {
+      // Security: Resolve symlinks in allowed directories during startup
+      // This ensures we know the real paths and can validate against them later
+      const resolved = await fs.realpath(absolute);
+      return normalizePath(resolved);
+    } catch (error) {
+      // If we can't resolve (doesn't exist), use the normalized absolute path
+      // This allows configuring allowed dirs that will be created later
+      return normalizePath(absolute);
+    }
+  })
 );
 
 // Validate that all directories exist and are accessible
-await Promise.all(args.map(async (dir) => {
+await Promise.all(allowedDirectories.map(async (dir) => {
   try {
-    const stats = await fs.stat(expandHome(dir));
+    const stats = await fs.stat(dir);
     if (!stats.isDirectory()) {
       console.error(`Error: ${dir} is not a directory`);
       process.exit(1);
@@ -53,54 +73,25 @@ await Promise.all(args.map(async (dir) => {
   }
 }));
 
-// Security utilities
-async function validatePath(requestedPath: string): Promise<string> {
-  const expandedPath = expandHome(requestedPath);
-  const absolute = path.isAbsolute(expandedPath)
-    ? path.resolve(expandedPath)
-    : path.resolve(process.cwd(), expandedPath);
-
-  const normalizedRequested = normalizePath(absolute);
-
-  // Check if path is within allowed directories
-  const isAllowed = allowedDirectories.some(dir => normalizedRequested.startsWith(dir));
-  if (!isAllowed) {
-    throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
-  }
-
-  // Handle symlinks by checking their real path
-  try {
-    const realPath = await fs.realpath(absolute);
-    const normalizedReal = normalizePath(realPath);
-    const isRealPathAllowed = allowedDirectories.some(dir => normalizedReal.startsWith(dir));
-    if (!isRealPathAllowed) {
-      throw new Error("Access denied - symlink target outside allowed directories");
-    }
-    return realPath;
-  } catch (error) {
-    // For new files that don't exist yet, verify parent directory
-    const parentDir = path.dirname(absolute);
-    try {
-      const realParentPath = await fs.realpath(parentDir);
-      const normalizedParent = normalizePath(realParentPath);
-      const isParentAllowed = allowedDirectories.some(dir => normalizedParent.startsWith(dir));
-      if (!isParentAllowed) {
-        throw new Error("Access denied - parent directory outside allowed directories");
-      }
-      return absolute;
-    } catch {
-      throw new Error(`Parent directory does not exist: ${parentDir}`);
-    }
-  }
-}
+// Initialize the global allowedDirectories in lib.ts
+setAllowedDirectories(allowedDirectories);
 
 // Schema definitions
-const ReadFileArgsSchema = z.object({
+const ReadTextFileArgsSchema = z.object({
   path: z.string(),
+  tail: z.number().optional().describe('If provided, returns only the last N lines of the file'),
+  head: z.number().optional().describe('If provided, returns only the first N lines of the file')
+});
+
+const ReadMediaFileArgsSchema = z.object({
+  path: z.string()
 });
 
 const ReadMultipleFilesArgsSchema = z.object({
-  paths: z.array(z.string()),
+  paths: z
+    .array(z.string())
+    .min(1, "At least one file path must be provided")
+    .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories."),
 });
 
 const WriteFileArgsSchema = z.object({
@@ -127,8 +118,14 @@ const ListDirectoryArgsSchema = z.object({
   path: z.string(),
 });
 
+const ListDirectoryWithSizesArgsSchema = z.object({
+  path: z.string(),
+  sortBy: z.enum(['name', 'size']).optional().default('name').describe('Sort entries by name or size'),
+});
+
 const DirectoryTreeArgsSchema = z.object({
   path: z.string(),
+  excludePatterns: z.array(z.string()).optional().default([])
 });
 
 const MoveFileArgsSchema = z.object({
@@ -149,16 +146,6 @@ const GetFileInfoArgsSchema = z.object({
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
 
-interface FileInfo {
-  size: number;
-  created: Date;
-  modified: Date;
-  accessed: Date;
-  isDirectory: boolean;
-  isFile: boolean;
-  permissions: string;
-}
-
 // Server setup
 const server = new Server(
   {
@@ -172,162 +159,22 @@ const server = new Server(
   },
 );
 
-// Tool implementations
-async function getFileStats(filePath: string): Promise<FileInfo> {
-  const stats = await fs.stat(filePath);
-  return {
-    size: stats.size,
-    created: stats.birthtime,
-    modified: stats.mtime,
-    accessed: stats.atime,
-    isDirectory: stats.isDirectory(),
-    isFile: stats.isFile(),
-    permissions: stats.mode.toString(8).slice(-3),
-  };
-}
-
-async function searchFiles(
-  rootPath: string,
-  pattern: string,
-  excludePatterns: string[] = []
-): Promise<string[]> {
-  const results: string[] = [];
-
-  async function search(currentPath: string) {
-    const entries = await fs.readdir(currentPath, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(currentPath, entry.name);
-
-      try {
-        // Validate each path before processing
-        await validatePath(fullPath);
-
-        // Check if path matches any exclude pattern
-        const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(pattern => {
-          const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
-          return minimatch(relativePath, globPattern, { dot: true });
-        });
-
-        if (shouldExclude) {
-          continue;
-        }
-
-        if (entry.name.toLowerCase().includes(pattern.toLowerCase())) {
-          results.push(fullPath);
-        }
-
-        if (entry.isDirectory()) {
-          await search(fullPath);
-        }
-      } catch (error) {
-        // Skip invalid paths during search
-        continue;
-      }
-    }
-  }
-
-  await search(rootPath);
-  return results;
-}
-
-// file editing and diffing utilities
-function normalizeLineEndings(text: string): string {
-  return text.replace(/\r\n/g, '\n');
-}
-
-function createUnifiedDiff(originalContent: string, newContent: string, filepath: string = 'file'): string {
-  // Ensure consistent line endings for diff
-  const normalizedOriginal = normalizeLineEndings(originalContent);
-  const normalizedNew = normalizeLineEndings(newContent);
-
-  return createTwoFilesPatch(
-    filepath,
-    filepath,
-    normalizedOriginal,
-    normalizedNew,
-    'original',
-    'modified'
-  );
-}
-
-async function applyFileEdits(
-  filePath: string,
-  edits: Array<{oldText: string, newText: string}>,
-  dryRun = false
-): Promise<string> {
-  // Read file content and normalize line endings
-  const content = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
-
-  // Apply edits sequentially
-  let modifiedContent = content;
-  for (const edit of edits) {
-    const normalizedOld = normalizeLineEndings(edit.oldText);
-    const normalizedNew = normalizeLineEndings(edit.newText);
-
-    // If exact match exists, use it
-    if (modifiedContent.includes(normalizedOld)) {
-      modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
-      continue;
-    }
-
-    // Otherwise, try line-by-line matching with flexibility for whitespace
-    const oldLines = normalizedOld.split('\n');
-    const contentLines = modifiedContent.split('\n');
-    let matchFound = false;
-
-    for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
-      const potentialMatch = contentLines.slice(i, i + oldLines.length);
-
-      // Compare lines with normalized whitespace
-      const isMatch = oldLines.every((oldLine, j) => {
-        const contentLine = potentialMatch[j];
-        return oldLine.trim() === contentLine.trim();
-      });
-
-      if (isMatch) {
-        // Preserve original indentation of first line
-        const originalIndent = contentLines[i].match(/^\s*/)?.[0] || '';
-        const newLines = normalizedNew.split('\n').map((line, j) => {
-          if (j === 0) return originalIndent + line.trimStart();
-          // For subsequent lines, try to preserve relative indentation
-          const oldIndent = oldLines[j]?.match(/^\s*/)?.[0] || '';
-          const newIndent = line.match(/^\s*/)?.[0] || '';
-          if (oldIndent && newIndent) {
-            const relativeIndent = newIndent.length - oldIndent.length;
-            return originalIndent + ' '.repeat(Math.max(0, relativeIndent)) + line.trimStart();
-          }
-          return line;
-        });
-
-        contentLines.splice(i, oldLines.length, ...newLines);
-        modifiedContent = contentLines.join('\n');
-        matchFound = true;
-        break;
-      }
-    }
-
-    if (!matchFound) {
-      throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
-    }
-  }
-
-  // Create unified diff
-  const diff = createUnifiedDiff(content, modifiedContent, filePath);
-
-  // Format diff with appropriate number of backticks
-  let numBackticks = 3;
-  while (diff.includes('`'.repeat(numBackticks))) {
-    numBackticks++;
-  }
-  const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
-
-  if (!dryRun) {
-    await fs.writeFile(filePath, modifiedContent, 'utf-8');
-  }
-
-  return formattedDiff;
+// Reads a file as a stream of buffers, concatenates them, and then encodes
+// the result to a Base64 string. This is a memory-efficient way to handle
+// binary data from a stream before the final encoding.
+async function readFileAsBase64Stream(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stream = createReadStream(filePath);
+    const chunks: Buffer[] = [];
+    stream.on('data', (chunk) => {
+      chunks.push(chunk as Buffer);
+    });
+    stream.on('end', () => {
+      const finalBuffer = Buffer.concat(chunks);
+      resolve(finalBuffer.toString('base64'));
+    });
+    stream.on('error', (err) => reject(err));
+  });
 }
 
 // Tool handlers
@@ -336,12 +183,27 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "read_file",
+        description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
+        inputSchema: zodToJsonSchema(ReadTextFileArgsSchema) as ToolInput,
+      },
+      {
+        name: "read_text_file",
         description:
-          "Read the complete contents of a file from the file system. " +
+          "Read the complete contents of a file from the file system as text. " +
           "Handles various text encodings and provides detailed error messages " +
           "if the file cannot be read. Use this tool when you need to examine " +
-          "the contents of a single file. Only works within allowed directories.",
-        inputSchema: zodToJsonSchema(ReadFileArgsSchema) as ToolInput,
+          "the contents of a single file. Use the 'head' parameter to read only " +
+          "the first N lines of a file, or the 'tail' parameter to read only " +
+          "the last N lines of a file. Operates on the file as text regardless of extension. " +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(ReadTextFileArgsSchema) as ToolInput,
+      },
+      {
+        name: "read_media_file",
+        description:
+          "Read an image or audio file. Returns the base64 encoded data and MIME type. " +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(ReadMediaFileArgsSchema) as ToolInput,
       },
       {
         name: "read_multiple_files",
@@ -388,6 +250,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: zodToJsonSchema(ListDirectoryArgsSchema) as ToolInput,
       },
       {
+        name: "list_directory_with_sizes",
+        description:
+          "Get a detailed listing of all files and directories in a specified path, including sizes. " +
+          "Results clearly distinguish between files and directories with [FILE] and [DIR] " +
+          "prefixes. This tool is useful for understanding directory structure and " +
+          "finding specific files within a directory. Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(ListDirectoryWithSizesArgsSchema) as ToolInput,
+      },
+      {
         name: "directory_tree",
         description:
             "Get a recursive tree view of files and directories as a JSON structure. " +
@@ -409,9 +280,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "search_files",
         description:
           "Recursively search for files and directories matching a pattern. " +
-          "Searches through all subdirectories from the starting path. The search " +
-          "is case-insensitive and matches partial names. Returns full paths to all " +
-          "matching items. Great for finding files when you don't know their exact location. " +
+          "The patterns should be glob-style patterns that match paths relative to the working directory. " +
+          "Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
+          "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
           "Only searches within allowed directories.",
         inputSchema: zodToJsonSchema(SearchFilesArgsSchema) as ToolInput,
       },
@@ -428,7 +299,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "list_allowed_directories",
         description:
           "Returns the list of directories that this server is allowed to access. " +
-          "Use this to understand which directories are available before trying to access files.",
+          "Subdirectories within these allowed directories are also accessible. " +
+          "Use this to understand which directories and their nested paths are available " +
+          "before trying to access files.",
         inputSchema: {
           type: "object",
           properties: {},
@@ -445,15 +318,68 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     switch (name) {
-      case "read_file": {
-        const parsed = ReadFileArgsSchema.safeParse(args);
+      case "read_file":
+      case "read_text_file": {
+        const parsed = ReadTextFileArgsSchema.safeParse(args);
         if (!parsed.success) {
-          throw new Error(`Invalid arguments for read_file: ${parsed.error}`);
+          throw new Error(`Invalid arguments for read_text_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const content = await fs.readFile(validPath, "utf-8");
+
+        if (parsed.data.head && parsed.data.tail) {
+          throw new Error("Cannot specify both head and tail parameters simultaneously");
+        }
+
+        if (parsed.data.tail) {
+          // Use memory-efficient tail implementation for large files
+          const tailContent = await tailFile(validPath, parsed.data.tail);
+          return {
+            content: [{ type: "text", text: tailContent }],
+          };
+        }
+
+        if (parsed.data.head) {
+          // Use memory-efficient head implementation for large files
+          const headContent = await headFile(validPath, parsed.data.head);
+          return {
+            content: [{ type: "text", text: headContent }],
+          };
+        }
+        const content = await readFileContent(validPath);
         return {
           content: [{ type: "text", text: content }],
+        };
+      }
+
+      case "read_media_file": {
+        const parsed = ReadMediaFileArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for read_media_file: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const extension = path.extname(validPath).toLowerCase();
+        const mimeTypes: Record<string, string> = {
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".gif": "image/gif",
+          ".webp": "image/webp",
+          ".bmp": "image/bmp",
+          ".svg": "image/svg+xml",
+          ".mp3": "audio/mpeg",
+          ".wav": "audio/wav",
+          ".ogg": "audio/ogg",
+          ".flac": "audio/flac",
+        };
+        const mimeType = mimeTypes[extension] || "application/octet-stream";
+        const data = await readFileAsBase64Stream(validPath);
+        const type = mimeType.startsWith("image/")
+          ? "image"
+          : mimeType.startsWith("audio/")
+            ? "audio"
+            : "blob";
+        return {
+          content: [{ type, data, mimeType }],
         };
       }
 
@@ -466,7 +392,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           parsed.data.paths.map(async (filePath: string) => {
             try {
               const validPath = await validatePath(filePath);
-              const content = await fs.readFile(validPath, "utf-8");
+              const content = await readFileContent(validPath);
               return `${filePath}:\n${content}\n`;
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
@@ -485,7 +411,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for write_file: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        await fs.writeFile(validPath, parsed.data.content, "utf-8");
+        await writeFileContent(validPath, parsed.data.content);
         return {
           content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
         };
@@ -530,48 +456,129 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-        case "directory_tree": {
-            const parsed = DirectoryTreeArgsSchema.safeParse(args);
-            if (!parsed.success) {
-                throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
+      case "list_directory_with_sizes": {
+        const parsed = ListDirectoryWithSizesArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for list_directory_with_sizes: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        const entries = await fs.readdir(validPath, { withFileTypes: true });
+
+        // Get detailed information for each entry
+        const detailedEntries = await Promise.all(
+          entries.map(async (entry) => {
+            const entryPath = path.join(validPath, entry.name);
+            try {
+              const stats = await fs.stat(entryPath);
+              return {
+                name: entry.name,
+                isDirectory: entry.isDirectory(),
+                size: stats.size,
+                mtime: stats.mtime
+              };
+            } catch (error) {
+              return {
+                name: entry.name,
+                isDirectory: entry.isDirectory(),
+                size: 0,
+                mtime: new Date(0)
+              };
             }
+          })
+        );
 
-            interface TreeEntry {
-                name: string;
-                type: 'file' | 'directory';
-                children?: TreeEntry[];
-            }
+        // Sort entries based on sortBy parameter
+        const sortedEntries = [...detailedEntries].sort((a, b) => {
+          if (parsed.data.sortBy === 'size') {
+            return b.size - a.size; // Descending by size
+          }
+          // Default sort by name
+          return a.name.localeCompare(b.name);
+        });
 
-            async function buildTree(currentPath: string): Promise<TreeEntry[]> {
-                const validPath = await validatePath(currentPath);
-                const entries = await fs.readdir(validPath, {withFileTypes: true});
-                const result: TreeEntry[] = [];
+        // Format the output
+        const formattedEntries = sortedEntries.map(entry =>
+          `${entry.isDirectory ? "[DIR]" : "[FILE]"} ${entry.name.padEnd(30)} ${
+            entry.isDirectory ? "" : formatSize(entry.size).padStart(10)
+          }`
+        );
 
-                for (const entry of entries) {
-                    const entryData: TreeEntry = {
-                        name: entry.name,
-                        type: entry.isDirectory() ? 'directory' : 'file'
-                    };
+        // Add summary
+        const totalFiles = detailedEntries.filter(e => !e.isDirectory).length;
+        const totalDirs = detailedEntries.filter(e => e.isDirectory).length;
+        const totalSize = detailedEntries.reduce((sum, entry) => sum + (entry.isDirectory ? 0 : entry.size), 0);
 
-                    if (entry.isDirectory()) {
-                        const subPath = path.join(currentPath, entry.name);
-                        entryData.children = await buildTree(subPath);
+        const summary = [
+          "",
+          `Total: ${totalFiles} files, ${totalDirs} directories`,
+          `Combined size: ${formatSize(totalSize)}`
+        ];
+
+        return {
+          content: [{
+            type: "text",
+            text: [...formattedEntries, ...summary].join("\n")
+          }],
+        };
+      }
+
+      case "directory_tree": {
+        const parsed = DirectoryTreeArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for directory_tree: ${parsed.error}`);
+        }
+
+        interface TreeEntry {
+            name: string;
+            type: 'file' | 'directory';
+            children?: TreeEntry[];
+        }
+        const rootPath = parsed.data.path;
+
+        async function buildTree(currentPath: string, excludePatterns: string[] = []): Promise<TreeEntry[]> {
+            const validPath = await validatePath(currentPath);
+            const entries = await fs.readdir(validPath, {withFileTypes: true});
+            const result: TreeEntry[] = [];
+
+            for (const entry of entries) {
+                const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
+                const shouldExclude = excludePatterns.some(pattern => {
+                    if (pattern.includes('*')) {
+                        return minimatch(relativePath, pattern, {dot: true});
                     }
+                    // For files: match exact name or as part of path
+                    // For directories: match as directory path
+                    return minimatch(relativePath, pattern, {dot: true}) ||
+                           minimatch(relativePath, `**/${pattern}`, {dot: true}) ||
+                           minimatch(relativePath, `**/${pattern}/**`, {dot: true});
+                });
+                if (shouldExclude)
+                    continue;
 
-                    result.push(entryData);
+                const entryData: TreeEntry = {
+                    name: entry.name,
+                    type: entry.isDirectory() ? 'directory' : 'file'
+                };
+
+                if (entry.isDirectory()) {
+                    const subPath = path.join(currentPath, entry.name);
+                    entryData.children = await buildTree(subPath, excludePatterns);
                 }
 
-                return result;
+                result.push(entryData);
             }
 
-            const treeData = await buildTree(parsed.data.path);
-            return {
-                content: [{
-                    type: "text",
-                    text: JSON.stringify(treeData, null, 2)
-                }],
-            };
+            return result;
         }
+
+        const treeData = await buildTree(rootPath, parsed.data.excludePatterns);
+        return {
+            content: [{
+                type: "text",
+                text: JSON.stringify(treeData, null, 2)
+            }],
+        };
+      }
 
       case "move_file": {
         const parsed = MoveFileArgsSchema.safeParse(args);
@@ -592,7 +599,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const results = await searchFiles(validPath, parsed.data.pattern, parsed.data.excludePatterns);
+        const results = await searchFilesWithValidation(validPath, parsed.data.pattern, allowedDirectories, { excludePatterns: parsed.data.excludePatterns });
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };
@@ -633,12 +640,63 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+// Updates allowed directories based on MCP client roots
+async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
+  const validatedRootDirs = await getValidRootDirectories(requestedRoots);
+  if (validatedRootDirs.length > 0) {
+    allowedDirectories = [...validatedRootDirs];
+    setAllowedDirectories(allowedDirectories); // Update the global state in lib.ts
+    console.error(`Updated allowed directories from MCP roots: ${validatedRootDirs.length} valid directories`);
+  } else {
+    console.error("No valid root directories provided by client");
+  }
+}
+
+// Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
+server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+  try {
+    // Request the updated roots list from the client
+    const response = await server.listRoots();
+    if (response && 'roots' in response) {
+      await updateAllowedDirectoriesFromRoots(response.roots);
+    }
+  } catch (error) {
+    console.error("Failed to request roots from client:", error instanceof Error ? error.message : String(error));
+  }
+});
+
+// Handles post-initialization setup, specifically checking for and fetching MCP roots.
+server.oninitialized = async () => {
+  const clientCapabilities = server.getClientCapabilities();
+
+  if (clientCapabilities?.roots) {
+    try {
+      const response = await server.listRoots();
+      if (response && 'roots' in response) {
+        await updateAllowedDirectoriesFromRoots(response.roots);
+      } else {
+        console.error("Client returned no roots set, keeping current settings");
+      }
+    } catch (error) {
+      console.error("Failed to request initial roots from client:", error instanceof Error ? error.message : String(error));
+    }
+  } else {
+    if (allowedDirectories.length > 0) {
+      console.error("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
+    }else{
+      throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
+    }
+  }
+};
+
 // Start server
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Secure MCP Filesystem Server running on stdio");
-  console.error("Allowed directories:", allowedDirectories);
+  if (allowedDirectories.length === 0) {
+    console.error("Started without allowed directories - waiting for client to provide roots via MCP protocol");
+  }
 }
 
 runServer().catch((error) => {
