@@ -1201,6 +1201,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Whois MCP](https://github.com/bharathvaj-ganesan/whois-mcp)** - MCP server that performs whois lookup against domain, IP, ASN and TLD.
 - **[Wikidata MCP](https://github.com/zzaebok/mcp-wikidata)** - Wikidata MCP server that interact with Wikidata, by searching identifiers, extracting metadata, and executing sparql query.
 - **[Wikidata SPARQL](https://github.com/QuentinCody/wikidata-sparql-mcp-server)** - Unofficial REMOTE MCP server for Wikidata's SPARQL endpoint, providing access to structured knowledge data, entity relationships, and semantic queries for research and data analysis.
+- **[Wikifunctions](https://github.com/Fredibau/wikifunctions-mcp-fredibau)** - Allowing AI models to discover and execute functions from the WikiFunctions library.
 - **[Wikipedia MCP](https://github.com/Rudra-ravi/wikipedia-mcp)** - Access and search Wikipedia articles via MCP for AI-powered information retrieval.
 - **[WildFly MCP](https://github.com/wildfly-extras/wildfly-mcp)** - WildFly MCP server that enables LLM to interact with running WildFly servers (retrieve metrics, logs, invoke operations, ...).
 - **[Windows CLI](https://github.com/SimonB97/win-cli-mcp-server)** - MCP server for secure command-line interactions on Windows systems, enabling controlled access to PowerShell, CMD, and Git Bash shells.
