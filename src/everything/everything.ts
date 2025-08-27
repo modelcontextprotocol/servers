@@ -180,6 +180,7 @@ export const createServer = () => {
 
   // Roots state management
   let currentRoots: Root[] = [];
+  let clientSupportsRoots = false;
   const messages = [
     { level: "debug", data: "Debug-level message" },
     { level: "info", data: "Info-level message" },
@@ -807,8 +808,8 @@ export const createServer = () => {
           uri: resource.uri,
           name: resource.name,
           description: `Resource ${i + 1}: ${resource.mimeType === "text/plain"
-              ? "plaintext resource"
-              : "binary blob resource"
+            ? "plaintext resource"
+            : "binary blob resource"
             }`,
           mimeType: resource.mimeType,
         });
@@ -841,15 +842,28 @@ export const createServer = () => {
     if (name === ToolName.LIST_ROOTS) {
       ListRootsSchema.parse(args);
 
+      if (!clientSupportsRoots) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "The MCP client does not support the roots protocol.\n\n" +
+                "This means the server cannot access information about the client's workspace directories or file system roots."
+            }
+          ]
+        };
+      }
+
       if (currentRoots.length === 0) {
         return {
           content: [
             {
               type: "text",
-              text: "No roots are currently set. This could mean:\n" +
-                "1. The client doesn't support the MCP roots protocol\n" +
-                "2. The client hasn't provided any roots yet\n" +
-                "3. The client provided empty roots"
+              text: "The client supports roots but no roots are currently configured.\n\n" +
+                "This could mean:\n" +
+                "1. The client hasn't provided any roots yet\n" +
+                "2. The client provided an empty roots list\n" +
+                "3. The roots configuration is still being loaded"
             }
           ]
         };
@@ -955,6 +969,7 @@ export const createServer = () => {
     const clientCapabilities = server.getClientCapabilities();
 
     if (clientCapabilities?.roots) {
+      clientSupportsRoots = true;
       try {
         const response = await server.listRoots();
         if (response && 'roots' in response) {
