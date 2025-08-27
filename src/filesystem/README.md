@@ -73,6 +73,7 @@ The server's directory access control follows this flow:
     - `head` (number, optional): First N lines
     - `tail` (number, optional): Last N lines
   - Always treats the file as UTF-8 text regardless of extension
+  - Cannot specify both `head` and `tail` simultaneously
 
 - **read_media_file**
   - Read an image or audio file
@@ -119,6 +120,23 @@ The server's directory access control follows this flow:
   - List directory contents with [FILE] or [DIR] prefixes
   - Input: `path` (string)
 
+- **list_directory_with_sizes**
+  - List directory contents with [FILE] or [DIR] prefixes, including file sizes
+  - Inputs:
+    - `path` (string): Directory path to list
+    - `sortBy` (string, optional): Sort entries by "name" or "size" (default: "name")
+  - Returns detailed listing with file sizes and summary statistics
+  - Shows total files, directories, and combined size
+
+- **directory_tree**
+  - Get a recursive tree view of files and directories as a JSON structure
+  - Input: `path` (string): Starting directory path
+  - Returns JSON structure with:
+    - `name`: File/directory name
+    - `type`: "file" or "directory"
+    - `children`: Array of child entries (for directories only)
+  - Output is formatted with 2-space indentation for readability
+
 - **move_file**
   - Move or rename files and directories
   - Inputs:
@@ -127,14 +145,27 @@ The server's directory access control follows this flow:
   - Fails if destination exists
 
 - **search_files**
-  - Recursively search for files/directories
+  - Recursively search for files/directories that match or do not match patterns
   - Inputs:
     - `path` (string): Starting directory
     - `pattern` (string): Search pattern
-    - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
-  - Case-insensitive matching
+    - `excludePatterns` (string[]): Exclude any patterns.
+  - Glob-style pattern matching
   - Returns full paths to matches
 
+- **directory_tree**
+  - Get recursive JSON tree structure of directory contents
+  - Inputs:
+    - `path` (string): Starting directory
+    - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
+  - Returns:
+    - JSON array where each entry contains:
+      - `name` (string): File/directory name
+      - `type` ('file'|'directory'): Entry type
+      - `children` (array): Present only for directories
+        - Empty array for empty directories
+        - Omitted for files
+    
 - **get_file_info**
   - Get detailed file/directory metadata
   - Input: `path` (string)
