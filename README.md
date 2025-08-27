@@ -1142,6 +1142,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Think MCP](https://github.com/Rai220/think-mcp)** - Enhances any agent's reasoning capabilities by integrating the think-tools, as described in [Anthropic's article](https://www.anthropic.com/engineering/claude-think-tool).
 - **[Think Node MCP](https://github.com/abhinav-mangla/think-tool-mcp)** - Enhances any agent's reasoning capabilities by integrating the think-tools, as described in [Anthropic's article](https://www.anthropic.com/engineering/claude-think-tool). (Works with Node)
 - **[Ticketmaster](https://github.com/delorenj/mcp-server-ticketmaster)** - Search for events, venues, and attractions through the Ticketmaster Discovery API
+- **[Ticketmaster MCP Server](https://github.com/mochow13/ticketmaster-mcp-server)** - A Model Context Protocol (MCP) server implemented in Streamable HTTP transport that allows AI models to interact with the Ticketmaster Discovery API, enabling searching events, venues, and attractions.
 - **[TickTick](https://github.com/alexarevalo9/ticktick-mcp-server)** - A Model Context Protocol (MCP) server designed to integrate with the TickTick task management platform, enabling intelligent context-aware task operations and automation.
 - **[TigerGraph](https://github.com/custom-discoveries/TigerGraph_MCP)** - A community built MCP server that interacts with TigerGraph Graph Database.
 - **[tip.md](https://github.com/tipdotmd#-mcp-server-for-ai-assistants)** - An MCP server that enables AI assistants to interact with tip.md's crypto tipping functionality, allowing agents or supporters to tip registered developers directly from AI chat interfaces.
@@ -1200,6 +1201,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Whois MCP](https://github.com/bharathvaj-ganesan/whois-mcp)** - MCP server that performs whois lookup against domain, IP, ASN and TLD.
 - **[Wikidata MCP](https://github.com/zzaebok/mcp-wikidata)** - Wikidata MCP server that interact with Wikidata, by searching identifiers, extracting metadata, and executing sparql query.
 - **[Wikidata SPARQL](https://github.com/QuentinCody/wikidata-sparql-mcp-server)** - Unofficial REMOTE MCP server for Wikidata's SPARQL endpoint, providing access to structured knowledge data, entity relationships, and semantic queries for research and data analysis.
+- **[Wikifunctions](https://github.com/Fredibau/wikifunctions-mcp-fredibau)** - Allowing AI models to discover and execute functions from the WikiFunctions library.
 - **[Wikipedia MCP](https://github.com/Rudra-ravi/wikipedia-mcp)** - Access and search Wikipedia articles via MCP for AI-powered information retrieval.
 - **[WildFly MCP](https://github.com/wildfly-extras/wildfly-mcp)** - WildFly MCP server that enables LLM to interact with running WildFly servers (retrieve metrics, logs, invoke operations, ...).
 - **[Windows CLI](https://github.com/SimonB97/win-cli-mcp-server)** - MCP server for secure command-line interactions on Windows systems, enabling controlled access to PowerShell, CMD, and Git Bash shells.
@@ -1224,6 +1226,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[YouTube](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/youtube)** - Extract Youtube video information (with proxies support).
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
 - **[YouTube DLP](https://github.com/AgentX-ai/youtube-dlp-server)** - Retrieve video information, subtitles, and top comments with proxies.
+- **[YouTube MCP](https://github.com/aardeshir/youtube-mcp)** - Create playlists from song lists with OAuth2. Search videos, manage playlists, let AI curate your YouTube collections.
 - **[Youtube Uploader MCP](https://github.com/anwerj/youtube-uploader-mcp)** - AI‑powered YouTube uploader—no CLI, no YouTube Studio.
 - **[YouTube Video Summarizer](https://github.com/nabid-pf/youtube-video-summarizer-mcp)** - Summarize lengthy youtube videos.
 - **[yutu](https://github.com/eat-pray-ai/yutu)** - A fully functional MCP server and CLI for YouTube to automate YouTube operation.
