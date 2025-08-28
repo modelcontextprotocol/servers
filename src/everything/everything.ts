@@ -165,7 +165,6 @@ export const createServer = () => {
         logging: {},
         completions: {},
         elicitation: {},
-        roots: { listChanged: true },
       },
       instructions
     }
