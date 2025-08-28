@@ -842,6 +842,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Magg: The MCP Aggregator](https://github.com/sitbon/magg)** - A meta-MCP server that acts as a universal hub, allowing LLMs to autonomously discover, install, and orchestrate multiple MCP servers - essentially giving AI assistants the power to extend their own capabilities on-demand. Includes `mbro`, a powerful CLI MCP server browser with scripting capability.
 - **[Mailchimp MCP](https://github.com/AgentX-ai/mailchimp-mcp)** - Allows AI agents to interact with the Mailchimp API (read-only)
 - **[MalwareBazaar_MCP](https://github.com/mytechnotalent/MalwareBazaar_MCP)** (by Kevin Thomas) - An AI-driven MCP server that autonomously interfaces with MalwareBazaar, delivering real-time threat intel and sample metadata for authorized cybersecurity research workflows.
+- **[Mandoline](https://github.com/mandoline-ai/mandoline-mcp-server)** - Enable AI assistants to reflect on, critique, and continuously improve their own performance using Mandoline's evaluation framework.
 - **[Matrix](https://github.com/mjknowles/matrix-mcp-server)** - Interact with a Matrix homeserver.
 - **[man-mcp-server](https://github.com/guyru/man-mcp-server)** - MCP to search and access man pages on the local machine.
 - **[MariaDB](https://github.com/abel9851/mcp-server-mariadb)** - MariaDB database integration with configurable access controls in Python.
