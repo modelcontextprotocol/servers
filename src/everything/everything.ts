@@ -1,6 +1,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
+  ClientCapabilities,
   CompleteRequestSchema,
   CreateMessageRequest,
   CreateMessageResultSchema,
@@ -12,11 +13,13 @@ import {
   LoggingLevel,
   ReadResourceRequestSchema,
   Resource,
+  RootsListChangedNotificationSchema,
   SetLevelRequestSchema,
   SubscribeRequestSchema,
   Tool,
   ToolSchema,
   UnsubscribeRequestSchema,
+  type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
@@ -96,6 +99,8 @@ const GetResourceLinksSchema = z.object({
     .describe("Number of resource links to return (1-10)"),
 });
 
+const ListRootsSchema = z.object({});
+
 const StructuredContentSchema = {
   input: z.object({
     location: z
@@ -129,7 +134,8 @@ enum ToolName {
   GET_RESOURCE_REFERENCE = "getResourceReference",
   ELICITATION = "startElicitation",
   GET_RESOURCE_LINKS = "getResourceLinks",
-  STRUCTURED_CONTENT = "structuredContent"
+  STRUCTURED_CONTENT = "structuredContent",
+  LIST_ROOTS = "listRoots"
 }
 
 enum PromptName {
@@ -171,6 +177,12 @@ export const createServer = () => {
 
   let logLevel: LoggingLevel = "debug";
   let logsUpdateInterval: NodeJS.Timeout | undefined;
+  // Store client capabilities 
+  let clientCapabilities: ClientCapabilities | undefined;
+
+  // Roots state management
+  let currentRoots: Root[] = [];
+  let clientSupportsRoots = false;
   const messages = [
     { level: "debug", data: "Debug-level message" },
     { level: "info", data: "Info-level message" },
@@ -530,7 +542,13 @@ export const createServer = () => {
         outputSchema: zodToJsonSchema(StructuredContentSchema.output) as ToolOutput,
       },
     ];
-
+    if (clientCapabilities!.roots) tools.push ({
+        name: ToolName.LIST_ROOTS,
+        description:
+            "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files.",
+        inputSchema: zodToJsonSchema(ListRootsSchema) as ToolInput,
+    });
+    
     return { tools };
   });
 
@@ -728,10 +746,10 @@ export const createServer = () => {
           properties: {
             color: { type: 'string', description: 'Favorite color' },
             number: { type: 'integer', description: 'Favorite number', minimum: 1, maximum: 100 },
-            pets: { 
-              type: 'string', 
-              enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'], 
-              description: 'Favorite pets' 
+            pets: {
+              type: 'string',
+              enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'],
+              description: 'Favorite pets'
             },
           }
         }
@@ -791,11 +809,10 @@ export const createServer = () => {
           type: "resource_link",
           uri: resource.uri,
           name: resource.name,
-          description: `Resource ${i + 1}: ${
-            resource.mimeType === "text/plain"
-              ? "plaintext resource"
-              : "binary blob resource"
-          }`,
+          description: `Resource ${i + 1}: ${resource.mimeType === "text/plain"
+            ? "plaintext resource"
+            : "binary blob resource"
+            }`,
           mimeType: resource.mimeType,
         });
       }
@@ -819,8 +836,54 @@ export const createServer = () => {
       }
 
       return {
-        content: [ backwardCompatiblecontent ],
+        content: [backwardCompatiblecontent],
         structuredContent: weather
+      };
+    }
+
+    if (name === ToolName.LIST_ROOTS) {
+      ListRootsSchema.parse(args);
+
+      if (!clientSupportsRoots) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "The MCP client does not support the roots protocol.\n\n" +
+                "This means the server cannot access information about the client's workspace directories or file system roots."
+            }
+          ]
+        };
+      }
+
+      if (currentRoots.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "The client supports roots but no roots are currently configured.\n\n" +
+                "This could mean:\n" +
+                "1. The client hasn't provided any roots yet\n" +
+                "2. The client provided an empty roots list\n" +
+                "3. The roots configuration is still being loaded"
+            }
+          ]
+        };
+      }
+
+      const rootsList = currentRoots.map((root, index) => {
+        return `${index + 1}. ${root.name || 'Unnamed Root'}\n   URI: ${root.uri}`;
+      }).join('\n\n');
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Current MCP Roots (${currentRoots.length} total):\n\n${rootsList}\n\n` +
+              "Note: This server demonstrates the roots protocol capability but doesn't actually access files. " +
+              "The roots are provided by the MCP client and can be used by servers that need file system access."
+          }
+        ]
       };
     }
 
@@ -872,6 +935,87 @@ export const createServer = () => {
 
     return {};
   });
+
+  // Roots protocol handlers
+  server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+    try {
+      // Request the updated roots list from the client
+      const response = await server.listRoots();
+      if (response && 'roots' in response) {
+        currentRoots = response.roots;
+
+        // Log the roots update for demonstration
+        await server.notification({
+          method: "notifications/message",
+          params: {
+            level: "info",
+            logger: "everything-server",
+            data: `Roots updated: ${currentRoots.length} root(s) received from client`,
+          },
+        });
+      }
+    } catch (error) {
+      await server.notification({
+        method: "notifications/message",
+        params: {
+          level: "error",
+          logger: "everything-server",
+          data: `Failed to request roots from client: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      });
+    }
+  });
+
+  // Handle post-initialization setup for roots
+  server.oninitialized = async () => {
+   clientCapabilities = server.getClientCapabilities();
+
+    if (clientCapabilities?.roots) {
+      clientSupportsRoots = true;
+      try {
+        const response = await server.listRoots();
+        if (response && 'roots' in response) {
+          currentRoots = response.roots;
+
+          await server.notification({
+            method: "notifications/message",
+            params: {
+              level: "info",
+              logger: "everything-server",
+              data: `Initial roots received: ${currentRoots.length} root(s) from client`,
+            },
+          });
+        } else {
+          await server.notification({
+            method: "notifications/message",
+            params: {
+              level: "warning",
+              logger: "everything-server",
+              data: "Client returned no roots set",
+            },
+          });
+        }
+      } catch (error) {
+        await server.notification({
+          method: "notifications/message",
+          params: {
+            level: "error",
+            logger: "everything-server",
+            data: `Failed to request initial roots from client: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        });
+      }
+    } else {
+      await server.notification({
+        method: "notifications/message",
+        params: {
+          level: "info",
+          logger: "everything-server",
+          data: "Client does not support MCP roots protocol",
+        },
+      });
+    }
+  };
 
   const cleanup = async () => {
     if (subsUpdateInterval) clearInterval(subsUpdateInterval);
