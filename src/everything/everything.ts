@@ -176,6 +176,8 @@ export const createServer = () => {
 
   let logLevel: LoggingLevel = "debug";
   let logsUpdateInterval: NodeJS.Timeout | undefined;
+  // Store client capabilities 
+  let clientCapabilities: ClientCapabilities | undefined;
 
   // Roots state management
   let currentRoots: Root[] = [];
