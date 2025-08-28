@@ -1,6 +1,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
+  ClientCapabilities,
   CompleteRequestSchema,
   CreateMessageRequest,
   CreateMessageResultSchema,
