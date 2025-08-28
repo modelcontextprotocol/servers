@@ -125,13 +125,42 @@ Example:
     - Relations between requested entities
   - Silently skips non-existent nodes
 
-# Usage with Claude Desktop
+# Usage
+
+The server supports two transport modes:
+1. **STDIO** (default): For use with Claude Desktop and other MCP clients
+2. **HTTP/SSE**: For web-based applications and HTTP clients
+
+## Transport Configuration
+
+### Environment Variables
+
+- `MCP_TRANSPORT`: Set to "stdio" (default) or "http"/"sse" for HTTP mode
+- `PORT`: HTTP server port (default: 3000, only used in HTTP mode)
+- `MEMORY_FILE_PATH`: Path to the memory storage JSON file (default: `memory.json` in the server directory)
+
+### STDIO Mode (Default)
+
+Used with Claude Desktop and other MCP clients that support STDIO transport.
+
+### HTTP Mode
+
+Run with HTTP transport:
+```bash
+MCP_TRANSPORT=http PORT=3000 node dist/index.js
+```
+
+The server will provide SSE endpoints at:
+- `GET /sse` - SSE endpoint for establishing MCP connection
+- `POST /message` - HTTP endpoint for sending MCP requests
+
+## Usage with Claude Desktop
 
 ### Setup
 
 Add this to your claude_desktop_config.json:
 
-#### Docker
+#### Docker (STDIO mode)
 
 ```json
 {
@@ -142,6 +171,19 @@ Add this to your claude_desktop_config.json:
     }
   }
 }
+```
+
+#### Docker (HTTP mode)
+
+```bash
+# Run HTTP server on port 3000
+docker run -e MCP_TRANSPORT=http -e PORT=3000 -p 3000:3000 --rm mcp/memory
+
+# Run with custom memory file path
+docker run -e MCP_TRANSPORT=http -e MEMORY_FILE_PATH=/data/custom-memory.json -v /path/to/data:/data -p 3000:3000 --rm mcp/memory
+
+# Run with all custom settings
+docker run -e MCP_TRANSPORT=http -e PORT=8080 -e MEMORY_FILE_PATH=/data/memory.json -v memory-data:/data -p 8080:8080 --rm mcp/memory
 ```
 
 #### NPX
@@ -216,7 +258,7 @@ Alternatively, you can add the configuration to a file called `.vscode/mcp.json`
 }
 ```
 
-#### Docker
+#### Docker (STDIO mode)
 
 ```json
 {
@@ -235,6 +277,10 @@ Alternatively, you can add the configuration to a file called `.vscode/mcp.json`
   }
 }
 ```
+
+#### Docker (HTTP mode)
+
+For HTTP mode with Docker in VS Code, you would typically run the container separately and connect via HTTP client library in your application.
 
 ### System Prompt
 
@@ -270,11 +316,48 @@ Follow these steps for each interaction:
 
 ## Building
 
-Docker:
+### Local Build
+
+```sh
+cd src/memory
+npm install
+npm run build
+```
+
+### Docker Build
 
 ```sh
 docker build -t mcp/memory -f src/memory/Dockerfile . 
 ```
+
+## Docker Usage Examples
+
+### STDIO Mode (Default)
+```sh
+# For Claude Desktop integration
+docker run --rm -i -v claude-memory:/app/dist mcp/memory
+
+# With custom memory file location
+docker run --rm -i -v /path/to/memory:/data -e MEMORY_FILE_PATH=/data/memory.json mcp/memory
+```
+
+### HTTP Mode
+```sh
+# Run HTTP server on default port 3000
+docker run --rm -e MCP_TRANSPORT=http -p 3000:3000 mcp/memory
+
+# Run HTTP server on custom port 8080
+docker run --rm -e MCP_TRANSPORT=http -e PORT=8080 -p 8080:8080 mcp/memory
+
+# Run with persistent memory storage
+docker run --rm -e MCP_TRANSPORT=http -p 3000:3000 -v memory-data:/app -e MEMORY_FILE_PATH=/app/memory.json mcp/memory
+```
+
+## Environment Variables
+
+- `MCP_TRANSPORT`: Transport mode - "stdio" (default) or "http"/"sse"
+- `PORT`: HTTP server port (default: 3000, only used in HTTP mode)
+- `MEMORY_FILE_PATH`: Path to memory storage file (default: "memory.json")
 
 For Awareness: a prior mcp/memory volume contains an index.js file that could be overwritten by the new container. If you are using a docker volume for storage, delete the old docker volume's `index.js` file before starting the new container.
 
