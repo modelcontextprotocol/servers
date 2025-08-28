@@ -164,8 +164,7 @@ export const createServer = () => {
         resources: { subscribe: true },
         tools: {},
         logging: {},
-        completions: {},
-        elicitation: {},
+        completions: {}
       },
       instructions
     }
@@ -177,7 +176,7 @@ export const createServer = () => {
 
   let logLevel: LoggingLevel = "debug";
   let logsUpdateInterval: NodeJS.Timeout | undefined;
-  // Store client capabilities 
+  // Store client capabilities
   let clientCapabilities: ClientCapabilities | undefined;
 
   // Roots state management
@@ -524,11 +523,6 @@ export const createServer = () => {
         inputSchema: zodToJsonSchema(GetResourceReferenceSchema) as ToolInput,
       },
       {
-        name: ToolName.ELICITATION,
-        description: "Demonstrates the Elicitation feature by asking the user to provide information about their favorite color, number, and pets.",
-        inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
-      },
-      {
         name: ToolName.GET_RESOURCE_LINKS,
         description:
           "Returns multiple resource links that reference different types of resources",
@@ -548,7 +542,12 @@ export const createServer = () => {
             "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files.",
         inputSchema: zodToJsonSchema(ListRootsSchema) as ToolInput,
     });
-    
+    if (clientCapabilities!.elicitation) tools.push ({
+        name: ToolName.ELICITATION,
+        description: "Demonstrates the Elicitation feature by asking the user to provide information about their favorite color, number, and pets.",
+        inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
+    });
+
     return { tools };
   });
 
