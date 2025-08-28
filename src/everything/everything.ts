@@ -967,7 +967,7 @@ export const createServer = () => {
 
   // Handle post-initialization setup for roots
   server.oninitialized = async () => {
-    const clientCapabilities = server.getClientCapabilities();
+   clientCapabilities = server.getClientCapabilities();
 
     if (clientCapabilities?.roots) {
       clientSupportsRoots = true;
