@@ -540,14 +540,14 @@ export const createServer = () => {
         inputSchema: zodToJsonSchema(StructuredContentSchema.input) as ToolInput,
         outputSchema: zodToJsonSchema(StructuredContentSchema.output) as ToolOutput,
       },
-      {
+    ];
+    if (clientCapabilities!.roots) tools.push ({
         name: ToolName.LIST_ROOTS,
         description:
-          "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files.",
+            "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files.",
         inputSchema: zodToJsonSchema(ListRootsSchema) as ToolInput,
-      },
-    ];
-
+    });
+    
     return { tools };
   });
 
