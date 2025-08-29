@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package*.json ./
 COPY index.ts ./
+COPY http.ts ./
 
 RUN echo '{ "compilerOptions": { "target": "ES2022", "module": "Node16", "moduleResolution": "Node16", "strict": true, "esModuleInterop": true, "skipLibCheck": true, "forceConsistentCasingInFileNames": true, "resolveJsonModule": true, "outDir": "./dist", "rootDir": "." }, "include": ["./**/*.ts"], "exclude": ["node_modules"] }' > tsconfig.json
 
@@ -29,4 +30,4 @@ RUN mkdir -p /data
 
 EXPOSE 3000
 
-ENTRYPOINT ["node", "dist/index.js"]
+ENTRYPOINT ["node", "dist/http.js"]
