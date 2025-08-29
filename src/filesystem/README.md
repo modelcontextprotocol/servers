@@ -11,6 +11,14 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Get file metadata
 - Dynamic directory access control via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots)
 
+## Breaking Changes
+
+### search_files Tool Changes (February 2025)
+The `search_files` tool has been updated with the following breaking changes:
+- **Parameter change**: The `pattern` parameter (string) has been replaced with `patterns` parameter (string[])  
+- **Behavior change**: Now uses glob pattern matching exclusively instead of mixed glob/substring matching
+- **Migration**: Update calls from `{"pattern": "*.js"}` to `{"patterns": ["*.js"]}` and ensure patterns use proper glob syntax
+
 ## Directory Access Control
 
 The server uses a flexible directory access control system. Directories can be specified via command-line arguments or dynamically via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots).
@@ -145,12 +153,12 @@ The server's directory access control follows this flow:
   - Fails if destination exists
 
 - **search_files**
-  - Recursively search for files/directories that match or do not match patterns
+  - Recursively search for files/directories that match glob patterns
   - Inputs:
     - `path` (string): Starting directory
-    - `pattern` (string): Search pattern
+    - `patterns` (string[]): Array of glob patterns to match
     - `excludePatterns` (string[]): Exclude any patterns.
-  - Glob-style pattern matching
+  - Glob-style pattern matching exclusively
   - Returns full paths to matches
 
 - **directory_tree**

@@ -135,7 +135,7 @@ const MoveFileArgsSchema = z.object({
 
 const SearchFilesArgsSchema = z.object({
   path: z.string(),
-  pattern: z.string(),
+  patterns: z.array(z.string()),
   excludePatterns: z.array(z.string()).optional().default([])
 });
 
@@ -264,6 +264,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             "Get a recursive tree view of files and directories as a JSON structure. " +
             "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
             "Files have no children array, while directories always have a children array (which may be empty). " +
+            "Supports excluding paths using glob patterns (e.g., ['node_modules', '**/*.log', '.git']). " +
             "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(DirectoryTreeArgsSchema) as ToolInput,
       },
@@ -279,9 +280,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "search_files",
         description:
-          "Recursively search for files and directories matching a pattern. " +
-          "The patterns should be glob-style patterns that match paths relative to the working directory. " +
-          "Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
+          "Recursively search for files and directories matching glob patterns. " +
+          "The patterns should be glob-style patterns that match paths relative to the search path. " +
+          "Use patterns like ['*.ext'] to match files in current directory, and ['**/*.ext'] to match files in all subdirectories. " +
+          "Multiple patterns can be provided to match different file types, e.g., ['**/*.js', '**/*.ts']. " +
           "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
           "Only searches within allowed directories.",
         inputSchema: zodToJsonSchema(SearchFilesArgsSchema) as ToolInput,
@@ -542,16 +544,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             for (const entry of entries) {
                 const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
-                const shouldExclude = excludePatterns.some(pattern => {
-                    if (pattern.includes('*')) {
-                        return minimatch(relativePath, pattern, {dot: true});
-                    }
-                    // For files: match exact name or as part of path
-                    // For directories: match as directory path
-                    return minimatch(relativePath, pattern, {dot: true}) ||
-                           minimatch(relativePath, `**/${pattern}`, {dot: true}) ||
-                           minimatch(relativePath, `**/${pattern}/**`, {dot: true});
-                });
+                // Use glob matching exclusively for consistency
+                const shouldExclude = excludePatterns.some(pattern => 
+                    minimatch(relativePath, pattern, {dot: true})
+                );
                 if (shouldExclude)
                     continue;
 
@@ -599,7 +595,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const results = await searchFilesWithValidation(validPath, parsed.data.pattern, allowedDirectories, { excludePatterns: parsed.data.excludePatterns });
+        const results = await searchFilesWithValidation(validPath, parsed.data.patterns, allowedDirectories, { excludePatterns: parsed.data.excludePatterns });
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };
