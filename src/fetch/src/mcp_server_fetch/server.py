@@ -1,5 +1,7 @@
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
+import ipaddress
+import socket
 
 import markdownify
 import readabilipy.simple_json
@@ -22,6 +24,131 @@ from pydantic import BaseModel, Field, AnyUrl
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
+
+# Default blocked IP ranges (local/internal networks)
+DEFAULT_BLOCKED_IP_RANGES = [
+    "127.0.0.0/8",      # Loopback
+    "10.0.0.0/8",       # Private Class A
+    "172.16.0.0/12",    # Private Class B
+    "192.168.0.0/16",   # Private Class C
+    "169.254.0.0/16",   # Link-local
+    "224.0.0.0/4",      # Multicast
+    "::1/128",          # IPv6 loopback
+    "fc00::/7",         # IPv6 unique local
+    "fe80::/10",        # IPv6 link-local
+]
+
+
+def is_ip_in_ranges(ip_str: str, ranges: list[str]) -> bool:
+    """Check if an IP address is within any of the specified CIDR ranges.
+    
+    Args:
+        ip_str: IP address string to check
+        ranges: List of CIDR range strings
+        
+    Returns:
+        True if IP is in any of the ranges, False otherwise
+    """
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        for range_str in ranges:
+            try:
+                network = ipaddress.ip_network(range_str, strict=False)
+                if ip in network:
+                    return True
+            except ValueError:
+                continue
+        return False
+    except ValueError:
+        return False
+
+
+def resolve_hostname_to_ips(hostname: str) -> list[str]:
+    """Resolve a hostname to its IP addresses.
+    
+    Args:
+        hostname: Hostname to resolve
+        
+    Returns:
+        List of IP addresses as strings
+        
+    Raises:
+        socket.gaierror: If hostname cannot be resolved
+    """
+    try:
+        # Get both IPv4 and IPv6 addresses
+        addr_info = socket.getaddrinfo(hostname, None, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
+        ips = list(set(info[4][0] for info in addr_info))
+        return ips
+    except socket.gaierror:
+        raise
+
+
+async def validate_url_against_allowlist(
+    url: str, 
+    allowed_hosts: list[str] | None = None,
+    blocked_ip_ranges: list[str] | None = None,
+    allow_private_ips: bool = False
+) -> None:
+    """Validate a URL against host allowlist and IP range restrictions.
+    
+    Args:
+        url: URL to validate
+        allowed_hosts: List of allowed hostnames/domains. If None, all hosts allowed by IP rules
+        blocked_ip_ranges: List of CIDR ranges to block. If None, uses DEFAULT_BLOCKED_IP_RANGES
+        allow_private_ips: If True, allows access to private/internal IP ranges
+        
+    Raises:
+        McpError: If URL is not allowed
+    """
+    if blocked_ip_ranges is None:
+        blocked_ip_ranges = DEFAULT_BLOCKED_IP_RANGES if not allow_private_ips else []
+    
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+    
+    if not hostname:
+        raise McpError(ErrorData(
+            code=INVALID_PARAMS,
+            message="Invalid URL: no hostname found"
+        ))
+    
+    # Check against allowed hosts list if provided
+    if allowed_hosts is not None:
+        host_allowed = False
+        for allowed_host in allowed_hosts:
+            if allowed_host.startswith('*.'):
+                # Wildcard domain matching
+                domain_suffix = allowed_host[2:]
+                if hostname == domain_suffix or hostname.endswith('.' + domain_suffix):
+                    host_allowed = True
+                    break
+            elif hostname == allowed_host:
+                host_allowed = True
+                break
+        
+        if not host_allowed:
+            raise McpError(ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"Host '{hostname}' is not in the allowed hosts list"
+            ))
+    
+    # Resolve hostname to IP addresses and check against blocked ranges
+    if blocked_ip_ranges:
+        try:
+            ips = resolve_hostname_to_ips(hostname)
+        except socket.gaierror as e:
+            raise McpError(ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"Failed to resolve hostname '{hostname}': {e}"
+            ))
+        
+        for ip in ips:
+            if is_ip_in_ranges(ip, blocked_ip_ranges):
+                raise McpError(ErrorData(
+                    code=INTERNAL_ERROR,
+                    message=f"Access to IP address '{ip}' (resolved from '{hostname}') is blocked as it falls within restricted IP ranges"
+                ))
 
 
 def extract_content_from_html(html: str) -> str:
@@ -182,6 +309,9 @@ async def serve(
     custom_user_agent: str | None = None,
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
+    allowed_hosts: list[str] | None = None,
+    allow_private_ips: bool = False,
+    blocked_ip_ranges: list[str] | None = None,
 ) -> None:
     """Run the fetch MCP server.
 
@@ -189,6 +319,9 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        allowed_hosts: Optional list of allowed hostnames/domains (supports wildcards like *.example.com)
+        allow_private_ips: Whether to allow access to private/internal IP ranges
+        blocked_ip_ranges: Optional list of custom CIDR ranges to block
     """
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
@@ -231,6 +364,11 @@ Although originally you did not have internet access, and were advised to refuse
         if not url:
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
+        # Validate URL against allowlist and IP restrictions
+        await validate_url_against_allowlist(
+            url, allowed_hosts, blocked_ip_ranges, allow_private_ips
+        )
+
         if not ignore_robots_txt:
             await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
 
@@ -262,6 +400,11 @@ Although originally you did not have internet access, and were advised to refuse
         url = arguments["url"]
 
         try:
+            # Validate URL against allowlist and IP restrictions  
+            await validate_url_against_allowlist(
+                url, allowed_hosts, blocked_ip_ranges, allow_private_ips
+            )
+            
             content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url)
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:
