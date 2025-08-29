@@ -89,6 +89,13 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
      - `structuredContent` field conformant to the output schema
      - A backward compatible Text Content field, a SHOULD advisory in the specification
 
+11. `listRoots`
+   - Lists the current MCP roots provided by the client
+   - Demonstrates the roots protocol capability even though this server doesn't access files
+   - No inputs required
+   - Returns: List of current roots with their URIs and names, or a message if no roots are set
+   - Shows how servers can interact with the MCP roots protocol
+
 ### Resources
 
 The server provides 100 test resources in two formats:
@@ -128,6 +135,18 @@ Resource features:
      - `resourceId` (number): ID of the resource to embed (1-100)
    - Returns: Multi-turn conversation with an embedded resource reference
    - Shows how to include resources directly in prompt messages
+
+### Roots
+
+The server demonstrates the MCP roots protocol capability:
+
+- Declares `roots: { listChanged: true }` capability to indicate support for roots
+- Handles `roots/list_changed` notifications from clients
+- Requests initial roots during server initialization
+- Provides a `listRoots` tool to display current roots
+- Logs roots-related events for demonstration purposes
+
+Note: This server doesn't actually access files, but demonstrates how servers can interact with the roots protocol for clients that need to understand which directories are available for file operations.
 
 ### Logging
 
