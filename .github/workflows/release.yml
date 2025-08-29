@@ -8,6 +8,7 @@ on:
 jobs:
   create-metadata:
     runs-on: ubuntu-latest
+    if: github.repository_owner == 'modelcontextprotocol'
     outputs:
       hash: ${{ steps.last-release.outputs.hash }}
       version: ${{ steps.create-version.outputs.version}}
