@@ -18,6 +18,9 @@ import {
   searchFilesWithValidation,
   // File editing functions
   applyFileEdits,
+  // Hidden files filtering functions
+  shouldIncludeHidden,
+  shouldFilterHiddenEntry,
   tailFile,
   headFile
 } from '../lib.js';
@@ -696,6 +699,87 @@ describe('Lib Functions', () => {
         
         expect(mockFileHandle.close).toHaveBeenCalled();
       });
+    });
+  });
+});
+
+describe('Hidden Files Filtering', () => {
+  describe('shouldIncludeHidden', () => {
+    const originalEnv = process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN;
+
+    afterEach(() => {
+      // Restore original environment variable
+      if (originalEnv === undefined) {
+        delete process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN;
+      } else {
+        process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN = originalEnv;
+      }
+    });
+
+    it('should return false by default (when env var not set)', () => {
+      delete process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN;
+      expect(shouldIncludeHidden()).toBe(false);
+    });
+
+    it('should return false when env var is set to "false"', () => {
+      process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN = 'false';
+      expect(shouldIncludeHidden()).toBe(false);
+    });
+
+    it('should return true when env var is set to "true"', () => {
+      process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN = 'true';
+      expect(shouldIncludeHidden()).toBe(true);
+    });
+
+    it('should return false for any other value', () => {
+      process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN = 'yes';
+      expect(shouldIncludeHidden()).toBe(false);
+    });
+  });
+
+  describe('shouldFilterHiddenEntry', () => {
+    const originalEnv = process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN;
+
+    afterEach(() => {
+      // Restore original environment variable
+      if (originalEnv === undefined) {
+        delete process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN;
+      } else {
+        process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN = originalEnv;
+      }
+    });
+
+    it('should filter dot-prefixed names by default', () => {
+      delete process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN;
+      expect(shouldFilterHiddenEntry('.git')).toBe(true);
+      expect(shouldFilterHiddenEntry('.env')).toBe(true);
+      expect(shouldFilterHiddenEntry('.terraform')).toBe(true);
+      expect(shouldFilterHiddenEntry('.vscode')).toBe(true);
+    });
+
+    it('should not filter regular names by default', () => {
+      delete process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN;
+      expect(shouldFilterHiddenEntry('README.md')).toBe(false);
+      expect(shouldFilterHiddenEntry('package.json')).toBe(false);
+      expect(shouldFilterHiddenEntry('src')).toBe(false);
+      expect(shouldFilterHiddenEntry('test.txt')).toBe(false);
+    });
+
+    it('should not filter any names when hidden files are included', () => {
+      process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN = 'true';
+      expect(shouldFilterHiddenEntry('.git')).toBe(false);
+      expect(shouldFilterHiddenEntry('.env')).toBe(false);
+      expect(shouldFilterHiddenEntry('README.md')).toBe(false);
+      expect(shouldFilterHiddenEntry('package.json')).toBe(false);
+    });
+
+    it('should handle edge cases correctly', () => {
+      delete process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN;
+      expect(shouldFilterHiddenEntry('')).toBe(false); // empty string
+      expect(shouldFilterHiddenEntry('.')).toBe(true); // single dot
+      expect(shouldFilterHiddenEntry('..')).toBe(true); // double dot
+      expect(shouldFilterHiddenEntry('name.')).toBe(false); // dot at end
+      expect(shouldFilterHiddenEntry('name.with.dots')).toBe(false); // dots in middle
     });
   });
 });
