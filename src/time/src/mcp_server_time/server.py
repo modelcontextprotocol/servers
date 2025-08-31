@@ -22,6 +22,7 @@ class TimeTools(str, Enum):
 class TimeResult(BaseModel):
     timezone: str
     datetime: str
+    day_of_week: str
     is_dst: bool
 
 
@@ -64,6 +65,7 @@ class TimeServer:
         return TimeResult(
             timezone=timezone_name,
             datetime=current_time.isoformat(timespec="seconds"),
+            day_of_week=current_time.strftime("%A"),
             is_dst=bool(current_time.dst()),
         )
 
@@ -104,11 +106,13 @@ class TimeServer:
             source=TimeResult(
                 timezone=source_tz,
                 datetime=source_time.isoformat(timespec="seconds"),
+                day_of_week=source_time.strftime("%A"),
                 is_dst=bool(source_time.dst()),
             ),
             target=TimeResult(
                 timezone=target_tz,
                 datetime=target_time.isoformat(timespec="seconds"),
+                day_of_week=target_time.strftime("%A"),
                 is_dst=bool(target_time.dst()),
             ),
             time_difference=time_diff_str,

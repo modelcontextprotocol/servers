@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-filesystem",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "MCP server for filesystem access",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
