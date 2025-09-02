@@ -14,12 +14,11 @@ import {
   ReadResourceRequestSchema,
   Resource,
   RootsListChangedNotificationSchema,
-  SetLevelRequestSchema,
   SubscribeRequestSchema,
   Tool,
   ToolSchema,
   UnsubscribeRequestSchema,
-  type Root,
+  type Root
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
@@ -174,7 +173,6 @@ export const createServer = () => {
   let subsUpdateInterval: NodeJS.Timeout | undefined;
   let stdErrUpdateInterval: NodeJS.Timeout | undefined;
 
-  let logLevel: LoggingLevel = "debug";
   let logsUpdateInterval: NodeJS.Timeout | undefined;
   // Store client capabilities
   let clientCapabilities: ClientCapabilities | undefined;
@@ -182,49 +180,42 @@ export const createServer = () => {
   // Roots state management
   let currentRoots: Root[] = [];
   let clientSupportsRoots = false;
-  const messages = [
-    { level: "debug", data: "Debug-level message" },
-    { level: "info", data: "Info-level message" },
-    { level: "notice", data: "Notice-level message" },
-    { level: "warning", data: "Warning-level message" },
-    { level: "error", data: "Error-level message" },
-    { level: "critical", data: "Critical-level message" },
-    { level: "alert", data: "Alert level-message" },
-    { level: "emergency", data: "Emergency-level message" },
-  ];
+  let sessionId: string | undefined;
 
-  const isMessageIgnored = (level: LoggingLevel): boolean => {
-    const currentLevel = messages.findIndex((msg) => logLevel === msg.level);
-    const messageLevel = messages.findIndex((msg) => level === msg.level);
-    return messageLevel < currentLevel;
-  };
+    // Function to start notification intervals when a client connects
+  const startNotificationIntervals = (sid?: string|undefined) => {
+      sessionId = sid;
+      if (!subsUpdateInterval) {
+        subsUpdateInterval = setInterval(() => {
+          for (const uri of subscriptions) {
+            server.notification({
+              method: "notifications/resources/updated",
+              params: { uri },
+            });
+          }
+        }, 10000);
+      }
 
-  // Function to start notification intervals when a client connects
-  const startNotificationIntervals = () => {
-    if (!subsUpdateInterval) {
-      subsUpdateInterval = setInterval(() => {
-        for (const uri of subscriptions) {
-          server.notification({
-            method: "notifications/resources/updated",
-            params: { uri },
-          });
-        }
-      }, 10000);
-    }
+      console.log(sessionId)
+      const maybeAppendSessionId = sessionId ? ` - SessionId ${sessionId}`: "";
+      const messages: { level: LoggingLevel; data: string }[] = [
+          { level: "debug", data: `Debug-level message${maybeAppendSessionId}` },
+          { level: "info", data: `Info-level message${maybeAppendSessionId}` },
+          { level: "notice", data: `Notice-level message${maybeAppendSessionId}` },
+          { level: "warning", data: `Warning-level message${maybeAppendSessionId}` },
+          { level: "error", data: `Error-level message${maybeAppendSessionId}` },
+          { level: "critical", data: `Critical-level message${maybeAppendSessionId}` },
+          { level: "alert", data: `Alert level-message${maybeAppendSessionId}` },
+          { level: "emergency", data: `Emergency-level message${maybeAppendSessionId}` },
+      ];
 
-    if (!logsUpdateInterval) {
-      logsUpdateInterval = setInterval(() => {
-        let message = {
-          method: "notifications/message",
-          params: messages[Math.floor(Math.random() * messages.length)],
-        };
-        if (!isMessageIgnored(message.params.level as LoggingLevel))
-          server.notification(message);
-      }, 20000);
+      if (!logsUpdateInterval) {
+          console.error("Starting logs update interval");
+          logsUpdateInterval = setInterval(async () => {
+          await server.sendLoggingMessage( messages[Math.floor(Math.random() * messages.length)], sessionId);
+      }, 15000);
     }
   };
-
-
 
   // Helper method to request sampling from client
   const requestSampling = async (
@@ -918,23 +909,6 @@ export const createServer = () => {
     throw new Error(`Unknown reference type`);
   });
 
-  server.setRequestHandler(SetLevelRequestSchema, async (request) => {
-    const { level } = request.params;
-    logLevel = level;
-
-    // Demonstrate different log levels
-    await server.notification({
-      method: "notifications/message",
-      params: {
-        level: "debug",
-        logger: "test-server",
-        data: `Logging level set to: ${logLevel}`,
-      },
-    });
-
-    return {};
-  });
-
   // Roots protocol handlers
   server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
     try {
@@ -944,24 +918,18 @@ export const createServer = () => {
         currentRoots = response.roots;
 
         // Log the roots update for demonstration
-        await server.notification({
-          method: "notifications/message",
-          params: {
+        await server.sendLoggingMessage({
             level: "info",
             logger: "everything-server",
             data: `Roots updated: ${currentRoots.length} root(s) received from client`,
-          },
-        });
+        }, sessionId);
       }
     } catch (error) {
-      await server.notification({
-        method: "notifications/message",
-        params: {
+      await server.sendLoggingMessage({
           level: "error",
           logger: "everything-server",
           data: `Failed to request roots from client: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      });
+      }, sessionId);
     }
   });
 
@@ -976,43 +944,31 @@ export const createServer = () => {
         if (response && 'roots' in response) {
           currentRoots = response.roots;
 
-          await server.notification({
-            method: "notifications/message",
-            params: {
+          await server.sendLoggingMessage({
               level: "info",
               logger: "everything-server",
               data: `Initial roots received: ${currentRoots.length} root(s) from client`,
-            },
-          });
+          }, sessionId);
         } else {
-          await server.notification({
-            method: "notifications/message",
-            params: {
+          await server.sendLoggingMessage({
               level: "warning",
               logger: "everything-server",
               data: "Client returned no roots set",
-            },
-          });
+          }, sessionId);
         }
       } catch (error) {
-        await server.notification({
-          method: "notifications/message",
-          params: {
+        await server.sendLoggingMessage({
             level: "error",
             logger: "everything-server",
             data: `Failed to request initial roots from client: ${error instanceof Error ? error.message : String(error)}`,
-          },
-        });
+        }, sessionId);
       }
     } else {
-      await server.notification({
-        method: "notifications/message",
-        params: {
+      await server.sendLoggingMessage({
           level: "info",
           logger: "everything-server",
           data: "Client does not support MCP roots protocol",
-        },
-      });
+      }, sessionId);
     }
   };
 
