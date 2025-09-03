@@ -1057,6 +1057,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[RCSB PDB](https://github.com/QuentinCody/rcsb-pdb-mcp-server)** - Unofficial MCP server for the Research Collaboratory for Structural Bioinformatics Protein Data Bank (RCSB PDB), providing access to 3D protein structures, experimental data, and structural bioinformatics information.
 - **[Reaper](https://github.com/dschuler36/reaper-mcp-server)** - Interact with your [Reaper](https://www.reaper.fm/) (Digital Audio Workstation) projects.
 - **[Redbee](https://github.com/Tamsi/redbee-mcp)** - Redbee MCP server that provides support for interacting with Redbee API.
+- **[Redfish](https://github.com/nokia/mcp-redfish)** - Redfish MCP server that provides support for interacting with [DMTF Redfish API](https://www.dmtf.org/standards/redfish).
 - **[Redis](https://github.com/GongRzhe/REDIS-MCP-Server)** - Redis database operations and caching microservice server with support for key-value operations, expiration management, and pattern-based key listing.
 - **[Redis](https://github.com/prajwalnayak7/mcp-server-redis)** MCP server to interact with Redis Server, AWS Memory DB, etc for caching or other use-cases where in-memory and key-value based storage is appropriate
 - **[RedNote MCP](https://github.com/ifuryst/rednote-mcp)** - MCP server for accessing RedNote(XiaoHongShu, xhs) content
