@@ -1151,6 +1151,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Thales CDSP CRDP MCP Server](https://github.com/sanyambassi/thales-cdsp-crdp-mcp-server)** - A Model Context Protocol (MCP) server that allows interacting with the CipherTrust RestFul Data Protection (CRDP) data protection service.
 - **[Thales CipherTrust Manager MCP Server](https://github.com/sanyambassi/ciphertrust-manager-mcp-server)** - MCP server for Thales CipherTrust Manager integration, enabling secure key management and cryptographic operations.
 - **[thegraph-mcp](https://github.com/kukapay/thegraph-mcp)** - An MCP server that powers AI agents with indexed blockchain data from The Graph.
+- **[TheHive MCP Server](https://github.com/redwaysecurity/the-hive-mcp-server)** - An MCP server for [TheHive](https://strangebee.com/thehive/) Security Incident Response Platform.
 - **[Things3 MCP](https://github.com/urbanogardun/things3-mcp)** - Things3 task management integration for macOS with comprehensive TODO, project, and tag management.
 - **[Think MCP](https://github.com/Rai220/think-mcp)** - Enhances any agent's reasoning capabilities by integrating the think-tools, as described in [Anthropic's article](https://www.anthropic.com/engineering/claude-think-tool).
 - **[Think Node MCP](https://github.com/abhinav-mangla/think-tool-mcp)** - Enhances any agent's reasoning capabilities by integrating the think-tools, as described in [Anthropic's article](https://www.anthropic.com/engineering/claude-think-tool). (Works with Node)
