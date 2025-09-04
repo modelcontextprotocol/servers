@@ -40,6 +40,17 @@ export interface SearchResult {
   isDirectory: boolean;
 }
 
+// Check if hidden files/directories should be included
+// Environment variable MCP_FILESYSTEM_INCLUDE_HIDDEN controls this (default: false)
+export function shouldIncludeHidden(): boolean {
+  return process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN === 'true';
+}
+
+// Check if a file/directory name should be filtered out (dot-prefixed items)
+export function shouldFilterHiddenEntry(name: string): boolean {
+  return !shouldIncludeHidden() && name.startsWith('.');
+}
+
 // Pure Utility Functions
 export function formatSize(bytes: number): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -361,6 +372,9 @@ export async function searchFilesWithValidation(
     const entries = await fs.readdir(currentPath, { withFileTypes: true });
 
     for (const entry of entries) {
+      // Skip hidden files/directories unless explicitly enabled
+      if (shouldFilterHiddenEntry(entry.name)) continue;
+
       const fullPath = path.join(currentPath, entry.name);
 
       try {
