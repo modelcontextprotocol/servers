@@ -26,6 +26,9 @@ dependencies = [
 [project.scripts]
 mcp-server-time = "mcp_server_time:main"
 
+[project.urls]
+MCP = "io.github.modelcontextprotocol/mcp-server-time"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
