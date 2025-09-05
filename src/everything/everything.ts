@@ -542,7 +542,7 @@ export const createServer = () => {
     return { tools };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request,extra) => {
     const { name, arguments: args } = request.params;
 
     if (name === ToolName.ECHO) {
@@ -584,7 +584,7 @@ export const createServer = () => {
               total: steps,
               progressToken,
             },
-          });
+          },{relatedRequestId: extra.requestId});
         }
       }
 
