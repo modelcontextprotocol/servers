@@ -11,6 +11,30 @@ import {
 // Fixed chalk import for ESM
 import chalk from 'chalk';
 
+// Attachment interfaces for multi-modal content
+interface AttachmentMetadata {
+  language?: string;      // Programming language for code blocks
+  format?: string;        // File format, diagram type, image format
+  size?: number;          // Content size in bytes
+  created?: string;       // ISO timestamp when attachment was created
+  description?: string;   // Human-readable description of the attachment
+  encoding?: string;      // Content encoding (base64, utf-8, etc.)
+  schema?: string;        // JSON schema for validation
+  width?: number;         // Image width in pixels
+  height?: number;        // Image height in pixels
+  complexity?: number;    // Code complexity score (0-100)
+  lineCount?: number;     // Number of lines in code/text
+}
+
+interface Attachment {
+  id: string;                    // Unique identifier for the attachment
+  type: 'code' | 'diagram' | 'image' | 'json' | 'table' | 'file' | 'url' | 'text' | 'markdown' | 'yaml' | 'xml';
+  name: string;                  // Human-readable name
+  content: string | object;      // The actual content
+  metadata?: AttachmentMetadata; // Additional metadata
+  thoughtReferences?: number[];  // Other thoughts this attachment relates to
+}
+
 interface ThoughtData {
   thought: string;
   thoughtNumber: number;
@@ -28,6 +52,8 @@ interface ThoughtData {
   confidence?: number; // 0-1 scale, where 0 = very uncertain, 1 = very confident
   evidence?: string[]; // Array of supporting evidence for this thought
   assumptions?: string[]; // Array of underlying assumptions this thought relies on
+  // Multi-modal attachments
+  attachments?: Attachment[]; // Array of multimedia attachments
 }
 
 // Synthesis interfaces
@@ -75,6 +101,12 @@ interface SynthesisResult {
     branches: number;
     revisions: number;
     keyInsights: string[];
+    attachmentSummary?: {
+      totalAttachments: number;
+      types: Record<string, number>;
+      evidenceBoost: number;
+      thoughtsWithAttachments: number;
+    };
   };
   decisions: Decision[];
   assumptions: Assumption[];
@@ -87,6 +119,30 @@ interface SynthesisResult {
     completeness: 'complete' | 'mostly-complete' | 'partial' | 'incomplete';
   };
   nextSteps: string[];
+  attachmentAnalysis?: {
+    summary: {
+      totalAttachments: number;
+      types: Record<string, number>;
+      evidenceBoost: number;
+      thoughtsWithAttachments: number;
+    };
+    codeAnalysis?: {
+      totalCodeBlocks: number;
+      languages: Record<string, number>;
+      averageComplexity: number;
+      thoughtsWithCode: number;
+    };
+    diagramAnalysis?: {
+      totalDiagrams: number;
+      types: Record<string, number>;
+      thoughtsWithDiagrams: number;
+    };
+    dataAnalysis?: {
+      totalDataSets: number;
+      formats: Record<string, number>;
+      thoughtsWithData: number;
+    };
+  };
 }
 
 // Decision tree visualization interfaces
@@ -162,11 +218,367 @@ interface SubagentPrompt {
   };
 }
 
+// Pattern learning system interfaces
+interface PatternStep {
+  stepType: 'analysis' | 'decomposition' | 'validation' | 'synthesis' | 'decision' | 'exploration';
+  description: string;
+  expectedConfidence: number;
+  keyTags: string[];
+  evidenceRequirements: string[];
+  commonPitfalls: string[];
+}
+
+interface ReasoningPattern {
+  id: string;
+  name: string;
+  description: string;
+  domain: string[];
+  approach: string;
+  problemContext: {
+    complexity: 'low' | 'medium' | 'high';
+    type: string[];
+    keywords: string[];
+    characteristics: string[];
+  };
+  successMetrics: {
+    averageConfidence: number;
+    completionRate: number;
+    evidenceQuality: number;
+    usageCount: number;
+    lastUsed: string;
+  };
+  thoughtSequence: PatternStep[];
+  adaptationGuidance: string;
+  variations: Array<{
+    name: string;
+    description: string;
+    conditions: string[];
+    modifications: string[];
+  }>;
+  created: string;
+  updated: string;
+}
+
+interface PatternMatch {
+  pattern: ReasoningPattern;
+  confidence: number;
+  matchReasons: string[];
+  adaptationSuggestions: string[];
+  applicabilityScore: number;
+}
+
+interface PatternExtractionContext {
+  sessionId: string;
+  totalThoughts: number;
+  averageConfidence: number;
+  completionStatus: 'complete' | 'partial' | 'abandoned';
+  domains: string[];
+  approaches: string[];
+  successFactors: string[];
+  challenges: string[];
+}
+
+class PatternLibrary {
+  private patterns: Map<string, ReasoningPattern> = new Map();
+  private patternIndex: {
+    byDomain: Map<string, Set<string>>;
+    byApproach: Map<string, Set<string>>;
+    byKeywords: Map<string, Set<string>>;
+    bySuccessRate: Array<{ id: string; score: number }>;
+  };
+
+  constructor() {
+    this.patternIndex = {
+      byDomain: new Map(),
+      byApproach: new Map(),
+      byKeywords: new Map(),
+      bySuccessRate: []
+    };
+  }
+
+  addPattern(pattern: ReasoningPattern): void {
+    this.patterns.set(pattern.id, pattern);
+    this.updateIndex(pattern);
+  }
+
+  getPattern(id: string): ReasoningPattern | undefined {
+    return this.patterns.get(id);
+  }
+
+  findSimilarPatterns(context: {
+    domains?: string[];
+    approach?: string;
+    keywords?: string[];
+    complexity?: string;
+    problemType?: string[];
+  }): PatternMatch[] {
+    const candidates = new Set<string>();
+    
+    // Find candidates by domain
+    if (context.domains) {
+      context.domains.forEach(domain => {
+        const domainPatterns = this.patternIndex.byDomain.get(domain);
+        if (domainPatterns) {
+          domainPatterns.forEach(id => candidates.add(id));
+        }
+      });
+    }
+    
+    // Find candidates by approach
+    if (context.approach) {
+      const approachPatterns = this.patternIndex.byApproach.get(context.approach);
+      if (approachPatterns) {
+        approachPatterns.forEach(id => candidates.add(id));
+      }
+    }
+    
+    // Find candidates by keywords
+    if (context.keywords) {
+      context.keywords.forEach(keyword => {
+        const keywordPatterns = this.patternIndex.byKeywords.get(keyword.toLowerCase());
+        if (keywordPatterns) {
+          keywordPatterns.forEach(id => candidates.add(id));
+        }
+      });
+    }
+    
+    // If no specific criteria, consider all patterns
+    if (candidates.size === 0) {
+      this.patterns.forEach((pattern, id) => candidates.add(id));
+    }
+    
+    // Score and rank candidates
+    const matches: PatternMatch[] = [];
+    candidates.forEach(id => {
+      const pattern = this.patterns.get(id);
+      if (pattern) {
+        const match = this.calculatePatternMatch(pattern, context);
+        if (match.confidence > 0.1) { // Only include reasonable matches
+          matches.push(match);
+        }
+      }
+    });
+    
+    return matches.sort((a, b) => b.confidence - a.confidence).slice(0, 10);
+  }
+
+  private calculatePatternMatch(pattern: ReasoningPattern, context: {
+    domains?: string[];
+    approach?: string;
+    keywords?: string[];
+    complexity?: string;
+    problemType?: string[];
+  }): PatternMatch {
+    let score = 0;
+    let maxScore = 0;
+    const matchReasons: string[] = [];
+    const adaptationSuggestions: string[] = [];
+    
+    // Domain matching (weight: 30%)
+    if (context.domains && pattern.domain.length > 0) {
+      const domainOverlap = context.domains.filter(d => pattern.domain.includes(d)).length;
+      const domainScore = domainOverlap / Math.max(context.domains.length, pattern.domain.length);
+      score += domainScore * 0.3;
+      if (domainOverlap > 0) {
+        matchReasons.push(`Shares ${domainOverlap} domain(s): ${context.domains.filter(d => pattern.domain.includes(d)).join(', ')}`);
+      }
+    }
+    maxScore += 0.3;
+    
+    // Approach matching (weight: 25%)
+    if (context.approach && pattern.approach) {
+      const approachScore = context.approach.toLowerCase() === pattern.approach.toLowerCase() ? 1 : 0;
+      score += approachScore * 0.25;
+      if (approachScore > 0) {
+        matchReasons.push(`Exact approach match: ${pattern.approach}`);
+      }
+    }
+    maxScore += 0.25;
+    
+    // Keyword matching (weight: 20%)
+    if (context.keywords && pattern.problemContext.keywords.length > 0) {
+      const keywordOverlap = context.keywords.filter(k => 
+        pattern.problemContext.keywords.some(pk => pk.toLowerCase().includes(k.toLowerCase()) || k.toLowerCase().includes(pk.toLowerCase()))
+      ).length;
+      const keywordScore = keywordOverlap / Math.max(context.keywords.length, pattern.problemContext.keywords.length);
+      score += keywordScore * 0.2;
+      if (keywordOverlap > 0) {
+        matchReasons.push(`${keywordOverlap} keyword matches`);
+      }
+    }
+    maxScore += 0.2;
+    
+    // Success rate (weight: 15%)
+    const successScore = pattern.successMetrics.averageConfidence * pattern.successMetrics.completionRate;
+    score += successScore * 0.15;
+    maxScore += 0.15;
+    
+    // Complexity matching (weight: 10%)
+    if (context.complexity && pattern.problemContext.complexity) {
+      const complexityScore = context.complexity === pattern.problemContext.complexity ? 1 : 0.5;
+      score += complexityScore * 0.1;
+    }
+    maxScore += 0.1;
+    
+    const confidence = maxScore > 0 ? score / maxScore : 0;
+    
+    // Generate adaptation suggestions
+    if (confidence > 0.3) {
+      if (context.complexity !== pattern.problemContext.complexity) {
+        adaptationSuggestions.push(`Adjust for ${context.complexity} complexity (pattern is for ${pattern.problemContext.complexity})`);
+      }
+      
+      if (pattern.variations.length > 0) {
+        adaptationSuggestions.push(`Consider variations: ${pattern.variations.map(v => v.name).join(', ')}`);
+      }
+      
+      adaptationSuggestions.push(pattern.adaptationGuidance);
+    }
+    
+    return {
+      pattern,
+      confidence,
+      matchReasons,
+      adaptationSuggestions: adaptationSuggestions.filter(s => s.length > 0),
+      applicabilityScore: confidence * (pattern.successMetrics.usageCount > 0 ? Math.min(Math.log(pattern.successMetrics.usageCount + 1) / 5, 1) : 0.1)
+    };
+  }
+
+  private updateIndex(pattern: ReasoningPattern): void {
+    // Update domain index
+    pattern.domain.forEach(domain => {
+      if (!this.patternIndex.byDomain.has(domain)) {
+        this.patternIndex.byDomain.set(domain, new Set());
+      }
+      this.patternIndex.byDomain.get(domain)!.add(pattern.id);
+    });
+    
+    // Update approach index
+    if (!this.patternIndex.byApproach.has(pattern.approach)) {
+      this.patternIndex.byApproach.set(pattern.approach, new Set());
+    }
+    this.patternIndex.byApproach.get(pattern.approach)!.add(pattern.id);
+    
+    // Update keyword index
+    pattern.problemContext.keywords.forEach(keyword => {
+      const key = keyword.toLowerCase();
+      if (!this.patternIndex.byKeywords.has(key)) {
+        this.patternIndex.byKeywords.set(key, new Set());
+      }
+      this.patternIndex.byKeywords.get(key)!.add(pattern.id);
+    });
+    
+    // Update success rate index
+    const successScore = pattern.successMetrics.averageConfidence * pattern.successMetrics.completionRate;
+    this.patternIndex.bySuccessRate.push({ id: pattern.id, score: successScore });
+    this.patternIndex.bySuccessRate.sort((a, b) => b.score - a.score);
+    
+    // Keep only top 1000 patterns by success rate to manage memory
+    if (this.patternIndex.bySuccessRate.length > 1000) {
+      this.patternIndex.bySuccessRate = this.patternIndex.bySuccessRate.slice(0, 1000);
+    }
+  }
+
+  updatePatternMetrics(patternId: string, metrics: {
+    confidence?: number;
+    completed?: boolean;
+    evidenceQuality?: number;
+  }): void {
+    const pattern = this.patterns.get(patternId);
+    if (!pattern) return;
+    
+    // Update usage count and last used
+    pattern.successMetrics.usageCount += 1;
+    pattern.successMetrics.lastUsed = new Date().toISOString();
+    
+    // Update metrics using exponential moving average
+    const alpha = 0.1; // Learning rate
+    
+    if (metrics.confidence !== undefined) {
+      pattern.successMetrics.averageConfidence = 
+        (1 - alpha) * pattern.successMetrics.averageConfidence + alpha * metrics.confidence;
+    }
+    
+    if (metrics.completed !== undefined) {
+      const completionValue = metrics.completed ? 1 : 0;
+      pattern.successMetrics.completionRate = 
+        (1 - alpha) * pattern.successMetrics.completionRate + alpha * completionValue;
+    }
+    
+    if (metrics.evidenceQuality !== undefined) {
+      pattern.successMetrics.evidenceQuality = 
+        (1 - alpha) * pattern.successMetrics.evidenceQuality + alpha * metrics.evidenceQuality;
+    }
+    
+    pattern.updated = new Date().toISOString();
+    
+    // Update index
+    this.updateIndex(pattern);
+  }
+
+  getAllPatterns(): ReasoningPattern[] {
+    return Array.from(this.patterns.values()).sort((a, b) => 
+      (b.successMetrics.averageConfidence * b.successMetrics.completionRate) - 
+      (a.successMetrics.averageConfidence * a.successMetrics.completionRate)
+    );
+  }
+
+  searchPatterns(query: {
+    text?: string;
+    domains?: string[];
+    approaches?: string[];
+    minConfidence?: number;
+    minUsage?: number;
+  }): ReasoningPattern[] {
+    let results = Array.from(this.patterns.values());
+    
+    if (query.text) {
+      const searchTerm = query.text.toLowerCase();
+      results = results.filter(pattern => 
+        pattern.name.toLowerCase().includes(searchTerm) ||
+        pattern.description.toLowerCase().includes(searchTerm) ||
+        pattern.approach.toLowerCase().includes(searchTerm) ||
+        pattern.problemContext.keywords.some(k => k.toLowerCase().includes(searchTerm))
+      );
+    }
+    
+    if (query.domains && query.domains.length > 0) {
+      results = results.filter(pattern => 
+        query.domains!.some(domain => pattern.domain.includes(domain))
+      );
+    }
+    
+    if (query.approaches && query.approaches.length > 0) {
+      results = results.filter(pattern => 
+        query.approaches!.includes(pattern.approach)
+      );
+    }
+    
+    if (query.minConfidence !== undefined) {
+      results = results.filter(pattern => 
+        pattern.successMetrics.averageConfidence >= query.minConfidence!
+      );
+    }
+    
+    if (query.minUsage !== undefined) {
+      results = results.filter(pattern => 
+        pattern.successMetrics.usageCount >= query.minUsage!
+      );
+    }
+    
+    return results.sort((a, b) => 
+      (b.successMetrics.averageConfidence * b.successMetrics.completionRate) - 
+      (a.successMetrics.averageConfidence * a.successMetrics.completionRate)
+    );
+  }
+}
+
 class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
   private disableThoughtLogging: boolean;
   private server: Server | null = null;
+  private patternLibrary: PatternLibrary = new PatternLibrary();
 
   constructor() {
     this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
@@ -1577,12 +1989,26 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
     const confidenceAssessment = this.assessOverallConfidence();
     const nextSteps = this.generateNextSteps();
 
+    // Collect all attachments for analysis
+    const allAttachments: Array<{ thought: number; attachment: Attachment }> = [];
+    for (const thought of this.thoughtHistory) {
+      if (thought.attachments) {
+        for (const attachment of thought.attachments) {
+          allAttachments.push({ thought: thought.thoughtNumber, attachment });
+        }
+      }
+    }
+
+    // Enhanced analysis with attachments
+    const attachmentAnalysis = this.analyzeAttachmentsInSynthesis(allAttachments);
+    
     return {
       summary: {
         totalThoughts: this.thoughtHistory.length,
         branches: Object.keys(this.branches).length,
         revisions: this.thoughtHistory.filter(t => t.isRevision).length,
-        keyInsights
+        keyInsights,
+        attachmentSummary: attachmentAnalysis.summary
       },
       decisions,
       assumptions,
@@ -1590,7 +2016,89 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
       actionItems,
       alternativeApproaches,
       confidenceAssessment,
-      nextSteps
+      nextSteps,
+      attachmentAnalysis
+    };
+  }
+
+  private analyzeAttachmentsInSynthesis(attachments: Array<{ thought: number; attachment: Attachment }>): any {
+    if (attachments.length === 0) {
+      return {
+        summary: {
+          totalAttachments: 0,
+          types: {},
+          evidenceBoost: 0,
+          thoughtsWithAttachments: 0
+        },
+        codeAnalysis: null,
+        diagramAnalysis: null,
+        dataAnalysis: null
+      };
+    }
+
+    const typeDistribution = this.analyzeAttachmentTypes(attachments.map(a => a.attachment));
+    const evidenceAttachments = attachments.filter(a => this.isEvidentialAttachment(a.attachment));
+    
+    return {
+      summary: {
+        totalAttachments: attachments.length,
+        types: typeDistribution,
+        evidenceBoost: evidenceAttachments.length * 0.05, // 5% boost per evidential attachment
+        thoughtsWithAttachments: new Set(attachments.map(a => a.thought)).size
+      },
+      codeAnalysis: this.analyzeCodeAttachments(attachments.filter(a => a.attachment.type === 'code')),
+      diagramAnalysis: this.analyzeDiagramAttachments(attachments.filter(a => a.attachment.type === 'diagram')),
+      dataAnalysis: this.analyzeDataAttachments(attachments.filter(a => ['json', 'table'].includes(a.attachment.type)))
+    };
+  }
+
+  private analyzeCodeAttachments(codeAttachments: Array<{ thought: number; attachment: Attachment }>): any {
+    if (codeAttachments.length === 0) return null;
+
+    const languages = this.analyzeLanguageDistribution(codeAttachments.map(c => c.attachment));
+    const totalComplexity = codeAttachments
+      .filter(c => c.attachment.metadata?.complexity !== undefined)
+      .reduce((sum, c) => sum + (c.attachment.metadata!.complexity || 0), 0);
+    
+    const avgComplexity = codeAttachments.length > 0 ? totalComplexity / codeAttachments.length : 0;
+
+    return {
+      totalCodeBlocks: codeAttachments.length,
+      languages,
+      averageComplexity: Math.round(avgComplexity),
+      thoughtsWithCode: new Set(codeAttachments.map(c => c.thought)).size
+    };
+  }
+
+  private analyzeDiagramAttachments(diagramAttachments: Array<{ thought: number; attachment: Attachment }>): any {
+    if (diagramAttachments.length === 0) return null;
+
+    const diagramTypes: Record<string, number> = {};
+    diagramAttachments.forEach(d => {
+      const type = d.attachment.metadata?.description || 'unknown';
+      diagramTypes[type] = (diagramTypes[type] || 0) + 1;
+    });
+
+    return {
+      totalDiagrams: diagramAttachments.length,
+      types: diagramTypes,
+      thoughtsWithDiagrams: new Set(diagramAttachments.map(d => d.thought)).size
+    };
+  }
+
+  private analyzeDataAttachments(dataAttachments: Array<{ thought: number; attachment: Attachment }>): any {
+    if (dataAttachments.length === 0) return null;
+
+    const formats: Record<string, number> = {};
+    dataAttachments.forEach(d => {
+      const format = d.attachment.metadata?.format || 'unknown';
+      formats[format] = (formats[format] || 0) + 1;
+    });
+
+    return {
+      totalDataSets: dataAttachments.length,
+      formats,
+      thoughtsWithData: new Set(dataAttachments.map(d => d.thought)).size
     };
   }
 
@@ -2338,6 +2846,7 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
         confidence: validatedInput.confidence,
         evidenceCount: validatedInput.evidence?.length || 0,
         assumptionsCount: validatedInput.assumptions?.length || 0,
+        attachmentCount: validatedInput.attachments?.length || 0,
         reasoningAnalysis: reasoningAnalysis,
         lowConfidenceThoughts: lowConfidenceThoughts.map(t => ({
           thoughtNumber: t.thoughtNumber,
@@ -2363,6 +2872,16 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
         responseData.assumptions = validatedInput.assumptions;
       }
 
+      if (validatedInput.attachments && validatedInput.attachments.length > 0) {
+        responseData.attachments = validatedInput.attachments.map(att => ({
+          id: att.id,
+          type: att.type,
+          name: att.name,
+          metadata: att.metadata,
+          contentPreview: this.generateContentPreview(att)
+        }));
+      }
+
       return {
         content: [{
           type: "text",
@@ -2381,6 +2900,1306 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
         isError: true
       };
     }
+  }
+
+  /**
+   * Attachment processing methods for multi-modal content
+   */
+  
+  public addAttachment(thoughtNumber: number, attachment: Omit<Attachment, 'id'>): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    try {
+      const thought = this.thoughtHistory.find(t => t.thoughtNumber === thoughtNumber);
+      if (!thought) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              error: `Thought ${thoughtNumber} not found`,
+              thoughtNumber
+            }, null, 2)
+          }],
+          isError: true
+        };
+      }
+
+      // Generate unique ID for the attachment
+      const attachmentId = `att_${thoughtNumber}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Process and validate the attachment
+      const processedAttachment = this.processAttachment(attachment, attachmentId);
+      
+      // Add to thought
+      if (!thought.attachments) {
+        thought.attachments = [];
+      }
+      thought.attachments.push(processedAttachment);
+
+      // Update confidence if attachment provides supporting evidence
+      if (this.isEvidentialAttachment(processedAttachment)) {
+        this.enhanceConfidenceWithAttachment(thought, processedAttachment);
+      }
+
+      const responseData = {
+        status: 'success',
+        thoughtNumber,
+        attachmentId: processedAttachment.id,
+        attachmentType: processedAttachment.type,
+        attachmentName: processedAttachment.name,
+        metadata: processedAttachment.metadata,
+        totalAttachments: thought.attachments.length,
+        confidenceImpact: this.isEvidentialAttachment(processedAttachment) ? 'positive' : 'none'
+      };
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(responseData, null, 2)
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+            status: 'failed',
+            thoughtNumber
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  public getAttachments(filters: {
+    thoughtNumber?: number;
+    type?: string;
+    language?: string;
+    searchContent?: string;
+  } = {}): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    try {
+      let attachments: Array<{ thought: number; attachment: Attachment }> = [];
+      
+      // Collect all attachments with their thought numbers
+      for (const thought of this.thoughtHistory) {
+        if (thought.attachments) {
+          for (const attachment of thought.attachments) {
+            attachments.push({ thought: thought.thoughtNumber, attachment });
+          }
+        }
+      }
+
+      // Apply filters
+      if (filters.thoughtNumber) {
+        attachments = attachments.filter(item => item.thought === filters.thoughtNumber);
+      }
+      
+      if (filters.type) {
+        attachments = attachments.filter(item => item.attachment.type === filters.type);
+      }
+      
+      if (filters.language) {
+        attachments = attachments.filter(item => 
+          item.attachment.metadata?.language?.toLowerCase().includes(filters.language!.toLowerCase())
+        );
+      }
+      
+      if (filters.searchContent) {
+        const searchTerm = filters.searchContent.toLowerCase();
+        attachments = attachments.filter(item =>
+          item.attachment.name.toLowerCase().includes(searchTerm) ||
+          (typeof item.attachment.content === 'string' && 
+           item.attachment.content.toLowerCase().includes(searchTerm)) ||
+          (item.attachment.metadata?.description?.toLowerCase().includes(searchTerm))
+        );
+      }
+
+      // Generate summary statistics
+      const typeDistribution = this.analyzeAttachmentTypes(attachments.map(item => item.attachment));
+      const languageDistribution = this.analyzeLanguageDistribution(attachments.map(item => item.attachment));
+
+      const responseData = {
+        totalAttachments: attachments.length,
+        filters,
+        typeDistribution,
+        languageDistribution,
+        attachments: attachments.map(item => ({
+          thoughtNumber: item.thought,
+          id: item.attachment.id,
+          type: item.attachment.type,
+          name: item.attachment.name,
+          metadata: item.attachment.metadata,
+          contentPreview: this.generateContentPreview(item.attachment),
+          thoughtReferences: item.attachment.thoughtReferences
+        }))
+      };
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(responseData, null, 2)
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+            status: 'failed'
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  public searchAttachments(
+    query: string,
+    options: {
+      types?: string[];
+      useRegex?: boolean;
+      includeContent?: boolean;
+      maxResults?: number;
+    } = {}
+  ): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    try {
+      let attachments: Array<{ thought: number; attachment: Attachment; relevanceScore: number }> = [];
+      
+      // Collect all attachments with their thought numbers
+      for (const thought of this.thoughtHistory) {
+        if (thought.attachments) {
+          for (const attachment of thought.attachments) {
+            attachments.push({ 
+              thought: thought.thoughtNumber, 
+              attachment,
+              relevanceScore: 0
+            });
+          }
+        }
+      }
+
+      // Apply type filtering
+      if (options.types && options.types.length > 0) {
+        attachments = attachments.filter(item => 
+          options.types!.includes(item.attachment.type)
+        );
+      }
+
+      // Search and score relevance
+      const searchFunction = options.useRegex 
+        ? this.searchWithRegex.bind(this, query)
+        : this.searchWithText.bind(this, query);
+
+      attachments = attachments.map(item => ({
+        ...item,
+        relevanceScore: searchFunction(item.attachment)
+      })).filter(item => item.relevanceScore > 0);
+
+      // Sort by relevance score
+      attachments.sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+      // Apply result limit
+      if (options.maxResults) {
+        attachments = attachments.slice(0, options.maxResults);
+      }
+
+      // Generate analysis
+      const analysis = this.analyzeSearchResults(attachments, query);
+
+      const responseData = {
+        query,
+        options,
+        totalResults: attachments.length,
+        analysis,
+        results: attachments.map(item => ({
+          thoughtNumber: item.thought,
+          relevanceScore: item.relevanceScore,
+          id: item.attachment.id,
+          type: item.attachment.type,
+          name: item.attachment.name,
+          metadata: item.attachment.metadata,
+          contentPreview: this.generateContentPreview(item.attachment),
+          fullContent: options.includeContent ? item.attachment.content : undefined,
+          thoughtReferences: item.attachment.thoughtReferences
+        }))
+      };
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(responseData, null, 2)
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+            status: 'failed',
+            query
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  /**
+   * Private helper methods for attachment processing
+   */
+  
+  private processAttachment(attachment: Omit<Attachment, 'id'>, id: string): Attachment {
+    const processed: Attachment = {
+      id,
+      type: attachment.type,
+      name: attachment.name,
+      content: attachment.content,
+      metadata: { ...attachment.metadata },
+      thoughtReferences: attachment.thoughtReferences
+    };
+
+    // Add creation timestamp
+    processed.metadata = processed.metadata || {};
+    processed.metadata.created = new Date().toISOString();
+
+    // Process based on type
+    switch (attachment.type) {
+      case 'code':
+        this.processCodeAttachment(processed);
+        break;
+      case 'image':
+        this.processImageAttachment(processed);
+        break;
+      case 'json':
+        this.processJsonAttachment(processed);
+        break;
+      case 'table':
+        this.processTableAttachment(processed);
+        break;
+      case 'diagram':
+        this.processDiagramAttachment(processed);
+        break;
+      case 'file':
+        this.processFileAttachment(processed);
+        break;
+      case 'url':
+        this.processUrlAttachment(processed);
+        break;
+      default:
+        this.processTextAttachment(processed);
+    }
+
+    return processed;
+  }
+
+  private processCodeAttachment(attachment: Attachment): void {
+    if (typeof attachment.content === 'string') {
+      const metadata = attachment.metadata!;
+      
+      // Detect language if not provided
+      if (!metadata.language) {
+        metadata.language = this.detectCodeLanguage(attachment.content);
+      }
+      
+      // Calculate metrics
+      metadata.lineCount = attachment.content.split('\n').length;
+      metadata.size = new Blob([attachment.content]).size;
+      metadata.complexity = this.calculateCodeComplexity(attachment.content);
+      metadata.format = 'text/plain';
+    }
+  }
+
+  private processImageAttachment(attachment: Attachment): void {
+    if (typeof attachment.content === 'string') {
+      const metadata = attachment.metadata!;
+      
+      // Detect if base64 encoded
+      if (attachment.content.startsWith('data:image/') || attachment.content.match(/^[A-Za-z0-9+/=]+$/)) {
+        metadata.encoding = 'base64';
+        metadata.size = Math.ceil(attachment.content.length * 0.75); // Rough base64 size estimate
+        
+        // Extract format from data URL if present
+        const dataUrlMatch = attachment.content.match(/^data:image\/([^;]+)/);
+        if (dataUrlMatch) {
+          metadata.format = dataUrlMatch[1];
+        }
+      } else {
+        // Assume file path or URL
+        const extension = attachment.content.split('.').pop()?.toLowerCase();
+        metadata.format = extension || 'unknown';
+      }
+    }
+  }
+
+  private processJsonAttachment(attachment: Attachment): void {
+    const metadata = attachment.metadata!;
+    
+    try {
+      let jsonObj: any;
+      
+      if (typeof attachment.content === 'string') {
+        jsonObj = JSON.parse(attachment.content);
+        attachment.content = jsonObj; // Store as parsed object
+      } else {
+        jsonObj = attachment.content;
+      }
+      
+      metadata.size = new Blob([JSON.stringify(jsonObj)]).size;
+      metadata.format = 'application/json';
+      metadata.schema = this.inferJsonSchema(jsonObj);
+      
+    } catch (error) {
+      metadata.format = 'invalid-json';
+      metadata.description = `JSON parsing error: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  private processTableAttachment(attachment: Attachment): void {
+    if (typeof attachment.content === 'string') {
+      const metadata = attachment.metadata!;
+      const lines = attachment.content.trim().split('\n');
+      
+      metadata.lineCount = lines.length;
+      metadata.size = new Blob([attachment.content]).size;
+      
+      // Detect delimiter
+      const firstLine = lines[0] || '';
+      if (firstLine.includes('\t')) {
+        metadata.format = 'tsv';
+      } else if (firstLine.includes(',')) {
+        metadata.format = 'csv';
+      } else {
+        metadata.format = 'table';
+      }
+    }
+  }
+
+  private processDiagramAttachment(attachment: Attachment): void {
+    if (typeof attachment.content === 'string') {
+      const metadata = attachment.metadata!;
+      
+      metadata.lineCount = attachment.content.split('\n').length;
+      metadata.size = new Blob([attachment.content]).size;
+      metadata.format = 'ascii';
+      
+      // Detect diagram type based on content
+      const content = attachment.content.toLowerCase();
+      if (content.includes('┌') || content.includes('└') || content.includes('├')) {
+        metadata.description = 'ASCII box diagram';
+      } else if (content.includes('->') || content.includes('=>')) {
+        metadata.description = 'ASCII flow diagram';
+      } else {
+        metadata.description = 'ASCII diagram';
+      }
+    }
+  }
+
+  private processFileAttachment(attachment: Attachment): void {
+    if (typeof attachment.content === 'string') {
+      const metadata = attachment.metadata!;
+      
+      // Assume content is file path or file reference
+      const parts = attachment.content.split('.');
+      const extension = parts.length > 1 ? parts.pop()!.toLowerCase() : '';
+      
+      metadata.format = extension;
+      metadata.size = 0; // Would need file system access to get actual size
+    }
+  }
+
+  private processUrlAttachment(attachment: Attachment): void {
+    if (typeof attachment.content === 'string') {
+      const metadata = attachment.metadata!;
+      
+      try {
+        const url = new URL(attachment.content);
+        metadata.format = url.protocol;
+        metadata.description = `${url.hostname} resource`;
+      } catch {
+        metadata.format = 'invalid-url';
+        metadata.description = 'Invalid URL format';
+      }
+    }
+  }
+
+  private processTextAttachment(attachment: Attachment): void {
+    if (typeof attachment.content === 'string') {
+      const metadata = attachment.metadata!;
+      
+      metadata.lineCount = attachment.content.split('\n').length;
+      metadata.size = new Blob([attachment.content]).size;
+      metadata.encoding = 'utf-8';
+      
+      if (attachment.type === 'markdown') {
+        metadata.format = 'text/markdown';
+      } else if (attachment.type === 'yaml') {
+        metadata.format = 'application/yaml';
+      } else if (attachment.type === 'xml') {
+        metadata.format = 'application/xml';
+      } else {
+        metadata.format = 'text/plain';
+      }
+    }
+  }
+
+  private detectCodeLanguage(code: string): string {
+    const languagePatterns = [
+      { lang: 'javascript', patterns: [/function\s+\w+/, /const\s+\w+\s*=/, /import\s+.*from/, /=>\s*{?/] },
+      { lang: 'typescript', patterns: [/interface\s+\w+/, /type\s+\w+\s*=/, /:\s*string/, /:\s*number/] },
+      { lang: 'python', patterns: [/def\s+\w+\(/, /import\s+\w+/, /from\s+\w+\s+import/, /if\s+__name__\s*==\s*['""]__main__['""]:/] },
+      { lang: 'java', patterns: [/public\s+class/, /public\s+static\s+void/, /System\.out\.println/] },
+      { lang: 'cpp', patterns: [/#include\s*</, /std::/, /cout\s*<</, /int\s+main\s*\(/] },
+      { lang: 'rust', patterns: [/fn\s+\w+/, /let\s+mut/, /use\s+std::/, /println!/] },
+      { lang: 'go', patterns: [/package\s+\w+/, /func\s+\w+/, /import\s*\(/, /fmt\./] },
+      { lang: 'sql', patterns: [/SELECT\s+.*FROM/i, /INSERT\s+INTO/i, /UPDATE\s+.*SET/i, /CREATE\s+TABLE/i] },
+      { lang: 'json', patterns: [/^\s*[{[]/, /"[\w-]+":\s*["{[]/, /},?\s*$/] },
+      { lang: 'yaml', patterns: [/^\s*[\w-]+:\s*/, /^---/, /^\s*-\s+/] }
+    ];
+
+    for (const { lang, patterns } of languagePatterns) {
+      const matchCount = patterns.filter((pattern: RegExp) => pattern.test(code)).length;
+      if (matchCount >= Math.ceil(patterns.length / 2)) {
+        return lang;
+      }
+    }
+
+    return 'text';
+  }
+
+  private calculateCodeComplexity(code: string): number {
+    // Simple complexity scoring based on various factors
+    let complexity = 0;
+    
+    // Control structures
+    const controlPatterns = [
+      /\bif\b/gi, /\belse\b/gi, /\bfor\b/gi, /\bwhile\b/gi, 
+      /\bswitch\b/gi, /\btry\b/gi, /\bcatch\b/gi
+    ];
+    
+    controlPatterns.forEach(pattern => {
+      const matches = code.match(pattern);
+      complexity += matches ? matches.length * 2 : 0;
+    });
+    
+    // Functions/methods
+    const functionPatterns = [/function\s+\w+/gi, /def\s+\w+/gi, /\w+\s*\(/gi];
+    functionPatterns.forEach(pattern => {
+      const matches = code.match(pattern);
+      complexity += matches ? matches.length : 0;
+    });
+    
+    // Nesting (approximated by indentation)
+    const lines = code.split('\n');
+    let maxIndent = 0;
+    lines.forEach(line => {
+      const indent = line.length - line.trimLeft().length;
+      maxIndent = Math.max(maxIndent, indent);
+    });
+    complexity += Math.floor(maxIndent / 2);
+    
+    return Math.min(complexity, 100); // Cap at 100
+  }
+
+  private inferJsonSchema(obj: any): string {
+    const getType = (value: any): string => {
+      if (value === null) return 'null';
+      if (Array.isArray(value)) return 'array';
+      return typeof value;
+    };
+
+    const buildSchema = (value: any): any => {
+      if (Array.isArray(value)) {
+        return {
+          type: 'array',
+          items: value.length > 0 ? buildSchema(value[0]) : { type: 'any' }
+        };
+      } else if (value !== null && typeof value === 'object') {
+        const properties: any = {};
+        Object.keys(value).forEach(key => {
+          properties[key] = buildSchema(value[key]);
+        });
+        return {
+          type: 'object',
+          properties
+        };
+      } else {
+        return { type: getType(value) };
+      }
+    };
+
+    return JSON.stringify(buildSchema(obj), null, 2);
+  }
+
+  private isEvidentialAttachment(attachment: Attachment): boolean {
+    // Attachments that provide supporting evidence
+    const evidentialTypes = ['code', 'diagram', 'json', 'table', 'image'];
+    return evidentialTypes.includes(attachment.type);
+  }
+
+  private enhanceConfidenceWithAttachment(thought: ThoughtData, attachment: Attachment): void {
+    // Boost confidence slightly if attachment provides evidence
+    if (thought.confidence !== undefined) {
+      const boost = 0.05; // 5% confidence boost
+      thought.confidence = Math.min(1.0, thought.confidence + boost);
+    }
+  }
+
+  private analyzeAttachmentTypes(attachments: Attachment[]): Record<string, number> {
+    const distribution: Record<string, number> = {};
+    attachments.forEach(att => {
+      distribution[att.type] = (distribution[att.type] || 0) + 1;
+    });
+    return distribution;
+  }
+
+  private analyzeLanguageDistribution(attachments: Attachment[]): Record<string, number> {
+    const distribution: Record<string, number> = {};
+    attachments
+      .filter(att => att.type === 'code' && att.metadata?.language)
+      .forEach(att => {
+        const lang = att.metadata!.language!;
+        distribution[lang] = (distribution[lang] || 0) + 1;
+      });
+    return distribution;
+  }
+
+  private generateContentPreview(attachment: Attachment): string {
+    const maxLength = 150;
+    
+    if (typeof attachment.content === 'string') {
+      if (attachment.content.length <= maxLength) {
+        return attachment.content;
+      }
+      return attachment.content.substring(0, maxLength) + '...';
+    } else {
+      const jsonStr = JSON.stringify(attachment.content, null, 2);
+      if (jsonStr.length <= maxLength) {
+        return jsonStr;
+      }
+      return jsonStr.substring(0, maxLength) + '...';
+    }
+  }
+
+  private searchWithText(query: string, attachment: Attachment): number {
+    const searchTerm = query.toLowerCase();
+    let score = 0;
+    
+    // Search in name (highest weight)
+    if (attachment.name.toLowerCase().includes(searchTerm)) {
+      score += 10;
+    }
+    
+    // Search in content
+    const content = typeof attachment.content === 'string' 
+      ? attachment.content 
+      : JSON.stringify(attachment.content);
+    
+    if (content.toLowerCase().includes(searchTerm)) {
+      score += 5;
+    }
+    
+    // Search in metadata
+    if (attachment.metadata?.description?.toLowerCase().includes(searchTerm)) {
+      score += 3;
+    }
+    
+    if (attachment.metadata?.language?.toLowerCase().includes(searchTerm)) {
+      score += 2;
+    }
+    
+    return score;
+  }
+
+  private searchWithRegex(query: string, attachment: Attachment): number {
+    try {
+      const regex = new RegExp(query, 'gi');
+      let score = 0;
+      
+      // Search in name
+      if (regex.test(attachment.name)) {
+        score += 10;
+      }
+      
+      // Search in content
+      const content = typeof attachment.content === 'string' 
+        ? attachment.content 
+        : JSON.stringify(attachment.content);
+      
+      const matches = content.match(regex);
+      if (matches) {
+        score += matches.length;
+      }
+      
+      return score;
+    } catch {
+      // Invalid regex, fall back to text search
+      return this.searchWithText(query, attachment);
+    }
+  }
+
+  private analyzeSearchResults(results: Array<{ attachment: Attachment; relevanceScore: number }>, query: string): any {
+    const typeDistribution = this.analyzeAttachmentTypes(results.map(r => r.attachment));
+    const avgRelevance = results.reduce((sum, r) => sum + r.relevanceScore, 0) / results.length;
+    
+    return {
+      query,
+      averageRelevance: avgRelevance,
+      typeDistribution,
+      highRelevanceCount: results.filter(r => r.relevanceScore >= 10).length
+    };
+  }
+
+  // Pattern learning methods
+  public extractPatterns(minConfidence: number = 0.7, requireCompletion: boolean = true): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    if (this.thoughtHistory.length === 0) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: "No thoughts available for pattern extraction",
+            suggestion: "Complete at least one reasoning session before extracting patterns"
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+
+    try {
+      // Analyze current session for extraction
+      const analysisResult = this.analyzeSessionForPatternExtraction(minConfidence, requireCompletion);
+      
+      if (!analysisResult.extractable) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              sessionAnalysis: analysisResult,
+              message: "Session does not meet criteria for pattern extraction",
+              requirements: {
+                minConfidence: minConfidence,
+                requireCompletion: requireCompletion,
+                minThoughts: 3
+              }
+            }, null, 2)
+          }]
+        };
+      }
+
+      // Extract pattern from session
+      const extractedPattern = this.createPatternFromSession(analysisResult);
+      
+      // Store pattern in library
+      this.patternLibrary.addPattern(extractedPattern);
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            extractedPattern: {
+              id: extractedPattern.id,
+              name: extractedPattern.name,
+              description: extractedPattern.description,
+              domain: extractedPattern.domain,
+              approach: extractedPattern.approach,
+              complexity: extractedPattern.problemContext.complexity,
+              thoughtSequence: extractedPattern.thoughtSequence,
+              successMetrics: extractedPattern.successMetrics
+            },
+            sessionAnalysis: analysisResult,
+            message: "Pattern successfully extracted and stored in library"
+          }, null, 2)
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: "Failed to extract pattern",
+            details: error instanceof Error ? error.message : String(error)
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  public getPatternRecommendations(context?: {
+    domains?: string[];
+    approach?: string;
+    keywords?: string[];
+    complexity?: 'low' | 'medium' | 'high';
+    problemType?: string[];
+  }): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    try {
+      // If no context provided, analyze current session
+      const searchContext = context || this.analyzeCurrentSessionContext();
+      
+      // Find matching patterns
+      const matches = this.patternLibrary.findSimilarPatterns(searchContext);
+      
+      if (matches.length === 0) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              context: searchContext,
+              matches: [],
+              message: "No matching patterns found. Try different search criteria or extract more patterns from successful sessions.",
+              suggestions: [
+                "Broaden search criteria by removing domain or complexity constraints",
+                "Use more general keywords",
+                "Complete successful reasoning sessions to build pattern library"
+              ]
+            }, null, 2)
+          }]
+        };
+      }
+
+      // Format recommendations
+      const recommendations = matches.slice(0, 5).map(match => ({
+        pattern: {
+          id: match.pattern.id,
+          name: match.pattern.name,
+          description: match.pattern.description,
+          approach: match.pattern.approach,
+          domain: match.pattern.domain,
+          complexity: match.pattern.problemContext.complexity,
+          successRate: Math.round(match.pattern.successMetrics.averageConfidence * match.pattern.successMetrics.completionRate * 100) / 100
+        },
+        matchConfidence: Math.round(match.confidence * 100) / 100,
+        applicabilityScore: Math.round(match.applicabilityScore * 100) / 100,
+        matchReasons: match.matchReasons,
+        adaptationSuggestions: match.adaptationSuggestions,
+        thoughtSequence: match.pattern.thoughtSequence.map(step => ({
+          stepType: step.stepType,
+          description: step.description,
+          expectedConfidence: step.expectedConfidence,
+          keyTags: step.keyTags
+        }))
+      }));
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            context: searchContext,
+            totalPatterns: matches.length,
+            topRecommendations: recommendations,
+            usageInstructions: {
+              howToApply: "Use the thought sequence as a template for your reasoning process",
+              adaptationGuidance: "Follow the adaptation suggestions for your specific context",
+              confidenceTargets: "Aim for the expected confidence levels at each step"
+            }
+          }, null, 2)
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: "Failed to get pattern recommendations",
+            details: error instanceof Error ? error.message : String(error)
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  public searchPatterns(query: {
+    text?: string;
+    domains?: string[];
+    approaches?: string[];
+    minConfidence?: number;
+    minUsage?: number;
+    complexity?: 'low' | 'medium' | 'high';
+  }): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    try {
+      const patterns = this.patternLibrary.searchPatterns(query);
+      
+      const results = patterns.map(pattern => ({
+        id: pattern.id,
+        name: pattern.name,
+        description: pattern.description,
+        domain: pattern.domain,
+        approach: pattern.approach,
+        complexity: pattern.problemContext.complexity,
+        successMetrics: {
+          averageConfidence: Math.round(pattern.successMetrics.averageConfidence * 100) / 100,
+          completionRate: Math.round(pattern.successMetrics.completionRate * 100) / 100,
+          usageCount: pattern.successMetrics.usageCount,
+          lastUsed: pattern.successMetrics.lastUsed
+        },
+        thoughtSequence: pattern.thoughtSequence.length,
+        created: pattern.created,
+        updated: pattern.updated
+      }));
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            query,
+            totalResults: results.length,
+            patterns: results,
+            summary: {
+              domains: [...new Set(patterns.flatMap(p => p.domain))].slice(0, 10),
+              approaches: [...new Set(patterns.map(p => p.approach))].slice(0, 10),
+              complexityDistribution: this.calculateComplexityDistribution(patterns),
+              avgSuccessRate: patterns.length > 0 ? Math.round(patterns.reduce((sum, p) => 
+                sum + (p.successMetrics.averageConfidence * p.successMetrics.completionRate), 0) / patterns.length * 100) / 100 : 0
+            }
+          }, null, 2)
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: "Failed to search patterns",
+            details: error instanceof Error ? error.message : String(error)
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  private analyzeSessionForPatternExtraction(minConfidence: number, requireCompletion: boolean): PatternExtractionContext & { extractable: boolean } {
+    const thoughtsWithConfidence = this.thoughtHistory.filter(t => t.confidence !== undefined);
+    const averageConfidence = thoughtsWithConfidence.length > 0 
+      ? thoughtsWithConfidence.reduce((sum, t) => sum + (t.confidence || 0), 0) / thoughtsWithConfidence.length 
+      : 0;
+
+    const sessionTags = new Set<string>();
+    this.thoughtHistory.forEach(t => t.tags?.forEach(tag => sessionTags.add(tag)));
+    
+    const domains = this.extractDomains([...sessionTags]);
+    const approaches = this.extractApproaches();
+    const successFactors = this.extractSuccessFactors();
+    const challenges = this.extractChallenges();
+    
+    const completionStatus = this.determineCompletionStatus();
+    
+    const extractable = this.thoughtHistory.length >= 3 && 
+      averageConfidence >= minConfidence &&
+      (!requireCompletion || completionStatus === 'complete') &&
+      domains.length > 0;
+
+    return {
+      sessionId: `session-${Date.now()}`,
+      totalThoughts: this.thoughtHistory.length,
+      averageConfidence,
+      completionStatus,
+      domains,
+      approaches,
+      successFactors,
+      challenges,
+      extractable
+    };
+  }
+
+  private createPatternFromSession(context: PatternExtractionContext): ReasoningPattern {
+    const patternId = `pattern-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const now = new Date().toISOString();
+    
+    // Analyze thought sequence to create pattern steps
+    const thoughtSequence = this.analyzeThoughtSequenceForPattern();
+    
+    // Determine problem complexity
+    const complexity = this.determineComplexity();
+    
+    // Extract keywords from thought content
+    const keywords = this.extractKeywords();
+    
+    // Create pattern name from primary domain and approach
+    const primaryDomain = context.domains[0] || 'general';
+    const primaryApproach = context.approaches[0] || 'systematic-analysis';
+    const patternName = `${primaryDomain}-${primaryApproach}-pattern`;
+
+    return {
+      id: patternId,
+      name: patternName,
+      description: `Extracted pattern for ${primaryDomain} problems using ${primaryApproach} approach`,
+      domain: context.domains,
+      approach: primaryApproach,
+      problemContext: {
+        complexity,
+        type: context.domains,
+        keywords,
+        characteristics: context.successFactors
+      },
+      successMetrics: {
+        averageConfidence: context.averageConfidence,
+        completionRate: context.completionStatus === 'complete' ? 1.0 : 0.5,
+        evidenceQuality: this.calculateEvidenceQuality(),
+        usageCount: 1,
+        lastUsed: now
+      },
+      thoughtSequence,
+      adaptationGuidance: this.generateAdaptationGuidance(context),
+      variations: [],
+      created: now,
+      updated: now
+    };
+  }
+
+  private analyzeCurrentSessionContext(): {
+    domains?: string[];
+    approach?: string;
+    keywords?: string[];
+    complexity?: 'low' | 'medium' | 'high';
+    problemType?: string[];
+  } {
+    if (this.thoughtHistory.length === 0) {
+      return {};
+    }
+
+    const allTags = new Set<string>();
+    this.thoughtHistory.forEach(t => t.tags?.forEach(tag => allTags.add(tag)));
+    
+    const domains = this.extractDomains([...allTags]);
+    const keywords = this.extractKeywords();
+    const complexity = this.determineComplexity();
+    const approaches = this.extractApproaches();
+
+    return {
+      domains,
+      approach: approaches[0],
+      keywords,
+      complexity,
+      problemType: domains
+    };
+  }
+
+  private extractDomains(tags: string[]): string[] {
+    const domainKeywords = {
+      'technical': ['code', 'programming', 'software', 'system', 'architecture', 'development', 'debugging'],
+      'research': ['analysis', 'investigation', 'study', 'research', 'data', 'hypothesis'],
+      'strategy': ['planning', 'strategy', 'decision', 'business', 'goals', 'objectives'],
+      'design': ['design', 'ui', 'ux', 'interface', 'user', 'experience'],
+      'problem-solving': ['problem', 'solution', 'troubleshooting', 'issue', 'fix'],
+      'evaluation': ['evaluation', 'assessment', 'review', 'comparison', 'criteria']
+    };
+
+    const domains = new Set<string>();
+    
+    // Check tags against domain keywords
+    tags.forEach(tag => {
+      const lowerTag = tag.toLowerCase();
+      Object.entries(domainKeywords).forEach(([domain, keywords]) => {
+        if (keywords.some(keyword => lowerTag.includes(keyword) || keyword.includes(lowerTag))) {
+          domains.add(domain);
+        }
+      });
+    });
+
+    // Also check thought content for domain indicators
+    const thoughtContent = this.thoughtHistory.map(t => t.thought.toLowerCase()).join(' ');
+    Object.entries(domainKeywords).forEach(([domain, keywords]) => {
+      const matchCount = keywords.reduce((count, keyword) => {
+        return count + (thoughtContent.split(keyword).length - 1);
+      }, 0);
+      if (matchCount >= 2) {
+        domains.add(domain);
+      }
+    });
+
+    return Array.from(domains);
+  }
+
+  private extractApproaches(): string[] {
+    const approachPatterns = {
+      'systematic-decomposition': ['break down', 'decompose', 'divide', 'step by step', 'systematic'],
+      'iterative-refinement': ['iterate', 'refine', 'improve', 'revise', 'iteration'],
+      'evidence-based': ['evidence', 'data', 'proof', 'validate', 'verify'],
+      'comparative-analysis': ['compare', 'contrast', 'versus', 'alternative', 'option'],
+      'risk-assessment': ['risk', 'threat', 'vulnerability', 'mitigation', 'safety'],
+      'creative-exploration': ['creative', 'brainstorm', 'innovative', 'explore', 'idea']
+    };
+
+    const thoughtContent = this.thoughtHistory.map(t => t.thought.toLowerCase()).join(' ');
+    const approaches: Array<{name: string, score: number}> = [];
+
+    Object.entries(approachPatterns).forEach(([approach, patterns]) => {
+      let score = 0;
+      patterns.forEach(pattern => {
+        const matches = thoughtContent.split(pattern).length - 1;
+        score += matches;
+      });
+      if (score > 0) {
+        approaches.push({name: approach, score});
+      }
+    });
+
+    return approaches.sort((a, b) => b.score - a.score).map(a => a.name);
+  }
+
+  private extractSuccessFactors(): string[] {
+    const factors = [];
+    
+    // High confidence thoughts indicate successful reasoning
+    const highConfidenceThoughts = this.thoughtHistory.filter(t => (t.confidence || 0) >= 0.8);
+    if (highConfidenceThoughts.length > 0) {
+      factors.push('high-confidence-reasoning');
+    }
+    
+    // Evidence usage indicates rigorous thinking
+    const evidenceCount = this.thoughtHistory.reduce((sum, t) => sum + (t.evidence?.length || 0), 0);
+    if (evidenceCount > 0) {
+      factors.push('evidence-backed-reasoning');
+    }
+    
+    // Reference patterns indicate connected thinking
+    const referenceCount = this.thoughtHistory.reduce((sum, t) => sum + (t.references?.length || 0), 0);
+    if (referenceCount > 0) {
+      factors.push('connected-reasoning');
+    }
+    
+    // Assumption tracking indicates careful thinking
+    const assumptionCount = this.thoughtHistory.reduce((sum, t) => sum + (t.assumptions?.length || 0), 0);
+    if (assumptionCount > 0) {
+      factors.push('assumption-awareness');
+    }
+
+    return factors;
+  }
+
+  private extractChallenges(): string[] {
+    const challenges = [];
+    
+    // Low confidence areas
+    const lowConfidenceThoughts = this.thoughtHistory.filter(t => (t.confidence || 1) < 0.5);
+    if (lowConfidenceThoughts.length > 0) {
+      challenges.push('uncertainty-management');
+    }
+    
+    // Revision patterns indicate difficulty
+    const revisions = this.thoughtHistory.filter(t => t.isRevision);
+    if (revisions.length > 0) {
+      challenges.push('iterative-refinement-needed');
+    }
+    
+    // Branching indicates complexity
+    const branches = Object.keys(this.branches);
+    if (branches.length > 0) {
+      challenges.push('complex-decision-space');
+    }
+
+    return challenges;
+  }
+
+  private determineCompletionStatus(): 'complete' | 'partial' | 'abandoned' {
+    if (this.thoughtHistory.length === 0) return 'abandoned';
+    
+    const lastThought = this.thoughtHistory[this.thoughtHistory.length - 1];
+    
+    // Check if explicitly marked as complete
+    if (!lastThought.nextThoughtNeeded && (lastThought.confidence || 0) >= 0.7) {
+      return 'complete';
+    }
+    
+    // Check for abandonment indicators
+    if (lastThought.nextThoughtNeeded && this.thoughtHistory.length < 3) {
+      return 'abandoned';
+    }
+    
+    return 'partial';
+  }
+
+  private analyzeThoughtSequenceForPattern(): PatternStep[] {
+    const steps: PatternStep[] = [];
+    
+    this.thoughtHistory.forEach((thought, index) => {
+      const stepType = this.determineStepType(thought, index);
+      const tags = thought.tags || [];
+      const confidence = thought.confidence || 0.5;
+      
+      const step: PatternStep = {
+        stepType,
+        description: this.extractStepDescription(thought, stepType),
+        expectedConfidence: confidence,
+        keyTags: tags,
+        evidenceRequirements: thought.evidence || [],
+        commonPitfalls: this.identifyCommonPitfalls(thought, stepType)
+      };
+      
+      steps.push(step);
+    });
+
+    return this.consolidatePatternSteps(steps);
+  }
+
+  private determineStepType(thought: ThoughtData, index: number): PatternStep['stepType'] {
+    const content = thought.thought.toLowerCase();
+    const tags = (thought.tags || []).map(t => t.toLowerCase());
+    
+    if (tags.includes('analysis') || content.includes('analyze') || content.includes('examine')) {
+      return 'analysis';
+    }
+    if (tags.includes('decomposition') || content.includes('break down') || content.includes('divide')) {
+      return 'decomposition';  
+    }
+    if (tags.includes('validation') || content.includes('validate') || content.includes('verify')) {
+      return 'validation';
+    }
+    if (tags.includes('synthesis') || content.includes('synthesize') || content.includes('combine')) {
+      return 'synthesis';
+    }
+    if (tags.includes('decision') || content.includes('decide') || content.includes('choose')) {
+      return 'decision';
+    }
+    
+    return 'exploration';
+  }
+
+  private extractStepDescription(thought: ThoughtData, stepType: PatternStep['stepType']): string {
+    const templates = {
+      'analysis': 'Analyze key components and relationships',
+      'decomposition': 'Break down complex problems into manageable parts',
+      'validation': 'Verify assumptions and validate approaches',
+      'synthesis': 'Combine insights to form comprehensive understanding',
+      'decision': 'Make informed decisions based on analysis',
+      'exploration': 'Explore possibilities and gather information'
+    };
+    
+    // Try to extract more specific description from thought content
+    const sentences = thought.thought.split(/[.!?]/).filter(s => s.length > 10);
+    if (sentences.length > 0) {
+      const firstSentence = sentences[0].trim();
+      if (firstSentence.length < 100) {
+        return firstSentence;
+      }
+    }
+    
+    return templates[stepType];
+  }
+
+  private identifyCommonPitfalls(thought: ThoughtData, stepType: PatternStep['stepType']): string[] {
+    const pitfalls: Record<PatternStep['stepType'], string[]> = {
+      'analysis': ['Surface-level analysis', 'Missing key relationships', 'Confirmation bias'],
+      'decomposition': ['Over-decomposition', 'Missing dependencies', 'Losing sight of whole'],
+      'validation': ['Insufficient evidence', 'Biased validation', 'Ignoring edge cases'],
+      'synthesis': ['Premature synthesis', 'Conflicting information ignored', 'Oversimplification'],
+      'decision': ['Analysis paralysis', 'Insufficient alternatives', 'Ignoring constraints'],
+      'exploration': ['Lack of direction', 'Information overload', 'Missing opportunities']
+    };
+    
+    return pitfalls[stepType] || [];
+  }
+
+  private consolidatePatternSteps(steps: PatternStep[]): PatternStep[] {
+    // Merge consecutive similar steps to avoid redundancy
+    const consolidated: PatternStep[] = [];
+    let currentStep: PatternStep | null = null;
+    
+    steps.forEach(step => {
+      if (!currentStep || currentStep.stepType !== step.stepType) {
+        if (currentStep) {
+          consolidated.push(currentStep);
+        }
+        currentStep = { ...step };
+      } else {
+        // Merge with current step
+        currentStep.expectedConfidence = (currentStep.expectedConfidence + step.expectedConfidence) / 2;
+        currentStep.keyTags = [...new Set([...currentStep.keyTags, ...step.keyTags])];
+        currentStep.evidenceRequirements = [...new Set([...currentStep.evidenceRequirements, ...step.evidenceRequirements])];
+        currentStep.commonPitfalls = [...new Set([...currentStep.commonPitfalls, ...step.commonPitfalls])];
+      }
+    });
+    
+    if (currentStep) {
+      consolidated.push(currentStep);
+    }
+    
+    return consolidated;
+  }
+
+  private determineComplexity(): 'low' | 'medium' | 'high' {
+    const thoughtCount = this.thoughtHistory.length;
+    const branchCount = Object.keys(this.branches).length;
+    const revisionCount = this.thoughtHistory.filter(t => t.isRevision).length;
+    const avgConfidence = this.thoughtHistory.filter(t => t.confidence !== undefined)
+      .reduce((sum, t) => sum + (t.confidence || 0), 0) / Math.max(1, this.thoughtHistory.length);
+    
+    let complexityScore = 0;
+    
+    if (thoughtCount > 10) complexityScore += 2;
+    else if (thoughtCount > 5) complexityScore += 1;
+    
+    if (branchCount > 2) complexityScore += 2;
+    else if (branchCount > 0) complexityScore += 1;
+    
+    if (revisionCount > 3) complexityScore += 2;
+    else if (revisionCount > 1) complexityScore += 1;
+    
+    if (avgConfidence < 0.6) complexityScore += 1;
+    
+    if (complexityScore >= 5) return 'high';
+    if (complexityScore >= 2) return 'medium';
+    return 'low';
+  }
+
+  private extractKeywords(): string[] {
+    const allText = this.thoughtHistory.map(t => t.thought).join(' ').toLowerCase();
+    const words = allText.match(/\b\w{4,}\b/g) || [];
+    
+    // Count word frequencies
+    const frequencies = new Map<string, number>();
+    words.forEach(word => {
+      frequencies.set(word, (frequencies.get(word) || 0) + 1);
+    });
+    
+    // Filter out common words and return most frequent
+    const commonWords = new Set(['this', 'that', 'with', 'have', 'will', 'from', 'they', 'been', 'their', 'said', 'each', 'which', 'what', 'were', 'when', 'where']);
+    
+    return Array.from(frequencies.entries())
+      .filter(([word, freq]) => freq > 1 && !commonWords.has(word))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([word]) => word);
+  }
+
+  private calculateEvidenceQuality(): number {
+    const thoughtsWithEvidence = this.thoughtHistory.filter(t => t.evidence && t.evidence.length > 0);
+    if (thoughtsWithEvidence.length === 0) return 0.3;
+    
+    const avgEvidencePerThought = thoughtsWithEvidence.reduce((sum, t) => sum + (t.evidence?.length || 0), 0) / thoughtsWithEvidence.length;
+    
+    // Normalize to 0-1 scale
+    return Math.min(avgEvidencePerThought / 3, 1);
+  }
+
+  private generateAdaptationGuidance(context: PatternExtractionContext): string {
+    const guidance = [];
+    
+    guidance.push(`This pattern works best for ${context.domains.join(', ')} problems`);
+    
+    if (context.successFactors.length > 0) {
+      guidance.push(`Key success factors: ${context.successFactors.join(', ')}`);
+    }
+    
+    if (context.challenges.length > 0) {
+      guidance.push(`Common challenges: ${context.challenges.join(', ')}`);
+    }
+    
+    guidance.push(`Adapt the confidence thresholds based on your specific context and risk tolerance`);
+    
+    return guidance.join('. ') + '.';
+  }
+
+  private calculateComplexityDistribution(patterns: ReasoningPattern[]): Record<string, number> {
+    const distribution = { low: 0, medium: 0, high: 0 };
+    patterns.forEach(p => {
+      distribution[p.problemContext.complexity]++;
+    });
+    return distribution;
   }
 }
 
@@ -2789,6 +4608,375 @@ The visualization helps you see patterns in your thinking that might not be obvi
   }
 };
 
+// New attachment-related tools
+const ADD_ATTACHMENT_TOOL: Tool = {
+  name: "add_attachment",
+  description: `Add multimedia attachments to existing thoughts to enrich reasoning with visual aids, code examples, diagrams, and structured data.
+
+**Supported Attachment Types:**
+- **code**: Programming code with syntax highlighting and complexity analysis
+- **diagram**: ASCII diagrams, flowcharts, system architecture, network topologies
+- **image**: Base64-encoded images with metadata extraction and validation
+- **json**: JSON data with schema validation and pretty formatting
+- **table**: Tabular data with CSV/TSV parsing and alignment
+- **file**: File references with content hashing and metadata
+- **url**: Web links and references with metadata
+- **text**: Plain text documents with formatting
+- **markdown**: Rich text with markdown formatting
+- **yaml**: YAML configuration with validation
+- **xml**: XML data with structure validation
+
+**Content Processing Features:**
+- Automatic syntax highlighting for 20+ programming languages
+- ASCII diagram generation and validation
+- Image format detection and metadata extraction
+- JSON schema validation and formatting
+- Table parsing with header detection and alignment
+- File size calculation and hash generation
+- URL validation and metadata extraction
+
+**Integration Benefits:**
+- Attachments enhance confidence scores when providing supporting evidence
+- Visual aids improve reasoning clarity and comprehension  
+- Code examples enable technical analysis and validation
+- Diagrams help visualize complex relationships and architectures
+- Structured data supports analytical reasoning
+
+**Example Usage:**
+Add a system architecture diagram to thought 3:
+{
+  "thoughtNumber": 3,
+  "attachment": {
+    "type": "diagram",
+    "name": "System Architecture",
+    "content": "┌─────────────┐    ┌──────────────┐\\n│   Client    │───▶│   Gateway    │\\n└─────────────┘    └──────────────┘"
+  }
+}`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      thoughtNumber: {
+        type: "number",
+        minimum: 1,
+        description: "The thought number to add the attachment to"
+      },
+      attachment: {
+        type: "object",
+        properties: {
+          type: {
+            type: "string",
+            enum: ["code", "diagram", "image", "json", "table", "file", "url", "text", "markdown", "yaml", "xml"],
+            description: "Type of attachment content"
+          },
+          name: {
+            type: "string",
+            description: "Human-readable name for the attachment"
+          },
+          content: {
+            description: "The attachment content (string or object depending on type)"
+          },
+          metadata: {
+            type: "object",
+            properties: {
+              language: { type: "string", description: "Programming language for code" },
+              format: { type: "string", description: "File format or diagram type" },
+              description: { type: "string", description: "Description of the attachment" },
+              encoding: { type: "string", description: "Content encoding (base64, utf-8, etc.)" },
+              schema: { type: "string", description: "JSON schema for validation" }
+            },
+            description: "Additional metadata for the attachment"
+          },
+          thoughtReferences: {
+            type: "array",
+            items: { type: "number", minimum: 1 },
+            description: "Other thought numbers this attachment relates to"
+          }
+        },
+        required: ["type", "name", "content"]
+      }
+    },
+    required: ["thoughtNumber", "attachment"]
+  }
+};
+
+const GET_ATTACHMENTS_TOOL: Tool = {
+  name: "get_attachments",
+  description: `Retrieve attachments by type, thought number, or search criteria.
+
+**Search Capabilities:**
+- Filter by attachment type (code, diagram, image, etc.)
+- Find attachments for specific thoughts
+- Search attachment content and metadata
+- Filter by programming language or format
+- Find cross-referenced attachments
+
+**Output Features:**
+- Detailed attachment metadata including size, format, creation time
+- Content preview for text-based attachments
+- Image metadata for visual content
+- Code complexity metrics for programming content
+- Cross-reference analysis showing related thoughts
+
+Use this tool to:
+- Review all attachments for a specific thought
+- Find code examples of a particular language
+- Locate diagrams and visual aids
+- Analyze attachment relationships across thoughts`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      thoughtNumber: {
+        type: "number",
+        minimum: 1,
+        description: "Get attachments for a specific thought number"
+      },
+      type: {
+        type: "string",
+        enum: ["code", "diagram", "image", "json", "table", "file", "url", "text", "markdown", "yaml", "xml"],
+        description: "Filter by attachment type"
+      },
+      language: {
+        type: "string",
+        description: "Filter code attachments by programming language"
+      },
+      searchContent: {
+        type: "string",
+        description: "Search within attachment content and metadata"
+      }
+    }
+  }
+};
+
+const SEARCH_ATTACHMENTS_TOOL: Tool = {
+  name: "search_attachments",
+  description: `Advanced search across all attachments with content analysis and relationship mapping.
+
+**Search Features:**
+- Full-text search across attachment content
+- Metadata field searching (names, descriptions, languages)
+- Regular expression support for pattern matching
+- Cross-reference analysis to find related attachments
+- Content type filtering and grouping
+
+**Analysis Capabilities:**
+- Code complexity analysis and language distribution
+- Diagram type classification and relationship mapping
+- Image format analysis and size distribution
+- JSON structure analysis and schema detection
+- Table structure analysis and data types
+
+**Results Include:**
+- Ranked search results with relevance scoring
+- Content previews and summaries
+- Related thought connections
+- Usage patterns and frequency analysis
+- Suggested improvements and optimizations`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "Search query for attachment content and metadata"
+      },
+      types: {
+        type: "array",
+        items: {
+          type: "string",
+          enum: ["code", "diagram", "image", "json", "table", "file", "url", "text", "markdown", "yaml", "xml"]
+        },
+        description: "Filter by specific attachment types"
+      },
+      useRegex: {
+        type: "boolean",
+        description: "Treat query as regular expression"
+      },
+      includeContent: {
+        type: "boolean",
+        description: "Include full attachment content in results"
+      },
+      maxResults: {
+        type: "number",
+        minimum: 1,
+        maximum: 100,
+        description: "Maximum number of results to return"
+      }
+    },
+    required: ["query"]
+  }
+};
+
+const EXTRACT_PATTERNS_TOOL: Tool = {
+  name: "extract_patterns",
+  description: `Extract and store reasoning patterns from current successful thinking session.
+
+**Pattern Extraction Process:**
+- Analyzes completed reasoning sessions for successful patterns
+- Captures problem-solving approaches and thought sequences
+- Identifies domain-specific reasoning strategies
+- Stores patterns with success metrics and adaptation guidance
+
+**Extraction Criteria:**
+- Minimum confidence threshold for pattern quality
+- Optional completion requirement for finished sessions
+- Minimum thought count for pattern viability
+- Domain identification and approach classification
+
+**Captured Elements:**
+- **Problem Context**: Domain, complexity, keywords, characteristics
+- **Approach Patterns**: Systematic decomposition, evidence-based reasoning, etc.
+- **Thought Sequence**: Step types, confidence targets, key insights
+- **Success Factors**: High confidence areas, evidence usage, connected reasoning
+- **Adaptation Guidance**: How to modify pattern for different contexts
+
+**Usage:**
+- Complete a successful reasoning session first
+- Extract patterns when confidence is high and session is complete
+- Patterns become available for future problem recommendations`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      minConfidence: {
+        type: "number",
+        minimum: 0,
+        maximum: 1,
+        default: 0.7,
+        description: "Minimum average confidence required for pattern extraction (0.0-1.0)"
+      },
+      requireCompletion: {
+        type: "boolean",
+        default: true,
+        description: "Whether to require session completion for pattern extraction"
+      }
+    }
+  }
+};
+
+const GET_PATTERN_RECOMMENDATIONS_TOOL: Tool = {
+  name: "get_pattern_recommendations",
+  description: `Get recommended reasoning patterns for current problem context or specified criteria.
+
+**Recommendation Process:**
+- Analyzes current session context (domains, approach, keywords, complexity)
+- Matches against pattern library using similarity scoring
+- Ranks patterns by relevance and historical success rates
+- Provides adaptation suggestions for your specific context
+
+**Pattern Matching Criteria:**
+- **Domain Overlap**: Shared problem domains (technical, research, strategy, etc.)
+- **Approach Similarity**: Similar reasoning methodologies
+- **Keyword Matching**: Related problem characteristics and terminology
+- **Complexity Alignment**: Problem difficulty and scope matching
+- **Success Metrics**: Historical effectiveness of patterns
+
+**Recommendation Output:**
+- Top 5 most relevant patterns with confidence scores
+- Thought sequence templates for each recommended pattern
+- Specific adaptation suggestions for your context
+- Expected confidence targets for each reasoning step
+- Success rates and usage statistics
+
+**Usage Instructions:**
+- Use recommended thought sequences as templates
+- Follow adaptation guidance for your specific problem
+- Aim for suggested confidence levels at each step
+- Modify approach based on your domain and constraints`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      domains: {
+        type: "array",
+        items: { type: "string" },
+        description: "Problem domains to search for (e.g., ['technical', 'research'])"
+      },
+      approach: {
+        type: "string",
+        description: "Preferred reasoning approach (e.g., 'systematic-decomposition', 'evidence-based')"
+      },
+      keywords: {
+        type: "array",
+        items: { type: "string" },
+        description: "Keywords describing the problem context"
+      },
+      complexity: {
+        type: "string",
+        enum: ["low", "medium", "high"],
+        description: "Problem complexity level"
+      },
+      problemType: {
+        type: "array",
+        items: { type: "string" },
+        description: "Specific problem types or categories"
+      }
+    }
+  }
+};
+
+const SEARCH_PATTERNS_TOOL: Tool = {
+  name: "search_patterns",
+  description: `Search the pattern library by text, domains, approaches, and success metrics.
+
+**Search Capabilities:**
+- **Text Search**: Pattern names, descriptions, approaches, and keywords
+- **Domain Filtering**: Find patterns for specific domains (technical, research, etc.)
+- **Approach Filtering**: Filter by reasoning methodology
+- **Success Filtering**: Minimum confidence and usage thresholds
+- **Complexity Filtering**: Pattern difficulty levels
+
+**Search Results Include:**
+- Pattern metadata (name, description, domain, approach, complexity)
+- Success metrics (confidence rates, completion rates, usage counts)
+- Creation and update timestamps
+- Thought sequence lengths and step types
+- Domain and approach distributions across results
+
+**Result Analysis:**
+- Domain distribution showing pattern coverage areas
+- Approach frequency showing common methodologies
+- Complexity breakdown showing difficulty levels
+- Average success rates across matching patterns
+
+**Use Cases:**
+- Find patterns for specific problem domains
+- Discover high-performing reasoning approaches
+- Analyze pattern library coverage and gaps
+- Research successful methodologies for complex problems`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      text: {
+        type: "string",
+        description: "Text search across pattern content (names, descriptions, approaches, keywords)"
+      },
+      domains: {
+        type: "array",
+        items: { type: "string" },
+        description: "Filter by specific domains"
+      },
+      approaches: {
+        type: "array",
+        items: { type: "string" },
+        description: "Filter by reasoning approaches"
+      },
+      minConfidence: {
+        type: "number",
+        minimum: 0,
+        maximum: 1,
+        description: "Minimum average confidence threshold"
+      },
+      minUsage: {
+        type: "number",
+        minimum: 0,
+        description: "Minimum usage count threshold"
+      },
+      complexity: {
+        type: "string",
+        enum: ["low", "medium", "high"],
+        description: "Filter by complexity level"
+      }
+    }
+  }
+};
+
 const server = new Server(
   {
     name: "sequential-thinking-server",
@@ -2806,7 +4994,7 @@ const thinkingServer = new SequentialThinkingServer();
 thinkingServer.setServer(server);
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [SEQUENTIAL_THINKING_TOOL, GET_THOUGHT_TOOL, SEARCH_THOUGHTS_TOOL, GET_RELATED_THOUGHTS_TOOL, SYNTHESIZE_THOUGHTS_TOOL, AUTO_THINK_TOOL, VISUALIZE_DECISION_TREE_TOOL],
+  tools: [SEQUENTIAL_THINKING_TOOL, GET_THOUGHT_TOOL, SEARCH_THOUGHTS_TOOL, GET_RELATED_THOUGHTS_TOOL, SYNTHESIZE_THOUGHTS_TOOL, AUTO_THINK_TOOL, VISUALIZE_DECISION_TREE_TOOL, ADD_ATTACHMENT_TOOL, GET_ATTACHMENTS_TOOL, SEARCH_ATTACHMENTS_TOOL, EXTRACT_PATTERNS_TOOL, GET_PATTERN_RECOMMENDATIONS_TOOL, SEARCH_PATTERNS_TOOL],
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -2967,6 +5155,84 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           isError: true
         };
       }
+    }
+
+    if (name === "add_attachment") {
+      const { thoughtNumber, attachment } = args as { 
+        thoughtNumber: number; 
+        attachment: Omit<Attachment, 'id'>
+      };
+      return thinkingServer.addAttachment(thoughtNumber, attachment);
+    }
+
+    if (name === "get_attachments") {
+      const filters = args as {
+        thoughtNumber?: number;
+        type?: string;
+        language?: string;
+        searchContent?: string;
+      };
+      return thinkingServer.getAttachments(filters);
+    }
+
+    if (name === "search_attachments") {
+      const { query, types, useRegex, includeContent, maxResults } = args as {
+        query: string;
+        types?: string[];
+        useRegex?: boolean;
+        includeContent?: boolean;
+        maxResults?: number;
+      };
+      return thinkingServer.searchAttachments(query, {
+        types,
+        useRegex,
+        includeContent,
+        maxResults
+      });
+    }
+
+    if (name === "extract_patterns") {
+      const { minConfidence, requireCompletion } = args as {
+        minConfidence?: number;
+        requireCompletion?: boolean;
+      };
+      return thinkingServer.extractPatterns(minConfidence, requireCompletion);
+    }
+
+    if (name === "get_pattern_recommendations") {
+      const { domains, approach, keywords, complexity, problemType } = args as {
+        domains?: string[];
+        approach?: string;
+        keywords?: string[];
+        complexity?: 'low' | 'medium' | 'high';
+        problemType?: string[];
+      };
+      return thinkingServer.getPatternRecommendations({
+        domains,
+        approach,
+        keywords,
+        complexity,
+        problemType
+      });
+    }
+
+    if (name === "search_patterns") {
+      const { text, domains, approaches, minConfidence, minUsage, complexity } = args as {
+        text?: string;
+        domains?: string[];
+        approaches?: string[];
+        minConfidence?: number;
+        minUsage?: number;
+        complexity?: 'low' | 'medium' | 'high';
+      };
+      return thinkingServer.searchPatterns({
+        text,
+        domains,
+        approaches,
+        minConfidence,
+        minUsage,
+        complexity
+      });
     }
 
     return {
