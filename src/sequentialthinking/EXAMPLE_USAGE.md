@@ -1,5 +1,7 @@
 # Example: Architectural Decision Analysis
 
+> **📖 For comprehensive real-world demonstrations, see [Demo Showcase](./demo-showcase.md)** which includes complete technical architecture decisions, creative writing sessions, complex problem solving with auto-thinking, decision tree visualizations, and pattern-guided workflows.
+
 This example demonstrates the decision tree visualization tool in action during a technical architecture decision process.
 
 ## Scenario: Database Selection for a New Application

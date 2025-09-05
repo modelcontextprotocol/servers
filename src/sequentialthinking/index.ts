@@ -54,6 +54,9 @@ interface ThoughtData {
   assumptions?: string[]; // Array of underlying assumptions this thought relies on
   // Multi-modal attachments
   attachments?: Attachment[]; // Array of multimedia attachments
+  // Session tracking
+  timestamp?: string;
+  sessionId?: string;
 }
 
 // Synthesis interfaces
@@ -353,7 +356,7 @@ class PatternLibrary {
       const pattern = this.patterns.get(id);
       if (pattern) {
         const match = this.calculatePatternMatch(pattern, context);
-        if (match.confidence > 0.1) { // Only include reasonable matches
+        if (match.confidence >= 0.15) { // Only include matches above minimum threshold
           matches.push(match);
         }
       }
@@ -374,23 +377,35 @@ class PatternLibrary {
     const matchReasons: string[] = [];
     const adaptationSuggestions: string[] = [];
     
-    // Domain matching (weight: 30%)
+    // Enhanced domain matching with semantic similarity (weight: 30%)
     if (context.domains && pattern.domain.length > 0) {
-      const domainOverlap = context.domains.filter(d => pattern.domain.includes(d)).length;
-      const domainScore = domainOverlap / Math.max(context.domains.length, pattern.domain.length);
+      const exactMatches = context.domains.filter(d => pattern.domain.includes(d)).length;
+      const semanticScore = this.calculateDomainSimilarity(context.domains, pattern.domain);
+      
+      // Prefer exact matches but allow some semantic similarity
+      const domainScore = exactMatches > 0 ? 
+        (exactMatches / Math.max(context.domains.length, pattern.domain.length)) :
+        Math.max(0, semanticScore - 0.3); // Require minimum semantic similarity
+        
       score += domainScore * 0.3;
-      if (domainOverlap > 0) {
-        matchReasons.push(`Shares ${domainOverlap} domain(s): ${context.domains.filter(d => pattern.domain.includes(d)).join(', ')}`);
+      if (exactMatches > 0) {
+        matchReasons.push(`Exact domain matches (${exactMatches}): ${context.domains.filter(d => pattern.domain.includes(d)).join(', ')}`);
+      } else if (semanticScore > 0.3) {
+        matchReasons.push(`Related domains (similarity: ${Math.round(semanticScore * 100)}%)`);
       }
     }
     maxScore += 0.3;
     
-    // Approach matching (weight: 25%)
+    // Enhanced approach matching with compatibility (weight: 25%)
     if (context.approach && pattern.approach) {
-      const approachScore = context.approach.toLowerCase() === pattern.approach.toLowerCase() ? 1 : 0;
-      score += approachScore * 0.25;
-      if (approachScore > 0) {
+      const approachCompatibility = this.calculateApproachCompatibility(context.approach, pattern.approach);
+      score += approachCompatibility * 0.25;
+      if (approachCompatibility === 1.0) {
         matchReasons.push(`Exact approach match: ${pattern.approach}`);
+      } else if (approachCompatibility > 0.5) {
+        matchReasons.push(`Compatible approach: ${pattern.approach} (${Math.round(approachCompatibility * 100)}% compatible)`);
+      } else if (approachCompatibility > 0) {
+        adaptationSuggestions.push(`Approach mismatch: ${context.approach} vs ${pattern.approach} - significant adaptation needed`);
       }
     }
     maxScore += 0.25;
@@ -422,8 +437,8 @@ class PatternLibrary {
     
     const confidence = maxScore > 0 ? score / maxScore : 0;
     
-    // Generate adaptation suggestions
-    if (confidence > 0.3) {
+    // Generate adaptation suggestions for acceptable matches ONLY
+    if (confidence >= 0.15) {
       if (context.complexity !== pattern.problemContext.complexity) {
         adaptationSuggestions.push(`Adjust for ${context.complexity} complexity (pattern is for ${pattern.problemContext.complexity})`);
       }
@@ -432,7 +447,9 @@ class PatternLibrary {
         adaptationSuggestions.push(`Consider variations: ${pattern.variations.map(v => v.name).join(', ')}`);
       }
       
-      adaptationSuggestions.push(pattern.adaptationGuidance);
+      if (pattern.adaptationGuidance) {
+        adaptationSuggestions.push(pattern.adaptationGuidance);
+      }
     }
     
     return {
@@ -442,6 +459,104 @@ class PatternLibrary {
       adaptationSuggestions: adaptationSuggestions.filter(s => s.length > 0),
       applicabilityScore: confidence * (pattern.successMetrics.usageCount > 0 ? Math.min(Math.log(pattern.successMetrics.usageCount + 1) / 5, 1) : 0.1)
     };
+  }
+
+  private calculateDomainSimilarity(contextDomains: string[], patternDomains: string[]): number {
+    // Define domain semantic relationships
+    const domainGroups = {
+      technical: ['technical', 'programming', 'software', 'system', 'architecture', 'development', 'debugging', 'code'],
+      analytical: ['research', 'analysis', 'investigation', 'study', 'data', 'hypothesis', 'evaluation', 'assessment'],
+      creative: ['creative', 'design', 'art', 'ui', 'ux', 'interface', 'user', 'experience', 'brainstorming'],
+      strategic: ['strategy', 'planning', 'business', 'goals', 'objectives', 'decision', 'management'],
+      problem_solving: ['problem-solving', 'troubleshooting', 'issue', 'fix', 'solution', 'debugging']
+    };
+    
+    // Get semantic groups for each domain set
+    const contextGroups = new Set<string>();
+    const patternGroups = new Set<string>();
+    
+    contextDomains.forEach(domain => {
+      Object.entries(domainGroups).forEach(([group, keywords]) => {
+        if (keywords.includes(domain.toLowerCase())) {
+          contextGroups.add(group);
+        }
+      });
+    });
+    
+    patternDomains.forEach(domain => {
+      Object.entries(domainGroups).forEach(([group, keywords]) => {
+        if (keywords.includes(domain.toLowerCase())) {
+          patternGroups.add(group);
+        }
+      });
+    });
+    
+    // Calculate overlap
+    const intersection = new Set([...contextGroups].filter(g => patternGroups.has(g)));
+    const union = new Set([...contextGroups, ...patternGroups]);
+    
+    // High penalty for cross-domain mismatches (e.g., technical vs creative)
+    const incompatiblePairs = [
+      ['technical', 'creative'],
+      ['technical', 'strategic'], 
+      ['creative', 'analytical']
+    ];
+    
+    const hasIncompatible = incompatiblePairs.some(([a, b]) => 
+      (contextGroups.has(a) && patternGroups.has(b)) || 
+      (contextGroups.has(b) && patternGroups.has(a))
+    );
+    
+    if (hasIncompatible && intersection.size === 0) {
+      return 0.1; // Very low similarity for incompatible domains
+    }
+    
+    return union.size > 0 ? intersection.size / union.size : 0;
+  }
+  
+  private calculateApproachCompatibility(contextApproach: string, patternApproach: string): number {
+    const approach1 = contextApproach.toLowerCase();
+    const approach2 = patternApproach.toLowerCase();
+    
+    // Exact match
+    if (approach1 === approach2) return 1.0;
+    
+    // Define approach compatibility matrix
+    const compatibilityMatrix: Record<string, Record<string, number>> = {
+      'systematic-decomposition': {
+        'evidence-based': 0.8,
+        'structured-analysis': 0.9,
+        'step-by-step': 0.7,
+        'creative-exploration': 0.3,
+        'intuitive': 0.2
+      },
+      'evidence-based': {
+        'systematic-decomposition': 0.8,
+        'analytical': 0.9,
+        'research-driven': 0.8,
+        'creative-exploration': 0.2,
+        'intuitive': 0.1
+      },
+      'creative-exploration': {
+        'brainstorming': 0.9,
+        'intuitive': 0.7,
+        'open-ended': 0.8,
+        'systematic-decomposition': 0.3,
+        'evidence-based': 0.2
+      },
+      'strategic-planning': {
+        'systematic-decomposition': 0.7,
+        'goal-oriented': 0.8,
+        'structured-analysis': 0.7,
+        'creative-exploration': 0.5
+      }
+    };
+    
+    const compatibility = compatibilityMatrix[approach1]?.[approach2] || 
+                         compatibilityMatrix[approach2]?.[approach1] ||
+                         0.4; // Default moderate compatibility for unknown approaches
+    
+    return compatibility;
   }
 
   private updateIndex(pattern: ReasoningPattern): void {
@@ -579,6 +694,8 @@ class SequentialThinkingServer {
   private disableThoughtLogging: boolean;
   private server: Server | null = null;
   private patternLibrary: PatternLibrary = new PatternLibrary();
+  private currentSessionId: string = `session-${Date.now()}`;
+  private sessionStartTime: Date = new Date();
 
   constructor() {
     this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
@@ -586,6 +703,48 @@ class SequentialThinkingServer {
 
   public setServer(server: Server) {
     this.server = server;
+  }
+  
+  // Session management methods
+  public resetSession(): { content: Array<{ type: string; text: string }> } {
+    const previousSessionId = this.currentSessionId;
+    const previousThoughtCount = this.thoughtHistory.length;
+    
+    this.currentSessionId = `session-${Date.now()}`;
+    this.sessionStartTime = new Date();
+    this.thoughtHistory = [];
+    this.branches = {};
+    
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          previousSession: {
+            id: previousSessionId,
+            thoughtCount: previousThoughtCount
+          },
+          newSession: {
+            id: this.currentSessionId,
+            startTime: this.sessionStartTime.toISOString()
+          },
+          message: "Session reset complete. Starting fresh with thought number 1."
+        }, null, 2)
+      }]
+    };
+  }
+  
+  public getCurrentSessionInfo(): { content: Array<{ type: string; text: string }> } {
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          sessionId: this.currentSessionId,
+          startTime: this.sessionStartTime.toISOString(),
+          thoughtCount: this.thoughtHistory.length,
+          duration: Date.now() - this.sessionStartTime.getTime()
+        }, null, 2)
+      }]
+    };
   }
 
   private validateThoughtData(input: unknown): ThoughtData {
@@ -2812,6 +2971,16 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
   public processThought(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
     try {
       const validatedInput = this.validateThoughtData(input);
+      
+      // Check if this might be a new session (thought number 1 after having thoughts)
+      if (validatedInput.thoughtNumber === 1 && this.thoughtHistory.length > 0) {
+        // Automatically reset session for new problems
+        this.resetSession();
+      }
+      
+      // Add session tracking
+      validatedInput.timestamp = new Date().toISOString();
+      validatedInput.sessionId = this.currentSessionId;
 
       if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
         validatedInput.totalThoughts = validatedInput.thoughtNumber;
@@ -3641,26 +3810,60 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
       // Find matching patterns
       const matches = this.patternLibrary.findSimilarPatterns(searchContext);
       
-      if (matches.length === 0) {
+      // Enhanced filtering: reject cross-domain patterns completely
+      const filteredMatches = matches.filter(match => {
+        // Check for severe domain mismatch (e.g., technical vs creative)
+        const contextDomains = searchContext.domains || [];
+        const patternDomains = match.pattern.domain || [];
+        
+        const incompatiblePairs = [
+          ['creative', 'technical'],
+          ['creative', 'analytical'], 
+          ['personal', 'technical'],
+          ['emotional', 'technical']
+        ];
+        
+        const hasIncompatibleDomain = incompatiblePairs.some(([a, b]) => 
+          (contextDomains.includes(a) && patternDomains.includes(b)) ||
+          (contextDomains.includes(b) && patternDomains.includes(a))
+        );
+        
+        // Reject if confidence too low OR incompatible domains
+        return match.confidence >= 0.15 && !hasIncompatibleDomain;
+      });
+
+      if (filteredMatches.length === 0) {
         return {
           content: [{
             type: "text",
             text: JSON.stringify({
               context: searchContext,
+              totalPatterns: matches.length,
               matches: [],
-              message: "No matching patterns found. Try different search criteria or extract more patterns from successful sessions.",
+              status: "no_suitable_patterns",
+              message: "No suitable patterns found that meet minimum quality thresholds.",
+              reasons: [
+                `Found ${matches.length} potential patterns, but all were rejected`,
+                "Patterns scored below 15% confidence threshold or had incompatible domains", 
+                "Cross-domain pattern recommendations are disabled for quality control"
+              ],
               suggestions: [
-                "Broaden search criteria by removing domain or complexity constraints",
-                "Use more general keywords",
-                "Complete successful reasoning sessions to build pattern library"
-              ]
+                "Start reasoning without a template - this appears to be a unique problem type",
+                "Focus on building evidence and structured analysis",
+                "Consider if this problem truly fits into existing reasoning patterns",
+                "Complete this session successfully to potentially create a new pattern"
+              ],
+              recommendation: "Proceed with original thinking rather than forcing incompatible patterns"
             }, null, 2)
           }]
         };
       }
 
+      // Use filtered matches for recommendations
+      const finalMatches = filteredMatches;
+
       // Format recommendations
-      const recommendations = matches.slice(0, 5).map(match => ({
+      const recommendations = finalMatches.slice(0, 5).map(match => ({
         pattern: {
           id: match.pattern.id,
           name: match.pattern.name,
@@ -3687,7 +3890,7 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
           type: "text",
           text: JSON.stringify({
             context: searchContext,
-            totalPatterns: matches.length,
+            totalPatterns: finalMatches.length,
             topRecommendations: recommendations,
             usageInstructions: {
               howToApply: "Use the thought sequence as a template for your reasoning process",
@@ -3772,29 +3975,32 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
   }
 
   private analyzeSessionForPatternExtraction(minConfidence: number, requireCompletion: boolean): PatternExtractionContext & { extractable: boolean } {
-    const thoughtsWithConfidence = this.thoughtHistory.filter(t => t.confidence !== undefined);
+    // Get current session thoughts only - detect session boundaries
+    const currentSessionThoughts = this.getCurrentSessionThoughts();
+    
+    const thoughtsWithConfidence = currentSessionThoughts.filter(t => t.confidence !== undefined);
     const averageConfidence = thoughtsWithConfidence.length > 0 
       ? thoughtsWithConfidence.reduce((sum, t) => sum + (t.confidence || 0), 0) / thoughtsWithConfidence.length 
       : 0;
 
     const sessionTags = new Set<string>();
-    this.thoughtHistory.forEach(t => t.tags?.forEach(tag => sessionTags.add(tag)));
+    currentSessionThoughts.forEach(t => t.tags?.forEach(tag => sessionTags.add(tag)));
     
     const domains = this.extractDomains([...sessionTags]);
-    const approaches = this.extractApproaches();
-    const successFactors = this.extractSuccessFactors();
-    const challenges = this.extractChallenges();
+    const approaches = this.extractApproachesFromThoughts(currentSessionThoughts);
+    const successFactors = this.extractSuccessFactorsFromThoughts(currentSessionThoughts);
+    const challenges = this.extractChallengesFromThoughts(currentSessionThoughts);
     
-    const completionStatus = this.determineCompletionStatus();
+    const completionStatus = this.determineCompletionStatusFromThoughts(currentSessionThoughts);
     
-    const extractable = this.thoughtHistory.length >= 3 && 
+    const extractable = currentSessionThoughts.length >= 3 && 
       averageConfidence >= minConfidence &&
       (!requireCompletion || completionStatus === 'complete') &&
       domains.length > 0;
 
     return {
       sessionId: `session-${Date.now()}`,
-      totalThoughts: this.thoughtHistory.length,
+      totalThoughts: currentSessionThoughts.length,
       averageConfidence,
       completionStatus,
       domains,
@@ -3850,6 +4056,79 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
     };
   }
 
+  private getCurrentSessionThoughts(): ThoughtData[] {
+    if (this.thoughtHistory.length === 0) return [];
+    
+    // Session boundary detection logic:
+    // 1. Find the most recent thought that starts a new reasoning chain (thought number 1)
+    // 2. Include all thoughts from that point forward
+    const reversedHistory = [...this.thoughtHistory].reverse();
+    const lastSessionStartIndex = reversedHistory.findIndex(thought => thought.thoughtNumber === 1);
+    
+    if (lastSessionStartIndex === -1) {
+      // No session boundary found, return all thoughts (fallback)
+      return this.thoughtHistory;
+    }
+    
+    // Return thoughts from the last session start to the end
+    const sessionStartIndex = this.thoughtHistory.length - 1 - lastSessionStartIndex;
+    return this.thoughtHistory.slice(sessionStartIndex);
+  }
+
+  private extractApproachesFromThoughts(thoughts: ThoughtData[]): string[] {
+    const approaches = new Set<string>();
+    
+    thoughts.forEach(thought => {
+      if (thought.tags?.includes('systematic') || thought.thought.includes('systematic')) {
+        approaches.add('systematic-decomposition');
+      }
+      if (thought.evidence && thought.evidence.length > 0) {
+        approaches.add('evidence-based');
+      }
+      if (thought.tags?.includes('creative')) {
+        approaches.add('creative-exploration');
+      }
+      if (thought.assumptions && thought.assumptions.length > 0) {
+        approaches.add('risk-assessment');
+      }
+    });
+    
+    return Array.from(approaches);
+  }
+
+  private extractSuccessFactorsFromThoughts(thoughts: ThoughtData[]): string[] {
+    const factors = new Set<string>();
+    const avgConfidence = thoughts.reduce((sum, t) => sum + (t.confidence || 0), 0) / thoughts.length;
+    
+    if (avgConfidence >= 0.8) factors.add('high-confidence-reasoning');
+    if (thoughts.some(t => t.evidence && t.evidence.length >= 2)) factors.add('evidence-backed-reasoning');
+    if (thoughts.some(t => t.references && t.references.length > 0)) factors.add('connected-reasoning');
+    if (thoughts.some(t => t.assumptions && t.assumptions.length > 0)) factors.add('assumption-awareness');
+    
+    return Array.from(factors);
+  }
+
+  private extractChallengesFromThoughts(thoughts: ThoughtData[]): string[] {
+    const challenges = new Set<string>();
+    
+    if (thoughts.some(t => (t.confidence || 0) < 0.5)) challenges.add('uncertainty-management');
+    if (thoughts.some(t => t.assumptions && t.assumptions.length >= 3)) challenges.add('assumption-complexity');
+    
+    return Array.from(challenges);
+  }
+
+  private determineCompletionStatusFromThoughts(thoughts: ThoughtData[]): 'complete' | 'partial' | 'abandoned' {
+    if (thoughts.length === 0) return 'abandoned';
+    
+    const lastThought = thoughts[thoughts.length - 1];
+    if (lastThought.nextThoughtNeeded === false) return 'complete';
+    
+    const avgConfidence = thoughts.reduce((sum, t) => sum + (t.confidence || 0), 0) / thoughts.length;
+    if (avgConfidence < 0.3) return 'abandoned';
+    
+    return 'partial';
+  }
+
   private analyzeCurrentSessionContext(): {
     domains?: string[];
     approach?: string;
@@ -3861,8 +4140,9 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
       return {};
     }
 
+    const currentSessionThoughts = this.getCurrentSessionThoughts();
     const allTags = new Set<string>();
-    this.thoughtHistory.forEach(t => t.tags?.forEach(tag => allTags.add(tag)));
+    currentSessionThoughts.forEach(t => t.tags?.forEach(tag => allTags.add(tag)));
     
     const domains = this.extractDomains([...allTags]);
     const keywords = this.extractKeywords();
@@ -3880,11 +4160,13 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
 
   private extractDomains(tags: string[]): string[] {
     const domainKeywords = {
-      'technical': ['code', 'programming', 'software', 'system', 'architecture', 'development', 'debugging'],
+      'technical': ['code', 'programming', 'software', 'system', 'architecture', 'development', 'debugging', 'algorithm', 'database', 'api'],
       'research': ['analysis', 'investigation', 'study', 'research', 'data', 'hypothesis'],
       'strategy': ['planning', 'strategy', 'decision', 'business', 'goals', 'objectives'],
       'design': ['design', 'ui', 'ux', 'interface', 'user', 'experience'],
-      'problem-solving': ['problem', 'solution', 'troubleshooting', 'issue', 'fix'],
+      'creative': ['creative', 'writing', 'artistic', 'poetry', 'storytelling', 'imagination', 'inspiration', 'art', 'literature', 'narrative', 'character', 'plot', 'theme'],
+      'personal': ['personal', 'emotional', 'feelings', 'relationships', 'therapy', 'self', 'growth', 'mindfulness'],
+      'problem-solving': ['troubleshooting', 'debugging-issues', 'systematic-problem-solving', 'root-cause', 'fix-implementation'],
       'evaluation': ['evaluation', 'assessment', 'review', 'comparison', 'criteria']
     };
 
@@ -3906,7 +4188,7 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
       const matchCount = keywords.reduce((count, keyword) => {
         return count + (thoughtContent.split(keyword).length - 1);
       }, 0);
-      if (matchCount >= 2) {
+      if (matchCount >= 4) {
         domains.add(domain);
       }
     });
@@ -3924,7 +4206,8 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
       'creative-exploration': ['creative', 'brainstorm', 'innovative', 'explore', 'idea']
     };
 
-    const thoughtContent = this.thoughtHistory.map(t => t.thought.toLowerCase()).join(' ');
+    const currentSessionThoughts = this.getCurrentSessionThoughts();
+    const thoughtContent = currentSessionThoughts.map(t => t.thought.toLowerCase()).join(' ');
     const approaches: Array<{name: string, score: number}> = [];
 
     Object.entries(approachPatterns).forEach(([approach, patterns]) => {
@@ -4015,8 +4298,9 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
 
   private analyzeThoughtSequenceForPattern(): PatternStep[] {
     const steps: PatternStep[] = [];
+    const currentSessionThoughts = this.getCurrentSessionThoughts();
     
-    this.thoughtHistory.forEach((thought, index) => {
+    currentSessionThoughts.forEach((thought, index) => {
       const stepType = this.determineStepType(thought, index);
       const tags = thought.tags || [];
       const confidence = thought.confidence || 0.5;
@@ -4122,11 +4406,12 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
   }
 
   private determineComplexity(): 'low' | 'medium' | 'high' {
-    const thoughtCount = this.thoughtHistory.length;
+    const currentSessionThoughts = this.getCurrentSessionThoughts();
+    const thoughtCount = currentSessionThoughts.length;
     const branchCount = Object.keys(this.branches).length;
-    const revisionCount = this.thoughtHistory.filter(t => t.isRevision).length;
-    const avgConfidence = this.thoughtHistory.filter(t => t.confidence !== undefined)
-      .reduce((sum, t) => sum + (t.confidence || 0), 0) / Math.max(1, this.thoughtHistory.length);
+    const revisionCount = currentSessionThoughts.filter(t => t.isRevision).length;
+    const avgConfidence = currentSessionThoughts.filter(t => t.confidence !== undefined)
+      .reduce((sum, t) => sum + (t.confidence || 0), 0) / Math.max(1, currentSessionThoughts.length);
     
     let complexityScore = 0;
     
@@ -4147,7 +4432,8 @@ Use tags like: analysis, problem-solving, planning, risk-assessment, decision, h
   }
 
   private extractKeywords(): string[] {
-    const allText = this.thoughtHistory.map(t => t.thought).join(' ').toLowerCase();
+    const currentSessionThoughts = this.getCurrentSessionThoughts();
+    const allText = currentSessionThoughts.map(t => t.thought).join(' ').toLowerCase();
     const words = allText.match(/\b\w{4,}\b/g) || [];
     
     // Count word frequencies
@@ -4990,11 +5276,63 @@ const server = new Server(
   }
 );
 
+const RESET_SESSION_TOOL: Tool = {
+  name: "reset_session",
+  description: `Reset the current thinking session to start fresh with a new problem.
+
+**Purpose:**
+- Clear all thoughts from current session
+- Start with thought number 1 for new problems  
+- Prevent contamination between different reasoning sessions
+- Maintain clean session boundaries for pattern learning
+
+**When to Use:**
+- Starting work on a completely different problem
+- When thoughts from previous problem are interfering
+- After completing one problem and moving to another
+- When pattern extraction is complete and ready for new work
+
+**What Gets Reset:**
+- All thought history cleared
+- Branch tracking reset
+- Session ID updated with timestamp
+- Attachment history cleared
+
+**What Persists:**
+- Pattern library (learned patterns remain available)
+- Tool configurations and settings`,
+  inputSchema: {
+    type: "object",
+    properties: {}
+  }
+};
+
+const GET_SESSION_INFO_TOOL: Tool = {
+  name: "get_session_info", 
+  description: `Get information about the current thinking session.
+
+**Session Information Includes:**
+- Current session ID and start time
+- Number of thoughts in current session
+- Session duration
+- Session isolation status
+
+**Use Cases:**
+- Check if you're in a clean session for new problems
+- Understand session boundaries for pattern extraction
+- Debug session management issues
+- Verify session reset worked correctly`,
+  inputSchema: {
+    type: "object",
+    properties: {}
+  }
+};
+
 const thinkingServer = new SequentialThinkingServer();
 thinkingServer.setServer(server);
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [SEQUENTIAL_THINKING_TOOL, GET_THOUGHT_TOOL, SEARCH_THOUGHTS_TOOL, GET_RELATED_THOUGHTS_TOOL, SYNTHESIZE_THOUGHTS_TOOL, AUTO_THINK_TOOL, VISUALIZE_DECISION_TREE_TOOL, ADD_ATTACHMENT_TOOL, GET_ATTACHMENTS_TOOL, SEARCH_ATTACHMENTS_TOOL, EXTRACT_PATTERNS_TOOL, GET_PATTERN_RECOMMENDATIONS_TOOL, SEARCH_PATTERNS_TOOL],
+  tools: [SEQUENTIAL_THINKING_TOOL, GET_THOUGHT_TOOL, SEARCH_THOUGHTS_TOOL, GET_RELATED_THOUGHTS_TOOL, SYNTHESIZE_THOUGHTS_TOOL, AUTO_THINK_TOOL, VISUALIZE_DECISION_TREE_TOOL, ADD_ATTACHMENT_TOOL, GET_ATTACHMENTS_TOOL, SEARCH_ATTACHMENTS_TOOL, EXTRACT_PATTERNS_TOOL, GET_PATTERN_RECOMMENDATIONS_TOOL, SEARCH_PATTERNS_TOOL, RESET_SESSION_TOOL, GET_SESSION_INFO_TOOL],
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -5233,6 +5571,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         minUsage,
         complexity
       });
+    }
+    if (name === "reset_session") {
+      return thinkingServer.resetSession();
+    }
+    if (name === "get_session_info") {
+      return thinkingServer.getCurrentSessionInfo();
     }
 
     return {

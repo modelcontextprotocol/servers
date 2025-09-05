@@ -165,6 +165,26 @@ Leverages Claude's reasoning capabilities through MCP sampling to:
 4. Continue until reaching a solution or max iterations
 5. Return complete thought chain with synthesis
 
+## 🎯 Comprehensive Demo Showcase
+
+For detailed real-world examples showcasing all features in action, see **[Demo Showcase](./demo-showcase.md)** which includes:
+
+### Featured Demos
+1. **[Technical Architecture Decision](./demo-showcase.md#demo-1-technical-architecture-decision-with-pattern-learning)** - Microservices design with pattern learning
+2. **[Creative Writing Support](./demo-showcase.md#demo-2-creative-writing-with-attachment-support)** - Story development with multi-modal attachments
+3. **[Complex Problem Solving](./demo-showcase.md#demo-3-complex-problem-solving-with-auto-thinking)** - Auto-thinking and comprehensive synthesis
+4. **[Decision Tree Visualization](./demo-showcase.md#demo-4-multi-step-analysis-with-decision-tree-visualization)** - Multi-branch strategic analysis
+5. **[Pattern-Guided Workflow](./demo-showcase.md#demo-5-pattern-guided-problem-solving-workflow)** - Complete pattern learning cycle
+
+### Demo Highlights
+- **Real-world Scenarios**: Technical architecture, creative writing, strategic planning, database optimization
+- **Complete Input/Output Examples**: Full JSON request/response documentation
+- **Advanced Features**: Decision trees, pattern learning, multi-modal attachments, autonomous thinking
+- **Performance Metrics**: Confidence tracking, evidence analysis, synthesis generation
+- **Learning System**: Pattern extraction and recommendation workflows
+
+Each demo includes complete code examples, visual outputs, and detailed analysis showing how the Enhanced Sequential Thinking MCP Server handles complex reasoning tasks across diverse domains.
+
 ## Configuration
 
 ### Usage with Claude Desktop
