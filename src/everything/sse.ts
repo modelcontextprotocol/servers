@@ -26,7 +26,7 @@ app.get("/sse", async (req, res) => {
     console.error("Client Connected: ", transport.sessionId);
 
     // Start notification intervals after client connects
-    startNotificationIntervals();
+    startNotificationIntervals(transport.sessionId);
 
     // Handle close of connection
     server.onclose = async () => {

@@ -48,6 +48,14 @@ class GitReset(BaseModel):
 class GitLog(BaseModel):
     repo_path: str
     max_count: int = 10
+    start_timestamp: Optional[str] = Field(
+        None,
+        description="Start timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')"
+    )
+    end_timestamp: Optional[str] = Field(
+        None,
+        description="End timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')"
+    )
 
 class GitCreateBranch(BaseModel):
     repo_path: str
@@ -82,6 +90,7 @@ class GitBranch(BaseModel):
         None,
         description="The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified",
     )
+
 
 class GitTools(str, Enum):
     STATUS = "git_status"
@@ -125,17 +134,41 @@ def git_reset(repo: git.Repo) -> str:
     repo.index.reset()
     return "All staged changes reset"
 
-def git_log(repo: git.Repo, max_count: int = 10) -> list[str]:
-    commits = list(repo.iter_commits(max_count=max_count))
-    log = []
-    for commit in commits:
-        log.append(
-            f"Commit: {commit.hexsha!r}\n"
-            f"Author: {commit.author!r}\n"
-            f"Date: {commit.authored_datetime}\n"
-            f"Message: {commit.message!r}\n"
-        )
-    return log
+def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] = None, end_timestamp: Optional[str] = None) -> list[str]:
+    if start_timestamp or end_timestamp:
+        # Use git log command with date filtering
+        args = []
+        if start_timestamp:
+            args.extend(['--since', start_timestamp])
+        if end_timestamp:
+            args.extend(['--until', end_timestamp])
+        args.extend(['--format=%H%n%an%n%ad%n%s%n'])
+        
+        log_output = repo.git.log(*args).split('\n')
+        
+        log = []
+        # Process commits in groups of 4 (hash, author, date, message)
+        for i in range(0, len(log_output), 4):
+            if i + 3 < len(log_output) and len(log) < max_count:
+                log.append(
+                    f"Commit: {log_output[i]}\n"
+                    f"Author: {log_output[i+1]}\n"
+                    f"Date: {log_output[i+2]}\n"
+                    f"Message: {log_output[i+3]}\n"
+                )
+        return log
+    else:
+        # Use existing logic for simple log without date filtering
+        commits = list(repo.iter_commits(max_count=max_count))
+        log = []
+        for commit in commits:
+            log.append(
+                f"Commit: {commit.hexsha!r}\n"
+                f"Author: {commit.author!r}\n"
+                f"Date: {commit.authored_datetime}\n"
+                f"Message: {commit.message!r}\n"
+            )
+        return log
 
 def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None = None) -> str:
     if base_branch:
@@ -202,6 +235,7 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
     branch_info = repo.git.branch(b_type, *contains_sha, *not_contains_sha)
 
     return branch_info
+
 
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
@@ -283,6 +317,7 @@ async def serve(repository: Path | None) -> None:
                 name=GitTools.BRANCH,
                 description="List Git branches",
                 inputSchema=GitBranch.model_json_schema(),
+
             )
         ]
 
@@ -380,13 +415,19 @@ async def serve(repository: Path | None) -> None:
                     text=result
                 )]
 
+            # Update the LOG case:
             case GitTools.LOG:
-                log = git_log(repo, arguments.get("max_count", 10))
+                log = git_log(
+                    repo, 
+                    arguments.get("max_count", 10),
+                    arguments.get("start_timestamp"),
+                    arguments.get("end_timestamp")
+                )
                 return [TextContent(
                     type="text",
                     text="Commit history:\n" + "\n".join(log)
                 )]
-
+            
             case GitTools.CREATE_BRANCH:
                 result = git_create_branch(
                     repo,
@@ -423,7 +464,7 @@ async def serve(repository: Path | None) -> None:
                     type="text",
                     text=result
                 )]
-
+            
             case _:
                 raise ValueError(f"Unknown tool: {name}")
 
