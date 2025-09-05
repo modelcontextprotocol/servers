@@ -57,6 +57,82 @@ interface ThoughtData {
   // Session tracking
   timestamp?: string;
   sessionId?: string;
+  // Interactive editing support
+  userId?: string; // User ID for collaborative environments
+  editHistory?: ThoughtEdit[]; // Complete edit history
+  originalContent?: string;
+  lastEditTimestamp?: string;
+}
+
+// Change tracking interfaces
+interface ThoughtEdit {
+  editId: string;
+  timestamp: string;
+  changeType: 'content' | 'confidence' | 'evidence' | 'assumptions' | 'tags' | 'attachments';
+  previousValue: any;
+  newValue: any;
+  reason?: string;
+  userId?: string;
+}
+
+// Collaborative thinking interfaces
+interface CollaborativeUser {
+  userId: string;
+  name: string;
+  role?: string;
+  permissions: UserPermissions;
+  joinedAt: string;
+  lastActive: string;
+}
+
+interface UserPermissions {
+  canCreateThoughts: boolean;
+  canEditOwnThoughts: boolean;
+  canEditAllThoughts: boolean;
+  canDeleteThoughts: boolean;
+  canManageUsers: boolean;
+  canExtractPatterns: boolean;
+  canViewEditHistory: boolean;
+}
+
+interface CollaborativeSession {
+  sessionId: string;
+  name: string;
+  description?: string;
+  createdBy: string;
+  createdAt: string;
+  isActive: boolean;
+  participants: CollaborativeUser[];
+  permissions: SessionPermissions;
+  thoughtCount: number;
+  lastActivity: string;
+}
+
+interface SessionPermissions {
+  isPublic: boolean;
+  allowGuestUsers: boolean;
+  requireApprovalForEdits: boolean;
+  allowAnonymousContributions: boolean;
+}
+
+interface ThoughtContribution {
+  thoughtNumber: number;
+  contributorId: string;
+  contributorName: string;
+  contributionType: 'created' | 'edited' | 'reviewed' | 'approved';
+  timestamp: string;
+  details?: string;
+}
+
+interface CollaborationActivity {
+  activityId: string;
+  sessionId: string;
+  userId: string;
+  userName: string;
+  activityType: 'join' | 'leave' | 'create_thought' | 'edit_thought' | 'add_attachment' | 'extract_pattern';
+  targetThoughtNumber?: number;
+  timestamp: string;
+  details?: string;
 }
 
 // Synthesis interfaces
@@ -696,6 +772,11 @@ class SequentialThinkingServer {
   private patternLibrary: PatternLibrary = new PatternLibrary();
   private currentSessionId: string = `session-${Date.now()}`;
   private sessionStartTime: Date = new Date();
+  // Collaborative features
+  private collaborativeSessions: Map<string, CollaborativeSession> = new Map();
+  private activeUsers: Map<string, CollaborativeUser> = new Map();
+  private activityLog: CollaborationActivity[] = [];
+  private currentCollaborativeSession: CollaborativeSession | null = null;
 
   constructor() {
     this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
@@ -745,6 +826,586 @@ class SequentialThinkingServer {
         }, null, 2)
       }]
     };
+  }
+
+  public editThought(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    try {
+      const data = input as Record<string, unknown>;
+      
+      if (!data.thoughtNumber || typeof data.thoughtNumber !== 'number') {
+        throw new Error('Invalid thoughtNumber: must be a number');
+      }
+      
+      const thoughtNumber = data.thoughtNumber as number;
+      const thoughtIndex = this.thoughtHistory.findIndex(t => t.thoughtNumber === thoughtNumber);
+      
+      if (thoughtIndex === -1) {
+        throw new Error(`Thought ${thoughtNumber} not found`);
+      }
+      
+      const existingThought = this.thoughtHistory[thoughtIndex];
+      const editId = `edit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const editTimestamp = new Date().toISOString();
+      const reason = data.reason as string || 'User edit';
+      const userId = data.userId as string || 'anonymous';
+      
+      // Initialize edit history if not present
+      if (!existingThought.editHistory) {
+        existingThought.editHistory = [];
+        existingThought.originalContent = existingThought.thought;
+      }
+      
+      const edits: ThoughtEdit[] = [];
+      
+      // Track changes to different fields
+      if (data.thought && typeof data.thought === 'string' && data.thought !== existingThought.thought) {
+        edits.push({
+          editId,
+          timestamp: editTimestamp,
+          changeType: 'content',
+          previousValue: existingThought.thought,
+          newValue: data.thought,
+          reason,
+          userId
+        });
+        existingThought.thought = data.thought as string;
+      }
+      
+      if (data.confidence !== undefined && typeof data.confidence === 'number' && data.confidence !== existingThought.confidence) {
+        edits.push({
+          editId,
+          timestamp: editTimestamp,
+          changeType: 'confidence',
+          previousValue: existingThought.confidence,
+          newValue: data.confidence,
+          reason,
+          userId
+        });
+        existingThought.confidence = data.confidence as number;
+      }
+      
+      if (data.evidence && Array.isArray(data.evidence)) {
+        const newEvidence = data.evidence as string[];
+        if (JSON.stringify(newEvidence) !== JSON.stringify(existingThought.evidence || [])) {
+          edits.push({
+            editId,
+            timestamp: editTimestamp,
+            changeType: 'evidence',
+            previousValue: existingThought.evidence || [],
+            newValue: newEvidence,
+            reason,
+            userId
+          });
+          existingThought.evidence = newEvidence;
+        }
+      }
+      
+      if (data.assumptions && Array.isArray(data.assumptions)) {
+        const newAssumptions = data.assumptions as string[];
+        if (JSON.stringify(newAssumptions) !== JSON.stringify(existingThought.assumptions || [])) {
+          edits.push({
+            editId,
+            timestamp: editTimestamp,
+            changeType: 'assumptions',
+            previousValue: existingThought.assumptions || [],
+            newValue: newAssumptions,
+            reason,
+            userId
+          });
+          existingThought.assumptions = newAssumptions;
+        }
+      }
+      
+      if (data.tags && Array.isArray(data.tags)) {
+        const newTags = data.tags as string[];
+        if (JSON.stringify(newTags) !== JSON.stringify(existingThought.tags || [])) {
+          edits.push({
+            editId,
+            timestamp: editTimestamp,
+            changeType: 'tags',
+            previousValue: existingThought.tags || [],
+            newValue: newTags,
+            reason,
+            userId
+          });
+          existingThought.tags = newTags;
+        }
+      }
+      
+      if (edits.length === 0) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              thoughtNumber,
+              status: "no_changes",
+              message: "No changes detected. Thought remains unchanged.",
+              currentThought: existingThought
+            }, null, 2)
+          }]
+        };
+      }
+      
+      // Add edits to history
+      existingThought.editHistory!.push(...edits);
+      existingThought.lastEditTimestamp = editTimestamp;
+      
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            thoughtNumber,
+            status: "edited",
+            message: `Thought ${thoughtNumber} successfully edited with ${edits.length} change(s)`,
+            editsApplied: edits.map(edit => ({
+              changeType: edit.changeType,
+              previousValue: edit.previousValue,
+              newValue: edit.newValue,
+              reason: edit.reason
+            })),
+            updatedThought: existingThought,
+            changesSummary: {
+              totalEdits: existingThought.editHistory!.length,
+              lastEditTimestamp: editTimestamp,
+              originalContent: existingThought.originalContent
+            }
+          }, null, 2)
+        }]
+      };
+      
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: `Failed to edit thought: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            details: "Please provide thoughtNumber and at least one field to edit (thought, confidence, evidence, assumptions, or tags)"
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  public getThoughtEditHistory(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    try {
+      const data = input as Record<string, unknown>;
+      
+      if (!data.thoughtNumber || typeof data.thoughtNumber !== 'number') {
+        throw new Error('Invalid thoughtNumber: must be a number');
+      }
+      
+      const thoughtNumber = data.thoughtNumber as number;
+      const thought = this.thoughtHistory.find(t => t.thoughtNumber === thoughtNumber);
+      
+      if (!thought) {
+        throw new Error(`Thought ${thoughtNumber} not found`);
+      }
+      
+      const editHistory = thought.editHistory || [];
+      
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            thoughtNumber,
+            hasEditHistory: editHistory.length > 0,
+            originalContent: thought.originalContent || thought.thought,
+            currentContent: thought.thought,
+            totalEdits: editHistory.length,
+            editHistory: editHistory.map(edit => ({
+              editId: edit.editId,
+              timestamp: edit.timestamp,
+              changeType: edit.changeType,
+              previousValue: edit.previousValue,
+              newValue: edit.newValue,
+              reason: edit.reason || 'No reason provided',
+              userId: edit.userId || 'anonymous'
+            })),
+            lastEditTimestamp: thought.lastEditTimestamp
+          }, null, 2)
+        }]
+      };
+      
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: `Failed to get edit history: ${error instanceof Error ? error.message : 'Unknown error'}`
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  // Collaborative Thinking Methods
+  public createCollaborativeSession(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    try {
+      const data = input as Record<string, unknown>;
+      
+      const sessionName = data.name as string || `Collaborative Session ${Date.now()}`;
+      const description = data.description as string || '';
+      const createdBy = data.createdBy as string || 'anonymous';
+      const isPublic = data.isPublic as boolean || false;
+      const allowGuestUsers = data.allowGuestUsers as boolean || true;
+      
+      const sessionId = `collab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const now = new Date().toISOString();
+      
+      // Create creator as first participant
+      const creator: CollaborativeUser = {
+        userId: createdBy,
+        name: data.creatorName as string || createdBy,
+        role: 'owner',
+        permissions: {
+          canCreateThoughts: true,
+          canEditOwnThoughts: true,
+          canEditAllThoughts: true,
+          canDeleteThoughts: true,
+          canManageUsers: true,
+          canExtractPatterns: true,
+          canViewEditHistory: true
+        },
+        joinedAt: now,
+        lastActive: now
+      };
+      
+      const session: CollaborativeSession = {
+        sessionId,
+        name: sessionName,
+        description,
+        createdBy,
+        createdAt: now,
+        isActive: true,
+        participants: [creator],
+        permissions: {
+          isPublic,
+          allowGuestUsers,
+          requireApprovalForEdits: data.requireApprovalForEdits as boolean || false,
+          allowAnonymousContributions: data.allowAnonymousContributions as boolean || true
+        },
+        thoughtCount: 0,
+        lastActivity: now
+      };
+      
+      this.collaborativeSessions.set(sessionId, session);
+      this.activeUsers.set(createdBy, creator);
+      this.currentCollaborativeSession = session;
+      
+      // Log activity
+      this.logCollaborationActivity({
+        activityId: `activity-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        sessionId,
+        userId: createdBy,
+        userName: creator.name,
+        activityType: 'join',
+        timestamp: now,
+        details: 'Created and joined collaborative session'
+      });
+      
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            sessionId,
+            status: "created",
+            message: `Collaborative session '${sessionName}' created successfully`,
+            session: {
+              sessionId,
+              name: sessionName,
+              description,
+              createdBy,
+              isActive: true,
+              participantCount: 1,
+              permissions: session.permissions
+            },
+            creator,
+            joinInstructions: {
+              sessionId,
+              message: "Share this sessionId with collaborators to invite them"
+            }
+          }, null, 2)
+        }]
+      };
+      
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: `Failed to create collaborative session: ${error instanceof Error ? error.message : 'Unknown error'}`
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  public joinCollaborativeSession(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    try {
+      const data = input as Record<string, unknown>;
+      
+      if (!data.sessionId || typeof data.sessionId !== 'string') {
+        throw new Error('Invalid sessionId: must be a string');
+      }
+      
+      if (!data.userId || typeof data.userId !== 'string') {
+        throw new Error('Invalid userId: must be a string');
+      }
+      
+      const sessionId = data.sessionId as string;
+      const userId = data.userId as string;
+      const userName = data.userName as string || userId;
+      const userRole = data.role as string || 'participant';
+      
+      const session = this.collaborativeSessions.get(sessionId);
+      if (!session) {
+        throw new Error(`Collaborative session ${sessionId} not found`);
+      }
+      
+      if (!session.isActive) {
+        throw new Error(`Collaborative session ${sessionId} is not active`);
+      }
+      
+      // Check if user already in session
+      const existingParticipant = session.participants.find(p => p.userId === userId);
+      if (existingParticipant) {
+        existingParticipant.lastActive = new Date().toISOString();
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              sessionId,
+              status: "already_joined",
+              message: `User ${userName} is already in session '${session.name}'`,
+              session: this.getSessionSummary(session),
+              userRole: existingParticipant.role
+            }, null, 2)
+          }]
+        };
+      }
+      
+      // Create new participant
+      const participant: CollaborativeUser = {
+        userId,
+        name: userName,
+        role: userRole,
+        permissions: this.getDefaultPermissions(userRole),
+        joinedAt: new Date().toISOString(),
+        lastActive: new Date().toISOString()
+      };
+      
+      session.participants.push(participant);
+      session.lastActivity = new Date().toISOString();
+      this.activeUsers.set(userId, participant);
+      
+      // Log activity
+      this.logCollaborationActivity({
+        activityId: `activity-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        sessionId,
+        userId,
+        userName,
+        activityType: 'join',
+        timestamp: new Date().toISOString(),
+        details: `Joined as ${userRole}`
+      });
+      
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            sessionId,
+            status: "joined",
+            message: `User ${userName} joined session '${session.name}' as ${userRole}`,
+            session: this.getSessionSummary(session),
+            participant,
+            collaborators: session.participants.map(p => ({
+              userId: p.userId,
+              name: p.name,
+              role: p.role,
+              joinedAt: p.joinedAt
+            }))
+          }, null, 2)
+        }]
+      };
+      
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: `Failed to join collaborative session: ${error instanceof Error ? error.message : 'Unknown error'}`
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  public getCollaborativeSessionStatus(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+    try {
+      const data = input as Record<string, unknown>;
+      
+      const sessionId = data.sessionId as string || this.currentCollaborativeSession?.sessionId;
+      if (!sessionId) {
+        throw new Error('No sessionId provided and no active collaborative session');
+      }
+      
+      const session = this.collaborativeSessions.get(sessionId);
+      if (!session) {
+        throw new Error(`Collaborative session ${sessionId} not found`);
+      }
+      
+      // Get recent activity
+      const recentActivity = this.activityLog
+        .filter(a => a.sessionId === sessionId)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 10);
+      
+      // Get thought contributions
+      const contributions: ThoughtContribution[] = [];
+      this.thoughtHistory.forEach((thought, index) => {
+        if (thought.timestamp && thought.sessionId === sessionId) {
+          contributions.push({
+            thoughtNumber: thought.thoughtNumber,
+            contributorId: thought.userId || 'anonymous',
+            contributorName: this.activeUsers.get(thought.userId || '')?.name || 'anonymous',
+            contributionType: 'created',
+            timestamp: thought.timestamp,
+            details: `Created thought: "${thought.thought.substring(0, 50)}..."`
+          });
+          
+          // Add edit contributions
+          if (thought.editHistory) {
+            thought.editHistory.forEach(edit => {
+              contributions.push({
+                thoughtNumber: thought.thoughtNumber,
+                contributorId: edit.userId || 'anonymous',
+                contributorName: this.activeUsers.get(edit.userId || '')?.name || 'anonymous',
+                contributionType: 'edited',
+                timestamp: edit.timestamp,
+                details: `${edit.changeType}: ${edit.reason || 'No reason provided'}`
+              });
+            });
+          }
+        }
+      });
+      
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            session: this.getSessionSummary(session),
+            participants: session.participants,
+            thoughtCount: this.thoughtHistory.filter(t => t.sessionId === sessionId).length,
+            recentActivity,
+            contributions: contributions.sort((a, b) => 
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            ).slice(0, 20),
+            statistics: {
+              totalParticipants: session.participants.length,
+              activeParticipants: session.participants.filter(p => {
+                const lastActive = new Date(p.lastActive).getTime();
+                const now = Date.now();
+                return (now - lastActive) < 3600000; // Active in last hour
+              }).length,
+              totalActivities: this.activityLog.filter(a => a.sessionId === sessionId).length,
+              sessionDuration: Date.now() - new Date(session.createdAt).getTime()
+            }
+          }, null, 2)
+        }]
+      };
+      
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            error: `Failed to get session status: ${error instanceof Error ? error.message : 'Unknown error'}`
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+  }
+
+  private getDefaultPermissions(role: string): UserPermissions {
+    switch (role.toLowerCase()) {
+      case 'owner':
+        return {
+          canCreateThoughts: true,
+          canEditOwnThoughts: true,
+          canEditAllThoughts: true,
+          canDeleteThoughts: true,
+          canManageUsers: true,
+          canExtractPatterns: true,
+          canViewEditHistory: true
+        };
+      case 'moderator':
+        return {
+          canCreateThoughts: true,
+          canEditOwnThoughts: true,
+          canEditAllThoughts: true,
+          canDeleteThoughts: false,
+          canManageUsers: true,
+          canExtractPatterns: true,
+          canViewEditHistory: true
+        };
+      case 'contributor':
+        return {
+          canCreateThoughts: true,
+          canEditOwnThoughts: true,
+          canEditAllThoughts: false,
+          canDeleteThoughts: false,
+          canManageUsers: false,
+          canExtractPatterns: true,
+          canViewEditHistory: true
+        };
+      case 'viewer':
+      case 'participant':
+      default:
+        return {
+          canCreateThoughts: true,
+          canEditOwnThoughts: true,
+          canEditAllThoughts: false,
+          canDeleteThoughts: false,
+          canManageUsers: false,
+          canExtractPatterns: false,
+          canViewEditHistory: false
+        };
+    }
+  }
+
+  private getSessionSummary(session: CollaborativeSession) {
+    return {
+      sessionId: session.sessionId,
+      name: session.name,
+      description: session.description,
+      createdBy: session.createdBy,
+      createdAt: session.createdAt,
+      isActive: session.isActive,
+      participantCount: session.participants.length,
+      thoughtCount: session.thoughtCount,
+      lastActivity: session.lastActivity,
+      permissions: session.permissions
+    };
+  }
+
+  private logCollaborationActivity(activity: CollaborationActivity): void {
+    this.activityLog.push(activity);
+    
+    // Keep only last 1000 activities to prevent memory issues
+    if (this.activityLog.length > 1000) {
+      this.activityLog = this.activityLog.slice(-1000);
+    }
+    
+    // Update session last activity
+    const session = this.collaborativeSessions.get(activity.sessionId);
+    if (session) {
+      session.lastActivity = activity.timestamp;
+    }
   }
 
   private validateThoughtData(input: unknown): ThoughtData {
@@ -5328,11 +5989,272 @@ const GET_SESSION_INFO_TOOL: Tool = {
   }
 };
 
+const EDIT_THOUGHT_TOOL: Tool = {
+  name: "edit_thought",
+  description: `Edit an existing thought with comprehensive change tracking.
+
+**Interactive Thought Editing Features:**
+- Modify thought content, confidence, evidence, assumptions, or tags
+- Complete change tracking with edit history and timestamps
+- Original content preservation for rollback capability
+- Multi-field editing support with granular change detection
+- User attribution and reason tracking for collaborative environments
+
+**Supported Edits:**
+- **Content**: Modify the main thought text
+- **Confidence**: Update confidence levels (0-1 scale)
+- **Evidence**: Add, remove, or modify supporting evidence
+- **Assumptions**: Update underlying assumptions
+- **Tags**: Change categorization and organization tags
+
+**Change Tracking:**
+- Automatic edit ID generation and timestamping
+- Previous/new value comparison for each field
+- Edit reason documentation for audit trails
+- User ID tracking for collaborative sessions
+- Complete edit history preservation
+
+**Use Cases:**
+- Refine thoughts as understanding develops
+- Correct errors without losing original content
+- Improve confidence scores based on new evidence
+- Update evidence and assumptions iteratively
+- Collaborative editing with attribution tracking
+- Quality improvement and content refinement`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      thoughtNumber: {
+        type: "number",
+        description: "The thought number to edit"
+      },
+      thought: {
+        type: "string",
+        description: "Updated thought content"
+      },
+      confidence: {
+        type: "number",
+        minimum: 0,
+        maximum: 1,
+        description: "Updated confidence level (0-1 scale)"
+      },
+      evidence: {
+        type: "array",
+        items: { type: "string" },
+        description: "Updated evidence array"
+      },
+      assumptions: {
+        type: "array", 
+        items: { type: "string" },
+        description: "Updated assumptions array"
+      },
+      tags: {
+        type: "array",
+        items: { type: "string" },
+        description: "Updated tags array"
+      },
+      reason: {
+        type: "string",
+        description: "Reason for the edit (optional, for audit trail)"
+      },
+      userId: {
+        type: "string",
+        description: "User ID making the edit (optional, for collaborative environments)"
+      }
+    },
+    required: ["thoughtNumber"]
+  }
+};
+
+const GET_THOUGHT_EDIT_HISTORY_TOOL: Tool = {
+  name: "get_thought_edit_history",
+  description: `Retrieve complete edit history for a thought with change tracking analysis.
+
+**Edit History Features:**
+- Complete chronological edit history with timestamps
+- Change type classification (content, confidence, evidence, etc.)
+- Previous/new value comparisons for each edit
+- Edit reason and user attribution tracking
+- Original content preservation and comparison
+
+**History Analysis:**
+- Total edit count and timeline
+- Change pattern analysis across different field types
+- User contribution tracking for collaborative sessions
+- Edit reason categorization and trends
+- Content evolution tracking from original to current
+
+**Use Cases:**
+- Review thought evolution and refinement process
+- Audit collaborative editing sessions
+- Understand reasoning development patterns
+- Rollback analysis and decision making
+- Quality assessment and improvement tracking
+- Collaborative workflow transparency`,
+  inputSchema: {
+    type: "object", 
+    properties: {
+      thoughtNumber: {
+        type: "number",
+        description: "The thought number to get edit history for"
+      }
+    },
+    required: ["thoughtNumber"]
+  }
+};
+
+const CREATE_COLLABORATIVE_SESSION_TOOL: Tool = {
+  name: "create_collaborative_session",
+  description: `Create a new collaborative thinking session for multi-user reasoning.
+
+**Collaborative Session Features:**
+- Multi-user real-time collaboration on shared reasoning problems
+- Role-based permissions and access control (owner, moderator, contributor, participant)
+- Activity logging and contribution tracking for all participants
+- Session management with join/leave functionality and user presence
+- Comprehensive audit trail of all collaborative activities
+
+**Session Configuration:**
+- **Public/Private Sessions**: Control visibility and access to collaborative sessions
+- **Guest User Support**: Allow anonymous or guest users to participate
+- **Edit Approval Workflow**: Optional approval process for collaborative edits
+- **Permission Management**: Fine-grained control over user capabilities
+
+**Use Cases:**
+- Team brainstorming and ideation sessions with structured thought development
+- Peer review and collaborative analysis of complex problems
+- Multi-stakeholder decision-making with transparent reasoning processes
+- Educational collaboration with student-teacher interaction tracking
+- Research collaboration with contribution attribution and peer validation`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: {
+        type: "string",
+        description: "Name of the collaborative session"
+      },
+      description: {
+        type: "string",
+        description: "Description of the session purpose and scope"
+      },
+      createdBy: {
+        type: "string", 
+        description: "User ID of the session creator"
+      },
+      creatorName: {
+        type: "string",
+        description: "Display name of the session creator"
+      },
+      isPublic: {
+        type: "boolean",
+        description: "Whether the session is publicly accessible"
+      },
+      allowGuestUsers: {
+        type: "boolean",
+        description: "Whether to allow guest/anonymous users"
+      },
+      requireApprovalForEdits: {
+        type: "boolean",
+        description: "Whether edits require approval from moderators"
+      },
+      allowAnonymousContributions: {
+        type: "boolean", 
+        description: "Whether to allow contributions from anonymous users"
+      }
+    },
+    required: ["name", "createdBy"]
+  }
+};
+
+const JOIN_COLLABORATIVE_SESSION_TOOL: Tool = {
+  name: "join_collaborative_session",
+  description: `Join an existing collaborative thinking session.
+
+**Joining Process:**
+- Connect to active collaborative sessions using session ID
+- Automatic role assignment based on session permissions
+- Real-time integration with ongoing collaborative reasoning
+- User presence tracking and activity status monitoring
+
+**Participation Features:**
+- Role-based access to session features and capabilities
+- Contribution tracking with user attribution for all activities
+- Real-time collaboration with other participants
+- Activity logging for accountability and session analysis
+
+**User Roles:**
+- **Owner**: Full control including session management and user permissions
+- **Moderator**: Can manage users, approve edits, and moderate discussions
+- **Contributor**: Can create and edit thoughts, participate fully in reasoning
+- **Participant**: Basic participation with limited editing capabilities`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      sessionId: {
+        type: "string",
+        description: "ID of the collaborative session to join"
+      },
+      userId: {
+        type: "string",
+        description: "Unique user ID for the participant"
+      },
+      userName: {
+        type: "string", 
+        description: "Display name for the participant"
+      },
+      role: {
+        type: "string",
+        enum: ["owner", "moderator", "contributor", "participant"],
+        description: "Role for the participant in the session"
+      }
+    },
+    required: ["sessionId", "userId"]
+  }
+};
+
+const GET_COLLABORATIVE_SESSION_STATUS_TOOL: Tool = {
+  name: "get_collaborative_session_status",
+  description: `Get comprehensive status and analytics for a collaborative thinking session.
+
+**Status Information:**
+- Session metadata including creation details and activity timeline
+- Complete participant list with roles, join times, and last activity
+- Thought contribution tracking with attribution to specific participants
+- Recent activity log showing all collaborative interactions and changes
+
+**Analytics & Insights:**
+- Participation statistics including active vs total participants
+- Contribution analysis showing thought creation and editing patterns
+- Session duration and activity timeline for collaboration assessment
+- User engagement metrics and interaction frequency analysis
+
+**Activity Tracking:**
+- Real-time activity feed with participant actions and timestamps
+- Thought creation, editing, and attachment activities with full attribution
+- Pattern extraction and synthesis activities with collaborative context
+- Join/leave events and session management activities
+
+**Use Cases:**
+- Monitor collaborative session health and participant engagement
+- Analyze contribution patterns for team collaboration assessment
+- Review session history for accountability and decision audit trails
+- Track collaborative reasoning development and pattern emergence`,
+  inputSchema: {
+    type: "object",
+    properties: {
+      sessionId: {
+        type: "string",
+        description: "ID of the collaborative session (optional, uses current session if not provided)"
+      }
+    }
+  }
+};
+
 const thinkingServer = new SequentialThinkingServer();
 thinkingServer.setServer(server);
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [SEQUENTIAL_THINKING_TOOL, GET_THOUGHT_TOOL, SEARCH_THOUGHTS_TOOL, GET_RELATED_THOUGHTS_TOOL, SYNTHESIZE_THOUGHTS_TOOL, AUTO_THINK_TOOL, VISUALIZE_DECISION_TREE_TOOL, ADD_ATTACHMENT_TOOL, GET_ATTACHMENTS_TOOL, SEARCH_ATTACHMENTS_TOOL, EXTRACT_PATTERNS_TOOL, GET_PATTERN_RECOMMENDATIONS_TOOL, SEARCH_PATTERNS_TOOL, RESET_SESSION_TOOL, GET_SESSION_INFO_TOOL],
+  tools: [SEQUENTIAL_THINKING_TOOL, GET_THOUGHT_TOOL, SEARCH_THOUGHTS_TOOL, GET_RELATED_THOUGHTS_TOOL, SYNTHESIZE_THOUGHTS_TOOL, AUTO_THINK_TOOL, VISUALIZE_DECISION_TREE_TOOL, ADD_ATTACHMENT_TOOL, GET_ATTACHMENTS_TOOL, SEARCH_ATTACHMENTS_TOOL, EXTRACT_PATTERNS_TOOL, GET_PATTERN_RECOMMENDATIONS_TOOL, SEARCH_PATTERNS_TOOL, RESET_SESSION_TOOL, GET_SESSION_INFO_TOOL, EDIT_THOUGHT_TOOL, GET_THOUGHT_EDIT_HISTORY_TOOL, CREATE_COLLABORATIVE_SESSION_TOOL, JOIN_COLLABORATIVE_SESSION_TOOL, GET_COLLABORATIVE_SESSION_STATUS_TOOL],
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -5577,6 +6499,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
     if (name === "get_session_info") {
       return thinkingServer.getCurrentSessionInfo();
+    }
+    if (name === "edit_thought") {
+      return thinkingServer.editThought(args);
+    }
+    if (name === "get_thought_edit_history") {
+      return thinkingServer.getThoughtEditHistory(args);
+    }
+
+    if (name === "create_collaborative_session") {
+      return thinkingServer.createCollaborativeSession(args);
+    }
+
+    if (name === "join_collaborative_session") {
+      return thinkingServer.joinCollaborativeSession(args);
+    }
+
+    if (name === "get_collaborative_session_status") {
+      return thinkingServer.getCollaborativeSessionStatus(args);
     }
 
     return {

@@ -91,6 +91,38 @@ Leverages Claude's reasoning capabilities through MCP sampling to:
 - At least one manual thought must exist first
 - MCP client must support sampling functionality
 
+### 7. `edit_thought` ✨ NEW
+**Interactive thought editing with comprehensive change tracking.**
+
+Modify existing thoughts while preserving complete edit history:
+- **Multi-field Editing**: Update content, confidence, evidence, assumptions, or tags
+- **Change Tracking**: Automatic edit history with timestamps and attribution
+- **Original Preservation**: Keep original content for rollback capability
+- **Audit Trail**: Edit reasons and user ID tracking for collaborative environments
+- **Granular Detection**: Precise tracking of what changed and when
+
+**Inputs:**
+- `thoughtNumber` (integer, required): Thought number to edit
+- `thought` (string, optional): Updated thought content
+- `confidence` (number, 0-1, optional): Updated confidence level
+- `evidence` (array, optional): Updated evidence list
+- `assumptions` (array, optional): Updated assumptions list
+- `tags` (array, optional): Updated tags list
+- `reason` (string, optional): Edit reason for audit trail
+- `userId` (string, optional): User ID for collaborative tracking
+
+### 8. `get_thought_edit_history` ✨ NEW
+**Retrieve complete edit history for any thought.**
+
+View the full evolution of thoughts with detailed change tracking:
+- **Complete History**: All edits with timestamps and change types
+- **Change Analysis**: Before/after comparisons for each modification
+- **User Attribution**: Track who made which changes when
+- **Original Comparison**: See difference from original to current content
+
+**Inputs:**
+- `thoughtNumber` (integer, required): Thought number to get history for
+
 ## 🚀 Usage Scenarios
 
 ### Enhanced Problem-Solving
@@ -164,6 +196,60 @@ Leverages Claude's reasoning capabilities through MCP sampling to:
 3. Auto-enhance with confidence scores and evidence
 4. Continue until reaching a solution or max iterations
 5. Return complete thought chain with synthesis
+
+### Interactive Thought Editing ✨ NEW
+```json
+// Create initial thought
+{
+  "thought": "Initial analysis suggests API-first approach",
+  "thoughtNumber": 1,
+  "totalThoughts": 3,
+  "nextThoughtNeeded": true,
+  "tags": ["architecture", "draft"],
+  "confidence": 0.6,
+  "evidence": ["Team has API expertise"]
+}
+
+// Edit the thought with improvements
+{
+  "thoughtNumber": 1,
+  "thought": "REFINED: Comprehensive analysis strongly supports API-first approach with GraphQL",
+  "confidence": 0.85,
+  "evidence": ["Team has API expertise", "GraphQL reduces API calls by 60%", "Industry adoption growing 40% annually"],
+  "tags": ["architecture", "graphql", "validated"],
+  "reason": "Added GraphQL specifics and supporting evidence from research"
+}
+
+// View complete edit history
+{
+  "thoughtNumber": 1
+}
+```
+
+**Edit Response:**
+```json
+{
+  "thoughtNumber": 1,
+  "status": "edited",
+  "message": "Thought 1 successfully edited with 4 change(s)",
+  "editsApplied": [
+    {
+      "changeType": "content",
+      "previousValue": "Initial analysis suggests API-first approach",
+      "newValue": "REFINED: Comprehensive analysis strongly supports API-first approach with GraphQL"
+    },
+    {
+      "changeType": "confidence", 
+      "previousValue": 0.6,
+      "newValue": 0.85
+    }
+  ],
+  "changesSummary": {
+    "totalEdits": 4,
+    "originalContent": "Initial analysis suggests API-first approach"
+  }
+}
+```
 
 ## 🎯 Comprehensive Demo Showcase
 
