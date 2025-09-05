@@ -1,0 +1,27 @@
+{
+  "id": "uxboost",
+  "name": "UXBoost",
+  "description": "MCP server for UXBoost analyses and agent sessions",
+  "image": "prsm323/uxboost-mcp:latest",
+  "docs": "https://api.uxboost.ai/api-docs",
+  "icon": "https://raw.githubusercontent.com/edwinkullu51/mcp-server/main/icon.svg",
+  "env": {
+    "API_BASE_URL": {
+      "default": "https://api.uxboost.ai",
+      "description": "API base URL"
+    }
+  },
+  "tools": [
+    "perform_static_analysis",
+    "perform_dynamic_analysis",
+    "create_agent_session",
+    "get_session_data",
+    "list_sessions",
+    "compare_sessions",
+    "get_analysis_report",
+    "export_session_data"
+  ],
+  "tags": ["web", "ux", "analysis", "crawler"]
+}
+
+
