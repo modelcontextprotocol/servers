@@ -642,6 +642,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Discord](https://github.com/SaseQ/discord-mcp)** - An MCP server, which connects to Discord through a bot, and provides comprehensive integration with Discord.
 - **[Discord](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/discord)** - For Discord API integration by Klavis AI
 - **[Discourse](https://github.com/AshDevFr/discourse-mcp-server)** - An MCP server to search Discourse posts on a Discourse forum.
+- **[DocBase](https://help.docbase.io/posts/3925317)** - Official MCP server for DocBase API integration, enabling post management, user collaboration, group administration, and more.
 - **[Docker](https://github.com/ckreiling/mcp-server-docker)** - Integrate with Docker to manage containers, images, volumes, and networks.
 - **[Docker](https://github.com/0xshariq/docker-mcp-server)** - Docker MCP Server provides advanced, unified Docker management via CLI and MCP workflows, supporting containers, images, volumes, networks, and orchestration.
 - **[Docs](https://github.com/da1z/docsmcp)** - Enable documentation access for the AI agent, supporting llms.txt and other remote or local files.
