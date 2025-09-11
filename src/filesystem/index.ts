@@ -39,6 +39,7 @@ if (args.length === 0) {
   console.error("  1. Command-line arguments (shown above)");
   console.error("  2. MCP roots protocol (if client supports it)");
   console.error("At least one directory must be provided by EITHER method for the server to operate.");
+  console.error("Note: Directories will be validated at startup but operations will be retried at runtime.");
 }
 
 // Store allowed directories in normalized and resolved form
@@ -59,22 +60,33 @@ let allowedDirectories = await Promise.all(
   })
 );
 
-// Validate that all directories exist and are accessible
-await Promise.all(allowedDirectories.map(async (dir) => {
-  try {
-    const stats = await fs.stat(dir);
-    if (!stats.isDirectory()) {
-      console.error(`Error: ${dir} is not a directory`);
-      process.exit(1);
+// Validate directories at startup - log warnings if path is not accessible at startup.
+// Directory accessibility may change between startup and runtime.
+const validatedDirectories = await Promise.all(
+  allowedDirectories.map(async (dir) => {
+    try {
+      const stats = await fs.stat(dir);
+      if (stats.isDirectory()) {
+        console.error(`Directory accessible: ${dir}`);
+        return dir;
+      } else if (stats.isFile()) {
+        console.error(`${dir} is a file, not a directory - skipping`);
+        return null;
+      } else {
+        // Include symlinks/special files - they might become directories when NAS/VPN reconnects
+        console.error(`${dir} is not a directory (${stats.isSymbolicLink() ? 'symlink' : 'special file'})`);
+        return dir;
+      }
+    } catch (error) {
+      // Include inaccessible paths - they might become accessible when storage/network reconnects
+      console.error(`Directory not accessible: ${dir} - ${error instanceof Error ? error.message : String(error)}`);
+      return dir;
     }
-  } catch (error) {
-    console.error(`Error accessing directory ${dir}:`, error);
-    process.exit(1);
-  }
-}));
+  })
+).then(results => results.filter((dir): dir is string => dir !== null));
 
 // Initialize the global allowedDirectories in lib.ts
-setAllowedDirectories(allowedDirectories);
+setAllowedDirectories(validatedDirectories);
 
 // Schema definitions
 const ReadTextFileArgsSchema = z.object({
