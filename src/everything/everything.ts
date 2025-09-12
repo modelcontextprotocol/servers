@@ -196,7 +196,6 @@ export const createServer = () => {
         }, 10000);
       }
 
-      console.log(sessionId)
       const maybeAppendSessionId = sessionId ? ` - SessionId ${sessionId}`: "";
       const messages: { level: LoggingLevel; data: string }[] = [
           { level: "debug", data: `Debug-level message${maybeAppendSessionId}` },
