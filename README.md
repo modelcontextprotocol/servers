@@ -870,6 +870,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Maton](https://github.com/maton-ai/agent-toolkit/tree/main/modelcontextprotocol)** - Connect to your SaaS tools like HubSpot, Salesforce, and more.
 - **[Maven Tools MCP](https://github.com/arvindand/maven-tools-mcp)** - Maven Central dependency intelligence for JVM build tools. Supports all build tools (Maven, Gradle, SBT, Mill) with Context7 integration for documentation support.
 - **[MCP-Airflow-API](https://github.com/call518/MCP-Airflow-API)** - Model Context Protocol (MCP) server for Apache Airflow API integration. Provides comprehensive tools for managing Airflow clusters including service operations, configuration management, status monitoring, and request tracking.
+- **[mcpcap](https://github.com/mcpcap/mcpcap)** - A modular Python MCP (Model Context Protocol) Server for analyzing PCAP files.
 - **[MCP Compass](https://github.com/liuyoshio/mcp-compass)** - Suggest the right MCP server for your needs
 - **[MCP Create](https://github.com/tesla0225/mcp-create)** - A dynamic MCP server management service that creates, runs, and manages Model Context Protocol servers on-the-fly.
 - **[MCP Documentation Server](https://github.com/andrea9293/mcp-documentation-server)** - Server that provides local-first document management and semantic search via embeddings or Gemini AI (recommended). Optimized for performance with disk persistence, an in-memory index, and caching.
