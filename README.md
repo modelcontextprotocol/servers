@@ -709,6 +709,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[freqtrade-mcp](https://github.com/kukapay/freqtrade-mcp)** - An MCP server that integrates with the Freqtrade cryptocurrency trading bot.
 - **[GDB](https://github.com/pansila/mcp_server_gdb)** - A GDB/MI protocol server based on the MCP protocol, providing remote application debugging capabilities with AI assistants.
 - **[ggRMCP](https://github.com/aalobaidi/ggRMCP)** - A Go gateway that converts gRPC services into MCP-compatible tools, allowing AI models like Claude to directly call your gRPC services.
+- **[Gemini Bridge](https://github.com/eLyiN/gemini-bridge)** - Lightweight MCP server that enables Claude to interact with Google's Gemini AI through the official CLI, offering zero API costs and stateless architecture.
 - **[Ghost](https://github.com/MFYDev/ghost-mcp)** - A Model Context Protocol (MCP) server for interacting with Ghost CMS through LLM interfaces like Claude.
 - **[Git](https://github.com/geropl/git-mcp-go)** - Allows LLM to interact with a local git repository, incl. optional push support.
 - **[Git Mob](https://github.com/Mubashwer/git-mob-mcp-server)** - MCP server that interfaces with the [git-mob](https://github.com/Mubashwer/git-mob) CLI app for managing co-authors in git commits during pair/mob programming.
