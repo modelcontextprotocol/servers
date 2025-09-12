@@ -22,7 +22,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
       transport = transports.get(sessionId)!;
     } else if (!sessionId) {
 
-      const { server, cleanup } = createServer();
+      const { server, cleanup, startNotificationIntervals } = createServer();
 
       // New initialization request
       const eventStore = new InMemoryEventStore();
@@ -53,7 +53,11 @@ app.post('/mcp', async (req: Request, res: Response) => {
       await server.connect(transport);
 
       await transport.handleRequest(req, res);
-      return; // Already handled
+
+      // Wait until initialize is complete and transport will have a sessionId
+      startNotificationIntervals(transport.sessionId);
+
+        return; // Already handled
     } else {
       // Invalid request - no session ID or not initialization request
       res.status(400).json({
