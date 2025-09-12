@@ -833,6 +833,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Linear](https://github.com/jerhadf/linear-mcp-server)** - Allows LLM to interact with Linear's API for project management, including searching, creating, and updating issues.
 - **[Linear (Go)](https://github.com/geropl/linear-mcp-go)** - Allows LLM to interact with Linear's API via a single static binary.
 - **[Linear MCP](https://github.com/anoncam/linear-mcp)** - Full blown implementation of the Linear SDK to support comprehensive Linear management of projects, initiatives, issues, users, teams and states.
+- **[Linked API MCP](https://github.com/Linked-API/linkedapi-mcp)** - MCP server that lets AI assistants control LinkedIn accounts and retrieve real-time data.
 - **[Listmonk MCP Server](https://github.com/rhnvrm/listmonk-mcp)** (by rhnvrm) - Full API coverage of [Listmonk](https://github.com/knadh/listmonk) email marketing FOSS.
 - **[LlamaCloud](https://github.com/run-llama/mcp-server-llamacloud)** (by marcusschiesser) - Integrate the data stored in a managed index on [LlamaCloud](https://cloud.llamaindex.ai/)
 - **[lldb-mcp](https://github.com/stass/lldb-mcp)** - A Model Context Protocol server for LLDB that provides LLM-driven debugging.
