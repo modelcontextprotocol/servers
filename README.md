@@ -30,6 +30,10 @@ These servers aim to demonstrate MCP features and the official SDKs.
 - **[Sequential Thinking](src/sequentialthinking)** - Dynamic and reflective problem-solving through thought sequences.
 - **[Time](src/time)** - Time and timezone conversion capabilities.
 
+### Archived
+
+Reference servers that are now archived can be found in [archived.md](archived.md).
+
 ## 🤝 Third-Party Servers
 
 ### 🎖️ Official Integrations
