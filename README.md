@@ -9,6 +9,7 @@ Typically, each MCP server is implemented with an MCP SDK:
 - [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk)
 - [Java MCP SDK](https://github.com/modelcontextprotocol/java-sdk)
 - [Kotlin MCP SDK](https://github.com/modelcontextprotocol/kotlin-sdk)
+- [PHP MCP SDK](https://github.com/modelcontextprotocol/php-sdk)
 - [Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk)
 - [Ruby MCP SDK](https://github.com/modelcontextprotocol/ruby-sdk)
 - [Rust MCP SDK](https://github.com/modelcontextprotocol/rust-sdk)
@@ -316,7 +317,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://octoeverywhere.com/img/logo.png" alt="OctoEverywhere Logo" /> **[OctoEverywhere](https://github.com/OctoEverywhere/mcp)** - A 3D Printing MCP server that allows for querying for live state, webcam snapshots, and 3D printer control.
 - <img height="12" width="12" src="https://avatars.githubusercontent.com/u/211697972" alt="Offorte Logo" /> **[Offorte](https://github.com/offorte/offorte-mcp-server#readme)** - Offorte Proposal Software official MCP server enables creation and sending of business proposals.
 - <img height="12" width="12" src="https://maps.olakrutrim.com/favicon.ico" alt="Ola Maps" /> **[OlaMaps](https://pypi.org/project/ola-maps-mcp-server)** - Official Ola Maps MCP Server for services like geocode, directions, place details and many more.
-- <img height="12" width="12" src="https://www.olostep.com/favicon.ico" alt="Olostep" /> **[Olostep](https://github.com/olostep/olostep-mcp-server)** - Search, scrape and crawl content from web. Real-time results in clean markdown. 
+- <img height="12" width="12" src="https://www.olostep.com/favicon.ico" alt="Olostep" /> **[Olostep](https://github.com/olostep/olostep-mcp-server)** - Search, scrape and crawl content from web. Real-time results in clean markdown.
 - <img height="12" width="12" src="https://static.onlyoffice.com/images/favicon.ico" alt="ONLYOFFICE DocSpace" /> **[ONLYOFFICE DocSpace](https://github.com/ONLYOFFICE/docspace-mcp)** - Interact with [ONLYOFFICE DocSpace](https://www.onlyoffice.com/docspace.aspx) API to create rooms, manage files and folders.
 - **[OMOP MCP](https://github.com/OHNLP/omop_mcp)** - Map clinical terminology to OMOP concepts using LLMs for healthcare data standardization.
 - <img height="12" width="12" src="https://op.gg/favicon.ico" alt="OP.GG Logo" /> **[OP.GG](https://github.com/opgginc/opgg-mcp)** - Access real-time gaming data across popular titles like League of Legends, TFT, and Valorant, offering champion analytics, esports schedules, meta compositions, and character statistics.
@@ -431,7 +432,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://images.thetradeagent.ai/trade_agent/logo.svg" alt="Trade Agent Logo" /> **[Trade Agent](https://github.com/Trade-Agent/trade-agent-mcp)** - Execute stock and crypto trades on your brokerage via [Trade Agent](https://thetradeagent.ai)
 - <img height="18" width="18" src="https://github.com/twelvedata/mcp/raw/develop/favicon.ico" alt="Twelvedata Logo" /> **[Twelve Data](https://github.com/twelvedata/mcp)** — Integrate your AI agents with real-time and historical financial market data through our official [Twelve Data](https://twelvedata.com) MCP server.
 - <img height="12" width="12" src="https://www.twilio.com/content/dam/twilio-com/core-assets/social/favicon-16x16.png" alt="Twilio Logo" /> **[Twilio](https://github.com/twilio-labs/mcp)** - Interact with [Twilio](https://www.twilio.com/en-us) APIs to send SMS messages, manage phone numbers, configure your account, and more.
-- <img height="12" width="12" src="https://avatars.githubusercontent.com/u/91520705?s=48&v=4" alt="Tencent RTC Logo" /> **[Tencent RTC](https://github.com/Tencent-RTC/mcp)** - The MCP Server enables AI IDEs to more effectively understand and use [Tencent's Real-Time Communication](https://trtc.io/) SDKs and APIs, which significantly streamlines the process for developers to build audio/video call applications.  
+- <img height="12" width="12" src="https://avatars.githubusercontent.com/u/91520705?s=48&v=4" alt="Tencent RTC Logo" /> **[Tencent RTC](https://github.com/Tencent-RTC/mcp)** - The MCP Server enables AI IDEs to more effectively understand and use [Tencent's Real-Time Communication](https://trtc.io/) SDKs and APIs, which significantly streamlines the process for developers to build audio/video call applications.
 - <img height="12" width="12" src="https://uberall.com/media/favicon.svg" alt="Uberall Logo" /> **[Uberall](https://github.com/uberall/uberall-mcp-server)** – Manage multi - location presence, including listings, reviews, and social posting, via [uberall](https://uberall.com).
 - <img height="12" width="12" src="https://avatars.githubusercontent.com/u/91906527" alt="Unblocked Logo" /> **[Unblocked](https://docs.getunblocked.com/unblocked-mcp)** Help your AI-powered IDEs generate faster, more accurate code by giving them access to context from Slack, Confluence, Google Docs, JIRA, and more with [Unblocked](https://getunblocked.com).
 - <img height="12" width="12" src="https://unifai.network/favicon.ico" alt="UnifAI Logo" /> **[UnifAI](https://github.com/unifai-network/unifai-mcp-server)** - Dynamically search and call tools using [UnifAI Network](https://unifai.network)
@@ -552,13 +553,13 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[BNBChain MCP](https://github.com/bnb-chain/bnbchain-mcp)** - An MCP server for interacting with BSC, opBNB, and the Greenfield blockchain.
 - **[Braintree](https://github.com/QuentinCody/braintree-mcp-server)** - Unofficial PayPal Braintree payment gateway MCP Server for AI agents to process payments, manage customers, and handle transactions securely.
 - **[Brazilian Law](https://github.com/pdmtt/brlaw_mcp_server/)** (by pdmtt) - Agent-driven research on Brazilian law using official sources.
-- **[BreakoutRoom](https://github.com/agree-able/room-mcp)** - Agents accomplishing goals together in p2p rooms 
+- **[BreakoutRoom](https://github.com/agree-able/room-mcp)** - Agents accomplishing goals together in p2p rooms
 - **[Browser MCP](https://github.com/bytedance/UI-TARS-desktop/tree/main/packages/agent-infra/mcp-servers/browser)** (by UI-TARS) - A fast, lightweight MCP server that empowers LLMs with browser automation via Puppeteer’s structured accessibility data, featuring optional vision mode for complex visual understanding and flexible, cross-platform configuration.
 - **[browser-use](https://github.com/co-browser/browser-use-mcp-server)** (by co-browser) - browser-use MCP server with dockerized playwright + chromium + vnc. supports stdio & resumable http.
 - **[BrowserLoop](https://github.com/mattiasw/browserloop)** - An MCP server for taking screenshots of web pages using Playwright. Supports high-quality capture with configurable formats, viewport sizes, cookie-based authentication, and both full page and element-specific screenshots.
 - **[Bsc-mcp](https://github.com/TermiX-official/bsc-mcp)** The first MCP server that serves as the bridge between AI and BNB Chain, enabling AI agents to execute complex on-chain operations through seamless integration with the BNB Chain, including transfer, swap, launch, security check on any token and even more.
 - **[BugBug MCP Server](https://github.com/simplypixi/bugbug-mcp-server)** - Unofficial MCP server for BugBug API.
-- **[BVG MCP Server - (Unofficial) ](https://github.com/svkaizoku/mcp-bvg)** - Unofficial MCP server for Berliner Verkehrsbetriebe Api. 
+- **[BVG MCP Server - (Unofficial) ](https://github.com/svkaizoku/mcp-bvg)** - Unofficial MCP server for Berliner Verkehrsbetriebe Api.
 - **[Bybit](https://github.com/ethancod1ng/bybit-mcp-server)** - A Model Context Protocol (MCP) server for integrating AI assistants with Bybit cryptocurrency exchange APIs, enabling automated trading, market data access, and account management.
 - **[CAD-MCP](https://github.com/daobataotie/CAD-MCP#)** (by daobataotie) - Drawing CAD(Line,Circle,Text,Annotation...) through MCP server, supporting mainstream CAD software.
 - **[Calculator](https://github.com/githejie/mcp-server-calculator)** - This server enables LLMs to use calculator for precise numerical calculations.
@@ -641,7 +642,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[DevOps AI Toolkit](https://github.com/vfarcic/dot-ai)** - AI-powered development productivity platform that enhances software development workflows through intelligent automation and AI-driven assistance.
 - **[DevOps-MCP](https://github.com/wangkanai/devops-mcp)** - Dynamic Azure DevOps MCP server with directory-based authentication switching, supporting work items, repositories, builds, pipelines, and multi-project management with local configuration files.
 - **[DGIdb](https://github.com/QuentinCody/dgidb-mcp-server)** - MCP server for the Drug Gene Interaction Database (DGIdb), providing access to drug-gene interaction data, druggable genome information, and pharmacogenomics research.
-- **[Dicom](https://github.com/ChristianHinge/dicom-mcp)** - An MCP server to query and retrieve medical images and for parsing and reading dicom-encapsulated documents (pdf etc.). 
+- **[Dicom](https://github.com/ChristianHinge/dicom-mcp)** - An MCP server to query and retrieve medical images and for parsing and reading dicom-encapsulated documents (pdf etc.).
 - **[Dify](https://github.com/YanxingLiu/dify-mcp-server)** - A simple implementation of an MCP server for dify workflows.
 - **[Discogs](https://github.com/cswkim/discogs-mcp-server)** - An MCP server that connects to the Discogs API for interacting with your music collection.
 - **[Discord](https://github.com/v-3/discordmcp)** - An MCP server to connect to Discord guilds through a bot and read and write messages in channels
@@ -929,7 +930,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Microsoft 365](https://github.com/softeria/ms-365-mcp-server)** - MCP server that connects to Microsoft Office and the whole Microsoft 365 suite using Graph API (including Outlook/mail, files, Excel, calendar)
 - **[Microsoft 365](https://github.com/pnp/cli-microsoft365-mcp-server)** - Single MCP server that allows to manage many different areas of Microsoft 365, for example: Entra ID, OneDrive, OneNote, Outlook, Planner, Power Apps, Power Automate, Power Platform, SharePoint Embedded, SharePoint Online, Teams, Viva Engage, and many more.
 - **[Microsoft 365 Files (SharePoint/OneDrive)](https://github.com/godwin3737/mcp-server-microsoft365-filesearch)** (by godwin3737) - MCP server with tools to search and get file content from Microsoft 365 including Onedrive and SharePoint. Works with Documents (pdf/docx), Presentations, Spreadsheets and Images.
-- **[Microsoft Teams](https://github.com/InditexTech/mcp-teams-server)** - MCP server that integrates Microsoft Teams messaging (read, post, mention, list members and threads) 
+- **[Microsoft Teams](https://github.com/InditexTech/mcp-teams-server)** - MCP server that integrates Microsoft Teams messaging (read, post, mention, list members and threads)
 - **[Mifos X](https://github.com/openMF/mcp-mifosx)** - An MCP server for the Mifos X Open Source Banking useful for managing clients, loans, savings, shares, financial transactions and generating financial reports.
 - **[Mikrotik](https://github.com/jeff-nasseri/mikrotik-mcp)** - Mikrotik MCP server which cover networking operations (IP, DHCP, Firewall, etc)
 - **[Mindmap](https://github.com/YuChenSSR/mindmap-mcp-server)** (by YuChenSSR) - A server that generates mindmaps from input containing markdown code.
@@ -1122,7 +1123,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[SoccerDataAPI](https://github.com/yeonupark/mcp-soccer-data)** - This MCP server provides real-time football match data based on the SoccerDataAPI.
 - **[Solana Agent Kit](https://github.com/sendaifun/solana-agent-kit/tree/main/examples/agent-kit-mcp-server)** - This MCP server enables LLMs to interact with the Solana blockchain with help of Solana Agent Kit by SendAI, allowing for 40+ protocol actions and growing
 - **[Solr MCP](https://github.com/mjochum64/mcp-solr-search)** - This MCP server offers a basic functionality to perform a search on Solr servers.
-- **[Solver](https://github.com/szeider/mcp-solver)** - Solves constraint satisfaction and optimization problems . 
+- **[Solver](https://github.com/szeider/mcp-solver)** - Solves constraint satisfaction and optimization problems .
 - **[Solvitor](https://github.com/Adeptus-Innovatio/solvitor-mcp)** – Solvitor MCP server provides tools to access reverse engineering tools that help developers extract IDL files from closed - source Solana smart contracts and decompile them.
 - **[Sourcerer](https://github.com/st3v3nmw/sourcerer-mcp)** - MCP for semantic code search & navigation that reduces token waste.
 - **[Specbridge](https://github.com/TBosak/specbridge)** - Easily turn your OpenAPI specs into MCP Tools.
