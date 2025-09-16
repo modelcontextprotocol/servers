@@ -1,11 +1,17 @@
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
 import { createServer } from "./everything.js";
+import cors from 'cors';
 
 console.error('Starting SSE server...');
 
 const app = express();
-
+app.use(cors({
+        "origin": "*",
+        "methods": "GET,POST",
+        "preflightContinue": false,
+        "optionsSuccessStatus": 204,
+    })); // Enable CORS for all routes
 const transports: Map<string, SSEServerTransport> = new Map<string, SSEServerTransport>();
 
 app.get("/sse", async (req, res) => {
