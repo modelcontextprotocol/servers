@@ -9,7 +9,7 @@ console.error('Starting Streamable HTTP server...');
 
 const app = express();
 app.use(cors({
-    "origin": "*",
+    "origin": "*", // use "*" with caution in production
     "methods": "GET,POST,DELETE",
     "preflightContinue": false,
     "optionsSuccessStatus": 204,
