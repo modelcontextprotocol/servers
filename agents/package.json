@@ -1,0 +1,41 @@
+{
+  "name": "@modelcontextprotocol/deepthink-agent",
+  "version": "1.0.0",
+  "description": "DeepThink Claude Agent - A specialized agent leveraging enhanced Sequential Thinking MCP server for complex reasoning",
+  "license": "MIT",
+  "author": "Anthropic, PBC (https://anthropic.com)",
+  "type": "module",
+  "bin": {
+    "deepthink-agent": "dist/deepthink-agent.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "examples"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "start": "node dist/deepthink-agent.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "shx": "^0.3.4",
+    "typescript": "^5.6.2"
+  },
+  "keywords": [
+    "claude",
+    "agent",
+    "reasoning",
+    "thinking",
+    "problem-solving",
+    "mcp",
+    "sequential-thinking",
+    "ai-assistant"
+  ]
+}
