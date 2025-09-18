@@ -293,6 +293,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img src="https://www.mimilabs.ai/logos/mimilabsSquare.svg" alt="mimilabs" width="12" height="12"> **[mimilabs](https://www.mimilabs.ai/mcp)** - A US healthcare data discovery guide for 50+ gov sources and thousands of publicly available US healthcare datasets regarding gov-funded programs, policies, drug pricings, clinical trials, etc.
 - <img src="https://avatars.githubusercontent.com/u/94089762?s=48&v=4" alt="Mobb" width="12" height="12"> **[Mobb](https://github.com/mobb-dev/bugsy?tab=readme-ov-file#model-context-protocol-mcp-server)** - The [Mobb Vibe Shield](https://vibe.mobb.ai/) MCP server identifies and remediates vulnerabilities in both human and AI-written code, ensuring your applications remain secure without slowing development.
 - <img height="12" width="12" src="https://console.gomomento.com/favicon.ico" /> **[Momento](https://github.com/momentohq/mcp-momento)** - Momento Cache lets you quickly improve your performance, reduce costs, and handle load at any scale.
+- <img height="12" width="12" src="https://www.monday.com/favicon.ico" alt="Monday.com Logo" /> **[Monday.com](https://github.com/mondaycom/mcp)** - Interact with Monday.com boards, items, accounts and work forms.
 - <img height="12" width="12" src="https://www.mongodb.com/favicon.ico" /> **[MongoDB](https://github.com/mongodb-js/mongodb-mcp-server)** - Both MongoDB Community Server and MongoDB Atlas are supported.
 - <img height="12" width="12" src="https://moorcheh.ai/Moorcheh-mcp.ico" alt="Moorcheh Logo" /> **[Moorcheh](https://github.com/moorcheh-ai/moorcheh-mcp)** - Embed, store, and search your documents, and build secure chatbots and RAG systems with Moorcheh's information-theoretic semantic search engine
 - <img height="12" width="12" src="https://www.motherduck.com/favicon.ico" alt="MotherDuck Logo" /> **[MotherDuck](https://github.com/motherduckdb/mcp-server-motherduck)** - Query and analyze data with MotherDuck and local DuckDB
@@ -938,7 +939,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Minima](https://github.com/dmayboroda/minima)** - MCP server for RAG on local files
 - **[Modao Proto MCP](https://github.com/modao-dev/modao-proto-mcp)** - AI-powered HTML prototype generation server that converts natural language descriptions into complete HTML code with modern design and responsive layouts. Supports design description expansion and seamless integration with Modao workspace.
 - **[Mobile MCP](https://github.com/mobile-next/mobile-mcp)** (by Mobile Next) - MCP server for Mobile(iOS/Android) automation, app scraping and development using physical devices or simulators/emulators.
-- **[Monday.com](https://github.com/sakce/mcp-server-monday)** - MCP Server to interact with Monday.com boards and items.
+- **[Monday.com (unofficial)](https://github.com/sakce/mcp-server-monday)** - MCP Server to interact with Monday.com boards and items.
 - **[MongoDB](https://github.com/kiliczsh/mcp-mongo-server)** - A Model Context Protocol Server for MongoDB.
 - **[MongoDB & Mongoose](https://github.com/nabid-pf/mongo-mongoose-mcp)** - MongoDB MCP Server with Mongoose Schema and Validation.
 - **[MongoDB Lens](https://github.com/furey/mongodb-lens)** - Full Featured MCP Server for MongoDB Databases.
