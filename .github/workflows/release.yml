@@ -194,10 +194,9 @@ jobs:
   create-release:
     needs: [update-packages, create-metadata, publish-pypi, publish-npm]
     if: |
-       (needs.update-packages.outputs.changes_made == 'true' && always()) &&
-       ((needs.publish-pypi.result == 'success' && needs.publish-npm.result == 'skipped') || 
-       (needs.publish-pypi.result == 'skipped' && needs.publish-npm.result == 'success') || 
-       (needs.publish-pypi.result == 'success' && needs.publish-npm.result == 'success'))
+      always() &&
+      needs.update-packages.outputs.changes_made == 'true' &&
+      (needs.publish-pypi.result == 'success' || needs.publish-npm.result == 'success')
     runs-on: ubuntu-latest
     environment: release
     permissions:
