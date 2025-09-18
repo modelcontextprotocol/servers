@@ -18,7 +18,7 @@ app.use(cors({
         'last-event-id',
         'mcp-protocol-version'
     ]
-})); // Enable CORS for all routes
+})); // Enable CORS for all routes so Inspector can connect
 
 const transports: Map<string, StreamableHTTPServerTransport> = new Map<string, StreamableHTTPServerTransport>();
 
