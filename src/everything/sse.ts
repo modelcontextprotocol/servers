@@ -7,11 +7,11 @@ console.error('Starting SSE server...');
 
 const app = express();
 app.use(cors({
-        "origin": "*", // use "*" with caution in production
-        "methods": "GET,POST",
-        "preflightContinue": false,
-        "optionsSuccessStatus": 204,
-    })); // Enable CORS for all routes so Inspector can connect
+    "origin": "*", // use "*" with caution in production
+    "methods": "GET,POST",
+    "preflightContinue": false,
+    "optionsSuccessStatus": 204,
+})); // Enable CORS for all routes so Inspector can connect
 const transports: Map<string, SSEServerTransport> = new Map<string, SSEServerTransport>();
 
 app.get("/sse", async (req, res) => {
