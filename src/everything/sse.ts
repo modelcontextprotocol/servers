@@ -7,7 +7,7 @@ console.error('Starting SSE server...');
 
 const app = express();
 app.use(cors({
-        "origin": "*",
+        "origin": "*", // use "*" with caution in production
         "methods": "GET,POST",
         "preflightContinue": false,
         "optionsSuccessStatus": 204,
