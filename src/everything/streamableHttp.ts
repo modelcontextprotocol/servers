@@ -27,7 +27,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
   try {
     // Check for existing session ID
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
-    console.log(`Session id: ${sessionId}`);
+
     let transport: StreamableHTTPServerTransport;
 
     if (sessionId && transports.has(sessionId)) {
