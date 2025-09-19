@@ -3,10 +3,22 @@ import { InMemoryEventStore } from '@modelcontextprotocol/sdk/examples/shared/in
 import express, { Request, Response } from "express";
 import { createServer } from "./everything.js";
 import { randomUUID } from 'node:crypto';
+import cors from 'cors';
 
 console.error('Starting Streamable HTTP server...');
 
 const app = express();
+app.use(cors({
+    "origin": "*", // use "*" with caution in production
+    "methods": "GET,POST,DELETE",
+    "preflightContinue": false,
+    "optionsSuccessStatus": 204,
+    "exposedHeaders": [
+        'mcp-session-id',
+        'last-event-id',
+        'mcp-protocol-version'
+    ]
+})); // Enable CORS for all routes so Inspector can connect
 
 const transports: Map<string, StreamableHTTPServerTransport> = new Map<string, StreamableHTTPServerTransport>();
 
@@ -15,6 +27,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
   try {
     // Check for existing session ID
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
     let transport: StreamableHTTPServerTransport;
 
     if (sessionId && transports.has(sessionId)) {
