@@ -745,6 +745,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Godot](https://github.com/Coding-Solo/godot-mcp)** - An MCP server providing comprehensive Godot engine integration for project editing, debugging, and scene management.
 - **[Golang Filesystem Server](https://github.com/mark3labs/mcp-filesystem-server)** - Secure file operations with configurable access controls built with Go!
 - **[Goodnews](https://github.com/VectorInstitute/mcp-goodnews)** - A simple MCP server that delivers curated positive and uplifting news stories.
+- **[Gopher MCP](https://github.com/cameronrye/gopher-mcp)** - Modern, cross-platform MCP server that enables AI assistants to browse and interact with both Gopher protocol and Gemini protocol resources safely and efficiently.
 - **[Google Ads](https://github.com/gomarble-ai/google-ads-mcp-server)** - MCP server acting as an interface to the Google Ads, enabling programmatic access to Facebook Ads data and management features.
 - **[Google Analytics](https://github.com/surendranb/google-analytics-mcp)** - Google Analytics MCP Server to bring data across 200+ dimensions & metrics for LLMs to analyse.
 - **[Google Calendar](https://github.com/v-3/google-calendar)** - Integration with Google Calendar to check schedules, find time, and add/delete events
