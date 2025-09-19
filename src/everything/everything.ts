@@ -196,7 +196,6 @@ export const createServer = () => {
         }, 10000);
       }
 
-      console.log(sessionId)
       const maybeAppendSessionId = sessionId ? ` - SessionId ${sessionId}`: "";
       const messages: { level: LoggingLevel; data: string }[] = [
           { level: "debug", data: `Debug-level message${maybeAppendSessionId}` },
@@ -542,7 +541,7 @@ export const createServer = () => {
     return { tools };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request,extra) => {
     const { name, arguments: args } = request.params;
 
     if (name === ToolName.ECHO) {
@@ -584,7 +583,7 @@ export const createServer = () => {
               total: steps,
               progressToken,
             },
-          });
+          },{relatedRequestId: extra.requestId});
         }
       }
 
