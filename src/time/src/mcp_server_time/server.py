@@ -46,7 +46,8 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     local_tzname = get_localzone_name()
     if local_tzname is not None:
         return ZoneInfo(local_tzname)
-    raise McpError("Could not determine local timezone - tzinfo is None")
+    # Default to UTC if local timezone cannot be determined
+    return ZoneInfo("UTC")
 
 
 def get_zoneinfo(timezone_name: str) -> ZoneInfo:

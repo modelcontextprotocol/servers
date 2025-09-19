@@ -486,10 +486,10 @@ def test_get_local_tz_with_valid_iana_name(mock_get_localzone):
 
 @patch('mcp_server_time.server.get_localzone_name')
 def test_get_local_tz_when_none_returned(mock_get_localzone):
-    """Test error when tzlocal returns None."""
+    """Test default to UTC when tzlocal returns None."""
     mock_get_localzone.return_value = None
-    with pytest.raises(McpError, match="Could not determine local timezone"):
-        get_local_tz()
+    result = get_local_tz()
+    assert str(result) == "UTC"
 
 
 @patch('mcp_server_time.server.get_localzone_name')
