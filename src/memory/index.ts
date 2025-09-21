@@ -72,8 +72,18 @@ class KnowledgeGraphManager {
 
   private async saveGraph(graph: KnowledgeGraph): Promise<void> {
     const lines = [
-      ...graph.entities.map(e => JSON.stringify({ type: "entity", ...e })),
-      ...graph.relations.map(r => JSON.stringify({ type: "relation", ...r })),
+      ...graph.entities.map(e => JSON.stringify({ 
+        type: "entity", 
+        name: e.name, 
+        entityType: e.entityType, 
+        observations: e.observations 
+      })),
+      ...graph.relations.map(r => JSON.stringify({ 
+        type: "relation", 
+        from: r.from, 
+        to: r.to, 
+        relationType: r.relationType 
+      })),
     ];
     await fs.writeFile(MEMORY_FILE_PATH, lines.join("\n"));
   }
@@ -257,10 +267,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   },
                 },
                 required: ["name", "entityType", "observations"],
+                additionalProperties: false,
               },
             },
           },
           required: ["entities"],
+          additionalProperties: false,
         },
       },
       {
@@ -279,10 +291,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   relationType: { type: "string", description: "The type of the relation" },
                 },
                 required: ["from", "to", "relationType"],
+                additionalProperties: false,
               },
             },
           },
           required: ["relations"],
+          additionalProperties: false,
         },
       },
       {
@@ -304,10 +318,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   },
                 },
                 required: ["entityName", "contents"],
+                additionalProperties: false,
               },
             },
           },
           required: ["observations"],
+          additionalProperties: false,
         },
       },
       {
@@ -323,6 +339,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["entityNames"],
+          additionalProperties: false,
         },
       },
       {
@@ -344,10 +361,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   },
                 },
                 required: ["entityName", "observations"],
+                additionalProperties: false,
               },
             },
           },
           required: ["deletions"],
+          additionalProperties: false,
         },
       },
       {
@@ -366,11 +385,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   relationType: { type: "string", description: "The type of the relation" },
                 },
                 required: ["from", "to", "relationType"],
+                additionalProperties: false,
               },
               description: "An array of relations to delete" 
             },
           },
           required: ["relations"],
+          additionalProperties: false,
         },
       },
       {
@@ -379,6 +400,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {},
+          additionalProperties: false,
         },
       },
       {
@@ -399,6 +421,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             query: { type: "string", description: "The search query to match against entity names, types, and observation content" },
           },
           required: ["query"],
+          additionalProperties: false,
         },
       },
       {
@@ -414,6 +437,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["names"],
+          additionalProperties: false,
         },
       },
     ],
