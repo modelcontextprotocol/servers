@@ -1153,6 +1153,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Stellar](https://github.com/syronlabs/stellar-mcp/)** - This MCP server enables LLMs to interact with the Stellar blockchain to create accounts, check address balances, analyze transactions, view transaction history, mint new assets, interact with smart contracts and much more.
 - **[Stitch AI](https://github.com/StitchAI/stitch-ai-mcp/)** - Knowledge management system for AI agents with memory space creation and retrieval capabilities.
 - **[Stockfish](https://github.com/sonirico/mcp-stockfish)** - MCP server connecting AI systems to Stockfish chess engine
+- **[Storybook](https://github.com/stefanoamorelli/storybook-mcp-server)** (by Stefano Amorelli) - Interact with Storybook component libraries, enabling component discovery, story management, prop inspection, and visual testing across different viewports.
 - **[Strava](https://github.com/r-huijts/strava-mcp)** - Connect to the Strava API to access activity data, athlete profiles, segments, and routes, enabling fitness tracking and analysis with Claude.
 - **[Strava API](https://github.com/tomekkorbak/strava-mcp-server)** - MCP server for Strava API to retrieve one's activities
 - **[Stripe](https://github.com/atharvagupta2003/mcp-stripe)** - This MCP allows integration with Stripe for handling payments, customers, and refunds.
