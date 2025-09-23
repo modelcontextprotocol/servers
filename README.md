@@ -1237,7 +1237,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Video Still Capture](https://github.com/13rac1/videocapture-mcp)** - 📷 Capture video stills from an OpenCV-compatible webcam or other video source.
 - **[Virtual location (Google Street View,etc.)](https://github.com/mfukushim/map-traveler-mcp)** - Integrates Google Map, Google Street View, PixAI, Stability.ai, ComfyUI API and Bluesky to provide a virtual location simulation in LLM (written in Effect.ts)
 - **[VMware Fusion](https://github.com/yeahdongcn/vmware-fusion-mcp-server)** - Manage VMware Fusion virtual machines via the Fusion REST API.
-- **[Voice Mode](https://github.com/mbailey/voicemode)** - Enable voice conversations with Claude using any OpenAI-compatible STT/TTS service ([voicemode.ai](https://voicemode.ai))
+- **[VoiceMode](https://github.com/mbailey/voicemode)** - Enable voice conversations with Claude using any OpenAI-compatible STT/TTS service [getvoicemode.com](https://getvoicemode.com/)
 - **[Voice Status Report](https://github.com/tomekkorbak/voice-status-report-mcp-server)** - An MCP server that provides voice status updates using OpenAI's text-to-speech API, to be used with Cursor or Claude Code.
 - **[VolcEngine TOS](https://github.com/dinghuazhou/sample-mcp-server-tos)** - A sample MCP server for VolcEngine TOS that flexibly get objects from TOS.
 - **[Voyp](https://github.com/paulotaylor/voyp-mcp)** - VOYP MCP server for making calls using Artificial Intelligence.
