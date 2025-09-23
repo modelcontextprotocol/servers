@@ -1022,6 +1022,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[OpenStack](https://github.com/wangsqly0407/openstack-mcp-server)** - MCP server implementation that provides OpenStack interaction.
 - **[Open Targets](https://github.com/QuentinCody/open-targets-mcp-server)** - Unofficial MCP server for the Open Targets Platform, providing access to target-disease associations, drug discovery data, and therapeutic hypothesis generation for biomedical research.
 - **[OpenWeather](https://github.com/mschneider82/mcp-openweather)** - Interact with the free openweathermap API to get the current and forecast weather for a location.
+- **[OpenZIM MCP](https://github.com/cameronrye/openzim-mcp)** - Modern, secure, and high-performance MCP server that enables AI models to access and search ZIM format knowledge bases offline, including Wikipedia and educational content archives.
 - **[Operative WebEvalAgent](https://github.com/Operative-Sh/web-eval-agent)** (by [Operative.sh](https://www.operative.sh)) - An MCP server to test, debug, and fix web applications autonomously.
 - **[OPNSense MCP](https://github.com/vespo92/OPNSenseMCP)** - MCP Server for OPNSense Firewall Management and API access
 - **[OpenAI GPT Image](https://github.com/SureScaleAI/openai-gpt-image-mcp)** - OpenAI GPT image generation/editing MCP server.
