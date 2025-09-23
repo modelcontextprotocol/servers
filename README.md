@@ -713,6 +713,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Fibaro HC3](https://github.com/coding-sailor/mcp-server-hc3)** - MCP server for Fibaro Home Center 3 smart home systems.
 - **[Figma](https://github.com/GLips/Figma-Context-MCP)** - Give your coding agent direct access to Figma file data, helping it one-shot design implementation.
 - **[Figma](https://github.com/paulvandermeijs/figma-mcp)** - A blazingly fast MCP server to read and export your Figma design files.
+- **[Figma to Flutter](https://github.com/mhmzdev/figma-flutter-mcp)** - Write down clean and better Flutter code from Figma design tokens and enrich nodes data in Flutter terminology.
 - **[Files](https://github.com/flesler/mcp-files)** - Enables agents to quickly find and edit code in a codebase with surgical precision. Find symbols, edit them everywhere.
 - **[FileSystem Server](https://github.com/Oncorporation/filesystem_server)** - Local MCP server for Visual Studio 2022 that provides code-workspace functionality by giving AI agents selective access to project folders and files
 - **[finmap.org](https://github.com/finmap-org/mcp-server)** MCP server provides comprehensive historical data from the US, UK, Russian and Turkish stock exchanges. Access sectors, tickers, company profiles, market cap, volume, value, and trade counts, as well as treemap and histogram visualizations.
