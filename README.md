@@ -1280,6 +1280,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[XiYan](https://github.com/XGenerationLab/xiyan_mcp_server)** - 🗄️ An MCP server that supports fetching data from a database using natural language queries, powered by XiyanSQL as the text-to-SQL LLM.
 - **[XMind](https://github.com/apeyroux/mcp-xmind)** - Read and search through your XMind directory containing XMind files.
 - **[Yahoo Finance](https://github.com/AgentX-ai/yahoo-finance-server)** - 📈 Lets your AI interact with Yahoo Finance to get comprehensive stock market data, news, financials, and more. Proxy supported.
+- **[YetiBrowser MCP](https://github.com/yetidevworks/yetibrowser-mcp)** - A fully open-source implementation of the Browser MCP workflow with standout features such as optimized screenshots, dom diffs, console access, multi-websocket support + more.
 - **[yfinance](https://github.com/Adity-star/mcp-yfinance-server)** -💹The MCP YFinance Stock Server provides real-time and historical stock data in a standard format, powering dashboards, AI agents,and research tools with seamless financial insights.
 - **[YNAB](https://github.com/ChuckBryan/ynabmcpserver)** - A Model Context Protocol (MCP) server for integrating with YNAB (You Need A Budget), allowing AI assistants to securely access and analyze your financial data.
 - **[YouTrack](https://github.com/tonyzorin/youtrack-mcp)** - A Model Context Protocol (MCP) server implementation for JetBrains YouTrack, allowing AI assistants to interact with YouTrack issue tracking system.
