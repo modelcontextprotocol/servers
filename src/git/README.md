@@ -84,13 +84,8 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `repo_path` (string): Path to Git repository
      - `revision` (string): The revision (commit hash, branch name, tag) to show
    - Returns: Contents of the specified commit
-12. `git_init`
-   - Initializes a Git repository
-   - Inputs:
-     - `repo_path` (string): Path to directory to initialize git repo
-   - Returns: Confirmation of repository initialization
 
-13. `git_branch`
+12. `git_branch`
    - List Git branches
    - Inputs:
      - `repo_path` (string): Path to the Git repository.
