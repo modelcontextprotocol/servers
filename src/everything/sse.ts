@@ -1,16 +1,22 @@
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
 import { createServer } from "./everything.js";
+import cors from 'cors';
 
 console.error('Starting SSE server...');
 
 const app = express();
-
+app.use(cors({
+    "origin": "*", // use "*" with caution in production
+    "methods": "GET,POST",
+    "preflightContinue": false,
+    "optionsSuccessStatus": 204,
+})); // Enable CORS for all routes so Inspector can connect
 const transports: Map<string, SSEServerTransport> = new Map<string, SSEServerTransport>();
 
 app.get("/sse", async (req, res) => {
   let transport: SSEServerTransport;
-  const { server, cleanup } = createServer();
+  const { server, cleanup, startNotificationIntervals } = createServer();
 
   if (req?.query?.sessionId) {
     const sessionId = (req?.query?.sessionId as string);
@@ -24,6 +30,9 @@ app.get("/sse", async (req, res) => {
     // Connect server to transport
     await server.connect(transport);
     console.error("Client Connected: ", transport.sessionId);
+
+    // Start notification intervals after client connects
+    startNotificationIntervals(transport.sessionId);
 
     // Handle close of connection
     server.onclose = async () => {

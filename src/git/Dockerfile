@@ -24,7 +24,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.12-slim-bookworm
 
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git git-lfs && rm -rf /var/lib/apt/lists/* \
+    && git lfs install --system
 
 WORKDIR /app
  

@@ -162,6 +162,12 @@ describe('Path Utilities', () => {
       expect(result).not.toContain('~');
     });
 
+    it('expands bare ~ to home directory', () => {
+      const result = expandHome('~');
+      expect(result).not.toContain('~');
+      expect(result.length).toBeGreaterThan(0);
+    });
+
     it('leaves other paths unchanged', () => {
       expect(expandHome('C:/test')).toBe('C:/test');
     });

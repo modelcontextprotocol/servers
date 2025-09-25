@@ -1,6 +1,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
+  ClientCapabilities,
   CompleteRequestSchema,
   CreateMessageRequest,
   CreateMessageResultSchema,
@@ -12,11 +13,12 @@ import {
   LoggingLevel,
   ReadResourceRequestSchema,
   Resource,
-  SetLevelRequestSchema,
+  RootsListChangedNotificationSchema,
   SubscribeRequestSchema,
   Tool,
   ToolSchema,
   UnsubscribeRequestSchema,
+  type Root
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
@@ -30,6 +32,9 @@ const instructions = readFileSync(join(__dirname, "instructions.md"), "utf-8");
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
+
+const ToolOutputSchema = ToolSchema.shape.outputSchema;
+type ToolOutput = z.infer<typeof ToolOutputSchema>;
 
 /* Input schemas for tools implemented in this server */
 const EchoSchema = z.object({
@@ -46,7 +51,10 @@ const LongRunningOperationSchema = z.object({
     .number()
     .default(10)
     .describe("Duration of the operation in seconds"),
-  steps: z.number().default(5).describe("Number of steps in the operation"),
+  steps: z
+    .number()
+    .default(5)
+    .describe("Number of steps in the operation"),
 });
 
 const PrintEnvSchema = z.object({});
@@ -58,13 +66,6 @@ const SampleLLMSchema = z.object({
     .default(100)
     .describe("Maximum number of tokens to generate"),
 });
-
-// Example completion values
-const EXAMPLE_COMPLETIONS = {
-  style: ["casual", "formal", "technical", "friendly"],
-  temperature: ["0", "0.5", "0.7", "1.0"],
-  resourceId: ["1", "2", "3", "4", "5"],
-};
 
 const GetTinyImageSchema = z.object({});
 
@@ -97,6 +98,30 @@ const GetResourceLinksSchema = z.object({
     .describe("Number of resource links to return (1-10)"),
 });
 
+const ListRootsSchema = z.object({});
+
+const StructuredContentSchema = {
+  input: z.object({
+    location: z
+      .string()
+      .trim()
+      .min(1)
+      .describe("City name or zip code"),
+  }),
+
+  output: z.object({
+    temperature: z
+      .number()
+      .describe("Temperature in celsius"),
+    conditions: z
+      .string()
+      .describe("Weather conditions description"),
+    humidity: z
+      .number()
+      .describe("Humidity percentage"),
+  })
+};
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -108,6 +133,8 @@ enum ToolName {
   GET_RESOURCE_REFERENCE = "getResourceReference",
   ELICITATION = "startElicitation",
   GET_RESOURCE_LINKS = "getResourceLinks",
+  STRUCTURED_CONTENT = "structuredContent",
+  LIST_ROOTS = "listRoots"
 }
 
 enum PromptName {
@@ -116,10 +143,18 @@ enum PromptName {
   RESOURCE = "resource_prompt",
 }
 
+// Example completion values
+const EXAMPLE_COMPLETIONS = {
+  style: ["casual", "formal", "technical", "friendly"],
+  temperature: ["0", "0.5", "0.7", "1.0"],
+  resourceId: ["1", "2", "3", "4", "5"],
+};
+
 export const createServer = () => {
   const server = new Server(
     {
       name: "example-servers/everything",
+      title: "Everything Example Server",
       version: "1.0.0",
     },
     {
@@ -128,8 +163,7 @@ export const createServer = () => {
         resources: { subscribe: true },
         tools: {},
         logging: {},
-        completions: {},
-        elicitation: {},
+        completions: {}
       },
       instructions
     }
@@ -139,58 +173,48 @@ export const createServer = () => {
   let subsUpdateInterval: NodeJS.Timeout | undefined;
   let stdErrUpdateInterval: NodeJS.Timeout | undefined;
 
-  // Set up update interval for subscribed resources
-  subsUpdateInterval = setInterval(() => {
-    for (const uri of subscriptions) {
-      server.notification({
-        method: "notifications/resources/updated",
-        params: { uri },
-      });
-    }
-  }, 10000);
-
-  let logLevel: LoggingLevel = "debug";
   let logsUpdateInterval: NodeJS.Timeout | undefined;
-  const messages = [
-    { level: "debug", data: "Debug-level message" },
-    { level: "info", data: "Info-level message" },
-    { level: "notice", data: "Notice-level message" },
-    { level: "warning", data: "Warning-level message" },
-    { level: "error", data: "Error-level message" },
-    { level: "critical", data: "Critical-level message" },
-    { level: "alert", data: "Alert level-message" },
-    { level: "emergency", data: "Emergency-level message" },
-  ];
+  // Store client capabilities
+  let clientCapabilities: ClientCapabilities | undefined;
 
-  const isMessageIgnored = (level: LoggingLevel): boolean => {
-    const currentLevel = messages.findIndex((msg) => logLevel === msg.level);
-    const messageLevel = messages.findIndex((msg) => level === msg.level);
-    return messageLevel < currentLevel;
+  // Roots state management
+  let currentRoots: Root[] = [];
+  let clientSupportsRoots = false;
+  let sessionId: string | undefined;
+
+    // Function to start notification intervals when a client connects
+  const startNotificationIntervals = (sid?: string|undefined) => {
+      sessionId = sid;
+      if (!subsUpdateInterval) {
+        subsUpdateInterval = setInterval(() => {
+          for (const uri of subscriptions) {
+            server.notification({
+              method: "notifications/resources/updated",
+              params: { uri },
+            });
+          }
+        }, 10000);
+      }
+
+      const maybeAppendSessionId = sessionId ? ` - SessionId ${sessionId}`: "";
+      const messages: { level: LoggingLevel; data: string }[] = [
+          { level: "debug", data: `Debug-level message${maybeAppendSessionId}` },
+          { level: "info", data: `Info-level message${maybeAppendSessionId}` },
+          { level: "notice", data: `Notice-level message${maybeAppendSessionId}` },
+          { level: "warning", data: `Warning-level message${maybeAppendSessionId}` },
+          { level: "error", data: `Error-level message${maybeAppendSessionId}` },
+          { level: "critical", data: `Critical-level message${maybeAppendSessionId}` },
+          { level: "alert", data: `Alert level-message${maybeAppendSessionId}` },
+          { level: "emergency", data: `Emergency-level message${maybeAppendSessionId}` },
+      ];
+
+      if (!logsUpdateInterval) {
+          console.error("Starting logs update interval");
+          logsUpdateInterval = setInterval(async () => {
+          await server.sendLoggingMessage( messages[Math.floor(Math.random() * messages.length)], sessionId);
+      }, 15000);
+    }
   };
-
-  // Set up update interval for random log messages
-  logsUpdateInterval = setInterval(() => {
-    let message = {
-      method: "notifications/message",
-      params: messages[Math.floor(Math.random() * messages.length)],
-    };
-    if (!isMessageIgnored(message.params.level as LoggingLevel))
-      server.notification(message);
-  }, 20000);
-
-
-  // Set up update interval for stderr messages
-  stdErrUpdateInterval = setInterval(() => {
-    const shortTimestamp = new Date().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    });
-    server.notification({
-      method: "notifications/stderr",
-      params: { content: `${shortTimestamp}: A stderr message` },
-    });
-  }, 30000);
 
   // Helper method to request sampling from client
   const requestSampling = async (
@@ -455,16 +479,16 @@ export const createServer = () => {
         inputSchema: zodToJsonSchema(AddSchema) as ToolInput,
       },
       {
-        name: ToolName.PRINT_ENV,
-        description:
-          "Prints all environment variables, helpful for debugging MCP server configuration",
-        inputSchema: zodToJsonSchema(PrintEnvSchema) as ToolInput,
-      },
-      {
         name: ToolName.LONG_RUNNING_OPERATION,
         description:
           "Demonstrates a long running operation with progress updates",
         inputSchema: zodToJsonSchema(LongRunningOperationSchema) as ToolInput,
+      },
+      {
+        name: ToolName.PRINT_ENV,
+        description:
+          "Prints all environment variables, helpful for debugging MCP server configuration",
+        inputSchema: zodToJsonSchema(PrintEnvSchema) as ToolInput,
       },
       {
         name: ToolName.SAMPLE_LLM,
@@ -489,22 +513,35 @@ export const createServer = () => {
         inputSchema: zodToJsonSchema(GetResourceReferenceSchema) as ToolInput,
       },
       {
-        name: ToolName.ELICITATION,
-        description: "Demonstrates the Elicitation feature by asking the user to provide information about their favorite color, number, and pets.",
-        inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
-      },
-      {
         name: ToolName.GET_RESOURCE_LINKS,
         description:
           "Returns multiple resource links that reference different types of resources",
         inputSchema: zodToJsonSchema(GetResourceLinksSchema) as ToolInput,
       },
+      {
+        name: ToolName.STRUCTURED_CONTENT,
+        description:
+          "Returns structured content along with an output schema for client data validation",
+        inputSchema: zodToJsonSchema(StructuredContentSchema.input) as ToolInput,
+        outputSchema: zodToJsonSchema(StructuredContentSchema.output) as ToolOutput,
+      },
     ];
+    if (clientCapabilities!.roots) tools.push ({
+        name: ToolName.LIST_ROOTS,
+        description:
+            "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files.",
+        inputSchema: zodToJsonSchema(ListRootsSchema) as ToolInput,
+    });
+    if (clientCapabilities!.elicitation) tools.push ({
+        name: ToolName.ELICITATION,
+        description: "Demonstrates the Elicitation feature by asking the user to provide information about their favorite color, number, and pets.",
+        inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
+    });
 
     return { tools };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request,extra) => {
     const { name, arguments: args } = request.params;
 
     if (name === ToolName.ECHO) {
@@ -546,7 +583,7 @@ export const createServer = () => {
               total: steps,
               progressToken,
             },
-          });
+          },{relatedRequestId: extra.requestId});
         }
       }
 
@@ -608,35 +645,6 @@ export const createServer = () => {
       };
     }
 
-    if (name === ToolName.GET_RESOURCE_REFERENCE) {
-      const validatedArgs = GetResourceReferenceSchema.parse(args);
-      const resourceId = validatedArgs.resourceId;
-
-      const resourceIndex = resourceId - 1;
-      if (resourceIndex < 0 || resourceIndex >= ALL_RESOURCES.length) {
-        throw new Error(`Resource with ID ${resourceId} does not exist`);
-      }
-
-      const resource = ALL_RESOURCES[resourceIndex];
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Returning resource reference for Resource ${resourceId}:`,
-          },
-          {
-            type: "resource",
-            resource: resource,
-          },
-          {
-            type: "text",
-            text: `You can access this resource using the URI: ${resource.uri}`,
-          },
-        ],
-      };
-    }
-
     if (name === ToolName.ANNOTATED_MESSAGE) {
       const { messageType, includeImage } = AnnotatedMessageSchema.parse(args);
 
@@ -688,6 +696,35 @@ export const createServer = () => {
       return { content };
     }
 
+    if (name === ToolName.GET_RESOURCE_REFERENCE) {
+      const validatedArgs = GetResourceReferenceSchema.parse(args);
+      const resourceId = validatedArgs.resourceId;
+
+      const resourceIndex = resourceId - 1;
+      if (resourceIndex < 0 || resourceIndex >= ALL_RESOURCES.length) {
+        throw new Error(`Resource with ID ${resourceId} does not exist`);
+      }
+
+      const resource = ALL_RESOURCES[resourceIndex];
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Returning resource reference for Resource ${resourceId}:`,
+          },
+          {
+            type: "resource",
+            resource: resource,
+          },
+          {
+            type: "text",
+            text: `You can access this resource using the URI: ${resource.uri}`,
+          },
+        ],
+      };
+    }
+
     if (name === ToolName.ELICITATION) {
       ElicitationSchema.parse(args);
 
@@ -698,10 +735,10 @@ export const createServer = () => {
           properties: {
             color: { type: 'string', description: 'Favorite color' },
             number: { type: 'integer', description: 'Favorite number', minimum: 1, maximum: 100 },
-            pets: { 
-              type: 'string', 
-              enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'], 
-              description: 'Favorite pets' 
+            pets: {
+              type: 'string',
+              enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'],
+              description: 'Favorite pets'
             },
           }
         }
@@ -709,13 +746,13 @@ export const createServer = () => {
 
       // Handle different response actions
       const content = [];
-      
+
       if (elicitationResult.action === 'accept' && elicitationResult.content) {
         content.push({
           type: "text",
           text: `✅ User provided their favorite things!`,
         });
-        
+
         // Only access elicitationResult.content when action is accept
         const { color, number, pets } = elicitationResult.content;
         content.push({
@@ -733,7 +770,7 @@ export const createServer = () => {
           text: `⚠️ User cancelled the elicitation dialog.`,
         });
       }
-      
+
       // Include raw result for debugging
       content.push({
         type: "text",
@@ -742,7 +779,7 @@ export const createServer = () => {
 
       return { content };
     }
-    
+
     if (name === ToolName.GET_RESOURCE_LINKS) {
       const { count } = GetResourceLinksSchema.parse(args);
       const content = [];
@@ -761,16 +798,82 @@ export const createServer = () => {
           type: "resource_link",
           uri: resource.uri,
           name: resource.name,
-          description: `Resource ${i + 1}: ${
-            resource.mimeType === "text/plain"
-              ? "plaintext resource"
-              : "binary blob resource"
-          }`,
+          description: `Resource ${i + 1}: ${resource.mimeType === "text/plain"
+            ? "plaintext resource"
+            : "binary blob resource"
+            }`,
           mimeType: resource.mimeType,
         });
       }
 
       return { content };
+    }
+
+    if (name === ToolName.STRUCTURED_CONTENT) {
+      // The same response is returned for every input.
+      const validatedArgs = StructuredContentSchema.input.parse(args);
+
+      const weather = {
+        temperature: 22.5,
+        conditions: "Partly cloudy",
+        humidity: 65
+      }
+
+      const backwardCompatiblecontent = {
+        type: "text",
+        text: JSON.stringify(weather)
+      }
+
+      return {
+        content: [backwardCompatiblecontent],
+        structuredContent: weather
+      };
+    }
+
+    if (name === ToolName.LIST_ROOTS) {
+      ListRootsSchema.parse(args);
+
+      if (!clientSupportsRoots) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "The MCP client does not support the roots protocol.\n\n" +
+                "This means the server cannot access information about the client's workspace directories or file system roots."
+            }
+          ]
+        };
+      }
+
+      if (currentRoots.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "The client supports roots but no roots are currently configured.\n\n" +
+                "This could mean:\n" +
+                "1. The client hasn't provided any roots yet\n" +
+                "2. The client provided an empty roots list\n" +
+                "3. The roots configuration is still being loaded"
+            }
+          ]
+        };
+      }
+
+      const rootsList = currentRoots.map((root, index) => {
+        return `${index + 1}. ${root.name || 'Unnamed Root'}\n   URI: ${root.uri}`;
+      }).join('\n\n');
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Current MCP Roots (${currentRoots.length} total):\n\n${rootsList}\n\n` +
+              "Note: This server demonstrates the roots protocol capability but doesn't actually access files. " +
+              "The roots are provided by the MCP client and can be used by servers that need file system access."
+          }
+        ]
+      };
     }
 
     throw new Error(`Unknown tool: ${name}`);
@@ -805,22 +908,68 @@ export const createServer = () => {
     throw new Error(`Unknown reference type`);
   });
 
-  server.setRequestHandler(SetLevelRequestSchema, async (request) => {
-    const { level } = request.params;
-    logLevel = level;
+  // Roots protocol handlers
+  server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+    try {
+      // Request the updated roots list from the client
+      const response = await server.listRoots();
+      if (response && 'roots' in response) {
+        currentRoots = response.roots;
 
-    // Demonstrate different log levels
-    await server.notification({
-      method: "notifications/message",
-      params: {
-        level: "debug",
-        logger: "test-server",
-        data: `Logging level set to: ${logLevel}`,
-      },
-    });
-
-    return {};
+        // Log the roots update for demonstration
+        await server.sendLoggingMessage({
+            level: "info",
+            logger: "everything-server",
+            data: `Roots updated: ${currentRoots.length} root(s) received from client`,
+        }, sessionId);
+      }
+    } catch (error) {
+      await server.sendLoggingMessage({
+          level: "error",
+          logger: "everything-server",
+          data: `Failed to request roots from client: ${error instanceof Error ? error.message : String(error)}`,
+      }, sessionId);
+    }
   });
+
+  // Handle post-initialization setup for roots
+  server.oninitialized = async () => {
+   clientCapabilities = server.getClientCapabilities();
+
+    if (clientCapabilities?.roots) {
+      clientSupportsRoots = true;
+      try {
+        const response = await server.listRoots();
+        if (response && 'roots' in response) {
+          currentRoots = response.roots;
+
+          await server.sendLoggingMessage({
+              level: "info",
+              logger: "everything-server",
+              data: `Initial roots received: ${currentRoots.length} root(s) from client`,
+          }, sessionId);
+        } else {
+          await server.sendLoggingMessage({
+              level: "warning",
+              logger: "everything-server",
+              data: "Client returned no roots set",
+          }, sessionId);
+        }
+      } catch (error) {
+        await server.sendLoggingMessage({
+            level: "error",
+            logger: "everything-server",
+            data: `Failed to request initial roots from client: ${error instanceof Error ? error.message : String(error)}`,
+        }, sessionId);
+      }
+    } else {
+      await server.sendLoggingMessage({
+          level: "info",
+          logger: "everything-server",
+          data: "Client does not support MCP roots protocol",
+      }, sessionId);
+    }
+  };
 
   const cleanup = async () => {
     if (subsUpdateInterval) clearInterval(subsUpdateInterval);
@@ -828,7 +977,7 @@ export const createServer = () => {
     if (stdErrUpdateInterval) clearInterval(stdErrUpdateInterval);
   };
 
-  return { server, cleanup };
+  return { server, cleanup, startNotificationIntervals };
 };
 
 const MCP_TINY_IMAGE =

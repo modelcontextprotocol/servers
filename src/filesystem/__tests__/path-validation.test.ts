@@ -4,6 +4,49 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import { isPathWithinAllowedDirectories } from '../path-validation.js';
 
+/**
+ * Check if the current environment supports symlink creation
+ */
+async function checkSymlinkSupport(): Promise<boolean> {
+  const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'symlink-test-'));
+  try {
+    const targetFile = path.join(testDir, 'target.txt');
+    const linkFile = path.join(testDir, 'link.txt');
+    
+    await fs.writeFile(targetFile, 'test');
+    await fs.symlink(targetFile, linkFile);
+    
+    // If we get here, symlinks are supported
+    return true;
+  } catch (error) {
+    // EPERM indicates no symlink permissions
+    if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+      return false;
+    }
+    // Other errors might indicate a real problem
+    throw error;
+  } finally {
+    await fs.rm(testDir, { recursive: true, force: true });
+  }
+}
+
+// Global variable to store symlink support status
+let symlinkSupported: boolean | null = null;
+
+/**
+ * Get cached symlink support status, checking once per test run
+ */
+async function getSymlinkSupport(): Promise<boolean> {
+  if (symlinkSupported === null) {
+    symlinkSupported = await checkSymlinkSupport();
+    if (!symlinkSupported) {
+      console.log('\n⚠️  Symlink tests will be skipped - symlink creation not supported in this environment');
+      console.log('   On Windows, enable Developer Mode or run as Administrator to enable symlink tests');
+    }
+  }
+  return symlinkSupported;
+}
+
 describe('Path Validation', () => {
   it('allows exact directory match', () => {
     const allowed = ['/home/user/project'];
@@ -587,6 +630,12 @@ describe('Path Validation', () => {
     });
 
     it('demonstrates symlink race condition allows writing outside allowed directories', async () => {
+      const symlinkSupported = await getSymlinkSupport();
+      if (!symlinkSupported) {
+        console.log('   ⏭️  Skipping symlink race condition test - symlinks not supported');
+        return;
+      }
+
       const allowed = [allowedDir];
 
       await expect(fs.access(testPath)).rejects.toThrow();
@@ -603,6 +652,12 @@ describe('Path Validation', () => {
     });
 
     it('shows timing differences between validation approaches', async () => {
+      const symlinkSupported = await getSymlinkSupport();
+      if (!symlinkSupported) {
+        console.log('   ⏭️  Skipping timing validation test - symlinks not supported');
+        return;
+      }
+
       const allowed = [allowedDir];
 
       const validation1 = isPathWithinAllowedDirectories(testPath, allowed);
@@ -618,6 +673,12 @@ describe('Path Validation', () => {
     });
 
     it('validates directory creation timing', async () => {
+      const symlinkSupported = await getSymlinkSupport();
+      if (!symlinkSupported) {
+        console.log('   ⏭️  Skipping directory creation timing test - symlinks not supported');
+        return;
+      }
+
       const allowed = [allowedDir];
       const testDir = path.join(allowedDir, 'newdir');
 
@@ -632,6 +693,12 @@ describe('Path Validation', () => {
     });
 
     it('demonstrates exclusive file creation behavior', async () => {
+      const symlinkSupported = await getSymlinkSupport();
+      if (!symlinkSupported) {
+        console.log('   ⏭️  Skipping exclusive file creation test - symlinks not supported');
+        return;
+      }
+
       const allowed = [allowedDir];
 
       await fs.symlink(targetFile, testPath);
@@ -644,6 +711,12 @@ describe('Path Validation', () => {
     });
 
     it('should use resolved parent paths for non-existent files', async () => {
+      const symlinkSupported = await getSymlinkSupport();
+      if (!symlinkSupported) {
+        console.log('   ⏭️  Skipping resolved parent paths test - symlinks not supported');
+        return;
+      }
+
       const allowed = [allowedDir];
 
       const symlinkDir = path.join(allowedDir, 'link');
@@ -662,6 +735,12 @@ describe('Path Validation', () => {
     });
 
     it('demonstrates parent directory symlink traversal', async () => {
+      const symlinkSupported = await getSymlinkSupport();
+      if (!symlinkSupported) {
+        console.log('   ⏭️  Skipping parent directory symlink traversal test - symlinks not supported');
+        return;
+      }
+
       const allowed = [allowedDir];
       const deepPath = path.join(allowedDir, 'sub1', 'sub2', 'file.txt');
 
@@ -682,6 +761,12 @@ describe('Path Validation', () => {
     });
 
     it('should prevent race condition between validatePath and file operation', async () => {
+      const symlinkSupported = await getSymlinkSupport();
+      if (!symlinkSupported) {
+        console.log('   ⏭️  Skipping race condition prevention test - symlinks not supported');
+        return;
+      }
+
       const allowed = [allowedDir];
       const racePath = path.join(allowedDir, 'race-file.txt');
       const targetFile = path.join(forbiddenDir, 'target.txt');
@@ -730,6 +815,12 @@ describe('Path Validation', () => {
     });
 
     it('should handle symlinks that point within allowed directories', async () => {
+      const symlinkSupported = await getSymlinkSupport();
+      if (!symlinkSupported) {
+        console.log('   ⏭️  Skipping symlinks within allowed directories test - symlinks not supported');
+        return;
+      }
+
       const allowed = [allowedDir];
       const targetFile = path.join(allowedDir, 'target.txt');
       const symlinkPath = path.join(allowedDir, 'symlink.txt');
@@ -756,6 +847,12 @@ describe('Path Validation', () => {
     });
 
     it('should prevent overwriting files through symlinks pointing outside allowed directories', async () => {
+      const symlinkSupported = await getSymlinkSupport();
+      if (!symlinkSupported) {
+        console.log('   ⏭️  Skipping symlink overwrite prevention test - symlinks not supported');
+        return;
+      }
+
       const allowed = [allowedDir];
       const legitFile = path.join(allowedDir, 'existing.txt');
       const targetFile = path.join(forbiddenDir, 'target.txt');
@@ -786,6 +883,12 @@ describe('Path Validation', () => {
     });
 
     it('demonstrates race condition in read operations', async () => {
+      const symlinkSupported = await getSymlinkSupport();
+      if (!symlinkSupported) {
+        console.log('   ⏭️  Skipping race condition in read operations test - symlinks not supported');
+        return;
+      }
+
       const allowed = [allowedDir];
       const legitFile = path.join(allowedDir, 'readable.txt');
       const secretFile = path.join(forbiddenDir, 'secret.txt');
@@ -812,6 +915,12 @@ describe('Path Validation', () => {
     });
 
     it('verifies rename does not follow symlinks', async () => {
+      const symlinkSupported = await getSymlinkSupport();
+      if (!symlinkSupported) {
+        console.log('   ⏭️  Skipping rename symlink test - symlinks not supported');
+        return;
+      }
+
       const allowed = [allowedDir];
       const tempFile = path.join(allowedDir, 'temp.txt');
       const targetSymlink = path.join(allowedDir, 'target-symlink.txt');
