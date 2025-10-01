@@ -61,6 +61,8 @@ const PrintEnvSchema = z.object({});
 
 const SampleLLMSchema = z.object({
   prompt: z.string().describe("The prompt to send to the LLM"),
+  includeContext: z.enum(["none", "thisServer", "allServers"]).default("none").describe("The level of context to include from this server or all servers"),
+  preferredModelName: z.string().optional().describe("Preferred model name to use for sampling"),
   maxTokens: z
     .number()
     .default(100)
@@ -220,7 +222,9 @@ export const createServer = () => {
   const requestSampling = async (
     context: string,
     uri: string,
-    maxTokens: number = 100
+    maxTokens: number = 100,
+    includeContext: "none" | "thisServer" | "allServers" = "none",
+    preferredModelName?: string
   ) => {
     const request: CreateMessageRequest = {
       method: "sampling/createMessage",
@@ -237,7 +241,10 @@ export const createServer = () => {
         systemPrompt: "You are a helpful test server.",
         maxTokens,
         temperature: 0.7,
-        includeContext: "thisServer",
+        includeContext,
+        modelPreferences: {
+          hints: preferredModelName !== undefined ? [{name: preferredModelName}] : undefined,
+        },
       },
     };
 
@@ -610,12 +617,14 @@ export const createServer = () => {
 
     if (name === ToolName.SAMPLE_LLM) {
       const validatedArgs = SampleLLMSchema.parse(args);
-      const { prompt, maxTokens } = validatedArgs;
+      const { prompt, maxTokens, includeContext, preferredModelName } = validatedArgs;
 
       const result = await requestSampling(
         prompt,
         ToolName.SAMPLE_LLM,
-        maxTokens
+        maxTokens,
+        includeContext,
+        preferredModelName,
       );
       return {
         content: [
@@ -735,6 +744,7 @@ export const createServer = () => {
           properties: {
             color: { type: 'string', description: 'Favorite color' },
             number: { type: 'integer', description: 'Favorite number', minimum: 1, maximum: 100 },
+            number: { type: 'number', description: 'Favorite number', minimum: 0, maximum: 1000, default: 3.14 },
             pets: {
               type: 'string',
               enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'],
