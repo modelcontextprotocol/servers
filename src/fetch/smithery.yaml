@@ -1,4 +1,7 @@
 name: fetch
 type: server
-runtime: docker
-entrypoint: Dockerfile
+runtime: python
+startCommand:
+  - uv
+  - run
+  - mcp_server_fetch
