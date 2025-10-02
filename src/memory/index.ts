@@ -21,11 +21,11 @@ export async function ensureMemoryFilePath(): Promise<string> {
       ? process.env.MEMORY_FILE_PATH
       : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH);
   }
-  
+
   // No custom path set, check for backward compatibility migration
   const oldMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
   const newMemoryPath = defaultMemoryPath;
-  
+
   try {
     // Check if old file exists and new file doesn't
     await fs.access(oldMemoryPath);
