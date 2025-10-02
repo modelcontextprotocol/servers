@@ -148,7 +148,7 @@ class KnowledgeGraphManager {
     const graph = await this.loadGraph();
 
     // Filter entities
-    graph.entities.filter(e =>
+    const filteredEntities = graph.entities.filter(e =>
       query.toLowerCase().includes(e.name) ||
       query.toLowerCase().includes(e.entityType) ||
       e.observations.some(o => query.toLowerCase().includes(o.toLowerCase()))
