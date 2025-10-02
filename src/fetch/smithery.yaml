@@ -4,4 +4,6 @@ runtime: python
 startCommand:
   - uv
   - run
+  - python
+  - -m
   - mcp_server_fetch
