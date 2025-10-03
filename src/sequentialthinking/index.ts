@@ -31,9 +31,40 @@ class SequentialThinkingServer {
     this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
   }
 
+  private sanitizeNumericParam(value: unknown): unknown {
+    // INPUT SANITIZATION: Coerce string numbers to actual numbers
+    // WHY: Some MCP clients may pass numeric parameters as strings
+    // EXPECTED: Convert valid numeric strings to numbers before validation
+    if (typeof value === 'number') {
+      return value;  // Already a number
+    }
+    if (typeof value === 'string' && /^\d+$/.test(value)) {
+      const parsed = parseInt(value, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        return parsed;  // Coerced to number
+      }
+    }
+    return value;  // Return as-is, let validation fail with clear error
+  }
+
   private validateThoughtData(input: unknown): ThoughtData {
     const data = input as Record<string, unknown>;
 
+    // Sanitize numeric parameters before validation
+    if (data.thoughtNumber !== undefined) {
+      data.thoughtNumber = this.sanitizeNumericParam(data.thoughtNumber);
+    }
+    if (data.totalThoughts !== undefined) {
+      data.totalThoughts = this.sanitizeNumericParam(data.totalThoughts);
+    }
+    if (data.revisesThought !== undefined) {
+      data.revisesThought = this.sanitizeNumericParam(data.revisesThought);
+    }
+    if (data.branchFromThought !== undefined) {
+      data.branchFromThought = this.sanitizeNumericParam(data.branchFromThought);
+    }
+
+    // Original validation (now works with coerced values)
     if (!data.thought || typeof data.thought !== 'string') {
       throw new Error('Invalid thought: must be a string');
     }
