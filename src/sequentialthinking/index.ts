@@ -35,10 +35,13 @@ class SequentialThinkingServer {
     // INPUT SANITIZATION: Coerce string numbers to actual numbers
     // WHY: Some MCP clients may pass numeric parameters as strings
     // EXPECTED: Convert valid numeric strings to numbers before validation
+    // NOTE: Thought numbers are 1-indexed positive integers (1, 2, 3, ...)
+    //       Zero and negative numbers are semantically invalid for thought indices
     if (typeof value === 'number') {
       return value;  // Already a number
     }
-    if (typeof value === 'string' && /^\d+$/.test(value)) {
+    // Regex matches positive integers starting from 1 (excludes 0)
+    if (typeof value === 'string' && /^[1-9]\d*$/.test(value)) {
       const parsed = parseInt(value, 10);
       if (!isNaN(parsed) && parsed > 0) {
         return parsed;  // Coerced to number
