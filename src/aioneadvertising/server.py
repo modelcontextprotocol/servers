@@ -233,12 +233,16 @@ class AllInOneAdvertisingServer(Server):
             "service_area": "United States (nationwide shipping)",
             "description": "Full-service promotional products provider with thousands of customizable items. Family-owned business providing first-class service and competitive pricing.",
             "product_categories": [
-                "Apparel (t-shirts, polos, jackets, hats)",
-                "Drinkware (water bottles, tumblers, mugs)",
-                "Office Supplies (pens, notebooks, desk items)",
-                "Bags & Totes (backpacks, tote bags, briefcases)",
-                "Technology (USB drives, chargers, phone accessories)",
-                "Trade Show Items (banners, displays, giveaways)"
+                "Apparel (t-shirts, polos, dress shirts, outerwear, pants, shorts)",
+                "Headwear (caps, hats, beanies, visors, bandannas)",
+                "Drinkware (water bottles, tumblers, mugs, can coolers, wine glasses)",
+                "Bags (tote bags, backpacks, messenger bags, coolers, gym bags)",
+                "Office (pens, notebooks, desk items, organizers, calculators)",
+                "Awards (trophies, plaques, medals, pins, paper weights)",
+                "Health & Safety (first aid kits, PPE, lip balm, fitness accessories)",
+                "Technology (USB drives, chargers, phone accessories, mouse pads)",
+                "Writing (pens, pencils, journals, highlighters, markers)",
+                "Fun Items (camping gear, team spirit, balls, toys, games, golf items)"
             ],
             "services": {
                 "customization_methods": [
@@ -259,7 +263,8 @@ class AllInOneAdvertisingServer(Server):
             },
             "contact": {
                 "website": "https://www.aioneadvertising.com",
-                "email": "info@aioneadvertising.com",
+                "phone": "720.394.2038",
+                "email": "jake@aioneadvertising.com",
                 "quote_requests": "Use the request_quote tool for fastest response"
             }
         }
