@@ -350,7 +350,7 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
 
 export async function searchFilesWithValidation(
   rootPath: string,
-  pattern: string,
+  patterns: string[],
   allowedDirectories: string[],
   options: SearchOptions = {}
 ): Promise<string[]> {
@@ -373,8 +373,12 @@ export async function searchFilesWithValidation(
 
         if (shouldExclude) continue;
 
-        // Use glob matching for the search pattern
-        if (minimatch(relativePath, pattern, { dot: true })) {
+        // Check if the path matches any of the patterns
+        const matches = patterns.some(pattern =>
+          minimatch(relativePath, pattern, { dot: true })
+        );
+
+        if (matches) {
           results.push(fullPath);
         }
 
