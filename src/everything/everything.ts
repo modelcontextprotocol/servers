@@ -543,7 +543,7 @@ export const createServer = () => {
       },
       {
         name: ToolName.ZIP_RESOURCES,
-        description: " a tool that would transform an image resource (passed by URL) by cropping it, and returns the result as a resource link.",
+        description: "Compresses the provided resource files (mapping of name to URI, which can be a data URI) to a zip file, which it returns as a data URI resource link.",
         inputSchema: zodToJsonSchema(ZipResourcesInputSchema) as ToolInput,
       }
     ];
