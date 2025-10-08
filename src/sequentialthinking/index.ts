@@ -239,28 +239,36 @@ You should:
         description: "Whether another thought step is needed"
       },
       thoughtNumber: {
-        type: "integer",
-        description: "Current thought number (numeric value, e.g., 1, 2, 3)",
-        minimum: 1
+        oneOf: [
+          { type: "integer", minimum: 1 },
+          { type: "string", pattern: "^[1-9]\\d*$" }
+        ],
+        description: "Current thought number (numeric value, e.g., 1, 2, 3)"
       },
       totalThoughts: {
-        type: "integer",
-        description: "Estimated total thoughts needed (numeric value, e.g., 5, 10)",
-        minimum: 1
+        oneOf: [
+          { type: "integer", minimum: 1 },
+          { type: "string", pattern: "^[1-9]\\d*$" }
+        ],
+        description: "Estimated total thoughts needed (numeric value, e.g., 5, 10)"
       },
       isRevision: {
         type: "boolean",
         description: "Whether this revises previous thinking"
       },
       revisesThought: {
-        type: "integer",
-        description: "Which thought is being reconsidered",
-        minimum: 1
+        oneOf: [
+          { type: "integer", minimum: 1 },
+          { type: "string", pattern: "^[1-9]\\d*$" }
+        ],
+        description: "Which thought is being reconsidered"
       },
       branchFromThought: {
-        type: "integer",
-        description: "Branching point thought number",
-        minimum: 1
+        oneOf: [
+          { type: "integer", minimum: 1 },
+          { type: "string", pattern: "^[1-9]\\d*$" }
+        ],
+        description: "Branching point thought number"
       },
       branchId: {
         type: "string",
