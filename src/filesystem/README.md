@@ -5,6 +5,8 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 ## Features
 
 - Read/write files
+- Append to existing files
+- Create files or append to existing ones
 - Create/list/delete directories
 - Move files/directories
 - Search files
@@ -91,6 +93,23 @@ The server's directory access control follows this flow:
   - Inputs:
     - `path` (string): File location
     - `content` (string): File content
+
+- **append_file**
+  - Append content to the end of an existing file
+  - Inputs:
+    - `path` (string): File location (must exist)
+    - `content` (string): Content to append
+  - File must already exist - use `write_file` to create new files
+  - Preserves existing content, adds new content at the end
+
+- **write_or_update_file**
+  - Create new file or append to existing file
+  - Inputs:
+    - `path` (string): File location
+    - `content` (string): Content to write or append
+  - If file doesn't exist: creates it with the provided content
+  - If file exists: appends new content to the end
+  - Useful when you want to add content while preserving existing data
 
 - **edit_file**
   - Make selective edits using advanced pattern matching and formatting
