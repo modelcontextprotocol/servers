@@ -31,9 +31,43 @@ class SequentialThinkingServer {
     this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
   }
 
+  private sanitizeNumericParam(value: unknown): unknown {
+    // INPUT SANITIZATION: Coerce string numbers to actual numbers
+    // WHY: Some MCP clients may pass numeric parameters as strings
+    // EXPECTED: Convert valid numeric strings to numbers before validation
+    // NOTE: Thought numbers are 1-indexed positive integers (1, 2, 3, ...)
+    //       Zero and negative numbers are semantically invalid for thought indices
+    if (typeof value === 'number') {
+      return value;  // Already a number
+    }
+    // Regex matches positive integers starting from 1 (excludes 0)
+    if (typeof value === 'string' && /^[1-9]\d*$/.test(value)) {
+      const parsed = parseInt(value, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        return parsed;  // Coerced to number
+      }
+    }
+    return value;  // Return as-is, let validation fail with clear error
+  }
+
   private validateThoughtData(input: unknown): ThoughtData {
     const data = input as Record<string, unknown>;
 
+    // Sanitize numeric parameters before validation
+    if (data.thoughtNumber !== undefined) {
+      data.thoughtNumber = this.sanitizeNumericParam(data.thoughtNumber);
+    }
+    if (data.totalThoughts !== undefined) {
+      data.totalThoughts = this.sanitizeNumericParam(data.totalThoughts);
+    }
+    if (data.revisesThought !== undefined) {
+      data.revisesThought = this.sanitizeNumericParam(data.revisesThought);
+    }
+    if (data.branchFromThought !== undefined) {
+      data.branchFromThought = this.sanitizeNumericParam(data.branchFromThought);
+    }
+
+    // Original validation (now works with coerced values)
     if (!data.thought || typeof data.thought !== 'string') {
       throw new Error('Invalid thought: must be a string');
     }
@@ -205,28 +239,36 @@ You should:
         description: "Whether another thought step is needed"
       },
       thoughtNumber: {
-        type: "integer",
-        description: "Current thought number (numeric value, e.g., 1, 2, 3)",
-        minimum: 1
+        oneOf: [
+          { type: "integer", minimum: 1 },
+          { type: "string", pattern: "^[1-9]\\d*$" }
+        ],
+        description: "Current thought number (numeric value, e.g., 1, 2, 3)"
       },
       totalThoughts: {
-        type: "integer",
-        description: "Estimated total thoughts needed (numeric value, e.g., 5, 10)",
-        minimum: 1
+        oneOf: [
+          { type: "integer", minimum: 1 },
+          { type: "string", pattern: "^[1-9]\\d*$" }
+        ],
+        description: "Estimated total thoughts needed (numeric value, e.g., 5, 10)"
       },
       isRevision: {
         type: "boolean",
         description: "Whether this revises previous thinking"
       },
       revisesThought: {
-        type: "integer",
-        description: "Which thought is being reconsidered",
-        minimum: 1
+        oneOf: [
+          { type: "integer", minimum: 1 },
+          { type: "string", pattern: "^[1-9]\\d*$" }
+        ],
+        description: "Which thought is being reconsidered"
       },
       branchFromThought: {
-        type: "integer",
-        description: "Branching point thought number",
-        minimum: 1
+        oneOf: [
+          { type: "integer", minimum: 1 },
+          { type: "string", pattern: "^[1-9]\\d*$" }
+        ],
+        description: "Branching point thought number"
       },
       branchId: {
         type: "string",
