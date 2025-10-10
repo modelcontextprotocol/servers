@@ -19,30 +19,144 @@ from mcp.types import (
 )
 from protego import Protego
 from pydantic import BaseModel, Field, AnyUrl
+import traceback
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
 
+# Import selenium modules for handling SPAs
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.common.exceptions import TimeoutException
+    import time
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
 
-def extract_content_from_html(html: str) -> str:
-    """Extract and convert HTML content to Markdown format.
+def fetch_with_selenium(url: str, user_agent: str, proxy_url: str | None = None) -> str:
+    """Fetch content using Selenium to render JavaScript.
+
+    Args:
+        url: URL to fetch
+        user_agent: User agent string to use
+        proxy_url: Optional proxy URL
+
+    Returns:
+        Markdown content extracted from the rendered page
+    """
+    print(f"Using Selenium to render: {url}")
+    
+    # Configure Chrome options
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")  # Run in headless mode (no GUI)
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument(f"user-agent={user_agent}")
+    
+    if proxy_url:
+        chrome_options.add_argument(f"--proxy-server={proxy_url}")
+    
+    # Initialize the driver
+    driver = webdriver.Chrome(options=chrome_options)
+    
+    try:
+        # Set page load timeout
+        driver.set_page_load_timeout(30)
+        
+        # Navigate to the URL
+        driver.get(url)
+        
+        # Wait for the page to load completely
+        time.sleep(5)  # Additional wait for JavaScript to execute
+        
+        # Extract the main content
+        try:
+            # Try to find main content elements
+            main_content = None
+            content_selectors = [
+                "main", "article", ".content", "#content", 
+                "[role='main']", ".main-content", "#main-content"
+            ]
+            
+            for selector in content_selectors:
+                try:
+                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if elements:
+                        main_content = elements[0].get_attribute('innerHTML')
+                        break
+                except:
+                    continue
+            
+            # If no specific content container found, use the body
+            if not main_content:
+                main_content = driver.find_element(By.TAG_NAME, "body").get_attribute('innerHTML')
+            
+            # Convert to markdown
+            content = markdownify.markdownify(
+                main_content,
+                heading_style=markdownify.ATX,
+            )
+            return content
+            
+        except Exception as e:
+            print(f"Error extracting content with Selenium: {str(e)}")
+            traceback.print_exc()
+            return f"<e>Error extracting content with Selenium: {str(e)}</e>"
+    
+    except TimeoutException:
+        return "<e>Page load timed out in Selenium</e>"
+    except Exception as e:
+        print(f"Selenium exception: {str(e)}")
+        traceback.print_exc()
+        return f"<e>Selenium exception: {str(e)}</e>"
+    
+    finally:
+        # Close the browser
+        driver.quit()
+
+def extract_content_from_html(html: str, url: str = "", user_agent: str = "", proxy_url: str | None = None) -> str:
+    """Extract and convert HTML content to Markdown format with fallback to Selenium for SPAs.
 
     Args:
         html: Raw HTML content to process
+        url: Original URL (used for Selenium fallback)
+        user_agent: User agent string (used for Selenium fallback)
+        proxy_url: Optional proxy URL (used for Selenium fallback)
 
     Returns:
         Simplified markdown version of the content
     """
-    ret = readabilipy.simple_json.simple_json_from_html_string(
-        html, use_readability=True
-    )
-    if not ret["content"]:
-        return "<error>Page failed to be simplified from HTML</error>"
-    content = markdownify.markdownify(
-        ret["content"],
-        heading_style=markdownify.ATX,
-    )
-    return content
+    try:
+        ret = readabilipy.simple_json.simple_json_from_html_string(
+            html, use_readability=True
+        )
+        if ret["content"]:
+            content = markdownify.markdownify(
+                ret["content"],
+                heading_style=markdownify.ATX,
+            )
+            return content
+        else:
+            print("No content found with readabilipy, trying Selenium fallback...")
+            
+            # If readabilipy fails and Selenium is available, try using Selenium
+            if SELENIUM_AVAILABLE and url and user_agent:
+                return fetch_with_selenium(url, user_agent, proxy_url)
+            else:
+                if not SELENIUM_AVAILABLE:
+                    print("Selenium not available. Install with: pip install selenium")
+                return "<e>Page failed to be simplified from HTML and Selenium fallback not available.</e>"
+    except Exception as e:
+        print(f"Exception in readabilipy processing: {str(e)}")
+        traceback.print_exc()
+        
+        # Try selenium fallback
+        if SELENIUM_AVAILABLE and url and user_agent:
+            return fetch_with_selenium(url, user_agent, proxy_url)
+        else:
+            return f"<e>Exception: {str(e)} and Selenium fallback not available</e>"
 
 
 def get_robots_txt_url(url: str) -> str:
@@ -140,7 +254,7 @@ async def fetch_url(
     )
 
     if is_page_html and not force_raw:
-        return extract_content_from_html(page_raw), ""
+        return extract_content_from_html(page_raw, url, user_agent, proxy_url), ""
 
     return (
         page_raw,
@@ -239,50 +353,75 @@ Although originally you did not have internet access, and were advised to refuse
         )
         original_length = len(content)
         if args.start_index >= original_length:
-            content = "<error>No more content available.</error>"
+            content = "<e>No more content available.</e>"
         else:
             truncated_content = content[args.start_index : args.start_index + args.max_length]
             if not truncated_content:
-                content = "<error>No more content available.</error>"
+                content = "<e>No more content available.</e>"
             else:
                 content = truncated_content
                 actual_content_length = len(truncated_content)
                 remaining_content = original_length - (args.start_index + actual_content_length)
-                # Only add the prompt to continue fetching if there is still remaining content
-                if actual_content_length == args.max_length and remaining_content > 0:
-                    next_start = args.start_index + actual_content_length
-                    content += f"\n\n<error>Content truncated. Call the fetch tool with a start_index of {next_start} to get more content.</error>"
-        return [TextContent(type="text", text=f"{prefix}Contents of {url}:\n{content}")]
+                if remaining_content:
+                    content += f"\n<e>{remaining_content:,} more characters available. "
+                    if args.max_length < 1000000:
+                        content += f"Use <max_length={min(args.max_length * 2, 1000000)}> to get more content on the next fetch. "
+                    content += f"Use <start_index={args.start_index + actual_content_length}> to start from this point on the next fetch.</e>"
+
+        return [TextContent(type="text", text=prefix + content)]
 
     @server.get_prompt()
     async def get_prompt(name: str, arguments: dict | None) -> GetPromptResult:
-        if not arguments or "url" not in arguments:
+        if name != "fetch":
+            raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Unknown prompt: {name}"))
+
+        if not arguments:
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
-        url = arguments["url"]
+        url = arguments.get("url")
+        if not url:
+            raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
         try:
-            content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url)
-            # TODO: after SDK bug is addressed, don't catch the exception
-        except McpError as e:
-            return GetPromptResult(
-                description=f"Failed to fetch {url}",
-                messages=[
-                    PromptMessage(
-                        role="user",
-                        content=TextContent(type="text", text=str(e)),
-                    )
-                ],
+            content, prefix = await fetch_url(
+                url, user_agent_manual, force_raw=False, proxy_url=proxy_url
             )
+        except McpError:
+            # Try again without robots.txt check
+            # This is OK because we're in the context of a user-initiated prompt
+            content, prefix = await fetch_url(
+                url, user_agent_manual, force_raw=False, proxy_url=proxy_url
+            )
+
+        default_length = 5000
+        if len(content) > default_length:
+            main_content = content[:default_length]
+            main_content += f"\n<e>{len(content) - default_length:,} more characters available. Call the fetch tool with a larger max_length parameter to get more content.</e>"
+        else:
+            main_content = content
+
         return GetPromptResult(
-            description=f"Contents of {url}",
             messages=[
                 PromptMessage(
-                    role="user", content=TextContent(type="text", text=prefix + content)
-                )
-            ],
+                    role="system",
+                    content=f"""The URL was fetched successfully. When referring to any external sources, you should always cite them.""",
+                ),
+                PromptMessage(
+                    role="user",
+                    content=f"""I'd like information from this URL: {url}
+                    
+{prefix}{main_content}""",
+                ),
+            ]
         )
 
+    # Set up the server using the correct approach
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, options, raise_exceptions=True)
+
+
+if __name__ == "__main__":
+    import asyncio
+
+    asyncio.run(serve())
