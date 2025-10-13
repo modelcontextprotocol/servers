@@ -16,7 +16,8 @@
     "build": "npm run build --workspaces",
     "watch": "npm run watch --workspaces",
     "publish-all": "npm publish --workspaces --access public",
-    "link-all": "npm link --workspaces"
+    "link-all": "npm link --workspaces",
+    "inspect-memory": "${NPX} @modelcontextprotocol/inspector ${NPM} node_modules/.bin/mcp-server-memory"
   },
   "dependencies": {
     "@modelcontextprotocol/server-everything": "*",
