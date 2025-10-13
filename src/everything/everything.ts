@@ -1,10 +1,13 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import {
   CallToolRequestSchema,
   ClientCapabilities,
   CompleteRequestSchema,
   CreateMessageRequest,
   CreateMessageResultSchema,
+  ElicitRequest,
+  ElicitResultSchema,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
   ListResourcesRequestSchema,
@@ -14,18 +17,20 @@ import {
   ReadResourceRequestSchema,
   Resource,
   RootsListChangedNotificationSchema,
-  SetLevelRequestSchema,
+  ServerNotification,
+  ServerRequest,
   SubscribeRequestSchema,
   Tool,
   ToolSchema,
   UnsubscribeRequestSchema,
-  type Root,
+  type Root
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import JSZip from "jszip";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,6 +41,8 @@ type ToolInput = z.infer<typeof ToolInputSchema>;
 
 const ToolOutputSchema = ToolSchema.shape.outputSchema;
 type ToolOutput = z.infer<typeof ToolOutputSchema>;
+
+type SendRequest = RequestHandlerExtra<ServerRequest, ServerNotification>["sendRequest"];
 
 /* Input schemas for tools implemented in this server */
 const EchoSchema = z.object({
@@ -123,6 +130,10 @@ const StructuredContentSchema = {
   })
 };
 
+const ZipResourcesInputSchema = z.object({
+  files: z.record(z.string().url().describe("URL of the file to include in the zip")).describe("Mapping of file names to URLs to include in the zip"),
+});
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -135,6 +146,7 @@ enum ToolName {
   ELICITATION = "startElicitation",
   GET_RESOURCE_LINKS = "getResourceLinks",
   STRUCTURED_CONTENT = "structuredContent",
+  ZIP_RESOURCES = "zip",
   LIST_ROOTS = "listRoots"
 }
 
@@ -174,7 +186,6 @@ export const createServer = () => {
   let subsUpdateInterval: NodeJS.Timeout | undefined;
   let stdErrUpdateInterval: NodeJS.Timeout | undefined;
 
-  let logLevel: LoggingLevel = "debug";
   let logsUpdateInterval: NodeJS.Timeout | undefined;
   // Store client capabilities
   let clientCapabilities: ClientCapabilities | undefined;
@@ -182,55 +193,48 @@ export const createServer = () => {
   // Roots state management
   let currentRoots: Root[] = [];
   let clientSupportsRoots = false;
-  const messages = [
-    { level: "debug", data: "Debug-level message" },
-    { level: "info", data: "Info-level message" },
-    { level: "notice", data: "Notice-level message" },
-    { level: "warning", data: "Warning-level message" },
-    { level: "error", data: "Error-level message" },
-    { level: "critical", data: "Critical-level message" },
-    { level: "alert", data: "Alert level-message" },
-    { level: "emergency", data: "Emergency-level message" },
-  ];
+  let sessionId: string | undefined;
 
-  const isMessageIgnored = (level: LoggingLevel): boolean => {
-    const currentLevel = messages.findIndex((msg) => logLevel === msg.level);
-    const messageLevel = messages.findIndex((msg) => level === msg.level);
-    return messageLevel < currentLevel;
-  };
+    // Function to start notification intervals when a client connects
+  const startNotificationIntervals = (sid?: string|undefined) => {
+      sessionId = sid;
+      if (!subsUpdateInterval) {
+        subsUpdateInterval = setInterval(() => {
+          for (const uri of subscriptions) {
+            server.notification({
+              method: "notifications/resources/updated",
+              params: { uri },
+            });
+          }
+        }, 10000);
+      }
 
-  // Function to start notification intervals when a client connects
-  const startNotificationIntervals = () => {
-    if (!subsUpdateInterval) {
-      subsUpdateInterval = setInterval(() => {
-        for (const uri of subscriptions) {
-          server.notification({
-            method: "notifications/resources/updated",
-            params: { uri },
-          });
-        }
-      }, 10000);
-    }
+      const maybeAppendSessionId = sessionId ? ` - SessionId ${sessionId}`: "";
+      const messages: { level: LoggingLevel; data: string }[] = [
+          { level: "debug", data: `Debug-level message${maybeAppendSessionId}` },
+          { level: "info", data: `Info-level message${maybeAppendSessionId}` },
+          { level: "notice", data: `Notice-level message${maybeAppendSessionId}` },
+          { level: "warning", data: `Warning-level message${maybeAppendSessionId}` },
+          { level: "error", data: `Error-level message${maybeAppendSessionId}` },
+          { level: "critical", data: `Critical-level message${maybeAppendSessionId}` },
+          { level: "alert", data: `Alert level-message${maybeAppendSessionId}` },
+          { level: "emergency", data: `Emergency-level message${maybeAppendSessionId}` },
+      ];
 
-    if (!logsUpdateInterval) {
-      logsUpdateInterval = setInterval(() => {
-        let message = {
-          method: "notifications/message",
-          params: messages[Math.floor(Math.random() * messages.length)],
-        };
-        if (!isMessageIgnored(message.params.level as LoggingLevel))
-          server.notification(message);
-      }, 20000);
+      if (!logsUpdateInterval) {
+          console.error("Starting logs update interval");
+          logsUpdateInterval = setInterval(async () => {
+          await server.sendLoggingMessage( messages[Math.floor(Math.random() * messages.length)], sessionId);
+      }, 15000);
     }
   };
-
-
 
   // Helper method to request sampling from client
   const requestSampling = async (
     context: string,
     uri: string,
-    maxTokens: number = 100
+    maxTokens: number = 100,
+    sendRequest: SendRequest
   ) => {
     const request: CreateMessageRequest = {
       method: "sampling/createMessage",
@@ -251,22 +255,24 @@ export const createServer = () => {
       },
     };
 
-    return await server.request(request, CreateMessageResultSchema);
+    return await sendRequest(request, CreateMessageResultSchema);
+
   };
 
   const requestElicitation = async (
     message: string,
-    requestedSchema: any
+    requestedSchema: any,
+    sendRequest: SendRequest
   ) => {
-    const request = {
+    const request: ElicitRequest = {
       method: 'elicitation/create',
       params: {
         message,
-        requestedSchema
-      }
+        requestedSchema,
+      },
     };
 
-    return await server.request(request, z.any());
+    return await sendRequest(request, ElicitResultSchema);
   };
 
   const ALL_RESOURCES: Resource[] = Array.from({ length: 100 }, (_, i) => {
@@ -344,12 +350,9 @@ export const createServer = () => {
     throw new Error(`Unknown resource: ${uri}`);
   });
 
-  server.setRequestHandler(SubscribeRequestSchema, async (request) => {
+  server.setRequestHandler(SubscribeRequestSchema, async (request, extra) => {
     const { uri } = request.params;
     subscriptions.add(uri);
-
-    // Request sampling from client when someone subscribes
-    await requestSampling("A new subscription was started", uri);
     return {};
   });
 
@@ -535,6 +538,11 @@ export const createServer = () => {
         inputSchema: zodToJsonSchema(StructuredContentSchema.input) as ToolInput,
         outputSchema: zodToJsonSchema(StructuredContentSchema.output) as ToolOutput,
       },
+      {
+        name: ToolName.ZIP_RESOURCES,
+        description: "Compresses the provided resource files (mapping of name to URI, which can be a data URI) to a zip file, which it returns as a data URI resource link.",
+        inputSchema: zodToJsonSchema(ZipResourcesInputSchema) as ToolInput,
+      }
     ];
     if (clientCapabilities!.roots) tools.push ({
         name: ToolName.LIST_ROOTS,
@@ -551,7 +559,7 @@ export const createServer = () => {
     return { tools };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request,extra) => {
     const { name, arguments: args } = request.params;
 
     if (name === ToolName.ECHO) {
@@ -593,7 +601,7 @@ export const createServer = () => {
               total: steps,
               progressToken,
             },
-          });
+          },{relatedRequestId: extra.requestId});
         }
       }
 
@@ -625,7 +633,8 @@ export const createServer = () => {
       const result = await requestSampling(
         prompt,
         ToolName.SAMPLE_LLM,
-        maxTokens
+        maxTokens,
+        extra.sendRequest
       );
       return {
         content: [
@@ -744,14 +753,20 @@ export const createServer = () => {
           type: 'object',
           properties: {
             color: { type: 'string', description: 'Favorite color' },
-            number: { type: 'integer', description: 'Favorite number', minimum: 1, maximum: 100 },
+            number: {
+              type: 'integer',
+              description: 'Favorite number',
+              minimum: 1,
+              maximum: 100,
+            },
             pets: {
               type: 'string',
               enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'],
-              description: 'Favorite pets'
+              description: 'Favorite pets',
             },
-          }
-        }
+          },
+        },
+        extra.sendRequest
       );
 
       // Handle different response actions
@@ -840,6 +855,37 @@ export const createServer = () => {
       };
     }
 
+    if (name === ToolName.ZIP_RESOURCES) {
+      const { files } = ZipResourcesInputSchema.parse(args);
+
+      const zip = new JSZip();
+
+      for (const [fileName, fileUrl] of Object.entries(files)) {
+        try {
+          const response = await fetch(fileUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch ${fileUrl}: ${response.statusText}`);
+          }
+          const arrayBuffer = await response.arrayBuffer();
+          zip.file(fileName, arrayBuffer);
+        } catch (error) {
+          throw new Error(`Error fetching file ${fileUrl}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
+      const uri = `data:application/zip;base64,${await zip.generateAsync({ type: "base64" })}`;
+
+      return {
+        content: [
+          {
+            type: "resource_link",
+            mimeType: "application/zip",
+            uri,
+          },
+        ],
+      };
+    }
+
     if (name === ToolName.LIST_ROOTS) {
       ListRootsSchema.parse(args);
 
@@ -918,23 +964,6 @@ export const createServer = () => {
     throw new Error(`Unknown reference type`);
   });
 
-  server.setRequestHandler(SetLevelRequestSchema, async (request) => {
-    const { level } = request.params;
-    logLevel = level;
-
-    // Demonstrate different log levels
-    await server.notification({
-      method: "notifications/message",
-      params: {
-        level: "debug",
-        logger: "test-server",
-        data: `Logging level set to: ${logLevel}`,
-      },
-    });
-
-    return {};
-  });
-
   // Roots protocol handlers
   server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
     try {
@@ -944,24 +973,18 @@ export const createServer = () => {
         currentRoots = response.roots;
 
         // Log the roots update for demonstration
-        await server.notification({
-          method: "notifications/message",
-          params: {
+        await server.sendLoggingMessage({
             level: "info",
             logger: "everything-server",
             data: `Roots updated: ${currentRoots.length} root(s) received from client`,
-          },
-        });
+        }, sessionId);
       }
     } catch (error) {
-      await server.notification({
-        method: "notifications/message",
-        params: {
+      await server.sendLoggingMessage({
           level: "error",
           logger: "everything-server",
           data: `Failed to request roots from client: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      });
+      }, sessionId);
     }
   });
 
@@ -976,43 +999,31 @@ export const createServer = () => {
         if (response && 'roots' in response) {
           currentRoots = response.roots;
 
-          await server.notification({
-            method: "notifications/message",
-            params: {
+          await server.sendLoggingMessage({
               level: "info",
               logger: "everything-server",
               data: `Initial roots received: ${currentRoots.length} root(s) from client`,
-            },
-          });
+          }, sessionId);
         } else {
-          await server.notification({
-            method: "notifications/message",
-            params: {
+          await server.sendLoggingMessage({
               level: "warning",
               logger: "everything-server",
               data: "Client returned no roots set",
-            },
-          });
+          }, sessionId);
         }
       } catch (error) {
-        await server.notification({
-          method: "notifications/message",
-          params: {
+        await server.sendLoggingMessage({
             level: "error",
             logger: "everything-server",
             data: `Failed to request initial roots from client: ${error instanceof Error ? error.message : String(error)}`,
-          },
-        });
+        }, sessionId);
       }
     } else {
-      await server.notification({
-        method: "notifications/message",
-        params: {
+      await server.sendLoggingMessage({
           level: "info",
           logger: "everything-server",
           data: "Client does not support MCP roots protocol",
-        },
-      });
+      }, sessionId);
     }
   };
 
