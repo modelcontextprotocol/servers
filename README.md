@@ -1017,6 +1017,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Naver](https://github.com/isnow890/naver-search-mcp)** (by isnow890) - MCP server for Naver Search API integration, supporting blog, news, shopping search and DataLab analytics features.
 - **[NBA](https://github.com/Taidgh-Robinson/nba-mcp-server)** - This MCP server provides tools to fetch recent and historical NBA games including basic and advanced statistics.
 - **[NCI GDC](https://github.com/QuentinCody/nci-gdc-mcp-server)** - Unofficial MCP server for the National Cancer Institute's Genomic Data Commons (GDC), providing access to harmonized cancer genomic and clinical data for oncology research.
+- **[NCP](https://github.com/portel-dev/ncp)** (Natural Context Provider by portel.dev) - NCP lets your AI dream of a tool and articulate its need as a user story. NCP then intelligently discovers and makes that tool instantly available, streamlining thought processes, eliminating cognitive overload, and slashing token costs by up to 87% (47ms discovery). Experience true on-demand tool access, smart health monitoring, and energy efficiency for your AI agents.
 - **[Neo4j](https://github.com/da-okazaki/mcp-neo4j-server)** - A community built server that interacts with Neo4j Graph Database.
 - **[Neovim](https://github.com/bigcodegen/mcp-neovim-server)** - An MCP Server for your Neovim session.
 - **[Netbird](https://github.com/aantti/mcp-netbird)** - List and analyze Netbird network peers, groups, policies, and more.
