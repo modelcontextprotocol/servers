@@ -353,9 +353,6 @@ export const createServer = () => {
   server.setRequestHandler(SubscribeRequestSchema, async (request, extra) => {
     const { uri } = request.params;
     subscriptions.add(uri);
-
-    // Request sampling from client when someone subscribes
-    await requestSampling("A new subscription was started", uri, undefined, extra.sendRequest);
     return {};
   });
 
@@ -877,7 +874,7 @@ export const createServer = () => {
       }
 
       const uri = `data:application/zip;base64,${await zip.generateAsync({ type: "base64" })}`;
-      
+
       return {
         content: [
           {
