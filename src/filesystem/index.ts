@@ -29,6 +29,7 @@ import {
   tailFile,
   headFile,
   setAllowedDirectories,
+  shouldFilterHiddenEntry,
 } from './lib.js';
 
 // Command line argument parsing
@@ -449,6 +450,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validPath = await validatePath(parsed.data.path);
         const entries = await fs.readdir(validPath, { withFileTypes: true });
         const formatted = entries
+          .filter((entry) => !shouldFilterHiddenEntry(entry.name))
           .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
           .join("\n");
         return {
@@ -464,27 +466,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validPath = await validatePath(parsed.data.path);
         const entries = await fs.readdir(validPath, { withFileTypes: true });
 
-        // Get detailed information for each entry
+        // Get detailed information for each entry (excluding hidden entries)
         const detailedEntries = await Promise.all(
-          entries.map(async (entry) => {
-            const entryPath = path.join(validPath, entry.name);
-            try {
-              const stats = await fs.stat(entryPath);
-              return {
-                name: entry.name,
-                isDirectory: entry.isDirectory(),
-                size: stats.size,
-                mtime: stats.mtime
-              };
-            } catch (error) {
-              return {
-                name: entry.name,
-                isDirectory: entry.isDirectory(),
-                size: 0,
-                mtime: new Date(0)
-              };
-            }
-          })
+          entries
+            .filter((entry) => !shouldFilterHiddenEntry(entry.name))
+            .map(async (entry) => {
+              const entryPath = path.join(validPath, entry.name);
+              try {
+                const stats = await fs.stat(entryPath);
+                return {
+                  name: entry.name,
+                  isDirectory: entry.isDirectory(),
+                  size: stats.size,
+                  mtime: stats.mtime
+                };
+              } catch (error) {
+                return {
+                  name: entry.name,
+                  isDirectory: entry.isDirectory(),
+                  size: 0,
+                  mtime: new Date(0)
+                };
+              }
+            })
         );
 
         // Sort entries based on sortBy parameter
@@ -541,6 +545,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             const result: TreeEntry[] = [];
 
             for (const entry of entries) {
+                // Skip hidden files/directories unless explicitly enabled
+                if (shouldFilterHiddenEntry(entry.name)) continue;
+
                 const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
                 const shouldExclude = excludePatterns.some(pattern => {
                     if (pattern.includes('*')) {

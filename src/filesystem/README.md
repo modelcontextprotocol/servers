@@ -15,6 +15,20 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 
 The server uses a flexible directory access control system. Directories can be specified via command-line arguments or dynamically via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots).
 
+### Hidden Files and Directories
+
+By default, the filesystem server **ignores dot-prefixed files and directories** (like `.git`, `.env`, `.terraform`, etc.) to:
+- Reduce token usage (especially from large directories like `.git`)
+- Enhance security by avoiding exposure of potentially sensitive hidden files
+- Follow the convention that dot-prefixed items are typically "hidden" for good reason
+
+To include hidden files and directories, set the environment variable:
+```bash
+export MCP_FILESYSTEM_INCLUDE_HIDDEN=true
+```
+
+This affects the following operations: `list_directory`, `list_directory_with_sizes`, `directory_tree`, and `search_files`.
+
 ### Method 1: Command-line Arguments
 Specify Allowed directories when starting the server:
 ```bash
