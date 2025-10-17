@@ -509,7 +509,7 @@ A growing set of community-developed and maintained servers demonstrates various
 > [!NOTE]
 > Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
 
-- **[.faf - The JPEG for AI](https://github.com/fafdev/mcp-server)** - Universal AI context format that makes any project 99% AI-ready. Features Context-Mirroring™ with proven disaster recovery, 0→99% AI-readiness scoring, and <50ms operations. The standard for AI context management.
+- **[claude-faf-mcp](https://github.com/Wolfe-Jam/claude-faf-mcp)** - MCP server for .faf format. Context scoring engine with project context management.
 - **[1mcpserver](https://github.com/particlefuture/1mcpserver)** - MCP of MCPs. Automatically discover, configure, and add MCP servers on your local machine.
 - **[1Panel](https://github.com/1Panel-dev/mcp-1panel)** - MCP server implementation that provides 1Panel interaction.
 - **[A2A](https://github.com/GongRzhe/A2A-MCP-Server)** - An MCP server that bridges the Model Context Protocol (MCP) with the Agent-to-Agent (A2A) protocol, enabling MCP-compatible AI assistants (like Claude) to seamlessly interact with A2A agents.
