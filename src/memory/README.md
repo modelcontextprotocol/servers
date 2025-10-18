@@ -180,7 +180,7 @@ The server can be configured using the following environment variables:
 }
 ```
 
-- `MEMORY_FILE_PATH`: Path to the memory storage JSON file (default: `memory.json` in the server directory)
+- `MEMORY_FILE_PATH`: Path to the memory storage JSON file (default: `memory.json` in the current working directory)
 
 # VS Code Installation Instructions
 
