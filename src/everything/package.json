@@ -22,7 +22,7 @@
     "start:streamableHttp": "node dist/streamableHttp.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.18.0",
+    "@modelcontextprotocol/sdk": "^1.19.1",
     "cors": "^2.8.5",
     "express": "^4.21.1",
     "jszip": "^3.10.1",
