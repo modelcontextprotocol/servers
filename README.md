@@ -522,6 +522,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[ADR Analysis](https://github.com/tosin2013/mcp-adr-analysis-server)** - AI-powered Architectural Decision Records (ADR) analysis server that provides architectural insights, technology stack detection, security checks, and TDD workflow enhancement for software development projects.
 - **[AgentBay](https://github.com/Michael98671/agentbay)** - An MCP server for providing serverless cloud infrastructure for AI agents.
 - **[AgentMode](https://www.agentmode.app)** - Connect to dozens of databases, data warehouses, Github & more, from a single MCP server.  Run the Docker image locally, in the cloud, or on-premise.
+- **[Agentic Framework](https://github.com/Piotr1215/mcp-agentic-framework)** - Multi-agent collaboration framework enabling AI agents to register, discover each other, exchange asynchronous messages via HTTP transport, and work together on complex tasks with persistent message history.
 - **[AI Agent Marketplace Index](https://github.com/AI-Agent-Hub/ai-agent-marketplace-index-mcp)** - MCP server to search more than 5000+ AI agents and tools of various categories from [AI Agent Marketplace Index](http://www.deepnlp.org/store/ai-agent) and monitor traffic of AI Agents.
 - **[AI Tasks](https://github.com/jbrinkman/valkey-ai-tasks)** - Let the AI manage complex plans with integrated task management and tracking tools. Supports STDIO, SSE and Streamable HTTP transports.
 - **[ai-Bible](https://github.com/AdbC99/ai-bible)** - Search the bible reliably and repeatably [ai-Bible Labs](https://ai-bible.com)
@@ -1039,6 +1040,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[oatpp-mcp](https://github.com/oatpp/oatpp-mcp)** - C++ MCP integration for Oat++. Use [Oat++](https://oatpp.io) to build MCP servers.
 - **[Obsidian Markdown Notes](https://github.com/calclavia/mcp-obsidian)** - Read and search through your Obsidian vault or any directory containing Markdown notes
 - **[obsidian-mcp](https://github.com/StevenStavrakis/obsidian-mcp)** - (by Steven Stavrakis) An MCP server for Obsidian.md with tools for searching, reading, writing, and organizing notes.
+- **[Obsidian Notes](https://github.com/Piotr1215/mcp-obsidian)** - Direct file system access to Obsidian vaults with security-first design, advanced search capabilities including MOC (Maps of Content) discovery, and support for obsidian.nvim - no Obsidian app required.
 - **[OceanBase](https://github.com/yuanoOo/oceanbase_mcp_server)** - (by yuanoOo) A Model Context Protocol (MCP) server that enables secure interaction with OceanBase databases.
 - **[Octocode](https://github.com/bgauryy/octocode-mcp)** - (by Guy Bary) AI-powered developer assistant that enables advanced code research, analysis and discovery across GitHub and NPM realms in realtime
 - **[Odoo](https://github.com/ivnvxd/mcp-server-odoo)** - Connect AI assistants to Odoo ERP systems for business data access and workflow automation.
@@ -1278,6 +1280,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[use_aws_mcp](https://github.com/runjivu/use_aws_mcp)** - amazon-q-cli's use_aws tool extracted into independent mcp, for general aws api usage.
 - **[User Feedback](https://github.com/mrexodia/user-feedback-mcp)** - Simple MCP Server to enable a human-in-the-loop workflow in tools like Cline and Cursor.
 - **[USPTO](https://github.com/riemannzeta/patent_mcp_server)** - MCP server for accessing United States Patent & Trademark Office data through its Open Data Protocol (ODP) API.
+- **[vCluster YAML](https://github.com/Piotr1215/vcluster-yaml-mcp-server)** - Query and validate vCluster YAML configurations directly from GitHub with live data fetching, multi-version support, and built-in validation. Includes standalone CLI.
 - **[Vectara](https://github.com/vectara/vectara-mcp)** - Query Vectara's trusted RAG-as-a-service platform.
 - **[Vega-Lite](https://github.com/isaacwasserman/mcp-vegalite-server)** - Generate visualizations from fetched data using the VegaLite format and renderer.
 - **[Vertica](https://github.com/nolleh/mcp-vertica)** - Vertica database integration in Python with configurable access controls and schema inspection
