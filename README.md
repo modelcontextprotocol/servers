@@ -1202,6 +1202,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Standard Korean Dictionary](https://github.com/privetin/stdict)** - Search the dictionary using API
 - **[Star Wars](https://github.com/johnpapa/mcp-starwars)** -MCP Server for the SWAPI Star Wars API. The main goal of the project is to show how an MCP server can be used to interact with APIs.
 - **[Starknet MCP Server](https://github.com/mcpdotdirect/starknet-mcp-server)** - A comprehensive MCP server for interacting with the Starknet blockchain, providing tools for querying blockchain data, resolving StarknetIDs, and performing token transfers.
+- **[Starling Bank](https://github.com/domdomegg/starling-bank-mcp)** - View and manage Starling Bank accounts and transactions through the Starling Bank API, including account balance checking and transaction history.
 - **[Starwind UI](https://github.com/Boston343/starwind-ui-mcp/)** - This MCP provides relevant commands, documentation, and other information to allow LLMs to take full advantage of Starwind UI's open source Astro components.
 - **[Stellar](https://github.com/syronlabs/stellar-mcp/)** - This MCP server enables LLMs to interact with the Stellar blockchain to create accounts, check address balances, analyze transactions, view transaction history, mint new assets, interact with smart contracts and much more.
 - **[Stitch AI](https://github.com/StitchAI/stitch-ai-mcp/)** - Knowledge management system for AI agents with memory space creation and retrieval capabilities.
