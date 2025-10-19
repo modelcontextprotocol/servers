@@ -635,6 +635,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[commands](https://github.com/g0t4/mcp-server-commands)** - Run commands and scripts. Just like in a terminal.
 - **[Companies House MCP](https://github.com/stefanoamorelli/companies-house-mcp)** (by Stefano Amorelli) - MCP server to connect with the UK Companies House API.
 - **[computer-control-mcp](https://github.com/AB498/computer-control-mcp)** - MCP server that provides computer control capabilities, like mouse, keyboard, OCR, etc. using PyAutoGUI, RapidOCR, ONNXRuntime Without External Dependencies.
+- **[computer-use-mcp](https://github.com/domdomegg/computer-use-mcp)** - Control your computer with screen capture, mouse, and keyboard capabilities for automated desktop interaction and task execution.
 - **[Computer-Use - Remote MacOS Use](https://github.com/baryhuang/mcp-remote-macos-use)** - Open-source out-of-the-box alternative to OpenAI Operator, providing a full desktop experience and optimized for using remote macOS machines as autonomous AI agents.
 - **[Congress.gov API](https://github.com/AshwinSundar/congress_gov_mcp)** - An MCP server to interact with real-time data from the Congress.gov API, which is the official API for the United States Congress.
 - **[Console Automation](https://github.com/ooples/mcp-console-automation)** - Production-ready MCP server for AI-driven console automation and monitoring. 40 tools for session management, SSH, testing, monitoring, and background jobs. Like Playwright for terminal applications.
