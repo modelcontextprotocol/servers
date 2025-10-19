@@ -1,10 +1,12 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import {
   CallToolRequestSchema,
   ClientCapabilities,
   CompleteRequestSchema,
   CreateMessageRequest,
   CreateMessageResultSchema,
+  ElicitResultSchema,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
   ListResourcesRequestSchema,
@@ -14,18 +16,20 @@ import {
   ReadResourceRequestSchema,
   Resource,
   RootsListChangedNotificationSchema,
-  SetLevelRequestSchema,
+  ServerNotification,
+  ServerRequest,
   SubscribeRequestSchema,
   Tool,
   ToolSchema,
   UnsubscribeRequestSchema,
-  type Root,
+  type Root
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import JSZip from "jszip";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,6 +40,8 @@ type ToolInput = z.infer<typeof ToolInputSchema>;
 
 const ToolOutputSchema = ToolSchema.shape.outputSchema;
 type ToolOutput = z.infer<typeof ToolOutputSchema>;
+
+type SendRequest = RequestHandlerExtra<ServerRequest, ServerNotification>["sendRequest"];
 
 /* Input schemas for tools implemented in this server */
 const EchoSchema = z.object({
@@ -123,6 +129,10 @@ const StructuredContentSchema = {
   })
 };
 
+const ZipResourcesInputSchema = z.object({
+  files: z.record(z.string().url().describe("URL of the file to include in the zip")).describe("Mapping of file names to URLs to include in the zip"),
+});
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -135,6 +145,7 @@ enum ToolName {
   ELICITATION = "startElicitation",
   GET_RESOURCE_LINKS = "getResourceLinks",
   STRUCTURED_CONTENT = "structuredContent",
+  ZIP_RESOURCES = "zip",
   LIST_ROOTS = "listRoots"
 }
 
@@ -174,7 +185,6 @@ export const createServer = () => {
   let subsUpdateInterval: NodeJS.Timeout | undefined;
   let stdErrUpdateInterval: NodeJS.Timeout | undefined;
 
-  let logLevel: LoggingLevel = "debug";
   let logsUpdateInterval: NodeJS.Timeout | undefined;
   // Store client capabilities
   let clientCapabilities: ClientCapabilities | undefined;
@@ -182,55 +192,48 @@ export const createServer = () => {
   // Roots state management
   let currentRoots: Root[] = [];
   let clientSupportsRoots = false;
-  const messages = [
-    { level: "debug", data: "Debug-level message" },
-    { level: "info", data: "Info-level message" },
-    { level: "notice", data: "Notice-level message" },
-    { level: "warning", data: "Warning-level message" },
-    { level: "error", data: "Error-level message" },
-    { level: "critical", data: "Critical-level message" },
-    { level: "alert", data: "Alert level-message" },
-    { level: "emergency", data: "Emergency-level message" },
-  ];
+  let sessionId: string | undefined;
 
-  const isMessageIgnored = (level: LoggingLevel): boolean => {
-    const currentLevel = messages.findIndex((msg) => logLevel === msg.level);
-    const messageLevel = messages.findIndex((msg) => level === msg.level);
-    return messageLevel < currentLevel;
-  };
+    // Function to start notification intervals when a client connects
+  const startNotificationIntervals = (sid?: string|undefined) => {
+      sessionId = sid;
+      if (!subsUpdateInterval) {
+        subsUpdateInterval = setInterval(() => {
+          for (const uri of subscriptions) {
+            server.notification({
+              method: "notifications/resources/updated",
+              params: { uri },
+            });
+          }
+        }, 10000);
+      }
 
-  // Function to start notification intervals when a client connects
-  const startNotificationIntervals = () => {
-    if (!subsUpdateInterval) {
-      subsUpdateInterval = setInterval(() => {
-        for (const uri of subscriptions) {
-          server.notification({
-            method: "notifications/resources/updated",
-            params: { uri },
-          });
-        }
-      }, 10000);
-    }
+      const maybeAppendSessionId = sessionId ? ` - SessionId ${sessionId}`: "";
+      const messages: { level: LoggingLevel; data: string }[] = [
+          { level: "debug", data: `Debug-level message${maybeAppendSessionId}` },
+          { level: "info", data: `Info-level message${maybeAppendSessionId}` },
+          { level: "notice", data: `Notice-level message${maybeAppendSessionId}` },
+          { level: "warning", data: `Warning-level message${maybeAppendSessionId}` },
+          { level: "error", data: `Error-level message${maybeAppendSessionId}` },
+          { level: "critical", data: `Critical-level message${maybeAppendSessionId}` },
+          { level: "alert", data: `Alert level-message${maybeAppendSessionId}` },
+          { level: "emergency", data: `Emergency-level message${maybeAppendSessionId}` },
+      ];
 
-    if (!logsUpdateInterval) {
-      logsUpdateInterval = setInterval(() => {
-        let message = {
-          method: "notifications/message",
-          params: messages[Math.floor(Math.random() * messages.length)],
-        };
-        if (!isMessageIgnored(message.params.level as LoggingLevel))
-          server.notification(message);
-      }, 20000);
+      if (!logsUpdateInterval) {
+          console.error("Starting logs update interval");
+          logsUpdateInterval = setInterval(async () => {
+          await server.sendLoggingMessage( messages[Math.floor(Math.random() * messages.length)], sessionId);
+      }, 15000);
     }
   };
-
-
 
   // Helper method to request sampling from client
   const requestSampling = async (
     context: string,
     uri: string,
-    maxTokens: number = 100
+    maxTokens: number = 100,
+    sendRequest: SendRequest
   ) => {
     const request: CreateMessageRequest = {
       method: "sampling/createMessage",
@@ -251,22 +254,8 @@ export const createServer = () => {
       },
     };
 
-    return await server.request(request, CreateMessageResultSchema);
-  };
+    return await sendRequest(request, CreateMessageResultSchema);
 
-  const requestElicitation = async (
-    message: string,
-    requestedSchema: any
-  ) => {
-    const request = {
-      method: 'elicitation/create',
-      params: {
-        message,
-        requestedSchema
-      }
-    };
-
-    return await server.request(request, z.any());
   };
 
   const ALL_RESOURCES: Resource[] = Array.from({ length: 100 }, (_, i) => {
@@ -344,12 +333,9 @@ export const createServer = () => {
     throw new Error(`Unknown resource: ${uri}`);
   });
 
-  server.setRequestHandler(SubscribeRequestSchema, async (request) => {
+  server.setRequestHandler(SubscribeRequestSchema, async (request, extra) => {
     const { uri } = request.params;
     subscriptions.add(uri);
-
-    // Request sampling from client when someone subscribes
-    await requestSampling("A new subscription was started", uri);
     return {};
   });
 
@@ -535,6 +521,11 @@ export const createServer = () => {
         inputSchema: zodToJsonSchema(StructuredContentSchema.input) as ToolInput,
         outputSchema: zodToJsonSchema(StructuredContentSchema.output) as ToolOutput,
       },
+      {
+        name: ToolName.ZIP_RESOURCES,
+        description: "Compresses the provided resource files (mapping of name to URI, which can be a data URI) to a zip file, which it returns as a data URI resource link.",
+        inputSchema: zodToJsonSchema(ZipResourcesInputSchema) as ToolInput,
+      }
     ];
     if (clientCapabilities!.roots) tools.push ({
         name: ToolName.LIST_ROOTS,
@@ -544,14 +535,14 @@ export const createServer = () => {
     });
     if (clientCapabilities!.elicitation) tools.push ({
         name: ToolName.ELICITATION,
-        description: "Demonstrates the Elicitation feature by asking the user to provide information about their favorite color, number, and pets.",
+        description: "Elicitation test tool that demonstrates how to request user input with various field types (string, boolean, email, uri, date, integer, number, enum)",
         inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
     });
 
     return { tools };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request,extra) => {
     const { name, arguments: args } = request.params;
 
     if (name === ToolName.ECHO) {
@@ -593,7 +584,7 @@ export const createServer = () => {
               total: steps,
               progressToken,
             },
-          });
+          },{relatedRequestId: extra.requestId});
         }
       }
 
@@ -625,7 +616,8 @@ export const createServer = () => {
       const result = await requestSampling(
         prompt,
         ToolName.SAMPLE_LLM,
-        maxTokens
+        maxTokens,
+        extra.sendRequest
       );
       return {
         content: [
@@ -738,21 +730,75 @@ export const createServer = () => {
     if (name === ToolName.ELICITATION) {
       ElicitationSchema.parse(args);
 
-      const elicitationResult = await requestElicitation(
-        'What are your favorite things?',
-        {
-          type: 'object',
-          properties: {
-            color: { type: 'string', description: 'Favorite color' },
-            number: { type: 'integer', description: 'Favorite number', minimum: 1, maximum: 100 },
-            pets: {
-              type: 'string',
-              enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'],
-              description: 'Favorite pets'
+      const elicitationResult = await extra.sendRequest({
+        method: 'elicitation/create',
+        params: {
+          message: 'Please provide inputs for the following fields:',
+          requestedSchema: {
+            type: 'object',
+            properties: {
+              name: {
+                title: 'Full Name',
+                type: 'string',
+                description: 'Your full, legal name',
+              },
+              check: {
+                title: 'Agree to terms',
+                type: 'boolean',
+                description: 'A boolean check',
+              },
+              color: {
+                title: 'Favorite Color',
+                type: 'string',
+                description: 'Favorite color (open text)',
+                default: 'blue',
+              },
+              email: {
+                title: 'Email Address',
+                type: 'string',
+                format: 'email',
+                description: 'Your email address (will be verified, and never shared with anyone else)',
+              },
+              homepage: {
+                type: 'string',
+                format: 'uri',
+                description: 'Homepage / personal site',
+              },
+              birthdate: {
+                title: 'Birthdate',
+                type: 'string',
+                format: 'date',
+                description: 'Your date of birth (will never be shared with anyone else)',
+              },
+              integer: {
+                title: 'Favorite Integer',
+                type: 'integer',
+                description: 'Your favorite integer (do not give us your phone number, pin, or other sensitive info)',
+                minimum: 1,
+                maximum: 100,
+                default: 42,
+              },
+              number: {
+                title: 'Favorite Number',
+                type: 'number',
+                description: 'Favorite number (there are no wrong answers)',
+                minimum: 0,
+                maximum: 1000,
+                default: 3.14,
+              },
+              petType: {
+                title: 'Pet type',
+                type: 'string',
+                enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'],
+                enumNames: ['Cats', 'Dogs', 'Birds', 'Fish', 'Reptiles'],
+                default: 'dogs',
+                description: 'Your favorite pet type',
+              },
             },
-          }
-        }
-      );
+            required: ['name'],
+          },
+        },
+      }, ElicitResultSchema, { timeout: 10 * 60 * 1000 /* 10 minutes */ });
 
       // Handle different response actions
       const content = [];
@@ -760,19 +806,30 @@ export const createServer = () => {
       if (elicitationResult.action === 'accept' && elicitationResult.content) {
         content.push({
           type: "text",
-          text: `✅ User provided their favorite things!`,
+          text: `✅ User provided the requested information!`,
         });
 
         // Only access elicitationResult.content when action is accept
-        const { color, number, pets } = elicitationResult.content;
+        const userData = elicitationResult.content;
+        const lines = [];
+        if (userData.name) lines.push(`- Name: ${userData.name}`);
+        if (userData.check !== undefined) lines.push(`- Agreed to terms: ${userData.check}`);
+        if (userData.color) lines.push(`- Favorite Color: ${userData.color}`);
+        if (userData.email) lines.push(`- Email: ${userData.email}`);
+        if (userData.homepage) lines.push(`- Homepage: ${userData.homepage}`);
+        if (userData.birthdate) lines.push(`- Birthdate: ${userData.birthdate}`);
+        if (userData.integer !== undefined) lines.push(`- Favorite Integer: ${userData.integer}`);
+        if (userData.number !== undefined) lines.push(`- Favorite Number: ${userData.number}`);
+        if (userData.petType) lines.push(`- Pet Type: ${userData.petType}`);
+
         content.push({
           type: "text",
-          text: `Their favorites are:\n- Color: ${color || 'not specified'}\n- Number: ${number || 'not specified'}\n- Pets: ${pets || 'not specified'}`,
+          text: `User inputs:\n${lines.join('\n')}`,
         });
       } else if (elicitationResult.action === 'decline') {
         content.push({
           type: "text",
-          text: `❌ User declined to provide their favorite things.`,
+          text: `❌ User declined to provide the requested information.`,
         });
       } else if (elicitationResult.action === 'cancel') {
         content.push({
@@ -837,6 +894,37 @@ export const createServer = () => {
       return {
         content: [backwardCompatiblecontent],
         structuredContent: weather
+      };
+    }
+
+    if (name === ToolName.ZIP_RESOURCES) {
+      const { files } = ZipResourcesInputSchema.parse(args);
+
+      const zip = new JSZip();
+
+      for (const [fileName, fileUrl] of Object.entries(files)) {
+        try {
+          const response = await fetch(fileUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch ${fileUrl}: ${response.statusText}`);
+          }
+          const arrayBuffer = await response.arrayBuffer();
+          zip.file(fileName, arrayBuffer);
+        } catch (error) {
+          throw new Error(`Error fetching file ${fileUrl}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
+      const uri = `data:application/zip;base64,${await zip.generateAsync({ type: "base64" })}`;
+
+      return {
+        content: [
+          {
+            type: "resource_link",
+            mimeType: "application/zip",
+            uri,
+          },
+        ],
       };
     }
 
@@ -918,23 +1006,6 @@ export const createServer = () => {
     throw new Error(`Unknown reference type`);
   });
 
-  server.setRequestHandler(SetLevelRequestSchema, async (request) => {
-    const { level } = request.params;
-    logLevel = level;
-
-    // Demonstrate different log levels
-    await server.notification({
-      method: "notifications/message",
-      params: {
-        level: "debug",
-        logger: "test-server",
-        data: `Logging level set to: ${logLevel}`,
-      },
-    });
-
-    return {};
-  });
-
   // Roots protocol handlers
   server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
     try {
@@ -944,24 +1015,18 @@ export const createServer = () => {
         currentRoots = response.roots;
 
         // Log the roots update for demonstration
-        await server.notification({
-          method: "notifications/message",
-          params: {
+        await server.sendLoggingMessage({
             level: "info",
             logger: "everything-server",
             data: `Roots updated: ${currentRoots.length} root(s) received from client`,
-          },
-        });
+        }, sessionId);
       }
     } catch (error) {
-      await server.notification({
-        method: "notifications/message",
-        params: {
+      await server.sendLoggingMessage({
           level: "error",
           logger: "everything-server",
           data: `Failed to request roots from client: ${error instanceof Error ? error.message : String(error)}`,
-        },
-      });
+      }, sessionId);
     }
   });
 
@@ -976,43 +1041,31 @@ export const createServer = () => {
         if (response && 'roots' in response) {
           currentRoots = response.roots;
 
-          await server.notification({
-            method: "notifications/message",
-            params: {
+          await server.sendLoggingMessage({
               level: "info",
               logger: "everything-server",
               data: `Initial roots received: ${currentRoots.length} root(s) from client`,
-            },
-          });
+          }, sessionId);
         } else {
-          await server.notification({
-            method: "notifications/message",
-            params: {
+          await server.sendLoggingMessage({
               level: "warning",
               logger: "everything-server",
               data: "Client returned no roots set",
-            },
-          });
+          }, sessionId);
         }
       } catch (error) {
-        await server.notification({
-          method: "notifications/message",
-          params: {
+        await server.sendLoggingMessage({
             level: "error",
             logger: "everything-server",
             data: `Failed to request initial roots from client: ${error instanceof Error ? error.message : String(error)}`,
-          },
-        });
+        }, sessionId);
       }
     } else {
-      await server.notification({
-        method: "notifications/message",
-        params: {
+      await server.sendLoggingMessage({
           level: "info",
           logger: "everything-server",
           data: "Client does not support MCP roots protocol",
-        },
-      });
+      }, sessionId);
     }
   };
 

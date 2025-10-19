@@ -128,15 +128,6 @@ The server's directory access control follows this flow:
   - Returns detailed listing with file sizes and summary statistics
   - Shows total files, directories, and combined size
 
-- **directory_tree**
-  - Get a recursive tree view of files and directories as a JSON structure
-  - Input: `path` (string): Starting directory path
-  - Returns JSON structure with:
-    - `name`: File/directory name
-    - `type`: "file" or "directory"
-    - `children`: Array of child entries (for directories only)
-  - Output is formatted with 2-space indentation for readability
-
 - **move_file**
   - Move or rename files and directories
   - Inputs:
@@ -165,6 +156,7 @@ The server's directory access control follows this flow:
       - `children` (array): Present only for directories
         - Empty array for empty directories
         - Omitted for files
+  - Output is formatted with 2-space indentation for readability
     
 - **get_file_info**
   - Get detailed file/directory metadata

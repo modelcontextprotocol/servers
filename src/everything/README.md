@@ -124,7 +124,7 @@ Resource features:
 2. `complex_prompt`
    - Advanced prompt demonstrating argument handling
    - Required arguments:
-     - `temperature` (number): Temperature setting
+     - `temperature` (string): Temperature setting
    - Optional arguments:
      - `style` (string): Output style preference
    - Returns: Multi-turn conversation with images

@@ -8,6 +8,7 @@ on:
 jobs:
   create-metadata:
     runs-on: ubuntu-latest
+    if: github.repository_owner == 'modelcontextprotocol'
     outputs:
       hash: ${{ steps.last-release.outputs.hash }}
       version: ${{ steps.create-version.outputs.version}}
@@ -192,7 +193,10 @@ jobs:
 
   create-release:
     needs: [update-packages, create-metadata, publish-pypi, publish-npm]
-    if: needs.update-packages.outputs.changes_made == 'true'
+    if: |
+      always() &&
+      needs.update-packages.outputs.changes_made == 'true' &&
+      (needs.publish-pypi.result == 'success' || needs.publish-npm.result == 'success')
     runs-on: ubuntu-latest
     environment: release
     permissions:
