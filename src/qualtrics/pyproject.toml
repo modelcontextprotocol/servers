@@ -1,0 +1,41 @@
+[project]
+name = "qualtrics-mcp"
+version = "0.1.0"
+description = "Model Context Protocol (MCP) Server para integración con Qualtrics API"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [
+    {name = "Eder Vázquez Vázquez", email = "eder2v@hotmail.com"},
+]
+keywords = ["mcp", "qualtrics", "api", "surveys", "model-context-protocol", "fastmcp", "claude"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Communications",
+]
+dependencies = [
+    "fastmcp>=2.12.4",
+    "httpx>=0.27.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "polars>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/EderBuug/qualtrics-mcp"
+Repository = "https://github.com/EderBuug/qualtrics-mcp"
+Issues = "https://github.com/EderBuug/qualtrics-mcp/issues"
+Documentation = "https://github.com/EderBuug/qualtrics-mcp/blob/main/README.md"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qualtrics_mcp"]
