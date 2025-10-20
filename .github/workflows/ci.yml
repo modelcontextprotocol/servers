@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   ci:
-    uses: cursorvers/cursor-workflows/.github/workflows/cursor-ci.yml@v1
+    uses: cursorvers/cursor-macmini-workflows/.github/workflows/cursor-ci.yml@v1
     with:
       node-version: '20'
       run-tests: 'npm test --if-present'
