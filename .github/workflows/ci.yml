@@ -1,0 +1,21 @@
+name: CI
+on:
+  push:
+    branches: ["**"]
+  pull_request: {}
+  workflow_dispatch: {}
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ci:
+    uses: <ORG>/cursor-workflows/.github/workflows/cursor-ci.yml@v1
+    with:
+      node-version: '20'
+      run-tests: 'npm test --if-present'
+      run-build: 'npm run build --if-present'
+      working-directory: '.'
+    secrets:
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }} # Cursor CLI使用時のみ
+
+
