@@ -1059,6 +1059,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[OpenAPI Schema Explorer](https://github.com/kadykov/mcp-openapi-schema-explorer)** - Token-efficient access to local or remote OpenAPI/Swagger specs via MCP Resources.
 - **[OpenCTI](https://github.com/Spathodea-Network/opencti-mcp)** - Interact with OpenCTI platform to retrieve threat intelligence data including reports, indicators, malware and threat actors.
 - **[OpenCV](https://github.com/GongRzhe/opencv-mcp-server)** - An MCP server providing OpenCV computer vision capabilities. This allows AI assistants and language models to access powerful computer vision tools.
+- **[OpenDigger MCP Server](https://github.com/X-lab2017/open-digger-mcp-server)** - Model Context Protocol (MCP) server for [OpenDigger](https://open-digger.cn/en/), enabling advanced repository analytics and insights through tools and prompts.
 - **[OpenDota](https://github.com/asusevski/opendota-mcp-server)** - Interact with OpenDota API to retrieve Dota 2 match data, player statistics, and more.
 - **[OpenLink Generic Java Database Connectivity](https://github.com/OpenLinkSoftware/mcp-jdbc-server)** - Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers)
 - **[OpenLink Generic Open Database Connectivity](https://github.com/OpenLinkSoftware/mcp-odbc-server)** - Generic Database Management System (DBMS) access via Open Database Connectivity (ODBC) Connectors (Drivers)
