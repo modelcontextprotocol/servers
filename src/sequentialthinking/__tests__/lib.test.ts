@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SequentialThinkingServer, ThoughtData } from '../lib.js';
 
-// Mock chalk to avoid ESM issues in Jest
-jest.mock('chalk', () => {
+// Mock chalk to avoid ESM issues
+vi.mock('chalk', () => {
   const chalkMock = {
     yellow: (str: string) => str,
     green: (str: string) => str,
@@ -10,7 +10,6 @@ jest.mock('chalk', () => {
   };
   return {
     default: chalkMock,
-    __esModule: true,
   };
 });
 
