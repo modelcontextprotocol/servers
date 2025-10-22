@@ -24,6 +24,8 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
+  appendFileContent,
+  writeOrUpdateFileContent,
   searchFilesWithValidation,
   applyFileEdits,
   tailFile,
@@ -95,6 +97,16 @@ const ReadMultipleFilesArgsSchema = z.object({
 });
 
 const WriteFileArgsSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+});
+
+const AppendFileArgsSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+});
+
+const WriteOrUpdateFileArgsSchema = z.object({
   path: z.string(),
   content: z.string(),
 });
@@ -222,6 +234,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "Use with caution as it will overwrite existing files without warning. " +
           "Handles text content with proper encoding. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(WriteFileArgsSchema) as ToolInput,
+      },
+      {
+        name: "append_file",
+        description:
+          "Append content to the end of an existing file. This operation adds new content " +
+          "to the file without modifying existing content. The file must already exist - " +
+          "use write_file to create new files or write_or_update_file to create or append. " +
+          "Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(AppendFileArgsSchema) as ToolInput,
+      },
+      {
+        name: "write_or_update_file",
+        description:
+          "Create a new file with content, or append to an existing file. If the file " +
+          "does not exist, it will be created with the provided content. If the file " +
+          "already exists, the new content will be appended to the end without overwriting " +
+          "existing content. This is useful when you want to add content to a file but " +
+          "preserve existing data. Only works within allowed directories.",
+        inputSchema: zodToJsonSchema(WriteOrUpdateFileArgsSchema) as ToolInput,
       },
       {
         name: "edit_file",
@@ -414,6 +445,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         await writeFileContent(validPath, parsed.data.content);
         return {
           content: [{ type: "text", text: `Successfully wrote to ${parsed.data.path}` }],
+        };
+      }
+
+      case "append_file": {
+        const parsed = AppendFileArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for append_file: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        await appendFileContent(validPath, parsed.data.content);
+        return {
+          content: [{ type: "text", text: `Successfully appended content to ${parsed.data.path}` }],
+        };
+      }
+
+      case "write_or_update_file": {
+        const parsed = WriteOrUpdateFileArgsSchema.safeParse(args);
+        if (!parsed.success) {
+          throw new Error(`Invalid arguments for write_or_update_file: ${parsed.error}`);
+        }
+        const validPath = await validatePath(parsed.data.path);
+        await writeOrUpdateFileContent(validPath, parsed.data.content);
+
+        // Determine if file was created or updated for better feedback
+        const stats = await fs.stat(validPath);
+        const message = stats.birthtime.getTime() === stats.mtime.getTime()
+          ? `Successfully created ${parsed.data.path} with content`
+          : `Successfully appended content to ${parsed.data.path}`;
+
+        return {
+          content: [{ type: "text", text: message }],
         };
       }
 
