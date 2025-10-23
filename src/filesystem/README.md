@@ -9,21 +9,77 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Move files/directories
 - Search files
 - Get file metadata
+- Dynamic directory access control via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots)
 
-**Note**: The server will only allow operations within directories specified via `args`.
+## Directory Access Control
+
+The server uses a flexible directory access control system. Directories can be specified via command-line arguments or dynamically via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots).
+
+### Method 1: Command-line Arguments
+Specify Allowed directories when starting the server:
+```bash
+mcp-server-filesystem /path/to/dir1 /path/to/dir2
+```
+
+### Method 2: MCP Roots (Recommended)
+MCP clients that support [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories. 
+
+Roots notified by Client to Server, completely replace any server-side Allowed directories when provided.
+
+**Important**: If server starts without command-line arguments AND client doesn't support roots protocol (or provides empty roots), the server will throw an error during initialization.
+
+This is the recommended method, as this enables runtime directory updates via `roots/list_changed` notifications without server restart, providing a more flexible and modern integration experience.
+
+### How It Works
+
+The server's directory access control follows this flow:
+
+1. **Server Startup**
+   - Server starts with directories from command-line arguments (if provided)
+   - If no arguments provided, server starts with empty allowed directories
+
+2. **Client Connection & Initialization**
+   - Client connects and sends `initialize` request with capabilities
+   - Server checks if client supports roots protocol (`capabilities.roots`)
+   
+3. **Roots Protocol Handling** (if client supports roots)
+   - **On initialization**: Server requests roots from client via `roots/list`
+   - Client responds with its configured roots
+   - Server replaces ALL allowed directories with client's roots
+   - **On runtime updates**: Client can send `notifications/roots/list_changed`
+   - Server requests updated roots and replaces allowed directories again
+
+4. **Fallback Behavior** (if client doesn't support roots)
+   - Server continues using command-line directories only
+   - No dynamic updates possible
+
+5. **Access Control**
+   - All filesystem operations are restricted to allowed directories
+   - Use `list_allowed_directories` tool to see current directories
+   - Server requires at least ONE allowed directory to operate
+
+**Note**: The server will only allow operations within directories specified either via `args` or via Roots.
+
+
 
 ## API
 
-### Resources
-
-- `file://system`: File system operations interface
-
 ### Tools
 
-- **read_file**
-  - Read complete contents of a file
-  - Input: `path` (string)
-  - Reads complete file contents with UTF-8 encoding
+- **read_text_file**
+  - Read complete contents of a file as text
+  - Inputs:
+    - `path` (string)
+    - `head` (number, optional): First N lines
+    - `tail` (number, optional): Last N lines
+  - Always treats the file as UTF-8 text regardless of extension
+  - Cannot specify both `head` and `tail` simultaneously
+
+- **read_media_file**
+  - Read an image or audio file
+  - Inputs:
+    - `path` (string)
+  - Streams the file and returns base64 data with the corresponding MIME type
 
 - **read_multiple_files**
   - Read multiple files simultaneously
@@ -64,6 +120,14 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - List directory contents with [FILE] or [DIR] prefixes
   - Input: `path` (string)
 
+- **list_directory_with_sizes**
+  - List directory contents with [FILE] or [DIR] prefixes, including file sizes
+  - Inputs:
+    - `path` (string): Directory path to list
+    - `sortBy` (string, optional): Sort entries by "name" or "size" (default: "name")
+  - Returns detailed listing with file sizes and summary statistics
+  - Shows total files, directories, and combined size
+
 - **move_file**
   - Move or rename files and directories
   - Inputs:
@@ -72,14 +136,28 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
   - Fails if destination exists
 
 - **search_files**
-  - Recursively search for files/directories
+  - Recursively search for files/directories that match or do not match patterns
   - Inputs:
     - `path` (string): Starting directory
     - `pattern` (string): Search pattern
-    - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
-  - Case-insensitive matching
+    - `excludePatterns` (string[]): Exclude any patterns.
+  - Glob-style pattern matching
   - Returns full paths to matches
 
+- **directory_tree**
+  - Get recursive JSON tree structure of directory contents
+  - Inputs:
+    - `path` (string): Starting directory
+    - `excludePatterns` (string[]): Exclude any patterns. Glob formats are supported.
+  - Returns:
+    - JSON array where each entry contains:
+      - `name` (string): File/directory name
+      - `type` ('file'|'directory'): Entry type
+      - `children` (array): Present only for directories
+        - Empty array for empty directories
+        - Omitted for files
+  - Output is formatted with 2-space indentation for readability
+    
 - **get_file_info**
   - Get detailed file/directory metadata
   - Input: `path` (string)
@@ -151,11 +229,15 @@ For quick installation, click the installation buttons below...
 
 [![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=filesystem&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22--mount%22%2C%22type%3Dbind%2Csrc%3D%24%7BworkspaceFolder%7D%2Cdst%3D%2Fprojects%2Fworkspace%22%2C%22mcp%2Ffilesystem%22%2C%22%2Fprojects%22%5D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=filesystem&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22--mount%22%2C%22type%3Dbind%2Csrc%3D%24%7BworkspaceFolder%7D%2Cdst%3D%2Fprojects%2Fworkspace%22%2C%22mcp%2Ffilesystem%22%2C%22%2Fprojects%22%5D%7D&quality=insiders)
 
-For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open Settings (JSON)`.
+For manual installation, you can configure the MCP server using one of these methods:
 
-Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+**Method 1: User Configuration (Recommended)**
+Add the configuration to your user-level MCP configuration file. Open the Command Palette (`Ctrl + Shift + P`) and run `MCP: Open User Configuration`. This will open your user `mcp.json` file where you can add the server configuration.
 
-> Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
+**Method 2: Workspace Configuration**
+Alternatively, you can add the configuration to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+
+> For more details about MCP configuration in VS Code, see the [official VS Code MCP documentation](https://code.visualstudio.com/docs/copilot/mcp).
 
 You can provide sandboxed directories to the server by mounting them to `/projects`. Adding the `ro` flag will make the directory readonly by the server.
 
@@ -164,19 +246,17 @@ Note: all directories must be mounted to `/projects` by default.
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "filesystem": {
-        "command": "docker",
-        "args": [
-          "run",
-          "-i",
-          "--rm",
-          "--mount", "type=bind,src=${workspaceFolder},dst=/projects/workspace",
-          "mcp/filesystem",
-          "/projects"
-        ]
-      }
+  "servers": {
+    "filesystem": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--mount", "type=bind,src=${workspaceFolder},dst=/projects/workspace",
+        "mcp/filesystem",
+        "/projects"
+      ]
     }
   }
 }
@@ -186,16 +266,14 @@ Note: all directories must be mounted to `/projects` by default.
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "filesystem": {
-        "command": "npx",
-        "args": [
-          "-y",
-          "@modelcontextprotocol/server-filesystem",
-          "${workspaceFolder}"
-        ]
-      }
+  "servers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "${workspaceFolder}"
+      ]
     }
   }
 }

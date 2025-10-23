@@ -27,23 +27,23 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
    - Returns: Completion message with duration and steps
    - Sends progress notifications during execution
 
-4. `sampleLLM`
+4. `printEnv`
+   - Prints all environment variables
+   - Useful for debugging MCP server configuration
+   - No inputs required
+   - Returns: JSON string of all environment variables
+
+5. `sampleLLM`
    - Demonstrates LLM sampling capability using MCP sampling feature
    - Inputs:
      - `prompt` (string): The prompt to send to the LLM
      - `maxTokens` (number, default: 100): Maximum tokens to generate
    - Returns: Generated LLM response
 
-5. `getTinyImage`
+6. `getTinyImage`
    - Returns a small test image
    - No inputs required
    - Returns: Base64 encoded PNG image data
-
-6. `printEnv`
-   - Prints all environment variables
-   - Useful for debugging MCP server configuration
-   - No inputs required
-   - Returns: JSON string of all environment variables
 
 7. `annotatedMessage`
    - Demonstrates how annotations can be used to provide metadata about content
@@ -71,6 +71,30 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
      - Text introduction
      - Embedded resource with `type: "resource"`
      - Text instruction for using the resource URI
+
+9. `startElicitation`
+   - Initiates an elicitation (interaction) within the MCP client.
+   - Inputs:
+      - `color` (string): Favorite color
+      - `number` (number, 1-100): Favorite number
+      - `pets` (enum): Favorite pet
+   - Returns: Confirmation of the elicitation demo with selection summary.
+
+10. `structuredContent`
+   - Demonstrates a tool returning structured content using the example in the specification
+   - Provides an output schema to allow testing of client SHOULD advisory to validate the result using the schema
+   - Inputs:
+     - `location` (string): A location or ZIP code, mock data is returned regardless of value
+   - Returns: a response with
+     - `structuredContent` field conformant to the output schema
+     - A backward compatible Text Content field, a SHOULD advisory in the specification
+
+11. `listRoots`
+   - Lists the current MCP roots provided by the client
+   - Demonstrates the roots protocol capability even though this server doesn't access files
+   - No inputs required
+   - Returns: List of current roots with their URIs and names, or a message if no roots are set
+   - Shows how servers can interact with the MCP roots protocol
 
 ### Resources
 
@@ -100,7 +124,7 @@ Resource features:
 2. `complex_prompt`
    - Advanced prompt demonstrating argument handling
    - Required arguments:
-     - `temperature` (number): Temperature setting
+     - `temperature` (string): Temperature setting
    - Optional arguments:
      - `style` (string): Output style preference
    - Returns: Multi-turn conversation with images
@@ -111,6 +135,18 @@ Resource features:
      - `resourceId` (number): ID of the resource to embed (1-100)
    - Returns: Multi-turn conversation with an embedded resource reference
    - Shows how to include resources directly in prompt messages
+
+### Roots
+
+The server demonstrates the MCP roots protocol capability:
+
+- Declares `roots: { listChanged: true }` capability to indicate support for roots
+- Handles `roots/list_changed` notifications from clients
+- Requests initial roots during server initialization
+- Provides a `listRoots` tool to display current roots
+- Logs roots-related events for demonstration purposes
+
+Note: This server doesn't actually access files, but demonstrates how servers can interact with the roots protocol for clients that need to understand which directories are available for file operations.
 
 ### Logging
 
@@ -152,22 +188,24 @@ For quick installation, use of of the one-click install buttons below...
 
 [![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=everything&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22mcp%2Feverything%22%5D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=everything&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22mcp%2Feverything%22%5D%7D&quality=insiders)
 
-For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open User Settings (JSON)`.
+For manual installation, you can configure the MCP server using one of these methods:
 
-Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+**Method 1: User Configuration (Recommended)**
+Add the configuration to your user-level MCP configuration file. Open the Command Palette (`Ctrl + Shift + P`) and run `MCP: Open User Configuration`. This will open your user `mcp.json` file where you can add the server configuration.
 
-> Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
+**Method 2: Workspace Configuration**
+Alternatively, you can add the configuration to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+
+> For more details about MCP configuration in VS Code, see the [official VS Code MCP documentation](https://code.visualstudio.com/docs/copilot/mcp).
 
 #### NPX
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "everything": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-everything"]
-      }
+  "servers": {
+    "everything": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everything"]
     }
   }
 }

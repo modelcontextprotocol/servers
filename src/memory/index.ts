@@ -11,14 +11,43 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Define memory file path using environment variable with fallback
-const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
+const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
 
-// If MEMORY_FILE_PATH is just a filename, put it in the same directory as the script
-const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
-  ? path.isAbsolute(process.env.MEMORY_FILE_PATH)
-    ? process.env.MEMORY_FILE_PATH
-    : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH)
-  : defaultMemoryPath;
+// Handle backward compatibility: migrate memory.json to memory.jsonl if needed
+async function ensureMemoryFilePath(): Promise<string> {
+  if (process.env.MEMORY_FILE_PATH) {
+    // Custom path provided, use it as-is (with absolute path resolution)
+    return path.isAbsolute(process.env.MEMORY_FILE_PATH)
+      ? process.env.MEMORY_FILE_PATH
+      : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH);
+  }
+  
+  // No custom path set, check for backward compatibility migration
+  const oldMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
+  const newMemoryPath = defaultMemoryPath;
+  
+  try {
+    // Check if old file exists and new file doesn't
+    await fs.access(oldMemoryPath);
+    try {
+      await fs.access(newMemoryPath);
+      // Both files exist, use new one (no migration needed)
+      return newMemoryPath;
+    } catch {
+      // Old file exists, new file doesn't - migrate
+      console.error('DETECTED: Found legacy memory.json file, migrating to memory.jsonl for JSONL format compatibility');
+      await fs.rename(oldMemoryPath, newMemoryPath);
+      console.error('COMPLETED: Successfully migrated memory.json to memory.jsonl');
+      return newMemoryPath;
+    }
+  } catch {
+    // Old file doesn't exist, use new path
+    return newMemoryPath;
+  }
+}
+
+// Initialize memory file path (will be set during startup)
+let MEMORY_FILE_PATH: string;
 
 // We are storing our memory using entities, relations, and observations in a graph structure
 interface Entity {
@@ -60,8 +89,18 @@ class KnowledgeGraphManager {
 
   private async saveGraph(graph: KnowledgeGraph): Promise<void> {
     const lines = [
-      ...graph.entities.map(e => JSON.stringify({ type: "entity", ...e })),
-      ...graph.relations.map(r => JSON.stringify({ type: "relation", ...r })),
+      ...graph.entities.map(e => JSON.stringify({ 
+        type: "entity", 
+        name: e.name, 
+        entityType: e.entityType, 
+        observations: e.observations 
+      })),
+      ...graph.relations.map(r => JSON.stringify({ 
+        type: "relation", 
+        from: r.from, 
+        to: r.to, 
+        relationType: r.relationType 
+      })),
     ];
     await fs.writeFile(MEMORY_FILE_PATH, lines.join("\n"));
   }
@@ -219,10 +258,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   },
                 },
                 required: ["name", "entityType", "observations"],
+                additionalProperties: false,
               },
             },
           },
           required: ["entities"],
+          additionalProperties: false,
         },
       },
       {
@@ -241,10 +282,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   relationType: { type: "string", description: "The type of the relation" },
                 },
                 required: ["from", "to", "relationType"],
+                additionalProperties: false,
               },
             },
           },
           required: ["relations"],
+          additionalProperties: false,
         },
       },
       {
@@ -266,10 +309,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   },
                 },
                 required: ["entityName", "contents"],
+                additionalProperties: false,
               },
             },
           },
           required: ["observations"],
+          additionalProperties: false,
         },
       },
       {
@@ -285,6 +330,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["entityNames"],
+          additionalProperties: false,
         },
       },
       {
@@ -306,10 +352,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   },
                 },
                 required: ["entityName", "observations"],
+                additionalProperties: false,
               },
             },
           },
           required: ["deletions"],
+          additionalProperties: false,
         },
       },
       {
@@ -328,11 +376,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   relationType: { type: "string", description: "The type of the relation" },
                 },
                 required: ["from", "to", "relationType"],
+                additionalProperties: false,
               },
               description: "An array of relations to delete" 
             },
           },
           required: ["relations"],
+          additionalProperties: false,
         },
       },
       {
@@ -341,6 +391,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {},
+          additionalProperties: false,
         },
       },
       {
@@ -352,6 +403,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             query: { type: "string", description: "The search query to match against entity names, types, and observation content" },
           },
           required: ["query"],
+          additionalProperties: false,
         },
       },
       {
@@ -367,6 +419,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["names"],
+          additionalProperties: false,
         },
       },
     ],
@@ -375,6 +428,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+
+  if (name === "read_graph") {
+    return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.readGraph(), null, 2) }] };
+  }
 
   if (!args) {
     throw new Error(`No arguments provided for tool: ${name}`);
@@ -396,8 +453,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case "delete_relations":
       await knowledgeGraphManager.deleteRelations(args.relations as Relation[]);
       return { content: [{ type: "text", text: "Relations deleted successfully" }] };
-    case "read_graph":
-      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.readGraph(), null, 2) }] };
     case "search_nodes":
       return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.searchNodes(args.query as string), null, 2) }] };
     case "open_nodes":
@@ -408,6 +463,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+  // Initialize memory file path with backward compatibility
+  MEMORY_FILE_PATH = await ensureMemoryFilePath();
+  
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Knowledge Graph MCP Server running on stdio");

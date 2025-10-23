@@ -8,6 +8,7 @@ on:
 jobs:
   create-metadata:
     runs-on: ubuntu-latest
+    if: github.repository_owner == 'modelcontextprotocol'
     outputs:
       hash: ${{ steps.last-release.outputs.hash }}
       version: ${{ steps.create-version.outputs.version}}
@@ -104,6 +105,7 @@ jobs:
 
   publish-pypi:
     needs: [update-packages, create-metadata]
+    if: ${{ needs.create-metadata.outputs.pypi_packages != '[]' && needs.create-metadata.outputs.pypi_packages != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -145,6 +147,7 @@ jobs:
 
   publish-npm:
     needs: [update-packages, create-metadata]
+    if: ${{ needs.create-metadata.outputs.npm_packages != '[]' && needs.create-metadata.outputs.npm_packages != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -190,7 +193,10 @@ jobs:
 
   create-release:
     needs: [update-packages, create-metadata, publish-pypi, publish-npm]
-    if: needs.update-packages.outputs.changes_made == 'true'
+    if: |
+      always() &&
+      needs.update-packages.outputs.changes_made == 'true' &&
+      (needs.publish-pypi.result == 'success' || needs.publish-npm.result == 'success')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -212,10 +218,3 @@ jobs:
             --title "Release $VERSION" \
             --notes-file RELEASE_NOTES.md
 
-      - name: Docker MCP images
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.DOCKER_TOKEN }}
-          repository: docker/labs-ai-tools-for-devs
-          event-type: build-mcp-images
-          client-payload: '{"ref": "${{ needs.create-metadata.outputs.version }}"}'

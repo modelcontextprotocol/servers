@@ -4,6 +4,8 @@ import json
 from typing import Sequence
 
 from zoneinfo import ZoneInfo
+from tzlocal import get_localzone_name  # ← returns "Europe/Paris", etc.
+
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
@@ -20,6 +22,7 @@ class TimeTools(str, Enum):
 class TimeResult(BaseModel):
     timezone: str
     datetime: str
+    day_of_week: str
     is_dst: bool
 
 
@@ -40,10 +43,11 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
         return ZoneInfo(local_tz_override)
 
     # Get local timezone from datetime.now()
-    tzinfo = datetime.now().astimezone(tz=None).tzinfo
-    if tzinfo is not None:
-        return ZoneInfo(str(tzinfo))
-    raise McpError("Could not determine local timezone - tzinfo is None")
+    local_tzname = get_localzone_name()
+    if local_tzname is not None:
+        return ZoneInfo(local_tzname)
+    # Default to UTC if local timezone cannot be determined
+    return ZoneInfo("UTC")
 
 
 def get_zoneinfo(timezone_name: str) -> ZoneInfo:
@@ -62,6 +66,7 @@ class TimeServer:
         return TimeResult(
             timezone=timezone_name,
             datetime=current_time.isoformat(timespec="seconds"),
+            day_of_week=current_time.strftime("%A"),
             is_dst=bool(current_time.dst()),
         )
 
@@ -102,11 +107,13 @@ class TimeServer:
             source=TimeResult(
                 timezone=source_tz,
                 datetime=source_time.isoformat(timespec="seconds"),
+                day_of_week=source_time.strftime("%A"),
                 is_dst=bool(source_time.dst()),
             ),
             target=TimeResult(
                 timezone=target_tz,
                 datetime=target_time.isoformat(timespec="seconds"),
+                day_of_week=target_time.strftime("%A"),
                 is_dst=bool(target_time.dst()),
             ),
             time_difference=time_diff_str,
