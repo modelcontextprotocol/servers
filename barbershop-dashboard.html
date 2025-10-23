@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>لوحة إدارة صالون الحلاقة</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f172a;
+      --bg-soft: #15263d;
+      --bg-elevated: #1f2a40;
+      --bg-highlight: rgba(56, 189, 248, 0.12);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #22d3ee;
+      --accent-strong: #0ea5e9;
+      --success: #34d399;
+      --warning: #facc15;
+      --danger: #f87171;
+      --shadow: 0 25px 50px -20px rgba(15, 23, 42, 0.65);
+      font-family: "Cairo", "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top right, rgba(14, 165, 233, 0.28), transparent 45%),
+        radial-gradient(circle at bottom left, rgba(236, 72, 153, 0.15), transparent 40%),
+        linear-gradient(135deg, #0b1120, #111c33 55%, #0f172a);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .app-window {
+      width: min(1240px, 100%);
+      background: rgba(15, 23, 42, 0.88);
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      max-height: 96vh;
+    }
+
+    .window-header {
+      height: 58px;
+      background: linear-gradient(90deg, rgba(34, 211, 238, 0.7), rgba(14, 165, 233, 0.35));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .window-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .control-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.45);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .control-dot:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18);
+      cursor: pointer;
+    }
+
+    .control-dot.minimize { background: #fbbf24; }
+    .control-dot.maximize { background: #22c55e; }
+    .control-dot.close { background: #ef4444; }
+
+    .window-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .window-title svg {
+      width: 20px;
+      height: 20px;
+      filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.4));
+    }
+
+    .app-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      overflow: hidden;
+    }
+
+    aside {
+      background: rgba(15, 23, 42, 0.8);
+      border-left: 1px solid rgba(148, 163, 184, 0.08);
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .profile-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      background: rgba(31, 42, 64, 0.85);
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .avatar {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      color: #0f172a;
+      display: grid;
+      place-items: center;
+      font-size: 1.3rem;
+      font-weight: 700;
+    }
+
+    .profile-meta h2 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .profile-meta span {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    nav {
+      display: grid;
+      gap: 6px;
+    }
+
+    .menu-button {
+      background: transparent;
+      color: inherit;
+      border: 1px solid transparent;
+      padding: 12px 14px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 500;
+      font-size: 0.95rem;
+      transition: transform 0.2s ease, background 0.2s ease, border 0.2s ease;
+      cursor: pointer;
+    }
+
+    .menu-button span {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .menu-button .icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: rgba(34, 211, 238, 0.16);
+      color: var(--accent);
+      font-size: 1.05rem;
+      transition: transform 0.25s ease;
+    }
+
+    .menu-button:hover,
+    .menu-button:focus,
+    .menu-button.active {
+      background: var(--bg-highlight);
+      border-color: rgba(34, 211, 238, 0.35);
+      transform: translateX(-4px);
+      outline: none;
+    }
+
+    .menu-button:active .icon {
+      transform: scale(0.86);
+    }
+
+    .quick-actions {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 14px;
+      background: rgba(31, 42, 64, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      display: grid;
+      gap: 12px;
+    }
+
+    .quick-actions h3 {
+      margin: 0 0 4px;
+      font-size: 0.95rem;
+    }
+
+    .quick-actions button {
+      all: unset;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      background: rgba(15, 23, 42, 0.55);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .quick-actions button:hover {
+      transform: translateY(-2px);
+      background: rgba(34, 211, 238, 0.08);
+    }
+
+    main {
+      background: rgba(15, 23, 42, 0.55);
+      padding: 24px 28px;
+      overflow: auto;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .toolbar-button {
+      all: unset;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: rgba(34, 211, 238, 0.14);
+      color: var(--accent);
+      border: 1px solid rgba(34, 211, 238, 0.4);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .toolbar-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 25px -18px rgba(34, 211, 238, 0.85);
+    }
+
+    .search-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-box input {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      color: inherit;
+      border-radius: 12px;
+      padding: 10px 42px 10px 14px;
+      min-width: 260px;
+      font-size: 0.95rem;
+    }
+
+    .search-box svg {
+      position: absolute;
+      left: 14px;
+      width: 20px;
+      height: 20px;
+      opacity: 0.6;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .stat-card {
+      background: rgba(31, 42, 64, 0.75);
+      border-radius: 16px;
+      padding: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      display: grid;
+      gap: 6px;
+      transition: transform 0.25s ease, border 0.25s ease;
+      cursor: pointer;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(34, 211, 238, 0.45);
+    }
+
+    .stat-card header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .stat-card strong {
+      font-size: 1.75rem;
+      font-weight: 700;
+    }
+
+    .stat-trend {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+    }
+
+    .stat-trend.up { color: var(--success); }
+    .stat-trend.down { color: var(--danger); }
+
+    .sections-grid {
+      display: grid;
+      gap: 20px;
+    }
+
+    section {
+      background: rgba(31, 42, 64, 0.78);
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      padding: 20px 22px;
+      display: grid;
+      gap: 18px;
+    }
+
+    section header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    section header h3 {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+
+    .section-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .section-actions button {
+      all: unset;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      cursor: pointer;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .section-actions button:hover {
+      transform: translateY(-2px);
+      background: rgba(34, 211, 238, 0.1);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border-spacing: 0;
+    }
+
+    th, td {
+      text-align: right;
+      padding: 12px 10px;
+      font-size: 0.9rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 0.75rem;
+    }
+
+    tbody tr:hover {
+      background: rgba(34, 211, 238, 0.06);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .status-pill.online {
+      background: rgba(52, 211, 153, 0.16);
+      color: var(--success);
+    }
+
+    .status-pill.offline {
+      background: rgba(248, 113, 113, 0.16);
+      color: var(--danger);
+    }
+
+    .status-pill.busy {
+      background: rgba(250, 204, 21, 0.16);
+      color: var(--warning);
+    }
+
+    .table-actions {
+      display: inline-flex;
+      gap: 6px;
+    }
+
+    .icon-button {
+      all: unset;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: transform 0.2s ease, background 0.2s ease, border 0.2s ease;
+    }
+
+    .icon-button:hover {
+      background: rgba(34, 211, 238, 0.12);
+      border-color: rgba(34, 211, 238, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .icon-button:active {
+      transform: scale(0.92);
+    }
+
+    form {
+      display: grid;
+      gap: 12px;
+    }
+
+    label {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-family: inherit;
+      resize: vertical;
+    }
+
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      display: none;
+    }
+
+    textarea {
+      min-height: 72px;
+    }
+
+    .form-row {
+      display: grid;
+      gap: 12px;
+    }
+
+    .form-row.split {
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .primary-action {
+      margin-top: 6px;
+      padding: 11px 14px;
+      border-radius: 12px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--accent-strong), #22d3ee);
+      color: #0f172a;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .primary-action:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 20px 30px -22px rgba(34, 211, 238, 0.95);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 28px;
+      border: 1px dashed rgba(148, 163, 184, 0.2);
+      border-radius: 14px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 14px;
+      max-height: 200px;
+      overflow: auto;
+      padding-left: 6px;
+    }
+
+    .timeline-item {
+      display: grid;
+      gap: 6px;
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+
+    .timeline-item strong {
+      font-size: 0.9rem;
+    }
+
+    .timeline-item span {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .toast {
+      position: fixed;
+      top: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 14px 22px;
+      background: rgba(31, 42, 64, 0.92);
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      box-shadow: 0 20px 35px -25px rgba(15, 23, 42, 0.95);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.9rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      z-index: 50;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .toast.success { border-color: rgba(52, 211, 153, 0.65); }
+    .toast.warning { border-color: rgba(250, 204, 21, 0.6); }
+    .toast.danger { border-color: rgba(248, 113, 113, 0.65); }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.8rem;
+      padding-top: 12px;
+      color: var(--muted);
+      border-top: 1px solid rgba(148, 163, 184, 0.12);
+    }
+
+    .footer-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .footer-actions button {
+      all: unset;
+      padding: 6px 10px;
+      border-radius: 10px;
+      background: rgba(34, 211, 238, 0.08);
+      color: var(--accent);
+      border: 1px solid rgba(34, 211, 238, 0.25);
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: transform 0.2s ease;
+    }
+
+    .footer-actions button:hover {
+      transform: translateY(-2px);
+    }
+
+    @media (max-width: 1080px) {
+      .app-body {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      nav {
+        flex: 1;
+        min-width: 240px;
+      }
+
+      .quick-actions {
+        min-width: 220px;
+      }
+    }
+
+    @media (max-width: 780px) {
+      body {
+        padding: 12px;
+      }
+
+      .app-window {
+        max-height: none;
+      }
+
+      .toolbar {
+        justify-content: center;
+      }
+
+      .search-box input {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-window">
+    <header class="window-header">
+      <div class="window-controls" aria-hidden="true">
+        <span class="control-dot close"></span>
+        <span class="control-dot maximize"></span>
+        <span class="control-dot minimize"></span>
+      </div>
+      <div class="window-title">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M4 12.5C4 7.25329 4 4.62994 5.31497 3.31497C6.62994 2 9.25329 2 14.5 2H15.5C18.0002 2 19.2502 2 20.1251 2.52299C20.5912 2.80543 20.9727 3.18683 21.2552 3.65294C21.7781 4.52777 21.7781 5.77777 21.7781 8.27778V9.27778C21.7781 14.5245 21.7781 17.1478 20.4632 18.4628C19.1482 19.7778 16.5249 19.7778 11.2781 19.7778H10.2781C5.03138 19.7778 2.40803 19.7778 1.09306 18.4628C-0.221908 17.1478 -0.221908 14.5245 -0.221908 9.27778V8.27778C-0.221908 6.88619 -0.221908 5.5131 0.0518661 4.45263C0.268693 3.658 0.658003 2.95368 1.22188 2.38981" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M8 18C8 19.6569 9.34315 21 11 21H17C18.6569 21 20 19.6569 20 18C20 16.3431 18.6569 15 17 15H11C9.34315 15 8 16.3431 8 18Z" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+        لوحة إدارة صالون الحلاقة
+      </div>
+      <div style="width: 40px"></div>
+    </header>
+    <div class="app-body">
+      <aside>
+        <div class="profile-card">
+          <div class="avatar">HT</div>
+          <div class="profile-meta">
+            <h2>صالون التميز</h2>
+            <span>مدير النظام: حاتم التركي</span>
+          </div>
+        </div>
+        <nav>
+          <button class="menu-button active" data-toast="استعراض لوحة التحكم">
+            <span>
+              <span class="icon">🏠</span>
+              لوحة القيادة
+            </span>
+            <small>Ctrl + 1</small>
+          </button>
+          <button class="menu-button" data-toast="إدارة جدول الحلاقين">
+            <span>
+              <span class="icon">💈</span>
+              جدول الحلاقين
+            </span>
+            <small>Ctrl + 2</small>
+          </button>
+          <button class="menu-button" data-toast="متابعة قاعدة العملاء">
+            <span>
+              <span class="icon">🧾</span>
+              ملفات العملاء
+            </span>
+            <small>Ctrl + 3</small>
+          </button>
+          <button class="menu-button" data-toast="تقارير المبيعات اليومية">
+            <span>
+              <span class="icon">📊</span>
+              تقارير المبيعات
+            </span>
+            <small>Ctrl + 4</small>
+          </button>
+        </nav>
+        <div class="quick-actions">
+          <h3>إجراءات سريعة</h3>
+          <button data-action="add-barber">إضافة حلاق جديد<span>＋</span></button>
+          <button data-action="add-client">تسجيل عميل فوري<span>🧍</span></button>
+          <button data-action="record-sale">تسجيل عملية بيع<span>💵</span></button>
+        </div>
+      </aside>
+      <main>
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <button class="toolbar-button" id="sync-data" data-toast="تم التحقق من البيانات" type="button">
+              🔄 مزامنة فورية
+            </button>
+            <button class="toolbar-button" id="open-settings" data-toast="فتح إعدادات النظام" type="button">
+              ⚙️ الإعدادات المتقدمة
+            </button>
+          </div>
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="m20 20-2-2"></path>
+            </svg>
+            <input id="search" type="search" placeholder="بحث في الحلاقين أو العملاء" aria-label="بحث" />
+          </div>
+        </div>
+
+        <div class="stats-grid" id="stats"></div>
+
+        <div class="sections-grid">
+          <section id="barber-section" aria-labelledby="barber-heading">
+            <header>
+              <h3 id="barber-heading">حضور الحلاقين اليوم</h3>
+              <div class="section-actions">
+                <button type="button" id="check-all" data-toast="تم تسجيل حضور الجميع">✅ تسجيل الجميع</button>
+                <button type="button" id="clear-attendance" data-toast="تم إعادة ضبط الحضور">♻️ إعادة ضبط</button>
+              </div>
+            </header>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>الحلاق</th>
+                    <th>الحالة</th>
+                    <th>العملاء اليوم</th>
+                    <th>وقت الدخول</th>
+                    <th>وقت الخروج</th>
+                    <th>إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="barber-table"></tbody>
+              </table>
+            </div>
+            <div class="timeline" id="attendance-log" aria-live="polite"></div>
+          </section>
+
+          <section id="client-section" aria-labelledby="client-heading">
+            <header>
+              <h3 id="client-heading">طابور العملاء وحجوزاتهم</h3>
+              <div class="section-actions">
+                <button type="button" id="new-client" data-toast="استمارة تسجيل عميل جاهزة">➕ عميل جديد</button>
+                <button type="button" id="clear-clients" data-toast="تم إفراغ الطابور">🧹 تفريغ الطابور</button>
+              </div>
+            </header>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>العميل</th>
+                    <th>الخدمة</th>
+                    <th>الحلاق</th>
+                    <th>الوقت</th>
+                    <th>ملاحظات</th>
+                    <th>إجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="client-table"></tbody>
+              </table>
+            </div>
+            <div class="empty-state" id="client-empty" hidden>لا توجد حجوزات قيد الانتظار.</div>
+          </section>
+
+          <section id="sales-section" aria-labelledby="sales-heading">
+            <header>
+              <h3 id="sales-heading">المبيعات اليومية</h3>
+              <div class="section-actions">
+                <button type="button" id="add-sale" data-toast="أضف عملية بيع جديدة">💳 إضافة بيع</button>
+                <button type="button" id="export-sales" data-toast="تم تجهيز ملف المبيعات">📤 تصدير</button>
+              </div>
+            </header>
+            <form id="sale-form" autocomplete="off">
+              <div class="form-row split">
+                <label>اسم العميل
+                  <input type="text" id="sale-customer" name="sale-customer" required />
+                </label>
+                <label>الخدمة المقدمة
+                  <input type="text" id="sale-service" name="sale-service" required />
+                </label>
+                <label>المبلغ (ريال)
+                  <input type="number" id="sale-amount" name="sale-amount" min="0" step="1" required />
+                </label>
+                <label>الحلاق المنفذ
+                  <select id="sale-barber" name="sale-barber" required></select>
+                </label>
+              </div>
+              <label>ملاحظات العملية
+                <textarea id="sale-notes" name="sale-notes" placeholder="تفاصيل إضافية أو خصم"></textarea>
+              </label>
+              <button type="submit" class="primary-action">💾 حفظ العملية</button>
+            </form>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>العميل</th>
+                    <th>الخدمة</th>
+                    <th>المبلغ</th>
+                    <th>الحلاق</th>
+                    <th>الوقت</th>
+                  </tr>
+                </thead>
+                <tbody id="sales-table"></tbody>
+              </table>
+            </div>
+            <div class="footer">
+              <span>آخر تحديث للمبيعات: <strong id="last-sale-update">—</strong></span>
+              <div class="footer-actions">
+                <button type="button" id="backup" data-toast="تم إنشاء نسخة احتياطية">🧩 نسخ احتياطي</button>
+                <button type="button" id="print" data-toast="تم إرسال التقرير للطباعة">🖨️ طباعة</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="toast" role="status" aria-live="polite" id="toast"></div>
+
+  <template id="timeline-item-template">
+    <div class="timeline-item">
+      <strong></strong>
+      <span></span>
+    </div>
+  </template>
+
+  <script>
+    const createId = () =>
+      (window.crypto && typeof window.crypto.randomUUID === "function"
+        ? window.crypto.randomUUID()
+        : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+
+    const state = {
+      barbers: [
+        { id: "b1", name: "سالم الخالدي", status: "offline", clientsToday: 0, checkIn: null, checkOut: null },
+        { id: "b2", name: "محمد الأحمد", status: "online", clientsToday: 3, checkIn: "09:02", checkOut: null },
+        { id: "b3", name: "خالد التركي", status: "busy", clientsToday: 1, checkIn: "09:30", checkOut: null },
+      ],
+      clients: [
+        { id: "c1", name: "أحمد الزهراني", service: "حلاقة كاملة", barberId: "b2", time: "10:15", notes: "يرغب في عطر خاص" },
+        { id: "c2", name: "مصعب الحارثي", service: "تحديد لحية", barberId: "b3", time: "10:45", notes: "ذو بشرة حساسة" },
+      ],
+      sales: [
+        { id: "s1", customer: "إياد العنزي", service: "حلاقة + استشوار", amount: 85, barberId: "b2", time: "09:45", notes: "مدفوع نقدًا" },
+      ],
+      timeline: [
+        { id: "t1", title: "محمد الأحمد سجل الدخول", time: "اليوم 09:02" },
+        { id: "t2", title: "تم تسجيل حجز جديد لمصعب الحارثي", time: "اليوم 09:50" },
+      ],
+      get totalRevenue() {
+        return this.sales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
+      },
+    };
+
+    const barberTable = document.getElementById("barber-table");
+    const clientTable = document.getElementById("client-table");
+    const clientEmpty = document.getElementById("client-empty");
+    const salesTable = document.getElementById("sales-table");
+    const saleForm = document.getElementById("sale-form");
+    const saleBarberSelect = document.getElementById("sale-barber");
+    const statsContainer = document.getElementById("stats");
+    const timelineContainer = document.getElementById("attendance-log");
+    const toast = document.getElementById("toast");
+    const lastSaleUpdate = document.getElementById("last-sale-update");
+
+    const statsConfig = [
+      { key: "barbers", label: "عدد الحلاقين", icon: "💈" },
+      { key: "clients", label: "عدد العملاء المنتظرين", icon: "🧍" },
+      { key: "sales", label: "عدد عمليات البيع", icon: "💳" },
+      { key: "revenue", label: "إجمالي المبيعات (ريال)", icon: "💰" },
+    ];
+
+    function showToast(message, variant = "success") {
+      toast.textContent = message;
+      toast.className = `toast ${variant}`;
+      requestAnimationFrame(() => {
+        toast.classList.add("show");
+        setTimeout(() => toast.classList.remove("show"), 2200);
+      });
+    }
+
+    function formatTime(date = new Date()) {
+      return date.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function renderStats() {
+      const stats = {
+        barbers: state.barbers.length,
+        clients: state.clients.length,
+        sales: state.sales.length,
+        revenue: state.totalRevenue.toLocaleString("ar-EG"),
+      };
+      statsContainer.innerHTML = "";
+      statsConfig.forEach(({ key, label, icon }) => {
+        const value = stats[key];
+        const change = Math.random() > 0.5 ? "up" : "down";
+        const delta = Math.floor(Math.random() * 9) + 1;
+        const statCard = document.createElement("article");
+        statCard.className = "stat-card";
+        statCard.setAttribute("tabindex", "0");
+        statCard.innerHTML = `
+          <header>
+            <span>${label}</span>
+            <span class="icon">${icon}</span>
+          </header>
+          <strong>${value}</strong>
+          <div class="stat-trend ${change}">
+            <span>${change === "up" ? "⬆️" : "⬇️"}</span>
+            <span>${delta}% هذا الأسبوع</span>
+          </div>
+        `;
+        statCard.addEventListener("click", () => showToast(`${label}: ${value}`));
+        statsContainer.append(statCard);
+      });
+    }
+
+    function renderTimeline() {
+      timelineContainer.innerHTML = "";
+      const template = document.getElementById("timeline-item-template");
+      state.timeline.slice(-8).reverse().forEach((entry) => {
+        const node = template.content.cloneNode(true);
+        node.querySelector("strong").textContent = entry.title;
+        node.querySelector("span").textContent = entry.time;
+        timelineContainer.append(node);
+      });
+    }
+
+    function renderBarbers() {
+      barberTable.innerHTML = "";
+      state.barbers.forEach((barber) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${barber.name}</td>
+          <td>
+            <span class="status-pill ${barber.status}">
+              ${barber.status === "online" ? "متواجد" : barber.status === "busy" ? "مشغول" : "غير متصل"}
+            </span>
+          </td>
+          <td>${barber.clientsToday}</td>
+          <td>${barber.checkIn || "—"}</td>
+          <td>${barber.checkOut || "—"}</td>
+          <td>
+            <div class="table-actions">
+              <button class="icon-button" data-action="check-in" data-id="${barber.id}" title="تسجيل دخول">✅</button>
+              <button class="icon-button" data-action="check-out" data-id="${barber.id}" title="تسجيل خروج">🚪</button>
+              <button class="icon-button" data-action="assign" data-id="${barber.id}" title="إضافة عميل">➕</button>
+            </div>
+          </td>
+        `;
+        barberTable.append(tr);
+      });
+    }
+
+    function renderClients() {
+      clientTable.innerHTML = "";
+      clientEmpty.hidden = state.clients.length > 0;
+      state.clients.forEach((client) => {
+        const barber = state.barbers.find((b) => b.id === client.barberId);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${client.name}</td>
+          <td>${client.service}</td>
+          <td>${barber ? barber.name : "—"}</td>
+          <td>${client.time}</td>
+          <td>${client.notes || "—"}</td>
+          <td>
+            <div class="table-actions">
+              <button class="icon-button" data-action="complete" data-id="${client.id}" title="إنهاء الخدمة">✂️</button>
+              <button class="icon-button" data-action="delay" data-id="${client.id}" title="تأجيل">⏱️</button>
+            </div>
+          </td>
+        `;
+        clientTable.append(tr);
+      });
+    }
+
+    function renderSales() {
+      salesTable.innerHTML = "";
+      state.sales.forEach((sale) => {
+        const barber = state.barbers.find((b) => b.id === sale.barberId);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${sale.customer}</td>
+          <td>${sale.service}</td>
+          <td>${Number(sale.amount).toLocaleString("ar-EG")} ر.س</td>
+          <td>${barber ? barber.name : "—"}</td>
+          <td>${sale.time}</td>
+        `;
+        salesTable.append(tr);
+      });
+      lastSaleUpdate.textContent = state.sales.length ? state.sales[state.sales.length - 1].time : "—";
+    }
+
+    function populateBarberSelect() {
+      saleBarberSelect.innerHTML = `<option value="" hidden>اختر الحلاق</option>`;
+      state.barbers.forEach((barber) => {
+        const option = document.createElement("option");
+        option.value = barber.id;
+        option.textContent = barber.name;
+        saleBarberSelect.append(option);
+      });
+    }
+
+    function addTimelineEntry(title) {
+      state.timeline.push({ id: createId(), title, time: `اليوم ${formatTime()}` });
+      renderTimeline();
+    }
+
+    function registerEventListeners() {
+      document.querySelectorAll("[data-toast]").forEach((element) => {
+        element.addEventListener("click", () => {
+          showToast(element.dataset.toast);
+        });
+      });
+
+      document.querySelector("nav").addEventListener("click", (event) => {
+        if (event.target.closest(".menu-button")) {
+          document.querySelectorAll(".menu-button").forEach((btn) => btn.classList.remove("active"));
+          const button = event.target.closest(".menu-button");
+          button.classList.add("active");
+        }
+      });
+
+      barberTable.addEventListener("click", (event) => {
+        const button = event.target.closest(".icon-button");
+        if (!button) return;
+        const barber = state.barbers.find((b) => b.id === button.dataset.id);
+        if (!barber) return;
+        switch (button.dataset.action) {
+          case "check-in":
+            barber.status = "online";
+            barber.checkIn = formatTime();
+            barber.checkOut = null;
+            addTimelineEntry(`${barber.name} سجل الدخول`);
+            showToast(`تم تسجيل حضور ${barber.name}`);
+            break;
+          case "check-out":
+            barber.status = "offline";
+            barber.checkOut = formatTime();
+            addTimelineEntry(`${barber.name} أنهى دوامه`);
+            showToast(`تم تسجيل انصراف ${barber.name}`, "warning");
+            break;
+          case "assign":
+            openClientForm(barber.id);
+            break;
+          default:
+            break;
+        }
+        renderBarbers();
+        renderStats();
+      });
+
+      clientTable.addEventListener("click", (event) => {
+        const button = event.target.closest(".icon-button");
+        if (!button) return;
+        const clientIndex = state.clients.findIndex((c) => c.id === button.dataset.id);
+        if (clientIndex === -1) return;
+        const client = state.clients[clientIndex];
+        const barber = state.barbers.find((b) => b.id === client.barberId);
+        if (button.dataset.action === "complete") {
+          state.clients.splice(clientIndex, 1);
+          if (barber) {
+            barber.clientsToday += 1;
+            barber.status = "busy";
+            setTimeout(() => {
+              barber.status = "online";
+              renderBarbers();
+            }, 2000);
+          }
+          state.sales.push({
+            id: createId(),
+            customer: client.name,
+            service: client.service,
+            amount: 65,
+            barberId: client.barberId,
+            time: formatTime(),
+            notes: "خدمة مسجلة تلقائيًا",
+          });
+          addTimelineEntry(`إتمام خدمة ${client.name}`);
+          showToast(`تم إنهاء خدمة ${client.name}`);
+          renderBarbers();
+          renderSales();
+        } else if (button.dataset.action === "delay") {
+          state.clients.push(state.clients.splice(clientIndex, 1)[0]);
+          showToast(`تم تأجيل ${client.name} إلى نهاية الطابور`, "warning");
+        }
+        renderClients();
+        renderStats();
+      });
+
+      document.getElementById("check-all").addEventListener("click", () => {
+        state.barbers.forEach((barber) => {
+          barber.status = "online";
+          barber.checkIn = barber.checkIn || formatTime();
+          barber.checkOut = null;
+        });
+        addTimelineEntry("تم تسجيل حضور جميع الحلاقين");
+        renderBarbers();
+        renderStats();
+      });
+
+      document.getElementById("clear-attendance").addEventListener("click", () => {
+        state.barbers.forEach((barber) => {
+          barber.status = "offline";
+          barber.checkIn = null;
+          barber.checkOut = null;
+        });
+        addTimelineEntry("تم إعادة ضبط حضور الحلاقين");
+        renderBarbers();
+        renderStats();
+      });
+
+      document.getElementById("new-client").addEventListener("click", () => openClientForm());
+
+      document.getElementById("clear-clients").addEventListener("click", () => {
+        state.clients = [];
+        addTimelineEntry("تم إفراغ طابور العملاء");
+        renderClients();
+        renderStats();
+      });
+
+      document.getElementById("add-sale").addEventListener("click", () => {
+        document.getElementById("sale-customer").focus();
+      });
+
+      saleForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const formData = new FormData(saleForm);
+        const sale = {
+          id: createId(),
+          customer: (formData.get("sale-customer") || "").trim(),
+          service: (formData.get("sale-service") || "").trim(),
+          amount: Number(formData.get("sale-amount")),
+          barberId: formData.get("sale-barber"),
+          notes: (formData.get("sale-notes") || "").trim(),
+          time: formatTime(),
+        };
+        if (!sale.customer || !sale.service || !sale.barberId || Number.isNaN(sale.amount) || sale.amount <= 0) {
+          showToast("الرجاء تعبئة جميع الحقول المطلوبة", "danger");
+          return;
+        }
+        state.sales.push(sale);
+        saleForm.reset();
+        addTimelineEntry(`تم تسجيل بيع جديد بقيمة ${sale.amount} ر.س`);
+        showToast("تم حفظ عملية البيع بنجاح");
+        renderSales();
+        renderStats();
+      });
+
+      document.querySelector(".quick-actions").addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        if (button.dataset.action === "add-barber") {
+          const name = prompt("اسم الحلاق الجديد:");
+          if (name) {
+            const barber = { id: createId(), name, status: "offline", clientsToday: 0, checkIn: null, checkOut: null };
+            state.barbers.push(barber);
+            addTimelineEntry(`تمت إضافة الحلاق ${name}`);
+            populateBarberSelect();
+            renderBarbers();
+            renderStats();
+            showToast(`مرحبا بالحلاق ${name}`);
+          }
+        } else if (button.dataset.action === "add-client") {
+          openClientForm();
+        } else if (button.dataset.action === "record-sale") {
+          document.getElementById("sale-customer").focus();
+          showToast("جاهز لتسجيل عملية بيع");
+        }
+      });
+
+      document.getElementById("search").addEventListener("input", (event) => {
+        const query = event.target.value.trim();
+        if (!query) {
+          renderBarbers();
+          renderClients();
+          return;
+        }
+        const regex = new RegExp(query, "i");
+        barberTable.querySelectorAll("tr").forEach((row) => {
+          row.style.display = regex.test(row.cells[0].textContent) ? "" : "none";
+        });
+        clientTable.querySelectorAll("tr").forEach((row) => {
+          row.style.display = regex.test(row.cells[0].textContent) || regex.test(row.cells[2].textContent) ? "" : "none";
+        });
+      });
+
+      document.getElementById("export-sales").addEventListener("click", () => {
+        const rows = state.sales
+          .map((sale) => {
+            const barber = state.barbers.find((b) => b.id === sale.barberId);
+            return `${sale.time},${sale.customer},${sale.service},${sale.amount},${barber ? barber.name : ""}`;
+          })
+          .join("\n");
+        const blob = new Blob([`الوقت,العميل,الخدمة,المبلغ,الحلاق\n${rows}`], { type: "text/csv;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `sales-${Date.now()}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+      });
+    }
+
+    function openClientForm(preferredBarberId) {
+      const name = prompt("اسم العميل:");
+      if (!name) return;
+      const service = prompt("الخدمة المطلوبة:", "حلاقة");
+      if (!service) return;
+      const barberName = preferredBarberId
+        ? state.barbers.find((b) => b.id === preferredBarberId)?.name
+        : prompt("اسم الحلاق المفضل:");
+      const barber = preferredBarberId
+        ? state.barbers.find((b) => b.id === preferredBarberId)
+        : state.barbers.find((b) => b.name.trim() === barberName?.trim());
+      const notes = prompt("ملاحظات إضافية:", "");
+      const client = {
+        id: createId(),
+        name,
+        service,
+        barberId: barber ? barber.id : state.barbers[0]?.id || null,
+        time: formatTime(),
+        notes,
+      };
+      state.clients.push(client);
+      addTimelineEntry(`إضافة عميل جديد: ${client.name}`);
+      showToast(`تمت إضافة ${client.name} إلى الطابور`);
+      renderClients();
+      renderStats();
+    }
+
+    function init() {
+      populateBarberSelect();
+      renderStats();
+      renderBarbers();
+      renderClients();
+      renderSales();
+      renderTimeline();
+      registerEventListeners();
+    }
+
+    init();
+  </script>
+</body>
+</html>
