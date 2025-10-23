@@ -802,6 +802,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Google-Scholar](https://github.com/JackKuo666/Google-Scholar-MCP-Server)** - Enable AI assistants to search and access Google Scholar papers through a simple MCP interface.
 - **[Google-Scholar](https://github.com/mochow13/google-scholar-mcp)** - An MCP server for Google Scholar written in TypeScript with Streamable HTTP transport, along with a `client` implementations that integrates with the server and interacts with `gemini-2.5-flash`.
 - **[gx-mcp-server](https://github.com/davidf9999/gx-mcp-server)** - Expose Great Expectations data validation and quality checks as MCP tools for AI agents.
+- **[Graylog](https://github.com/Pranavj17/mcp-server-graylog)** - Search Graylog logs by absolute/relative timestamps, filter by streams, and debug production issues directly from Claude Desktop.
 - **[Gralio SaaS Database](https://github.com/tymonTe/gralio-mcp)** - Find and compare SaaS products, including data from G2 reviews, Trustpilot, Crunchbase, Linkedin, pricing, features and more, using [Gralio MCP](https://gralio.ai/mcp) server
 - **[GraphQL](https://github.com/drestrepom/mcp_graphql)** - Comprehensive GraphQL API integration that automatically exposes each GraphQL query as a separate tool.
 - **[GraphQL Schema](https://github.com/hannesj/mcp-graphql-schema)** - Allow LLMs to explore large GraphQL schemas without bloating the context.
