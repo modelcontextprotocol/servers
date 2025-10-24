@@ -545,7 +545,7 @@ export const createServer = () => {
       },
       {
         name: ToolName.GZIP,
-        description: "Compresses a single file using gzip compression. Takes a file name and data URI, returns the compressed data as a gzipped resource.",
+        description: "Compresses a single file using gzip compression. Takes a file name and data URI, and either returns the compressed data as a gzipped resource or as a resource link, allowing it to be downloaded in a subsequent request.",
         inputSchema: zodToJsonSchema(GzipInputSchema) as ToolInput,
       }
     ];
