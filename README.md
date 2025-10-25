@@ -972,7 +972,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[MCPfinder](https://github.com/mcpfinder/server)** - The AI Agent's "App Store": Discover, install, and monetize AI capabilities — all within the MCP ecosystem.
 - **[MCPIgnore Filesytem](https://github.com/CyberhavenInc/filesystem-mcpignore)** - A Data Security First filesystem MCP server that implements .mcpignore to prevent MCP clients from accessing sensitive data.
 - **[MCPJungle](https://github.com/mcpjungle/MCPJungle)** - Self-hosted MCP Registry and Gateway for enterprise AI Agents
-- **[MCP Toolz](https://github.com/taylorleese/mcp-toolz)** - Context management, todo persistence, and AI second opinions for Claude Code. Share contexts across sessions and get feedback from ChatGPT or Claude.
+- **[MCP Toolz](https://github.com/taylorleese/mcp-toolz)** - Context management, todo persistence, and AI second opinions for Claude Code. Share contexts across sessions and get feedback from ChatGPT, Claude, Gemini, and DeepSeek.
 - **[Md2doc](https://github.com/Yorick-Ryu/md2doc-mcp)** - Convert Markdown text to DOCX format using an external conversion service
 - **[MeasureSpace MCP](https://github.com/MeasureSpace/measure-space-mcp-server)** - A free [Model Context Protocol (MCP) Server](https://smithery.ai/server/@MeasureSpace/measure-space-mcp-server) that provides global weather, climate, air quality forecast and geocoding services by [measurespace.io](https://measurespace.io).
 - **[MediaWiki](https://github.com/ProfessionalWiki/MediaWiki-MCP-Server)** - A Model Context Protocol (MCP) Server that interacts with any MediaWiki wiki
