@@ -936,6 +936,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[MCP Create](https://github.com/tesla0225/mcp-create)** - A dynamic MCP server management service that creates, runs, and manages Model Context Protocol servers on-the-fly.
 - **[MCP Documentation Server](https://github.com/andrea9293/mcp-documentation-server)** - Server that provides local-first document management and semantic search via embeddings or Gemini AI (recommended). Optimized for performance with disk persistence, an in-memory index, and caching.
 - **[MCP Installer](https://github.com/anaisbetts/mcp-installer)** - This server is a server that installs other MCP servers for you.
+- **[MCP on Android TV](https://github.com/MiddlePoint-Solutions/mcp-on-android-tv)** - A Model Context Protocol (MCP) server running directly on your Android TV with bundeld access to ADB on-device.
 - **[MCP ProjectManage OpenProject](https://github.com/boma086/mcp-projectmanage-openproject)** - This server provides the MCP service for project weekly reports, with project management information supplied by OpenProject.
 - **[MCP Proxy Server](https://github.com/TBXark/mcp-proxy)** - An MCP proxy server that aggregates and serves multiple MCP resource servers through a single HTTP server.
 - **[MCP Server Creator](https://github.com/GongRzhe/MCP-Server-Creator)** - A powerful Model Context Protocol (MCP) server that creates other MCP servers! This meta-server provides tools for dynamically generating FastMCP server configurations and Python code.
