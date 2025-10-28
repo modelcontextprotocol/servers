@@ -521,6 +521,8 @@ Official integrations are maintained by companies building production ready MCP 
 - **[ZenML](https://github.com/zenml-io/mcp-zenml)** - Interact with your MLOps and LLMOps pipelines through your [ZenML](https://www.zenml.io) MCP server
 - <img height="12" width="12" src="https://www.zine.ai/images/zine-logo.png" alt="Zine Logo" /> **[Zine](https://www.zine.ai)** - Your memory, everywhere AI goes. Think iPhoto for your knowledge - upload and curate. Like ChatGPT but portable - context that travels with you.
 - <img height="12" width="12" src="https://zizai.work/images/logo.jpg" alt="ZIZAI Logo" /> **[ZIZAI Recruitment](https://github.com/zaiwork/mcp)** - Interact with the next-generation intelligent recruitment platform for employees and employers, powered by [ZIZAI Recruitment](https://zizai.work).
+- <img height="12" width="12" src="https://postidentity.com/favicon.ico" alt="PostIdentity Logo" /> **[PostIdentity](https://github.com/PostIdentity/mcp-server)** - Generate AI-powered social media posts from any AI assistant. Manage identities, create posts, track referrals, and browse marketplace templates, powered by [PostIdentity](https://postidentity.com).
+
 ### 🌎 Community Servers
 
 A growing set of community-developed and maintained servers demonstrates various applications of MCP across different domains.
