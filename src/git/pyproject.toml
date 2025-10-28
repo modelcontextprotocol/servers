@@ -3,7 +3,7 @@ name = "mcp-server-git"
 version = "0.6.2"
 description = "A Model Context Protocol server providing tools to read, search, and manipulate Git repositories programmatically via LLMs"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 authors = [{ name = "Anthropic, PBC." }]
 maintainers = [{ name = "David Soria Parra", email = "davidsp@anthropic.com" }]
 keywords = ["git", "mcp", "llm", "automation"]
@@ -16,10 +16,10 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
-    "click>=8.1.7",
-    "gitpython>=3.1.43",
-    "mcp>=1.0.0",
-    "pydantic>=2.0.0",
+    "click>=8.2.2",
+    "gitpython>=3.1.45",
+    "mcp>=1.12.3",
+    "pydantic>=2.11.7",
 ]
 
 [project.scripts]
