@@ -2,8 +2,17 @@
 
 A Model Context Protocol server that provides web content fetching capabilities. This server enables LLMs to retrieve and process content from web pages, converting HTML to markdown for easier consumption.
 
-> [!CAUTION]
-> This server can access local/internal IP addresses and may represent a security risk. Exercise caution when using this MCP server to ensure this does not expose any sensitive data.
+## Security
+
+**By default, this server blocks access to local/internal IP addresses** (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, etc.) to prevent access to internal networks and services. This provides security against potential misuse.
+
+You can customize security settings using the following options:
+- `--allowed-hosts`: Specify allowed hostnames/domains (supports wildcards like *.example.com)
+- `--allow-private-ips`: Allow access to private/internal IP ranges  
+- `--blocked-ip-ranges`: Specify additional CIDR ranges to block
+
+> [!TIP]
+> For maximum security in production environments, use `--allowed-hosts` to explicitly whitelist only the domains you need to access.
 
 The fetch tool will truncate the response, but by using the `start_index` argument, you can specify where to start the content extraction. This lets models read a webpage in chunks, until they find the information they need.
 
@@ -167,6 +176,44 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 ### Customization - Proxy
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
+
+### Security Configuration Examples
+
+**Allow specific domains only:**
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch", "--allowed-hosts", "example.com", "*.github.com", "docs.python.org"]
+    }
+  }
+}
+```
+
+**Allow internal IPs for development (NOT recommended for production):**
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx", 
+      "args": ["mcp-server-fetch", "--allow-private-ips"]
+    }
+  }
+}
+```
+
+**Custom blocked IP ranges:**
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch", "--blocked-ip-ranges", "203.0.113.0/24", "198.51.100.0/24"]
+    }
+  }
+}
+```
 
 ## Debugging
 
