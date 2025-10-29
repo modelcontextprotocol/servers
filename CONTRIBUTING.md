@@ -1,105 +1,38 @@
 # Contributing to MCP Servers
 
-Thank you for your interest in contributing to the Model Context Protocol (MCP) servers! This document provides guidelines and instructions for contributing.
+Thanks for your interest in contributing! Here's how you can help make this repo better.
 
-## Types of Contributions
+We accept changes through [the standard GitHub flow model](https://docs.github.com/en/get-started/using-github/github-flow).
 
-### 1. New Servers
+## Server Listings
 
-The repository contains reference implementations, as well as a list of community servers.
-We generally don't accept new servers into the repository. We do accept pull requests to the [README.md](./README.md)
-adding a reference to your servers.
+We welcome PRs that add links to your servers in the [README.md](./README.md)!
 
-Please keep lists in alphabetical order to minimize merge conflicts when adding new items.
+## Server Implementations
 
-- Check the [modelcontextprotocol.io](https://modelcontextprotocol.io) documentation
-- Ensure your server doesn't duplicate existing functionality
-- Consider whether your server would be generally useful to others
-- Follow [security best practices](https://modelcontextprotocol.io/docs/concepts/transports#security-considerations) from the MCP documentation
-- Create a PR adding a link to your server to the [README.md](./README.md).
+We welcome:
+- **Bug fixes** — Help us squash those pesky bugs.
+- **Usability improvements** — Making servers easier to use for humans and agents.
+- **Enhancements that demonstrate MCP protocol features** — We encourage contributions that help reference servers better illustrate underutilized aspects of the MCP protocol beyond just Tools, such as Resources, Prompts, or Roots. For example, adding Roots support to filesystem-server helps showcase this important but lesser-known feature.
 
-### 2. Improvements to Existing Servers
-Enhancements to existing servers are welcome! This includes:
+We're more selective about:
+- **Other new features** — Especially if they're not crucial to the server's core purpose or are highly opinionated. The existing servers are reference servers meant to inspire the community. If you need specific features, we encourage you to build enhanced versions! We think a diverse ecosystem of servers is beneficial for everyone, and would love to link to your improved server in our README.
 
-- Bug fixes
-- Performance improvements
-- New features
-- Security enhancements
+We don't accept:
+- **New server implementations** — We encourage you to publish them yourself, and link to them from the README.
 
-### 3. Documentation
-Documentation improvements are always welcome:
+## Testing
 
-- Fixing typos or unclear instructions
-- Adding examples
-- Improving setup instructions
-- Adding troubleshooting guides
+When adding or configuring tests for servers implemented in TypeScript, use **vitest** as the test framework. Vitest provides better ESM support, faster test execution, and a more modern testing experience.
 
-## Getting Started
+## Documentation
 
-1. Fork the repository
-2. Clone your fork:
-   ```bash
-   git clone https://github.com/your-username/servers.git
-   ```
-3. Add the upstream remote:
-   ```bash
-   git remote add upstream https://github.com/modelcontextprotocol/servers.git
-   ```
-4. Create a branch:
-   ```bash
-   git checkout -b my-feature
-   ```
+Improvements to existing documentation is welcome - although generally we'd prefer ergonomic improvements than documenting pain points if possible!
 
-## Development Guidelines
-
-### Code Style
-- Follow the existing code style in the repository
-- Include appropriate type definitions
-- Add comments for complex logic
-
-### Documentation
-- Include a detailed README.md in your server directory
-- Document all configuration options
-- Provide setup instructions
-- Include usage examples
-
-### Security
-- Follow security best practices
-- Implement proper input validation
-- Handle errors appropriately
-- Document security considerations
-
-## Submitting Changes
-
-1. Commit your changes:
-   ```bash
-   git add .
-   git commit -m "Description of changes"
-   ```
-2. Push to your fork:
-   ```bash
-   git push origin my-feature
-   ```
-3. Create a Pull Request through GitHub
-
-### Pull Request Guidelines
-
-- Thoroughly test your changes
-- Fill out the pull request template completely
-- Link any related issues
-- Provide clear description of changes
-- Include any necessary documentation updates
-- Add screenshots for UI changes
-- List any breaking changes
+We're more selective about adding wholly new documentation, especially in ways that aren't vendor neutral (e.g. how to run a particular server with a particular client).
 
 ## Community
 
-- Participate in [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
-- Follow the [Code of Conduct](CODE_OF_CONDUCT.md)
+[Learn how the MCP community communicates](https://modelcontextprotocol.io/community/communication).
 
-## Questions?
-
-- Check the [documentation](https://modelcontextprotocol.io)
-- Ask in GitHub Discussions
-
-Thank you for contributing to MCP Servers!
+Thank you for helping make MCP servers better for everyone!
