@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { normalizePath, expandHome, convertToWindowsPath } from '../path-utils.js';
 
 describe('Path Utilities', () => {
