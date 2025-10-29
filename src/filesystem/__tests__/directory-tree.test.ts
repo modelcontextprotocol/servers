@@ -19,16 +19,10 @@ async function buildTreeForTesting(currentPath: string, rootPath: string, exclud
 
     for (const entry of entries) {
         const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
-        const shouldExclude = excludePatterns.some(pattern => {
-            if (pattern.includes('*')) {
-                return minimatch(relativePath, pattern, {dot: true});
-            }
-            // For files: match exact name or as part of path
-            // For directories: match as directory path
-            return minimatch(relativePath, pattern, {dot: true}) ||
-                   minimatch(relativePath, `**/${pattern}`, {dot: true}) ||
-                   minimatch(relativePath, `**/${pattern}/**`, {dot: true});
-        });
+        // Use glob matching exclusively for consistency
+        const shouldExclude = excludePatterns.some(pattern => 
+            minimatch(relativePath, pattern, {dot: true})
+        );
         if (shouldExclude)
             continue;
 
@@ -74,7 +68,7 @@ describe('buildTree exclude patterns', () => {
     });
 
     it('should exclude files matching simple patterns', async () => {
-        // Test the current implementation - this will fail until the bug is fixed
+        // With strict glob matching, '.env' only matches exactly '.env'
         const tree = await buildTreeForTesting(testDir, testDir, ['.env']);
         const fileNames = tree.map(entry => entry.name);
         
@@ -85,6 +79,7 @@ describe('buildTree exclude patterns', () => {
     });
 
     it('should exclude directories matching simple patterns', async () => {
+        // With strict glob matching, 'node_modules' only matches top-level
         const tree = await buildTreeForTesting(testDir, testDir, ['node_modules']);
         const dirNames = tree.map(entry => entry.name);
         
@@ -93,8 +88,9 @@ describe('buildTree exclude patterns', () => {
         expect(dirNames).toContain('.git');
     });
 
-    it('should exclude nested directories with same pattern', async () => {
-        const tree = await buildTreeForTesting(testDir, testDir, ['node_modules']);
+    it('should exclude nested directories with glob pattern', async () => {
+        // Use '**/node_modules' to match at any level
+        const tree = await buildTreeForTesting(testDir, testDir, ['**/node_modules']);
         
         // Find the nested directory
         const nestedDir = tree.find(entry => entry.name === 'nested');
@@ -124,7 +120,8 @@ describe('buildTree exclude patterns', () => {
     });
 
     it('should work with multiple exclude patterns', async () => {
-        const tree = await buildTreeForTesting(testDir, testDir, ['node_modules', '.env', '.git']);
+        // Mix of exact matches and glob patterns
+        const tree = await buildTreeForTesting(testDir, testDir, ['**/node_modules', '.env', '.git']);
         const entryNames = tree.map(entry => entry.name);
         
         expect(entryNames).not.toContain('node_modules');
