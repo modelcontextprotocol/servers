@@ -625,6 +625,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[BugBug MCP Server](https://github.com/simplypixi/bugbug-mcp-server)** - Unofficial MCP server for BugBug API.
 - **[BVG MCP Server - (Unofficial) ](https://github.com/svkaizoku/mcp-bvg)** - Unofficial MCP server for Berliner Verkehrsbetriebe Api.
 - **[Bybit](https://github.com/ethancod1ng/bybit-mcp-server)** - A Model Context Protocol (MCP) server for integrating AI assistants with Bybit cryptocurrency exchange APIs, enabling automated trading, market data access, and account management.
+- **[C64 Bridge](https://github.com/chrisgleissner/c64bridge)** - AI command bridge for Commodore 64 hardware. Control Ultimate 64 and C64 Ultimate devices through REST API with BASIC and assembly program creation, real-time memory inspection, SID audio synthesis, and curated retro computing knowledge via local RAG.
 - **[CAD-MCP](https://github.com/daobataotie/CAD-MCP#)** (by daobataotie) - Drawing CAD(Line,Circle,Text,Annotation...) through MCP server, supporting mainstream CAD software.
 - **[Calculator](https://github.com/githejie/mcp-server-calculator)** - This server enables LLMs to use calculator for precise numerical calculations.
 - **[CalDAV MCP](https://github.com/dominik1001/caldav-mcp)** - A CalDAV MCP server to expose calendar operations as tools for AI assistants.
