@@ -196,11 +196,8 @@ describe('Path Utilities', () => {
     });
 
     it('returns normalized non-Windows/WSL/Unix-style Windows paths as is after basic normalization', () => {
-      // Relative path
-      const relativePath = 'some/relative/path';
-      expect(normalizePath(relativePath)).toBe(relativePath.replace(/\//g, '\\'));
-
       // A path that looks somewhat absolute but isn't a drive or recognized Unix root for Windows conversion
+      // These paths should be preserved as-is (not converted to Windows C:\ format or WSL format)
       const otherAbsolutePath = '\\someserver\\share\\file';
       expect(normalizePath(otherAbsolutePath)).toBe(otherAbsolutePath);
     });
@@ -349,6 +346,20 @@ describe('Path Utilities', () => {
       expect(result).toBe('/mnt/c/Users/username/folder');
       expect(result).not.toContain('C:');
       expect(result).not.toContain('\\');
+    });
+
+    it('should handle relative path slash conversion based on platform', () => {
+      // This test verifies platform-specific behavior naturally without mocking
+      // On Windows: forward slashes converted to backslashes
+      // On Linux/Unix: forward slashes preserved
+      const relativePath = 'some/relative/path';
+      const result = normalizePath(relativePath);
+
+      if (originalPlatform === 'win32') {
+        expect(result).toBe('some\\relative\\path');
+      } else {
+        expect(result).toBe('some/relative/path');
+      }
     });
   });
 });
