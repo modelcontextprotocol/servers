@@ -168,6 +168,16 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
 
+## Deployment to MCP Agent Cloud
+
+The repository ships with a ready-to-use deployment config for [MCP Agent Cloud](https://docs.mcp-agent.com/cloud/use-cases/deploy-mcp-servers). To publish this server:
+
+1. Authenticate once with `mcp-agent login`.
+2. From `servers/src/fetch`, deploy with `mcp-agent deploy fetch-server --app-description "Fetch MCP server"`.
+3. Inspect the live endpoint using `mcp-agent cloud servers describe fetch-server`, then install it into a client (for example `mcp-agent install https://<app_id>.deployments.mcp-agent.com/sse --client cursor`).
+
+The deployment uses `mcp_agent.config.yaml` (same directory) which runs `uv run python -m mcp_server_fetch`. The bundler expects a `main.py` containing an `MCPApp` definition—this repository includes that stub so you can deploy without additional wiring. To pass optional flags (such as `--ignore-robots-txt`, `--user-agent`, or `--proxy-url`), edit `mcp_agent.config.yaml` before re-running `mcp-agent deploy`.
+
 ## Windows Configuration
 
 If you're experiencing timeout issues on Windows, you may need to set the `PYTHONIOENCODING` environment variable to ensure proper character encoding:

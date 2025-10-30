@@ -1,0 +1,15 @@
+name: fetch-server
+execution_engine: asyncio
+mcp:
+  servers:
+    fetch:
+      command: uv
+      args:
+        - run
+        - python
+        - -m
+        - mcp_server_fetch
+logger:
+  transports:
+    - console
+  level: info
