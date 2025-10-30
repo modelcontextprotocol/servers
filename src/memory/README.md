@@ -125,6 +125,16 @@ Example:
     - Relations between requested entities
   - Silently skips non-existent nodes
 
+- **get_node_relations**
+  - Get all relations for a specific node, including incoming and outgoing connections
+  - Input: `nodeName` (string)
+  - Returns:
+    - `outgoing` (array): Relations where this node is the source
+    - `incoming` (array): Relations where this node is the target
+    - `connected_entities` (string[]): Names of all connected entities
+  - Enables efficient graph traversal without loading entire graph
+  - Returns empty arrays if node has no relations
+
 # Usage with Claude Desktop
 
 ### Setup
