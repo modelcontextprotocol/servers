@@ -9,14 +9,18 @@ async function main() {
     const transport = new StdioServerTransport();
     const {server, cleanup, startNotificationIntervals} = createServer();
 
+    // Cleanup when client disconnects
+    server.onclose = async () => {
+      await cleanup();
+      process.exit(0);
+    };
+
     await server.connect(transport);
     startNotificationIntervals();
 
     // Cleanup on exit
     process.on("SIGINT", async () => {
-        await cleanup();
-        await server.close();
-        process.exit(0);
+      await server.close();
     });
 }
 
