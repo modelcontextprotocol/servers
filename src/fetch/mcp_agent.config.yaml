@@ -1,15 +1,13 @@
-name: fetch-server
+$schema: ../../schema/mcp-agent.config.schema.json
+
 execution_engine: asyncio
+logger:
+  transports: [console]
+  level: debug
+
 mcp:
   servers:
     fetch:
-      command: uv
-      args:
-        - run
-        - python
-        - -m
-        - mcp_server_fetch
-logger:
-  transports:
-    - console
-  level: info
+      command: "uvx"
+      args: ["mcp-server-fetch"]
+      description: "Fetch content at URLs from the web"
