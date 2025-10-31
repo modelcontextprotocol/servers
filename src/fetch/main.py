@@ -5,6 +5,7 @@ from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
 from mcp_agent.app import MCPApp
+from mcp.server.fastmcp import FastMCP
 from mcp.shared.exceptions import McpError
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -22,10 +23,17 @@ from mcp.types import (
 from pydantic import AnyUrl, BaseModel, Field
 
 CONFIG_PATH = (Path(__file__).parent / "mcp_agent.config.yaml").resolve()
+
+mcp = FastMCP(
+    name="fetch",
+    instructions="Fetch URLs and return markdown content.",
+)
+
 app = MCPApp(
     name="fetch-server",
     description="Fetch MCP server",
     settings=str(CONFIG_PATH),
+    mcp=mcp,
 )
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
@@ -33,16 +41,34 @@ DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://
 
 
 def extract_content_from_html(html: str) -> str:
-    from readabilipy.simple_json import simple_json_from_html_string
-    import markdownify
+    try:
+        from readabilipy.simple_json import simple_json_from_html_string
+    except ImportError:
+        simple_json_from_html_string = None
 
-    ret = simple_json_from_html_string(html, use_readability=True)
-    if not ret["content"]:
-        return "<error>Page failed to be simplified from HTML</error>"
-    return markdownify.markdownify(ret["content"], heading_style=markdownify.ATX)
+    try:
+        import markdownify
+    except ImportError:
+        markdownify = None  # type: ignore
+
+    if simple_json_from_html_string:
+        ret = simple_json_from_html_string(html, use_readability=True)
+        if ret.get("content"):
+            if markdownify:
+                return markdownify.markdownify(
+                    ret["content"],
+                    heading_style=markdownify.ATX,
+                )
+            return ret["content"]
+
+    if markdownify:
+        return markdownify.markdownify(html, heading_style=markdownify.ATX)
+
+    return html
 
 
 def get_robots_txt_url(url: str) -> str:
+    url = url.strip()
     parsed = urlparse(url)
     return urlunparse((parsed.scheme, parsed.netloc, "/robots.txt", "", "", ""))
 
@@ -50,12 +76,13 @@ def get_robots_txt_url(url: str) -> str:
 async def check_may_autonomously_fetch_url(
     url: str, user_agent: str, proxy_url: str | None = None
 ) -> None:
+    url = url.strip()
     from httpx import AsyncClient, HTTPError
     from protego import Protego
 
     robot_txt_url = get_robots_txt_url(url)
 
-    async with AsyncClient(proxies=proxy_url) as client:
+    async with AsyncClient() as client:
         try:
             response = await client.get(
                 robot_txt_url,
@@ -111,9 +138,14 @@ async def check_may_autonomously_fetch_url(
 async def fetch_url(
     url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None
 ) -> Tuple[str, str]:
+    url = url.strip()
+    if not url:
+        raise McpError(
+            ErrorData(code=INVALID_PARAMS, message="URL is required after trimming")
+        )
     from httpx import AsyncClient, HTTPError
 
-    async with AsyncClient(proxies=proxy_url) as client:
+    async with AsyncClient() as client:
         try:
             response = await client.get(
                 url,
@@ -286,7 +318,7 @@ async def serve(
         await server.run(read_stream, write_stream, options, raise_exceptions=True)
 
 
-@app.tool(
+@mcp.tool(
     name="fetch_url",
     structured_output=False,
     description=(
