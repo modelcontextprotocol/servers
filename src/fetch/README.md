@@ -176,7 +176,25 @@ The repository ships with a ready-to-use deployment config for [MCP Agent Cloud]
 2. From `servers/src/fetch`, deploy with `mcp-agent deploy fetch-server --app-description "Fetch MCP server"`.
 3. Inspect the live endpoint using `mcp-agent cloud servers describe fetch-server`, then install it into a client (for example `mcp-agent install https://<app_id>.deployments.mcp-agent.com/sse --client cursor`).
 
-The deployment uses `mcp_agent.config.yaml` (same directory) which runs `uv run python -m mcp_server_fetch`. The bundler expects a `main.py` containing an `MCPApp` definition—this repository includes that stub so you can deploy without additional wiring. To pass optional flags (such as `--ignore-robots-txt`, `--user-agent`, or `--proxy-url`), edit `mcp_agent.config.yaml` before re-running `mcp-agent deploy`.
+The deployment uses `mcp_agent.config.yaml` (same directory), mirroring the [mcp-agent cloud example](https://github.com/lastmile-ai/mcp-agent/tree/main/examples/cloud/mcp). It launches the stdio fetch server via `uvx mcp-server-fetch`, and `main.py` wires the tool into the cloud runtime using `FastMCP`.
+
+**Hosted instance**
+
+- App URL: `https://xxucyrqrp9xazl7kat535fkhnugne7h.deployments.mcp-agent.com`
+- SSE endpoint: `https://xxucyrqrp9xazl7kat535fkhnugne7h.deployments.mcp-agent.com/sse`
+- Tool name: `fetch_url`
+
+To connect with Inspector:
+
+```bash
+killall node 2>/dev/null || true
+npx --yes @modelcontextprotocol/inspector \
+  --transport sse \
+  --server-url https://xxucyrqrp9xazl7kat535fkhnugne7h.deployments.mcp-agent.com/sse \
+  --header "Authorization: Bearer <token from deploy output>"
+```
+
+If `readabilipy` or `markdownify` are unavailable in the environment, the server gracefully falls back to returning raw HTML. To pass optional CLI flags (such as `--ignore-robots-txt`, `--user-agent`, or `--proxy-url`), edit `mcp_agent.config.yaml` before re-running `mcp-agent cloud deploy`.
 
 ## Windows Configuration
 
