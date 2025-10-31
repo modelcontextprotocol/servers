@@ -642,6 +642,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[ChessPal Chess Engine (stockfish)](https://github.com/wilson-urdaneta/chesspal-mcp-engine)** - A Stockfish-powered chess engine exposed as an MCP server. Calculates best moves and supports both HTTP/SSE and stdio transports.
 - **[Chroma](https://github.com/privetin/chroma)** - Vector database server for semantic document search and metadata filtering, built on Chroma
 - **[Chrome history](https://github.com/vincent-pli/chrome-history-mcp)** - Talk with AI about your browser history, get fun ^_^
+- **[cicada](https://github.com/wende/cicada)** - AST-powered code intelligence for Elixir projects. Provides 9 tools including function search, call site tracking, PR attribution, git history, and semantic search - reducing AI query tokens by 82%.
 - **[CIViC](https://github.com/QuentinCody/civic-mcp-server)** - MCP server for the Clinical Interpretation of Variants in Cancer (CIViC) database, providing access to clinical variant interpretations and genomic evidence for cancer research.
 - **[Claude Thread Continuity](https://github.com/peless/claude-thread-continuity)** - Persistent memory system enabling Claude Desktop conversations to resume with full context across sessions. Maintains conversation history, project states, and user preferences for seamless multi-session workflows.
 - **[claude-faf-mcp](https://github.com/Wolfe-Jam/claude-faf-mcp)** - MCP server for .faf format. Context scoring engine with project context management.
