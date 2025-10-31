@@ -1,13 +1,16 @@
 $schema: ../../schema/mcp-agent.config.schema.json
-
 execution_engine: asyncio
 logger:
-  transports: [console]
+  transports:
+  - console
   level: debug
-
 mcp:
   servers:
     fetch:
-      command: "uvx"
-      args: ["mcp-server-fetch"]
-      description: "Fetch content at URLs from the web"
+      command: uvx
+      args:
+      - mcp-server-fetch
+      description: Fetch content at URLs from the web
+    fetch-remote:
+      transport: sse
+      url: https://xxucyrqrp9xazl7kat535fkhnugne7h.deployments.mcp-agent.com/sse
