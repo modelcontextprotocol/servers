@@ -784,6 +784,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Firebase](https://github.com/gannonh/firebase-mcp)** - Server to interact with Firebase services including Firebase Authentication, Firestore, and Firebase Storage.
 - **[Fish Audio](https://github.com/da-okazaki/mcp-fish-audio-server)** - Text-to-Speech integration with Fish Audio's API, supporting multiple voices, streaming, and real-time playback
 - **[FitBit MCP Server](https://github.com/NitayRabi/fitbit-mcp)** - An MCP server that connects to FitBit API using a token obtained from OAuth flow.
+- **[Fleet](https://github.com/SimplyMinimal/fleet-mcp)** - Full Fleet integration for device management, security monitoring, and compliance enforcement. Supports host management, live query execution, policy management, software inventory, vulnerability tracking, and MDM operations. Supports Read-Only and Read-Write modes.
 - **[FlightRadar24](https://github.com/sunsetcoder/flightradar24-mcp-server)** - A Claude Desktop MCP server that helps you track flights in real-time using Flightradar24 data.
 - **[Fluent-MCP](https://github.com/modesty/fluent-mcp)** - MCP server for Fluent (ServiceNow SDK) providing access to ServiceNow SDK CLI, API specifications, code snippets, and more.
 - **[Flyworks Avatar](https://github.com/Flyworks-AI/flyworks-mcp)** - Fast and free zeroshot lipsync MCP server.
