@@ -21,6 +21,10 @@ We're more selective about:
 We don't accept:
 - **New server implementations** — We encourage you to publish them yourself, and link to them from the README.
 
+## Testing
+
+When adding or configuring tests for servers implemented in TypeScript, use **vitest** as the test framework. Vitest provides better ESM support, faster test execution, and a more modern testing experience.
+
 ## Documentation
 
 Improvements to existing documentation is welcome - although generally we'd prefer ergonomic improvements than documenting pain points if possible!

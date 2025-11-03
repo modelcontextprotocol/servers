@@ -11,38 +11,69 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Define memory file path using environment variable with fallback
-const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
+export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
 
-// If MEMORY_FILE_PATH is just a filename, put it in the same directory as the script
-const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
-  ? path.isAbsolute(process.env.MEMORY_FILE_PATH)
-    ? process.env.MEMORY_FILE_PATH
-    : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH)
-  : defaultMemoryPath;
+// Handle backward compatibility: migrate memory.json to memory.jsonl if needed
+export async function ensureMemoryFilePath(): Promise<string> {
+  if (process.env.MEMORY_FILE_PATH) {
+    // Custom path provided, use it as-is (with absolute path resolution)
+    return path.isAbsolute(process.env.MEMORY_FILE_PATH)
+      ? process.env.MEMORY_FILE_PATH
+      : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH);
+  }
+  
+  // No custom path set, check for backward compatibility migration
+  const oldMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
+  const newMemoryPath = defaultMemoryPath;
+  
+  try {
+    // Check if old file exists and new file doesn't
+    await fs.access(oldMemoryPath);
+    try {
+      await fs.access(newMemoryPath);
+      // Both files exist, use new one (no migration needed)
+      return newMemoryPath;
+    } catch {
+      // Old file exists, new file doesn't - migrate
+      console.error('DETECTED: Found legacy memory.json file, migrating to memory.jsonl for JSONL format compatibility');
+      await fs.rename(oldMemoryPath, newMemoryPath);
+      console.error('COMPLETED: Successfully migrated memory.json to memory.jsonl');
+      return newMemoryPath;
+    }
+  } catch {
+    // Old file doesn't exist, use new path
+    return newMemoryPath;
+  }
+}
+
+// Initialize memory file path (will be set during startup)
+let MEMORY_FILE_PATH: string;
 
 // We are storing our memory using entities, relations, and observations in a graph structure
-interface Entity {
+export interface Entity {
   name: string;
   entityType: string;
   observations: string[];
 }
 
-interface Relation {
+export interface Relation {
   from: string;
   to: string;
   relationType: string;
 }
 
-interface KnowledgeGraph {
+export interface KnowledgeGraph {
   entities: Entity[];
   relations: Relation[];
 }
 
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
-class KnowledgeGraphManager {
+export class KnowledgeGraphManager {
+  constructor(private memoryFilePath: string) {}
+
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
-      const data = await fs.readFile(MEMORY_FILE_PATH, "utf-8");
+      const data = await fs.readFile(this.memoryFilePath, "utf-8");
       const lines = data.split("\n").filter(line => line.trim() !== "");
       return lines.reduce((graph: KnowledgeGraph, line) => {
         const item = JSON.parse(line);
@@ -60,20 +91,20 @@ class KnowledgeGraphManager {
 
   private async saveGraph(graph: KnowledgeGraph): Promise<void> {
     const lines = [
-      ...graph.entities.map(e => JSON.stringify({ 
-        type: "entity", 
-        name: e.name, 
-        entityType: e.entityType, 
-        observations: e.observations 
+      ...graph.entities.map(e => JSON.stringify({
+        type: "entity",
+        name: e.name,
+        entityType: e.entityType,
+        observations: e.observations
       })),
-      ...graph.relations.map(r => JSON.stringify({ 
-        type: "relation", 
-        from: r.from, 
-        to: r.to, 
-        relationType: r.relationType 
+      ...graph.relations.map(r => JSON.stringify({
+        type: "relation",
+        from: r.from,
+        to: r.to,
+        relationType: r.relationType
       })),
     ];
-    await fs.writeFile(MEMORY_FILE_PATH, lines.join("\n"));
+    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
@@ -193,7 +224,7 @@ class KnowledgeGraphManager {
   }
 }
 
-const knowledgeGraphManager = new KnowledgeGraphManager();
+let knowledgeGraphManager: KnowledgeGraphManager;
 
 
 // The server instance and tools exposed to Claude
@@ -434,6 +465,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+  // Initialize memory file path with backward compatibility
+  MEMORY_FILE_PATH = await ensureMemoryFilePath();
+
+  // Initialize knowledge graph manager with the memory file path
+  knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_FILE_PATH);
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Knowledge Graph MCP Server running on stdio");

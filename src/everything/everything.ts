@@ -6,7 +6,6 @@ import {
   CompleteRequestSchema,
   CreateMessageRequest,
   CreateMessageResultSchema,
-  ElicitRequest,
   ElicitResultSchema,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
@@ -257,22 +256,6 @@ export const createServer = () => {
 
     return await sendRequest(request, CreateMessageResultSchema);
 
-  };
-
-  const requestElicitation = async (
-    message: string,
-    requestedSchema: any,
-    sendRequest: SendRequest
-  ) => {
-    const request: ElicitRequest = {
-      method: 'elicitation/create',
-      params: {
-        message,
-        requestedSchema,
-      },
-    };
-
-    return await sendRequest(request, ElicitResultSchema);
   };
 
   const ALL_RESOURCES: Resource[] = Array.from({ length: 100 }, (_, i) => {
@@ -552,7 +535,7 @@ export const createServer = () => {
     });
     if (clientCapabilities!.elicitation) tools.push ({
         name: ToolName.ELICITATION,
-        description: "Demonstrates the Elicitation feature by asking the user to provide information about their favorite color, number, and pets.",
+        description: "Elicitation test tool that demonstrates how to request user input with various field types (string, boolean, email, uri, date, integer, number, enum)",
         inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
     });
 
@@ -747,27 +730,75 @@ export const createServer = () => {
     if (name === ToolName.ELICITATION) {
       ElicitationSchema.parse(args);
 
-      const elicitationResult = await requestElicitation(
-        'What are your favorite things?',
-        {
-          type: 'object',
-          properties: {
-            color: { type: 'string', description: 'Favorite color' },
-            number: {
-              type: 'integer',
-              description: 'Favorite number',
-              minimum: 1,
-              maximum: 100,
+      const elicitationResult = await extra.sendRequest({
+        method: 'elicitation/create',
+        params: {
+          message: 'Please provide inputs for the following fields:',
+          requestedSchema: {
+            type: 'object',
+            properties: {
+              name: {
+                title: 'Full Name',
+                type: 'string',
+                description: 'Your full, legal name',
+              },
+              check: {
+                title: 'Agree to terms',
+                type: 'boolean',
+                description: 'A boolean check',
+              },
+              color: {
+                title: 'Favorite Color',
+                type: 'string',
+                description: 'Favorite color (open text)',
+                default: 'blue',
+              },
+              email: {
+                title: 'Email Address',
+                type: 'string',
+                format: 'email',
+                description: 'Your email address (will be verified, and never shared with anyone else)',
+              },
+              homepage: {
+                type: 'string',
+                format: 'uri',
+                description: 'Homepage / personal site',
+              },
+              birthdate: {
+                title: 'Birthdate',
+                type: 'string',
+                format: 'date',
+                description: 'Your date of birth (will never be shared with anyone else)',
+              },
+              integer: {
+                title: 'Favorite Integer',
+                type: 'integer',
+                description: 'Your favorite integer (do not give us your phone number, pin, or other sensitive info)',
+                minimum: 1,
+                maximum: 100,
+                default: 42,
+              },
+              number: {
+                title: 'Favorite Number',
+                type: 'number',
+                description: 'Favorite number (there are no wrong answers)',
+                minimum: 0,
+                maximum: 1000,
+                default: 3.14,
+              },
+              petType: {
+                title: 'Pet type',
+                type: 'string',
+                enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'],
+                enumNames: ['Cats', 'Dogs', 'Birds', 'Fish', 'Reptiles'],
+                default: 'dogs',
+                description: 'Your favorite pet type',
+              },
             },
-            pets: {
-              type: 'string',
-              enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'],
-              description: 'Favorite pets',
-            },
+            required: ['name'],
           },
         },
-        extra.sendRequest
-      );
+      }, ElicitResultSchema, { timeout: 10 * 60 * 1000 /* 10 minutes */ });
 
       // Handle different response actions
       const content = [];
@@ -775,19 +806,30 @@ export const createServer = () => {
       if (elicitationResult.action === 'accept' && elicitationResult.content) {
         content.push({
           type: "text",
-          text: `✅ User provided their favorite things!`,
+          text: `✅ User provided the requested information!`,
         });
 
         // Only access elicitationResult.content when action is accept
-        const { color, number, pets } = elicitationResult.content;
+        const userData = elicitationResult.content;
+        const lines = [];
+        if (userData.name) lines.push(`- Name: ${userData.name}`);
+        if (userData.check !== undefined) lines.push(`- Agreed to terms: ${userData.check}`);
+        if (userData.color) lines.push(`- Favorite Color: ${userData.color}`);
+        if (userData.email) lines.push(`- Email: ${userData.email}`);
+        if (userData.homepage) lines.push(`- Homepage: ${userData.homepage}`);
+        if (userData.birthdate) lines.push(`- Birthdate: ${userData.birthdate}`);
+        if (userData.integer !== undefined) lines.push(`- Favorite Integer: ${userData.integer}`);
+        if (userData.number !== undefined) lines.push(`- Favorite Number: ${userData.number}`);
+        if (userData.petType) lines.push(`- Pet Type: ${userData.petType}`);
+
         content.push({
           type: "text",
-          text: `Their favorites are:\n- Color: ${color || 'not specified'}\n- Number: ${number || 'not specified'}\n- Pets: ${pets || 'not specified'}`,
+          text: `User inputs:\n${lines.join('\n')}`,
         });
       } else if (elicitationResult.action === 'decline') {
         content.push({
           type: "text",
-          text: `❌ User declined to provide their favorite things.`,
+          text: `❌ User declined to provide the requested information.`,
         });
       } else if (elicitationResult.action === 'cancel') {
         content.push({

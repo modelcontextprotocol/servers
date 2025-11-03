@@ -16,17 +16,20 @@
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.5.0",
+    "@modelcontextprotocol/sdk": "^1.19.1",
     "chalk": "^5.3.0",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
     "@types/node": "^22",
     "@types/yargs": "^17.0.32",
+    "@vitest/coverage-v8": "^2.1.8",
     "shx": "^0.3.4",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^2.1.8"
   }
 }
