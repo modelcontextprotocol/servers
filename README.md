@@ -1278,6 +1278,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Teradata](https://github.com/arturborycki/mcp-teradata)** - his MCP server enables LLMs to interact with Teradata databases. This MCP Server support tools and prompts for multi task data analytics
 - **[Terminal-Control](https://github.com/GongRzhe/terminal-controller-mcp)** - An MCP server that enables secure terminal command execution, directory navigation, and file system operations through a standardized interface.
 - **[Terraform-Cloud](https://github.com/severity1/terraform-cloud-mcp)** - An MCP server that integrates AI assistants with the Terraform Cloud API, allowing you to manage your infrastructure through natural conversation.
+- **[Tensorboard Query](https://github.com/Alir3z4/tb-query)** - An MCP server for querying and analyzing TensorBoard event files.
 - **[TFT-Match-Analyzer](https://github.com/GeLi2001/tft-mcp-server)** - MCP server for teamfight tactics match history & match details fetching, providing user the detailed context for every match.
 - **[Thales CDSP CAKM MCP Server](https://github.com/sanyambassi/thales-cdsp-cakm-mcp-server)** - An MCP server for the Thales CipherTrust Data Security Platform (CDSP) Cloud Key Management (CAKM) connector. This MCP server supports Ms SQL and Oracle databases.
 - **[Thales CDSP CRDP MCP Server](https://github.com/sanyambassi/thales-cdsp-crdp-mcp-server)** - A Model Context Protocol (MCP) server that allows interacting with the CipherTrust RestFul Data Protection (CRDP) data protection service.
