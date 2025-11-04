@@ -8,14 +8,15 @@ import os from 'os';
  */
 export function convertToWindowsPath(p: string): string {
   // Handle WSL paths (/mnt/c/...)
+  // NEVER convert WSL paths - they are valid Linux paths that work with Node.js fs operations in WSL
+  // Converting them to Windows format (C:\...) breaks fs operations inside WSL
   if (p.startsWith('/mnt/')) {
-    const driveLetter = p.charAt(5).toUpperCase();
-    const pathPart = p.slice(6).replace(/\//g, '\\');
-    return `${driveLetter}:${pathPart}`;
+    return p; // Leave WSL paths unchanged
   }
-  
+
   // Handle Unix-style Windows paths (/c/...)
-  if (p.match(/^\/[a-zA-Z]\//)) {
+  // Only convert when running on Windows
+  if (p.match(/^\/[a-zA-Z]\//) && process.platform === 'win32') {
     const driveLetter = p.charAt(1).toUpperCase();
     const pathPart = p.slice(2).replace(/\//g, '\\');
     return `${driveLetter}:${pathPart}`;
@@ -38,21 +39,29 @@ export function convertToWindowsPath(p: string): string {
 export function normalizePath(p: string): string {
   // Remove any surrounding quotes and whitespace
   p = p.trim().replace(/^["']|["']$/g, '');
-  
-  // Check if this is a Unix path (starts with / but not a Windows or WSL path)
-  const isUnixPath = p.startsWith('/') && 
-                    !p.match(/^\/mnt\/[a-z]\//i) && 
-                    !p.match(/^\/[a-zA-Z]\//);
-  
+
+  // Check if this is a Unix path that should not be converted
+  // WSL paths (/mnt/) should ALWAYS be preserved as they work correctly in WSL with Node.js fs
+  // Regular Unix paths should also be preserved
+  const isUnixPath = p.startsWith('/') && (
+    // Always preserve WSL paths (/mnt/c/, /mnt/d/, etc.)
+    p.match(/^\/mnt\/[a-z]\//i) ||
+    // On non-Windows platforms, treat all absolute paths as Unix paths
+    (process.platform !== 'win32') ||
+    // On Windows, preserve Unix paths that aren't Unix-style Windows paths (/c/, /d/, etc.)
+    (process.platform === 'win32' && !p.match(/^\/[a-zA-Z]\//))
+  );
+
   if (isUnixPath) {
     // For Unix paths, just normalize without converting to Windows format
     // Replace double slashes with single slashes and remove trailing slashes
     return p.replace(/\/+/g, '/').replace(/\/+$/, '');
   }
-  
-  // Convert WSL or Unix-style Windows paths to Windows format
+
+  // Convert Unix-style Windows paths (/c/, /d/) to Windows format if on Windows
+  // This function will now leave /mnt/ paths unchanged
   p = convertToWindowsPath(p);
-  
+
   // Handle double backslashes, preserving leading UNC \\
   if (p.startsWith('\\\\')) {
     // For UNC paths, first normalize any excessive leading backslashes to exactly \\
@@ -67,15 +76,15 @@ export function normalizePath(p: string): string {
     // For non-UNC paths, normalize all double backslashes
     p = p.replace(/\\\\/g, '\\');
   }
-  
+
   // Use Node's path normalization, which handles . and .. segments
   let normalized = path.normalize(p);
-  
+
   // Fix UNC paths after normalization (path.normalize can remove a leading backslash)
   if (p.startsWith('\\\\') && !normalized.startsWith('\\\\')) {
     normalized = '\\' + normalized;
   }
-  
+
   // Handle Windows paths: convert slashes and ensure drive letter is capitalized
   if (normalized.match(/^[a-zA-Z]:/)) {
     let result = normalized.replace(/\//g, '\\');
@@ -85,10 +94,15 @@ export function normalizePath(p: string): string {
     }
     return result;
   }
-  
-  // For all other paths (including relative paths), convert forward slashes to backslashes
-  // This ensures relative paths like "some/relative/path" become "some\\relative\\path"
-  return normalized.replace(/\//g, '\\');
+
+  // On Windows, convert forward slashes to backslashes for relative paths
+  // On Linux/Unix, preserve forward slashes
+  if (process.platform === 'win32') {
+    return normalized.replace(/\//g, '\\');
+  }
+
+  // On non-Windows platforms, keep the normalized path as-is
+  return normalized;
 }
 
 /**

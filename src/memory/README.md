@@ -173,14 +173,14 @@ The server can be configured using the following environment variables:
         "@modelcontextprotocol/server-memory"
       ],
       "env": {
-        "MEMORY_FILE_PATH": "/path/to/custom/memory.json"
+        "MEMORY_FILE_PATH": "/path/to/custom/memory.jsonl"
       }
     }
   }
 }
 ```
 
-- `MEMORY_FILE_PATH`: Path to the memory storage JSON file (default: `memory.json` in the server directory)
+- `MEMORY_FILE_PATH`: Path to the memory storage JSONL file (default: `memory.jsonl` in the server directory)
 
 # VS Code Installation Instructions
 
