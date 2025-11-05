@@ -1372,7 +1372,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Xcode](https://github.com/r-huijts/xcode-mcp-server)** - MCP server that brings AI to your Xcode projects, enabling intelligent code assistance, file operations, project management, and automated development tasks.
 - **[Xcode-mcp-server](https://github.com/drewster99/xcode-mcp-server)** (by drewster99) - Best Xcode integration - ClaudeCode and Cursor can build your project *with* Xcode and see the same errors you do. Fast easy setup.
 - **[xcodebuild](https://github.com/ShenghaiWang/xcodebuild)**  - 🍎 Build iOS Xcode workspace/project and feed back errors to llm.
-- **[Xero-mcp-server](https://github.com/john-zhang-dev/xero-mcp)** - Enabling clients to interact with Xero system for streamlined accounting, invoicing, and business operations.
+- **[Xero-mcp-server](https://github.com/XeroAPI/xero-mcp-server)** - Enabling clients to interact with Xero system for streamlined accounting, invoicing, and business operations.
 - **[XiYan](https://github.com/XGenerationLab/xiyan_mcp_server)** - 🗄️ An MCP server that supports fetching data from a database using natural language queries, powered by XiyanSQL as the text-to-SQL LLM.
 - **[XMind](https://github.com/apeyroux/mcp-xmind)** - Read and search through your XMind directory containing XMind files.
 - **[Yahoo Finance](https://github.com/AgentX-ai/yahoo-finance-server)** - 📈 Lets your AI interact with Yahoo Finance to get comprehensive stock market data, news, financials, and more. Proxy supported.
