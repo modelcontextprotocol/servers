@@ -1,6 +1,6 @@
 {
-  "name": "@modelcontextprotocol/server-filesystem",
-  "version": "0.6.3",
+  "name": "@roryulloa/server-filesystem",
+  "version": "2025.11.6",
   "description": "MCP server for filesystem access",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
@@ -30,9 +30,9 @@
     "@types/diff": "^5.0.9",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^22",
-    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/coverage-v8": "^4.0.7",
     "shx": "^0.3.4",
     "typescript": "^5.8.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.0.7"
   }
 }
