@@ -94,6 +94,16 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
    - Returns: List of branches
 
+13. `git_push`
+   - Pushes changes to a remote repository
+   - Inputs:
+     - `repo_path` (string): Path to the Git repository
+     - `remote` (string, optional): The remote repository to push to (default: 'origin')
+     - `branch` (string, optional): The branch to push. If not specified, pushes the current branch
+     - `force` (boolean, optional): Force push the branch, overwriting remote history if necessary (default: false)
+     - `set_upstream` (boolean, optional): Set the upstream branch when pushing (git push -u) (default: false)
+   - Returns: Confirmation of push operation with output details
+
 ## Installation
 
 ### Using uv (recommended)

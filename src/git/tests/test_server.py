@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 import git
-from mcp_server_git.server import git_checkout, git_branch, git_add
+from mcp_server_git.server import git_checkout, git_branch, git_add, git_push
 import shutil
 
 @pytest.fixture
@@ -91,3 +91,7 @@ def test_git_add_specific_files(test_repository):
     assert "file1.txt" in staged_files
     assert "file2.txt" not in staged_files
     assert result == "Files staged successfully"
+
+def test_git_push_no_remote(test_repository):
+    result = git_push(test_repository)
+    assert "Error pushing to origin" in result

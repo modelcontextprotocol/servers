@@ -90,6 +90,28 @@ class GitBranch(BaseModel):
         description="The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified",
     )
 
+class GitPush(BaseModel):
+    repo_path: str = Field(
+        ...,
+        description="The path to the Git repository.",
+    )
+    remote: str = Field(
+        default="origin",
+        description="The remote repository to push to (default: 'origin').",
+    )
+    branch: Optional[str] = Field(
+        None,
+        description="The branch to push. If not specified, pushes the current branch.",
+    )
+    force: bool = Field(
+        default=False,
+        description="Force push the branch, overwriting remote history if necessary.",
+    )
+    set_upstream: bool = Field(
+        default=False,
+        description="Set the upstream branch when pushing (git push -u).",
+    )
+
 
 class GitTools(str, Enum):
     STATUS = "git_status"
@@ -103,6 +125,7 @@ class GitTools(str, Enum):
     CREATE_BRANCH = "git_create_branch"
     CHECKOUT = "git_checkout"
     SHOW = "git_show"
+    PUSH = "git_push"
 
     BRANCH = "git_branch"
 
@@ -230,6 +253,24 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
 
     return branch_info
 
+def git_push(repo: git.Repo, remote: str = "origin", branch: str | None = None, force: bool = False, set_upstream: bool = False) -> str:
+    args = []
+    if force:
+        args.append("--force")
+    if set_upstream:
+        args.append("-u")
+    
+    if branch:
+        args.extend([remote, branch])
+    else:
+        args.append(remote)
+    
+    try:
+        result = repo.git.push(*args)
+        return f"Pushed successfully to {remote}: {result}"
+    except git.GitCommandError as e:
+        return f"Error pushing to {remote}: {e}"
+
 
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
@@ -302,7 +343,11 @@ async def serve(repository: Path | None) -> None:
                 description="Shows the contents of a commit",
                 inputSchema=GitShow.model_json_schema(),
             ),
-
+            Tool(
+                name=GitTools.PUSH,
+                description="Pushes changes to a remote repository",
+                inputSchema=GitPush.model_json_schema(),
+            ),
             Tool(
                 name=GitTools.BRANCH,
                 description="List Git branches",
@@ -441,6 +486,19 @@ async def serve(repository: Path | None) -> None:
                     arguments.get("branch_type", 'local'),
                     arguments.get("contains", None),
                     arguments.get("not_contains", None),
+                )
+                return [TextContent(
+                    type="text",
+                    text=result
+                )]
+            
+            case GitTools.PUSH:
+                result = git_push(
+                    repo,
+                    arguments.get("remote", "origin"),
+                    arguments.get("branch", None),
+                    arguments.get("force", False),
+                    arguments.get("set_upstream", False),
                 )
                 return [TextContent(
                     type="text",
