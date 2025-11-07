@@ -30,6 +30,7 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import JSZip from "jszip";
+import JSZip from "jszip";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -133,6 +134,10 @@ const ZipResourcesInputSchema = z.object({
   files: z.record(z.string().url().describe("URL of the file to include in the zip")).describe("Mapping of file names to URLs to include in the zip"),
 });
 
+const ZipResourcesInputSchema = z.object({
+  files: z.record(z.string().url().describe("URL of the file to include in the zip")).describe("Mapping of file names to URLs to include in the zip"),
+});
+
 enum ToolName {
   ECHO = "echo",
   ADD = "add",
@@ -145,6 +150,7 @@ enum ToolName {
   ELICITATION = "startElicitation",
   GET_RESOURCE_LINKS = "getResourceLinks",
   STRUCTURED_CONTENT = "structuredContent",
+  ZIP_RESOURCES = "zip",
   ZIP_RESOURCES = "zip",
   LIST_ROOTS = "listRoots"
 }
@@ -523,7 +529,7 @@ export const createServer = () => {
       },
       {
         name: ToolName.ZIP_RESOURCES,
-        description: "Compresses the provided resource files (mapping of name to URI, which can be a data URI) to a zip file, which it returns as a data URI resource link.",
+        description: " a tool that would transform an image resource (passed by URL) by cropping it, and returns the result as a resource link.",
         inputSchema: zodToJsonSchema(ZipResourcesInputSchema) as ToolInput,
       }
     ];
