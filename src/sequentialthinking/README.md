@@ -139,7 +139,7 @@ Run the following:
 #### npx
 
 ```bash
-codex mcp add sequential-thinking -- npx -y @modelcontextprotocol/server-sequential-thinking
+codex mcp add sequential-thinking npx -y @modelcontextprotocol/server-sequential-thinking
 ```
 
 ## Building
