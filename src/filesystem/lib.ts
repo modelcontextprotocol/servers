@@ -184,7 +184,9 @@ export async function applyFileEdits(
 
     // If exact match exists, use it
     if (modifiedContent.includes(normalizedOld)) {
-      modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
+      // SECURITY FIX: Use replaceAll() to replace ALL occurrences, not just the first one
+      // This prevents incomplete updates (e.g., replacing only first occurrence of a secret key)
+      modifiedContent = modifiedContent.replaceAll(normalizedOld, normalizedNew);
       continue;
     }
 

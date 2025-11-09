@@ -9,6 +9,7 @@ import {
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomBytes } from 'crypto';
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
@@ -75,12 +76,25 @@ export class KnowledgeGraphManager {
     try {
       const data = await fs.readFile(this.memoryFilePath, "utf-8");
       const lines = data.split("\n").filter(line => line.trim() !== "");
-      return lines.reduce((graph: KnowledgeGraph, line) => {
-        const item = JSON.parse(line);
-        if (item.type === "entity") graph.entities.push(item as Entity);
-        if (item.type === "relation") graph.relations.push(item as Relation);
+      const errors: Array<{line: number, error: string}> = [];
+
+      const graph = lines.reduce((graph: KnowledgeGraph, line, index) => {
+        try {
+          const item = JSON.parse(line);
+          if (item.type === "entity") graph.entities.push(item as Entity);
+          if (item.type === "relation") graph.relations.push(item as Relation);
+        } catch (parseError) {
+          errors.push({line: index + 1, error: String(parseError)});
+          console.error(`Failed to parse line ${index + 1}: ${line.substring(0, 100)}...`);
+        }
         return graph;
       }, { entities: [], relations: [] });
+
+      if (errors.length > 0) {
+        console.error(`WARNING: Knowledge graph loaded with ${errors.length} corrupted lines (partial data loss)`);
+      }
+
+      return graph;
     } catch (error) {
       if (error instanceof Error && 'code' in error && (error as any).code === "ENOENT") {
         return { entities: [], relations: [] };
@@ -104,7 +118,22 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n") + "\n");
+    const content = lines.join("\n") + "\n";
+
+    // SECURITY: Use atomic write with temporary file + rename to prevent:
+    // 1. Concurrent save corruption
+    // 2. Partial write corruption on crash
+    // 3. Lost updates from race conditions
+    const tempPath = `${this.memoryFilePath}.${randomBytes(16).toString('hex')}.tmp`;
+    try {
+      await fs.writeFile(tempPath, content, 'utf-8');
+      await fs.rename(tempPath, this.memoryFilePath);
+    } catch (error) {
+      try {
+        await fs.unlink(tempPath);
+      } catch {}
+      throw error;
+    }
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {

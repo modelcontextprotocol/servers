@@ -342,8 +342,16 @@ async def serve(repository: Path | None) -> None:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-        repo_path = Path(arguments["repo_path"])
-        
+        repo_path = Path(arguments["repo_path"]).resolve()
+
+        # SECURITY: Validate repo_path is in allowed repositories to prevent directory traversal
+        allowed_repos = await list_repos()
+        if str(repo_path) not in allowed_repos:
+            raise ValueError(
+                f"Repository {repo_path} is not in allowed repositories. "
+                f"Allowed repositories: {', '.join(allowed_repos)}"
+            )
+
         # For all commands, we need an existing repo
         repo = git.Repo(repo_path)
 
