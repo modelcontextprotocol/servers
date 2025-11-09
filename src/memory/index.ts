@@ -104,7 +104,7 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    await fs.writeFile(this.memoryFilePath, lines.join("\n") + "\n");
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
