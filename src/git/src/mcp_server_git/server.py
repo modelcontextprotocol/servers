@@ -97,6 +97,70 @@ def validate_file_paths(file_paths: list[str]) -> list[str]:
 
     return validated
 
+def validate_git_reference(ref: str, ref_type: str = "reference") -> str:
+    """
+    Validate git references (branches, tags, commit SHAs, revisions).
+    Prevents command injection and invalid references.
+    """
+    if not ref or not isinstance(ref, str):
+        raise ValueError(f"Git {ref_type} must be a non-empty string")
+
+    if len(ref) > MAX_BRANCH_NAME_LENGTH:
+        raise ValueError(f"Git {ref_type} exceeds maximum length of {MAX_BRANCH_NAME_LENGTH}")
+
+    # Remove control characters and null bytes
+    sanitized = re.sub(r'[\x00-\x1f\x7f]', '', ref)
+
+    if not sanitized:
+        raise ValueError(f"Git {ref_type} cannot be empty after sanitization")
+
+    # Check for command injection patterns
+    dangerous_chars = ['|', '&', ';', '$', '`', '\n', '(', ')', '<', '>']
+    for char in dangerous_chars:
+        if char in sanitized:
+            raise ValueError(f"Git {ref_type} contains forbidden character: '{char}'")
+
+    return sanitized
+
+def validate_timestamp(timestamp: str) -> str:
+    """
+    Validate timestamp strings for git log filtering.
+    Prevents command injection via timestamp parameters.
+    """
+    if not timestamp or not isinstance(timestamp, str):
+        raise ValueError("Timestamp must be a non-empty string")
+
+    if len(timestamp) > 100:  # Reasonable limit for date strings
+        raise ValueError("Timestamp exceeds maximum length of 100 characters")
+
+    # Remove control characters and null bytes
+    sanitized = re.sub(r'[\x00-\x1f\x7f]', '', timestamp)
+
+    if not sanitized:
+        raise ValueError("Timestamp cannot be empty after sanitization")
+
+    # CRITICAL SECURITY: Check for command injection patterns
+    # Git timestamps should only contain alphanumeric, spaces, hyphens, colons, slashes
+    dangerous_chars = ['|', '&', ';', '$', '`', '\n', '(', ')', '<', '>', '\\', '"', "'"]
+    for char in dangerous_chars:
+        if char in sanitized:
+            raise ValueError(f"Timestamp contains forbidden character: '{char}'")
+
+    return sanitized.strip()
+
+def validate_max_count(max_count: int) -> int:
+    """Validate max_count parameter to prevent resource exhaustion."""
+    if not isinstance(max_count, int):
+        raise ValueError("max_count must be an integer")
+
+    if max_count < 1:
+        raise ValueError("max_count must be at least 1")
+
+    if max_count > 10000:  # Reasonable upper limit
+        raise ValueError("max_count cannot exceed 10000")
+
+    return max_count
+
 class GitStatus(BaseModel):
     repo_path: str
 
@@ -195,7 +259,9 @@ def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) 
     return repo.git.diff(f"--unified={context_lines}", "--cached")
 
 def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
-    return repo.git.diff(f"--unified={context_lines}", target)
+    # SECURITY: Validate target reference to prevent command injection
+    validated_target = validate_git_reference(target, "diff target")
+    return repo.git.diff(f"--unified={context_lines}", validated_target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
     # SECURITY: Validate and sanitize commit message
@@ -217,21 +283,26 @@ def git_reset(repo: git.Repo) -> str:
     return "All staged changes reset"
 
 def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] = None, end_timestamp: Optional[str] = None) -> list[str]:
+    # SECURITY: Validate max_count to prevent resource exhaustion
+    validated_max_count = validate_max_count(max_count)
+
     if start_timestamp or end_timestamp:
-        # Use git log command with date filtering
+        # CRITICAL SECURITY: Validate timestamp parameters to prevent command injection
         args = []
         if start_timestamp:
-            args.extend(['--since', start_timestamp])
+            validated_start = validate_timestamp(start_timestamp)
+            args.extend(['--since', validated_start])
         if end_timestamp:
-            args.extend(['--until', end_timestamp])
+            validated_end = validate_timestamp(end_timestamp)
+            args.extend(['--until', validated_end])
         args.extend(['--format=%H%n%an%n%ad%n%s%n'])
-        
+
         log_output = repo.git.log(*args).split('\n')
-        
+
         log = []
         # Process commits in groups of 4 (hash, author, date, message)
         for i in range(0, len(log_output), 4):
-            if i + 3 < len(log_output) and len(log) < max_count:
+            if i + 3 < len(log_output) and len(log) < validated_max_count:
                 log.append(
                     f"Commit: {log_output[i]}\n"
                     f"Author: {log_output[i+1]}\n"
@@ -241,7 +312,7 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
         return log
     else:
         # Use existing logic for simple log without date filtering
-        commits = list(repo.iter_commits(max_count=max_count))
+        commits = list(repo.iter_commits(max_count=validated_max_count))
         log = []
         for commit in commits:
             log.append(
@@ -274,7 +345,9 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
 
 
 def git_show(repo: git.Repo, revision: str) -> str:
-    commit = repo.commit(revision)
+    # SECURITY: Validate revision to prevent command injection
+    validated_revision = validate_git_reference(revision, "revision")
+    commit = repo.commit(validated_revision)
     output = [
         f"Commit: {commit.hexsha!r}\n"
         f"Author: {commit.author!r}\n"
@@ -292,17 +365,20 @@ def git_show(repo: git.Repo, revision: str) -> str:
     return "".join(output)
 
 def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, not_contains: str | None = None) -> str:
+    # SECURITY: Validate commit SHAs to prevent command injection
     match contains:
         case None:
             contains_sha = (None,)
         case _:
-            contains_sha = ("--contains", contains)
+            validated_contains = validate_git_reference(contains, "commit SHA")
+            contains_sha = ("--contains", validated_contains)
 
     match not_contains:
         case None:
             not_contains_sha = (None,)
         case _:
-            not_contains_sha = ("--no-contains", not_contains)
+            validated_not_contains = validate_git_reference(not_contains, "commit SHA")
+            not_contains_sha = ("--no-contains", validated_not_contains)
 
     match branch_type:
         case 'local':

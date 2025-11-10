@@ -305,30 +305,64 @@ export class KnowledgeGraphManager {
   }
 
   async deleteEntities(entityNames: string[]): Promise<void> {
+    // VALIDATION: Validate and sanitize entity names before deletion
+    const validatedNames = entityNames.map(name =>
+      validateAndSanitizeString(name, MAX_STRING_LENGTH, 'Entity name')
+    );
+
     const graph = await this.loadGraph();
-    graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
-    graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
+
+    // OPTIMIZATION: Use Set for O(1) lookup instead of O(n) includes()
+    // This changes complexity from O(n²) to O(n)
+    const namesToDelete = new Set(validatedNames);
+    graph.entities = graph.entities.filter(e => !namesToDelete.has(e.name));
+    graph.relations = graph.relations.filter(r =>
+      !namesToDelete.has(r.from) && !namesToDelete.has(r.to)
+    );
+
     await this.saveGraph(graph);
   }
 
   async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
     const graph = await this.loadGraph();
+
+    // OPTIMIZATION: Build entity lookup map for O(1) access instead of O(n) find()
+    const entityMap = new Map(graph.entities.map(e => [e.name, e]));
+
     deletions.forEach(d => {
-      const entity = graph.entities.find(e => e.name === d.entityName);
+      // VALIDATION: Validate and sanitize entity name and observations
+      const entityName = validateAndSanitizeString(d.entityName, MAX_STRING_LENGTH, 'Entity name');
+      const validatedObservations = d.observations.map((obs, idx) =>
+        validateAndSanitizeString(obs, MAX_OBSERVATION_CONTENT_LENGTH, `Observation ${idx + 1}`)
+      );
+
+      const entity = entityMap.get(entityName);
       if (entity) {
-        entity.observations = entity.observations.filter(o => !d.observations.includes(o));
+        // OPTIMIZATION: Use Set for O(1) lookup instead of O(n) includes()
+        const observationsToDelete = new Set(validatedObservations);
+        entity.observations = entity.observations.filter(o => !observationsToDelete.has(o));
       }
     });
+
     await this.saveGraph(graph);
   }
 
   async deleteRelations(relations: Relation[]): Promise<void> {
+    // VALIDATION: Validate and sanitize all input relations
+    const validatedRelations = relations.map(r => validateRelation(r));
+
     const graph = await this.loadGraph();
-    graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
-      r.from === delRelation.from && 
-      r.to === delRelation.to && 
-      r.relationType === delRelation.relationType
-    ));
+
+    // OPTIMIZATION: Use Set with composite keys for O(1) lookup instead of O(n*m) some()
+    // This changes complexity from O(n*m) to O(n+m)
+    const relationsToDelete = new Set(
+      validatedRelations.map(r => `${r.from}|${r.to}|${r.relationType}`)
+    );
+
+    graph.relations = graph.relations.filter(r =>
+      !relationsToDelete.has(`${r.from}|${r.to}|${r.relationType}`)
+    );
+
     await this.saveGraph(graph);
   }
 

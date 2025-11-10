@@ -227,6 +227,23 @@ export async function applyFileEdits(
   edits: FileEdit[],
   dryRun: boolean = false
 ): Promise<string> {
+  // SECURITY: Check file size before reading to prevent OOM
+  try {
+    const stats = await fs.stat(filePath);
+    if (stats && stats.size > MAX_FILE_SIZE_READ) {
+      throw new Error(
+        `File size ${stats.size} bytes exceeds maximum read size of ${MAX_FILE_SIZE_READ} bytes ` +
+        `(${Math.round(MAX_FILE_SIZE_READ / 1024 / 1024)}MB). ` +
+        `Cannot apply edits to files this large.`
+      );
+    }
+  } catch (error) {
+    if ((error as any).message && (error as any).message.includes('exceeds maximum')) {
+      throw error; // Re-throw size limit errors
+    }
+    // Otherwise, continue to readFile which will provide appropriate error
+  }
+
   // Read file content and normalize line endings
   const content = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
 
@@ -316,12 +333,23 @@ export async function applyFileEdits(
 
 // Memory-efficient implementation to get the last N lines of a file
 export async function tailFile(filePath: string, numLines: number): Promise<string> {
-  const CHUNK_SIZE = 1024; // Read 1KB at a time
+  // SECURITY: Check file size before processing to prevent OOM
   const stats = await fs.stat(filePath);
-  const fileSize = stats.size;
-  
+  const fileSize = stats?.size || 0;
+
+  // Handle empty files early
   if (fileSize === 0) return '';
-  
+
+  if (fileSize > MAX_FILE_SIZE_READ) {
+    throw new Error(
+      `File size ${fileSize} bytes exceeds maximum read size of ${MAX_FILE_SIZE_READ} bytes ` +
+      `(${Math.round(MAX_FILE_SIZE_READ / 1024 / 1024)}MB). ` +
+      `Cannot tail files this large.`
+    );
+  }
+
+  const CHUNK_SIZE = 1024; // Read 1KB at a time
+
   // Open file for reading
   const fileHandle = await fs.open(filePath, 'r');
   try {
@@ -368,6 +396,16 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
 
 // New function to get the first N lines of a file
 export async function headFile(filePath: string, numLines: number): Promise<string> {
+  // SECURITY: Check file size before processing to prevent OOM
+  const stats = await fs.stat(filePath);
+  if (stats && stats.size && stats.size > MAX_FILE_SIZE_READ) {
+    throw new Error(
+      `File size ${stats.size} bytes exceeds maximum read size of ${MAX_FILE_SIZE_READ} bytes ` +
+      `(${Math.round(MAX_FILE_SIZE_READ / 1024 / 1024)}MB). ` +
+      `Cannot head files this large.`
+    );
+  }
+
   const fileHandle = await fs.open(filePath, 'r');
   try {
     const lines: string[] = [];
@@ -414,9 +452,28 @@ export async function searchFilesWithValidation(
   const results: string[] = [];
 
   async function search(currentPath: string) {
+    // SECURITY: Stop early if we've reached the result limit to prevent resource exhaustion
+    if (results.length >= MAX_SEARCH_RESULTS) {
+      return;
+    }
+
     const entries = await fs.readdir(currentPath, { withFileTypes: true });
 
+    // SECURITY: Check directory entry count to prevent DoS from directories with millions of files
+    if (entries.length > MAX_DIRECTORY_ENTRIES) {
+      throw new Error(
+        `Directory ${currentPath} contains ${entries.length} entries, ` +
+        `exceeding maximum of ${MAX_DIRECTORY_ENTRIES}. ` +
+        `This may indicate a DoS attempt or misconfiguration.`
+      );
+    }
+
     for (const entry of entries) {
+      // Stop early if we've reached the result limit
+      if (results.length >= MAX_SEARCH_RESULTS) {
+        return;
+      }
+
       const fullPath = path.join(currentPath, entry.name);
 
       try {
