@@ -7,6 +7,14 @@ import { minimatch } from 'minimatch';
 import { normalizePath, expandHome } from './path-utils.js';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
 
+// Resource limits for DoS protection and stability
+const MAX_FILE_SIZE_READ = 100 * 1024 * 1024; // 100MB max read
+const MAX_FILE_SIZE_WRITE = 50 * 1024 * 1024; // 50MB max write
+const MAX_FILES_BATCH_READ = 100; // Max files to read in one batch
+const MAX_DIRECTORY_ENTRIES = 10000; // Max directory entries to return
+const MAX_SEARCH_RESULTS = 1000; // Max search results
+const MAX_PATH_LENGTH = 4096; // Max path length (filesystem limit)
+
 // Global allowed directories - set by the main module
 let allowedDirectories: string[] = [];
 
@@ -74,10 +82,29 @@ export function createUnifiedDiff(originalContent: string, newContent: string, f
 
 // Security & Validation Functions
 export async function validatePath(requestedPath: string): Promise<string> {
+  // SECURITY: Validate path length to prevent buffer overflow attacks
+  if (requestedPath.length > MAX_PATH_LENGTH) {
+    throw new Error(
+      `Path length ${requestedPath.length} exceeds maximum allowed length of ${MAX_PATH_LENGTH} characters`
+    );
+  }
+
+  // SECURITY: Check for null bytes which are forbidden in paths
+  if (requestedPath.includes('\0')) {
+    throw new Error('Access denied - invalid path: contains null byte');
+  }
+
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
     : path.resolve(process.cwd(), expandedPath);
+
+  // Final path length check after resolution
+  if (absolute.length > MAX_PATH_LENGTH) {
+    throw new Error(
+      `Resolved path length ${absolute.length} exceeds maximum allowed length of ${MAX_PATH_LENGTH} characters`
+    );
+  }
 
   const normalizedRequested = normalizePath(absolute);
 
@@ -132,10 +159,37 @@ export async function getFileStats(filePath: string): Promise<FileInfo> {
 }
 
 export async function readFileContent(filePath: string, encoding: string = 'utf-8'): Promise<string> {
+  // SECURITY: Check file size before reading to prevent OOM
+  try {
+    const stats = await fs.stat(filePath);
+    if (stats && stats.size > MAX_FILE_SIZE_READ) {
+      throw new Error(
+        `File size ${stats.size} bytes exceeds maximum read size of ${MAX_FILE_SIZE_READ} bytes ` +
+        `(${Math.round(MAX_FILE_SIZE_READ / 1024 / 1024)}MB). ` +
+        `Use head/tail operations for large files.`
+      );
+    }
+  } catch (error) {
+    // If stat fails, let readFile handle the error (file might not exist, etc.)
+    if ((error as any).message && (error as any).message.includes('exceeds maximum')) {
+      throw error; // Re-throw size limit errors
+    }
+    // Otherwise, continue to readFile which will provide appropriate error
+  }
+
   return await fs.readFile(filePath, encoding as BufferEncoding);
 }
 
 export async function writeFileContent(filePath: string, content: string): Promise<void> {
+  // SECURITY: Check content size before writing to prevent disk exhaustion
+  const contentSize = Buffer.byteLength(content, 'utf-8');
+  if (contentSize > MAX_FILE_SIZE_WRITE) {
+    throw new Error(
+      `Content size ${contentSize} bytes exceeds maximum write size of ${MAX_FILE_SIZE_WRITE} bytes ` +
+      `(${Math.round(MAX_FILE_SIZE_WRITE / 1024 / 1024)}MB)`
+    );
+  }
+
   try {
     // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
     // preventing writes through pre-existing symlinks

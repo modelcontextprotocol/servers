@@ -14,9 +14,88 @@ from mcp.types import (
 from enum import Enum
 import git
 from pydantic import BaseModel, Field
+import re
 
 # Default number of context lines to show in diff output
 DEFAULT_CONTEXT_LINES = 3
+
+# Resource limits and validation constants
+MAX_BRANCH_NAME_LENGTH = 255
+MAX_COMMIT_MESSAGE_LENGTH = 10000
+MAX_FILE_PATH_LENGTH = 4096
+
+# Input validation and sanitization
+def validate_branch_name(name: str) -> str:
+    """
+    Validate and sanitize git branch names according to git rules.
+    Prevents command injection and invalid branch names.
+    """
+    if not name or not isinstance(name, str):
+        raise ValueError("Branch name must be a non-empty string")
+
+    if len(name) > MAX_BRANCH_NAME_LENGTH:
+        raise ValueError(f"Branch name exceeds maximum length of {MAX_BRANCH_NAME_LENGTH}")
+
+    # Remove control characters and null bytes
+    sanitized = re.sub(r'[\x00-\x1f\x7f]', '', name)
+
+    if not sanitized:
+        raise ValueError("Branch name cannot be empty after sanitization")
+
+    # Git branch name rules
+    if sanitized.startswith('-') or sanitized.startswith('.'):
+        raise ValueError("Branch name cannot start with '-' or '.'")
+
+    if sanitized.endswith('.lock') or sanitized.endswith('/'):
+        raise ValueError("Branch name cannot end with '.lock' or '/'")
+
+    if '..' in sanitized or '@{' in sanitized or '//' in sanitized:
+        raise ValueError("Branch name cannot contain '..', '@{', or '//'")
+
+    # Check for forbidden characters
+    forbidden_chars = ['~', '^', ':', '?', '*', '[', '\\', ' ', '\t']
+    for char in forbidden_chars:
+        if char in sanitized:
+            raise ValueError(f"Branch name cannot contain '{char}'")
+
+    if not re.match(r'^[a-zA-Z0-9/_.-]+$', sanitized):
+        raise ValueError("Branch name contains invalid characters")
+
+    return sanitized
+
+def validate_commit_message(message: str) -> str:
+    """Validate and sanitize git commit messages."""
+    if not message or not isinstance(message, str):
+        raise ValueError("Commit message must be a non-empty string")
+
+    if len(message) > MAX_COMMIT_MESSAGE_LENGTH:
+        raise ValueError(f"Commit message exceeds maximum length of {MAX_COMMIT_MESSAGE_LENGTH}")
+
+    sanitized = message.replace('\x00', '')
+
+    if not sanitized.strip():
+        raise ValueError("Commit message cannot be empty after sanitization")
+
+    return sanitized
+
+def validate_file_paths(file_paths: list[str]) -> list[str]:
+    """Validate file paths for git operations."""
+    validated = []
+    for file_path in file_paths:
+        if not file_path or not isinstance(file_path, str):
+            raise ValueError("File path must be a non-empty string")
+
+        if len(file_path) > MAX_FILE_PATH_LENGTH:
+            raise ValueError(f"File path exceeds maximum length of {MAX_FILE_PATH_LENGTH}")
+
+        sanitized = file_path.replace('\x00', '')
+
+        if not sanitized:
+            raise ValueError("File path cannot be empty after sanitization")
+
+        validated.append(sanitized)
+
+    return validated
 
 class GitStatus(BaseModel):
     repo_path: str
@@ -119,14 +198,18 @@ def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_L
     return repo.git.diff(f"--unified={context_lines}", target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
-    commit = repo.index.commit(message)
+    # SECURITY: Validate and sanitize commit message
+    validated_message = validate_commit_message(message)
+    commit = repo.index.commit(validated_message)
     return f"Changes committed successfully with hash {commit.hexsha}"
 
 def git_add(repo: git.Repo, files: list[str]) -> str:
     if files == ["."]:
         repo.git.add(".")
     else:
-        repo.index.add(files)
+        # SECURITY: Validate file paths before git operations
+        validated_files = validate_file_paths(files)
+        repo.index.add(validated_files)
     return "Files staged successfully"
 
 def git_reset(repo: git.Repo) -> str:
@@ -170,17 +253,23 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
         return log
 
 def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None = None) -> str:
+    # SECURITY: Validate and sanitize branch names
+    validated_branch_name = validate_branch_name(branch_name)
+
     if base_branch:
-        base = repo.references[base_branch]
+        validated_base_branch = validate_branch_name(base_branch)
+        base = repo.references[validated_base_branch]
     else:
         base = repo.active_branch
 
-    repo.create_head(branch_name, base)
-    return f"Created branch '{branch_name}' from '{base.name}'"
+    repo.create_head(validated_branch_name, base)
+    return f"Created branch '{validated_branch_name}' from '{base.name}'"
 
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
-    repo.git.checkout(branch_name)
-    return f"Switched to branch '{branch_name}'"
+    # SECURITY: Validate and sanitize branch name
+    validated_branch_name = validate_branch_name(branch_name)
+    repo.git.checkout(validated_branch_name)
+    return f"Switched to branch '{validated_branch_name}'"
 
 
 

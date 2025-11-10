@@ -50,6 +50,13 @@ export async function ensureMemoryFilePath(): Promise<string> {
 // Initialize memory file path (will be set during startup)
 let MEMORY_FILE_PATH: string;
 
+// Resource limits for DoS protection and stability
+const MAX_ENTITIES = 100000;
+const MAX_RELATIONS = 500000;
+const MAX_OBSERVATIONS_PER_ENTITY = 10000;
+const MAX_STRING_LENGTH = 10000; // Max length for names, types, observations
+const MAX_OBSERVATION_CONTENT_LENGTH = 50000; // Max length for observation content
+
 // We are storing our memory using entities, relations, and observations in a graph structure
 export interface Entity {
   name: string;
@@ -66,6 +73,44 @@ export interface Relation {
 export interface KnowledgeGraph {
   entities: Entity[];
   relations: Relation[];
+}
+
+// Input validation and sanitization
+function validateAndSanitizeString(value: string, maxLength: number, fieldName: string): string {
+  if (typeof value !== 'string') {
+    throw new Error(`${fieldName} must be a string`);
+  }
+
+  // Remove null bytes and control characters except newlines/tabs
+  const sanitized = value.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+
+  if (sanitized.length === 0) {
+    throw new Error(`${fieldName} cannot be empty after sanitization`);
+  }
+
+  if (sanitized.length > maxLength) {
+    throw new Error(`${fieldName} exceeds maximum length of ${maxLength} characters (got ${sanitized.length})`);
+  }
+
+  return sanitized.trim();
+}
+
+function validateEntity(entity: Entity): Entity {
+  return {
+    name: validateAndSanitizeString(entity.name, MAX_STRING_LENGTH, 'Entity name'),
+    entityType: validateAndSanitizeString(entity.entityType, MAX_STRING_LENGTH, 'Entity type'),
+    observations: entity.observations.map((obs, idx) =>
+      validateAndSanitizeString(obs, MAX_OBSERVATION_CONTENT_LENGTH, `Observation ${idx + 1}`)
+    )
+  };
+}
+
+function validateRelation(relation: Relation): Relation {
+  return {
+    from: validateAndSanitizeString(relation.from, MAX_STRING_LENGTH, 'Relation from'),
+    to: validateAndSanitizeString(relation.to, MAX_STRING_LENGTH, 'Relation to'),
+    relationType: validateAndSanitizeString(relation.relationType, MAX_STRING_LENGTH, 'Relation type')
+  };
 }
 
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
@@ -137,20 +182,81 @@ export class KnowledgeGraphManager {
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
+    // Validate and sanitize all input entities
+    const validatedEntities = entities.map(e => validateEntity(e));
+
     const graph = await this.loadGraph();
-    const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
+
+    // Check resource limits
+    if (graph.entities.length + validatedEntities.length > MAX_ENTITIES) {
+      throw new Error(
+        `Entity limit exceeded. Current: ${graph.entities.length}, ` +
+        `Attempting to add: ${validatedEntities.length}, ` +
+        `Maximum: ${MAX_ENTITIES}`
+      );
+    }
+
+    // Check observations limit per entity
+    for (const entity of validatedEntities) {
+      if (entity.observations.length > MAX_OBSERVATIONS_PER_ENTITY) {
+        throw new Error(
+          `Entity "${entity.name}" has ${entity.observations.length} observations, ` +
+          `exceeding maximum of ${MAX_OBSERVATIONS_PER_ENTITY}`
+        );
+      }
+    }
+
+    // OPTIMIZATION: Use Set for O(1) lookup instead of O(n) array.some()
+    const existingNames = new Set(graph.entities.map(e => e.name));
+    const newEntities = validatedEntities.filter(e => !existingNames.has(e.name));
+
+    if (newEntities.length === 0) {
+      return []; // No new entities to add
+    }
+
     graph.entities.push(...newEntities);
     await this.saveGraph(graph);
     return newEntities;
   }
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
+    // Validate and sanitize all input relations
+    const validatedRelations = relations.map(r => validateRelation(r));
+
     const graph = await this.loadGraph();
-    const newRelations = relations.filter(r => !graph.relations.some(existingRelation => 
-      existingRelation.from === r.from && 
-      existingRelation.to === r.to && 
-      existingRelation.relationType === r.relationType
-    ));
+
+    // Check resource limits
+    if (graph.relations.length + validatedRelations.length > MAX_RELATIONS) {
+      throw new Error(
+        `Relation limit exceeded. Current: ${graph.relations.length}, ` +
+        `Attempting to add: ${validatedRelations.length}, ` +
+        `Maximum: ${MAX_RELATIONS}`
+      );
+    }
+
+    // Validate that referenced entities exist
+    const entityNames = new Set(graph.entities.map(e => e.name));
+    for (const relation of validatedRelations) {
+      if (!entityNames.has(relation.from)) {
+        throw new Error(`Entity "${relation.from}" does not exist (referenced in relation)`);
+      }
+      if (!entityNames.has(relation.to)) {
+        throw new Error(`Entity "${relation.to}" does not exist (referenced in relation)`);
+      }
+    }
+
+    // OPTIMIZATION: Use Set for O(1) lookup instead of O(n) array.some()
+    const existingRelationKeys = new Set(
+      graph.relations.map(r => `${r.from}|${r.to}|${r.relationType}`)
+    );
+    const newRelations = validatedRelations.filter(
+      r => !existingRelationKeys.has(`${r.from}|${r.to}|${r.relationType}`)
+    );
+
+    if (newRelations.length === 0) {
+      return []; // No new relations to add
+    }
+
     graph.relations.push(...newRelations);
     await this.saveGraph(graph);
     return newRelations;
@@ -158,15 +264,42 @@ export class KnowledgeGraphManager {
 
   async addObservations(observations: { entityName: string; contents: string[] }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
     const graph = await this.loadGraph();
+
+    // Build entity lookup map for O(1) access
+    const entityMap = new Map(graph.entities.map(e => [e.name, e]));
+
     const results = observations.map(o => {
-      const entity = graph.entities.find(e => e.name === o.entityName);
+      // Validate entity name
+      const entityName = validateAndSanitizeString(o.entityName, MAX_STRING_LENGTH, 'Entity name');
+
+      const entity = entityMap.get(entityName);
       if (!entity) {
-        throw new Error(`Entity with name ${o.entityName} not found`);
+        throw new Error(`Entity with name ${entityName} not found`);
       }
-      const newObservations = o.contents.filter(content => !entity.observations.includes(content));
+
+      // Validate and sanitize observation contents
+      const validatedContents = o.contents.map((content, idx) =>
+        validateAndSanitizeString(content, MAX_OBSERVATION_CONTENT_LENGTH, `Observation ${idx + 1}`)
+      );
+
+      // Check if adding observations would exceed limit
+      const potentialTotal = entity.observations.length + validatedContents.length;
+      if (potentialTotal > MAX_OBSERVATIONS_PER_ENTITY) {
+        throw new Error(
+          `Adding ${validatedContents.length} observations to entity "${entityName}" ` +
+          `would exceed maximum of ${MAX_OBSERVATIONS_PER_ENTITY} ` +
+          `(current: ${entity.observations.length})`
+        );
+      }
+
+      // OPTIMIZATION: Use Set for O(1) lookup instead of O(n) includes()
+      const existingObservations = new Set(entity.observations);
+      const newObservations = validatedContents.filter(content => !existingObservations.has(content));
+
       entity.observations.push(...newObservations);
-      return { entityName: o.entityName, addedObservations: newObservations };
+      return { entityName, addedObservations: newObservations };
     });
+
     await this.saveGraph(graph);
     return results;
   }
