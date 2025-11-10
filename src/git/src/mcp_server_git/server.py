@@ -100,7 +100,7 @@ def validate_file_paths(file_paths: list[str]) -> list[str]:
 def validate_git_reference(ref: str, ref_type: str = "reference") -> str:
     """
     Validate git references (branches, tags, commit SHAs, revisions).
-    Prevents command injection and invalid references.
+    Prevents command injection and argument injection attacks.
     """
     if not ref or not isinstance(ref, str):
         raise ValueError(f"Git {ref_type} must be a non-empty string")
@@ -113,6 +113,11 @@ def validate_git_reference(ref: str, ref_type: str = "reference") -> str:
 
     if not sanitized:
         raise ValueError(f"Git {ref_type} cannot be empty after sanitization")
+
+    # CRITICAL SECURITY: Prevent argument injection by blocking leading dashes
+    # This prevents attacks like "--upload-pack=malicious" or "-q --exec=evil"
+    if sanitized.startswith('-'):
+        raise ValueError(f"Git {ref_type} cannot start with dash (-) to prevent argument injection")
 
     # Check for command injection patterns
     dangerous_chars = ['|', '&', ';', '$', '`', '\n', '(', ')', '<', '>']
@@ -259,9 +264,10 @@ def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) 
     return repo.git.diff(f"--unified={context_lines}", "--cached")
 
 def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
-    # SECURITY: Validate target reference to prevent command injection
+    # SECURITY: Validate target reference to prevent command and argument injection
     validated_target = validate_git_reference(target, "diff target")
-    return repo.git.diff(f"--unified={context_lines}", validated_target)
+    # Use -- separator to prevent validated_target from being interpreted as an option
+    return repo.git.diff(f"--unified={context_lines}", "--", validated_target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
     # SECURITY: Validate and sanitize commit message
@@ -345,8 +351,9 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
 
 
 def git_show(repo: git.Repo, revision: str) -> str:
-    # SECURITY: Validate revision to prevent command injection
+    # SECURITY: Validate revision to prevent command and argument injection
     validated_revision = validate_git_reference(revision, "revision")
+    # Use explicit revision lookup to prevent argument injection
     commit = repo.commit(validated_revision)
     output = [
         f"Commit: {commit.hexsha!r}\n"
@@ -512,9 +519,10 @@ async def serve(repository: Path | None) -> None:
         # SECURITY: Validate repo_path is in allowed repositories to prevent directory traversal
         allowed_repos = await list_repos()
         if str(repo_path) not in allowed_repos:
+            # SECURITY: Sanitize error message to prevent information disclosure about repository structure
             raise ValueError(
-                f"Repository {repo_path} is not in allowed repositories. "
-                f"Allowed repositories: {', '.join(allowed_repos)}"
+                "Repository is not in allowed repositories. "
+                "Contact administrator to configure allowed repositories."
             )
 
         # For all commands, we need an existing repo

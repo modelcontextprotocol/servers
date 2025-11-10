@@ -14,13 +14,61 @@ import { randomBytes } from 'crypto';
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
 
+// Validate memory file path to prevent path traversal attacks
+function validateMemoryFilePath(filePath: string): string {
+  // SECURITY: Prevent path traversal in environment variable
+  const normalized = path.normalize(filePath);
+
+  // Block directory traversal patterns
+  if (normalized.includes('..')) {
+    throw new Error(
+      'SECURITY: Memory file path contains directory traversal (..) which is forbidden'
+    );
+  }
+
+  // Block absolute paths to sensitive system directories
+  const absolutePath = path.isAbsolute(normalized)
+    ? normalized
+    : path.join(path.dirname(fileURLToPath(import.meta.url)), normalized);
+
+  const resolvedPath = path.resolve(absolutePath);
+
+  // Forbidden system paths (add more as needed for your environment)
+  const forbiddenPaths = [
+    '/etc',
+    '/proc',
+    '/sys',
+    '/dev',
+    '/boot',
+    '/root',
+    'C:\\Windows',
+    'C:\\Program Files'
+  ];
+
+  for (const forbidden of forbiddenPaths) {
+    if (resolvedPath.startsWith(forbidden)) {
+      throw new Error(
+        `SECURITY: Memory file path cannot be in system directory (${forbidden})`
+      );
+    }
+  }
+
+  // Ensure the resolved path is either in the module directory or an explicitly allowed location
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  if (!resolvedPath.startsWith(moduleDir) && !path.isAbsolute(normalized)) {
+    throw new Error(
+      'SECURITY: Memory file path must be within the module directory or an absolute path'
+    );
+  }
+
+  return resolvedPath;
+}
+
 // Handle backward compatibility: migrate memory.json to memory.jsonl if needed
 export async function ensureMemoryFilePath(): Promise<string> {
   if (process.env.MEMORY_FILE_PATH) {
-    // Custom path provided, use it as-is (with absolute path resolution)
-    return path.isAbsolute(process.env.MEMORY_FILE_PATH)
-      ? process.env.MEMORY_FILE_PATH
-      : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH);
+    // SECURITY: Validate custom path to prevent path traversal attacks
+    return validateMemoryFilePath(process.env.MEMORY_FILE_PATH);
   }
   
   // No custom path set, check for backward compatibility migration
@@ -75,14 +123,31 @@ export interface KnowledgeGraph {
   relations: Relation[];
 }
 
+// Dangerous property names that could cause prototype pollution or JSONL injection
+const FORBIDDEN_PROPERTY_NAMES = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+  'hasOwnProperty',
+  'isPrototypeOf',
+  'propertyIsEnumerable',
+  'toString',
+  'valueOf',
+  '__defineGetter__',
+  '__defineSetter__',
+  '__lookupGetter__',
+  '__lookupSetter__'
+]);
+
 // Input validation and sanitization
 function validateAndSanitizeString(value: string, maxLength: number, fieldName: string): string {
   if (typeof value !== 'string') {
     throw new Error(`${fieldName} must be a string`);
   }
 
-  // Remove null bytes and control characters except newlines/tabs
-  const sanitized = value.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+  // CRITICAL SECURITY: Remove ALL control characters including newlines and carriage returns
+  // This prevents JSONL injection attacks where embedded newlines corrupt the JSONL format
+  const sanitized = value.replace(/[\x00-\x1F\x7F]/g, '');
 
   if (sanitized.length === 0) {
     throw new Error(`${fieldName} cannot be empty after sanitization`);
@@ -92,7 +157,17 @@ function validateAndSanitizeString(value: string, maxLength: number, fieldName: 
     throw new Error(`${fieldName} exceeds maximum length of ${maxLength} characters (got ${sanitized.length})`);
   }
 
-  return sanitized.trim();
+  // CRITICAL SECURITY: Prevent prototype pollution by blocking dangerous property names
+  const trimmed = sanitized.trim();
+  const normalized = trimmed.toLowerCase();
+
+  if (FORBIDDEN_PROPERTY_NAMES.has(normalized)) {
+    throw new Error(
+      `${fieldName} contains forbidden property name "${trimmed}" that could cause prototype pollution`
+    );
+  }
+
+  return trimmed;
 }
 
 function validateEntity(entity: Entity): Entity {
