@@ -137,7 +137,6 @@ def git_commit_signed(repo: git.Repo, message: str, key_id: str | None = None) -
         repo.git.commit("-S" + key_id, "-m", message)
     else:
         repo.git.commit("-S", "-m", message)
-    
     # Get the commit hash of HEAD
     commit_hash = repo.head.commit.hexsha
     return f"Changes committed and signed successfully with hash {commit_hash}"
@@ -415,7 +414,7 @@ async def serve(repository: Path | None) -> None:
 
             case GitTools.COMMIT_SIGNED:
                 result = git_commit_signed(
-                    repo, 
+                    repo,
                     arguments["message"],
                     arguments.get("key_id")
                 )
