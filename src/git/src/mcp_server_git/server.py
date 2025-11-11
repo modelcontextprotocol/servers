@@ -137,7 +137,6 @@ def git_commit_signed(repo: git.Repo, message: str, key_id: str | None = None) -
         repo.git.commit("-S" + key_id, "-m", message)
     else:
         repo.git.commit("-S", "-m", message)
-    
     # Get the commit hash of HEAD
     commit_hash = repo.head.commit.hexsha
     return f"Changes committed and signed successfully with hash {commit_hash}"
@@ -162,9 +161,9 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
         if end_timestamp:
             args.extend(['--until', end_timestamp])
         args.extend(['--format=%H%n%an%n%ad%n%s%n'])
-        
+
         log_output = repo.git.log(*args).split('\n')
-        
+
         log = []
         # Process commits in groups of 4 (hash, author, date, message)
         for i in range(0, len(log_output), 4):
@@ -368,7 +367,7 @@ async def serve(repository: Path | None) -> None:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         repo_path = Path(arguments["repo_path"])
-        
+
         # For all commands, we need an existing repo
         repo = git.Repo(repo_path)
 
@@ -410,7 +409,7 @@ async def serve(repository: Path | None) -> None:
 
             case GitTools.COMMIT_SIGNED:
                 result = git_commit_signed(
-                    repo, 
+                    repo,
                     arguments["message"],
                     arguments.get("key_id")
                 )
@@ -436,7 +435,7 @@ async def serve(repository: Path | None) -> None:
             # Update the LOG case:
             case GitTools.LOG:
                 log = git_log(
-                    repo, 
+                    repo,
                     arguments.get("max_count", 10),
                     arguments.get("start_timestamp"),
                     arguments.get("end_timestamp")
@@ -445,7 +444,7 @@ async def serve(repository: Path | None) -> None:
                     type="text",
                     text="Commit history:\n" + "\n".join(log)
                 )]
-            
+
             case GitTools.CREATE_BRANCH:
                 result = git_create_branch(
                     repo,
@@ -482,7 +481,7 @@ async def serve(repository: Path | None) -> None:
                     type="text",
                     text=result
                 )]
-            
+
             case _:
                 raise ValueError(f"Unknown tool: {name}")
 

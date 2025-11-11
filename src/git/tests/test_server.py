@@ -103,14 +103,14 @@ def test_git_commit_signed_without_key_id(test_repository):
     file_path = Path(test_repository.working_dir) / "signed_test.txt"
     file_path.write_text("testing signed commit")
     test_repository.index.add(["signed_test.txt"])
-    
+
     # Note: This test may fail if GPG is not configured on the system
     # In that case, it should raise a GitCommandError
     try:
         result = git_commit_signed(test_repository, "Test signed commit")
         assert "Changes committed and signed successfully" in result
         assert "with hash" in result
-        
+
         # Verify the commit was actually created
         latest_commit = test_repository.head.commit
         assert latest_commit.message.strip() == "Test signed commit"
@@ -123,13 +123,13 @@ def test_git_commit_signed_with_key_id(test_repository):
     file_path = Path(test_repository.working_dir) / "signed_test_with_key.txt"
     file_path.write_text("testing signed commit with key")
     test_repository.index.add(["signed_test_with_key.txt"])
-    
+
     # Note: This test may fail if GPG is not configured or key doesn't exist
     try:
         result = git_commit_signed(test_repository, "Test signed commit with key", "TESTKEY123")
         assert "Changes committed and signed successfully" in result
         assert "with hash" in result
-        
+
         # Verify the commit was actually created
         latest_commit = test_repository.head.commit
         assert latest_commit.message.strip() == "Test signed commit with key"
