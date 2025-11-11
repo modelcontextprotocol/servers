@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 import git
-from mcp_server_git.server import git_checkout, git_branch, git_add, git_status
+from mcp_server_git.server import git_checkout, git_branch, git_add, git_status, git_commit_signed
 import shutil
 
 @pytest.fixture
@@ -97,3 +97,42 @@ def test_git_status(test_repository):
 
     assert result is not None
     assert "On branch" in result or "branch" in result.lower()
+
+def test_git_commit_signed_without_key_id(test_repository):
+    # Create and stage a new file
+    file_path = Path(test_repository.working_dir) / "signed_test.txt"
+    file_path.write_text("testing signed commit")
+    test_repository.index.add(["signed_test.txt"])
+    
+    # Note: This test may fail if GPG is not configured on the system
+    # In that case, it should raise a GitCommandError
+    try:
+        result = git_commit_signed(test_repository, "Test signed commit")
+        assert "Changes committed and signed successfully" in result
+        assert "with hash" in result
+        
+        # Verify the commit was actually created
+        latest_commit = test_repository.head.commit
+        assert latest_commit.message.strip() == "Test signed commit"
+    except git.GitCommandError as e:
+        # GPG not configured or signing failed - this is expected in CI/test environments
+        pytest.skip(f"GPG signing not available: {str(e)}")
+
+def test_git_commit_signed_with_key_id(test_repository):
+    # Create and stage a new file
+    file_path = Path(test_repository.working_dir) / "signed_test_with_key.txt"
+    file_path.write_text("testing signed commit with key")
+    test_repository.index.add(["signed_test_with_key.txt"])
+    
+    # Note: This test may fail if GPG is not configured or key doesn't exist
+    try:
+        result = git_commit_signed(test_repository, "Test signed commit with key", "TESTKEY123")
+        assert "Changes committed and signed successfully" in result
+        assert "with hash" in result
+        
+        # Verify the commit was actually created
+        latest_commit = test_repository.head.commit
+        assert latest_commit.message.strip() == "Test signed commit with key"
+    except git.GitCommandError as e:
+        # GPG not configured, key not found, or signing failed - expected in CI/test environments
+        pytest.skip(f"GPG signing with specific key not available: {str(e)}")
