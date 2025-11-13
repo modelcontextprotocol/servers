@@ -185,6 +185,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "read_file",
         description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
         inputSchema: zodToJsonSchema(ReadTextFileArgsSchema) as ToolInput,
+        annotations: {
+          readOnlyHint: true,
+        },
       },
       {
         name: "read_text_file",
@@ -197,6 +200,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "the last N lines of a file. Operates on the file as text regardless of extension. " +
           "Only works within allowed directories.",
         inputSchema: zodToJsonSchema(ReadTextFileArgsSchema) as ToolInput,
+        annotations: {
+          readOnlyHint: true,
+        },
       },
       {
         name: "read_media_file",
@@ -204,6 +210,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "Read an image or audio file. Returns the base64 encoded data and MIME type. " +
           "Only works within allowed directories.",
         inputSchema: zodToJsonSchema(ReadMediaFileArgsSchema) as ToolInput,
+        annotations: {
+          readOnlyHint: true,
+        },
       },
       {
         name: "read_multiple_files",
@@ -214,6 +223,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "path as a reference. Failed reads for individual files won't stop " +
           "the entire operation. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(ReadMultipleFilesArgsSchema) as ToolInput,
+        annotations: {
+          readOnlyHint: true,
+        },
       },
       {
         name: "write_file",
@@ -222,6 +234,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "Use with caution as it will overwrite existing files without warning. " +
           "Handles text content with proper encoding. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(WriteFileArgsSchema) as ToolInput,
+        annotations: {
+          idempotentHint: true,
+          destructiveHint: true,
+        },
       },
       {
         name: "edit_file",
@@ -230,6 +246,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "with new content. Returns a git-style diff showing the changes made. " +
           "Only works within allowed directories.",
         inputSchema: zodToJsonSchema(EditFileArgsSchema) as ToolInput,
+        annotations: {
+          idempotentHint: false,
+          destructiveHint: true,
+        },
       },
       {
         name: "create_directory",
@@ -239,6 +259,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "this operation will succeed silently. Perfect for setting up directory " +
           "structures for projects or ensuring required paths exist. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(CreateDirectoryArgsSchema) as ToolInput,
+        annotations: {
+          idempotentHint: true,
+          destructiveHint: false,
+        },
       },
       {
         name: "list_directory",
@@ -248,6 +272,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "prefixes. This tool is essential for understanding directory structure and " +
           "finding specific files within a directory. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(ListDirectoryArgsSchema) as ToolInput,
+        annotations: {
+          readOnlyHint: true,
+        },
       },
       {
         name: "list_directory_with_sizes",
@@ -257,6 +284,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "prefixes. This tool is useful for understanding directory structure and " +
           "finding specific files within a directory. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(ListDirectoryWithSizesArgsSchema) as ToolInput,
+        annotations: {
+          readOnlyHint: true,
+        },
       },
       {
         name: "directory_tree",
@@ -266,6 +296,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             "Files have no children array, while directories always have a children array (which may be empty). " +
             "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(DirectoryTreeArgsSchema) as ToolInput,
+        annotations: {
+          readOnlyHint: true,
+        },
       },
       {
         name: "move_file",
@@ -275,6 +308,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "operation will fail. Works across different directories and can be used " +
           "for simple renaming within the same directory. Both source and destination must be within allowed directories.",
         inputSchema: zodToJsonSchema(MoveFileArgsSchema) as ToolInput,
+        annotations: {
+          idempotentHint: false,
+          destructiveHint: false,
+        },
       },
       {
         name: "search_files",
@@ -285,6 +322,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
           "Only searches within allowed directories.",
         inputSchema: zodToJsonSchema(SearchFilesArgsSchema) as ToolInput,
+        annotations: {
+          readOnlyHint: true,
+        },
       },
       {
         name: "get_file_info",
@@ -294,6 +334,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "and type. This tool is perfect for understanding file characteristics " +
           "without reading the actual content. Only works within allowed directories.",
         inputSchema: zodToJsonSchema(GetFileInfoArgsSchema) as ToolInput,
+        annotations: {
+          readOnlyHint: true,
+        },
       },
       {
         name: "list_allowed_directories",
@@ -306,6 +349,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {},
           required: [],
+        },
+        annotations: {
+          readOnlyHint: true,
         },
       },
     ],
