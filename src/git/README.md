@@ -70,7 +70,7 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of the new branch
-     - `start_point` (string, optional): Starting point for the new branch
+     - `base_branch` (string, optional): Base branch to create from (defaults to current branch)
    - Returns: Confirmation of branch creation
 10. `git_checkout`
    - Switches branches
