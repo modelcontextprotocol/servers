@@ -99,6 +99,12 @@ export class SequentialThinkingServer {
     };
   }
 
+  // Strip ANSI escape codes to calculate visual width
+  private stripAnsi(str: string): string {
+    // eslint-disable-next-line no-control-regex
+    return str.replace(/\u001b\[[0-9;]*m/g, '');
+  }
+
   private formatThought(thoughtData: ThoughtData): string {
     const { thoughtNumber, totalThoughts, thought, isRevision, revisesThought, branchFromThought, branchId } = thoughtData;
 
@@ -117,7 +123,9 @@ export class SequentialThinkingServer {
     }
 
     const header = `${prefix} ${thoughtNumber}/${totalThoughts}${context}`;
-    const border = '─'.repeat(Math.max(header.length, thought.length) + 4);
+    // Use visual length (without ANSI codes) for border calculation
+    const headerVisualLength = this.stripAnsi(header).length;
+    const border = '─'.repeat(Math.max(headerVisualLength, thought.length) + 4);
 
     return `
 ┌${border}┐

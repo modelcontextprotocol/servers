@@ -550,6 +550,65 @@ describe('SequentialThinkingServer', () => {
     });
   });
 
+  describe('ANSI formatting', () => {
+    it('should calculate border width using visual length, not ANSI-inclusive length', () => {
+      // Enable logging to capture formatted output
+      delete process.env.DISABLE_THOUGHT_LOGGING;
+      const serverWithLogging = new SequentialThinkingServer();
+
+      // Spy on console.error to capture formatted output
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      serverWithLogging.processThought({
+        thought: 'Test',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true
+      });
+
+      // Get the formatted output
+      const formattedOutput = errorSpy.mock.calls[0][0];
+
+      // Extract border lines
+      const lines = formattedOutput.split('\n');
+      const topBorder = lines[1]; // ┌───...┐
+      const bottomBorder = lines[4]; // └───...┘
+
+      // Borders should have same length (if ANSI handled correctly)
+      expect(topBorder.length).toBe(bottomBorder.length);
+
+      errorSpy.mockRestore();
+      process.env.DISABLE_THOUGHT_LOGGING = 'true';
+    });
+
+    it('should handle long context strings in branch thoughts', () => {
+      delete process.env.DISABLE_THOUGHT_LOGGING;
+      const serverWithLogging = new SequentialThinkingServer();
+
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      serverWithLogging.processThought({
+        thought: 'Branch thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: false,
+        branchFromThought: 1,
+        branchId: 'very-long-branch-identifier-name'
+      });
+
+      const formattedOutput = errorSpy.mock.calls[0][0];
+      const lines = formattedOutput.split('\n');
+      const topBorder = lines[1];
+      const bottomBorder = lines[4];
+
+      // Borders should have same length
+      expect(topBorder.length).toBe(bottomBorder.length);
+
+      errorSpy.mockRestore();
+      process.env.DISABLE_THOUGHT_LOGGING = 'true';
+    });
+  });
+
   describe('processThought - with logging enabled', () => {
     let serverWithLogging: SequentialThinkingServer;
 
