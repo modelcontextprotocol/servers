@@ -12,6 +12,14 @@ export interface ThoughtData {
   nextThoughtNeeded: boolean;
 }
 
+// Maximum number of thoughts to retain in history to prevent unbounded memory growth
+// Configurable via MAX_THOUGHT_HISTORY environment variable (default: 1000)
+const MAX_THOUGHT_HISTORY = parseInt(process.env.MAX_THOUGHT_HISTORY || '1000', 10);
+
+// Maximum number of branches to track simultaneously
+// Configurable via MAX_BRANCHES environment variable (default: 100)
+const MAX_BRANCHES = parseInt(process.env.MAX_BRANCHES || '100', 10);
+
 export class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
@@ -146,11 +154,23 @@ export class SequentialThinkingServer {
 
       this.thoughtHistory.push(validatedInput);
 
+      // Enforce maximum history size using FIFO eviction
+      if (this.thoughtHistory.length > MAX_THOUGHT_HISTORY) {
+        this.thoughtHistory.shift(); // Remove oldest thought
+      }
+
       if (validatedInput.branchFromThought && validatedInput.branchId) {
         if (!this.branches[validatedInput.branchId]) {
           this.branches[validatedInput.branchId] = [];
         }
         this.branches[validatedInput.branchId].push(validatedInput);
+
+        // Enforce maximum branches using LRU-style eviction
+        const branchKeys = Object.keys(this.branches);
+        if (branchKeys.length > MAX_BRANCHES) {
+          // Remove oldest branch (first key)
+          delete this.branches[branchKeys[0]];
+        }
       }
 
       if (!this.disableThoughtLogging) {

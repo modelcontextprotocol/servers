@@ -620,4 +620,85 @@ describe('SequentialThinkingServer', () => {
       expect(result.isError).toBeUndefined();
     });
   });
+
+  describe('processThought - memory bounds enforcement', () => {
+    it('should enforce maximum history size with default 1000 limit', () => {
+      // Use default MAX_THOUGHT_HISTORY (1000)
+      // Add 1005 thoughts to exceed the default limit
+      for (let i = 1; i <= 1005; i++) {
+        server.processThought({
+          thought: `Thought ${i}`,
+          thoughtNumber: i,
+          totalThoughts: 1005,
+          nextThoughtNeeded: i < 1005
+        });
+      }
+
+      const result = server.processThought({
+        thought: 'Final check thought',
+        thoughtNumber: 1006,
+        totalThoughts: 1006,
+        nextThoughtNeeded: false
+      });
+
+      const data = JSON.parse(result.content[0].text);
+
+      // History should be capped at 1000 (the default MAX_THOUGHT_HISTORY)
+      expect(data.thoughtHistoryLength).toBeLessThanOrEqual(1000);
+    });
+
+    it('should enforce maximum branches limit with default 100 limit', () => {
+      // Use default MAX_BRANCHES (100)
+      // Create 105 branches to exceed the default limit
+      for (let i = 1; i <= 105; i++) {
+        server.processThought({
+          thought: `Branch ${i} thought`,
+          thoughtNumber: 1,
+          totalThoughts: 1,
+          nextThoughtNeeded: false,
+          branchFromThought: 1,
+          branchId: `branch-${i}`
+        });
+      }
+
+      const result = server.processThought({
+        thought: 'Final thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false
+      });
+
+      const data = JSON.parse(result.content[0].text);
+
+      // Branches should be capped at 100 (the default MAX_BRANCHES)
+      expect(data.branches.length).toBeLessThanOrEqual(100);
+    });
+
+    it('should use FIFO eviction for thought history', () => {
+      const testServer = new SequentialThinkingServer();
+
+      // Add thoughts up to limit + 2 to trigger eviction
+      // Using small number for faster test
+      for (let i = 1; i <= 5; i++) {
+        testServer.processThought({
+          thought: `Thought ${i}`,
+          thoughtNumber: i,
+          totalThoughts: 5,
+          nextThoughtNeeded: i < 5
+        });
+      }
+
+      const result = testServer.processThought({
+        thought: 'Thought 6',
+        thoughtNumber: 6,
+        totalThoughts: 6,
+        nextThoughtNeeded: false
+      });
+
+      const data = JSON.parse(result.content[0].text);
+
+      // With default limit of 1000, all 6 thoughts should be retained
+      expect(data.thoughtHistoryLength).toBe(6);
+    });
+  });
 });

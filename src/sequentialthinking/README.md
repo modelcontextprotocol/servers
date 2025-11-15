@@ -77,8 +77,19 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 
-To disable logging of thought information set env var: `DISABLE_THOUGHT_LOGGING` to `true`.
-Comment
+## Environment Variables
+
+- `DISABLE_THOUGHT_LOGGING`: Set to `true` to disable stderr logging of thought information (default: `false`)
+- `MAX_THOUGHT_HISTORY`: Maximum number of thoughts to retain in memory (default: `1000`)
+- `MAX_BRANCHES`: Maximum number of thought branches to track simultaneously (default: `100`)
+
+**Note on Memory Management**: The server implements bounded state to prevent unbounded memory growth in long-running sessions. When limits are exceeded, the oldest thoughts/branches are evicted using FIFO (First-In-First-Out) strategy.
+
+## Architecture Notes
+
+This server uses a singleton pattern appropriate for stdio transport, where each client spawns a dedicated server process. The singleton maintains state across multiple thought requests within a single thinking session, enabling features like thought history tracking and branch management.
+
+For stdio transport, concurrent requests from the same client are rare (LLMs typically call tools sequentially), so the singleton design provides the necessary state persistence without significant concurrency concerns.
 
 ### Usage with VS Code
 
