@@ -1,16 +1,5 @@
 import chalk from 'chalk';
-
-export interface ThoughtData {
-  thought: string;
-  thoughtNumber: number;
-  totalThoughts: number;
-  isRevision?: boolean;
-  revisesThought?: number;
-  branchFromThought?: number;
-  branchId?: string;
-  needsMoreThoughts?: boolean;
-  nextThoughtNeeded: boolean;
-}
+import { z } from 'zod';
 
 // Maximum thought string size to prevent DoS (100KB)
 const MAX_THOUGHT_SIZE = 100 * 1024;
@@ -33,6 +22,110 @@ const MAX_BRANCHES = parseEnvInt('MAX_BRANCHES', 100, 1, 100000);
 // Maximum thoughts per branch
 const MAX_THOUGHTS_PER_BRANCH = parseEnvInt('MAX_THOUGHTS_PER_BRANCH', 1000, 1, 100000);
 
+// Zod schema for thought data validation
+export const ThoughtDataSchema = z.object({
+  thought: z
+    .string()
+    .min(1, 'thought field must contain at least one character')
+    .max(MAX_THOUGHT_SIZE, `thought field exceeds maximum size of ${MAX_THOUGHT_SIZE} bytes`)
+    .describe('Your current thinking step'),
+
+  thoughtNumber: z
+    .number()
+    .int('thoughtNumber must be an integer')
+    .min(1, 'thoughtNumber must be at least 1')
+    .describe('Current thought number (numeric value, e.g., 1, 2, 3)'),
+
+  totalThoughts: z
+    .number()
+    .int('totalThoughts must be an integer')
+    .min(1, 'totalThoughts must be at least 1')
+    .describe('Estimated total thoughts needed (numeric value, e.g., 5, 10)'),
+
+  nextThoughtNeeded: z
+    .boolean()
+    .describe('Whether another thought step is needed'),
+
+  // Optional fields
+  isRevision: z
+    .boolean()
+    .optional()
+    .describe('Whether this revises previous thinking'),
+
+  revisesThought: z
+    .number()
+    .int('revisesThought must be an integer')
+    .min(1, 'revisesThought must be at least 1')
+    .optional()
+    .describe('Which thought is being reconsidered'),
+
+  branchFromThought: z
+    .number()
+    .int('branchFromThought must be an integer')
+    .min(1, 'branchFromThought must be at least 1')
+    .optional()
+    .describe('Branching point thought number'),
+
+  branchId: z
+    .string()
+    .min(1, 'branchId cannot be empty')
+    .max(256, 'branchId exceeds maximum length of 256')
+    .optional()
+    .describe('Branch identifier'),
+
+  needsMoreThoughts: z
+    .boolean()
+    .optional()
+    .describe('If more thoughts are needed')
+}).refine(
+  (data) => {
+    // If isRevision is true, revisesThought must be provided
+    if (data.isRevision && data.revisesThought === undefined) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'When isRevision is true, revisesThought must be provided'
+  }
+).refine(
+  (data) => {
+    // If branchFromThought is provided, branchId must be provided
+    if (data.branchFromThought !== undefined && !data.branchId) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'When branchFromThought is provided, branchId must also be provided'
+  }
+).refine(
+  (data) => {
+    // revisesThought must be less than thoughtNumber
+    if (data.revisesThought !== undefined && data.revisesThought >= data.thoughtNumber) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'revisesThought must be less than thoughtNumber'
+  }
+).refine(
+  (data) => {
+    // branchFromThought must be less than thoughtNumber
+    if (data.branchFromThought !== undefined && data.branchFromThought >= data.thoughtNumber) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'branchFromThought must be less than thoughtNumber'
+  }
+);
+
+// Type inferred from Zod schema for type safety
+export type ThoughtData = z.infer<typeof ThoughtDataSchema>;
+
 export class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
@@ -43,85 +136,7 @@ export class SequentialThinkingServer {
   }
 
   private validateThoughtData(input: unknown): ThoughtData {
-    const data = input as Record<string, unknown>;
-
-    if (typeof data.thought !== 'string') {
-      throw new Error('Invalid thought: must be a string');
-    }
-    if (data.thought.length === 0) {
-      throw new Error('Invalid thought: cannot be empty');
-    }
-    if (data.thought.length > MAX_THOUGHT_SIZE) {
-      throw new Error(`Invalid thought: exceeds maximum size of ${MAX_THOUGHT_SIZE} bytes`);
-    }
-    if (!data.thoughtNumber || typeof data.thoughtNumber !== 'number') {
-      throw new Error('Invalid thoughtNumber: must be a number');
-    }
-    if (!Number.isInteger(data.thoughtNumber)) {
-      throw new Error('Invalid thoughtNumber: must be an integer');
-    }
-    if (!data.totalThoughts || typeof data.totalThoughts !== 'number') {
-      throw new Error('Invalid totalThoughts: must be a number');
-    }
-    if (!Number.isInteger(data.totalThoughts)) {
-      throw new Error('Invalid totalThoughts: must be an integer');
-    }
-    if (typeof data.nextThoughtNeeded !== 'boolean') {
-      throw new Error('Invalid nextThoughtNeeded: must be a boolean');
-    }
-
-    // Validate optional integer fields
-    if (data.revisesThought !== undefined) {
-      if (typeof data.revisesThought !== 'number') {
-        throw new Error('Invalid revisesThought: must be a number');
-      }
-      if (!Number.isInteger(data.revisesThought)) {
-        throw new Error('Invalid revisesThought: must be an integer');
-      }
-    }
-
-    if (data.branchFromThought !== undefined) {
-      if (typeof data.branchFromThought !== 'number') {
-        throw new Error('Invalid branchFromThought: must be a number');
-      }
-      if (!Number.isInteger(data.branchFromThought)) {
-        throw new Error('Invalid branchFromThought: must be an integer');
-      }
-    }
-
-    // Validate optional boolean fields
-    if (data.isRevision !== undefined && typeof data.isRevision !== 'boolean') {
-      throw new Error('Invalid isRevision: must be a boolean');
-    }
-
-    if (data.needsMoreThoughts !== undefined && typeof data.needsMoreThoughts !== 'boolean') {
-      throw new Error('Invalid needsMoreThoughts: must be a boolean');
-    }
-
-    // Validate optional string fields
-    if (data.branchId !== undefined) {
-      if (typeof data.branchId !== 'string') {
-        throw new Error('Invalid branchId: must be a string');
-      }
-      if (data.branchId.length === 0) {
-        throw new Error('Invalid branchId: cannot be empty');
-      }
-      if (data.branchId.length > 256) {
-        throw new Error('Invalid branchId: exceeds maximum length of 256');
-      }
-    }
-
-    return {
-      thought: data.thought,
-      thoughtNumber: data.thoughtNumber,
-      totalThoughts: data.totalThoughts,
-      nextThoughtNeeded: data.nextThoughtNeeded,
-      isRevision: data.isRevision as boolean | undefined,
-      revisesThought: data.revisesThought as number | undefined,
-      branchFromThought: data.branchFromThought as number | undefined,
-      branchId: data.branchId as string | undefined,
-      needsMoreThoughts: data.needsMoreThoughts as boolean | undefined,
-    };
+    return ThoughtDataSchema.parse(input);
   }
 
   // Strip ANSI escape codes to calculate visual width
@@ -212,11 +227,23 @@ export class SequentialThinkingServer {
         }]
       };
     } catch (error) {
+      let errorMessage: string;
+
+      if (error instanceof z.ZodError) {
+        // Format Zod validation errors for better readability
+        errorMessage = error.errors.map(err => {
+          const path = err.path.length > 0 ? `${err.path.join('.')}: ` : '';
+          return `${path}${err.message}`;
+        }).join('; ');
+      } else {
+        errorMessage = error instanceof Error ? error.message : String(error);
+      }
+
       return {
         content: [{
           type: "text",
           text: JSON.stringify({
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage,
             status: 'failed'
           }, null, 2)
         }],
