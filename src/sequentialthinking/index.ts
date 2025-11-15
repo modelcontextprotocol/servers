@@ -125,14 +125,14 @@ const server = new Server(
   }
 );
 
-const thinkingServer = new SequentialThinkingServer();
-
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [SEQUENTIAL_THINKING_TOOL],
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === "sequentialthinking") {
+    // Create new instance per request to avoid shared state
+    const thinkingServer = new SequentialThinkingServer();
     return thinkingServer.processThought(request.params.arguments);
   }
 
