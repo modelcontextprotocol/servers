@@ -24,17 +24,75 @@ export class SequentialThinkingServer {
   private validateThoughtData(input: unknown): ThoughtData {
     const data = input as Record<string, unknown>;
 
-    if (!data.thought || typeof data.thought !== 'string') {
-      throw new Error('Invalid thought: must be a string');
+    // Validate required fields
+    if (typeof data.thought !== 'string' || data.thought.length === 0) {
+      throw new Error('Invalid thought: must be a non-empty string');
     }
-    if (!data.thoughtNumber || typeof data.thoughtNumber !== 'number') {
+
+    if (typeof data.thoughtNumber !== 'number') {
       throw new Error('Invalid thoughtNumber: must be a number');
     }
-    if (!data.totalThoughts || typeof data.totalThoughts !== 'number') {
+    if (!Number.isFinite(data.thoughtNumber)) {
+      throw new Error('Invalid thoughtNumber: thoughtNumber must be a valid number');
+    }
+    if (data.thoughtNumber < 1) {
+      throw new Error('Invalid thoughtNumber: thoughtNumber must be >= 1');
+    }
+
+    if (typeof data.totalThoughts !== 'number') {
       throw new Error('Invalid totalThoughts: must be a number');
     }
+    if (!Number.isFinite(data.totalThoughts)) {
+      throw new Error('Invalid totalThoughts: totalThoughts must be a valid number');
+    }
+    if (data.totalThoughts < 1) {
+      throw new Error('Invalid totalThoughts: totalThoughts must be >= 1');
+    }
+
     if (typeof data.nextThoughtNeeded !== 'boolean') {
       throw new Error('Invalid nextThoughtNeeded: must be a boolean');
+    }
+
+    // Validate optional fields if present
+    if (data.isRevision !== undefined && typeof data.isRevision !== 'boolean') {
+      throw new Error('Invalid isRevision: isRevision must be a boolean');
+    }
+
+    if (data.revisesThought !== undefined) {
+      if (typeof data.revisesThought !== 'number') {
+        throw new Error('Invalid revisesThought: revisesThought must be a number');
+      }
+      if (!Number.isFinite(data.revisesThought)) {
+        throw new Error('Invalid revisesThought: revisesThought must be a valid number');
+      }
+      if (data.revisesThought < 1) {
+        throw new Error('Invalid revisesThought: revisesThought must be >= 1');
+      }
+    }
+
+    if (data.branchFromThought !== undefined) {
+      if (typeof data.branchFromThought !== 'number') {
+        throw new Error('Invalid branchFromThought: branchFromThought must be a number');
+      }
+      if (!Number.isFinite(data.branchFromThought)) {
+        throw new Error('Invalid branchFromThought: branchFromThought must be a valid number');
+      }
+      if (data.branchFromThought < 1) {
+        throw new Error('Invalid branchFromThought: branchFromThought must be >= 1');
+      }
+    }
+
+    if (data.branchId !== undefined) {
+      if (typeof data.branchId !== 'string') {
+        throw new Error('Invalid branchId: branchId must be a string');
+      }
+      if (data.branchId.length === 0) {
+        throw new Error('Invalid branchId: branchId cannot be empty');
+      }
+    }
+
+    if (data.needsMoreThoughts !== undefined && typeof data.needsMoreThoughts !== 'boolean') {
+      throw new Error('Invalid needsMoreThoughts: needsMoreThoughts must be a boolean');
     }
 
     return {
