@@ -346,9 +346,10 @@ describe('SequentialThinkingServer', () => {
       expect(result.content[0].text).toContain('Invalid thought');
     });
 
-    it('should handle very long thought strings', () => {
+    it('should accept thought at max size (100KB)', () => {
+      const maxSize = 100 * 1024;
       const input = {
-        thought: 'a'.repeat(10000),
+        thought: 'a'.repeat(maxSize),
         thoughtNumber: 1,
         totalThoughts: 1,
         nextThoughtNeeded: false
@@ -356,6 +357,20 @@ describe('SequentialThinkingServer', () => {
 
       const result = server.processThought(input);
       expect(result.isError).toBeUndefined();
+    });
+
+    it('should reject thought exceeding max size (100KB)', () => {
+      const maxSize = 100 * 1024;
+      const input = {
+        thought: 'a'.repeat(maxSize + 1),
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('exceeds maximum size');
     });
 
     it('should handle thoughtNumber = 1, totalThoughts = 1', () => {

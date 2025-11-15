@@ -12,6 +12,9 @@ export interface ThoughtData {
   nextThoughtNeeded: boolean;
 }
 
+// Maximum thought string size to prevent DoS (100KB)
+const MAX_THOUGHT_SIZE = 100 * 1024;
+
 export class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
@@ -26,6 +29,9 @@ export class SequentialThinkingServer {
 
     if (!data.thought || typeof data.thought !== 'string') {
       throw new Error('Invalid thought: must be a string');
+    }
+    if (data.thought.length > MAX_THOUGHT_SIZE) {
+      throw new Error(`Invalid thought: exceeds maximum size of ${MAX_THOUGHT_SIZE} bytes`);
     }
     if (!data.thoughtNumber || typeof data.thoughtNumber !== 'number') {
       throw new Error('Invalid thoughtNumber: must be a number');
