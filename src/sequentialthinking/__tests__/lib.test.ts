@@ -332,6 +332,78 @@ describe('SequentialThinkingServer', () => {
     });
   });
 
+  describe('processThought - optional field validation', () => {
+    it('should reject non-boolean isRevision', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: true,
+        isRevision: 'true'
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('Invalid isRevision');
+    });
+
+    it('should reject non-boolean needsMoreThoughts', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: true,
+        needsMoreThoughts: 1
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('Invalid needsMoreThoughts');
+    });
+
+    it('should reject non-string branchId', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: true,
+        branchId: 123
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('Invalid branchId: must be a string');
+    });
+
+    it('should reject empty branchId', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: true,
+        branchId: ''
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('Invalid branchId: cannot be empty');
+    });
+
+    it('should reject branchId exceeding 256 characters', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: true,
+        branchId: 'a'.repeat(257)
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('Invalid branchId: exceeds maximum length of 256');
+    });
+  });
+
   describe('processThought - edge cases', () => {
     it('should reject empty thought string', () => {
       const input = {

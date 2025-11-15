@@ -86,6 +86,28 @@ export class SequentialThinkingServer {
       }
     }
 
+    // Validate optional boolean fields
+    if (data.isRevision !== undefined && typeof data.isRevision !== 'boolean') {
+      throw new Error('Invalid isRevision: must be a boolean');
+    }
+
+    if (data.needsMoreThoughts !== undefined && typeof data.needsMoreThoughts !== 'boolean') {
+      throw new Error('Invalid needsMoreThoughts: must be a boolean');
+    }
+
+    // Validate optional string fields
+    if (data.branchId !== undefined) {
+      if (typeof data.branchId !== 'string') {
+        throw new Error('Invalid branchId: must be a string');
+      }
+      if (data.branchId.length === 0) {
+        throw new Error('Invalid branchId: cannot be empty');
+      }
+      if (data.branchId.length > 256) {
+        throw new Error('Invalid branchId: exceeds maximum length of 256');
+      }
+    }
+
     return {
       thought: data.thought,
       thoughtNumber: data.thoughtNumber,
