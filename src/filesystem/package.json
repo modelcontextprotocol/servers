@@ -30,9 +30,9 @@
     "@types/diff": "^5.0.9",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^22",
-    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/coverage-v8": "^4.0.9",
     "shx": "^0.3.4",
     "typescript": "^5.8.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.0.9"
   }
 }
