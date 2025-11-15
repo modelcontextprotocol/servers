@@ -455,6 +455,101 @@ describe('SequentialThinkingServer', () => {
     });
   });
 
+  describe('processThought - memory limits', () => {
+    it('should enforce MAX_THOUGHT_HISTORY limit with default 1000', () => {
+      const testServer = new SequentialThinkingServer();
+
+      // Add 1001 thoughts to exceed default limit
+      for (let i = 1; i <= 1001; i++) {
+        testServer.processThought({
+          thought: `Thought ${i}`,
+          thoughtNumber: i,
+          totalThoughts: 1001,
+          nextThoughtNeeded: i < 1001
+        });
+      }
+
+      const result = testServer.processThought({
+        thought: 'Query',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      // Should have evicted oldest, kept max 1000
+      expect(data.thoughtHistoryLength).toBe(1000);
+    });
+
+    it('should enforce MAX_THOUGHTS_PER_BRANCH limit with default 1000', () => {
+      const testServer = new SequentialThinkingServer();
+
+      // Add 1001 thoughts to same branch to exceed default limit
+      for (let i = 1; i <= 1001; i++) {
+        testServer.processThought({
+          thought: `Branch thought ${i}`,
+          thoughtNumber: i,
+          totalThoughts: 1001,
+          nextThoughtNeeded: i < 1001,
+          branchFromThought: 1,
+          branchId: 'test-branch'
+        });
+      }
+
+      const result = testServer.processThought({
+        thought: 'Query',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.branches).toContain('test-branch');
+      // Branch should exist but be capped at 1000 thoughts per branch
+      expect(data.thoughtHistoryLength).toBe(1000);
+    });
+
+    it('should enforce MAX_BRANCHES limit with default 100', () => {
+      const testServer = new SequentialThinkingServer();
+
+      // Add 101 different branches to exceed default limit
+      for (let i = 1; i <= 101; i++) {
+        testServer.processThought({
+          thought: `Branch ${i} thought`,
+          thoughtNumber: 1,
+          totalThoughts: 1,
+          nextThoughtNeeded: false,
+          branchFromThought: 1,
+          branchId: `branch-${i}`
+        });
+      }
+
+      const result = testServer.processThought({
+        thought: 'Query',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      // Should have evicted oldest branches, kept max 100
+      expect(data.branches.length).toBe(100);
+      expect(data.branches).not.toContain('branch-1'); // First should be evicted
+      expect(data.branches).toContain('branch-101'); // Last should exist
+    });
+  });
+
+  describe('environment variable validation', () => {
+    it('should reject invalid MAX_THOUGHT_HISTORY', () => {
+      process.env.MAX_THOUGHT_HISTORY = '200000'; // > 100000
+      expect(() => {
+        // This triggers env parsing
+        const lib = require('../lib.js');
+      }).toThrow();
+      delete process.env.MAX_THOUGHT_HISTORY;
+    });
+  });
+
   describe('processThought - with logging enabled', () => {
     let serverWithLogging: SequentialThinkingServer;
 

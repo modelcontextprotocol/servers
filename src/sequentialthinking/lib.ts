@@ -15,6 +15,24 @@ export interface ThoughtData {
 // Maximum thought string size to prevent DoS (100KB)
 const MAX_THOUGHT_SIZE = 100 * 1024;
 
+// Parse and validate environment variable as integer with bounds
+function parseEnvInt(envVar: string, defaultValue: number, min: number, max: number): number {
+  const value = parseInt(process.env[envVar] || String(defaultValue), 10);
+  if (!Number.isFinite(value) || value < min || value > max) {
+    throw new Error(`Invalid ${envVar}: must be between ${min} and ${max}`);
+  }
+  return value;
+}
+
+// Maximum number of thoughts to retain in history (per instance)
+const MAX_THOUGHT_HISTORY = parseEnvInt('MAX_THOUGHT_HISTORY', 1000, 1, 100000);
+
+// Maximum number of branches to track simultaneously
+const MAX_BRANCHES = parseEnvInt('MAX_BRANCHES', 100, 1, 100000);
+
+// Maximum thoughts per branch
+const MAX_THOUGHTS_PER_BRANCH = parseEnvInt('MAX_THOUGHTS_PER_BRANCH', 1000, 1, 100000);
+
 export class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
@@ -119,11 +137,28 @@ export class SequentialThinkingServer {
 
       this.thoughtHistory.push(validatedInput);
 
+      // Enforce maximum history size using FIFO eviction
+      if (this.thoughtHistory.length > MAX_THOUGHT_HISTORY) {
+        this.thoughtHistory.shift(); // Remove oldest thought
+      }
+
       if (validatedInput.branchFromThought && validatedInput.branchId) {
         if (!this.branches[validatedInput.branchId]) {
           this.branches[validatedInput.branchId] = [];
         }
         this.branches[validatedInput.branchId].push(validatedInput);
+
+        // Enforce maximum thoughts per branch using FIFO eviction
+        if (this.branches[validatedInput.branchId].length > MAX_THOUGHTS_PER_BRANCH) {
+          this.branches[validatedInput.branchId].shift(); // Remove oldest thought in branch
+        }
+
+        // Enforce maximum branches using LRU-style eviction
+        const branchKeys = Object.keys(this.branches);
+        if (branchKeys.length > MAX_BRANCHES) {
+          // Remove oldest branch (first key)
+          delete this.branches[branchKeys[0]];
+        }
       }
 
       if (!this.disableThoughtLogging) {
