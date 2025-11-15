@@ -177,7 +177,7 @@ describe('Sequential Thinking MCP Server Integration', () => {
   describe('Tool schema runtime validation alignment', () => {
     it('should ensure schema matches runtime validation for required fields', () => {
       const schema = SEQUENTIAL_THINKING_TOOL.inputSchema;
-      const requiredFields = schema.required;
+      const requiredFields = schema.required as string[];
 
       // Test each required field triggers validation error when missing
       for (const field of requiredFields) {

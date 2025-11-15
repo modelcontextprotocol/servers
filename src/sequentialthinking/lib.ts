@@ -45,8 +45,11 @@ export class SequentialThinkingServer {
   private validateThoughtData(input: unknown): ThoughtData {
     const data = input as Record<string, unknown>;
 
-    if (!data.thought || typeof data.thought !== 'string') {
+    if (typeof data.thought !== 'string') {
       throw new Error('Invalid thought: must be a string');
+    }
+    if (data.thought.length === 0) {
+      throw new Error('Invalid thought: cannot be empty');
     }
     if (data.thought.length > MAX_THOUGHT_SIZE) {
       throw new Error(`Invalid thought: exceeds maximum size of ${MAX_THOUGHT_SIZE} bytes`);
