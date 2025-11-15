@@ -183,7 +183,7 @@ export class SequentialThinkingServer {
           this.branches[validatedInput.branchId].shift(); // Remove oldest thought in branch
         }
 
-        // Enforce maximum branches using LRU-style eviction
+        // Enforce maximum branches using FIFO eviction (oldest branch first)
         const branchKeys = Object.keys(this.branches);
         if (branchKeys.length > MAX_BRANCHES) {
           // Remove oldest branch (first key)
