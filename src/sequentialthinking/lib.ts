@@ -30,11 +30,36 @@ export class SequentialThinkingServer {
     if (!data.thoughtNumber || typeof data.thoughtNumber !== 'number') {
       throw new Error('Invalid thoughtNumber: must be a number');
     }
+    if (!Number.isInteger(data.thoughtNumber)) {
+      throw new Error('Invalid thoughtNumber: must be an integer');
+    }
     if (!data.totalThoughts || typeof data.totalThoughts !== 'number') {
       throw new Error('Invalid totalThoughts: must be a number');
     }
+    if (!Number.isInteger(data.totalThoughts)) {
+      throw new Error('Invalid totalThoughts: must be an integer');
+    }
     if (typeof data.nextThoughtNeeded !== 'boolean') {
       throw new Error('Invalid nextThoughtNeeded: must be a boolean');
+    }
+
+    // Validate optional integer fields
+    if (data.revisesThought !== undefined) {
+      if (typeof data.revisesThought !== 'number') {
+        throw new Error('Invalid revisesThought: must be a number');
+      }
+      if (!Number.isInteger(data.revisesThought)) {
+        throw new Error('Invalid revisesThought: must be an integer');
+      }
+    }
+
+    if (data.branchFromThought !== undefined) {
+      if (typeof data.branchFromThought !== 'number') {
+        throw new Error('Invalid branchFromThought: must be a number');
+      }
+      if (!Number.isInteger(data.branchFromThought)) {
+        throw new Error('Invalid branchFromThought: must be an integer');
+      }
     }
 
     return {

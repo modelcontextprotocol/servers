@@ -274,6 +274,64 @@ describe('SequentialThinkingServer', () => {
     });
   });
 
+  describe('processThought - integer validation', () => {
+    it('should reject float thoughtNumber', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1.5,
+        totalThoughts: 3,
+        nextThoughtNeeded: true
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('must be an integer');
+    });
+
+    it('should reject float totalThoughts', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 3.7,
+        nextThoughtNeeded: true
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('must be an integer');
+    });
+
+    it('should reject float revisesThought', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        isRevision: true,
+        revisesThought: 1.5
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('must be an integer');
+    });
+
+    it('should reject float branchFromThought', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        branchFromThought: 1.5,
+        branchId: 'branch-a'
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('must be an integer');
+    });
+  });
+
   describe('processThought - edge cases', () => {
     it('should reject empty thought string', () => {
       const input = {
