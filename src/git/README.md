@@ -94,6 +94,15 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
    - Returns: List of branches
 
+13. `git_log_detail`
+   - Shows the commit logs with diffs
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `max_count` (number, optional): Maximum number of commits to show (default: 10)
+     - `start_timestamp` (string, optional): Start timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
+     - `end_timestamp` (string, optional): End timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
+   - Returns: The git log output, including the diff for each commit
+
 ## Installation
 
 ### Using uv (recommended)

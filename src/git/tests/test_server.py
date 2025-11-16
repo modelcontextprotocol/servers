@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 import git
-from mcp_server_git.server import git_checkout, git_branch, git_add, git_status
+from mcp_server_git.server import git_checkout, git_branch, git_add, git_status, git_log_detail
 import shutil
 
 @pytest.fixture
@@ -97,3 +97,13 @@ def test_git_status(test_repository):
 
     assert result is not None
     assert "On branch" in result or "branch" in result.lower()
+
+def test_git_log_detail(test_repository):
+    initial_commit = test_repository.head.commit
+    result = git_log_detail(test_repository, max_count=1)
+
+    assert initial_commit.hexsha in result
+    assert "initial commit" in result
+    assert "test.txt" in result
+    assert "1 file changed, 1 insertion(+)" in result
+    assert "+test" in result
