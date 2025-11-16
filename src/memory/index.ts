@@ -123,7 +123,23 @@ export interface KnowledgeGraph {
   relations: Relation[];
 }
 
-// Dangerous property names that could cause prototype pollution or JSONL injection
+// 🛡️ AI ASSISTANT PATTERN: Prototype Pollution Prevention
+// CRITICAL SECURITY: Block property names that could cause prototype pollution attacks
+//
+// What is Prototype Pollution?
+// - An attack where malicious input modifies Object.prototype or other built-in prototypes
+// - Example: Setting "__proto__.isAdmin = true" could grant unauthorized access
+// - This affects ALL objects in the application, not just the current one
+//
+// Why these specific properties?
+// - __proto__: Direct access to object's prototype chain
+// - constructor: Can be used to access Function constructor for RCE
+// - prototype: Modifying built-in prototypes affects all instances
+// - hasOwnProperty, toString, valueOf: Built-in methods that should never be overridden
+// - __defineGetter/Setter__: Legacy property descriptors
+// - __lookupGetter/Setter__: Legacy property lookup methods
+//
+// When adding new fields, ALWAYS validate against this set!
 const FORBIDDEN_PROPERTY_NAMES = new Set([
   '__proto__',
   'constructor',
@@ -145,8 +161,20 @@ function validateAndSanitizeString(value: string, maxLength: number, fieldName: 
     throw new Error(`${fieldName} must be a string`);
   }
 
+  // 🛡️ AI ASSISTANT PATTERN: JSONL Injection Prevention
   // CRITICAL SECURITY: Remove ALL control characters including newlines and carriage returns
-  // This prevents JSONL injection attacks where embedded newlines corrupt the JSONL format
+  //
+  // What is JSONL Injection?
+  // - JSONL (JSON Lines) format: Each line is a complete JSON object
+  // - Attack: Input like "Alice\n{\"type\":\"entity\",\"name\":\"Hacker\"...}" creates a new entity
+  // - Impact: Data corruption, unauthorized entity creation, bypassing validation
+  //
+  // Why remove \x00-\x1F?
+  // - \x00-\x1F covers ALL ASCII control characters (including \n, \r, \t)
+  // - \x0A (\n) and \x0D (\r) are the most dangerous (line breaks)
+  // - \x7F (DEL) is also dangerous
+  //
+  // When working with JSONL, ALWAYS sanitize user input this way!
   const sanitized = value.replace(/[\x00-\x1F\x7F]/g, '');
 
   if (sanitized.length === 0) {
@@ -240,10 +268,31 @@ export class KnowledgeGraphManager {
     ];
     const content = lines.join("\n") + "\n";
 
-    // SECURITY: Use atomic write with temporary file + rename to prevent:
-    // 1. Concurrent save corruption
-    // 2. Partial write corruption on crash
-    // 3. Lost updates from race conditions
+    // 🛡️ AI ASSISTANT PATTERN: Atomic File Writes (Write-to-Temp-Then-Rename)
+    // CRITICAL SECURITY & DATA INTEGRITY: Use atomic write pattern to prevent data corruption
+    //
+    // The Problem:
+    // - Direct writes (fs.writeFile) can be interrupted mid-write (crash, power loss, kill signal)
+    // - Result: Corrupted file with partial JSON, unrecoverable data loss
+    // - Concurrent writes can interleave bytes, creating garbage data
+    //
+    // The Solution (Write-to-Temp-Then-Rename):
+    // 1. Write to temporary file (with random name to avoid conflicts)
+    // 2. Rename temp file to target file (atomic operation in POSIX filesystems)
+    // 3. Clean up temp file if write fails
+    //
+    // Why this works:
+    // - fs.rename() is atomic: Either completes fully or not at all (POSIX guarantee)
+    // - If crash happens during write, original file is untouched
+    // - If crash happens during rename, we have complete temp file
+    // - Readers always see either old complete file or new complete file, never partial
+    //
+    // When to use this pattern:
+    // - ANY write operation where data integrity is critical
+    // - Configuration files, databases, state files
+    // - Files larger than a few KB
+    //
+    // ALWAYS use this pattern for important data writes!
     const tempPath = `${this.memoryFilePath}.${randomBytes(16).toString('hex')}.tmp`;
     try {
       await fs.writeFile(tempPath, content, 'utf-8');
@@ -320,7 +369,24 @@ export class KnowledgeGraphManager {
       }
     }
 
-    // OPTIMIZATION: Use Set for O(1) lookup instead of O(n) array.some()
+    // ⚡ AI ASSISTANT PATTERN: Set-Based Deduplication (O(n) instead of O(n²))
+    // PERFORMANCE OPTIMIZATION: Use Set.has() instead of Array.includes() or Array.some()
+    //
+    // Why this pattern?
+    // - Set.has() is O(1) - constant time lookup using hash tables
+    // - Array.includes() is O(n) - linear scan through entire array
+    // - Array.some() is O(n) - linear scan with predicate function
+    //
+    // Impact:
+    // - With 1,000 relations: Array method = 1,000,000 operations, Set = 1,000 operations
+    // - This gives 100x-1000x speedup for large datasets
+    //
+    // When to use this pattern:
+    // - Deduplication checks (like this case)
+    // - Membership testing with more than ~10 items
+    // - Lookups that happen in loops
+    //
+    // ALWAYS use Set/Map for lookups in performance-critical code!
     const existingRelationKeys = new Set(
       graph.relations.map(r => `${r.from}|${r.to}|${r.relationType}`)
     );

