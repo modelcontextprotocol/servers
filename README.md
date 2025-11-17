@@ -854,6 +854,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[GraphQL](https://github.com/drestrepom/mcp_graphql)** - Comprehensive GraphQL API integration that automatically exposes each GraphQL query as a separate tool.
 - **[GraphQL Schema](https://github.com/hannesj/mcp-graphql-schema)** - Allow LLMs to explore large GraphQL schemas without bloating the context.
 - **[Graylog](https://github.com/Pranavj17/mcp-server-graylog)** - Search Graylog logs by absolute/relative timestamps, filter by streams, and debug production issues directly from Claude Desktop.
+- **[Grok-MCP](https://github.com/merterbak/Grok-MCP)** - MCP server for xAI’s API featuring the latest Grok models, image analysis & generation, and web search.
 - **[gx-mcp-server](https://github.com/davidf9999/gx-mcp-server)** - Expose Great Expectations data validation and quality checks as MCP tools for AI agents.
 - **[HackMD](https://github.com/yuna0x0/hackmd-mcp)** (by yuna0x0) - An MCP server for HackMD, a collaborative markdown editor. It allows users to create, read, and update documents in HackMD using the Model Context Protocol.
 - **[HAProxy](https://github.com/tuannvm/haproxy-mcp-server)** - A Model Context Protocol (MCP) server for HAProxy implemented in Go, leveraging HAProxy Runtime API.
