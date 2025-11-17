@@ -15,6 +15,7 @@
   "scripts": {
     "build": "npm run build --workspaces",
     "watch": "npm run watch --workspaces",
+    "test": "npm ci --workspaces && npm test --workspaces --if-present",
     "publish-all": "npm publish --workspaces --access public",
     "link-all": "npm link --workspaces"
   },

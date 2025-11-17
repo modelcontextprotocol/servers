@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { z } from 'zod';
 import { SequentialThinkingServer, ThoughtData } from '../lib.js';
 
 // Mock chalk to avoid ESM issues
@@ -32,7 +33,7 @@ describe('SequentialThinkingServer', () => {
 
       const result = server.processThought(input);
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid thought');
+      expect(result.content[0].text).toContain('thought');
     });
 
     it('should reject input with non-string thought', () => {
@@ -45,7 +46,7 @@ describe('SequentialThinkingServer', () => {
 
       const result = server.processThought(input);
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid thought');
+      expect(result.content[0].text).toContain('thought');
     });
 
     it('should reject input with missing thoughtNumber', () => {
@@ -57,7 +58,7 @@ describe('SequentialThinkingServer', () => {
 
       const result = server.processThought(input);
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid thoughtNumber');
+      expect(result.content[0].text).toContain('thoughtNumber');
     });
 
     it('should reject input with non-number thoughtNumber', () => {
@@ -70,7 +71,7 @@ describe('SequentialThinkingServer', () => {
 
       const result = server.processThought(input);
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid thoughtNumber');
+      expect(result.content[0].text).toContain('thoughtNumber');
     });
 
     it('should reject input with missing totalThoughts', () => {
@@ -82,7 +83,7 @@ describe('SequentialThinkingServer', () => {
 
       const result = server.processThought(input);
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid totalThoughts');
+      expect(result.content[0].text).toContain('totalThoughts');
     });
 
     it('should reject input with non-number totalThoughts', () => {
@@ -95,7 +96,7 @@ describe('SequentialThinkingServer', () => {
 
       const result = server.processThought(input);
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid totalThoughts');
+      expect(result.content[0].text).toContain('totalThoughts');
     });
 
     it('should reject input with missing nextThoughtNeeded', () => {
@@ -107,7 +108,7 @@ describe('SequentialThinkingServer', () => {
 
       const result = server.processThought(input);
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid nextThoughtNeeded');
+      expect(result.content[0].text).toContain('nextThoughtNeeded');
     });
 
     it('should reject input with non-boolean nextThoughtNeeded', () => {
@@ -120,7 +121,7 @@ describe('SequentialThinkingServer', () => {
 
       const result = server.processThought(input);
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid nextThoughtNeeded');
+      expect(result.content[0].text).toContain('nextThoughtNeeded');
     });
   });
 
@@ -274,6 +275,136 @@ describe('SequentialThinkingServer', () => {
     });
   });
 
+  describe('processThought - integer validation', () => {
+    it('should reject float thoughtNumber', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1.5,
+        totalThoughts: 3,
+        nextThoughtNeeded: true
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('must be an integer');
+    });
+
+    it('should reject float totalThoughts', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 3.7,
+        nextThoughtNeeded: true
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('must be an integer');
+    });
+
+    it('should reject float revisesThought', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        isRevision: true,
+        revisesThought: 1.5
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('must be an integer');
+    });
+
+    it('should reject float branchFromThought', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        branchFromThought: 1.5,
+        branchId: 'branch-a'
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('must be an integer');
+    });
+  });
+
+  describe('processThought - optional field validation', () => {
+    it('should reject non-boolean isRevision', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: true,
+        isRevision: 'true'
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('isRevision');
+    });
+
+    it('should reject non-boolean needsMoreThoughts', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: true,
+        needsMoreThoughts: 1
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('needsMoreThoughts');
+    });
+
+    it('should reject non-string branchId', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: true,
+        branchId: 123
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('branchId');
+    });
+
+    it('should reject empty branchId', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: true,
+        branchId: ''
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('branchId');
+    });
+
+    it('should reject branchId exceeding 256 characters', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: true,
+        branchId: 'a'.repeat(257)
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('branchId');
+    });
+  });
+
   describe('processThought - edge cases', () => {
     it('should reject empty thought string', () => {
       const input = {
@@ -285,12 +416,13 @@ describe('SequentialThinkingServer', () => {
 
       const result = server.processThought(input);
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid thought');
+      expect(result.content[0].text).toContain('thought');
     });
 
-    it('should handle very long thought strings', () => {
+    it('should accept thought at max size (100KB)', () => {
+      const maxSize = 100 * 1024;
       const input = {
-        thought: 'a'.repeat(10000),
+        thought: 'a'.repeat(maxSize),
         thoughtNumber: 1,
         totalThoughts: 1,
         nextThoughtNeeded: false
@@ -298,6 +430,20 @@ describe('SequentialThinkingServer', () => {
 
       const result = server.processThought(input);
       expect(result.isError).toBeUndefined();
+    });
+
+    it('should reject thought exceeding max size (100KB)', () => {
+      const maxSize = 100 * 1024;
+      const input = {
+        thought: 'a'.repeat(maxSize + 1),
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('exceeds maximum size');
     });
 
     it('should handle thoughtNumber = 1, totalThoughts = 1', () => {
@@ -382,6 +528,163 @@ describe('SequentialThinkingServer', () => {
     });
   });
 
+  describe('processThought - memory limits', () => {
+    it('should enforce MAX_THOUGHT_HISTORY limit with default 1000', () => {
+      const testServer = new SequentialThinkingServer();
+
+      // Add 1001 thoughts to exceed default limit
+      for (let i = 1; i <= 1001; i++) {
+        testServer.processThought({
+          thought: `Thought ${i}`,
+          thoughtNumber: i,
+          totalThoughts: 1001,
+          nextThoughtNeeded: i < 1001
+        });
+      }
+
+      const result = testServer.processThought({
+        thought: 'Query',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      // Should have evicted oldest, kept max 1000
+      expect(data.thoughtHistoryLength).toBe(1000);
+    });
+
+    it('should enforce MAX_THOUGHTS_PER_BRANCH limit with default 1000', () => {
+      const testServer = new SequentialThinkingServer();
+
+      // Add 1001 thoughts to same branch to exceed default limit
+      for (let i = 1; i <= 1001; i++) {
+        testServer.processThought({
+          thought: `Branch thought ${i}`,
+          thoughtNumber: i,
+          totalThoughts: 1001,
+          nextThoughtNeeded: i < 1001,
+          branchFromThought: 1,
+          branchId: 'test-branch'
+        });
+      }
+
+      const result = testServer.processThought({
+        thought: 'Query',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.branches).toContain('test-branch');
+      // Branch should exist but be capped at 1000 thoughts per branch
+      expect(data.thoughtHistoryLength).toBe(1000);
+    });
+
+    it('should enforce MAX_BRANCHES limit with default 100', () => {
+      const testServer = new SequentialThinkingServer();
+
+      // Add 101 different branches to exceed default limit
+      // Each branch is branched from thought 1, so thoughtNumber must be > 1
+      for (let i = 1; i <= 101; i++) {
+        testServer.processThought({
+          thought: `Branch ${i} thought`,
+          thoughtNumber: i + 1, // Must be > branchFromThought (1)
+          totalThoughts: 102,
+          nextThoughtNeeded: false,
+          branchFromThought: 1,
+          branchId: `branch-${i}`
+        });
+      }
+
+      const result = testServer.processThought({
+        thought: 'Query in branch 101',
+        thoughtNumber: 103,
+        totalThoughts: 103,
+        nextThoughtNeeded: false,
+        branchFromThought: 1,
+        branchId: 'branch-101' // Query last branch to see what branches exist
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      // Should have evicted oldest branches, kept max 100
+      expect(data.branches.length).toBe(100);
+      expect(data.branches).not.toContain('branch-1'); // First should be evicted
+      expect(data.branches).toContain('branch-101'); // Last should exist
+    });
+  });
+
+  describe('environment variable validation', () => {
+    it('should reject invalid MAX_THOUGHT_HISTORY', () => {
+      process.env.MAX_THOUGHT_HISTORY = '200000'; // > 100000
+      expect(() => {
+        // This triggers env parsing
+        const lib = require('../lib.js');
+      }).toThrow();
+      delete process.env.MAX_THOUGHT_HISTORY;
+    });
+  });
+
+  describe('ANSI formatting', () => {
+    it('should calculate border width using visual length, not ANSI-inclusive length', () => {
+      // Enable logging to capture formatted output
+      delete process.env.DISABLE_THOUGHT_LOGGING;
+      const serverWithLogging = new SequentialThinkingServer();
+
+      // Spy on console.error to capture formatted output
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      serverWithLogging.processThought({
+        thought: 'Test',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true
+      });
+
+      // Get the formatted output
+      const formattedOutput = errorSpy.mock.calls[0][0];
+
+      // Extract border lines
+      const lines = formattedOutput.split('\n');
+      const topBorder = lines[1]; // ┌───...┐
+      const bottomBorder = lines[4]; // └───...┘
+
+      // Borders should have same length (if ANSI handled correctly)
+      expect(topBorder.length).toBe(bottomBorder.length);
+
+      errorSpy.mockRestore();
+      process.env.DISABLE_THOUGHT_LOGGING = 'true';
+    });
+
+    it('should handle long context strings in branch thoughts', () => {
+      delete process.env.DISABLE_THOUGHT_LOGGING;
+      const serverWithLogging = new SequentialThinkingServer();
+
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      serverWithLogging.processThought({
+        thought: 'Branch thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: false,
+        branchFromThought: 1,
+        branchId: 'very-long-branch-identifier-name'
+      });
+
+      const formattedOutput = errorSpy.mock.calls[0][0];
+      const lines = formattedOutput.split('\n');
+      const topBorder = lines[1];
+      const bottomBorder = lines[4];
+
+      // Borders should have same length
+      expect(topBorder.length).toBe(bottomBorder.length);
+
+      errorSpy.mockRestore();
+      process.env.DISABLE_THOUGHT_LOGGING = 'true';
+    });
+  });
+
   describe('processThought - with logging enabled', () => {
     let serverWithLogging: SequentialThinkingServer;
 
@@ -434,6 +737,120 @@ describe('SequentialThinkingServer', () => {
 
       const result = serverWithLogging.processThought(input);
       expect(result.isError).toBeUndefined();
+    });
+  });
+
+  describe('processThought - logical constraints', () => {
+    it('should reject revisesThought >= thoughtNumber', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        isRevision: true,
+        revisesThought: 2 // Same as thoughtNumber
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('revisesThought must be less than thoughtNumber');
+    });
+
+    it('should reject branchFromThought >= thoughtNumber', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        branchFromThought: 3, // Greater than thoughtNumber
+        branchId: 'test'
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('branchFromThought must be less than thoughtNumber');
+    });
+
+    it('should reject isRevision=true without revisesThought', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        isRevision: true
+        // Missing revisesThought
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('revisesThought must be provided');
+    });
+
+    it('should reject branchFromThought without branchId', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        branchFromThought: 1
+        // Missing branchId
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('branchId must also be provided');
+    });
+
+    it('should reject negative thoughtNumber', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: -1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('at least 1');
+    });
+
+    it('should reject negative totalThoughts', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: -5,
+        nextThoughtNeeded: true
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('at least 1');
+    });
+
+    it('should reject zero thoughtNumber', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 0,
+        totalThoughts: 3,
+        nextThoughtNeeded: true
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('at least 1');
+    });
+
+    it('should reject zero totalThoughts', () => {
+      const input = {
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 0,
+        nextThoughtNeeded: true
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('at least 1');
     });
   });
 });

@@ -619,6 +619,9 @@ export const createServer = () => {
         maxTokens,
         extra.sendRequest
       );
+      if (result.content.type !== "text") {
+        throw new Error("Sampling result content is not text");
+      }
       return {
         content: [
           { type: "text", text: `LLM sampling result: ${result.content.text}` },

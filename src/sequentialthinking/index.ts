@@ -6,8 +6,14 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   Tool,
+  ToolSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { SequentialThinkingServer } from './lib.js';
+import { z } from "zod";
+import { SequentialThinkingServer, ThoughtDataSchema } from './lib.js';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
+const ToolInputSchema = ToolSchema.shape.inputSchema;
+type ToolInput = z.infer<typeof ToolInputSchema>;
 
 const SEQUENTIAL_THINKING_TOOL: Tool = {
   name: "sequentialthinking",
@@ -65,52 +71,7 @@ You should:
 9. Repeat the process until satisfied with the solution
 10. Provide a single, ideally correct answer as the final output
 11. Only set next_thought_needed to false when truly done and a satisfactory answer is reached`,
-  inputSchema: {
-    type: "object",
-    properties: {
-      thought: {
-        type: "string",
-        description: "Your current thinking step"
-      },
-      nextThoughtNeeded: {
-        type: "boolean",
-        description: "Whether another thought step is needed"
-      },
-      thoughtNumber: {
-        type: "integer",
-        description: "Current thought number (numeric value, e.g., 1, 2, 3)",
-        minimum: 1
-      },
-      totalThoughts: {
-        type: "integer",
-        description: "Estimated total thoughts needed (numeric value, e.g., 5, 10)",
-        minimum: 1
-      },
-      isRevision: {
-        type: "boolean",
-        description: "Whether this revises previous thinking"
-      },
-      revisesThought: {
-        type: "integer",
-        description: "Which thought is being reconsidered",
-        minimum: 1
-      },
-      branchFromThought: {
-        type: "integer",
-        description: "Branching point thought number",
-        minimum: 1
-      },
-      branchId: {
-        type: "string",
-        description: "Branch identifier"
-      },
-      needsMoreThoughts: {
-        type: "boolean",
-        description: "If more thoughts are needed"
-      }
-    },
-    required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"]
-  }
+  inputSchema: zodToJsonSchema(ThoughtDataSchema) as ToolInput
 };
 
 const server = new Server(
