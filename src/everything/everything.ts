@@ -205,7 +205,7 @@ export const createServer = () => {
       if (!logsUpdateInterval) {
           console.error("Starting logs update interval");
           logsUpdateInterval = setInterval(async () => {
-          await server.server.sendLoggingMessage( messages[Math.floor(Math.random() * messages.length)]);
+          await server.sendLoggingMessage(messages[Math.floor(Math.random() * messages.length)]);
       }, 15000);
     }
   };
@@ -673,14 +673,15 @@ export const createServer = () => {
     }
   );
 
-  // Tools that need access to request metadata or client capabilities must use setRequestHandler
-  // These include: LONG_RUNNING_OPERATION, SAMPLE_LLM, ELICITATION, LIST_ROOTS, GET_RESOURCE_REFERENCE
-  server.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-    const { name, arguments: args } = request.params;
-
-    if (name === ToolName.GET_RESOURCE_REFERENCE) {
-      const validatedArgs = GetResourceReferenceSchema.parse(args);
-      const resourceId = validatedArgs.resourceId;
+  server.registerTool(
+    ToolName.GET_RESOURCE_REFERENCE,
+    {
+      title: "Get Resource Reference",
+      description: "Returns a resource reference that can be read by the client",
+      inputSchema: GetResourceReferenceSchema.shape,
+    },
+    async (args, extra) => {
+      const resourceId = args.resourceId;
 
       const resourceIndex = resourceId - 1;
       if (resourceIndex < 0 || resourceIndex >= ALL_RESOURCES.length) {
@@ -697,7 +698,7 @@ export const createServer = () => {
           },
           {
             type: "resource" as const,
-            resource: resource,
+            resource: resource as any,
           },
           {
             type: "text" as const,
@@ -706,12 +707,19 @@ export const createServer = () => {
         ],
       };
     }
+  );
 
-    if (name === ToolName.LONG_RUNNING_OPERATION) {
-      const validatedArgs = LongRunningOperationSchema.parse(args);
-      const { duration, steps } = validatedArgs;
+  server.registerTool(
+    ToolName.LONG_RUNNING_OPERATION,
+    {
+      title: "Long Running Operation",
+      description: "Demonstrates a long running operation with progress notifications",
+      inputSchema: LongRunningOperationSchema.shape,
+    },
+    async (args, extra) => {
+      const { duration, steps } = args;
       const stepDuration = duration / steps;
-      const progressToken = request.params._meta?.progressToken;
+      const progressToken = extra._meta?.progressToken;
 
       for (let i = 1; i < steps + 1; i++) {
         await new Promise((resolve) =>
@@ -739,10 +747,17 @@ export const createServer = () => {
         ],
       };
     }
+  );
 
-    if (name === ToolName.SAMPLE_LLM) {
-      const validatedArgs = SampleLLMSchema.parse(args);
-      const { prompt, maxTokens } = validatedArgs;
+  server.registerTool(
+    ToolName.SAMPLE_LLM,
+    {
+      title: "Sample LLM",
+      description: "Requests the client to sample from an LLM",
+      inputSchema: SampleLLMSchema.shape,
+    },
+    async (args, extra) => {
+      const { prompt, maxTokens } = args;
 
       const result = await requestSampling(
         prompt,
@@ -756,10 +771,16 @@ export const createServer = () => {
         ],
       };
     }
+  );
 
-    if (name === ToolName.ELICITATION) {
-      ElicitationSchema.parse(args);
-
+  server.registerTool(
+    ToolName.ELICITATION,
+    {
+      title: "Start Elicitation",
+      description: "Demonstrates client-side user input collection via elicitation",
+      inputSchema: ElicitationSchema.shape,
+    },
+    async (args, extra) => {
       const elicitationResult = await extra.sendRequest({
         method: 'elicitation/create',
         params: {
@@ -876,10 +897,16 @@ export const createServer = () => {
 
       return { content };
     }
+  );
 
-    if (name === ToolName.LIST_ROOTS) {
-      ListRootsSchema.parse(args);
-
+  server.registerTool(
+    ToolName.LIST_ROOTS,
+    {
+      title: "List Roots",
+      description: "Lists the root directories provided by the MCP client",
+      inputSchema: ListRootsSchema.shape,
+    },
+    async (args, extra) => {
       if (!clientSupportsRoots) {
         return {
           content: [
@@ -922,10 +949,7 @@ export const createServer = () => {
         ]
       };
     }
-
-    // If we get here, the tool was registered with registerTool and will be handled automatically
-    throw new Error(`Tool ${name} should be handled by registerTool or is unknown`);
-  });
+  );
 
   server.server.setRequestHandler(CompleteRequestSchema, async (request) => {
     const { ref, argument } = request.params;
@@ -965,14 +989,14 @@ export const createServer = () => {
         currentRoots = response.roots;
 
         // Log the roots update for demonstration
-        await server.server.sendLoggingMessage({
+        await server.sendLoggingMessage({
             level: "info",
             logger: "everything-server",
             data: `Roots updated: ${currentRoots.length} root(s) received from client`,
         });
       }
     } catch (error) {
-      await server.server.sendLoggingMessage({
+      await server.sendLoggingMessage({
           level: "error",
           logger: "everything-server",
           data: `Failed to request roots from client: ${error instanceof Error ? error.message : String(error)}`,
@@ -991,27 +1015,27 @@ export const createServer = () => {
         if (response && 'roots' in response) {
           currentRoots = response.roots;
 
-          await server.server.sendLoggingMessage({
+          await server.sendLoggingMessage({
               level: "info",
               logger: "everything-server",
               data: `Initial roots received: ${currentRoots.length} root(s) from client`,
           });
         } else {
-          await server.server.sendLoggingMessage({
+          await server.sendLoggingMessage({
               level: "warning",
               logger: "everything-server",
               data: "Client returned no roots set",
           });
         }
       } catch (error) {
-        await server.server.sendLoggingMessage({
+        await server.sendLoggingMessage({
             level: "error",
             logger: "everything-server",
             data: `Failed to request initial roots from client: ${error instanceof Error ? error.message : String(error)}`,
         });
       }
     } else {
-      await server.server.sendLoggingMessage({
+      await server.sendLoggingMessage({
           level: "info",
           logger: "everything-server",
           data: "Client does not support MCP roots protocol",
