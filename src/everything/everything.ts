@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import {
   CallToolRequestSchema,
@@ -8,10 +8,7 @@ import {
   CreateMessageResultSchema,
   ElicitResultSchema,
   GetPromptRequestSchema,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
   LoggingLevel,
-  ReadResourceRequestSchema,
   Resource,
   RootsListChangedNotificationSchema,
   ServerNotification,
@@ -260,64 +257,42 @@ export const createServer = () => {
     }
   });
 
-  const PAGE_SIZE = 10;
+  // Register resource using modern API with a template pattern
+  server.registerResource(
+    'static-resources',
+    new ResourceTemplate('test://static/resource/{id}', { list: undefined }),
+    {
+      description: 'A static test resource with a numeric ID',
+    },
+    async (uri, variables, extra) => {
+      const id = Array.isArray(variables.id) ? variables.id[0] : variables.id;
+      const index = parseInt(id, 10) - 1;
 
-  // Initialize resource handlers to set up capabilities
-  // We'll override them below with our custom pagination logic
-  server['setResourceRequestHandlers']();
-
-  server.server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
-    const cursor = request.params?.cursor;
-    let startIndex = 0;
-
-    if (cursor) {
-      const decodedCursor = parseInt(atob(cursor), 10);
-      if (!isNaN(decodedCursor)) {
-        startIndex = decodedCursor;
-      }
-    }
-
-    const endIndex = Math.min(startIndex + PAGE_SIZE, ALL_RESOURCES.length);
-    const resources = ALL_RESOURCES.slice(startIndex, endIndex);
-
-    let nextCursor: string | undefined;
-    if (endIndex < ALL_RESOURCES.length) {
-      nextCursor = btoa(endIndex.toString());
-    }
-
-    return {
-      resources,
-      nextCursor,
-    };
-  });
-
-  server.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => {
-    return {
-      resourceTemplates: [
-        {
-          uriTemplate: "test://static/resource/{id}",
-          name: "Static Resource",
-          description: "A static resource with a numeric ID",
-        },
-      ],
-    };
-  });
-
-  server.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    const uri = request.params.uri;
-
-    if (uri.startsWith("test://static/resource/")) {
-      const index = parseInt(uri.split("/").pop() ?? "", 10) - 1;
       if (index >= 0 && index < ALL_RESOURCES.length) {
         const resource = ALL_RESOURCES[index];
-        return {
-          contents: [resource],
-        };
+        // Build the resource contents based on type
+        if ('text' in resource && resource.text) {
+          return {
+            contents: [{
+              uri: resource.uri,
+              mimeType: resource.mimeType,
+              text: resource.text as string,
+            }],
+          };
+        } else if ('blob' in resource && resource.blob) {
+          return {
+            contents: [{
+              uri: resource.uri,
+              mimeType: resource.mimeType,
+              blob: resource.blob as string,
+            }],
+          };
+        }
       }
-    }
 
-    throw new Error(`Unknown resource: ${uri}`);
-  });
+      throw new Error(`Unknown resource: ${uri.href}`);
+    }
+  );
 
   server.server.setRequestHandler(SubscribeRequestSchema, async (request, extra) => {
     const { uri } = request.params;
