@@ -159,9 +159,12 @@ const server = new Server(
   },
 );
 
-// Reads a file as a stream of buffers, concatenates them, and then encodes
-// the result to a Base64 string. This is a memory-efficient way to handle
-// binary data from a stream before the final encoding.
+/**
+ * Reads a file as a stream of buffers, concatenates them, and then encodes
+ * the result to a Base64 string. This is a memory-efficient way to handle
+ * binary data from a stream before the final encoding.
+ * @internal
+ */
 async function readFileAsBase64Stream(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const stream = createReadStream(filePath);
@@ -640,7 +643,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-// Updates allowed directories based on MCP client roots
+/**
+ * Updates allowed directories based on MCP client roots.
+ * This function validates and normalizes root directories provided by the MCP client.
+ * @internal
+ */
 async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
   const validatedRootDirs = await getValidRootDirectories(requestedRoots);
   if (validatedRootDirs.length > 0) {
@@ -689,7 +696,10 @@ server.oninitialized = async () => {
   }
 };
 
-// Start server
+/**
+ * Starts the MCP filesystem server.
+ * @internal
+ */
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);

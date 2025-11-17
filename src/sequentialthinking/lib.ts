@@ -1,26 +1,41 @@
 import chalk from 'chalk';
 
+/**
+ * Represents a single thought in the sequential thinking process.
+ * Contains metadata about the thought's position, relationships, and continuation.
+ */
 export interface ThoughtData {
-  thought: string;
-  thoughtNumber: number;
-  totalThoughts: number;
-  isRevision?: boolean;
-  revisesThought?: number;
-  branchFromThought?: number;
-  branchId?: string;
-  needsMoreThoughts?: boolean;
-  nextThoughtNeeded: boolean;
+  readonly thought: string;
+  readonly thoughtNumber: number;
+  readonly totalThoughts: number;
+  readonly isRevision?: boolean;
+  readonly revisesThought?: number;
+  readonly branchFromThought?: number;
+  readonly branchId?: string;
+  readonly needsMoreThoughts?: boolean;
+  readonly nextThoughtNeeded: boolean;
 }
 
+/**
+ * Manages the sequential thinking process.
+ * Tracks thoughts, branches, and formats output for display.
+ */
 export class SequentialThinkingServer {
-  private thoughtHistory: ThoughtData[] = [];
-  private branches: Record<string, ThoughtData[]> = {};
-  private disableThoughtLogging: boolean;
+  private readonly thoughtHistory: ThoughtData[] = [];
+  private readonly branches: Record<string, ThoughtData[]> = {};
+  private readonly disableThoughtLogging: boolean;
 
   constructor() {
     this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
   }
 
+  /**
+   * Validates and parses thought data from unknown input.
+   * @param input - The raw input to validate
+   * @returns Validated ThoughtData
+   * @throws {Error} If validation fails
+   * @internal
+   */
   private validateThoughtData(input: unknown): ThoughtData {
     const data = input as Record<string, unknown>;
 
@@ -50,6 +65,12 @@ export class SequentialThinkingServer {
     };
   }
 
+  /**
+   * Formats a thought for display with visual styling.
+   * @param thoughtData - The thought data to format
+   * @returns A formatted string with borders and colors
+   * @internal
+   */
   private formatThought(thoughtData: ThoughtData): string {
     const { thoughtNumber, totalThoughts, thought, isRevision, revisesThought, branchFromThought, branchId } = thoughtData;
 
@@ -78,12 +99,22 @@ export class SequentialThinkingServer {
 └${border}┘`;
   }
 
+  /**
+   * Processes and records a thought in the sequential thinking process.
+   * Validates the input, updates history, and optionally logs to console.
+   *
+   * @param input - The thought data to process
+   * @returns A result object containing status information or error details
+   */
   public processThought(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
     try {
-      const validatedInput = this.validateThoughtData(input);
+      let validatedInput = this.validateThoughtData(input);
 
       if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
-        validatedInput.totalThoughts = validatedInput.thoughtNumber;
+        validatedInput = {
+          ...validatedInput,
+          totalThoughts: validatedInput.thoughtNumber
+        };
       }
 
       this.thoughtHistory.push(validatedInput);
