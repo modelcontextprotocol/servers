@@ -21,8 +21,8 @@ export interface ThoughtData {
  * Tracks thoughts, branches, and formats output for display.
  */
 export class SequentialThinkingServer {
-  private readonly thoughtHistory: ThoughtData[] = [];
-  private readonly branches: Record<string, ThoughtData[]> = {};
+  private thoughtHistory: ThoughtData[] = [];
+  private branches: Record<string, ThoughtData[]> = {};
   private readonly disableThoughtLogging: boolean;
 
   constructor() {
