@@ -1,5 +1,4 @@
 import chalk from 'chalk';
-import { z } from 'zod';
 
 export interface ThoughtData {
   thought: string;
@@ -12,18 +11,6 @@ export interface ThoughtData {
   needsMoreThoughts?: boolean;
   nextThoughtNeeded: boolean;
 }
-
-const thoughtDataSchema = z.object({
-  thought: z.string().min(1, "Invalid thought: must be a non-empty string"),
-  thoughtNumber: z.number({ invalid_type_error: "Invalid thoughtNumber: must be a number" }).int().min(1),
-  totalThoughts: z.number({ invalid_type_error: "Invalid totalThoughts: must be a number" }).int().min(1),
-  nextThoughtNeeded: z.boolean({ invalid_type_error: "Invalid nextThoughtNeeded: must be a boolean" }),
-  isRevision: z.boolean().optional(),
-  revisesThought: z.number().int().min(1).optional(),
-  branchFromThought: z.number().int().min(1).optional(),
-  branchId: z.string().optional(),
-  needsMoreThoughts: z.boolean().optional()
-});
 
 export class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
@@ -62,27 +49,25 @@ export class SequentialThinkingServer {
 └${border}┘`;
   }
 
-  public processThought(input: unknown): { content: Array<{ type: "text"; text: string }>; isError?: boolean } {
+  public processThought(input: ThoughtData): { content: Array<{ type: "text"; text: string }>; isError?: boolean } {
     try {
-      // Validate input with Zod
-      const validatedInput = thoughtDataSchema.parse(input);
-
+      // Validation happens at the tool registration layer via Zod
       // Adjust totalThoughts if thoughtNumber exceeds it
-      if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
-        validatedInput.totalThoughts = validatedInput.thoughtNumber;
+      if (input.thoughtNumber > input.totalThoughts) {
+        input.totalThoughts = input.thoughtNumber;
       }
 
-      this.thoughtHistory.push(validatedInput);
+      this.thoughtHistory.push(input);
 
-      if (validatedInput.branchFromThought && validatedInput.branchId) {
-        if (!this.branches[validatedInput.branchId]) {
-          this.branches[validatedInput.branchId] = [];
+      if (input.branchFromThought && input.branchId) {
+        if (!this.branches[input.branchId]) {
+          this.branches[input.branchId] = [];
         }
-        this.branches[validatedInput.branchId].push(validatedInput);
+        this.branches[input.branchId].push(input);
       }
 
       if (!this.disableThoughtLogging) {
-        const formattedThought = this.formatThought(validatedInput);
+        const formattedThought = this.formatThought(input);
         console.error(formattedThought);
       }
 
@@ -90,40 +75,20 @@ export class SequentialThinkingServer {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
-            thoughtNumber: validatedInput.thoughtNumber,
-            totalThoughts: validatedInput.totalThoughts,
-            nextThoughtNeeded: validatedInput.nextThoughtNeeded,
+            thoughtNumber: input.thoughtNumber,
+            totalThoughts: input.totalThoughts,
+            nextThoughtNeeded: input.nextThoughtNeeded,
             branches: Object.keys(this.branches),
             thoughtHistoryLength: this.thoughtHistory.length
           }, null, 2)
         }]
       };
     } catch (error) {
-      let errorMessage: string;
-
-      if (error instanceof z.ZodError) {
-        // Extract the first validation error and format it nicely
-        const firstError = error.errors[0];
-        const field = firstError.path[0];
-
-        if (firstError.code === 'invalid_type' && firstError.received === 'undefined') {
-          errorMessage = `Invalid ${field}: must be ${firstError.expected === 'string' ? 'a string' : firstError.expected === 'number' ? 'a number' : 'a boolean'}`;
-        } else if (firstError.code === 'invalid_type') {
-          errorMessage = `Invalid ${field}: must be ${firstError.expected === 'string' ? 'a string' : firstError.expected === 'number' ? 'a number' : 'a boolean'}`;
-        } else if (firstError.code === 'too_small' && firstError.minimum === 1) {
-          errorMessage = firstError.message;
-        } else {
-          errorMessage = firstError.message;
-        }
-      } else {
-        errorMessage = error instanceof Error ? error.message : String(error);
-      }
-
       return {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
-            error: errorMessage,
+            error: error instanceof Error ? error.message : String(error),
             status: 'failed'
           }, null, 2)
         }],
