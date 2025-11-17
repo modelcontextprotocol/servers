@@ -52,7 +52,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
 
 
       // Set up onclose handler to clean up transport when closed
-      server.onclose = async () => {
+      server.server.onclose = async () => {
         const sid = transport.sessionId;
         if (sid && transports.has(sid)) {
           console.error(`Transport closed for session ${sid}, removing from transports map`);
@@ -63,7 +63,7 @@ app.post('/mcp', async (req: Request, res: Response) => {
 
       // Connect the transport to the MCP server BEFORE handling the request
       // so responses can flow back through the same transport
-      await server.connect(transport);
+      await server.server.connect(transport);
 
       await transport.handleRequest(req, res);
 

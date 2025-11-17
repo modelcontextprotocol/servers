@@ -28,14 +28,14 @@ app.get("/sse", async (req, res) => {
     transports.set(transport.sessionId, transport);
 
     // Connect server to transport
-    await server.connect(transport);
+    await server.server.connect(transport);
     console.error("Client Connected: ", transport.sessionId);
 
     // Start notification intervals after client connects
     startNotificationIntervals(transport.sessionId);
 
     // Handle close of connection
-    server.onclose = async () => {
+    server.server.onclose = async () => {
       console.error("Client Disconnected: ", transport.sessionId);
       transports.delete(transport.sessionId);
       await cleanup();
