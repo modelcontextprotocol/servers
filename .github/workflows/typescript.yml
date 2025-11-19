@@ -41,21 +41,9 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: npm ci
 
-      - name: Check if tests exist
-        id: check-tests
-        working-directory: src/${{ matrix.package }}
-        run: |
-          if npm run test --silent 2>/dev/null; then
-            echo "has-tests=true" >> $GITHUB_OUTPUT
-          else
-            echo "has-tests=false" >> $GITHUB_OUTPUT
-          fi
-        continue-on-error: true
-
       - name: Run tests
-        if: steps.check-tests.outputs.has-tests == 'true'
         working-directory: src/${{ matrix.package }}
-        run: npm test
+        run: npm test --if-present
 
   build:
     needs: [detect-packages, test]
