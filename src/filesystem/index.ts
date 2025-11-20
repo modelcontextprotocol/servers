@@ -14,7 +14,6 @@ import { createReadStream } from "fs";
 import path from "path";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from './path-utils.js';
 import { getValidRootDirectories } from './roots-utils.js';
 import {
@@ -24,7 +23,7 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
-  searchFilesWithValidation,
+  searchFilesByName,
   applyFileEdits,
   tailFile,
   headFile,
@@ -39,6 +38,7 @@ if (args.length === 0) {
   console.error("  1. Command-line arguments (shown above)");
   console.error("  2. MCP roots protocol (if client supports it)");
   console.error("At least one directory must be provided by EITHER method for the server to operate.");
+  console.error("Note: Directories will be validated at startup but operations will be retried at runtime.");
 }
 
 // Store allowed directories in normalized and resolved form
@@ -59,22 +59,33 @@ let allowedDirectories = await Promise.all(
   })
 );
 
-// Validate that all directories exist and are accessible
-await Promise.all(allowedDirectories.map(async (dir) => {
-  try {
-    const stats = await fs.stat(dir);
-    if (!stats.isDirectory()) {
-      console.error(`Error: ${dir} is not a directory`);
-      process.exit(1);
+// Validate directories at startup - log warnings if path is not accessible at startup.
+// Directory accessibility may change between startup and runtime.
+const validatedDirectories = await Promise.all(
+  allowedDirectories.map(async (dir) => {
+    try {
+      const stats = await fs.stat(dir);
+      if (stats.isDirectory()) {
+        console.error(`Directory accessible: ${dir}`);
+        return dir;
+      } else if (stats.isFile()) {
+        console.error(`${dir} is a file, not a directory - skipping`);
+        return null;
+      } else {
+        // Include symlinks/special files - they might become directories when NAS/VPN reconnects
+        console.error(`${dir} is not a directory (${stats.isSymbolicLink() ? 'symlink' : 'special file'})`);
+        return dir;
+      }
+    } catch (error) {
+      // Include inaccessible paths - they might become accessible when storage/network reconnects
+      console.error(`Directory not accessible: ${dir} - ${error instanceof Error ? error.message : String(error)}`);
+      return dir;
     }
-  } catch (error) {
-    console.error(`Error accessing directory ${dir}:`, error);
-    process.exit(1);
-  }
-}));
+  })
+).then(results => results.filter((dir): dir is string => dir !== null));
 
 // Initialize the global allowedDirectories in lib.ts
-setAllowedDirectories(allowedDirectories);
+setAllowedDirectories(validatedDirectories);
 
 // Schema definitions
 const ReadTextFileArgsSchema = z.object({
@@ -88,10 +99,7 @@ const ReadMediaFileArgsSchema = z.object({
 });
 
 const ReadMultipleFilesArgsSchema = z.object({
-  paths: z
-    .array(z.string())
-    .min(1, "At least one file path must be provided")
-    .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories."),
+  paths: z.array(z.string()),
 });
 
 const WriteFileArgsSchema = z.object({
@@ -125,7 +133,6 @@ const ListDirectoryWithSizesArgsSchema = z.object({
 
 const DirectoryTreeArgsSchema = z.object({
   path: z.string(),
-  excludePatterns: z.array(z.string()).optional().default([])
 });
 
 const MoveFileArgsSchema = z.object({
@@ -280,9 +287,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "search_files",
         description:
           "Recursively search for files and directories matching a pattern. " +
-          "The patterns should be glob-style patterns that match paths relative to the working directory. " +
-          "Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
-          "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
+          "Searches through all subdirectories from the starting path. The search " +
+          "is case-insensitive and matches partial names. Returns full paths to all " +
+          "matching items. Great for finding files when you don't know their exact location. " +
           "Only searches within allowed directories.",
         inputSchema: zodToJsonSchema(SearchFilesArgsSchema) as ToolInput,
       },
@@ -533,28 +540,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: 'file' | 'directory';
             children?: TreeEntry[];
         }
-        const rootPath = parsed.data.path;
 
-        async function buildTree(currentPath: string, excludePatterns: string[] = []): Promise<TreeEntry[]> {
+        async function buildTree(currentPath: string): Promise<TreeEntry[]> {
             const validPath = await validatePath(currentPath);
             const entries = await fs.readdir(validPath, {withFileTypes: true});
             const result: TreeEntry[] = [];
 
             for (const entry of entries) {
-                const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
-                const shouldExclude = excludePatterns.some(pattern => {
-                    if (pattern.includes('*')) {
-                        return minimatch(relativePath, pattern, {dot: true});
-                    }
-                    // For files: match exact name or as part of path
-                    // For directories: match as directory path
-                    return minimatch(relativePath, pattern, {dot: true}) ||
-                           minimatch(relativePath, `**/${pattern}`, {dot: true}) ||
-                           minimatch(relativePath, `**/${pattern}/**`, {dot: true});
-                });
-                if (shouldExclude)
-                    continue;
-
                 const entryData: TreeEntry = {
                     name: entry.name,
                     type: entry.isDirectory() ? 'directory' : 'file'
@@ -562,7 +554,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
                 if (entry.isDirectory()) {
                     const subPath = path.join(currentPath, entry.name);
-                    entryData.children = await buildTree(subPath, excludePatterns);
+                    entryData.children = await buildTree(subPath);
                 }
 
                 result.push(entryData);
@@ -571,7 +563,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             return result;
         }
 
-        const treeData = await buildTree(rootPath, parsed.data.excludePatterns);
+        const treeData = await buildTree(parsed.data.path);
         return {
             content: [{
                 type: "text",
@@ -599,7 +591,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error(`Invalid arguments for search_files: ${parsed.error}`);
         }
         const validPath = await validatePath(parsed.data.path);
-        const results = await searchFilesWithValidation(validPath, parsed.data.pattern, allowedDirectories, { excludePatterns: parsed.data.excludePatterns });
+        const results = await searchFilesByName(validPath, parsed.data.pattern, parsed.data.excludePatterns);
         return {
           content: [{ type: "text", text: results.length > 0 ? results.join("\n") : "No matches found" }],
         };

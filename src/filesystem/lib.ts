@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import { Dirent } from "fs";
 import path from "path";
 import os from 'os';
 import { randomBytes } from 'crypto';
@@ -348,45 +349,109 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
   }
 }
 
-export async function searchFilesWithValidation(
+// Search by name function with glob pattern support
+export async function searchFilesByName(
   rootPath: string,
   pattern: string,
-  allowedDirectories: string[],
-  options: SearchOptions = {}
+  excludePatterns: string[] = []
 ): Promise<string[]> {
-  const { excludePatterns = [] } = options;
   const results: string[] = [];
+  const queue: string[] = [rootPath];
+  const processedPaths = new Set<string>();
+  const caseSensitive = /[A-Z]/.test(pattern); // Check if pattern has uppercase characters
 
-  async function search(currentPath: string) {
-    const entries = await fs.readdir(currentPath, { withFileTypes: true });
+  // Determine if the pattern is a glob pattern or a simple substring
+  const isGlobPattern = pattern.includes('*') || pattern.includes('?') || pattern.includes('[') || pattern.includes('{');
 
-    for (const entry of entries) {
-      const fullPath = path.join(currentPath, entry.name);
+  // Prepare the matcher function based on pattern type
+  let matcher: (name: string, fullPath: string) => boolean;
 
-      try {
-        await validatePath(fullPath);
-
+  if (isGlobPattern) {
+    // For glob patterns, use minimatch
+    matcher = (name: string, fullPath: string) => {
+      // Handle different pattern types
+      if (pattern.includes('/')) {
+        // If pattern has path separators, match against relative path from root
         const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(excludePattern =>
-          minimatch(relativePath, excludePattern, { dot: true })
-        );
+        return minimatch(relativePath, pattern, { nocase: !caseSensitive, dot: true });
+      } else {
+        // If pattern has no path separators, match just against the basename
+        return minimatch(name, pattern, { nocase: !caseSensitive, dot: true });
+      }
+    };
+  } else {
+    // For simple substrings, use includes() for better performance
+    const searchPattern = caseSensitive ? pattern : pattern.toLowerCase();
+    matcher = (name: string) => {
+      const nameToMatch = caseSensitive ? name : name.toLowerCase();
+      return nameToMatch.includes(searchPattern);
+    };
+  }
 
-        if (shouldExclude) continue;
+  const compiledExcludes = excludePatterns.map(pattern => {
+    const globPattern = pattern.includes('*') ? pattern : `**/${pattern}/**`;
+    return (path: string) => minimatch(path, globPattern, { dot: true });
+  });
 
-        // Use glob matching for the search pattern
-        if (minimatch(relativePath, pattern, { dot: true })) {
-          results.push(fullPath);
+  const shouldExclude = (relativePath: string): boolean => {
+    return compiledExcludes.some(matchFn => matchFn(relativePath));
+  };
+
+  // Process directories in a breadth-first manner
+  while (queue.length > 0) {
+    const currentBatch = [...queue]; // Copy current queue for parallel processing
+    queue.length = 0; // Clear queue for next batch
+
+    // Process current batch in parallel
+    const entriesBatches = await Promise.all(
+      currentBatch.map(async (currentPath): Promise<Dirent[]> => {
+        if (processedPaths.has(currentPath)) return []; // Skip if already processed
+        processedPaths.add(currentPath);
+
+        try {
+          await validatePath(currentPath);
+          return await fs.readdir(currentPath, { withFileTypes: true });
+        } catch (error) {
+          return []; // Return empty array on error
         }
+      })
+    );
 
-        if (entry.isDirectory()) {
-          await search(fullPath);
+    // Flatten and process entries
+    for (let i = 0; i < currentBatch.length; i++) {
+      const currentPath = currentBatch[i];
+      const entries = entriesBatches[i];
+
+      if (!entries) continue;
+
+      for (const entry of entries) {
+        const fullPath = path.join(currentPath, entry.name);
+        try {
+          // Validate path before processing
+          await validatePath(fullPath);
+
+          // Check exclude patterns (once per entry)
+          const relativePath = path.relative(rootPath, fullPath);
+          if (shouldExclude(relativePath)) {
+            continue;
+          }
+
+          // Apply the appropriate matcher function
+          if (matcher(entry.name, fullPath)) {
+            results.push(fullPath);
+          }
+
+          // Add directories to queue for next batch
+          if (entry.isDirectory()) {
+            queue.push(fullPath);
+          }
+        } catch (error) {
+          // Skip invalid paths
+          continue;
         }
-      } catch {
-        continue;
       }
     }
   }
 
-  await search(rootPath);
   return results;
 }
