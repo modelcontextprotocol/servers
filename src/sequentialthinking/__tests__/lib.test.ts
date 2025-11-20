@@ -22,107 +22,8 @@ describe('SequentialThinkingServer', () => {
     server = new SequentialThinkingServer();
   });
 
-  describe('processThought - validation', () => {
-    it('should reject input with missing thought', () => {
-      const input = {
-        thoughtNumber: 1,
-        totalThoughts: 3,
-        nextThoughtNeeded: true
-      };
-
-      const result = server.processThought(input);
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid thought');
-    });
-
-    it('should reject input with non-string thought', () => {
-      const input = {
-        thought: 123,
-        thoughtNumber: 1,
-        totalThoughts: 3,
-        nextThoughtNeeded: true
-      };
-
-      const result = server.processThought(input);
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid thought');
-    });
-
-    it('should reject input with missing thoughtNumber', () => {
-      const input = {
-        thought: 'Test thought',
-        totalThoughts: 3,
-        nextThoughtNeeded: true
-      };
-
-      const result = server.processThought(input);
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid thoughtNumber');
-    });
-
-    it('should reject input with non-number thoughtNumber', () => {
-      const input = {
-        thought: 'Test thought',
-        thoughtNumber: '1',
-        totalThoughts: 3,
-        nextThoughtNeeded: true
-      };
-
-      const result = server.processThought(input);
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid thoughtNumber');
-    });
-
-    it('should reject input with missing totalThoughts', () => {
-      const input = {
-        thought: 'Test thought',
-        thoughtNumber: 1,
-        nextThoughtNeeded: true
-      };
-
-      const result = server.processThought(input);
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid totalThoughts');
-    });
-
-    it('should reject input with non-number totalThoughts', () => {
-      const input = {
-        thought: 'Test thought',
-        thoughtNumber: 1,
-        totalThoughts: '3',
-        nextThoughtNeeded: true
-      };
-
-      const result = server.processThought(input);
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid totalThoughts');
-    });
-
-    it('should reject input with missing nextThoughtNeeded', () => {
-      const input = {
-        thought: 'Test thought',
-        thoughtNumber: 1,
-        totalThoughts: 3
-      };
-
-      const result = server.processThought(input);
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid nextThoughtNeeded');
-    });
-
-    it('should reject input with non-boolean nextThoughtNeeded', () => {
-      const input = {
-        thought: 'Test thought',
-        thoughtNumber: 1,
-        totalThoughts: 3,
-        nextThoughtNeeded: 'true'
-      };
-
-      const result = server.processThought(input);
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid nextThoughtNeeded');
-    });
-  });
+  // Note: Input validation tests removed - validation now happens at the tool
+  // registration layer via Zod schemas before processThought is called
 
   describe('processThought - valid inputs', () => {
     it('should accept valid basic thought', () => {
@@ -275,19 +176,6 @@ describe('SequentialThinkingServer', () => {
   });
 
   describe('processThought - edge cases', () => {
-    it('should reject empty thought string', () => {
-      const input = {
-        thought: '',
-        thoughtNumber: 1,
-        totalThoughts: 1,
-        nextThoughtNeeded: false
-      };
-
-      const result = server.processThought(input);
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('Invalid thought');
-    });
-
     it('should handle very long thought strings', () => {
       const input = {
         thought: 'a'.repeat(10000),
@@ -347,25 +235,6 @@ describe('SequentialThinkingServer', () => {
       expect(result.content.length).toBe(1);
       expect(result.content[0]).toHaveProperty('type', 'text');
       expect(result.content[0]).toHaveProperty('text');
-    });
-
-    it('should return correct error structure on failure', () => {
-      const input = {
-        thought: 'Test',
-        thoughtNumber: 1,
-        totalThoughts: 1
-        // missing nextThoughtNeeded
-      };
-
-      const result = server.processThought(input);
-
-      expect(result).toHaveProperty('isError', true);
-      expect(result).toHaveProperty('content');
-      expect(Array.isArray(result.content)).toBe(true);
-
-      const errorData = JSON.parse(result.content[0].text);
-      expect(errorData).toHaveProperty('error');
-      expect(errorData).toHaveProperty('status', 'failed');
     });
 
     it('should return valid JSON in response', () => {

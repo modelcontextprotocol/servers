@@ -1,17 +1,22 @@
 #!/usr/bin/env node
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  Tool,
-} from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 import { SequentialThinkingServer } from './lib.js';
 
-const SEQUENTIAL_THINKING_TOOL: Tool = {
-  name: "sequentialthinking",
-  description: `A detailed tool for dynamic and reflective problem-solving through thoughts.
+const server = new McpServer({
+  name: "sequential-thinking-server",
+  version: "0.2.0",
+});
+
+const thinkingServer = new SequentialThinkingServer();
+
+server.registerTool(
+  "sequentialthinking",
+  {
+    title: "Sequential Thinking",
+    description: `A detailed tool for dynamic and reflective problem-solving through thoughts.
 This tool helps analyze problems through a flexible thinking process that can adapt and evolve.
 Each thought can build on, question, or revise previous insights as understanding deepens.
 
@@ -37,13 +42,13 @@ Key features:
 
 Parameters explained:
 - thought: Your current thinking step, which can include:
-* Regular analytical steps
-* Revisions of previous thoughts
-* Questions about previous decisions
-* Realizations about needing more analysis
-* Changes in approach
-* Hypothesis generation
-* Hypothesis verification
+  * Regular analytical steps
+  * Revisions of previous thoughts
+  * Questions about previous decisions
+  * Realizations about needing more analysis
+  * Changes in approach
+  * Hypothesis generation
+  * Hypothesis verification
 - nextThoughtNeeded: True if you need more thinking, even if at what seemed like the end
 - thoughtNumber: Current number in sequence (can go beyond initial total if needed)
 - totalThoughts: Current estimate of thoughts needed (can be adjusted up/down)
@@ -65,85 +70,41 @@ You should:
 9. Repeat the process until satisfied with the solution
 10. Provide a single, ideally correct answer as the final output
 11. Only set next_thought_needed to false when truly done and a satisfactory answer is reached`,
-  inputSchema: {
-    type: "object",
-    properties: {
-      thought: {
-        type: "string",
-        description: "Your current thinking step"
-      },
-      nextThoughtNeeded: {
-        type: "boolean",
-        description: "Whether another thought step is needed"
-      },
-      thoughtNumber: {
-        type: "integer",
-        description: "Current thought number (numeric value, e.g., 1, 2, 3)",
-        minimum: 1
-      },
-      totalThoughts: {
-        type: "integer",
-        description: "Estimated total thoughts needed (numeric value, e.g., 5, 10)",
-        minimum: 1
-      },
-      isRevision: {
-        type: "boolean",
-        description: "Whether this revises previous thinking"
-      },
-      revisesThought: {
-        type: "integer",
-        description: "Which thought is being reconsidered",
-        minimum: 1
-      },
-      branchFromThought: {
-        type: "integer",
-        description: "Branching point thought number",
-        minimum: 1
-      },
-      branchId: {
-        type: "string",
-        description: "Branch identifier"
-      },
-      needsMoreThoughts: {
-        type: "boolean",
-        description: "If more thoughts are needed"
-      }
+    inputSchema: {
+      thought: z.string().describe("Your current thinking step"),
+      nextThoughtNeeded: z.boolean().describe("Whether another thought step is needed"),
+      thoughtNumber: z.number().int().min(1).describe("Current thought number (numeric value, e.g., 1, 2, 3)"),
+      totalThoughts: z.number().int().min(1).describe("Estimated total thoughts needed (numeric value, e.g., 5, 10)"),
+      isRevision: z.boolean().optional().describe("Whether this revises previous thinking"),
+      revisesThought: z.number().int().min(1).optional().describe("Which thought is being reconsidered"),
+      branchFromThought: z.number().int().min(1).optional().describe("Branching point thought number"),
+      branchId: z.string().optional().describe("Branch identifier"),
+      needsMoreThoughts: z.boolean().optional().describe("If more thoughts are needed")
     },
-    required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"]
-  }
-};
-
-const server = new Server(
-  {
-    name: "sequential-thinking-server",
-    version: "0.2.0",
+    outputSchema: {
+      thoughtNumber: z.number(),
+      totalThoughts: z.number(),
+      nextThoughtNeeded: z.boolean(),
+      branches: z.array(z.string()),
+      thoughtHistoryLength: z.number()
+    },
   },
-  {
-    capabilities: {
-      tools: {},
-    },
+  async (args) => {
+    const result = thinkingServer.processThought(args);
+
+    if (result.isError) {
+      return result;
+    }
+
+    // Parse the JSON response to get structured content
+    const parsedContent = JSON.parse(result.content[0].text);
+
+    return {
+      content: result.content,
+      structuredContent: parsedContent
+    };
   }
 );
-
-const thinkingServer = new SequentialThinkingServer();
-
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [SEQUENTIAL_THINKING_TOOL],
-}));
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "sequentialthinking") {
-    return thinkingServer.processThought(request.params.arguments);
-  }
-
-  return {
-    content: [{
-      type: "text",
-      text: `Unknown tool: ${request.params.name}`
-    }],
-    isError: true
-  };
-});
 
 async function runServer() {
   const transport = new StdioServerTransport();
