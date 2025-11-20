@@ -12,6 +12,7 @@
   "exclude": [
     "**/__tests__/**",
     "**/*.test.ts",
-    "**/*.spec.ts"
+    "**/*.spec.ts",
+    "vitest.config.ts"
   ]
 }
