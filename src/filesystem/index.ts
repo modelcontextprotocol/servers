@@ -3,6 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
+  CallToolResult,
   RootsListChangedNotificationSchema,
   type Root,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -199,11 +200,7 @@ server.registerTool(
   {
     title: "Read File (Deprecated)",
     description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
-    inputSchema: {
-      path: z.string(),
-      tail: z.number().optional().describe("If provided, returns only the last N lines of the file"),
-      head: z.number().optional().describe("If provided, returns only the first N lines of the file")
-    },
+    inputSchema: ReadTextFileArgsSchema.shape,
     outputSchema: {
       content: z.array(z.object({
         type: z.literal("text"),
@@ -253,7 +250,7 @@ server.registerTool(
     },
     outputSchema: {
       content: z.array(z.object({
-        type: z.enum(["image", "audio"]),
+        type: z.enum(["image", "audio", "blob"]),
         data: z.string(),
         mimeType: z.string()
       }))
@@ -278,17 +275,15 @@ server.registerTool(
     const mimeType = mimeTypes[extension] || "application/octet-stream";
     const data = await readFileAsBase64Stream(validPath);
 
-    if (mimeType.startsWith("audio/")) {
-      return {
-        content: [{ type: "audio" as const, data, mimeType }],
-      };
-    } else {
-      // For all other media types including images and unknown types, return as image
-      // (MCP ImageContent can handle any base64-encoded binary data with appropriate mimeType)
-      return {
-        content: [{ type: "image" as const, data, mimeType }],
-      };
-    }
+    const type = mimeType.startsWith("image/")
+      ? "image"
+      : mimeType.startsWith("audio/")
+        ? "audio"
+        // Fallback for other binary types, not officially supported by the spec but has been used for some time
+        : "blob";
+    return {
+      content: [{ type, data, mimeType }],
+    } as unknown as CallToolResult;
   }
 );
 
