@@ -8,39 +8,53 @@ import { normalizePath, expandHome } from './path-utils.js';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
 
 // Global allowed directories - set by the main module
+// This is managed internally and should not be accessed directly
 let allowedDirectories: string[] = [];
 
-// Function to set allowed directories from the main module
+/**
+ * Sets the allowed directories for file operations.
+ * This function should only be called by the main server module during initialization.
+ * @internal
+ */
 export function setAllowedDirectories(directories: string[]): void {
   allowedDirectories = [...directories];
 }
 
-// Function to get current allowed directories
-export function getAllowedDirectories(): string[] {
-  return [...allowedDirectories];
-}
-
 // Type definitions
+/**
+ * @internal - Used internally for file stat operations
+ */
 interface FileInfo {
-  size: number;
-  created: Date;
-  modified: Date;
-  accessed: Date;
-  isDirectory: boolean;
-  isFile: boolean;
-  permissions: string;
+  readonly size: number;
+  readonly created: Date;
+  readonly modified: Date;
+  readonly accessed: Date;
+  readonly isDirectory: boolean;
+  readonly isFile: boolean;
+  readonly permissions: string;
 }
 
+/**
+ * Options for file search operations
+ */
 export interface SearchOptions {
-  excludePatterns?: string[];
+  readonly excludePatterns?: readonly string[];
 }
 
+/**
+ * Result of a file search operation
+ */
 export interface SearchResult {
-  path: string;
-  isDirectory: boolean;
+  readonly path: string;
+  readonly isDirectory: boolean;
 }
 
 // Pure Utility Functions
+/**
+ * Formats a byte size into a human-readable string.
+ * @param bytes - The number of bytes to format
+ * @returns A formatted string (e.g., "1.50 KB", "2.00 MB")
+ */
 export function formatSize(bytes: number): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   if (bytes === 0) return '0 B';
@@ -53,10 +67,22 @@ export function formatSize(bytes: number): string {
   return `${(bytes / Math.pow(1024, unitIndex)).toFixed(2)} ${units[unitIndex]}`;
 }
 
+/**
+ * Normalizes line endings from CRLF to LF.
+ * @param text - The text to normalize
+ * @returns Text with normalized line endings
+ */
 export function normalizeLineEndings(text: string): string {
   return text.replace(/\r\n/g, '\n');
 }
 
+/**
+ * Creates a unified diff between two strings.
+ * @param originalContent - The original content
+ * @param newContent - The new content
+ * @param filepath - The file path to show in the diff header
+ * @returns A unified diff string
+ */
 export function createUnifiedDiff(originalContent: string, newContent: string, filepath: string = 'file'): string {
   // Ensure consistent line endings for diff
   const normalizedOriginal = normalizeLineEndings(originalContent);
@@ -73,6 +99,17 @@ export function createUnifiedDiff(originalContent: string, newContent: string, f
 }
 
 // Security & Validation Functions
+/**
+ * Validates that a path is within the allowed directories.
+ * This function performs critical security checks including:
+ * - Verifying the path is within allowed directories
+ * - Resolving symlinks to prevent symlink attacks
+ * - Checking parent directories for new files
+ *
+ * @param requestedPath - The path to validate
+ * @returns The validated absolute path
+ * @throws {Error} If the path is outside allowed directories
+ */
 export async function validatePath(requestedPath: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
@@ -118,6 +155,11 @@ export async function validatePath(requestedPath: string): Promise<string> {
 
 
 // File Operations
+/**
+ * Retrieves detailed statistics about a file or directory.
+ * @param filePath - The path to the file or directory (must be pre-validated)
+ * @returns File statistics including size, timestamps, and permissions
+ */
 export async function getFileStats(filePath: string): Promise<FileInfo> {
   const stats = await fs.stat(filePath);
   return {
@@ -131,10 +173,23 @@ export async function getFileStats(filePath: string): Promise<FileInfo> {
   };
 }
 
+/**
+ * Reads the contents of a file as a string.
+ * @param filePath - The path to the file (must be pre-validated)
+ * @param encoding - The character encoding to use (defaults to 'utf-8')
+ * @returns The file contents as a string
+ */
 export async function readFileContent(filePath: string, encoding: string = 'utf-8'): Promise<string> {
   return await fs.readFile(filePath, encoding as BufferEncoding);
 }
 
+/**
+ * Writes content to a file with atomic operations to prevent race conditions.
+ * Uses exclusive creation ('wx' flag) for new files and atomic rename for existing files.
+ *
+ * @param filePath - The path to the file (must be pre-validated)
+ * @param content - The content to write
+ */
 export async function writeFileContent(filePath: string, content: string): Promise<void> {
   try {
     // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
@@ -163,11 +218,23 @@ export async function writeFileContent(filePath: string, content: string): Promi
 
 
 // File Editing Functions
+/**
+ * @internal - Used internally for file editing operations
+ */
 interface FileEdit {
-  oldText: string;
-  newText: string;
+  readonly oldText: string;
+  readonly newText: string;
 }
 
+/**
+ * Applies a series of edits to a file with flexible whitespace matching.
+ * Returns a unified diff showing the changes made.
+ *
+ * @param filePath - The path to the file (must be pre-validated)
+ * @param edits - Array of edits to apply
+ * @param dryRun - If true, generates diff without modifying the file
+ * @returns A formatted unified diff string
+ */
 export async function applyFileEdits(
   filePath: string,
   edits: FileEdit[],
@@ -258,7 +325,14 @@ export async function applyFileEdits(
   return formattedDiff;
 }
 
-// Memory-efficient implementation to get the last N lines of a file
+/**
+ * Memory-efficient implementation to get the last N lines of a file.
+ * Reads the file in chunks from the end to avoid loading the entire file into memory.
+ *
+ * @param filePath - The path to the file (must be pre-validated)
+ * @param numLines - The number of lines to retrieve from the end
+ * @returns The last N lines of the file
+ */
 export async function tailFile(filePath: string, numLines: number): Promise<string> {
   const CHUNK_SIZE = 1024; // Read 1KB at a time
   const stats = await fs.stat(filePath);
@@ -310,7 +384,14 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
   }
 }
 
-// New function to get the first N lines of a file
+/**
+ * Gets the first N lines of a file.
+ * Reads the file in chunks to avoid loading the entire file into memory.
+ *
+ * @param filePath - The path to the file (must be pre-validated)
+ * @param numLines - The number of lines to retrieve from the beginning
+ * @returns The first N lines of the file
+ */
 export async function headFile(filePath: string, numLines: number): Promise<string> {
   const fileHandle = await fs.open(filePath, 'r');
   try {
@@ -348,10 +429,20 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
   }
 }
 
+/**
+ * Recursively searches for files matching a pattern within allowed directories.
+ * Only returns files that pass path validation.
+ *
+ * @param rootPath - The root path to start searching from
+ * @param pattern - Glob pattern to match files against
+ * @param allowedDirectories - Array of allowed directory paths
+ * @param options - Search options including exclude patterns
+ * @returns Array of matching file paths
+ */
 export async function searchFilesWithValidation(
   rootPath: string,
   pattern: string,
-  allowedDirectories: string[],
+  allowedDirectories: readonly string[],
   options: SearchOptions = {}
 ): Promise<string[]> {
   const { excludePatterns = [] } = options;

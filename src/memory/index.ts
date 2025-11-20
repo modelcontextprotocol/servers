@@ -10,10 +10,17 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Define memory file path using environment variable with fallback
+/**
+ * Default path for the memory file.
+ * @internal
+ */
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
 
-// Handle backward compatibility: migrate memory.json to memory.jsonl if needed
+/**
+ * Ensures the memory file path is properly configured.
+ * Handles backward compatibility by migrating from memory.json to memory.jsonl if needed.
+ * @internal
+ */
 export async function ensureMemoryFilePath(): Promise<string> {
   if (process.env.MEMORY_FILE_PATH) {
     // Custom path provided, use it as-is (with absolute path resolution)
@@ -49,33 +56,51 @@ export async function ensureMemoryFilePath(): Promise<string> {
 // Initialize memory file path (will be set during startup)
 let MEMORY_FILE_PATH: string;
 
-// We are storing our memory using entities, relations, and observations in a graph structure
+/**
+ * Entity in the knowledge graph.
+ * Represents a node with a name, type, and associated observations.
+ */
 export interface Entity {
-  name: string;
-  entityType: string;
-  observations: string[];
+  readonly name: string;
+  readonly entityType: string;
+  readonly observations: readonly string[];
 }
 
+/**
+ * Relation between two entities in the knowledge graph.
+ * Represents a directed edge from one entity to another.
+ */
 export interface Relation {
-  from: string;
-  to: string;
-  relationType: string;
+  readonly from: string;
+  readonly to: string;
+  readonly relationType: string;
 }
 
+/**
+ * The complete knowledge graph structure.
+ * Contains all entities and their relationships.
+ */
 export interface KnowledgeGraph {
-  entities: Entity[];
-  relations: Relation[];
+  readonly entities: readonly Entity[];
+  readonly relations: readonly Relation[];
 }
 
-// The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
+/**
+ * Manages all operations for the knowledge graph.
+ * Provides methods to create, read, update, and delete entities and relations.
+ */
 export class KnowledgeGraphManager {
-  constructor(private memoryFilePath: string) {}
+  constructor(private readonly memoryFilePath: string) {}
 
+  /**
+   * Loads the knowledge graph from disk.
+   * @internal
+   */
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
       const data = await fs.readFile(this.memoryFilePath, "utf-8");
       const lines = data.split("\n").filter(line => line.trim() !== "");
-      return lines.reduce((graph: KnowledgeGraph, line) => {
+      return lines.reduce((graph: { entities: Entity[], relations: Relation[] }, line) => {
         const item = JSON.parse(line);
         if (item.type === "entity") graph.entities.push(item as Entity);
         if (item.type === "relation") graph.relations.push(item as Relation);
@@ -89,6 +114,10 @@ export class KnowledgeGraphManager {
     }
   }
 
+  /**
+   * Saves the knowledge graph to disk.
+   * @internal
+   */
   private async saveGraph(graph: KnowledgeGraph): Promise<void> {
     const lines = [
       ...graph.entities.map(e => JSON.stringify({
@@ -107,74 +136,146 @@ export class KnowledgeGraphManager {
     await fs.writeFile(this.memoryFilePath, lines.join("\n"));
   }
 
-  async createEntities(entities: Entity[]): Promise<Entity[]> {
+  /**
+   * Creates new entities in the knowledge graph.
+   * Only creates entities that don't already exist.
+   * @param entities - Array of entities to create
+   * @returns Array of newly created entities
+   */
+  async createEntities(entities: readonly Entity[]): Promise<Entity[]> {
     const graph = await this.loadGraph();
     const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
-    graph.entities.push(...newEntities);
-    await this.saveGraph(graph);
-    return newEntities;
+    const updatedGraph = {
+      entities: [...graph.entities, ...newEntities],
+      relations: [...graph.relations]
+    };
+    await this.saveGraph(updatedGraph);
+    return [...newEntities];
   }
 
-  async createRelations(relations: Relation[]): Promise<Relation[]> {
+  /**
+   * Creates new relations in the knowledge graph.
+   * Only creates relations that don't already exist.
+   * @param relations - Array of relations to create
+   * @returns Array of newly created relations
+   */
+  async createRelations(relations: readonly Relation[]): Promise<Relation[]> {
     const graph = await this.loadGraph();
-    const newRelations = relations.filter(r => !graph.relations.some(existingRelation => 
-      existingRelation.from === r.from && 
-      existingRelation.to === r.to && 
+    const newRelations = relations.filter(r => !graph.relations.some(existingRelation =>
+      existingRelation.from === r.from &&
+      existingRelation.to === r.to &&
       existingRelation.relationType === r.relationType
     ));
-    graph.relations.push(...newRelations);
-    await this.saveGraph(graph);
-    return newRelations;
+    const updatedGraph = {
+      entities: [...graph.entities],
+      relations: [...graph.relations, ...newRelations]
+    };
+    await this.saveGraph(updatedGraph);
+    return [...newRelations];
   }
 
-  async addObservations(observations: { entityName: string; contents: string[] }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
+  /**
+   * Adds observations to existing entities.
+   * Only adds observations that don't already exist for each entity.
+   * @param observations - Array of observations to add
+   * @returns Array of results showing what was added
+   * @throws {Error} If an entity is not found
+   */
+  async addObservations(observations: readonly { entityName: string; contents: readonly string[] }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
     const graph = await this.loadGraph();
-    const results = observations.map(o => {
-      const entity = graph.entities.find(e => e.name === o.entityName);
-      if (!entity) {
+    const results: { entityName: string; addedObservations: string[] }[] = [];
+    const updatedEntities = graph.entities.map(entity => {
+      const observation = observations.find(o => o.entityName === entity.name);
+      if (!observation) return entity;
+
+      const newObservations = observation.contents.filter(content => !entity.observations.includes(content));
+      results.push({ entityName: entity.name, addedObservations: [...newObservations] });
+
+      return {
+        ...entity,
+        observations: [...entity.observations, ...newObservations]
+      };
+    });
+
+    // Check if all requested entities were found
+    observations.forEach(o => {
+      if (!graph.entities.some(e => e.name === o.entityName)) {
         throw new Error(`Entity with name ${o.entityName} not found`);
       }
-      const newObservations = o.contents.filter(content => !entity.observations.includes(content));
-      entity.observations.push(...newObservations);
-      return { entityName: o.entityName, addedObservations: newObservations };
     });
-    await this.saveGraph(graph);
+
+    await this.saveGraph({
+      entities: updatedEntities,
+      relations: [...graph.relations]
+    });
     return results;
   }
 
-  async deleteEntities(entityNames: string[]): Promise<void> {
+  /**
+   * Deletes entities and all relations involving them.
+   * @param entityNames - Array of entity names to delete
+   */
+  async deleteEntities(entityNames: readonly string[]): Promise<void> {
     const graph = await this.loadGraph();
-    graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
-    graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
-    await this.saveGraph(graph);
+    const updatedGraph = {
+      entities: graph.entities.filter(e => !entityNames.includes(e.name)),
+      relations: graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to))
+    };
+    await this.saveGraph(updatedGraph);
   }
 
-  async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
+  /**
+   * Deletes specific observations from entities.
+   * @param deletions - Array of deletions specifying entity names and observations to remove
+   */
+  async deleteObservations(deletions: readonly { entityName: string; observations: readonly string[] }[]): Promise<void> {
     const graph = await this.loadGraph();
-    deletions.forEach(d => {
-      const entity = graph.entities.find(e => e.name === d.entityName);
-      if (entity) {
-        entity.observations = entity.observations.filter(o => !d.observations.includes(o));
-      }
+    const updatedEntities = graph.entities.map(entity => {
+      const deletion = deletions.find(d => d.entityName === entity.name);
+      if (!deletion) return entity;
+
+      return {
+        ...entity,
+        observations: entity.observations.filter(o => !deletion.observations.includes(o))
+      };
     });
-    await this.saveGraph(graph);
+    await this.saveGraph({
+      entities: updatedEntities,
+      relations: [...graph.relations]
+    });
   }
 
-  async deleteRelations(relations: Relation[]): Promise<void> {
+  /**
+   * Deletes specific relations from the knowledge graph.
+   * @param relations - Array of relations to delete
+   */
+  async deleteRelations(relations: readonly Relation[]): Promise<void> {
     const graph = await this.loadGraph();
-    graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
-      r.from === delRelation.from && 
-      r.to === delRelation.to && 
-      r.relationType === delRelation.relationType
-    ));
-    await this.saveGraph(graph);
+    const updatedGraph = {
+      entities: [...graph.entities],
+      relations: graph.relations.filter(r => !relations.some(delRelation =>
+        r.from === delRelation.from &&
+        r.to === delRelation.to &&
+        r.relationType === delRelation.relationType
+      ))
+    };
+    await this.saveGraph(updatedGraph);
   }
 
+  /**
+   * Reads the entire knowledge graph.
+   * @returns The complete knowledge graph
+   */
   async readGraph(): Promise<KnowledgeGraph> {
     return this.loadGraph();
   }
 
-  // Very basic search function
+  /**
+   * Searches for nodes in the knowledge graph matching a query.
+   * Searches entity names, types, and observations.
+   * @param query - The search query
+   * @returns A filtered knowledge graph containing matching entities and their relations
+   */
   async searchNodes(query: string): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
     
@@ -201,7 +302,12 @@ export class KnowledgeGraphManager {
     return filteredGraph;
   }
 
-  async openNodes(names: string[]): Promise<KnowledgeGraph> {
+  /**
+   * Opens specific nodes by name.
+   * @param names - Array of entity names to retrieve
+   * @returns A filtered knowledge graph containing the requested entities and their relations
+   */
+  async openNodes(names: readonly string[]): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
     
     // Filter entities
@@ -224,10 +330,16 @@ export class KnowledgeGraphManager {
   }
 }
 
+/**
+ * Global instance of the knowledge graph manager.
+ * @internal
+ */
 let knowledgeGraphManager: KnowledgeGraphManager;
 
-
-// The server instance and tools exposed to Claude
+/**
+ * The MCP server instance.
+ * @internal
+ */
 const server = new Server({
   name: "memory-server",
   version: "0.6.3",
@@ -464,6 +576,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+/**
+ * Main entry point for the memory server.
+ * @internal
+ */
 async function main() {
   // Initialize memory file path with backward compatibility
   MEMORY_FILE_PATH = await ensureMemoryFilePath();
