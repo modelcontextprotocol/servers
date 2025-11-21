@@ -1,6 +1,6 @@
 {
-  "name": "@modelcontextprotocol/server-memory",
-  "version": "0.6.3",
+  "name": "@roryulloa/server-memory",
+  "version": "2025.11.6",
   "description": "MCP server for enabling memory for Claude through a knowledge graph",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
@@ -24,9 +24,9 @@
   },
   "devDependencies": {
     "@types/node": "^22",
-    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/coverage-v8": "^4.0.7",
     "shx": "^0.3.4",
     "typescript": "^5.6.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.0.7"
   }
 }

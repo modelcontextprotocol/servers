@@ -19,9 +19,12 @@
     "link-all": "npm link --workspaces"
   },
   "dependencies": {
-    "@modelcontextprotocol/server-everything": "*",
-    "@modelcontextprotocol/server-memory": "*",
-    "@modelcontextprotocol/server-filesystem": "*",
-    "@modelcontextprotocol/server-sequential-thinking": "*"
+    "@roryulloa/server-everything": "^2025.11.6",
+    "@roryulloa/server-filesystem": "*",
+    "@roryulloa/server-memory": "*",
+    "@roryulloa/server-sequential-thinking": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
   }
 }

@@ -1,6 +1,6 @@
 {
-  "name": "@modelcontextprotocol/server-sequential-thinking",
-  "version": "0.6.2",
+  "name": "@roryulloa/server-sequential-thinking",
+  "version": "2025.11.6",
   "description": "MCP server for sequential thinking and problem solving",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
@@ -27,9 +27,9 @@
   "devDependencies": {
     "@types/node": "^22",
     "@types/yargs": "^17.0.32",
-    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/coverage-v8": "^4.0.7",
     "shx": "^0.3.4",
     "typescript": "^5.3.3",
-    "vitest": "^2.1.8"
+    "vitest": "^4.0.7"
   }
 }
