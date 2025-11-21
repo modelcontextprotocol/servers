@@ -17,7 +17,7 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.1.7",
-    "gitpython>=3.1.43",
+    "gitpython>=3.1.45",
     "mcp>=1.0.0",
     "pydantic>=2.0.0",
 ]
@@ -29,8 +29,8 @@ mcp-server-git = "mcp_server_git:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv]
-dev-dependencies = ["pyright>=1.1.389", "ruff>=0.7.3", "pytest>=8.0.0"]
+[dependency-groups]
+dev = ["pyright>=1.1.407", "ruff>=0.7.3", "pytest>=8.0.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
