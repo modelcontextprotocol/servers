@@ -38,6 +38,14 @@ class GitCommit(BaseModel):
     repo_path: str
     message: str
 
+class GitCommitSigned(BaseModel):
+    repo_path: str
+    message: str
+    key_id: Optional[str] = Field(
+        None,
+        description="Optional GPG key ID to use for signing. If not provided, uses the default configured GPG key."
+    )
+
 class GitAdd(BaseModel):
     repo_path: str
     files: list[str]
@@ -97,6 +105,7 @@ class GitTools(str, Enum):
     DIFF_STAGED = "git_diff_staged"
     DIFF = "git_diff"
     COMMIT = "git_commit"
+    COMMIT_SIGNED = "git_commit_signed"
     ADD = "git_add"
     RESET = "git_reset"
     LOG = "git_log"
@@ -122,6 +131,16 @@ def git_commit(repo: git.Repo, message: str) -> str:
     commit = repo.index.commit(message)
     return f"Changes committed successfully with hash {commit.hexsha}"
 
+def git_commit_signed(repo: git.Repo, message: str, key_id: str | None = None) -> str:
+    # Use the git command directly for signing support
+    if key_id:
+        repo.git.commit("-S" + key_id, "-m", message)
+    else:
+        repo.git.commit("-S", "-m", message)
+    # Get the commit hash of HEAD
+    commit_hash = repo.head.commit.hexsha
+    return f"Changes committed and signed successfully with hash {commit_hash}"
+
 def git_add(repo: git.Repo, files: list[str]) -> str:
     if files == ["."]:
         repo.git.add(".")
@@ -142,9 +161,9 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
         if end_timestamp:
             args.extend(['--until', end_timestamp])
         args.extend(['--format=%H%n%an%n%ad%n%s%n'])
-        
+
         log_output = repo.git.log(*args).split('\n')
-        
+
         log = []
         # Process commits in groups of 4 (hash, author, date, message)
         for i in range(0, len(log_output), 4):
@@ -273,6 +292,11 @@ async def serve(repository: Path | None) -> None:
                 inputSchema=GitCommit.model_json_schema(),
             ),
             Tool(
+                name=GitTools.COMMIT_SIGNED,
+                description="Records changes to the repository with GPG signature",
+                inputSchema=GitCommitSigned.model_json_schema(),
+            ),
+            Tool(
                 name=GitTools.ADD,
                 description="Adds file contents to the staging area",
                 inputSchema=GitAdd.model_json_schema(),
@@ -343,7 +367,7 @@ async def serve(repository: Path | None) -> None:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         repo_path = Path(arguments["repo_path"])
-        
+
         # For all commands, we need an existing repo
         repo = git.Repo(repo_path)
 
@@ -383,6 +407,17 @@ async def serve(repository: Path | None) -> None:
                     text=result
                 )]
 
+            case GitTools.COMMIT_SIGNED:
+                result = git_commit_signed(
+                    repo,
+                    arguments["message"],
+                    arguments.get("key_id")
+                )
+                return [TextContent(
+                    type="text",
+                    text=result
+                )]
+
             case GitTools.ADD:
                 result = git_add(repo, arguments["files"])
                 return [TextContent(
@@ -400,7 +435,7 @@ async def serve(repository: Path | None) -> None:
             # Update the LOG case:
             case GitTools.LOG:
                 log = git_log(
-                    repo, 
+                    repo,
                     arguments.get("max_count", 10),
                     arguments.get("start_timestamp"),
                     arguments.get("end_timestamp")
@@ -409,7 +444,7 @@ async def serve(repository: Path | None) -> None:
                     type="text",
                     text="Commit history:\n" + "\n".join(log)
                 )]
-            
+
             case GitTools.CREATE_BRANCH:
                 result = git_create_branch(
                     repo,
@@ -446,7 +481,7 @@ async def serve(repository: Path | None) -> None:
                     type="text",
                     text=result
                 )]
-            
+
             case _:
                 raise ValueError(f"Unknown tool: {name}")
 
