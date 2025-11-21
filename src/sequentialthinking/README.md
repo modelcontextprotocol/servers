@@ -132,6 +132,16 @@ For Docker installation:
 }
 ```
 
+### Usage with Codex CLI
+
+Run the following:
+
+#### npx
+
+```bash
+codex mcp add sequential-thinking npx -y @modelcontextprotocol/server-sequential-thinking
+```
+
 ## Building
 
 Docker:
