@@ -57,6 +57,18 @@ class GitLog(BaseModel):
         description="End timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')"
     )
 
+class GitLogDetail(BaseModel):
+    repo_path: str
+    max_count: int = 10
+    start_timestamp: Optional[str] = Field(
+        None,
+        description="Start timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')"
+    )
+    end_timestamp: Optional[str] = Field(
+        None,
+        description="End timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')"
+    )
+
 class GitCreateBranch(BaseModel):
     repo_path: str
     branch_name: str
@@ -103,6 +115,7 @@ class GitTools(str, Enum):
     CREATE_BRANCH = "git_create_branch"
     CHECKOUT = "git_checkout"
     SHOW = "git_show"
+    LOG_DETAIL = "git_log_detail"
 
     BRANCH = "git_branch"
 
@@ -168,6 +181,15 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
                 f"Message: {commit.message!r}\n"
             )
         return log
+
+def git_log_detail(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] = None, end_timestamp: Optional[str] = None) -> str:
+    args = [f'--max-count={max_count}', '--patch-with-stat']
+    if start_timestamp:
+        args.extend(['--since', start_timestamp])
+    if end_timestamp:
+        args.extend(['--until', end_timestamp])
+    
+    return repo.git.log(*args)
 
 def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None = None) -> str:
     if base_branch:
@@ -286,6 +308,11 @@ async def serve(repository: Path | None) -> None:
                 name=GitTools.LOG,
                 description="Shows the commit logs",
                 inputSchema=GitLog.model_json_schema(),
+            ),
+            Tool(
+                name=GitTools.LOG_DETAIL,
+                description="Shows the commit logs with diffs",
+                inputSchema=GitLogDetail.model_json_schema(),
             ),
             Tool(
                 name=GitTools.CREATE_BRANCH,
@@ -409,7 +436,19 @@ async def serve(repository: Path | None) -> None:
                     type="text",
                     text="Commit history:\n" + "\n".join(log)
                 )]
-            
+
+            case GitTools.LOG_DETAIL:
+                log = git_log_detail(
+                    repo,
+                    arguments.get("max_count", 10),
+                    arguments.get("start_timestamp"),
+                    arguments.get("end_timestamp"),
+                )
+                return [TextContent(
+                    type="text",
+                    text=f"Commit logs with diffs:\n{log}"
+                )]
+
             case GitTools.CREATE_BRANCH:
                 result = git_create_branch(
                     repo,
