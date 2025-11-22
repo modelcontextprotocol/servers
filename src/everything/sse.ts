@@ -35,7 +35,7 @@ app.get("/sse", async (req, res) => {
     startNotificationIntervals(transport.sessionId);
 
     // Handle close of connection
-    server.onclose = async () => {
+    transport.onclose = async () => {
       console.error("Client Disconnected: ", transport.sessionId);
       transports.delete(transport.sessionId);
       await cleanup();

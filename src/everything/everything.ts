@@ -1,4 +1,4 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import {
   CallToolRequestSchema,
@@ -8,24 +8,16 @@ import {
   CreateMessageResultSchema,
   ElicitResultSchema,
   GetPromptRequestSchema,
-  ListPromptsRequestSchema,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ListToolsRequestSchema,
   LoggingLevel,
-  ReadResourceRequestSchema,
   Resource,
   RootsListChangedNotificationSchema,
   ServerNotification,
   ServerRequest,
   SubscribeRequestSchema,
-  Tool,
-  ToolSchema,
   UnsubscribeRequestSchema,
   type Root
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -34,12 +26,6 @@ import JSZip from "jszip";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const instructions = readFileSync(join(__dirname, "instructions.md"), "utf-8");
-
-const ToolInputSchema = ToolSchema.shape.inputSchema;
-type ToolInput = z.infer<typeof ToolInputSchema>;
-
-const ToolOutputSchema = ToolSchema.shape.outputSchema;
-type ToolOutput = z.infer<typeof ToolOutputSchema>;
 
 type SendRequest = RequestHandlerExtra<ServerRequest, ServerNotification>["sendRequest"];
 
@@ -163,20 +149,13 @@ const EXAMPLE_COMPLETIONS = {
 };
 
 export const createServer = () => {
-  const server = new Server(
+  const server = new McpServer(
     {
       name: "example-servers/everything",
       title: "Everything Example Server",
       version: "1.0.0",
     },
     {
-      capabilities: {
-        prompts: {},
-        resources: { subscribe: true },
-        tools: {},
-        logging: {},
-        completions: {}
-      },
       instructions
     }
   );
@@ -200,7 +179,7 @@ export const createServer = () => {
       if (!subsUpdateInterval) {
         subsUpdateInterval = setInterval(() => {
           for (const uri of subscriptions) {
-            server.notification({
+            server.server.notification({
               method: "notifications/resources/updated",
               params: { uri },
             });
@@ -223,7 +202,7 @@ export const createServer = () => {
       if (!logsUpdateInterval) {
           console.error("Starting logs update interval");
           logsUpdateInterval = setInterval(async () => {
-          await server.sendLoggingMessage( messages[Math.floor(Math.random() * messages.length)], sessionId);
+          await server.sendLoggingMessage(messages[Math.floor(Math.random() * messages.length)]);
       }, 15000);
     }
   };
@@ -278,155 +257,154 @@ export const createServer = () => {
     }
   });
 
-  const PAGE_SIZE = 10;
+  // Register all 100 resources individually so they appear in listings
+  for (let i = 0; i < ALL_RESOURCES.length; i++) {
+    const resource = ALL_RESOURCES[i];
+    const resourceId = i + 1;
 
-  server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
-    const cursor = request.params?.cursor;
-    let startIndex = 0;
-
-    if (cursor) {
-      const decodedCursor = parseInt(atob(cursor), 10);
-      if (!isNaN(decodedCursor)) {
-        startIndex = decodedCursor;
+    server.registerResource(
+      `static-resource-${resourceId}`,
+      resource.uri,
+      {
+        name: resource.name,
+        description: `Resource ${resourceId}: ${resource.mimeType === "text/plain" ? "plaintext resource" : "binary blob resource"}`,
+        mimeType: resource.mimeType,
+      },
+      async () => {
+        // Build the resource contents based on type
+        if ('text' in resource && resource.text) {
+          return {
+            contents: [{
+              uri: resource.uri,
+              mimeType: resource.mimeType,
+              text: resource.text as string,
+            }],
+          };
+        } else if ('blob' in resource && resource.blob) {
+          return {
+            contents: [{
+              uri: resource.uri,
+              mimeType: resource.mimeType,
+              blob: resource.blob as string,
+            }],
+          };
+        }
+        throw new Error(`Resource ${resource.uri} has neither text nor blob`);
       }
-    }
+    );
+  }
 
-    const endIndex = Math.min(startIndex + PAGE_SIZE, ALL_RESOURCES.length);
-    const resources = ALL_RESOURCES.slice(startIndex, endIndex);
+  // Also register a template for the same pattern to support dynamic access
+  server.registerResource(
+    'static-resources-template',
+    new ResourceTemplate('test://static/resource/{id}', { list: undefined }),
+    {
+      description: 'A static test resource with a numeric ID',
+    },
+    async (uri, variables) => {
+      const id = Array.isArray(variables.id) ? variables.id[0] : variables.id;
+      const index = parseInt(id, 10) - 1;
 
-    let nextCursor: string | undefined;
-    if (endIndex < ALL_RESOURCES.length) {
-      nextCursor = btoa(endIndex.toString());
-    }
-
-    return {
-      resources,
-      nextCursor,
-    };
-  });
-
-  server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => {
-    return {
-      resourceTemplates: [
-        {
-          uriTemplate: "test://static/resource/{id}",
-          name: "Static Resource",
-          description: "A static resource with a numeric ID",
-        },
-      ],
-    };
-  });
-
-  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    const uri = request.params.uri;
-
-    if (uri.startsWith("test://static/resource/")) {
-      const index = parseInt(uri.split("/").pop() ?? "", 10) - 1;
       if (index >= 0 && index < ALL_RESOURCES.length) {
         const resource = ALL_RESOURCES[index];
-        return {
-          contents: [resource],
-        };
+        // Build the resource contents based on type
+        if ('text' in resource && resource.text) {
+          return {
+            contents: [{
+              uri: resource.uri,
+              mimeType: resource.mimeType,
+              text: resource.text as string,
+            }],
+          };
+        } else if ('blob' in resource && resource.blob) {
+          return {
+            contents: [{
+              uri: resource.uri,
+              mimeType: resource.mimeType,
+              blob: resource.blob as string,
+            }],
+          };
+        }
       }
+
+      throw new Error(`Unknown resource: ${uri.href}`);
     }
+  );
 
-    throw new Error(`Unknown resource: ${uri}`);
-  });
-
-  server.setRequestHandler(SubscribeRequestSchema, async (request, extra) => {
+  server.server.setRequestHandler(SubscribeRequestSchema, async (request, extra) => {
     const { uri } = request.params;
     subscriptions.add(uri);
     return {};
   });
 
-  server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
+  server.server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
     subscriptions.delete(request.params.uri);
     return {};
   });
 
-  server.setRequestHandler(ListPromptsRequestSchema, async () => {
-    return {
-      prompts: [
+  // Prompts with simple content can use registerPrompt, but those with resource content need setRequestHandler
+  // Register simple and complex prompts
+  server.registerPrompt(
+    PromptName.SIMPLE,
+    {
+      title: "Simple Prompt",
+      description: "A prompt without arguments",
+      argsSchema: {}
+    },
+    () => ({
+      messages: [
         {
-          name: PromptName.SIMPLE,
-          description: "A prompt without arguments",
-        },
-        {
-          name: PromptName.COMPLEX,
-          description: "A prompt with arguments",
-          arguments: [
-            {
-              name: "temperature",
-              description: "Temperature setting",
-              required: true,
-            },
-            {
-              name: "style",
-              description: "Output style",
-              required: false,
-            },
-          ],
-        },
-        {
-          name: PromptName.RESOURCE,
-          description: "A prompt that includes an embedded resource reference",
-          arguments: [
-            {
-              name: "resourceId",
-              description: "Resource ID to include (1-100)",
-              required: true,
-            },
-          ],
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: "This is a simple prompt without arguments.",
+          },
         },
       ],
-    };
-  });
+    })
+  );
 
-  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+  server.registerPrompt(
+    PromptName.COMPLEX,
+    {
+      title: "Complex Prompt",
+      description: "A prompt with arguments",
+      argsSchema: {
+        temperature: z.string().describe("Temperature setting"),
+        style: z.string().optional().describe("Output style"),
+      }
+    },
+    (args) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: `This is a complex prompt with arguments: temperature=${args.temperature}, style=${args.style}`,
+          },
+        },
+        {
+          role: "assistant" as const,
+          content: {
+            type: "text" as const,
+            text: "I understand. You've provided a complex prompt with temperature and style arguments. How would you like me to proceed?",
+          },
+        },
+        {
+          role: "user" as const,
+          content: {
+            type: "image" as const,
+            data: MCP_TINY_IMAGE,
+            mimeType: "image/png",
+          },
+        },
+      ],
+    })
+  );
+
+  // Resource prompt must use setRequestHandler for now due to type compatibility issues
+  server.server.setRequestHandler(GetPromptRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-
-    if (name === PromptName.SIMPLE) {
-      return {
-        messages: [
-          {
-            role: "user",
-            content: {
-              type: "text",
-              text: "This is a simple prompt without arguments.",
-            },
-          },
-        ],
-      };
-    }
-
-    if (name === PromptName.COMPLEX) {
-      return {
-        messages: [
-          {
-            role: "user",
-            content: {
-              type: "text",
-              text: `This is a complex prompt with arguments: temperature=${args?.temperature}, style=${args?.style}`,
-            },
-          },
-          {
-            role: "assistant",
-            content: {
-              type: "text",
-              text: "I understand. You've provided a complex prompt with temperature and style arguments. How would you like me to proceed?",
-            },
-          },
-          {
-            role: "user",
-            content: {
-              type: "image",
-              data: MCP_TINY_IMAGE,
-              mimeType: "image/png",
-            },
-          },
-        ],
-      };
-    }
 
     if (name === PromptName.RESOURCE) {
       const resourceId = parseInt(args?.resourceId as string, 10);
@@ -442,16 +420,16 @@ export const createServer = () => {
       return {
         messages: [
           {
-            role: "user",
+            role: "user" as const,
             content: {
-              type: "text",
+              type: "text" as const,
               text: `This prompt includes Resource ${resourceId}. Please analyze the following resource:`,
             },
           },
           {
-            role: "user",
+            role: "user" as const,
             content: {
-              type: "resource",
+              type: "resource" as const,
               resource: resource,
             },
           },
@@ -462,114 +440,298 @@ export const createServer = () => {
     throw new Error(`Unknown prompt: ${name}`);
   });
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const tools: Tool[] = [
-      {
-        name: ToolName.ECHO,
-        description: "Echoes back the input",
-        inputSchema: zodToJsonSchema(EchoSchema) as ToolInput,
-      },
-      {
-        name: ToolName.ADD,
-        description: "Adds two numbers",
-        inputSchema: zodToJsonSchema(AddSchema) as ToolInput,
-      },
-      {
-        name: ToolName.LONG_RUNNING_OPERATION,
-        description:
-          "Demonstrates a long running operation with progress updates",
-        inputSchema: zodToJsonSchema(LongRunningOperationSchema) as ToolInput,
-      },
-      {
-        name: ToolName.PRINT_ENV,
-        description:
-          "Prints all environment variables, helpful for debugging MCP server configuration",
-        inputSchema: zodToJsonSchema(PrintEnvSchema) as ToolInput,
-      },
-      {
-        name: ToolName.SAMPLE_LLM,
-        description: "Samples from an LLM using MCP's sampling feature",
-        inputSchema: zodToJsonSchema(SampleLLMSchema) as ToolInput,
-      },
-      {
-        name: ToolName.GET_TINY_IMAGE,
-        description: "Returns the MCP_TINY_IMAGE",
-        inputSchema: zodToJsonSchema(GetTinyImageSchema) as ToolInput,
-      },
-      {
-        name: ToolName.ANNOTATED_MESSAGE,
-        description:
-          "Demonstrates how annotations can be used to provide metadata about content",
-        inputSchema: zodToJsonSchema(AnnotatedMessageSchema) as ToolInput,
-      },
-      {
-        name: ToolName.GET_RESOURCE_REFERENCE,
-        description:
-          "Returns a resource reference that can be used by MCP clients",
-        inputSchema: zodToJsonSchema(GetResourceReferenceSchema) as ToolInput,
-      },
-      {
-        name: ToolName.GET_RESOURCE_LINKS,
-        description:
-          "Returns multiple resource links that reference different types of resources",
-        inputSchema: zodToJsonSchema(GetResourceLinksSchema) as ToolInput,
-      },
-      {
-        name: ToolName.STRUCTURED_CONTENT,
-        description:
-          "Returns structured content along with an output schema for client data validation",
-        inputSchema: zodToJsonSchema(StructuredContentSchema.input) as ToolInput,
-        outputSchema: zodToJsonSchema(StructuredContentSchema.output) as ToolOutput,
-      },
-      {
-        name: ToolName.ZIP_RESOURCES,
-        description: "Compresses the provided resource files (mapping of name to URI, which can be a data URI) to a zip file, which it returns as a data URI resource link.",
-        inputSchema: zodToJsonSchema(ZipResourcesInputSchema) as ToolInput,
-      }
-    ];
-    if (clientCapabilities!.roots) tools.push ({
-        name: ToolName.LIST_ROOTS,
-        description:
-            "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files.",
-        inputSchema: zodToJsonSchema(ListRootsSchema) as ToolInput,
-    });
-    if (clientCapabilities!.elicitation) tools.push ({
-        name: ToolName.ELICITATION,
-        description: "Elicitation test tool that demonstrates how to request user input with various field types (string, boolean, email, uri, date, integer, number, enum)",
-        inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
-    });
-
-    return { tools };
-  });
-
-  server.setRequestHandler(CallToolRequestSchema, async (request,extra) => {
-    const { name, arguments: args } = request.params;
-
-    if (name === ToolName.ECHO) {
-      const validatedArgs = EchoSchema.parse(args);
+  // Register tools using modern API
+  server.registerTool(
+    ToolName.ECHO,
+    {
+      title: "Echo",
+      description: "Echoes back the input",
+      inputSchema: EchoSchema.shape,
+    },
+    async (args) => {
       return {
-        content: [{ type: "text", text: `Echo: ${validatedArgs.message}` }],
+        content: [{ type: "text" as const, text: `Echo: ${args.message}` }],
       };
     }
+  );
 
-    if (name === ToolName.ADD) {
-      const validatedArgs = AddSchema.parse(args);
-      const sum = validatedArgs.a + validatedArgs.b;
+  server.registerTool(
+    ToolName.ADD,
+    {
+      title: "Add",
+      description: "Adds two numbers",
+      inputSchema: AddSchema.shape,
+    },
+    async (args) => {
+      const sum = args.a + args.b;
       return {
         content: [
           {
-            type: "text",
-            text: `The sum of ${validatedArgs.a} and ${validatedArgs.b} is ${sum}.`,
+            type: "text" as const,
+            text: `The sum of ${args.a} and ${args.b} is ${sum}.`,
           },
         ],
       };
     }
+  );
 
-    if (name === ToolName.LONG_RUNNING_OPERATION) {
-      const validatedArgs = LongRunningOperationSchema.parse(args);
-      const { duration, steps } = validatedArgs;
+  server.registerTool(
+    ToolName.PRINT_ENV,
+    {
+      title: "Print Environment",
+      description: "Prints all environment variables, helpful for debugging MCP server configuration",
+      inputSchema: PrintEnvSchema.shape,
+    },
+    async () => {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(process.env, null, 2),
+          },
+        ],
+      };
+    }
+  );
+
+  server.registerTool(
+    ToolName.GET_TINY_IMAGE,
+    {
+      title: "Get Tiny Image",
+      description: "Returns the MCP_TINY_IMAGE",
+      inputSchema: GetTinyImageSchema.shape,
+    },
+    async () => {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: "This is a tiny image:",
+          },
+          {
+            type: "image" as const,
+            data: MCP_TINY_IMAGE,
+            mimeType: "image/png",
+          },
+          {
+            type: "text" as const,
+            text: "The image above is the MCP tiny image.",
+          },
+        ],
+      };
+    }
+  );
+
+  server.registerTool(
+    ToolName.ANNOTATED_MESSAGE,
+    {
+      title: "Annotated Message",
+      description: "Demonstrates how annotations can be used to provide metadata about content",
+      inputSchema: AnnotatedMessageSchema.shape,
+    },
+    async (args) => {
+      const { messageType, includeImage } = args;
+      const content: any[] = [];
+
+      // Main message with different priorities/audiences based on type
+      if (messageType === "error") {
+        content.push({
+          type: "text" as const,
+          text: "Error: Operation failed",
+          annotations: {
+            priority: 1.0, // Errors are highest priority
+            audience: ["user", "assistant"], // Both need to know about errors
+          },
+        });
+      } else if (messageType === "success") {
+        content.push({
+          type: "text" as const,
+          text: "Operation completed successfully",
+          annotations: {
+            priority: 0.7, // Success messages are important but not critical
+            audience: ["user"], // Success mainly for user consumption
+          },
+        });
+      } else if (messageType === "debug") {
+        content.push({
+          type: "text" as const,
+          text: "Debug: Cache hit ratio 0.95, latency 150ms",
+          annotations: {
+            priority: 0.3, // Debug info is low priority
+            audience: ["assistant"], // Technical details for assistant
+          },
+        });
+      }
+
+      // Optional image with its own annotations
+      if (includeImage) {
+        content.push({
+          type: "image" as const,
+          data: MCP_TINY_IMAGE,
+          mimeType: "image/png",
+          annotations: {
+            priority: 0.5,
+            audience: ["user"], // Images primarily for user visualization
+          },
+        });
+      }
+
+      return { content };
+    }
+  );
+
+  server.registerTool(
+    ToolName.GET_RESOURCE_LINKS,
+    {
+      title: "Get Resource Links",
+      description: "Returns multiple resource links that reference different types of resources",
+      inputSchema: GetResourceLinksSchema.shape,
+    },
+    async (args) => {
+      const { count } = args;
+      const content: any[] = [];
+
+      // Add intro text
+      content.push({
+        type: "text" as const,
+        text: `Here are ${count} resource links to resources available in this server (see full output in tool response if your client does not support resource_link yet):`,
+      });
+
+      // Return resource links to actual resources from ALL_RESOURCES
+      const actualCount = Math.min(count, ALL_RESOURCES.length);
+      for (let i = 0; i < actualCount; i++) {
+        const resource = ALL_RESOURCES[i];
+        content.push({
+          type: "resource_link" as const,
+          uri: resource.uri,
+          name: resource.name,
+          description: `Resource ${i + 1}: ${resource.mimeType === "text/plain"
+            ? "plaintext resource"
+            : "binary blob resource"
+            }`,
+          mimeType: resource.mimeType,
+        });
+      }
+
+      return { content };
+    }
+  );
+
+  server.registerTool(
+    ToolName.STRUCTURED_CONTENT,
+    {
+      title: "Structured Content",
+      description: "Returns structured content along with an output schema for client data validation",
+      inputSchema: StructuredContentSchema.input.shape,
+      outputSchema: StructuredContentSchema.output.shape,
+    },
+    async (args) => {
+      // The same response is returned for every input.
+      const weather = {
+        temperature: 22.5,
+        conditions: "Partly cloudy",
+        humidity: 65
+      }
+
+      const backwardCompatiblecontent = {
+        type: "text" as const,
+        text: JSON.stringify(weather)
+      }
+
+      return {
+        content: [backwardCompatiblecontent],
+        structuredContent: weather
+      };
+    }
+  );
+
+  server.registerTool(
+    ToolName.ZIP_RESOURCES,
+    {
+      title: "Zip Resources",
+      description: "Compresses the provided resource files (mapping of name to URI, which can be a data URI) to a zip file, which it returns as a data URI resource link.",
+      inputSchema: ZipResourcesInputSchema.shape,
+    },
+    async (args) => {
+      const { files } = args;
+
+      const zip = new JSZip();
+
+      for (const [fileName, fileUrl] of Object.entries(files)) {
+        try {
+          const response = await fetch(fileUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch ${fileUrl}: ${response.statusText}`);
+          }
+          const arrayBuffer = await response.arrayBuffer();
+          zip.file(fileName, arrayBuffer);
+        } catch (error) {
+          throw new Error(`Error fetching file ${fileUrl}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
+      const uri = `data:application/zip;base64,${await zip.generateAsync({ type: "base64" })}`;
+
+      return {
+        content: [
+          {
+            type: "resource_link" as const,
+            uri,
+            name: "compressed.zip",
+            mimeType: "application/zip",
+          },
+        ],
+      };
+    }
+  );
+
+  server.registerTool(
+    ToolName.GET_RESOURCE_REFERENCE,
+    {
+      title: "Get Resource Reference",
+      description: "Returns a resource reference that can be read by the client",
+      inputSchema: GetResourceReferenceSchema.shape,
+    },
+    async (args, extra) => {
+      const resourceId = args.resourceId;
+
+      const resourceIndex = resourceId - 1;
+      if (resourceIndex < 0 || resourceIndex >= ALL_RESOURCES.length) {
+        throw new Error(`Resource with ID ${resourceId} does not exist`);
+      }
+
+      const resource = ALL_RESOURCES[resourceIndex];
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Returning resource reference for Resource ${resourceId}:`,
+          },
+          {
+            type: "resource" as const,
+            resource: resource as any,
+          },
+          {
+            type: "text" as const,
+            text: `You can access this resource using the URI: ${resource.uri}`,
+          },
+        ],
+      };
+    }
+  );
+
+  server.registerTool(
+    ToolName.LONG_RUNNING_OPERATION,
+    {
+      title: "Long Running Operation",
+      description: "Demonstrates a long running operation with progress notifications",
+      inputSchema: LongRunningOperationSchema.shape,
+    },
+    async (args, extra) => {
+      const { duration, steps } = args;
       const stepDuration = duration / steps;
-      const progressToken = request.params._meta?.progressToken;
+      const progressToken = extra._meta?.progressToken;
 
       for (let i = 1; i < steps + 1; i++) {
         await new Promise((resolve) =>
@@ -577,7 +739,7 @@ export const createServer = () => {
         );
 
         if (progressToken !== undefined) {
-          await server.notification({
+          await server.server.notification({
             method: "notifications/progress",
             params: {
               progress: i,
@@ -591,27 +753,23 @@ export const createServer = () => {
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: `Long running operation completed. Duration: ${duration} seconds, Steps: ${steps}.`,
           },
         ],
       };
     }
+  );
 
-    if (name === ToolName.PRINT_ENV) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(process.env, null, 2),
-          },
-        ],
-      };
-    }
-
-    if (name === ToolName.SAMPLE_LLM) {
-      const validatedArgs = SampleLLMSchema.parse(args);
-      const { prompt, maxTokens } = validatedArgs;
+  server.registerTool(
+    ToolName.SAMPLE_LLM,
+    {
+      title: "Sample LLM",
+      description: "Requests the client to sample from an LLM",
+      inputSchema: SampleLLMSchema.shape,
+    },
+    async (args, extra) => {
+      const { prompt, maxTokens } = args;
 
       const result = await requestSampling(
         prompt,
@@ -621,115 +779,20 @@ export const createServer = () => {
       );
       return {
         content: [
-          { type: "text", text: `LLM sampling result: ${result.content.text}` },
+          { type: "text" as const, text: `LLM sampling result: ${result.content.text}` },
         ],
       };
     }
+  );
 
-    if (name === ToolName.GET_TINY_IMAGE) {
-      GetTinyImageSchema.parse(args);
-      return {
-        content: [
-          {
-            type: "text",
-            text: "This is a tiny image:",
-          },
-          {
-            type: "image",
-            data: MCP_TINY_IMAGE,
-            mimeType: "image/png",
-          },
-          {
-            type: "text",
-            text: "The image above is the MCP tiny image.",
-          },
-        ],
-      };
-    }
-
-    if (name === ToolName.ANNOTATED_MESSAGE) {
-      const { messageType, includeImage } = AnnotatedMessageSchema.parse(args);
-
-      const content = [];
-
-      // Main message with different priorities/audiences based on type
-      if (messageType === "error") {
-        content.push({
-          type: "text",
-          text: "Error: Operation failed",
-          annotations: {
-            priority: 1.0, // Errors are highest priority
-            audience: ["user", "assistant"], // Both need to know about errors
-          },
-        });
-      } else if (messageType === "success") {
-        content.push({
-          type: "text",
-          text: "Operation completed successfully",
-          annotations: {
-            priority: 0.7, // Success messages are important but not critical
-            audience: ["user"], // Success mainly for user consumption
-          },
-        });
-      } else if (messageType === "debug") {
-        content.push({
-          type: "text",
-          text: "Debug: Cache hit ratio 0.95, latency 150ms",
-          annotations: {
-            priority: 0.3, // Debug info is low priority
-            audience: ["assistant"], // Technical details for assistant
-          },
-        });
-      }
-
-      // Optional image with its own annotations
-      if (includeImage) {
-        content.push({
-          type: "image",
-          data: MCP_TINY_IMAGE,
-          mimeType: "image/png",
-          annotations: {
-            priority: 0.5,
-            audience: ["user"], // Images primarily for user visualization
-          },
-        });
-      }
-
-      return { content };
-    }
-
-    if (name === ToolName.GET_RESOURCE_REFERENCE) {
-      const validatedArgs = GetResourceReferenceSchema.parse(args);
-      const resourceId = validatedArgs.resourceId;
-
-      const resourceIndex = resourceId - 1;
-      if (resourceIndex < 0 || resourceIndex >= ALL_RESOURCES.length) {
-        throw new Error(`Resource with ID ${resourceId} does not exist`);
-      }
-
-      const resource = ALL_RESOURCES[resourceIndex];
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Returning resource reference for Resource ${resourceId}:`,
-          },
-          {
-            type: "resource",
-            resource: resource,
-          },
-          {
-            type: "text",
-            text: `You can access this resource using the URI: ${resource.uri}`,
-          },
-        ],
-      };
-    }
-
-    if (name === ToolName.ELICITATION) {
-      ElicitationSchema.parse(args);
-
+  server.registerTool(
+    ToolName.ELICITATION,
+    {
+      title: "Start Elicitation",
+      description: "Demonstrates client-side user input collection via elicitation",
+      inputSchema: ElicitationSchema.shape,
+    },
+    async (args, extra) => {
       const elicitationResult = await extra.sendRequest({
         method: 'elicitation/create',
         params: {
@@ -801,11 +864,11 @@ export const createServer = () => {
       }, ElicitResultSchema, { timeout: 10 * 60 * 1000 /* 10 minutes */ });
 
       // Handle different response actions
-      const content = [];
+      const content: any[] = [];
 
       if (elicitationResult.action === 'accept' && elicitationResult.content) {
         content.push({
-          type: "text",
+          type: "text" as const,
           text: `✅ User provided the requested information!`,
         });
 
@@ -823,119 +886,44 @@ export const createServer = () => {
         if (userData.petType) lines.push(`- Pet Type: ${userData.petType}`);
 
         content.push({
-          type: "text",
+          type: "text" as const,
           text: `User inputs:\n${lines.join('\n')}`,
         });
       } else if (elicitationResult.action === 'decline') {
         content.push({
-          type: "text",
+          type: "text" as const,
           text: `❌ User declined to provide the requested information.`,
         });
       } else if (elicitationResult.action === 'cancel') {
         content.push({
-          type: "text",
+          type: "text" as const,
           text: `⚠️ User cancelled the elicitation dialog.`,
         });
       }
 
       // Include raw result for debugging
       content.push({
-        type: "text",
+        type: "text" as const,
         text: `\nRaw result: ${JSON.stringify(elicitationResult, null, 2)}`,
       });
 
       return { content };
     }
+  );
 
-    if (name === ToolName.GET_RESOURCE_LINKS) {
-      const { count } = GetResourceLinksSchema.parse(args);
-      const content = [];
-
-      // Add intro text
-      content.push({
-        type: "text",
-        text: `Here are ${count} resource links to resources available in this server (see full output in tool response if your client does not support resource_link yet):`,
-      });
-
-      // Return resource links to actual resources from ALL_RESOURCES
-      const actualCount = Math.min(count, ALL_RESOURCES.length);
-      for (let i = 0; i < actualCount; i++) {
-        const resource = ALL_RESOURCES[i];
-        content.push({
-          type: "resource_link",
-          uri: resource.uri,
-          name: resource.name,
-          description: `Resource ${i + 1}: ${resource.mimeType === "text/plain"
-            ? "plaintext resource"
-            : "binary blob resource"
-            }`,
-          mimeType: resource.mimeType,
-        });
-      }
-
-      return { content };
-    }
-
-    if (name === ToolName.STRUCTURED_CONTENT) {
-      // The same response is returned for every input.
-      const validatedArgs = StructuredContentSchema.input.parse(args);
-
-      const weather = {
-        temperature: 22.5,
-        conditions: "Partly cloudy",
-        humidity: 65
-      }
-
-      const backwardCompatiblecontent = {
-        type: "text",
-        text: JSON.stringify(weather)
-      }
-
-      return {
-        content: [backwardCompatiblecontent],
-        structuredContent: weather
-      };
-    }
-
-    if (name === ToolName.ZIP_RESOURCES) {
-      const { files } = ZipResourcesInputSchema.parse(args);
-
-      const zip = new JSZip();
-
-      for (const [fileName, fileUrl] of Object.entries(files)) {
-        try {
-          const response = await fetch(fileUrl);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch ${fileUrl}: ${response.statusText}`);
-          }
-          const arrayBuffer = await response.arrayBuffer();
-          zip.file(fileName, arrayBuffer);
-        } catch (error) {
-          throw new Error(`Error fetching file ${fileUrl}: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
-
-      const uri = `data:application/zip;base64,${await zip.generateAsync({ type: "base64" })}`;
-
-      return {
-        content: [
-          {
-            type: "resource_link",
-            mimeType: "application/zip",
-            uri,
-          },
-        ],
-      };
-    }
-
-    if (name === ToolName.LIST_ROOTS) {
-      ListRootsSchema.parse(args);
-
+  server.registerTool(
+    ToolName.LIST_ROOTS,
+    {
+      title: "List Roots",
+      description: "Lists the root directories provided by the MCP client",
+      inputSchema: ListRootsSchema.shape,
+    },
+    async (args, extra) => {
       if (!clientSupportsRoots) {
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: "The MCP client does not support the roots protocol.\n\n" +
                 "This means the server cannot access information about the client's workspace directories or file system roots."
             }
@@ -947,7 +935,7 @@ export const createServer = () => {
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: "The client supports roots but no roots are currently configured.\n\n" +
                 "This could mean:\n" +
                 "1. The client hasn't provided any roots yet\n" +
@@ -965,7 +953,7 @@ export const createServer = () => {
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: `Current MCP Roots (${currentRoots.length} total):\n\n${rootsList}\n\n` +
               "Note: This server demonstrates the roots protocol capability but doesn't actually access files. " +
               "The roots are provided by the MCP client and can be used by servers that need file system access."
@@ -973,11 +961,9 @@ export const createServer = () => {
         ]
       };
     }
+  );
 
-    throw new Error(`Unknown tool: ${name}`);
-  });
-
-  server.setRequestHandler(CompleteRequestSchema, async (request) => {
+  server.server.setRequestHandler(CompleteRequestSchema, async (request) => {
     const { ref, argument } = request.params;
 
     if (ref.type === "ref/resource") {
@@ -1007,10 +993,10 @@ export const createServer = () => {
   });
 
   // Roots protocol handlers
-  server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+  server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
     try {
       // Request the updated roots list from the client
-      const response = await server.listRoots();
+      const response = await server.server.listRoots();
       if (response && 'roots' in response) {
         currentRoots = response.roots;
 
@@ -1019,25 +1005,25 @@ export const createServer = () => {
             level: "info",
             logger: "everything-server",
             data: `Roots updated: ${currentRoots.length} root(s) received from client`,
-        }, sessionId);
+        });
       }
     } catch (error) {
       await server.sendLoggingMessage({
           level: "error",
           logger: "everything-server",
           data: `Failed to request roots from client: ${error instanceof Error ? error.message : String(error)}`,
-      }, sessionId);
+      });
     }
   });
 
   // Handle post-initialization setup for roots
-  server.oninitialized = async () => {
-   clientCapabilities = server.getClientCapabilities();
+  server.server.oninitialized = async () => {
+   clientCapabilities = server.server.getClientCapabilities();
 
     if (clientCapabilities?.roots) {
       clientSupportsRoots = true;
       try {
-        const response = await server.listRoots();
+        const response = await server.server.listRoots();
         if (response && 'roots' in response) {
           currentRoots = response.roots;
 
@@ -1045,27 +1031,27 @@ export const createServer = () => {
               level: "info",
               logger: "everything-server",
               data: `Initial roots received: ${currentRoots.length} root(s) from client`,
-          }, sessionId);
+          });
         } else {
           await server.sendLoggingMessage({
               level: "warning",
               logger: "everything-server",
               data: "Client returned no roots set",
-          }, sessionId);
+          });
         }
       } catch (error) {
         await server.sendLoggingMessage({
             level: "error",
             logger: "everything-server",
             data: `Failed to request initial roots from client: ${error instanceof Error ? error.message : String(error)}`,
-        }, sessionId);
+        });
       }
     } else {
       await server.sendLoggingMessage({
           level: "info",
           logger: "everything-server",
           data: "Client does not support MCP roots protocol",
-      }, sessionId);
+      });
     }
   };
 
