@@ -619,9 +619,13 @@ export const createServer = () => {
         maxTokens,
         extra.sendRequest
       );
+      const content = Array.isArray(result.content) ? result.content : [result.content];
+      const textResult = content.every((c) => c.type === "text")
+        ? content.map(c => c.text).join("\n")
+        : JSON.stringify(result.content);
       return {
         content: [
-          { type: "text", text: `LLM sampling result: ${result.content.text}` },
+          { type: "text", text: `LLM sampling result: ${textResult}` },
         ],
       };
     }
