@@ -6,13 +6,16 @@ import {
   CompleteRequestSchema,
   CreateMessageRequest,
   CreateMessageResultSchema,
+  ElicitRequest,
   ElicitResultSchema,
+  ErrorCode,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
   ListResourcesRequestSchema,
   ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
   LoggingLevel,
+  McpError,
   ReadResourceRequestSchema,
   Resource,
   RootsListChangedNotificationSchema,
@@ -21,8 +24,11 @@ import {
   SubscribeRequestSchema,
   Tool,
   UnsubscribeRequestSchema,
-  type Root
+  type CallToolResult,
+  type Root,
 } from "@modelcontextprotocol/sdk/types.js";
+import { ToolRegistry, BreakToolLoopError } from "./toolRegistry.js";
+import { runToolLoop } from "./toolLoop.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { readFileSync } from "fs";
@@ -68,6 +74,12 @@ const SampleLLMSchema = z.object({
     .number()
     .default(100)
     .describe("Maximum number of tokens to generate"),
+});
+
+const AdventureGameSchema = z.object({
+  gameSynopsisOrSubject: z
+    .string()
+    .describe("Description of the game subject or possible synopsis."),
 });
 
 const GetTinyImageSchema = z.object({});
@@ -137,6 +149,7 @@ enum ToolName {
   LONG_RUNNING_OPERATION = "longRunningOperation",
   PRINT_ENV = "printEnv",
   SAMPLE_LLM = "sampleLLM",
+  ADVENTURE_GAME = "adventureGame",
   GET_TINY_IMAGE = "getTinyImage",
   ANNOTATED_MESSAGE = "annotatedMessage",
   GET_RESOURCE_REFERENCE = "getResourceReference",
@@ -224,36 +237,6 @@ export const createServer = () => {
           await server.sendLoggingMessage( messages[Math.floor(Math.random() * messages.length)], sessionId);
       }, 15000);
     }
-  };
-
-  // Helper method to request sampling from client
-  const requestSampling = async (
-    context: string,
-    uri: string,
-    maxTokens: number = 100,
-    sendRequest: SendRequest
-  ) => {
-    const request: CreateMessageRequest = {
-      method: "sampling/createMessage",
-      params: {
-        messages: [
-          {
-            role: "user",
-            content: {
-              type: "text",
-              text: `Resource ${uri} context: ${context}`,
-            },
-          },
-        ],
-        systemPrompt: "You are a helpful test server.",
-        maxTokens,
-        temperature: 0.7,
-        includeContext: "thisServer",
-      },
-    };
-
-    return await sendRequest(request, CreateMessageResultSchema);
-
   };
 
   const ALL_RESOURCES: Resource[] = Array.from({ length: 100 }, (_, i) => {
@@ -536,6 +519,11 @@ export const createServer = () => {
         description: "Elicitation test tool that demonstrates how to request user input with various field types (string, boolean, email, uri, date, integer, number, enum)",
         inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
     });
+    if (clientCapabilities!.sampling && clientCapabilities!.elicitation) tools.push ({
+        name: ToolName.ADVENTURE_GAME,
+        description: "Play a 'choose your own adventure' game. The user will be asked for decisions along the way via elicitation. Requires both sampling and elicitation capabilities.",
+        inputSchema: zodToJsonSchema(AdventureGameSchema) as ToolInput,
+    });
 
     return { tools };
   });
@@ -611,12 +599,25 @@ export const createServer = () => {
       const validatedArgs = SampleLLMSchema.parse(args);
       const { prompt, maxTokens } = validatedArgs;
 
-      const result = await requestSampling(
-        prompt,
-        ToolName.SAMPLE_LLM,
-        maxTokens,
-        extra.sendRequest
-      );
+      const result = await extra.sendRequest(<CreateMessageRequest>{
+        method: "sampling/createMessage",
+        params: {
+          maxTokens,
+          messages: [
+            {
+              role: "user",
+              content: {
+                type: "text",
+                text: prompt,
+              },
+            },
+          ],
+          systemPrompt: "You are a helpful test server.",
+          temperature: 0.7,
+          includeContext: "thisServer",
+        },
+      }, CreateMessageResultSchema);
+
       const content = Array.isArray(result.content) ? result.content : [result.content];
       const textResult = content.every((c) => c.type === "text")
         ? content.map(c => c.text).join("\n")
@@ -626,6 +627,176 @@ export const createServer = () => {
           { type: "text", text: `LLM sampling result: ${textResult}` },
         ],
       };
+    }
+
+    if (name === ToolName.ADVENTURE_GAME) {
+      const { gameSynopsisOrSubject } = AdventureGameSchema.parse(args);
+
+      // Helper to create error result
+      const makeErrorCallToolResult = (error: unknown): CallToolResult => ({
+        content: [
+          {
+            type: "text",
+            text: error instanceof Error ? `${error.message}\n${error.stack}` : `${error}`,
+          },
+        ],
+        isError: true,
+      });
+
+      // Create registry with game tools
+      const gameRegistry = new ToolRegistry({
+        userLost: {
+          description: "Called when the user loses",
+          inputSchema: z.object({
+            storyUpdate: z.string(),
+          }),
+          callback: async (args, gameExtra) => {
+            const { storyUpdate } = args as { storyUpdate: string };
+            await gameExtra.sendRequest(<ElicitRequest>{
+              method: 'elicitation/create',
+              params: {
+                mode: 'form',
+                message: 'You Lost!\n' + storyUpdate,
+                requestedSchema: {
+                  type: 'object',
+                  properties: {},
+                },
+              },
+            }, ElicitResultSchema);
+            throw new BreakToolLoopError('lost');
+          },
+        },
+        userWon: {
+          description: "Called when the user wins the game",
+          inputSchema: z.object({
+            storyUpdate: z.string(),
+          }),
+          callback: async (args, gameExtra) => {
+            const { storyUpdate } = args as { storyUpdate: string };
+            await gameExtra.sendRequest(<ElicitRequest>{
+              method: 'elicitation/create',
+              params: {
+                mode: 'form',
+                message: 'You Won!\n' + storyUpdate,
+                requestedSchema: {
+                  type: 'object',
+                  properties: {},
+                },
+              },
+            }, ElicitResultSchema);
+            throw new BreakToolLoopError('won');
+          },
+        },
+        nextStep: {
+          description: "Next step in the game.",
+          inputSchema: z.object({
+            storyUpdate: z.string().describe("Description of the next step of the game. Acknowledges the last decision (if any) and describes what happened because of / since it was made, then continues the story up to the point where another decision is needed from the user (if/when appropriate)."),
+            nextDecisions: z.array(z.string()).describe("The list of possible decisions the user/player can make at this point of the story. Empty list if we've reached the end of the story"),
+            decisionTimeoutSeconds: z.number().optional().describe("Optional: timeout in seconds for decision to be made. Used when a timely decision is needed."),
+          }),
+          outputSchema: z.object({
+            userDecision: z.string().optional()
+              .describe("The decision the user took, or undefined if the user let the decision time out."),
+          }),
+          callback: async (args, gameExtra) => {
+            const { storyUpdate, nextDecisions, decisionTimeoutSeconds } = args as {
+              storyUpdate: string;
+              nextDecisions: string[];
+              decisionTimeoutSeconds?: number;
+            };
+            try {
+              const result = await gameExtra.sendRequest(<ElicitRequest>{
+                method: 'elicitation/create',
+                params: {
+                  mode: 'form',
+                  message: storyUpdate,
+                  requestedSchema: {
+                    type: 'object',
+                    properties: {
+                      nextDecision: {
+                        title: 'Next step',
+                        type: 'string',
+                        enum: nextDecisions,
+                      },
+                    },
+                  },
+                },
+              }, ElicitResultSchema, {
+                timeout: decisionTimeoutSeconds == null ? undefined : decisionTimeoutSeconds * 1000,
+              });
+
+              if (result.action === 'accept') {
+                const structuredContent = {
+                  userDecision: result.content?.nextDecision as string,
+                };
+                return {
+                  content: [{ type: 'text' as const, text: JSON.stringify(structuredContent) }],
+                  structuredContent,
+                };
+              } else {
+                return {
+                  content: [{ type: 'text' as const, text: result.action === 'decline' ? 'Game Over' : 'Game Cancelled' }],
+                };
+              }
+            } catch (error) {
+              if (error instanceof McpError && error.code === ErrorCode.RequestTimeout) {
+                const structuredContent = {
+                  userDecision: undefined, // Means "timed out"
+                };
+                return {
+                  content: [{ type: 'text' as const, text: JSON.stringify(structuredContent) }],
+                  structuredContent,
+                };
+              }
+              return makeErrorCallToolResult(error);
+            }
+          },
+        },
+      });
+
+      try {
+        const { answer, transcript, usage } = await runToolLoop({
+          initialMessages: [{
+            role: "user",
+            content: {
+              type: "text",
+              text: gameSynopsisOrSubject,
+            },
+          }],
+          systemPrompt:
+            "You are a 'choose your own adventure' game master. " +
+            "Given an initial user request (subject and/or synopsis of the game, maybe description of their role in the game), " +
+            "you will relentlessly walk the user forward in an imaginary story, " +
+            "giving them regular choices as to what their character can do next can happen next. " +
+            "If the user didn't choose a role for themselves, you can ask them to pick one of a few interesting options (first decision). " +
+            "Then you will continually develop the story and call the nextStep tool to give story updates and ask for pivotal decisions. " +
+            "Updates should fit in a page (sometimes as short as a paragraph e.g. if doing a battle with very fast paced action). " +
+            "Some decisions should have a timeout to create some thrills for the user, in tight action scenes. " +
+            "When / if the user loses (e.g. dies, or whatever the user expressed as a loss condition), the last call to nextStep should have zero options.",
+          defaultToolChoice: { mode: 'required' },
+          server,
+          registry: gameRegistry,
+        }, extra);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: answer,
+            },
+            {
+              type: "text",
+              text: `\n\n--- Usage: ${usage.api_calls} API calls, ${usage.input_tokens} input / ${usage.output_tokens} output tokens ---`,
+            },
+            {
+              type: "text",
+              text: `\n\n--- Debug Transcript (${transcript.length} messages) ---\n${JSON.stringify(transcript, null, 2)}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return makeErrorCallToolResult(error);
+      }
     }
 
     if (name === ToolName.GET_TINY_IMAGE) {
