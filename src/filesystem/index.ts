@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   CallToolResult,
   RootsListChangedNotificationSchema,
+  ToolSchema,
   type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
@@ -12,6 +13,7 @@ import { createReadStream } from "fs";
 import path from "path";
 import { z } from "zod";
 import { minimatch } from "minimatch";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { normalizePath, expandHome } from './path-utils.js';
 import { getValidRootDirectories } from './roots-utils.js';
 import {
@@ -74,6 +76,8 @@ await Promise.all(allowedDirectories.map(async (dir) => {
 setAllowedDirectories(allowedDirectories);
 
 // Schema definitions
+const ToolInputSchema = ToolSchema.shape.inputSchema;
+type ToolInput = z.infer<typeof ToolInputSchema>;
 const ReadTextFileArgsSchema = z.object({
   path: z.string(),
   tail: z.number().optional().describe('If provided, returns only the last N lines of the file'),
