@@ -847,55 +847,38 @@ export const createServer = () => {
       return { content };
     }
 
-    if (name === ToolName.GET_RESOURCE_LINKS) {
-      const { count } = GetResourceLinksSchema.parse(args);
-      const content = [];
-
-      // Add intro text
-      content.push({
-        type: "text",
-        text: `Here are ${count} resource links to resources available in this server (see full output in tool response if your client does not support resource_link yet):`,
-      });
-
-      // Return resource links to actual resources from ALL_RESOURCES
-      const actualCount = Math.min(count, ALL_RESOURCES.length);
-      for (let i = 0; i < actualCount; i++) {
-        const resource = ALL_RESOURCES[i];
-        content.push({
-          type: "resource_link",
-          uri: resource.uri,
-          name: resource.name,
-          description: `Resource ${i + 1}: ${resource.mimeType === "text/plain"
-            ? "plaintext resource"
-            : "binary blob resource"
-            }`,
-          mimeType: resource.mimeType,
-        });
+    mcpServer.registerTool(ToolName.STRUCTURED_CONTENT, {
+      description: "Returns structured weather data with both text and typed output",
+      inputSchema: {
+        location: z.string().trim().min(1).describe("City name or zip code"),
+        backwardsCompatible: z
+          .boolean()
+          .describe(
+            "Whether to include the structured content in the content blocks as well (as per MCP spec recommendation, for backwards compatibility)",
+          ),
+      },
+      outputSchema: {
+        temperature: z.number().describe("Temperature in celsius"),
+        conditions: z.string().describe("Weather conditions description"),
+        humidity: z.number().describe("Humidity percentage"),
       }
-
-      return { content };
-    }
-
-    if (name === ToolName.STRUCTURED_CONTENT) {
-      // The same response is returned for every input.
-      const validatedArgs = StructuredContentSchema.input.parse(args);
-
+    }, async ({ location, backwardsCompatible }) => {
+      // The same response is returned for every location.
       const weather = {
         temperature: 22.5,
         conditions: "Partly cloudy",
         humidity: 65
-      }
-
-      const backwardCompatiblecontent = {
-        type: "text",
-        text: JSON.stringify(weather)
-      }
+      };
 
       return {
-        content: [backwardCompatiblecontent],
+        content: backwardsCompatible
+            ? [{
+          type: "text",
+          text: JSON.stringify(weather)
+        }] : [],
         structuredContent: weather
       };
-    }
+    });
 
     if (name === ToolName.ZIP_RESOURCES) {
       const { files } = ZipResourcesInputSchema.parse(args);
