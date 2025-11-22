@@ -5,7 +5,7 @@
   "description": "Model Context Protocol servers",
   "license": "MIT",
   "author": "Anthropic, PBC (https://anthropic.com)",
-  "homepage": "https://modelcontextprotocol.io",
+  "homepage": ".",,
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
   "type": "module",
   "workspaces": [
