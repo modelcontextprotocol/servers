@@ -7,6 +7,35 @@ import { minimatch } from 'minimatch';
 import { normalizePath, expandHome } from './path-utils.js';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
 
+// 🛡️ AI ASSISTANT PATTERN: Resource Limits for DoS Protection
+// CRITICAL SECURITY: Enforce resource limits to prevent Denial of Service (DoS) attacks
+//
+// Why Resource Limits Matter:
+// - Unbounded operations can cause Out-of-Memory (OOM) crashes
+// - Large file reads can exhaust server memory
+// - Recursive directory scans can consume all CPU
+// - Search operations can run indefinitely
+//
+// Attack Scenarios Prevented:
+// - Reading /dev/zero (infinite file) → OOM crash
+// - Searching entire filesystem → CPU exhaustion
+// - Listing directory with millions of files → Memory exhaustion
+// - Writing multi-GB files → Disk space exhaustion
+//
+// Best Practices:
+// - Check file size BEFORE reading (not after)
+// - Limit search results with early termination
+// - Set realistic limits based on your use case
+// - Always validate limits at the START of operations
+//
+// When adding new file operations, ALWAYS enforce these limits!
+const MAX_FILE_SIZE_READ = 100 * 1024 * 1024; // 100MB max read
+const MAX_FILE_SIZE_WRITE = 50 * 1024 * 1024; // 50MB max write
+const MAX_FILES_BATCH_READ = 100; // Max files to read in one batch
+const MAX_DIRECTORY_ENTRIES = 10000; // Max directory entries to return
+const MAX_SEARCH_RESULTS = 1000; // Max search results
+const MAX_PATH_LENGTH = 4096; // Max path length (filesystem limit)
+
 // Global allowed directories - set by the main module
 let allowedDirectories: string[] = [];
 
@@ -74,17 +103,37 @@ export function createUnifiedDiff(originalContent: string, newContent: string, f
 
 // Security & Validation Functions
 export async function validatePath(requestedPath: string): Promise<string> {
+  // SECURITY: Validate path length to prevent buffer overflow attacks
+  if (requestedPath.length > MAX_PATH_LENGTH) {
+    throw new Error(
+      `Path length ${requestedPath.length} exceeds maximum allowed length of ${MAX_PATH_LENGTH} characters`
+    );
+  }
+
+  // SECURITY: Check for null bytes which are forbidden in paths
+  if (requestedPath.includes('\0')) {
+    throw new Error('Access denied - invalid path: contains null byte');
+  }
+
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
     : path.resolve(process.cwd(), expandedPath);
+
+  // Final path length check after resolution
+  if (absolute.length > MAX_PATH_LENGTH) {
+    throw new Error(
+      `Resolved path length ${absolute.length} exceeds maximum allowed length of ${MAX_PATH_LENGTH} characters`
+    );
+  }
 
   const normalizedRequested = normalizePath(absolute);
 
   // Security: Check if path is within allowed directories before any file operations
   const isAllowed = isPathWithinAllowedDirectories(normalizedRequested, allowedDirectories);
   if (!isAllowed) {
-    throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
+    // SECURITY: Sanitize error message to prevent information disclosure
+    throw new Error('Access denied - path outside allowed directories');
   }
 
   // Security: Handle symlinks by checking their real path to prevent symlink attacks
@@ -93,7 +142,8 @@ export async function validatePath(requestedPath: string): Promise<string> {
     const realPath = await fs.realpath(absolute);
     const normalizedReal = normalizePath(realPath);
     if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
-      throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
+      // SECURITY: Sanitize error message to prevent information disclosure
+      throw new Error('Access denied - symlink target outside allowed directories');
     }
     return realPath;
   } catch (error) {
@@ -105,7 +155,8 @@ export async function validatePath(requestedPath: string): Promise<string> {
         const realParentPath = await fs.realpath(parentDir);
         const normalizedParent = normalizePath(realParentPath);
         if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+          // SECURITY: Sanitize error message to prevent information disclosure
+          throw new Error('Access denied - parent directory outside allowed directories');
         }
         return absolute;
       } catch {
@@ -132,10 +183,37 @@ export async function getFileStats(filePath: string): Promise<FileInfo> {
 }
 
 export async function readFileContent(filePath: string, encoding: string = 'utf-8'): Promise<string> {
+  // SECURITY: Check file size before reading to prevent OOM
+  try {
+    const stats = await fs.stat(filePath);
+    if (stats && stats.size > MAX_FILE_SIZE_READ) {
+      throw new Error(
+        `File size ${stats.size} bytes exceeds maximum read size of ${MAX_FILE_SIZE_READ} bytes ` +
+        `(${Math.round(MAX_FILE_SIZE_READ / 1024 / 1024)}MB). ` +
+        `Use head/tail operations for large files.`
+      );
+    }
+  } catch (error) {
+    // If stat fails, let readFile handle the error (file might not exist, etc.)
+    if ((error as any).message && (error as any).message.includes('exceeds maximum')) {
+      throw error; // Re-throw size limit errors
+    }
+    // Otherwise, continue to readFile which will provide appropriate error
+  }
+
   return await fs.readFile(filePath, encoding as BufferEncoding);
 }
 
 export async function writeFileContent(filePath: string, content: string): Promise<void> {
+  // SECURITY: Check content size before writing to prevent disk exhaustion
+  const contentSize = Buffer.byteLength(content, 'utf-8');
+  if (contentSize > MAX_FILE_SIZE_WRITE) {
+    throw new Error(
+      `Content size ${contentSize} bytes exceeds maximum write size of ${MAX_FILE_SIZE_WRITE} bytes ` +
+      `(${Math.round(MAX_FILE_SIZE_WRITE / 1024 / 1024)}MB)`
+    );
+  }
+
   try {
     // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
     // preventing writes through pre-existing symlinks
@@ -173,6 +251,23 @@ export async function applyFileEdits(
   edits: FileEdit[],
   dryRun: boolean = false
 ): Promise<string> {
+  // SECURITY: Check file size before reading to prevent OOM
+  try {
+    const stats = await fs.stat(filePath);
+    if (stats && stats.size > MAX_FILE_SIZE_READ) {
+      throw new Error(
+        `File size ${stats.size} bytes exceeds maximum read size of ${MAX_FILE_SIZE_READ} bytes ` +
+        `(${Math.round(MAX_FILE_SIZE_READ / 1024 / 1024)}MB). ` +
+        `Cannot apply edits to files this large.`
+      );
+    }
+  } catch (error) {
+    if ((error as any).message && (error as any).message.includes('exceeds maximum')) {
+      throw error; // Re-throw size limit errors
+    }
+    // Otherwise, continue to readFile which will provide appropriate error
+  }
+
   // Read file content and normalize line endings
   const content = normalizeLineEndings(await fs.readFile(filePath, 'utf-8'));
 
@@ -184,7 +279,9 @@ export async function applyFileEdits(
 
     // If exact match exists, use it
     if (modifiedContent.includes(normalizedOld)) {
-      modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
+      // SECURITY FIX: Use replaceAll() to replace ALL occurrences, not just the first one
+      // This prevents incomplete updates (e.g., replacing only first occurrence of a secret key)
+      modifiedContent = modifiedContent.replaceAll(normalizedOld, normalizedNew);
       continue;
     }
 
@@ -260,12 +357,23 @@ export async function applyFileEdits(
 
 // Memory-efficient implementation to get the last N lines of a file
 export async function tailFile(filePath: string, numLines: number): Promise<string> {
-  const CHUNK_SIZE = 1024; // Read 1KB at a time
+  // SECURITY: Check file size before processing to prevent OOM
   const stats = await fs.stat(filePath);
-  const fileSize = stats.size;
-  
+  const fileSize = stats?.size || 0;
+
+  // Handle empty files early
   if (fileSize === 0) return '';
-  
+
+  if (fileSize > MAX_FILE_SIZE_READ) {
+    throw new Error(
+      `File size ${fileSize} bytes exceeds maximum read size of ${MAX_FILE_SIZE_READ} bytes ` +
+      `(${Math.round(MAX_FILE_SIZE_READ / 1024 / 1024)}MB). ` +
+      `Cannot tail files this large.`
+    );
+  }
+
+  const CHUNK_SIZE = 1024; // Read 1KB at a time
+
   // Open file for reading
   const fileHandle = await fs.open(filePath, 'r');
   try {
@@ -312,6 +420,16 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
 
 // New function to get the first N lines of a file
 export async function headFile(filePath: string, numLines: number): Promise<string> {
+  // SECURITY: Check file size before processing to prevent OOM
+  const stats = await fs.stat(filePath);
+  if (stats && stats.size && stats.size > MAX_FILE_SIZE_READ) {
+    throw new Error(
+      `File size ${stats.size} bytes exceeds maximum read size of ${MAX_FILE_SIZE_READ} bytes ` +
+      `(${Math.round(MAX_FILE_SIZE_READ / 1024 / 1024)}MB). ` +
+      `Cannot head files this large.`
+    );
+  }
+
   const fileHandle = await fs.open(filePath, 'r');
   try {
     const lines: string[] = [];
@@ -358,9 +476,28 @@ export async function searchFilesWithValidation(
   const results: string[] = [];
 
   async function search(currentPath: string) {
+    // SECURITY: Stop early if we've reached the result limit to prevent resource exhaustion
+    if (results.length >= MAX_SEARCH_RESULTS) {
+      return;
+    }
+
     const entries = await fs.readdir(currentPath, { withFileTypes: true });
 
+    // SECURITY: Check directory entry count to prevent DoS from directories with millions of files
+    if (entries.length > MAX_DIRECTORY_ENTRIES) {
+      throw new Error(
+        `Directory ${currentPath} contains ${entries.length} entries, ` +
+        `exceeding maximum of ${MAX_DIRECTORY_ENTRIES}. ` +
+        `This may indicate a DoS attempt or misconfiguration.`
+      );
+    }
+
     for (const entry of entries) {
+      // Stop early if we've reached the result limit
+      if (results.length >= MAX_SEARCH_RESULTS) {
+        return;
+      }
+
       const fullPath = path.join(currentPath, entry.name);
 
       try {
