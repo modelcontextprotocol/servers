@@ -90,7 +90,9 @@ const GetResourceReferenceSchema = z.object({
     .describe("ID of the resource to reference (1-100)"),
 });
 
-const ElicitationSchema = z.object({});
+const ElicitationSchema = z.object({
+  mode: z.enum(['form', 'url']).describe("Elicitation mode"),
+});
 
 const GetResourceLinksSchema = z.object({
   count: z
@@ -728,11 +730,12 @@ export const createServer = () => {
     }
 
     if (name === ToolName.ELICITATION) {
-      ElicitationSchema.parse(args);
+      const { mode } = ElicitationSchema.parse(args);
 
       const elicitationResult = await extra.sendRequest({
         method: 'elicitation/create',
         params: {
+          mode,
           message: 'Please provide inputs for the following fields:',
           requestedSchema: {
             type: 'object',
