@@ -33,6 +33,7 @@ To publish your server, follow the [quickstart guide starting from the "Install 
 <!-- Go over all the following points, and put an `x` in all the boxes that apply. -->
 - [ ] I have read the [MCP Protocol Documentation](https://modelcontextprotocol.io)
 - [ ] My changes follows MCP security best practices
+- [ ] I have updated the server's README accordingly
 - [ ] I have tested this with an LLM client
 - [ ] My code follows the repository's style guidelines
 - [ ] New and existing tests pass locally
