@@ -19,6 +19,9 @@ Typically, each MCP server is implemented with an MCP SDK:
 > [!NOTE]
 > Lists in this README are maintained in alphabetical order to minimize merge conflicts when adding new items.
 
+> [!IMPORTANT]
+> **We are no longer accepting PRs to add servers to this README.** Please publish your server to the [MCP Server Registry](https://github.com/modelcontextprotocol/registry) instead by following the [quickstart guide](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/quickstart.mdx#step-3-install-mcp-publisher). The registry provides better discoverability and a streamlined publishing process for the MCP ecosystem. You can browse published servers at [https://registry.modelcontextprotocol.io/](https://registry.modelcontextprotocol.io/).
+
 ## 🌟 Reference Servers
 
 These servers aim to demonstrate MCP features and the official SDKs.
