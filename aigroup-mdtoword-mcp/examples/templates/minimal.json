@@ -1,0 +1,151 @@
+{
+  "name": "极简模板",
+  "description": "简洁清爽的文档样式，适用于简单文档、笔记、快速记录等场景",
+  "category": "custom",
+  "styleConfig": {
+    "document": {
+      "defaultFont": "微软雅黑",
+      "defaultSize": 24,
+      "defaultColor": "333333",
+      "page": {
+        "size": "A4",
+        "orientation": "portrait",
+        "margins": {
+          "top": 1440,
+          "bottom": 1440,
+          "left": 1440,
+          "right": 1440
+        }
+      }
+    },
+    "headingStyles": {
+      "h1": {
+        "font": "微软雅黑",
+        "size": 32,
+        "color": "333333",
+        "bold": true,
+        "spacing": {
+          "before": 360,
+          "after": 180,
+          "line": 360
+        }
+      },
+      "h2": {
+        "font": "微软雅黑",
+        "size": 28,
+        "color": "333333",
+        "bold": true,
+        "spacing": {
+          "before": 240,
+          "after": 120,
+          "line": 340
+        }
+      },
+      "h3": {
+        "font": "微软雅黑",
+        "size": 26,
+        "color": "333333",
+        "bold": true,
+        "spacing": {
+          "before": 180,
+          "after": 90,
+          "line": 320
+        }
+      },
+      "h4": {
+        "font": "微软雅黑",
+        "size": 24,
+        "color": "666666",
+        "bold": true,
+        "spacing": {
+          "before": 120,
+          "after": 60,
+          "line": 300
+        }
+      }
+    },
+    "paragraphStyles": {
+      "normal": {
+        "font": "微软雅黑",
+        "size": 24,
+        "color": "333333",
+        "spacing": {
+          "line": 360,
+          "lineRule": "auto",
+          "after": 120
+        },
+        "alignment": "left"
+      }
+    },
+    "listStyles": {
+      "bullet": {
+        "font": "微软雅黑",
+        "size": 24,
+        "color": "333333",
+        "indent": {
+          "left": 480
+        }
+      },
+      "numbered": {
+        "font": "微软雅黑",
+        "size": 24,
+        "color": "333333",
+        "indent": {
+          "left": 480
+        }
+      }
+    },
+    "tableStyles": {
+      "default": {
+        "width": {
+          "size": 100,
+          "type": "pct"
+        },
+        "borders": {
+          "top": { "size": 4, "color": "CCCCCC", "style": "single" },
+          "bottom": { "size": 4, "color": "CCCCCC", "style": "single" },
+          "left": { "size": 4, "color": "CCCCCC", "style": "single" },
+          "right": { "size": 4, "color": "CCCCCC", "style": "single" },
+          "insideH": { "size": 2, "color": "EEEEEE", "style": "single" },
+          "insideV": { "size": 2, "color": "EEEEEE", "style": "single" }
+        },
+        "headerStyle": {
+          "shading": "F8F8F8",
+          "textStyle": {
+            "bold": true,
+            "color": "333333"
+          }
+        }
+      }
+    },
+    "codeBlockStyle": {
+      "font": "Consolas",
+      "size": 20,
+      "color": "333333",
+      "backgroundColor": "F8F8F8",
+      "spacing": {
+        "before": 180,
+        "after": 180
+      }
+    },
+    "inlineCodeStyle": {
+      "font": "Consolas",
+      "size": 22,
+      "color": "666666",
+      "backgroundColor": "F0F0F0"
+    },
+    "blockquoteStyle": {
+      "font": "微软雅黑",
+      "size": 24,
+      "color": "666666",
+      "italic": true,
+      "indent": {
+        "left": 480
+      },
+      "spacing": {
+        "before": 180,
+        "after": 180
+      }
+    }
+  }
+}

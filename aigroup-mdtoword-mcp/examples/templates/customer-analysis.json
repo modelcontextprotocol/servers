@@ -1,0 +1,236 @@
+{
+  "name": "客户分析模板",
+  "description": "专业的客户分析报告模板，适用于客户情况分析、市场调研、商业分析等场景",
+  "category": "analysis",
+  "styleConfig": {
+    "document": {
+      "defaultFont": "宋体",
+      "defaultSize": 24,
+      "defaultColor": "000000",
+      "page": {
+        "size": "A4",
+        "orientation": "portrait",
+        "margins": {
+          "top": 1440,
+          "bottom": 1440,
+          "left": 1440,
+          "right": 1440
+        }
+      }
+    },
+    "headingStyles": {
+      "h1": {
+        "name": "一级标题",
+        "level": 1,
+        "font": "黑体",
+        "size": 32,
+        "color": "000000",
+        "bold": true,
+        "spacing": {
+          "before": 480,
+          "after": 240,
+          "line": 400
+        },
+        "alignment": "center"
+      },
+      "h2": {
+        "name": "二级标题",
+        "level": 2,
+        "font": "黑体",
+        "size": 28,
+        "color": "000000",
+        "bold": true,
+        "spacing": {
+          "before": 360,
+          "after": 180,
+          "line": 380
+        }
+      },
+      "h3": {
+        "name": "三级标题",
+        "level": 3,
+        "font": "宋体",
+        "size": 26,
+        "color": "000000",
+        "bold": true,
+        "spacing": {
+          "before": 240,
+          "after": 120,
+          "line": 360
+        }
+      },
+      "h4": {
+        "name": "四级标题",
+        "level": 4,
+        "font": "宋体",
+        "size": 24,
+        "color": "000000",
+        "bold": true,
+        "spacing": {
+          "before": 180,
+          "after": 90,
+          "line": 340
+        }
+      },
+      "h5": {
+        "name": "五级标题",
+        "level": 5,
+        "font": "宋体",
+        "size": 22,
+        "color": "000000",
+        "bold": true,
+        "spacing": {
+          "before": 120,
+          "after": 60,
+          "line": 320
+        }
+      },
+      "h6": {
+        "name": "六级标题",
+        "level": 6,
+        "font": "宋体",
+        "size": 20,
+        "color": "000000",
+        "bold": true,
+        "spacing": {
+          "before": 120,
+          "after": 60,
+          "line": 320
+        }
+      }
+    },
+    "paragraphStyles": {
+      "normal": {
+        "name": "正文",
+        "font": "宋体",
+        "size": 24,
+        "color": "000000",
+        "spacing": {
+          "line": 400,
+          "lineRule": "auto",
+          "after": 120
+        },
+        "alignment": "justify",
+        "indent": {
+          "firstLine": 480
+        }
+      }
+    },
+    "listStyles": {
+      "bullet": {
+        "name": "项目符号列表",
+        "type": "bullet",
+        "font": "宋体",
+        "size": 24,
+        "color": "000000",
+        "spacing": {
+          "line": 400,
+          "after": 60
+        },
+        "indent": {
+          "left": 480
+        }
+      },
+      "ordered": {
+        "name": "编号列表",
+        "type": "number",
+        "font": "宋体",
+        "size": 24,
+        "color": "000000",
+        "spacing": {
+          "line": 400,
+          "after": 60
+        },
+        "indent": {
+          "left": 480
+        }
+      }
+    },
+    "tableStyles": {
+      "default": {
+        "name": "默认表格",
+        "width": {
+          "size": 100,
+          "type": "pct"
+        },
+        "borders": {
+          "top": { "size": 8, "color": "000000", "style": "single" },
+          "bottom": { "size": 8, "color": "000000", "style": "single" },
+          "left": { "size": 4, "color": "000000", "style": "single" },
+          "right": { "size": 4, "color": "000000", "style": "single" },
+          "insideHorizontal": { "size": 4, "color": "000000", "style": "single" },
+          "insideVertical": { "size": 4, "color": "000000", "style": "single" }
+        },
+        "cellMargin": {
+          "top": 100,
+          "bottom": 100,
+          "left": 100,
+          "right": 100
+        },
+        "headerStyle": {
+          "shading": "F0F0F0",
+          "textStyle": {
+            "font": "宋体",
+            "bold": true,
+            "color": "000000",
+            "size": 24
+          }
+        }
+      }
+    },
+    "codeBlockStyle": {
+      "name": "代码块",
+      "font": "Courier New",
+      "size": 20,
+      "color": "000000",
+      "backgroundColor": "F8F9FA",
+      "spacing": {
+        "before": 240,
+        "after": 240,
+        "line": 240
+      },
+      "indent": {
+        "left": 240
+      },
+      "borders": {
+        "left": { "size": 4, "color": "CCCCCC", "style": "single" }
+      }
+    },
+    "inlineCodeStyle": {
+      "font": "Courier New",
+      "size": 22,
+      "color": "000000",
+      "backgroundColor": "F8F9FA"
+    },
+    "blockquoteStyle": {
+      "name": "引用",
+      "font": "宋体",
+      "size": 24,
+      "color": "000000",
+      "italic": true,
+      "indent": {
+        "left": 720
+      },
+      "borders": {
+        "left": { "size": 4, "color": "CCCCCC", "style": "single" }
+      },
+      "spacing": {
+        "before": 240,
+        "after": 240,
+        "line": 400
+      },
+      "backgroundColor": "F8F9FA"
+    },
+    "emphasisStyles": {
+      "strong": {
+        "bold": true
+      },
+      "emphasis": {
+        "italic": true
+      },
+      "strikethrough": {
+        "strike": true
+      }
+    }
+  }
+}
