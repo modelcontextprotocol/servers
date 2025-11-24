@@ -175,6 +175,35 @@ The server's directory access control follows this flow:
   - Returns:
     - Directories that this server can read/write from
 
+### Tool annotations (MCP hints)
+
+This server sets [MCP ToolAnnotations](https://modelcontextprotocol.io/specification/2025-03-26/server/tools#toolannotations)
+on each tool so clients can:
+
+- Distinguish **read‑only** tools from write‑capable tools.
+- Understand which write operations are **idempotent** (safe to retry with the same arguments).
+- Highlight operations that may be **destructive** (overwriting or heavily mutating data).
+
+The mapping for filesystem tools is:
+
+| Tool                        | readOnlyHint | idempotentHint | destructiveHint | Notes                                            |
+|-----------------------------|--------------|----------------|-----------------|--------------------------------------------------|
+| `read_text_file`            | `true`       | –              | –               | Pure read                                       |
+| `read_media_file`           | `true`       | –              | –               | Pure read                                       |
+| `read_multiple_files`       | `true`       | –              | –               | Pure read                                       |
+| `list_directory`            | `true`       | –              | –               | Pure read                                       |
+| `list_directory_with_sizes` | `true`       | –              | –               | Pure read                                       |
+| `directory_tree`            | `true`       | –              | –               | Pure read                                       |
+| `search_files`              | `true`       | –              | –               | Pure read                                       |
+| `get_file_info`             | `true`       | –              | –               | Pure read                                       |
+| `list_allowed_directories`  | `true`       | –              | –               | Pure read                                       |
+| `create_directory`          | `false`      | `true`         | `false`         | Re‑creating the same dir is a no‑op             |
+| `write_file`                | `false`      | `true`         | `true`          | Overwrites existing files                       |
+| `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply      |
+| `move_file`                 | `false`      | `false`        | `false`         | Move/rename only; repeat usually errors         |
+
+> Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec.
+
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
 
