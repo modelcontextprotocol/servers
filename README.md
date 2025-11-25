@@ -538,6 +538,8 @@ Official integrations are maintained by companies building production ready MCP 
 - **[ZettelkastenSpace](https://github.com/joshylchen/zettelkasten_space)** - Built on the proven [Zettelkasten](https://www.zettelkasten.space/) method, enhanced with Claude Desktop integration via Model Context Protocol 
 - <img height="12" width="12" src="https://www.zine.ai/images/zine-logo.png" alt="Zine Logo" /> **[Zine](https://www.zine.ai)** - Your memory, everywhere AI goes. Think iPhoto for your knowledge - upload and curate. Like ChatGPT but portable - context that travels with you.
 - <img height="12" width="12" src="https://zizai.work/images/logo.jpg" alt="ZIZAI Logo" /> **[ZIZAI Recruitment](https://github.com/zaiwork/mcp)** - Interact with the next-generation intelligent recruitment platform for employees and employers, powered by [ZIZAI Recruitment](https://zizai.work).
+- <img height="12" width="12" src="https://miniprogram.tcsas-superapp.com/icon_512.png" alt="TCSAS Logo" /> **[TCSAS](https://github.com/TCMPP-Team/tcsas-devtools-mcp-server)** - Built on the Tencent Mini Program technical framework and fully following the development, powered by [Tencent Cloud Super App as a Service](https://www.tencentcloud.com/products/tcsas?lang=en&pg=).
+
 ### 🌎 Community Servers
 
 A growing set of community-developed and maintained servers demonstrates various applications of MCP across different domains.
