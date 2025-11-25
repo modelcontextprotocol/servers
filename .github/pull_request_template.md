@@ -6,7 +6,7 @@
 
 **Note: We are no longer accepting PRs to add servers to the README.** Instead, please publish your server to the [MCP Server Registry](https://github.com/modelcontextprotocol/registry) to make it discoverable to the MCP ecosystem.
 
-To publish your server, follow the [quickstart guide starting from the "Install MCP Publisher" step](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/quickstart.mdx#step-3-install-mcp-publisher). You can browse published servers at [https://registry.modelcontextprotocol.io/](https://registry.modelcontextprotocol.io/).
+To publish your server, follow the [quickstart guide](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/quickstart.mdx). You can browse published servers at [https://registry.modelcontextprotocol.io/](https://registry.modelcontextprotocol.io/).
 
 ## Server Details
 <!-- If modifying an existing server, provide details -->

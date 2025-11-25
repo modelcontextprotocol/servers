@@ -6,7 +6,7 @@ We accept changes through [the standard GitHub flow model](https://docs.github.c
 
 ## Server Listings
 
-We are **no longer accepting PRs** to add server links to the README. Please publish your server to the [MCP Server Registry](https://github.com/modelcontextprotocol/registry) instead. Follow the [quickstart guide starting from the "Install MCP Publisher" step](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/quickstart.mdx#step-3-install-mcp-publisher).
+We are **no longer accepting PRs** to add server links to the README. Please publish your server to the [MCP Server Registry](https://github.com/modelcontextprotocol/registry) instead. Follow the [quickstart guide](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/quickstart.mdx).
 
 You can browse published servers using the simple UI at [https://registry.modelcontextprotocol.io/](https://registry.modelcontextprotocol.io/).
 
