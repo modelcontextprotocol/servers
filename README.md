@@ -2,6 +2,9 @@
 
 This repository is a collection of *reference implementations* for the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), as well as references to community-built servers and additional resources.
 
+> [!IMPORTANT]
+> If you are looking for a list of MCP servers, you can browse published servers on [the MCP Registry](https://registry.modelcontextprotocol.io/). The repository served by this README is dedicated to housing just the small number of reference servers maintained by the MCP steering group.
+
 The servers in this repository showcase the versatility and extensibility of MCP, demonstrating how it can be used to give Large Language Models (LLMs) secure, controlled access to tools and data sources.
 Typically, each MCP server is implemented with an MCP SDK:
 
@@ -16,11 +19,6 @@ Typically, each MCP server is implemented with an MCP SDK:
 - [Swift MCP SDK](https://github.com/modelcontextprotocol/swift-sdk)
 - [TypeScript MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 
-> [!NOTE]
-The server lists in this README are no longer maintained and will eventually be removed.
-
-> [!IMPORTANT]
-> If you are looking for a list of MCP servers, you can browse published servers on [the MCP Registry](https://registry.modelcontextprotocol.io/). The repository served by this README is dedicated to housing just the small number of reference servers maintained by the MCP steering group.
 ## 🌟 Reference Servers
 
 These servers aim to demonstrate MCP features and the official SDKs.
@@ -52,6 +50,9 @@ The following reference servers are now archived and can be found at [servers-ar
 - **[SQLite](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/sqlite)** - Database interaction and business intelligence capabilities.
 
 ## 🤝 Third-Party Servers
+
+> [!NOTE]
+The server lists in this README are no longer maintained and will eventually be removed.
 
 ### 🎖️ Official Integrations
 
