@@ -1052,6 +1052,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Membase](https://github.com/unibaseio/membase-mcp)** - Save and query your agent memory in distributed way by Membase.
 - **[Meme MCP](https://github.com/lidorshimoni/meme-mcp)** - Generate memes via AI using the Imgflip API through the Model Context Protocol.
 - **[memento-mcp](https://github.com/gannonh/memento-mcp)** - Knowledge graph memory system built on Neo4j with semantic search, temporal awareness.
+- **[memos-api-mcp](https://github.com/MemTensor/memos-api-mcp)** - A Model Context Protocol implementation for the API service of [MemOS](https://memos.openmem.net/), a memory management operating system designed for AI applications.
 - **[Meta Ads Remote MCP](https://github.com/pipeboard-co/meta-ads-mcp)** - Remote MCP server to interact with Meta Ads API - access, analyze, and manage Facebook, Instagram, and other Meta platforms advertising campaigns.
 - **[MetaTrader MCP](https://github.com/ariadng/metatrader-mcp-server)** - Enable AI LLMs to execute trades using MetaTrader 5 platform.
 - **[Metricool MCP](https://github.com/metricool/mcp-metricool)** - A Model Context Protocol server that integrates with Metricool's social media analytics platform to retrieve performance metrics and schedule content across networks like Instagram, Facebook, Twitter, LinkedIn, TikTok and YouTube.
