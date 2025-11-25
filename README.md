@@ -1401,6 +1401,7 @@ search, and comprehensive file analysis.
 - **[whale-tracker-mcp](https://github.com/kukapay/whale-tracker-mcp)**  -  A mcp server for tracking cryptocurrency whale transactions.
 - **[WhatsApp MCP Server](https://github.com/lharries/whatsapp-mcp)** - MCP server for your personal WhatsApp handling individuals, groups, searching and sending.
 - **[Whois MCP](https://github.com/bharathvaj-ganesan/whois-mcp)** - MCP server that performs whois lookup against domain, IP, ASN and TLD.
+- **[Withings](https://github.com/akutishevsky/withings-mcp)** - Access and analyze Withings health data including sleep analysis, body measurements, workouts, ECG recordings, and fitness goals through natural conversation.
 - **[Wikidata MCP](https://github.com/zzaebok/mcp-wikidata)** - Wikidata MCP server that interact with Wikidata, by searching identifiers, extracting metadata, and executing sparql query.
 - **[Wikidata SPARQL](https://github.com/QuentinCody/wikidata-sparql-mcp-server)** - Unofficial REMOTE MCP server for Wikidata's SPARQL endpoint, providing access to structured knowledge data, entity relationships, and semantic queries for research and data analysis.
 - **[Wikifunctions](https://github.com/Fredibau/wikifunctions-mcp-fredibau)** - Allowing AI models to discover and execute functions from the WikiFunctions library.
