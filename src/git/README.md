@@ -1,5 +1,7 @@
 # mcp-server-git: A git MCP server
 
+<!-- mcp-name: io.github.modelcontextprotocol/server-git -->
+
 ## Overview
 
 A Model Context Protocol server for Git repository interaction and automation. This server provides tools to read, search, and manipulate Git repositories via Large Language Models.
