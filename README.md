@@ -951,6 +951,8 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Langflow MCP Server](https://github.com/nobrainer-tech/langflow-mcp)** - Comprehensive MCP server providing 90 tools for Langflow workflow automation - manage flows, execute workflows, handle builds, and interact with knowledge bases. Includes Docker support and full API coverage for Langflow 1.6.4.
 - **[Langflow-DOC-QA-SERVER](https://github.com/GongRzhe/Langflow-DOC-QA-SERVER)** - A Model Context Protocol server for document Q&A powered by Langflow. It demonstrates core MCP concepts by providing a simple interface to query documents through a Langflow backend.
 - **[Language Server](https://github.com/isaacphi/mcp-language-server)** - MCP Language Server helps MCP enabled clients navigate codebases more easily by giving them access to semantic tools like get definition, references, rename, and diagnostics.
+- **[Large File MCP](https://github.com/willianpinho/large-file-mcp)** - Intelligent handling of large files with smart chunking, navigation, and streaming capabilities. Features LRU caching, regex
+search, and comprehensive file analysis.
 - **[Lark(Feishu)](https://github.com/kone-net/mcp_server_lark)** - A Model Context Protocol(MCP) server for Lark(Feishu) sheet, message, doc and etc.
 - **[Lazy Toggl MCP](https://github.com/movstox/lazy-toggl-mcp)** - Simple unofficial MCP server to track time via Toggl API
 - **[lean-lsp-mcp](https://github.com/oOo0oOo/lean-lsp-mcp)** - Interact with the [Lean theorem prover](https://lean-lang.org/) via the Language Server Protocol.
