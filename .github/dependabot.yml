@@ -1,0 +1,56 @@
+version: 2
+updates:
+  # npm workspaces monorepo - manage from root only
+  # See: https://github.com/dependabot/dependabot-core/issues/6346
+  # Dependabot has issues updating package-lock.json when configured
+  # for individual workspace directories. Using root directory ensures
+  # consistent lockfile updates across all workspaces.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Use 'increase' strategy to ensure both package.json and package-lock.json
+    # are updated consistently
+    versioning-strategy: increase
+    groups:
+      # Group version updates (minor/patch only for safety)
+      npm-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Explicitly configure security updates grouping
+      # This ensures security updates are handled from the root directory
+      # to avoid npm workspace hoisting issues when different workspaces
+      # need different major versions of the same package
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  # Python packages
+  - package-ecosystem: "pip"
+    directory: "/src/fetch"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "pip"
+    directory: "/src/git"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "pip"
+    directory: "/src/time"
+    schedule:
+      interval: "weekly"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
