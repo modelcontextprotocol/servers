@@ -1,0 +1,180 @@
+{
+  "name": "商务报告模板",
+  "description": "现代商务报告样式，适用于企业内部报告、项目总结、商业计划书等",
+  "category": "business",
+  "styleConfig": {
+    "document": {
+      "defaultFont": "微软雅黑",
+      "defaultSize": 24,
+      "defaultColor": "333333",
+      "page": {
+        "size": "A4",
+        "orientation": "portrait",
+        "margins": {
+          "top": 1440,
+          "bottom": 1440,
+          "left": 1440,
+          "right": 1440
+        }
+      }
+    },
+    "headingStyles": {
+      "h1": {
+        "font": "黑体",
+        "size": 36,
+        "color": "2E74B5",
+        "bold": true,
+        "spacing": {
+          "before": 480,
+          "after": 240,
+          "line": 400
+        }
+      },
+      "h2": {
+        "font": "微软雅黑",
+        "size": 32,
+        "color": "2E74B5",
+        "bold": true,
+        "spacing": {
+          "before": 360,
+          "after": 180,
+          "line": 380
+        }
+      },
+      "h3": {
+        "font": "微软雅黑",
+        "size": 28,
+        "color": "4472C4",
+        "bold": true,
+        "spacing": {
+          "before": 240,
+          "after": 120,
+          "line": 360
+        }
+      },
+      "h4": {
+        "font": "微软雅黑",
+        "size": 26,
+        "color": "666666",
+        "bold": true,
+        "spacing": {
+          "before": 180,
+          "after": 90,
+          "line": 340
+        }
+      },
+      "h5": {
+        "font": "微软雅黑",
+        "size": 24,
+        "color": "666666",
+        "bold": true,
+        "spacing": {
+          "before": 120,
+          "after": 60,
+          "line": 320
+        }
+      }
+    },
+    "paragraphStyles": {
+      "normal": {
+        "font": "微软雅黑",
+        "size": 24,
+        "color": "333333",
+        "spacing": {
+          "line": 400,
+          "lineRule": "auto",
+          "after": 120
+        },
+        "alignment": "justify"
+      }
+    },
+    "listStyles": {
+      "bullet": {
+        "font": "微软雅黑",
+        "size": 24,
+        "color": "333333",
+        "indent": {
+          "left": 480
+        },
+        "spacing": {
+          "after": 60
+        }
+      },
+      "numbered": {
+        "font": "微软雅黑",
+        "size": 24,
+        "color": "333333",
+        "indent": {
+          "left": 480
+        },
+        "spacing": {
+          "after": 60
+        }
+      }
+    },
+    "tableStyles": {
+      "default": {
+        "width": {
+          "size": 100,
+          "type": "pct"
+        },
+        "borders": {
+          "top": { "size": 8, "color": "2E74B5", "style": "single" },
+          "bottom": { "size": 6, "color": "CCCCCC", "style": "single" },
+          "left": { "size": 4, "color": "E1E4E8", "style": "single" },
+          "right": { "size": 4, "color": "E1E4E8", "style": "single" },
+          "insideH": { "size": 4, "color": "F0F0F0", "style": "single" },
+          "insideV": { "size": 4, "color": "F0F0F0", "style": "single" }
+        },
+        "headerStyle": {
+          "shading": "E7F3FF",
+          "textStyle": {
+            "font": "微软雅黑",
+            "bold": true,
+            "color": "2E74B5",
+            "size": 24
+          }
+        }
+      }
+    },
+    "codeBlockStyle": {
+      "font": "Consolas",
+      "size": 20,
+      "color": "333333",
+      "backgroundColor": "F8F9FA",
+      "borders": {
+        "left": { "size": 8, "color": "2E74B5", "style": "single" }
+      },
+      "spacing": {
+        "before": 240,
+        "after": 240
+      },
+      "indent": {
+        "left": 240
+      }
+    },
+    "inlineCodeStyle": {
+      "font": "Consolas",
+      "size": 22,
+      "color": "E74C3C",
+      "backgroundColor": "F8F9FA"
+    },
+    "blockquoteStyle": {
+      "font": "微软雅黑",
+      "size": 24,
+      "color": "666666",
+      "italic": true,
+      "borders": {
+        "left": { "size": 8, "color": "4472C4", "style": "single" }
+      },
+      "indent": {
+        "left": 480
+      },
+      "spacing": {
+        "before": 240,
+        "after": 240
+      },
+      "backgroundColor": "F8F9FA"
+    }
+  }
+}

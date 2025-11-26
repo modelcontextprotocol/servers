@@ -1,0 +1,313 @@
+{
+  "id": "enhanced-features",
+  "name": "增强功能示例",
+  "description": "展示水印、页眉页脚、目录、主题等新增功能的模板",
+  "category": "示例",
+  "isDefault": false,
+  "styleConfig": {
+    "theme": {
+      "name": "专业蓝色主题",
+      "description": "采用蓝色为主色调的专业主题",
+      "colors": {
+        "primary": "2E5C8A",
+        "secondary": "5A8FC4",
+        "accent": "1A4D7E",
+        "text": "333333",
+        "background": "FFFFFF",
+        "border": "CCCCCC"
+      },
+      "fonts": {
+        "heading": "微软雅黑",
+        "body": "宋体",
+        "code": "Consolas"
+      },
+      "spacing": {
+        "small": 120,
+        "medium": 240,
+        "large": 480
+      }
+    },
+    "watermark": {
+      "text": "内部文档 - 机密",
+      "font": "宋体",
+      "size": 80,
+      "color": "E0E0E0",
+      "opacity": 0.2,
+      "rotation": -45,
+      "position": "diagonal"
+    },
+    "headerFooter": {
+      "header": {
+        "content": "企业内部文档",
+        "alignment": "center",
+        "textStyle": {
+          "font": "微软雅黑",
+          "size": 20,
+          "color": "666666"
+        },
+        "border": {
+          "bottom": {
+            "size": 4,
+            "color": "2E5C8A",
+            "style": "single"
+          }
+        }
+      },
+      "footer": {
+        "content": "第 ",
+        "alignment": "center",
+        "textStyle": {
+          "font": "宋体",
+          "size": 18,
+          "color": "666666"
+        },
+        "border": {
+          "top": {
+            "size": 2,
+            "color": "CCCCCC",
+            "style": "single"
+          }
+        },
+        "showPageNumber": true,
+        "pageNumberFormat": "页"
+      },
+      "differentFirstPage": false,
+      "differentOddEven": false
+    },
+    "tableOfContents": {
+      "enabled": true,
+      "title": "目 录",
+      "titleStyle": {
+        "font": "黑体",
+        "size": 32,
+        "bold": true,
+        "color": "2E5C8A",
+        "alignment": "center",
+        "spacing": {
+          "before": 0,
+          "after": 480,
+          "line": 400
+        }
+      },
+      "levels": [1, 2, 3],
+      "showPageNumbers": true,
+      "pageNumberAlignment": "right",
+      "tabLeader": "dot"
+    },
+    "document": {
+      "defaultFont": "宋体",
+      "defaultSize": 24,
+      "defaultColor": "333333",
+      "page": {
+        "size": "A4",
+        "orientation": "portrait",
+        "margins": {
+          "top": 1440,
+          "bottom": 1440,
+          "left": 1800,
+          "right": 1800
+        }
+      }
+    },
+    "paragraphStyles": {
+      "normal": {
+        "name": "正文",
+        "font": "宋体",
+        "size": 24,
+        "color": "333333",
+        "spacing": {
+          "line": 400,
+          "lineRule": "auto",
+          "after": 120
+        },
+        "alignment": "justify",
+        "indent": {
+          "firstLine": 480
+        }
+      }
+    },
+    "headingStyles": {
+      "h1": {
+        "name": "一级标题",
+        "level": 1,
+        "font": "微软雅黑",
+        "size": 36,
+        "color": "2E5C8A",
+        "bold": true,
+        "spacing": {
+          "before": 480,
+          "after": 240,
+          "line": 400
+        },
+        "alignment": "left",
+        "border": {
+          "bottom": {
+            "size": 8,
+            "color": "2E5C8A",
+            "style": "single"
+          }
+        }
+      },
+      "h2": {
+        "name": "二级标题",
+        "level": 2,
+        "font": "微软雅黑",
+        "size": 30,
+        "color": "5A8FC4",
+        "bold": true,
+        "spacing": {
+          "before": 360,
+          "after": 180,
+          "line": 380
+        },
+        "alignment": "left"
+      },
+      "h3": {
+        "name": "三级标题",
+        "level": 3,
+        "font": "微软雅黑",
+        "size": 26,
+        "color": "333333",
+        "bold": true,
+        "spacing": {
+          "before": 240,
+          "after": 120,
+          "line": 360
+        },
+        "alignment": "left"
+      }
+    },
+    "tableStyles": {
+      "default": {
+        "name": "专业表格",
+        "width": {
+          "size": 100,
+          "type": "pct"
+        },
+        "borders": {
+          "top": {
+            "size": 12,
+            "color": "2E5C8A",
+            "style": "single"
+          },
+          "bottom": {
+            "size": 12,
+            "color": "2E5C8A",
+            "style": "single"
+          },
+          "left": {
+            "size": 4,
+            "color": "CCCCCC",
+            "style": "single"
+          },
+          "right": {
+            "size": 4,
+            "color": "CCCCCC",
+            "style": "single"
+          },
+          "insideHorizontal": {
+            "size": 4,
+            "color": "E0E0E0",
+            "style": "single"
+          },
+          "insideVertical": {
+            "size": 4,
+            "color": "E0E0E0",
+            "style": "single"
+          }
+        },
+        "cellMargin": {
+          "top": 120,
+          "bottom": 120,
+          "left": 150,
+          "right": 150
+        },
+        "alignment": "center",
+        "headerStyle": {
+          "shading": "2E5C8A",
+          "textStyle": {
+            "font": "微软雅黑",
+            "bold": true,
+            "color": "FFFFFF",
+            "size": 22
+          },
+          "alignment": "center"
+        },
+        "cellAlignment": {
+          "horizontal": "left",
+          "vertical": "center"
+        },
+        "stripedRows": {
+          "enabled": true,
+          "oddRowShading": "FFFFFF",
+          "evenRowShading": "F5F8FB"
+        }
+      }
+    },
+    "imageStyles": {
+      "default": {
+        "maxWidth": 600,
+        "maxHeight": 800,
+        "maintainAspectRatio": true,
+        "alignment": "center",
+        "spacing": {
+          "before": 240,
+          "after": 240
+        },
+        "border": {
+          "color": "CCCCCC",
+          "width": 1,
+          "style": "single"
+        }
+      }
+    },
+    "codeBlockStyle": {
+      "name": "代码块",
+      "font": "Consolas",
+      "size": 20,
+      "color": "333333",
+      "backgroundColor": "F5F5F5",
+      "spacing": {
+        "before": 240,
+        "after": 240,
+        "line": 280
+      },
+      "indent": {
+        "left": 360
+      },
+      "border": {
+        "left": {
+          "size": 6,
+          "color": "2E5C8A",
+          "style": "single"
+        }
+      }
+    },
+    "blockquoteStyle": {
+      "name": "引用",
+      "font": "楷体",
+      "size": 22,
+      "color": "666666",
+      "italic": true,
+      "indent": {
+        "left": 720
+      },
+      "border": {
+        "left": {
+          "size": 6,
+          "color": "5A8FC4",
+          "style": "single"
+        }
+      },
+      "spacing": {
+        "before": 240,
+        "after": 240,
+        "line": 400
+      },
+      "shading": {
+        "fill": "F8FAFC",
+        "type": "solid"
+      }
+    }
+  }
+}

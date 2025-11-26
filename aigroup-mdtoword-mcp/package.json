@@ -1,0 +1,105 @@
+{
+  "name": "aigroup-mdtoword-mcp",
+  "version": "4.0.1",
+  "description": "Professional Markdown to Word document converter with MCP protocol support - Advanced styling, mathematical formulas, tables, and complete document layout",
+  "keywords": [
+    "markdown",
+    "docx",
+    "word",
+    "converter",
+    "mcp",
+    "model-context-protocol",
+    "document-conversion",
+    "styling-system",
+    "mathematical-formulas",
+    "tables",
+    "headers-footers",
+    "page-numbers",
+    "zod",
+    "typescript"
+  ],
+  "author": {
+    "name": "AI Group",
+    "email": "jackdark425@gmail.com",
+    "url": "https://github.com/jackdark425"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aigroup/aigroup-mdtoword-mcp.git"
+  },
+  "homepage": "https://github.com/aigroup/aigroup-mdtoword-mcp",
+  "bugs": {
+    "url": "https://github.com/aigroup/aigroup-mdtoword-mcp/issues"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "aigroup-mdtoword-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "prepare": "npm run build",
+    "test": "node tests/test.js",
+    "test:math": "node tests/test-math-formulas.js",
+    "test:images": "node tests/test-local-images.js",
+    "test:pages": "node tests/test-page-numbers.js",
+    "server:stdio": "node dist/index.js",
+    "server:http": "node dist/http-server.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.1",
+    "csv-parse": "^5.5.6",
+    "docx": "^9.5.0",
+    "express": "^4.21.2",
+    "markdown-it": "^14.1.0",
+    "node-fetch": "^3.3.2",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.0",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.10.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "files": [
+    "dist",
+    "examples",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "mcp": {
+    "type": "server",
+    "transports": [
+      "stdio",
+      "http"
+    ],
+    "tools": [
+      "markdown_to_docx",
+      "table_data_to_markdown"
+    ],
+    "resources": [
+      "template://*",
+      "style-guide://*",
+      "metrics://*"
+    ],
+    "prompts": [
+      "conversion-help",
+      "styling-guidance",
+      "troubleshooting"
+    ]
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

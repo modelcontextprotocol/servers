@@ -1,0 +1,161 @@
+{
+  "name": "学术论文模板",
+  "description": "适用于学术论文的标准格式，符合大多数期刊和会议的要求",
+  "category": "academic",
+  "styleConfig": {
+    "document": {
+      "defaultFont": "Times New Roman",
+      "defaultSize": 24,
+      "defaultColor": "000000",
+      "page": {
+        "size": "A4",
+        "orientation": "portrait",
+        "margins": {
+          "top": 1440,
+          "bottom": 1440,
+          "left": 1800,
+          "right": 1440
+        }
+      }
+    },
+    "headingStyles": {
+      "h1": {
+        "font": "Times New Roman",
+        "size": 28,
+        "color": "000000",
+        "bold": true,
+        "alignment": "center",
+        "spacing": {
+          "before": 480,
+          "after": 240,
+          "line": 360
+        }
+      },
+      "h2": {
+        "font": "Times New Roman",
+        "size": 26,
+        "color": "000000",
+        "bold": true,
+        "spacing": {
+          "before": 360,
+          "after": 180,
+          "line": 360
+        }
+      },
+      "h3": {
+        "font": "Times New Roman",
+        "size": 24,
+        "color": "000000",
+        "bold": true,
+        "spacing": {
+          "before": 240,
+          "after": 120,
+          "line": 360
+        }
+      },
+      "h4": {
+        "font": "Times New Roman",
+        "size": 24,
+        "color": "000000",
+        "bold": true,
+        "italic": true,
+        "spacing": {
+          "before": 180,
+          "after": 90,
+          "line": 360
+        }
+      }
+    },
+    "paragraphStyles": {
+      "normal": {
+        "font": "Times New Roman",
+        "size": 24,
+        "color": "000000",
+        "spacing": {
+          "line": 480,
+          "lineRule": "auto"
+        },
+        "indent": {
+          "firstLine": 480
+        },
+        "alignment": "justify"
+      }
+    },
+    "listStyles": {
+      "bullet": {
+        "font": "Times New Roman",
+        "size": 24,
+        "color": "000000",
+        "indent": {
+          "left": 720
+        }
+      },
+      "numbered": {
+        "font": "Times New Roman",
+        "size": 24,
+        "color": "000000",
+        "indent": {
+          "left": 720
+        }
+      }
+    },
+    "tableStyles": {
+      "default": {
+        "width": {
+          "size": 100,
+          "type": "pct"
+        },
+        "borders": {
+          "top": { "size": 6, "color": "000000", "style": "single" },
+          "bottom": { "size": 6, "color": "000000", "style": "single" },
+          "left": { "size": 4, "color": "000000", "style": "single" },
+          "right": { "size": 4, "color": "000000", "style": "single" },
+          "insideH": { "size": 4, "color": "000000", "style": "single" },
+          "insideV": { "size": 4, "color": "000000", "style": "single" }
+        },
+        "headerStyle": {
+          "textStyle": {
+            "bold": true,
+            "color": "000000"
+          }
+        }
+      }
+    },
+    "codeBlockStyle": {
+      "font": "Courier New",
+      "size": 20,
+      "color": "000000",
+      "backgroundColor": "F8F8F8",
+      "borders": {
+        "top": { "size": 4, "color": "CCCCCC", "style": "single" },
+        "bottom": { "size": 4, "color": "CCCCCC", "style": "single" },
+        "left": { "size": 4, "color": "CCCCCC", "style": "single" },
+        "right": { "size": 4, "color": "CCCCCC", "style": "single" }
+      },
+      "spacing": {
+        "before": 240,
+        "after": 240
+      }
+    },
+    "inlineCodeStyle": {
+      "font": "Courier New",
+      "size": 22,
+      "color": "000000",
+      "backgroundColor": "F0F0F0"
+    },
+    "blockquoteStyle": {
+      "font": "Times New Roman",
+      "size": 24,
+      "color": "666666",
+      "italic": true,
+      "indent": {
+        "left": 720,
+        "right": 720
+      },
+      "spacing": {
+        "before": 240,
+        "after": 240
+      }
+    }
+  }
+}

@@ -1,0 +1,205 @@
+{
+  "name": "技术文档模板",
+  "description": "专为技术文档、API文档、开发指南等设计的样式模板",
+  "category": "technical",
+  "styleConfig": {
+    "document": {
+      "defaultFont": "微软雅黑",
+      "defaultSize": 24,
+      "defaultColor": "24292E",
+      "page": {
+        "size": "A4",
+        "orientation": "portrait",
+        "margins": {
+          "top": 1440,
+          "bottom": 1440,
+          "left": 1440,
+          "right": 1440
+        }
+      }
+    },
+    "headingStyles": {
+      "h1": {
+        "font": "微软雅黑",
+        "size": 36,
+        "color": "0366D6",
+        "bold": true,
+        "spacing": {
+          "before": 480,
+          "after": 240,
+          "line": 400
+        },
+        "borders": {
+          "bottom": { "size": 4, "color": "E1E4E8", "style": "single" }
+        }
+      },
+      "h2": {
+        "font": "微软雅黑",
+        "size": 32,
+        "color": "24292E",
+        "bold": true,
+        "spacing": {
+          "before": 360,
+          "after": 180,
+          "line": 380
+        },
+        "borders": {
+          "bottom": { "size": 2, "color": "E1E4E8", "style": "single" }
+        }
+      },
+      "h3": {
+        "font": "微软雅黑",
+        "size": 28,
+        "color": "24292E",
+        "bold": true,
+        "spacing": {
+          "before": 240,
+          "after": 120,
+          "line": 360
+        }
+      },
+      "h4": {
+        "font": "微软雅黑",
+        "size": 26,
+        "color": "586069",
+        "bold": true,
+        "spacing": {
+          "before": 180,
+          "after": 90,
+          "line": 340
+        }
+      },
+      "h5": {
+        "font": "微软雅黑",
+        "size": 24,
+        "color": "586069",
+        "bold": true,
+        "spacing": {
+          "before": 120,
+          "after": 60,
+          "line": 320
+        }
+      },
+      "h6": {
+        "font": "微软雅黑",
+        "size": 22,
+        "color": "6A737D",
+        "bold": true,
+        "spacing": {
+          "before": 90,
+          "after": 45,
+          "line": 300
+        }
+      }
+    },
+    "paragraphStyles": {
+      "normal": {
+        "font": "微软雅黑",
+        "size": 24,
+        "color": "24292E",
+        "spacing": {
+          "line": 380,
+          "lineRule": "auto",
+          "after": 120
+        },
+        "alignment": "left"
+      }
+    },
+    "listStyles": {
+      "bullet": {
+        "font": "微软雅黑",
+        "size": 24,
+        "color": "24292E",
+        "indent": {
+          "left": 480
+        },
+        "spacing": {
+          "after": 60
+        }
+      },
+      "numbered": {
+        "font": "微软雅黑",
+        "size": 24,
+        "color": "24292E",
+        "indent": {
+          "left": 480
+        },
+        "spacing": {
+          "after": 60
+        }
+      }
+    },
+    "tableStyles": {
+      "default": {
+        "width": {
+          "size": 100,
+          "type": "pct"
+        },
+        "borders": {
+          "top": { "size": 6, "color": "D1D5DA", "style": "single" },
+          "bottom": { "size": 6, "color": "D1D5DA", "style": "single" },
+          "left": { "size": 6, "color": "D1D5DA", "style": "single" },
+          "right": { "size": 6, "color": "D1D5DA", "style": "single" },
+          "insideH": { "size": 4, "color": "E1E4E8", "style": "single" },
+          "insideV": { "size": 4, "color": "E1E4E8", "style": "single" }
+        },
+        "headerStyle": {
+          "shading": "F6F8FA",
+          "textStyle": {
+            "font": "微软雅黑",
+            "bold": true,
+            "color": "24292E",
+            "size": 24
+          }
+        }
+      }
+    },
+    "codeBlockStyle": {
+      "font": "Consolas",
+      "size": 20,
+      "color": "24292E",
+      "backgroundColor": "F6F8FA",
+      "borders": {
+        "top": { "size": 4, "color": "E1E4E8", "style": "single" },
+        "bottom": { "size": 4, "color": "E1E4E8", "style": "single" },
+        "left": { "size": 4, "color": "E1E4E8", "style": "single" },
+        "right": { "size": 4, "color": "E1E4E8", "style": "single" }
+      },
+      "spacing": {
+        "before": 240,
+        "after": 240
+      },
+      "indent": {
+        "left": 240,
+        "right": 240
+      }
+    },
+    "inlineCodeStyle": {
+      "font": "Consolas",
+      "size": 22,
+      "color": "D73A49",
+      "backgroundColor": "F6F8FA",
+      "borders": {
+        "top": { "size": 2, "color": "E1E4E8", "style": "single" },
+        "bottom": { "size": 2, "color": "E1E4E8", "style": "single" },
+        "left": { "size": 2, "color": "E1E4E8", "style": "single" },
+        "right": { "size": 2, "color": "E1E4E8", "style": "single" }
+      }
+    },
+    "blockquoteStyle": {
+      "font": "微软雅黑",
+      "size": 24,
+      "color": "6A737D",
+      "borders": {
+        "left": { "size": 8, "color": "DFE2E5", "style": "single" }
+      },
+      "indent": {
+        "left": 480
+      },
+      "spacing": {
+        "before": 240,
+        "after": 240
+      }
+    }
+  }
+}
