@@ -20,7 +20,7 @@
     "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.19.1",
+    "@modelcontextprotocol/sdk": "^1.23.0",
     "diff": "^5.1.0",
     "glob": "^10.3.10",
     "minimatch": "^10.0.1",
