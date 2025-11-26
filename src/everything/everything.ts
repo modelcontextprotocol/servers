@@ -20,7 +20,6 @@ import {
   ServerRequest,
   SubscribeRequestSchema,
   Tool,
-  ToolSchema,
   UnsubscribeRequestSchema,
   type Root
 } from "@modelcontextprotocol/sdk/types.js";
@@ -35,11 +34,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const instructions = readFileSync(join(__dirname, "instructions.md"), "utf-8");
 
-const ToolInputSchema = ToolSchema.shape.inputSchema;
-type ToolInput = z.infer<typeof ToolInputSchema>;
-
-const ToolOutputSchema = ToolSchema.shape.outputSchema;
-type ToolOutput = z.infer<typeof ToolOutputSchema>;
+type ToolInput = Tool["inputSchema"];
+type ToolOutput = Tool["outputSchema"];
 
 type SendRequest = RequestHandlerExtra<ServerRequest, ServerNotification>["sendRequest"];
 
@@ -621,7 +617,7 @@ export const createServer = () => {
       );
       return {
         content: [
-          { type: "text", text: `LLM sampling result: ${result.content.text}` },
+          { type: "text", text: `LLM sampling result: ${Array.isArray(result.content) ? result.content.map(c => c.type === "text" ? c.text : JSON.stringify(c)).join("") : (result.content.type === "text" ? result.content.text : JSON.stringify(result.content))}` },
         ],
       };
     }

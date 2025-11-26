@@ -69,7 +69,7 @@ You should:
 8. Verify the hypothesis based on the Chain of Thought steps
 9. Repeat the process until satisfied with the solution
 10. Provide a single, ideally correct answer as the final output
-11. Only set next_thought_needed to false when truly done and a satisfactory answer is reached`,
+11. Only set nextThoughtNeeded to false when truly done and a satisfactory answer is reached`,
     inputSchema: {
       thought: z.string().describe("Your current thinking step"),
       nextThoughtNeeded: z.boolean().describe("Whether another thought step is needed"),
