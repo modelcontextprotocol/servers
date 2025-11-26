@@ -573,6 +573,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Adobe Commerce](https://github.com/rafaelstz/adobe-commerce-dev-mcp)** — MCP to interact with Adobe Commerce GraphQL API, including orders, products, customers, etc.
 - **[ADR Analysis](https://github.com/tosin2013/mcp-adr-analysis-server)** - AI-powered Architectural Decision Records (ADR) analysis server that provides architectural insights, technology stack detection, security checks, and TDD workflow enhancement for software development projects.
 - **[Ads MCP](https://github.com/amekala/ads-mcp)** - Remote MCP server for cross-platform ad campaign creation (Google Ads Search & PMax, TikTok). OAuth 2.1 authentication with progress streaming support for long-running operations. [Website](https://www.adspirer.com/)
+- **[Agent Interviews](https://github.com/thinkchainai/agentinterviews_mcp)** - Conduct AI-powered qualitative research interviews and surveys at scale with [Agent Interviews](https://agentinterviews.com).
 - **[AgentBay](https://github.com/Michael98671/agentbay)** - An MCP server for providing serverless cloud infrastructure for AI agents.
 - **[Agentic Framework](https://github.com/Piotr1215/mcp-agentic-framework)** - Multi-agent collaboration framework enabling AI agents to register, discover each other, exchange asynchronous messages via HTTP transport, and work together on complex tasks with persistent message history.
 - **[AgentMode](https://www.agentmode.app)** - Connect to dozens of databases, data warehouses, Github & more, from a single MCP server.  Run the Docker image locally, in the cloud, or on-premise.
@@ -1012,6 +1013,7 @@ search, and comprehensive file analysis.
 - **[Matrix](https://github.com/mjknowles/matrix-mcp-server)** - Interact with a Matrix homeserver.
 - **[Maven Tools MCP](https://github.com/arvindand/maven-tools-mcp)** - Maven Central dependency intelligence for JVM build tools. Supports all build tools (Maven, Gradle, SBT, Mill) with Context7 integration for documentation support.
 - **[Maybe Don't AI Policy Engine](https://www.maybedont.ai/download/)** - Yet another MCP security gateway, Maybe Don't AI provides policy checks on any call before it reaches downstream MCP servers to protect users from agents behaving poorly.
+- **[MCP Bundles Hub](https://github.com/thinkchainai/mcpbundles)** - Discover, install, and manage 500+ MCP provider integrations and bundles through [MCP Bundles](https://mcpbundles.com).
 - **[MCP Compass](https://github.com/liuyoshio/mcp-compass)** - Suggest the right MCP server for your needs
 - **[MCP Context Provider](https://github.com/doobidoo/MCP-Context-Provider)** - Static server that provides AI models with persistent tool-specific context and rules, preventing context loss between chat sessions and enabling consistent behavior across interactions.
 - **[MCP Create](https://github.com/tesla0225/mcp-create)** - A dynamic MCP server management service that creates, runs, and manages Model Context Protocol servers on-the-fly.
