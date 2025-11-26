@@ -1077,6 +1077,7 @@ search, and comprehensive file analysis.
 - **[Membase](https://github.com/unibaseio/membase-mcp)** - Save and query your agent memory in distributed way by Membase.
 - **[Meme MCP](https://github.com/lidorshimoni/meme-mcp)** - Generate memes via AI using the Imgflip API through the Model Context Protocol.
 - **[memento-mcp](https://github.com/gannonh/memento-mcp)** - Knowledge graph memory system built on Neo4j with semantic search, temporal awareness.
+- **[MCP Knowledge Graph](https://github.com/moche-ai/mcp-knowledge-graph)** - Verified knowledge graph with trust scores, fact-checking, and reasoning. Provides technology context, dependencies, alternatives, and best practices. Live server: [mcp.moche.ai](https://mcp.moche.ai)
 - **[memos-api-mcp](https://github.com/MemTensor/memos-api-mcp)** - A Model Context Protocol implementation for the API service of [MemOS](https://memos.openmem.net/), a memory management operating system designed for AI applications.
 - **[Meta Ads Remote MCP](https://github.com/pipeboard-co/meta-ads-mcp)** - Remote MCP server to interact with Meta Ads API - access, analyze, and manage Facebook, Instagram, and other Meta platforms advertising campaigns.
 - **[MetaTrader MCP](https://github.com/ariadng/metatrader-mcp-server)** - Enable AI LLMs to execute trades using MetaTrader 5 platform.
