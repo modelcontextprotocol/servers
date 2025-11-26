@@ -3,9 +3,14 @@
   "version": "0.6.2",
   "description": "MCP server that exercises all the features of the MCP protocol",
   "license": "MIT",
+  "mcpName": "io.github.modelcontextprotocol/server-everything",
   "author": "Anthropic, PBC (https://anthropic.com)",
   "homepage": "https://modelcontextprotocol.io",
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/modelcontextprotocol/servers.git"
+  },
   "type": "module",
   "bin": {
     "mcp-server-everything": "dist/index.js"
