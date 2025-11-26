@@ -1149,7 +1149,6 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Oura Ring](https://github.com/rajvirtual/oura-mcp-server)** (by Rajesh Vijay) - MCP Server to access and analyze your Oura Ring data. It provides a structured way to fetch and understand your health metrics.
 - **[Outline](https://github.com/Vortiago/mcp-outline)** - MCP Server to interact with [Outline](https://www.getoutline.com) knowledge base to search, read, create, and manage documents and their content, access collections, add comments, and manage document backlinks.
 - **[Outlook Mail + Calendar + OneDrive](https://github.com/Norcim133/OutlookMCPServer) - Virtual assistant with Outlook Mail, Calendar, and early OneDrive support (requires Azure admin).
-- **[pgtuner_mcp](https://github.com/isdaniel/pgtuner_mcp)** - provides AI-powered PostgreSQL performance tuning capabilities.
 - **[Pacman](https://github.com/oborchers/mcp-server-pacman)** - An MCP server that provides package index querying capabilities. This server is able to search and retrieve information from package repositories like PyPI, npm, crates.io, Docker Hub, and Terraform Registry.
 - **[pancakeswap-poolspy-mcp](https://github.com/kukapay/pancakeswap-poolspy-mcp)** - An MCP server that tracks newly created liquidity pools on Pancake Swap.
 - **[Pandoc](https://github.com/vivekVells/mcp-pandoc)** - MCP server for seamless document format conversion using Pandoc, supporting Markdown, HTML, PDF, DOCX (.docx), csv and more.
@@ -1161,6 +1160,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Peacock for VS Code](https://github.com/johnpapa/peacock-mcp)** - MCP Server for the Peacock extension for VS Code, coloring your world, one Code editor at a time. The main goal of the project is to show how an MCP server can be used to interact with APIs.
 - **[persistproc](https://github.com/irskep/persistproc)** - MCP server + command line tool that allows agents to see & control long-running processes like web servers.
 - **[Pexels](https://github.com/garylab/pexels-mcp-server)** - A MCP server providing access to Pexels Free Image API, enabling seamless search, retrieval, and download of high-quality royalty-free images.
+- **[pgtuner_mcp](https://github.com/isdaniel/pgtuner_mcp)** - provides AI-powered PostgreSQL performance tuning capabilities.
 - **[Pharos](https://github.com/QuentinCody/pharos-mcp-server)** - Unofficial MCP server for the Pharos database by the National Center for Advancing Translational Sciences (NCATS), providing access to target, drug, and disease information for drug discovery research.
 - **[Phone MCP](https://github.com/hao-cyber/phone-mcp)** - 📱 A powerful plugin that lets you control your Android phone. Enables AI agents to perform complex tasks like automatically playing music based on weather or making calls and sending texts.
 - **[PIF](https://github.com/hungryrobot1/MCP-PIF)** - A Personal Intelligence Framework (PIF), providing tools for file operations, structured reasoning, and journal-based documentation to support continuity and evolving human-AI collaboration across sessions.
