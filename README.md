@@ -865,6 +865,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Goodnews](https://github.com/VectorInstitute/mcp-goodnews)** - A simple MCP server that delivers curated positive and uplifting news stories.
 - **[Google Ads](https://github.com/gomarble-ai/google-ads-mcp-server)** - MCP server acting as an interface to the Google Ads, enabling programmatic access to Facebook Ads data and management features.
 - **[Google Analytics](https://github.com/surendranb/google-analytics-mcp)** - Google Analytics MCP Server to bring data across 200+ dimensions & metrics for LLMs to analyse.
+- **[Google Analytics 4](https://github.com/gomakers-ai/mcp-google-analytics)** - MCP server for Google Analytics Data API and Measurement Protocol to read reports and send events.
 - **[Google Calendar](https://github.com/v-3/google-calendar)** - Integration with Google Calendar to check schedules, find time, and add/delete events
 - **[Google Calendar](https://github.com/nspady/google-calendar-mcp)** - Google Calendar MCP Server for managing Google calendar events. Also supports searching for events by attributes like title and location.
 - **[Google Custom Search](https://github.com/adenot/mcp-google-search)** - Provides Google Search results via the Google Custom Search API
