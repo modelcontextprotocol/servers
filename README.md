@@ -1397,6 +1397,7 @@ search, and comprehensive file analysis.
 - **[USA Spending MCP Server](https://github.com/thsmale/usaspending-mcp-server)** – This leverages the official source of government spending data [USASPENDING.gov](https://www.usaspending.gov/). Which enables one to track government spending over time, search government spending by agency, explore government spending to communities, and much more.
 - **[use_aws_mcp](https://github.com/runjivu/use_aws_mcp)** - amazon-q-cli's use_aws tool extracted into independent mcp, for general aws api usage.
 - **[User Feedback](https://github.com/mrexodia/user-feedback-mcp)** - Simple MCP Server to enable a human-in-the-loop workflow in tools like Cline and Cursor.
+- **[Useless Toolkit](https://uselesstoolkit.com/apis/mcp-servers)** - MCP-ready server endpoints for utility APIs, including Password Generator, IP2Geo etc., are provided by UselessToolkit.com, allowing seamless integration with AI agents via secure RapidAPI connections.
 - **[USPTO](https://github.com/riemannzeta/patent_mcp_server)** - MCP server for accessing United States Patent & Trademark Office data through its Open Data Protocol (ODP) API.
 - **[Vectara](https://github.com/vectara/vectara-mcp)** - Query Vectara's trusted RAG-as-a-service platform.
 - **[Vega-Lite](https://github.com/isaacwasserman/mcp-vegalite-server)** - Generate visualizations from fetched data using the VegaLite format and renderer.
