@@ -2,6 +2,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -460,9 +461,73 @@ async function main() {
   // Initialize knowledge graph manager with the memory file path
   knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_FILE_PATH);
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Knowledge Graph MCP Server running on stdio");
+  // Use HTTP transport if MCP_TRANSPORT=http, otherwise stdio
+  if (process.env.MCP_TRANSPORT === 'http') {
+    const { createServer } = await import('http');
+    const transports: Record<string, StreamableHTTPServerTransport> = {};
+
+    const httpServer = createServer(async (req, res) => {
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+      if (req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+          const parsedBody = body.trim() ? JSON.parse(body) : undefined;
+
+          let transport: StreamableHTTPServerTransport;
+          if (sessionId && transports[sessionId]) {
+            transport = transports[sessionId];
+          } else if (!sessionId) {
+            transport = new StreamableHTTPServerTransport({
+              sessionIdGenerator: () => crypto.randomUUID(),
+              onsessioninitialized: (sid) => {
+                transports[sid] = transport;
+                console.error('Session initialized:', sid);
+              },
+              onsessionclosed: (sid) => {
+                delete transports[sid];
+                console.error('Session closed:', sid);
+              }
+            });
+            await server.connect(transport);
+          } else {
+            res.writeHead(400);
+            res.end('Invalid session ID');
+            return;
+          }
+
+          await transport.handleRequest(req, res, parsedBody);
+        });
+      } else if (req.method === 'GET') {
+        if (!sessionId || !transports[sessionId]) {
+          res.writeHead(400);
+          res.end('Invalid or missing session ID');
+          return;
+        }
+        await transports[sessionId].handleRequest(req, res);
+      } else if (req.method === 'DELETE') {
+        if (!sessionId || !transports[sessionId]) {
+          res.writeHead(400);
+          res.end('Invalid or missing session ID');
+          return;
+        }
+        await transports[sessionId].handleRequest(req, res);
+      } else {
+        res.writeHead(405);
+        res.end('Method not allowed');
+      }
+    });
+
+    const port = parseInt(process.env.PORT || '3000');
+    httpServer.listen(port, () => {
+      console.error(`Knowledge Graph MCP Server running on HTTP port ${port}`);
+    });
+  } else {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Knowledge Graph MCP Server running on stdio");
+  }
 }
 
 main().catch((error) => {
