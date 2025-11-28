@@ -1112,6 +1112,7 @@ search, and comprehensive file analysis.
 - **[MySQL](https://github.com/benborla/mcp-server-mysql)** (by benborla) - MySQL database integration in NodeJS with configurable access controls and schema inspection
 - **[MySQL](https://github.com/designcomputer/mysql_mcp_server)** (by DesignComputer) - MySQL database integration in Python with configurable access controls and schema inspection
 - **[MySQL-Server](https://github.com/tonycai/mcp-mysql-server)** (by TonyCai) - MySQL Database Integration using Python script with configurable access controls and schema inspection, usng stdio mode to suitable local deployment, you can run it in docker container.
+- **[Mysqltuner_mcp](https://github.com/isdaniel/mysqltuner_mcp)**  (by Danielshih)  - MySQL MCP Performance Tuning Server - AI-powered MySQL performance tuning capabilities.
 - **[n8n](https://github.com/leonardsellem/n8n-mcp-server)** - This MCP server provides tools and resources for AI assistants to manage n8n workflows and executions, including listing, creating, updating, and deleting workflows, as well as monitoring their execution status.
 - **[Nacos MCP Router](https://github.com/nacos-group/nacos-mcp-router)** - This MCP(Model Context Protocol) Server provides tools to search, install, proxy other MCP servers.
 - **[Nanana](https://github.com/nanana-app/mcp-server-nano-banana)** - This MCP provides AI text-to-image generator and AI image-to-image editor powered by Google Gemini Nano Banana.
