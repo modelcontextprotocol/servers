@@ -142,9 +142,9 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
         if end_timestamp:
             args.extend(['--until', end_timestamp])
         args.extend(['--format=%H%n%an%n%ad%n%s%n'])
-        
+
         log_output = repo.git.log(*args).split('\n')
-        
+
         log = []
         # Process commits in groups of 4 (hash, author, date, message)
         for i in range(0, len(log_output), 4):
@@ -199,7 +199,12 @@ def git_show(repo: git.Repo, revision: str) -> str:
         diff = commit.diff(git.NULL_TREE, create_patch=True)
     for d in diff:
         output.append(f"\n--- {d.a_path}\n+++ {d.b_path}\n")
-        output.append(d.diff.decode('utf-8'))
+        if d.diff is None:
+            continue
+        if isinstance(d.diff, bytes):
+            output.append(d.diff.decode('utf-8'))
+        else:
+            output.append(d.diff)
     return "".join(output)
 
 def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, not_contains: str | None = None) -> str:
@@ -343,7 +348,7 @@ async def serve(repository: Path | None) -> None:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         repo_path = Path(arguments["repo_path"])
-        
+
         # For all commands, we need an existing repo
         repo = git.Repo(repo_path)
 
@@ -400,7 +405,7 @@ async def serve(repository: Path | None) -> None:
             # Update the LOG case:
             case GitTools.LOG:
                 log = git_log(
-                    repo, 
+                    repo,
                     arguments.get("max_count", 10),
                     arguments.get("start_timestamp"),
                     arguments.get("end_timestamp")
@@ -409,7 +414,7 @@ async def serve(repository: Path | None) -> None:
                     type="text",
                     text="Commit history:\n" + "\n".join(log)
                 )]
-            
+
             case GitTools.CREATE_BRANCH:
                 result = git_create_branch(
                     repo,
@@ -446,7 +451,7 @@ async def serve(repository: Path | None) -> None:
                     type="text",
                     text=result
                 )]
-            
+
             case _:
                 raise ValueError(f"Unknown tool: {name}")
 

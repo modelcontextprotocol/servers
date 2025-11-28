@@ -3,9 +3,14 @@
   "version": "0.6.2",
   "description": "MCP server that exercises all the features of the MCP protocol",
   "license": "MIT",
+  "mcpName": "io.github.modelcontextprotocol/server-everything",
   "author": "Anthropic, PBC (https://anthropic.com)",
   "homepage": "https://modelcontextprotocol.io",
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/modelcontextprotocol/servers.git"
+  },
   "type": "module",
   "bin": {
     "mcp-server-everything": "dist/index.js"
@@ -22,11 +27,11 @@
     "start:streamableHttp": "node dist/streamableHttp.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.19.1",
+    "@modelcontextprotocol/sdk": "^1.23.0",
     "cors": "^2.8.5",
     "express": "^4.21.1",
     "jszip": "^3.10.1",
-    "zod": "^3.23.8",
+    "zod": "^3.25.0",
     "zod-to-json-schema": "^3.23.5"
   },
   "devDependencies": {

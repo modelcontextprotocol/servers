@@ -44,5 +44,6 @@ jobs:
           assignee_trigger: "claude"
 
           claude_args: |
+            --mcp-config .mcp.json
             --allowedTools Bash
-            --system-prompt "If posting a comment to GitHub, give a concise summary of the comment at the top and put all the details in a <details> block."
+            --append-system-prompt "If posting a comment to GitHub, give a concise summary of the comment at the top and put all the details in a <details> block. When working on MCP-related code or reviewing MCP-related changes, use the mcp-docs MCP server to look up the latest protocol documentation. For schema details, reference https://github.com/modelcontextprotocol/modelcontextprotocol/tree/main/schema which contains versioned schemas in JSON (schema.json) and TypeScript (schema.ts) formats."
