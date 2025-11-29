@@ -1068,6 +1068,7 @@ search, and comprehensive file analysis.
 - **[mcp_weather](https://github.com/isdaniel/mcp_weather_server)** - Get weather information from https://api.open-meteo.com API.
 - **[mcpcap](https://github.com/mcpcap/mcpcap)** - A modular Python MCP (Model Context Protocol) Server for analyzing PCAP files.
 - **[MCPfinder](https://github.com/mcpfinder/server)** - The AI Agent's "App Store": Discover, install, and monetize AI capabilities — all within the MCP ecosystem.
+- **[MCPower](https://github.com/wspotter/mcpower)** - Semantic knowledge search MCP server using FAISS vector embeddings. Drop any folder of documents and get instant natural language search via MCP or web console.
 - **[MCPIgnore Filesytem](https://github.com/CyberhavenInc/filesystem-mcpignore)** - A Data Security First filesystem MCP server that implements .mcpignore to prevent MCP clients from accessing sensitive data.
 - **[MCPJungle](https://github.com/mcpjungle/MCPJungle)** - Self-hosted MCP Registry and Gateway for enterprise AI Agents
 - **[MCPShell](https://github.com/inercia/mcpshell)** - Tool that allows LLMs to safely execute command-line tools, providing a secure bridge between LLMs and operating system commands.
