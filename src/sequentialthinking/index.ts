@@ -11,7 +11,19 @@ const server = new McpServer({
   version: "0.2.0",
 });
 
-const thinkingServer = new SequentialThinkingServer();
+const thinkingSessions = new Map<string, SequentialThinkingServer>();
+
+function getOrCreateThinkingServer(sessionId?: string): SequentialThinkingServer {
+  if (!sessionId) {
+    return new SequentialThinkingServer();
+  }
+  
+  if (!thinkingSessions.has(sessionId)) {
+    thinkingSessions.set(sessionId, new SequentialThinkingServer());
+  }
+  
+  return thinkingSessions.get(sessionId)!;
+}
 
 server.registerTool(
   "sequentialthinking",
@@ -91,13 +103,13 @@ You should:
     },
   },
   async (args) => {
+    const thinkingServer = getOrCreateThinkingServer();
     const result = thinkingServer.processThought(args);
 
     if (result.isError) {
-      return result;
+      return { content: result.content };
     }
 
-    // Parse the JSON response to get structured content
     const parsedContent = JSON.parse(result.content[0].text);
 
     return {
@@ -111,32 +123,73 @@ async function runServer() {
   if (process.env.MCP_TRANSPORT === 'http') {
     const { createServer } = await import('http');
     const transports: Record<string, StreamableHTTPServerTransport> = {};
+    const sessionTimeouts: Record<string, NodeJS.Timeout> = {};
+    const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+    const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB
+
+    function cleanupSession(sid: string) {
+      delete transports[sid];
+      thinkingSessions.delete(sid);
+      if (sessionTimeouts[sid]) {
+        clearTimeout(sessionTimeouts[sid]);
+        delete sessionTimeouts[sid];
+      }
+    }
+
+    function resetSessionTimeout(sid: string) {
+      if (sessionTimeouts[sid]) {
+        clearTimeout(sessionTimeouts[sid]);
+      }
+      sessionTimeouts[sid] = setTimeout(() => cleanupSession(sid), SESSION_TIMEOUT_MS);
+    }
 
     const httpServer = createServer(async (req, res) => {
       const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
       if (req.method === 'POST') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
+        const chunks: Buffer[] = [];
+        let totalSize = 0;
+
+        req.on('data', chunk => {
+          totalSize += chunk.length;
+          if (totalSize > MAX_BODY_SIZE) {
+            req.destroy();
+            res.writeHead(413);
+            res.end('Request body too large');
+            return;
+          }
+          chunks.push(chunk);
+        });
+
         req.on('end', async () => {
-          const parsedBody = body.trim() ? JSON.parse(body) : undefined;
+          let parsedBody;
+          try {
+            const body = Buffer.concat(chunks).toString();
+            parsedBody = body.trim() ? JSON.parse(body) : undefined;
+          } catch (error) {
+            res.writeHead(400);
+            res.end('Invalid JSON');
+            return;
+          }
 
           let transport: StreamableHTTPServerTransport;
           if (sessionId && transports[sessionId]) {
             transport = transports[sessionId];
+            resetSessionTimeout(sessionId);
           } else if (!sessionId) {
             transport = new StreamableHTTPServerTransport({
               sessionIdGenerator: () => crypto.randomUUID(),
-              onsessioninitialized: (sid) => {
+              onsessioninitialized: async (sid) => {
+                await server.connect(transport);
                 transports[sid] = transport;
+                resetSessionTimeout(sid);
                 console.error('Session initialized:', sid);
               },
               onsessionclosed: (sid) => {
-                delete transports[sid];
+                cleanupSession(sid);
                 console.error('Session closed:', sid);
               }
             });
-            await server.connect(transport);
           } else {
             res.writeHead(400);
             res.end('Invalid session ID');
@@ -151,6 +204,7 @@ async function runServer() {
           res.end('Invalid or missing session ID');
           return;
         }
+        resetSessionTimeout(sessionId);
         await transports[sessionId].handleRequest(req, res);
       } else if (req.method === 'DELETE') {
         if (!sessionId || !transports[sessionId]) {
@@ -159,6 +213,7 @@ async function runServer() {
           return;
         }
         await transports[sessionId].handleRequest(req, res);
+        cleanupSession(sessionId);
       } else {
         res.writeHead(405);
         res.end('Method not allowed');

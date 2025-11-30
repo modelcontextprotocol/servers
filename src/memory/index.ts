@@ -547,7 +547,8 @@ async function main() {
               } else if (!sessionId) {
                 transport = new StreamableHTTPServerTransport({
                   sessionIdGenerator: () => crypto.randomUUID(),
-                  onsessioninitialized: (sid) => {
+                  onsessioninitialized: async (sid) => {
+                    await server.connect(transport);
                     transports[sid] = transport;
                     resetSessionTimer(sid);
                     console.error('Session initialized:', sid);
@@ -556,7 +557,6 @@ async function main() {
                     cleanupSession(sid);
                   }
                 });
-                await server.connect(transport);
               } else {
                 res.writeHead(400);
                 res.end('Invalid session ID');
