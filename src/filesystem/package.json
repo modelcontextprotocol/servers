@@ -3,9 +3,14 @@
   "version": "0.6.3",
   "description": "MCP server for filesystem access",
   "license": "MIT",
+  "mcpName": "io.github.modelcontextprotocol/server-filesystem",
   "author": "Anthropic, PBC (https://anthropic.com)",
   "homepage": "https://modelcontextprotocol.io",
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/modelcontextprotocol/servers.git"
+  },
   "type": "module",
   "bin": {
     "mcp-server-filesystem": "dist/index.js"
@@ -20,9 +25,9 @@
     "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.19.1",
+    "@modelcontextprotocol/sdk": "^1.23.0",
     "diff": "^5.1.0",
-    "glob": "^10.3.10",
+    "glob": "^10.5.0",
     "minimatch": "^10.0.1",
     "zod-to-json-schema": "^3.23.5"
   },

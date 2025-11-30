@@ -3,6 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
+  CallToolResult,
   RootsListChangedNotificationSchema,
   type Root,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -175,22 +176,18 @@ const readTextFileHandler = async (args: z.infer<typeof ReadTextFileArgsSchema>)
     throw new Error("Cannot specify both head and tail parameters simultaneously");
   }
 
+  let content: string;
   if (args.tail) {
-    const tailContent = await tailFile(validPath, args.tail);
-    return {
-      content: [{ type: "text" as const, text: tailContent }],
-    };
+    content = await tailFile(validPath, args.tail);
+  } else if (args.head) {
+    content = await headFile(validPath, args.head);
+  } else {
+    content = await readFileContent(validPath);
   }
 
-  if (args.head) {
-    const headContent = await headFile(validPath, args.head);
-    return {
-      content: [{ type: "text" as const, text: headContent }],
-    };
-  }
-  const content = await readFileContent(validPath);
   return {
     content: [{ type: "text" as const, text: content }],
+    structuredContent: { content }
   };
 };
 
@@ -199,17 +196,9 @@ server.registerTool(
   {
     title: "Read File (Deprecated)",
     description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
-    inputSchema: {
-      path: z.string(),
-      tail: z.number().optional().describe("If provided, returns only the last N lines of the file"),
-      head: z.number().optional().describe("If provided, returns only the first N lines of the file")
-    },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    inputSchema: ReadTextFileArgsSchema.shape,
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: true }
   },
   readTextFileHandler
 );
@@ -231,12 +220,8 @@ server.registerTool(
       tail: z.number().optional().describe("If provided, returns only the last N lines of the file"),
       head: z.number().optional().describe("If provided, returns only the first N lines of the file")
     },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: true }
   },
   readTextFileHandler
 );
@@ -253,11 +238,12 @@ server.registerTool(
     },
     outputSchema: {
       content: z.array(z.object({
-        type: z.enum(["image", "audio"]),
+        type: z.enum(["image", "audio", "blob"]),
         data: z.string(),
         mimeType: z.string()
       }))
-    }
+    },
+    annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ReadMediaFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -278,17 +264,17 @@ server.registerTool(
     const mimeType = mimeTypes[extension] || "application/octet-stream";
     const data = await readFileAsBase64Stream(validPath);
 
-    if (mimeType.startsWith("audio/")) {
-      return {
-        content: [{ type: "audio" as const, data, mimeType }],
-      };
-    } else {
-      // For all other media types including images and unknown types, return as image
-      // (MCP ImageContent can handle any base64-encoded binary data with appropriate mimeType)
-      return {
-        content: [{ type: "image" as const, data, mimeType }],
-      };
-    }
+    const type = mimeType.startsWith("image/")
+      ? "image"
+      : mimeType.startsWith("audio/")
+        ? "audio"
+        // Fallback for other binary types, not officially supported by the spec but has been used for some time
+        : "blob";
+    const contentItem = { type: type as 'image' | 'audio' | 'blob', data, mimeType };
+    return {
+      content: [contentItem],
+      structuredContent: { content: [contentItem] }
+    } as unknown as CallToolResult;
   }
 );
 
@@ -307,12 +293,8 @@ server.registerTool(
         .min(1)
         .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories.")
     },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ReadMultipleFilesArgsSchema>) => {
     const results = await Promise.all(
@@ -327,8 +309,10 @@ server.registerTool(
         }
       }),
     );
+    const text = results.join("\n---\n");
     return {
-      content: [{ type: "text" as const, text: results.join("\n---\n") }],
+      content: [{ type: "text" as const, text }],
+      structuredContent: { content: text }
     };
   }
 );
@@ -345,18 +329,16 @@ server.registerTool(
       path: z.string(),
       content: z.string()
     },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
   },
   async (args: z.infer<typeof WriteFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
     await writeFileContent(validPath, args.content);
+    const text = `Successfully wrote to ${args.path}`;
     return {
-      content: [{ type: "text" as const, text: `Successfully wrote to ${args.path}` }],
+      content: [{ type: "text" as const, text }],
+      structuredContent: { content: text }
     };
   }
 );
@@ -377,18 +359,15 @@ server.registerTool(
       })),
       dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
     },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
   },
   async (args: z.infer<typeof EditFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
     const result = await applyFileEdits(validPath, args.edits, args.dryRun);
     return {
       content: [{ type: "text" as const, text: result }],
+      structuredContent: { content: result }
     };
   }
 );
@@ -405,18 +384,16 @@ server.registerTool(
     inputSchema: {
       path: z.string()
     },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false }
   },
   async (args: z.infer<typeof CreateDirectoryArgsSchema>) => {
     const validPath = await validatePath(args.path);
     await fs.mkdir(validPath, { recursive: true });
+    const text = `Successfully created directory ${args.path}`;
     return {
-      content: [{ type: "text" as const, text: `Successfully created directory ${args.path}` }],
+      content: [{ type: "text" as const, text }],
+      structuredContent: { content: text }
     };
   }
 );
@@ -433,12 +410,8 @@ server.registerTool(
     inputSchema: {
       path: z.string()
     },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ListDirectoryArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -448,6 +421,7 @@ server.registerTool(
       .join("\n");
     return {
       content: [{ type: "text" as const, text: formatted }],
+      structuredContent: { content: formatted }
     };
   }
 );
@@ -465,12 +439,8 @@ server.registerTool(
       path: z.string(),
       sortBy: z.enum(["name", "size"]).optional().default("name").describe("Sort entries by name or size")
     },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ListDirectoryWithSizesArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -526,11 +496,11 @@ server.registerTool(
       `Combined size: ${formatSize(totalSize)}`
     ];
 
+    const text = [...formattedEntries, ...summary].join("\n");
+    const contentBlock = { type: "text" as const, text };
     return {
-      content: [{
-        type: "text" as const,
-        text: [...formattedEntries, ...summary].join("\n")
-      }],
+      content: [contentBlock],
+      structuredContent: { content: [contentBlock] }
     };
   }
 );
@@ -548,12 +518,8 @@ server.registerTool(
       path: z.string(),
       excludePatterns: z.array(z.string()).optional().default([])
     },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof DirectoryTreeArgsSchema>) => {
     interface TreeEntry {
@@ -600,11 +566,11 @@ server.registerTool(
     }
 
     const treeData = await buildTree(rootPath, args.excludePatterns);
+    const text = JSON.stringify(treeData, null, 2);
+    const contentBlock = { type: "text" as const, text };
     return {
-      content: [{
-        type: "text" as const,
-        text: JSON.stringify(treeData, null, 2)
-      }],
+      content: [contentBlock],
+      structuredContent: { content: [contentBlock] }
     };
   }
 );
@@ -622,19 +588,18 @@ server.registerTool(
       source: z.string(),
       destination: z.string()
     },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false }
   },
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
     const validSourcePath = await validatePath(args.source);
     const validDestPath = await validatePath(args.destination);
     await fs.rename(validSourcePath, validDestPath);
+    const text = `Successfully moved ${args.source} to ${args.destination}`;
+    const contentBlock = { type: "text" as const, text };
     return {
-      content: [{ type: "text" as const, text: `Successfully moved ${args.source} to ${args.destination}` }],
+      content: [contentBlock],
+      structuredContent: { content: [contentBlock] }
     };
   }
 );
@@ -654,18 +619,16 @@ server.registerTool(
       pattern: z.string(),
       excludePatterns: z.array(z.string()).optional().default([])
     },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof SearchFilesArgsSchema>) => {
     const validPath = await validatePath(args.path);
     const results = await searchFilesWithValidation(validPath, args.pattern, allowedDirectories, { excludePatterns: args.excludePatterns });
+    const text = results.length > 0 ? results.join("\n") : "No matches found";
     return {
-      content: [{ type: "text" as const, text: results.length > 0 ? results.join("\n") : "No matches found" }],
+      content: [{ type: "text" as const, text }],
+      structuredContent: { content: text }
     };
   }
 );
@@ -682,20 +645,18 @@ server.registerTool(
     inputSchema: {
       path: z.string()
     },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof GetFileInfoArgsSchema>) => {
     const validPath = await validatePath(args.path);
     const info = await getFileStats(validPath);
+    const text = Object.entries(info)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join("\n");
     return {
-      content: [{ type: "text" as const, text: Object.entries(info)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join("\n") }],
+      content: [{ type: "text" as const, text }],
+      structuredContent: { content: text }
     };
   }
 );
@@ -710,19 +671,14 @@ server.registerTool(
       "Use this to understand which directories and their nested paths are available " +
       "before trying to access files.",
     inputSchema: {},
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.literal("text"),
-        text: z.string()
-      }))
-    }
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: true }
   },
   async () => {
+    const text = `Allowed directories:\n${allowedDirectories.join('\n')}`;
     return {
-      content: [{
-        type: "text" as const,
-        text: `Allowed directories:\n${allowedDirectories.join('\n')}`
-      }],
+      content: [{ type: "text" as const, text }],
+      structuredContent: { content: text }
     };
   }
 );
