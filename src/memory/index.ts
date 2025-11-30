@@ -8,6 +8,30 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// Simple file lock implementation
+class FileLock {
+  private locks = new Map<string, Promise<void>>();
+
+  async acquire<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    while (this.locks.has(key)) {
+      await this.locks.get(key);
+    }
+    
+    let release: () => void;
+    const lock = new Promise<void>(resolve => { release = resolve; });
+    this.locks.set(key, lock);
+    
+    try {
+      return await fn();
+    } finally {
+      this.locks.delete(key);
+      release!();
+    }
+  }
+}
+
+const fileLock = new FileLock();
+
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
 
@@ -70,39 +94,47 @@ export class KnowledgeGraphManager {
   constructor(private memoryFilePath: string) {}
 
   private async loadGraph(): Promise<KnowledgeGraph> {
-    try {
-      const data = await fs.readFile(this.memoryFilePath, "utf-8");
-      const lines = data.split("\n").filter(line => line.trim() !== "");
-      return lines.reduce((graph: KnowledgeGraph, line) => {
-        const item = JSON.parse(line);
-        if (item.type === "entity") graph.entities.push(item as Entity);
-        if (item.type === "relation") graph.relations.push(item as Relation);
-        return graph;
-      }, { entities: [], relations: [] });
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && (error as any).code === "ENOENT") {
-        return { entities: [], relations: [] };
+    return fileLock.acquire(this.memoryFilePath, async () => {
+      try {
+        const data = await fs.readFile(this.memoryFilePath, "utf-8");
+        const lines = data.split("\n").filter(line => line.trim() !== "");
+        return lines.reduce((graph: KnowledgeGraph, line) => {
+          try {
+            const item = JSON.parse(line);
+            if (item.type === "entity") graph.entities.push(item as Entity);
+            if (item.type === "relation") graph.relations.push(item as Relation);
+          } catch (parseError) {
+            console.error(`Skipping malformed line: ${line}`, parseError);
+          }
+          return graph;
+        }, { entities: [], relations: [] });
+      } catch (error) {
+        if (error instanceof Error && 'code' in error && (error as any).code === "ENOENT") {
+          return { entities: [], relations: [] };
+        }
+        throw error;
       }
-      throw error;
-    }
+    });
   }
 
   private async saveGraph(graph: KnowledgeGraph): Promise<void> {
-    const lines = [
-      ...graph.entities.map(e => JSON.stringify({
-        type: "entity",
-        name: e.name,
-        entityType: e.entityType,
-        observations: e.observations
-      })),
-      ...graph.relations.map(r => JSON.stringify({
-        type: "relation",
-        from: r.from,
-        to: r.to,
-        relationType: r.relationType
-      })),
-    ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    return fileLock.acquire(this.memoryFilePath, async () => {
+      const lines = [
+        ...graph.entities.map(e => JSON.stringify({
+          type: "entity",
+          name: e.name,
+          entityType: e.entityType,
+          observations: e.observations
+        })),
+        ...graph.relations.map(r => JSON.stringify({
+          type: "relation",
+          from: r.from,
+          to: r.to,
+          relationType: r.relationType
+        })),
+      ];
+      await fs.writeFile(this.memoryFilePath, lines.join("\n") + "\n");
+    });
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
@@ -465,57 +497,109 @@ async function main() {
   if (process.env.MCP_TRANSPORT === 'http') {
     const { createServer } = await import('http');
     const transports: Record<string, StreamableHTTPServerTransport> = {};
+    const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+    const MAX_REQUEST_SIZE = 10 * 1024 * 1024; // 10MB
+    const sessionTimers: Record<string, NodeJS.Timeout> = {};
+
+    const cleanupSession = (sessionId: string) => {
+      if (sessionTimers[sessionId]) {
+        clearTimeout(sessionTimers[sessionId]);
+        delete sessionTimers[sessionId];
+      }
+      delete transports[sessionId];
+      console.error('Session cleaned up:', sessionId);
+    };
+
+    const resetSessionTimer = (sessionId: string) => {
+      if (sessionTimers[sessionId]) {
+        clearTimeout(sessionTimers[sessionId]);
+      }
+      sessionTimers[sessionId] = setTimeout(() => cleanupSession(sessionId), SESSION_TIMEOUT);
+    };
 
     const httpServer = createServer(async (req, res) => {
-      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      try {
+        const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
-      if (req.method === 'POST') {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', async () => {
-          const parsedBody = body.trim() ? JSON.parse(body) : undefined;
+        if (req.method === 'POST') {
+          let body = '';
+          let size = 0;
 
-          let transport: StreamableHTTPServerTransport;
-          if (sessionId && transports[sessionId]) {
-            transport = transports[sessionId];
-          } else if (!sessionId) {
-            transport = new StreamableHTTPServerTransport({
-              sessionIdGenerator: () => crypto.randomUUID(),
-              onsessioninitialized: (sid) => {
-                transports[sid] = transport;
-                console.error('Session initialized:', sid);
-              },
-              onsessionclosed: (sid) => {
-                delete transports[sid];
-                console.error('Session closed:', sid);
+          req.on('data', chunk => {
+            size += chunk.length;
+            if (size > MAX_REQUEST_SIZE) {
+              req.destroy();
+              res.writeHead(413);
+              res.end('Request too large');
+              return;
+            }
+            body += chunk;
+          });
+
+          req.on('end', async () => {
+            try {
+              const parsedBody = body.trim() ? JSON.parse(body) : undefined;
+
+              let transport: StreamableHTTPServerTransport;
+              if (sessionId && transports[sessionId]) {
+                transport = transports[sessionId];
+                resetSessionTimer(sessionId);
+              } else if (!sessionId) {
+                transport = new StreamableHTTPServerTransport({
+                  sessionIdGenerator: () => crypto.randomUUID(),
+                  onsessioninitialized: (sid) => {
+                    transports[sid] = transport;
+                    resetSessionTimer(sid);
+                    console.error('Session initialized:', sid);
+                  },
+                  onsessionclosed: (sid) => {
+                    cleanupSession(sid);
+                  }
+                });
+                await server.connect(transport);
+              } else {
+                res.writeHead(400);
+                res.end('Invalid session ID');
+                return;
               }
-            });
-            await server.connect(transport);
-          } else {
+
+              await transport.handleRequest(req, res, parsedBody);
+            } catch (error) {
+              console.error('Error handling POST request:', error);
+              res.writeHead(500);
+              res.end('Internal server error');
+            }
+          });
+
+          req.on('error', (error) => {
+            console.error('Request error:', error);
             res.writeHead(400);
-            res.end('Invalid session ID');
+            res.end('Bad request');
+          });
+        } else if (req.method === 'GET') {
+          if (!sessionId || !transports[sessionId]) {
+            res.writeHead(400);
+            res.end('Invalid or missing session ID');
             return;
           }
-
-          await transport.handleRequest(req, res, parsedBody);
-        });
-      } else if (req.method === 'GET') {
-        if (!sessionId || !transports[sessionId]) {
-          res.writeHead(400);
-          res.end('Invalid or missing session ID');
-          return;
+          resetSessionTimer(sessionId);
+          await transports[sessionId].handleRequest(req, res);
+        } else if (req.method === 'DELETE') {
+          if (!sessionId || !transports[sessionId]) {
+            res.writeHead(400);
+            res.end('Invalid or missing session ID');
+            return;
+          }
+          await transports[sessionId].handleRequest(req, res);
+          cleanupSession(sessionId);
+        } else {
+          res.writeHead(405);
+          res.end('Method not allowed');
         }
-        await transports[sessionId].handleRequest(req, res);
-      } else if (req.method === 'DELETE') {
-        if (!sessionId || !transports[sessionId]) {
-          res.writeHead(400);
-          res.end('Invalid or missing session ID');
-          return;
-        }
-        await transports[sessionId].handleRequest(req, res);
-      } else {
-        res.writeHead(405);
-        res.end('Method not allowed');
+      } catch (error) {
+        console.error('Unhandled error in HTTP handler:', error);
+        res.writeHead(500);
+        res.end('Internal server error');
       }
     });
 
