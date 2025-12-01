@@ -74,8 +74,14 @@ export class KnowledgeGraphManager {
       const lines = data.split("\n").filter(line => line.trim() !== "");
       return lines.reduce((graph: KnowledgeGraph, line) => {
         const item = JSON.parse(line);
-        if (item.type === "entity") graph.entities.push(item as Entity);
-        if (item.type === "relation") graph.relations.push(item as Relation);
+        if (item.type === "entity") {
+          const { type, ...entity } = item;
+          graph.entities.push(entity as Entity);
+        }
+        if (item.type === "relation") {
+          const { type, ...relation } = item;
+          graph.relations.push(relation as Relation);
+        }
         return graph;
       }, { entities: [], relations: [] });
     } catch (error) {
