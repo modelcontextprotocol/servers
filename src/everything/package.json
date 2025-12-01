@@ -29,7 +29,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.23.0",
     "cors": "^2.8.5",
-    "express": "^4.21.1",
+    "express": "^4.22.0",
     "jszip": "^3.10.1",
     "zod": "^3.25.0",
     "zod-to-json-schema": "^3.23.5"
