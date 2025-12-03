@@ -16,9 +16,16 @@ export class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
   private disableThoughtLogging: boolean;
+  private readonly maxHistorySize: number = 1000;
 
   constructor() {
     this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
+  }
+
+  private pruneHistory(): void {
+    if (this.thoughtHistory.length > this.maxHistorySize) {
+      this.thoughtHistory = this.thoughtHistory.slice(-this.maxHistorySize);
+    }
   }
 
   private formatThought(thoughtData: ThoughtData): string {
@@ -58,12 +65,18 @@ export class SequentialThinkingServer {
       }
 
       this.thoughtHistory.push(input);
+      this.pruneHistory();
 
       if (input.branchFromThought && input.branchId) {
         if (!this.branches[input.branchId]) {
           this.branches[input.branchId] = [];
         }
         this.branches[input.branchId].push(input);
+        
+        // Prune branches too
+        if (this.branches[input.branchId].length > this.maxHistorySize) {
+          this.branches[input.branchId] = this.branches[input.branchId].slice(-this.maxHistorySize);
+        }
       }
 
       if (!this.disableThoughtLogging) {

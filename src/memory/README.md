@@ -182,6 +182,31 @@ The server can be configured using the following environment variables:
 
 - `MEMORY_FILE_PATH`: Path to the memory storage JSONL file (default: `memory.jsonl` in the server directory)
 
+#### HTTP Transport
+
+To run the server with HTTP transport instead of stdio:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "http",
+        "PORT": "3000"
+      }
+    }
+  }
+}
+```
+
+- `MCP_TRANSPORT`: Set to `http` to use HTTP transport (default: stdio)
+- `PORT`: HTTP port number (default: 3000)
+
 # VS Code Installation Instructions
 
 For quick installation, use one of the one-click installation buttons below:

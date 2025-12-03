@@ -78,6 +78,32 @@ Add this to your `claude_desktop_config.json`:
 ```
 
 To disable logging of thought information set env var: `DISABLE_THOUGHT_LOGGING` to `true`.
+
+#### HTTP Transport
+
+To run the server with HTTP transport instead of stdio:
+
+```json
+{
+  "mcpServers": {
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "http",
+        "PORT": "3000"
+      }
+    }
+  }
+}
+```
+
+- `MCP_TRANSPORT`: Set to `http` to use HTTP transport (default: stdio)
+- `PORT`: HTTP port number (default: 3000)
+
 Comment
 
 ### Usage with VS Code
