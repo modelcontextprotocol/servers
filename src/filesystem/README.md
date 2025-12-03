@@ -208,6 +208,152 @@ The mapping for filesystem tools is:
 Add this to your `claude_desktop_config.json`:
 
 Note: you can provide sandboxed directories to the server by mounting them to `/projects`. Adding the `ro` flag will make the directory readonly by the server.
+# Installing the Filesystem MCP Server for Claude Desktop on Windows
+
+Getting Claude Desktop to interact with your local files opens up powerful workflows for document analysis, code review, and file management. This guide walks you through setting up the Filesystem MCP (Model Context Protocol) server on Windows, including a common fix for connection issues.
+
+## Prerequisites
+
+Before starting, make sure you have:
+
+- Claude Desktop installed on your Windows machine
+- Node.js installed (download from [nodejs.org](https://nodejs.org) if needed)
+- Administrator access to your computer
+
+## Step 1: Fix the Roaming Directory Issue
+
+Many Windows users encounter server connection errors or file sourcing problems because of how Windows handles the AppData\Roaming directory with npx. To prevent this, create the npx cache directory manually before configuring anything.
+
+Open Command Prompt and run:
+
+```cmd
+mkdir C:\Users\YOUR_USERNAME\AppData\Roaming\npx
+```
+
+Replace `YOUR_USERNAME` with your actual Windows username. You can find this by opening File Explorer and navigating to `C:\Users\` to see your username folder.
+
+## Step 2: Locate the Claude Desktop Configuration File
+
+The configuration file lives at:
+
+```
+C:\Users\YOUR_USERNAME\AppData\Roaming\Claude\claude_desktop_config.json
+```
+
+If the file doesn't exist, you can create it. If it does exist, you'll be editing it.
+
+## Step 3: Update the Configuration
+
+Open `claude_desktop_config.json` in a text editor (Notepad works fine) and add the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "C:/Program Files/nodejs/npx.cmd",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:\\Users\\YOUR_USERNAME\\Desktop",
+        "C:\\Users\\YOUR_USERNAME\\Downloads"
+      ]
+    }
+  }
+}
+```
+
+A few important notes about this configuration:
+
+- The `command` path uses forward slashes, which works correctly on Windows
+- The `args` paths use escaped backslashes (`\\`) as required for JSON strings
+- The `-y` flag automatically confirms the npx package installation
+- You can add or remove directory paths in the args array to control which folders Claude can access
+
+Adjust the paths to match your username and whichever directories you want Claude to be able to read and write.
+
+## Step 4: Fully Restart Claude Desktop
+
+This step is critical. Don't just close the window—you need to completely quit the application:
+
+1. Right-click the Claude icon in your system tray (bottom-right corner of your taskbar)
+2. Select "Quit" or "Exit"
+3. Wait a few seconds
+4. Relaunch Claude Desktop
+
+A simple window close won't reload the configuration. The full restart ensures Claude reads the updated config file.
+
+## Step 5: Verify the Server is Running
+
+Once Claude Desktop opens without errors:
+
+1. Click on the **Settings** menu (gear icon or via the menu)
+2. Navigate to **Developer**
+3. Look for the **filesystem** server in the list
+4. Confirm it shows as running (typically indicated by a green status or "connected" label)
+
+If you see errors here, double-check your configuration file for JSON syntax errors (missing commas, brackets, or quote marks are common culprits).
+
+## Step 6: Configure the Connector
+
+With the server running, you now need to enable the connector:
+
+1. Go to **Settings > Connectors**
+2. Find the **filesystem** connector in the list
+3. Click to configure or enable it
+4. Save your changes
+
+## Step 7: Confirm Everything Works
+
+Start a new conversation in Claude Desktop. You should now see a small plug or hammer icon in the input area. Click it to open the tools modal—the filesystem connector should appear in the list of available tools.
+
+Try asking Claude something like "What files are on my Desktop?" to verify the connection is working properly.
+
+## Troubleshooting
+
+**Server won't start or shows connection errors**
+
+- Verify Node.js is installed by running `node --version` in Command Prompt
+- Confirm the npx.cmd path matches your Node.js installation location
+- Make sure you created the Roaming\npx directory from Step 1
+
+**JSON parsing errors**
+
+- Validate your JSON at [jsonlint.com](https://jsonlint.com)
+- Check for trailing commas (not allowed in JSON)
+- Ensure all paths use either forward slashes or escaped backslashes
+
+**Filesystem connector not appearing**
+
+- Restart Claude Desktop completely (quit from system tray)
+- Check Developer settings to confirm the server is running
+- Verify the connector is enabled in Settings > Connectors
+
+**Permission denied errors**
+
+- Make sure the directories you specified in the config actually exist
+- Check that your Windows user has read/write permissions for those folders
+
+## Customizing Your Setup
+
+You can grant Claude access to additional directories by adding more paths to the args array:
+
+```json
+"args": [
+  "-y",
+  "@modelcontextprotocol/server-filesystem",
+  "C:\\Users\\YOUR_USERNAME\\Desktop",
+  "C:\\Users\\YOUR_USERNAME\\Downloads",
+  "C:\\Users\\YOUR_USERNAME\\Documents",
+  "D:\\Projects"
+]
+```
+
+Be thoughtful about which directories you expose. Limiting access to specific folders you actually need keeps things more secure and prevents accidental modifications to system files.
+
+## Conclusion
+
+With the Filesystem MCP server configured, Claude Desktop can now help you manage files, analyze documents, review code, and automate file-based tasks directly on your Windows machine. The initial setup takes a few minutes, but once configured, it opens up a much more integrated workflow.
+
 
 ### Docker
 Note: all directories must be mounted to `/projects` by default.
