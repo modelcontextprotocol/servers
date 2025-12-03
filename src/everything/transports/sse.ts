@@ -1,6 +1,6 @@
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
-import { createServer } from "./everything.js";
+import { createServer } from "../server/index.js";
 import cors from 'cors';
 
 console.error('Starting SSE server...');
@@ -35,7 +35,7 @@ app.get("/sse", async (req, res) => {
     startNotificationIntervals(transport.sessionId);
 
     // Handle close of connection
-    server.onclose = async () => {
+    server.server.onclose = async () => {
       console.error("Client Disconnected: ", transport.sessionId);
       transports.delete(transport.sessionId);
       await cleanup();
