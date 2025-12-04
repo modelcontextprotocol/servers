@@ -1127,6 +1127,7 @@ search, and comprehensive file analysis.
 - **[NCP](https://github.com/portel-dev/ncp)** (Natural Context Provider by portel.dev) - NCP lets your AI dream of a tool and articulate its need as a user story. NCP then intelligently discovers and makes that tool instantly available, streamlining thought processes, eliminating cognitive overload, and slashing token costs by up to 87% (47ms discovery). Experience true on-demand tool access, smart health monitoring, and energy efficiency for your AI agents.
 - **[Neo4j](https://github.com/da-okazaki/mcp-neo4j-server)** - A community built server that interacts with Neo4j Graph Database.
 - **[Neovim](https://github.com/bigcodegen/mcp-neovim-server)** - An MCP Server for your Neovim session.
+- **[NerdyChefs Prompts](mayeu20/mcp-server)** - Access 900+ professional AI prompts for sales, marketing, engineering, and more. Search by keyword, tag, category, or persona.
 - **[Netbird](https://github.com/aantti/mcp-netbird)** - List and analyze Netbird network peers, groups, policies, and more.
 - **[NetMind ParsePro](https://github.com/protagolabs/Netmind-Parse-PDF-MCP)** - The PDF Parser AI service, built and customized by the [NetMind](https://www.netmind.ai/) team.
 - **[NetSuite](https://github.com/dsvantien/netsuite-mcp-server)** - MCP server for NetSuite ERP integration with OAuth 2.0 authentication, enabling natural language access to NetSuite data through SuiteQL queries, reports, saved searches, and REST API operations.
