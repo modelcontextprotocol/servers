@@ -1,13 +1,16 @@
 # MCP "Everything" Server - Development Guidelines
 
 ## Build, Test & Run Commands
+
 - Build: `npm run build` - Compiles TypeScript to JavaScript
 - Watch mode: `npm run watch` - Watches for changes and rebuilds automatically
-- Run server: `npm run start` - Starts the MCP server using stdio transport
+- Run STDIO server: `npm run start:stdio` - Starts the MCP server using stdio transport
 - Run SSE server: `npm run start:sse` - Starts the MCP server with SSE transport
+- Run StreamableHttp server: `npm run start:stremableHttp` - Starts the MCP server with StreamableHttp transport
 - Prepare release: `npm run prepare` - Builds the project for publishing
 
 ## Code Style Guidelines
+
 - Use ES modules with `.js` extension in import paths
 - Strictly type all functions and variables with TypeScript
 - Follow zod schema patterns for tool input validation

@@ -21,7 +21,7 @@ import {
   SubscribeRequestSchema,
   Tool,
   UnsubscribeRequestSchema,
-  type Root
+  type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
@@ -37,7 +37,10 @@ const instructions = readFileSync(join(__dirname, "instructions.md"), "utf-8");
 type ToolInput = Tool["inputSchema"];
 type ToolOutput = Tool["outputSchema"];
 
-type SendRequest = RequestHandlerExtra<ServerRequest, ServerNotification>["sendRequest"];
+type SendRequest = RequestHandlerExtra<
+  ServerRequest,
+  ServerNotification
+>["sendRequest"];
 
 /* Input schemas for tools implemented in this server */
 const EchoSchema = z.object({
@@ -54,10 +57,7 @@ const LongRunningOperationSchema = z.object({
     .number()
     .default(10)
     .describe("Duration of the operation in seconds"),
-  steps: z
-    .number()
-    .default(5)
-    .describe("Number of steps in the operation"),
+  steps: z.number().default(5).describe("Number of steps in the operation"),
 });
 
 const PrintEnvSchema = z.object({});
@@ -105,28 +105,20 @@ const ListRootsSchema = z.object({});
 
 const StructuredContentSchema = {
   input: z.object({
-    location: z
-      .string()
-      .trim()
-      .min(1)
-      .describe("City name or zip code"),
+    location: z.string().trim().min(1).describe("City name or zip code"),
   }),
 
   output: z.object({
-    temperature: z
-      .number()
-      .describe("Temperature in celsius"),
-    conditions: z
-      .string()
-      .describe("Weather conditions description"),
-    humidity: z
-      .number()
-      .describe("Humidity percentage"),
-  })
+    temperature: z.number().describe("Temperature in celsius"),
+    conditions: z.string().describe("Weather conditions description"),
+    humidity: z.number().describe("Humidity percentage"),
+  }),
 };
 
 const ZipResourcesInputSchema = z.object({
-  files: z.record(z.string().url().describe("URL of the file to include in the zip")).describe("Mapping of file names to URLs to include in the zip"),
+  files: z
+    .record(z.string().url().describe("URL of the file to include in the zip"))
+    .describe("Mapping of file names to URLs to include in the zip"),
 });
 
 enum ToolName {
@@ -142,7 +134,7 @@ enum ToolName {
   GET_RESOURCE_LINKS = "getResourceLinks",
   STRUCTURED_CONTENT = "structuredContent",
   ZIP_RESOURCES = "zip",
-  LIST_ROOTS = "listRoots"
+  LIST_ROOTS = "listRoots",
 }
 
 enum PromptName {
@@ -171,9 +163,9 @@ export const createServer = () => {
         resources: { subscribe: true },
         tools: {},
         logging: {},
-        completions: {}
+        completions: {},
       },
-      instructions
+      instructions,
     }
   );
 
@@ -190,36 +182,48 @@ export const createServer = () => {
   let clientSupportsRoots = false;
   let sessionId: string | undefined;
 
-    // Function to start notification intervals when a client connects
-  const startNotificationIntervals = (sid?: string|undefined) => {
-      sessionId = sid;
-      if (!subsUpdateInterval) {
-        subsUpdateInterval = setInterval(() => {
-          for (const uri of subscriptions) {
-            server.notification({
-              method: "notifications/resources/updated",
-              params: { uri },
-            });
-          }
-        }, 10000);
-      }
+  // Function to start notification intervals when a client connects
+  const startNotificationIntervals = (sid?: string | undefined) => {
+    sessionId = sid;
+    if (!subsUpdateInterval) {
+      subsUpdateInterval = setInterval(() => {
+        for (const uri of subscriptions) {
+          server.notification({
+            method: "notifications/resources/updated",
+            params: { uri },
+          });
+        }
+      }, 10000);
+    }
 
-      const maybeAppendSessionId = sessionId ? ` - SessionId ${sessionId}`: "";
-      const messages: { level: LoggingLevel; data: string }[] = [
-          { level: "debug", data: `Debug-level message${maybeAppendSessionId}` },
-          { level: "info", data: `Info-level message${maybeAppendSessionId}` },
-          { level: "notice", data: `Notice-level message${maybeAppendSessionId}` },
-          { level: "warning", data: `Warning-level message${maybeAppendSessionId}` },
-          { level: "error", data: `Error-level message${maybeAppendSessionId}` },
-          { level: "critical", data: `Critical-level message${maybeAppendSessionId}` },
-          { level: "alert", data: `Alert level-message${maybeAppendSessionId}` },
-          { level: "emergency", data: `Emergency-level message${maybeAppendSessionId}` },
-      ];
+    const maybeAppendSessionId = sessionId ? ` - SessionId ${sessionId}` : "";
+    const messages: { level: LoggingLevel; data: string }[] = [
+      { level: "debug", data: `Debug-level message${maybeAppendSessionId}` },
+      { level: "info", data: `Info-level message${maybeAppendSessionId}` },
+      { level: "notice", data: `Notice-level message${maybeAppendSessionId}` },
+      {
+        level: "warning",
+        data: `Warning-level message${maybeAppendSessionId}`,
+      },
+      { level: "error", data: `Error-level message${maybeAppendSessionId}` },
+      {
+        level: "critical",
+        data: `Critical-level message${maybeAppendSessionId}`,
+      },
+      { level: "alert", data: `Alert level-message${maybeAppendSessionId}` },
+      {
+        level: "emergency",
+        data: `Emergency-level message${maybeAppendSessionId}`,
+      },
+    ];
 
-      if (!logsUpdateInterval) {
-          console.error("Starting logs update interval");
-          logsUpdateInterval = setInterval(async () => {
-          await server.sendLoggingMessage( messages[Math.floor(Math.random() * messages.length)], sessionId);
+    if (!logsUpdateInterval) {
+      console.error("Starting logs update interval");
+      logsUpdateInterval = setInterval(async () => {
+        await server.sendLoggingMessage(
+          messages[Math.floor(Math.random() * messages.length)],
+          sessionId
+        );
       }, 15000);
     }
   };
@@ -251,7 +255,6 @@ export const createServer = () => {
     };
 
     return await sendRequest(request, CreateMessageResultSchema);
-
   };
 
   const ALL_RESOURCES: Resource[] = Array.from({ length: 100 }, (_, i) => {
@@ -514,31 +517,39 @@ export const createServer = () => {
         name: ToolName.STRUCTURED_CONTENT,
         description:
           "Returns structured content along with an output schema for client data validation",
-        inputSchema: zodToJsonSchema(StructuredContentSchema.input) as ToolInput,
-        outputSchema: zodToJsonSchema(StructuredContentSchema.output) as ToolOutput,
+        inputSchema: zodToJsonSchema(
+          StructuredContentSchema.input
+        ) as ToolInput,
+        outputSchema: zodToJsonSchema(
+          StructuredContentSchema.output
+        ) as ToolOutput,
       },
       {
         name: ToolName.ZIP_RESOURCES,
-        description: "Compresses the provided resource files (mapping of name to URI, which can be a data URI) to a zip file, which it returns as a data URI resource link.",
+        description:
+          "Compresses the provided resource files (mapping of name to URI, which can be a data URI) to a zip file, which it returns as a data URI resource link.",
         inputSchema: zodToJsonSchema(ZipResourcesInputSchema) as ToolInput,
-      }
+      },
     ];
-    if (clientCapabilities!.roots) tools.push ({
+    if (clientCapabilities!.roots)
+      tools.push({
         name: ToolName.LIST_ROOTS,
         description:
-            "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files.",
+          "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files.",
         inputSchema: zodToJsonSchema(ListRootsSchema) as ToolInput,
-    });
-    if (clientCapabilities!.elicitation) tools.push ({
+      });
+    if (clientCapabilities!.elicitation)
+      tools.push({
         name: ToolName.ELICITATION,
-        description: "Elicitation test tool that demonstrates how to request user input with various field types (string, boolean, email, uri, date, integer, number, enum)",
+        description:
+          "Elicitation test tool that demonstrates how to request user input with various field types (string, boolean, email, uri, date, integer, number, enum)",
         inputSchema: zodToJsonSchema(ElicitationSchema) as ToolInput,
-    });
+      });
 
     return { tools };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request,extra) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
 
     if (name === ToolName.ECHO) {
@@ -573,14 +584,17 @@ export const createServer = () => {
         );
 
         if (progressToken !== undefined) {
-          await server.notification({
-            method: "notifications/progress",
-            params: {
-              progress: i,
-              total: steps,
-              progressToken,
+          await server.notification(
+            {
+              method: "notifications/progress",
+              params: {
+                progress: i,
+                total: steps,
+                progressToken,
+              },
             },
-          },{relatedRequestId: extra.requestId});
+            { relatedRequestId: extra.requestId }
+          );
         }
       }
 
@@ -617,7 +631,20 @@ export const createServer = () => {
       );
       return {
         content: [
-          { type: "text", text: `LLM sampling result: ${Array.isArray(result.content) ? result.content.map(c => c.type === "text" ? c.text : JSON.stringify(c)).join("") : (result.content.type === "text" ? result.content.text : JSON.stringify(result.content))}` },
+          {
+            type: "text",
+            text: `LLM sampling result: ${
+              Array.isArray(result.content)
+                ? result.content
+                    .map((c) =>
+                      c.type === "text" ? c.text : JSON.stringify(c)
+                    )
+                    .join("")
+                : result.content.type === "text"
+                ? result.content.text
+                : JSON.stringify(result.content)
+            }`,
+          },
         ],
       };
     }
@@ -726,80 +753,87 @@ export const createServer = () => {
     if (name === ToolName.ELICITATION) {
       ElicitationSchema.parse(args);
 
-      const elicitationResult = await extra.sendRequest({
-        method: 'elicitation/create',
-        params: {
-          message: 'Please provide inputs for the following fields:',
-          requestedSchema: {
-            type: 'object',
-            properties: {
-              name: {
-                title: 'Full Name',
-                type: 'string',
-                description: 'Your full, legal name',
+      const elicitationResult = await extra.sendRequest(
+        {
+          method: "elicitation/create",
+          params: {
+            message: "Please provide inputs for the following fields:",
+            requestedSchema: {
+              type: "object",
+              properties: {
+                name: {
+                  title: "Full Name",
+                  type: "string",
+                  description: "Your full, legal name",
+                },
+                check: {
+                  title: "Agree to terms",
+                  type: "boolean",
+                  description: "A boolean check",
+                },
+                color: {
+                  title: "Favorite Color",
+                  type: "string",
+                  description: "Favorite color (open text)",
+                  default: "blue",
+                },
+                email: {
+                  title: "Email Address",
+                  type: "string",
+                  format: "email",
+                  description:
+                    "Your email address (will be verified, and never shared with anyone else)",
+                },
+                homepage: {
+                  type: "string",
+                  format: "uri",
+                  description: "Homepage / personal site",
+                },
+                birthdate: {
+                  title: "Birthdate",
+                  type: "string",
+                  format: "date",
+                  description:
+                    "Your date of birth (will never be shared with anyone else)",
+                },
+                integer: {
+                  title: "Favorite Integer",
+                  type: "integer",
+                  description:
+                    "Your favorite integer (do not give us your phone number, pin, or other sensitive info)",
+                  minimum: 1,
+                  maximum: 100,
+                  default: 42,
+                },
+                number: {
+                  title: "Favorite Number",
+                  type: "number",
+                  description: "Favorite number (there are no wrong answers)",
+                  minimum: 0,
+                  maximum: 1000,
+                  default: 3.14,
+                },
+                petType: {
+                  title: "Pet type",
+                  type: "string",
+                  enum: ["cats", "dogs", "birds", "fish", "reptiles"],
+                  enumNames: ["Cats", "Dogs", "Birds", "Fish", "Reptiles"],
+                  default: "dogs",
+                  description: "Your favorite pet type",
+                },
               },
-              check: {
-                title: 'Agree to terms',
-                type: 'boolean',
-                description: 'A boolean check',
-              },
-              color: {
-                title: 'Favorite Color',
-                type: 'string',
-                description: 'Favorite color (open text)',
-                default: 'blue',
-              },
-              email: {
-                title: 'Email Address',
-                type: 'string',
-                format: 'email',
-                description: 'Your email address (will be verified, and never shared with anyone else)',
-              },
-              homepage: {
-                type: 'string',
-                format: 'uri',
-                description: 'Homepage / personal site',
-              },
-              birthdate: {
-                title: 'Birthdate',
-                type: 'string',
-                format: 'date',
-                description: 'Your date of birth (will never be shared with anyone else)',
-              },
-              integer: {
-                title: 'Favorite Integer',
-                type: 'integer',
-                description: 'Your favorite integer (do not give us your phone number, pin, or other sensitive info)',
-                minimum: 1,
-                maximum: 100,
-                default: 42,
-              },
-              number: {
-                title: 'Favorite Number',
-                type: 'number',
-                description: 'Favorite number (there are no wrong answers)',
-                minimum: 0,
-                maximum: 1000,
-                default: 3.14,
-              },
-              petType: {
-                title: 'Pet type',
-                type: 'string',
-                enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'],
-                enumNames: ['Cats', 'Dogs', 'Birds', 'Fish', 'Reptiles'],
-                default: 'dogs',
-                description: 'Your favorite pet type',
-              },
+              required: ["name"],
             },
-            required: ['name'],
           },
         },
-      }, ElicitResultSchema, { timeout: 10 * 60 * 1000 /* 10 minutes */ });
+        ElicitResultSchema,
+        { timeout: 10 * 60 * 1000 /* 10 minutes */ }
+      );
 
       // Handle different response actions
       const content = [];
 
-      if (elicitationResult.action === 'accept' && elicitationResult.content) {
+      if (elicitationResult.action === "accept" && elicitationResult.content) {
         content.push({
           type: "text",
           text: `✅ User provided the requested information!`,
@@ -809,25 +843,29 @@ export const createServer = () => {
         const userData = elicitationResult.content;
         const lines = [];
         if (userData.name) lines.push(`- Name: ${userData.name}`);
-        if (userData.check !== undefined) lines.push(`- Agreed to terms: ${userData.check}`);
+        if (userData.check !== undefined)
+          lines.push(`- Agreed to terms: ${userData.check}`);
         if (userData.color) lines.push(`- Favorite Color: ${userData.color}`);
         if (userData.email) lines.push(`- Email: ${userData.email}`);
         if (userData.homepage) lines.push(`- Homepage: ${userData.homepage}`);
-        if (userData.birthdate) lines.push(`- Birthdate: ${userData.birthdate}`);
-        if (userData.integer !== undefined) lines.push(`- Favorite Integer: ${userData.integer}`);
-        if (userData.number !== undefined) lines.push(`- Favorite Number: ${userData.number}`);
+        if (userData.birthdate)
+          lines.push(`- Birthdate: ${userData.birthdate}`);
+        if (userData.integer !== undefined)
+          lines.push(`- Favorite Integer: ${userData.integer}`);
+        if (userData.number !== undefined)
+          lines.push(`- Favorite Number: ${userData.number}`);
         if (userData.petType) lines.push(`- Pet Type: ${userData.petType}`);
 
         content.push({
           type: "text",
-          text: `User inputs:\n${lines.join('\n')}`,
+          text: `User inputs:\n${lines.join("\n")}`,
         });
-      } else if (elicitationResult.action === 'decline') {
+      } else if (elicitationResult.action === "decline") {
         content.push({
           type: "text",
           text: `❌ User declined to provide the requested information.`,
         });
-      } else if (elicitationResult.action === 'cancel') {
+      } else if (elicitationResult.action === "cancel") {
         content.push({
           type: "text",
           text: `⚠️ User cancelled the elicitation dialog.`,
@@ -861,10 +899,11 @@ export const createServer = () => {
           type: "resource_link",
           uri: resource.uri,
           name: resource.name,
-          description: `Resource ${i + 1}: ${resource.mimeType === "text/plain"
-            ? "plaintext resource"
-            : "binary blob resource"
-            }`,
+          description: `Resource ${i + 1}: ${
+            resource.mimeType === "text/plain"
+              ? "plaintext resource"
+              : "binary blob resource"
+          }`,
           mimeType: resource.mimeType,
         });
       }
@@ -879,17 +918,17 @@ export const createServer = () => {
       const weather = {
         temperature: 22.5,
         conditions: "Partly cloudy",
-        humidity: 65
-      }
+        humidity: 65,
+      };
 
       const backwardCompatiblecontent = {
         type: "text",
-        text: JSON.stringify(weather)
-      }
+        text: JSON.stringify(weather),
+      };
 
       return {
         content: [backwardCompatiblecontent],
-        structuredContent: weather
+        structuredContent: weather,
       };
     }
 
@@ -902,16 +941,24 @@ export const createServer = () => {
         try {
           const response = await fetch(fileUrl);
           if (!response.ok) {
-            throw new Error(`Failed to fetch ${fileUrl}: ${response.statusText}`);
+            throw new Error(
+              `Failed to fetch ${fileUrl}: ${response.statusText}`
+            );
           }
           const arrayBuffer = await response.arrayBuffer();
           zip.file(fileName, arrayBuffer);
         } catch (error) {
-          throw new Error(`Error fetching file ${fileUrl}: ${error instanceof Error ? error.message : String(error)}`);
+          throw new Error(
+            `Error fetching file ${fileUrl}: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
         }
       }
 
-      const uri = `data:application/zip;base64,${await zip.generateAsync({ type: "base64" })}`;
+      const uri = `data:application/zip;base64,${await zip.generateAsync({
+        type: "base64",
+      })}`;
 
       return {
         content: [
@@ -932,10 +979,11 @@ export const createServer = () => {
           content: [
             {
               type: "text",
-              text: "The MCP client does not support the roots protocol.\n\n" +
-                "This means the server cannot access information about the client's workspace directories or file system roots."
-            }
-          ]
+              text:
+                "The MCP client does not support the roots protocol.\n\n" +
+                "This means the server cannot access information about the client's workspace directories or file system roots.",
+            },
+          ],
         };
       }
 
@@ -944,29 +992,35 @@ export const createServer = () => {
           content: [
             {
               type: "text",
-              text: "The client supports roots but no roots are currently configured.\n\n" +
+              text:
+                "The client supports roots but no roots are currently configured.\n\n" +
                 "This could mean:\n" +
                 "1. The client hasn't provided any roots yet\n" +
                 "2. The client provided an empty roots list\n" +
-                "3. The roots configuration is still being loaded"
-            }
-          ]
+                "3. The roots configuration is still being loaded",
+            },
+          ],
         };
       }
 
-      const rootsList = currentRoots.map((root, index) => {
-        return `${index + 1}. ${root.name || 'Unnamed Root'}\n   URI: ${root.uri}`;
-      }).join('\n\n');
+      const rootsList = currentRoots
+        .map((root, index) => {
+          return `${index + 1}. ${root.name || "Unnamed Root"}\n   URI: ${
+            root.uri
+          }`;
+        })
+        .join("\n\n");
 
       return {
         content: [
           {
             type: "text",
-            text: `Current MCP Roots (${currentRoots.length} total):\n\n${rootsList}\n\n` +
+            text:
+              `Current MCP Roots (${currentRoots.length} total):\n\n${rootsList}\n\n` +
               "Note: This server demonstrates the roots protocol capability but doesn't actually access files. " +
-              "The roots are provided by the MCP client and can be used by servers that need file system access."
-          }
-        ]
+              "The roots are provided by the MCP client and can be used by servers that need file system access.",
+          },
+        ],
       };
     }
 
@@ -1003,65 +1057,90 @@ export const createServer = () => {
   });
 
   // Roots protocol handlers
-  server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
-    try {
-      // Request the updated roots list from the client
-      const response = await server.listRoots();
-      if (response && 'roots' in response) {
-        currentRoots = response.roots;
+  server.setNotificationHandler(
+    RootsListChangedNotificationSchema,
+    async () => {
+      try {
+        // Request the updated roots list from the client
+        const response = await server.listRoots();
+        if (response && "roots" in response) {
+          currentRoots = response.roots;
 
-        // Log the roots update for demonstration
-        await server.sendLoggingMessage({
-            level: "info",
+          // Log the roots update for demonstration
+          await server.sendLoggingMessage(
+            {
+              level: "info",
+              logger: "everything-server",
+              data: `Roots updated: ${currentRoots.length} root(s) received from client`,
+            },
+            sessionId
+          );
+        }
+      } catch (error) {
+        await server.sendLoggingMessage(
+          {
+            level: "error",
             logger: "everything-server",
-            data: `Roots updated: ${currentRoots.length} root(s) received from client`,
-        }, sessionId);
+            data: `Failed to request roots from client: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          },
+          sessionId
+        );
       }
-    } catch (error) {
-      await server.sendLoggingMessage({
-          level: "error",
-          logger: "everything-server",
-          data: `Failed to request roots from client: ${error instanceof Error ? error.message : String(error)}`,
-      }, sessionId);
     }
-  });
+  );
 
   // Handle post-initialization setup for roots
   server.oninitialized = async () => {
-   clientCapabilities = server.getClientCapabilities();
+    clientCapabilities = server.getClientCapabilities();
 
     if (clientCapabilities?.roots) {
       clientSupportsRoots = true;
       try {
         const response = await server.listRoots();
-        if (response && 'roots' in response) {
+        if (response && "roots" in response) {
           currentRoots = response.roots;
 
-          await server.sendLoggingMessage({
+          await server.sendLoggingMessage(
+            {
               level: "info",
               logger: "everything-server",
               data: `Initial roots received: ${currentRoots.length} root(s) from client`,
-          }, sessionId);
+            },
+            sessionId
+          );
         } else {
-          await server.sendLoggingMessage({
+          await server.sendLoggingMessage(
+            {
               level: "warning",
               logger: "everything-server",
               data: "Client returned no roots set",
-          }, sessionId);
+            },
+            sessionId
+          );
         }
       } catch (error) {
-        await server.sendLoggingMessage({
+        await server.sendLoggingMessage(
+          {
             level: "error",
             logger: "everything-server",
-            data: `Failed to request initial roots from client: ${error instanceof Error ? error.message : String(error)}`,
-        }, sessionId);
+            data: `Failed to request initial roots from client: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          },
+          sessionId
+        );
       }
     } else {
-      await server.sendLoggingMessage({
+      await server.sendLoggingMessage(
+        {
           level: "info",
           logger: "everything-server",
           data: "Client does not support MCP roots protocol",
-      }, sessionId);
+        },
+        sessionId
+      );
     }
   };
 
