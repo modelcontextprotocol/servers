@@ -1,11 +1,11 @@
 # Everything Server – Architecture and Layout
 
-This document summarizes the current layout and runtime architecture of the `src/everything` package. It explains how the server starts, how transports are wired, where tools and resources are registered, and how to extend the system.
+This document summarizes the current layout and runtime architecture of the `src/everything` package. It explains how the server starts, how transports are wired, where tools, prompts, and resources are registered, and how to extend the system.
 
 ## High‑level Overview
 
-- Purpose: A minimal, modular MCP server showcasing core Model Context Protocol features. It exposes a simple tool and both static and dynamic resources, and can be run over multiple transports (STDIO, SSE, and Streamable HTTP).
-- Design: A small “server factory” constructs the MCP server and registers features. Transports are separate entry points that create/connect the server and handle network concerns. Tools and resources are organized in their own submodules.
+- Purpose: A minimal, modular MCP server showcasing core Model Context Protocol features. It exposes a simple tool, several prompts, and both static and dynamic resources, and can be run over multiple transports (STDIO, SSE, and Streamable HTTP).
+- Design: A small “server factory” constructs the MCP server and registers features. Transports are separate entry points that create/connect the server and handle network concerns. Tools, prompts, and resources are organized in their own submodules.
 - Two server implementations exist:
   - `server/index.ts`: The lightweight, modular server used by transports in this package.
   - `server/everything.ts`: A comprehensive reference server (much larger, many tools/prompts/resources) kept for reference/testing but not wired up by default in the entry points.
@@ -25,6 +25,11 @@ src/everything
 ├── tools
 │   ├── index.ts
 │   └── echo.ts
+├── prompts
+│   ├── index.ts
+│   ├── simple.ts
+│   ├── complex.ts
+│   └── completions.ts
 ├── resources
 │   ├── index.ts
 │   ├── dynamic.ts
@@ -44,7 +49,7 @@ At `src/everything`:
 - server/
 
   - index.ts
-    - Server factory that creates an `McpServer` with declared capabilities, loads server instructions, and registers tools and resources.
+    - Server factory that creates an `McpServer` with declared capabilities, loads server instructions, and registers tools, prompts, and resources.
     - Exposes `{ server, cleanup, startNotificationIntervals }` to the chosen transport.
   - everything.ts
     - A full “reference/monolith” implementation demonstrating most MCP features. Not the default path used by the transports in this package.
@@ -68,6 +73,17 @@ At `src/everything`:
     - `registerTools(server)` orchestrator, currently delegates to `addToolEcho`.
   - echo.ts
     - Defines a minimal `echo` tool with a Zod input schema and returns `Echo: {message}`.
+
+- prompts/
+
+  - index.ts
+    - `registerPrompts(server)` orchestrator; delegates to individual prompt registrations.
+  - simple.ts
+    - Registers `simple-prompt`: a prompt with no arguments that returns a single user message.
+  - complex.ts
+    - Registers `complex-prompt`: a prompt with two arguments (`city` required, `state` optional) used to compose a message.
+  - completions.ts
+    - Registers `completable-prompt`: a prompt whose arguments support server-driven completions using the SDK’s `completable(...)` helper (e.g., completing `department` and context-aware `name`).
 
 - resources/
 
@@ -116,6 +132,7 @@ At `src/everything`:
    - Loads human‑readable “server instructions” from the docs folder (`server-instructions.md`).
    - Registers tools via `registerTools(server)`.
    - Registers resources via `registerResources(server)`.
+   - Registers prompts via `registerPrompts(server)`.
    - Returns the server and two lifecycle hooks:
      - `cleanup`: transport may call on shutdown (currently a no‑op).
      - `startNotificationIntervals(sessionId?)`: currently a no‑op; wired in SSE transport for future periodic notifications.
@@ -131,6 +148,12 @@ At `src/everything`:
 
   - `echo` (tools/echo.ts): Echoes the provided `message: string`. Uses Zod to validate inputs.
 
+- Prompts
+
+  - `simple-prompt` (prompts/simple.ts): No-argument prompt that returns a static user message.
+  - `complex-prompt` (prompts/complex.ts): Two-argument prompt with `city` (required) and `state` (optional) used to compose a question.
+  - `completable-prompt` (prompts/completions.ts): Demonstrates argument auto-completions with the SDK’s `completable` helper; `department` completions drive context-aware `name` suggestions.
+
 - Resources
   - Dynamic Text: `test://dynamic/resource/text/{index}` (content generated on the fly)
   - Dynamic Blob: `test://dynamic/resource/blob/{index}` (base64 payload generated on the fly)
@@ -142,6 +165,11 @@ At `src/everything`:
 
   - Create a new file under `tools/` with your `addToolX(server)` function that registers the tool via `server.registerTool(...)`.
   - Export and call it from `tools/index.ts` inside `registerTools(server)`.
+
+- Adding Prompts
+
+  - Create a new file under `prompts/` with your `addXPrompt(server)` function that registers the prompt via `server.registerPrompt(...)`.
+  - Export and call it from `prompts/index.ts` inside `registerPrompts(server)`.
 
 - Adding Resources
 
