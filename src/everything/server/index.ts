@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerTools } from "../tools/index.js";
+import { registerResources } from "../resources/index.js";
 import { dirname, join } from "path";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
@@ -30,6 +31,9 @@ export const createServer = () => {
 
     // Register the tools
     registerTools(server);
+
+    // Register the resources
+    registerResources(server);
 
     return {
         server,

@@ -22,9 +22,9 @@
     "build": "tsc && shx cp instructions.md dist/ && shx chmod +x dist/*.js",
     "prepare": "npm run build",
     "watch": "tsc --watch",
-    "start": "node dist/index.js",
-    "start:sse": "node dist/sse.js",
-    "start:streamableHttp": "node dist/streamableHttp.js"
+    "start:stdio": "node dist/index.js stdio",
+    "start:sse": "node dist/index.js sse",
+    "start:streamableHttp": "node dist/index.js streamableHttp"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.24.0",
