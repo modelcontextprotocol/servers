@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export const addSimplePrompt = (server: McpServer) => {
+export const registerSimplePrompt = (server: McpServer) => {
   server.registerPrompt(
     "simple-prompt",
     {

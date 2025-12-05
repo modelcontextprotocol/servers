@@ -24,7 +24,8 @@ src/everything
 │   └── streamableHttp.ts
 ├── tools
 │   ├── index.ts
-│   └── echo.ts
+│   ├── echo.ts
+│   └── add.ts
 ├── prompts
 │   ├── index.ts
 │   ├── simple.ts
@@ -70,9 +71,11 @@ At `src/everything`:
 - tools/
 
   - index.ts
-    - `registerTools(server)` orchestrator, currently delegates to `addToolEcho`.
+    - `registerTools(server)` orchestrator, currently delegates to `registerEchoTool` and `registerAddTool`.
   - echo.ts
     - Defines a minimal `echo` tool with a Zod input schema and returns `Echo: {message}`.
+  - add.ts
+    - Defines an `add` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
 
 - prompts/
 
@@ -147,6 +150,7 @@ At `src/everything`:
 - Tools
 
   - `echo` (tools/echo.ts): Echoes the provided `message: string`. Uses Zod to validate inputs.
+  - `add` (tools/add.ts): Adds two numbers `a` and `b` and returns their sum. Uses Zod to validate inputs.
 
 - Prompts
 
@@ -163,17 +167,17 @@ At `src/everything`:
 
 - Adding Tools
 
-  - Create a new file under `tools/` with your `addToolX(server)` function that registers the tool via `server.registerTool(...)`.
+  - Create a new file under `tools/` with your `registerXTool(server)` function that registers the tool via `server.registerTool(...)`.
   - Export and call it from `tools/index.ts` inside `registerTools(server)`.
 
 - Adding Prompts
 
-  - Create a new file under `prompts/` with your `addXPrompt(server)` function that registers the prompt via `server.registerPrompt(...)`.
+  - Create a new file under `prompts/` with your `registerXPrompt(server)` function that registers the prompt via `server.registerPrompt(...)`.
   - Export and call it from `prompts/index.ts` inside `registerPrompts(server)`.
 
 - Adding Resources
 
-  - Create a new file under `resources/` with your `addXResources(server)` function using `server.registerResource(...)` (optionally with `ResourceTemplate`).
+  - Create a new file under `resources/` with your `registerXResources(server)` function using `server.registerResource(...)` (optionally with `ResourceTemplate`).
   - Export and call it from `resources/index.ts` inside `registerResources(server)`.
 
 - Adding Transports

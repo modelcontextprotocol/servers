@@ -2,7 +2,7 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
 
-export const addPromptWithCompletions = (server: McpServer) => {
+export const registerPromptWithCompletions = (server: McpServer) => {
   const promptArgsSchema = {
     department: completable(z.string(), (value) => {
       return ["Engineering", "Sales", "Marketing", "Support"].filter((d) =>

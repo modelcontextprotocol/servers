@@ -18,7 +18,7 @@ import {
  *
  * @param server
  */
-export const addDynamicResources = (server: McpServer) => {
+export const registerDynamicResources = (server: McpServer) => {
   const uriBase: string = "test://dynamic/resource";
   const textUriBase: string = `${uriBase}/text`;
   const blobUriBase: string = `${uriBase}/blob`;

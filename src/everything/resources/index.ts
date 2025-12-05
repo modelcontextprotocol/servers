@@ -1,12 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { addDynamicResources } from "./dynamic.js";
-import { addStaticResources } from "./static.js";
+import { registerDynamicResources } from "./dynamic.js";
+import { registerStaticResources } from "./static.js";
 
 /**
  * Register the resources with the MCP server.
  * @param server
  */
 export const registerResources = (server: McpServer) => {
-  addDynamicResources(server);
-  addStaticResources(server);
+  registerDynamicResources(server);
+  registerStaticResources(server);
 };

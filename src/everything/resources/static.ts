@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
  *
  * @param server
  */
-export const addStaticResources = (server: McpServer) => {
+export const registerStaticResources = (server: McpServer) => {
   const docsDir = join(__dirname, "..", "docs");
 
   let entries: string[] = [];

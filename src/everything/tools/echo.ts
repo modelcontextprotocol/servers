@@ -13,7 +13,7 @@ const config = {
   inputSchema: EchoSchema,
 };
 
-export const addToolEcho = (server: McpServer) => {
+export const registerEchoTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {
     const validatedArgs = EchoSchema.parse(args);
     return {

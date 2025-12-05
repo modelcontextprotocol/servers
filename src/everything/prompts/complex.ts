@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export const addComplexPrompt = (server: McpServer) => {
+export const registerComplexPrompt = (server: McpServer) => {
   const promptArgsSchema = {
     city: z.string().describe("Name of the city"),
     state: z.string().describe("Name of the state").optional(),
