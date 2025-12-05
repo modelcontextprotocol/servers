@@ -1,15 +1,17 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerTools } from "../tools/index.js";
-import { registerResources } from "../resources/index.js";
 import { dirname, join } from "path";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const instructions = readInstructions();
+import { registerTools } from "../tools/index.js";
+import { registerResources } from "../resources/index.js";
+import { registerPrompts } from "../prompts/index.js";
 
-// Create the MCP resource server
+// Everything Server factory
 export const createServer = () => {
+  // Read the server instructions
+  const instructions = readInstructions();
+
+  // Create the server
   const server = new McpServer(
     {
       name: "mcp-servers/everything",
@@ -35,6 +37,9 @@ export const createServer = () => {
   // Register the resources
   registerResources(server);
 
+  // Register the prompts
+  registerPrompts(server);
+
   return {
     server,
     cleanup: () => {},
@@ -42,14 +47,15 @@ export const createServer = () => {
   };
 };
 
+// Read the server instructions from a file
 function readInstructions(): string {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const filePath = join(__dirname, "..", "docs", "server-instructions.md");
   let instructions;
 
   try {
-    instructions = readFileSync(
-      join(__dirname, "..", "docs", "server-instructions.md"),
-      "utf-8"
-    );
+    instructions = readFileSync(filePath, "utf-8");
   } catch (e) {
     instructions = "Server instructions not loaded: " + e;
   }
