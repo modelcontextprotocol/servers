@@ -10,7 +10,7 @@ const __dirname = dirname(__filename);
  * Register static resources for each file in the docs folder.
  *
  * - Each file in src/everything/docs is exposed as an individual static resource
- * - URIs follow the pattern: "test://static/docs/<filename>"
+ * - URIs follow the pattern: "demo://static/docs/<filename>"
  * - Markdown files are served as text/markdown; others as text/plain
  *
  * @param server
@@ -35,10 +35,10 @@ export const registerStaticResources = (server: McpServer) => {
       continue;
     }
 
-    const uri = `test://static/docs/${encodeURIComponent(name)}`;
+    const uri = `demo://resource/static/document/${encodeURIComponent(name)}`;
     const mimeType = getMimeType(name);
     const displayName = `Docs: ${name}`;
-    const description = `Static documentation file exposed from /docs: ${name}`;
+    const description = `Static document file exposed from /docs: ${name}`;
 
     server.registerResource(
       displayName,

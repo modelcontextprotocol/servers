@@ -94,12 +94,12 @@ At `src/everything`:
     - `registerResources(server)` orchestrator; delegates to static and dynamic resources.
   - dynamic.ts
     - Registers two dynamic, template‑driven resources using `ResourceTemplate`:
-      - Text: `test://dynamic/resource/text/{index}` (MIME: `text/plain`)
-      - Blob: `test://dynamic/resource/blob/{index}` (MIME: `application/octet-stream`, Base64 payload)
+      - Text: `demo://resource/dynamic/text/{index}` (MIME: `text/plain`)
+      - Blob: `demo://resource/dynamic/blob/{index}` (MIME: `application/octet-stream`, Base64 payload)
     - The `{index}` path variable must be a finite integer. Content is generated on demand with a GMT timestamp.
   - static.ts
     - Registers static resources for each file in the `docs/` folder.
-    - URIs follow the pattern: `test://static/docs/<filename>`.
+    - URIs follow the pattern: `demo://static/docs/<filename>`.
     - Serves markdown files as `text/markdown`, `.txt` as `text/plain`, `.json` as `application/json`, others default to `text/plain`.
 
 - docs/
@@ -159,9 +159,9 @@ At `src/everything`:
   - `completable-prompt` (prompts/completions.ts): Demonstrates argument auto-completions with the SDK’s `completable` helper; `department` completions drive context-aware `name` suggestions.
 
 - Resources
-  - Dynamic Text: `test://dynamic/resource/text/{index}` (content generated on the fly)
-  - Dynamic Blob: `test://dynamic/resource/blob/{index}` (base64 payload generated on the fly)
-  - Static Docs: `test://static/docs/<filename>` (serves files from `src/everything/docs/` as static resources)
+  - Dynamic Text: `demo://resource/dynamic/text/{index}` (content generated on the fly)
+  - Dynamic Blob: `demo://resource/dynamic/blob/{index}` (base64 payload generated on the fly)
+  - Static Docs: `demo://static/docs/<filename>` (serves files from `src/everything/docs/` as static resources)
 
 ## Extension Points
 

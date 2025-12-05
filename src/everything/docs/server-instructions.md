@@ -16,7 +16,7 @@ Server generates automatic log messages every 20 seconds (filtered by current lo
 
 `complex_prompt` includes both text arguments and image content for testing client multi-modal handling. `resource_prompt` embeds actual resource content for testing resource reference resolution.
 
-Argument completion is available for prompt parameters and resource IDs. Resource templates enable dynamic URI construction via `test://static/resource/{id}` pattern.
+Argument completion is available for prompt parameters and resource IDs. Resource templates enable dynamic URI construction via `demo://static/resource/{id}` pattern.
 
 ## Easter egg
 

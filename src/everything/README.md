@@ -101,12 +101,12 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
 The server provides 100 test resources in two formats:
 - Even numbered resources:
   - Plaintext format
-  - URI pattern: `test://static/resource/{even_number}`
+  - URI pattern: `demo://static/resource/{even_number}`
   - Content: Simple text description
 
 - Odd numbered resources:
   - Binary blob format
-  - URI pattern: `test://static/resource/{odd_number}`
+  - URI pattern: `demo://static/resource/{odd_number}`
   - Content: Base64 encoded binary data
 
 Resource features:

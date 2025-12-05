@@ -13,13 +13,13 @@ import {
  * - Both blob and text resources:
  *   - have content that is dynamically generated, including a timestamp
  *   - have different template URIs
- *     - Blob: "test://dynamic/resource/blob/{index}"
- *     - Text: "test://dynamic/resource/text/{index}"
+ *     - Blob: "demo://resource/dynamic/blob/{index}"
+ *     - Text: "demo://resource/dynamic/text/{index}"
  *
  * @param server
  */
 export const registerDynamicResources = (server: McpServer) => {
-  const uriBase: string = "test://dynamic/resource";
+  const uriBase: string = "demo://resource/dynamic";
   const textUriBase: string = `${uriBase}/text`;
   const blobUriBase: string = `${uriBase}/blob`;
   const textUriTemplate: string = `${textUriBase}/{index}`;
