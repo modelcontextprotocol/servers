@@ -1,4 +1,4 @@
-# Sequential Thinking MCP Server
+# Sequential Thinking MCP Serverd
 
 An MCP server implementation that provides a tool for dynamic and reflective problem-solving through a structured thinking process.
 
