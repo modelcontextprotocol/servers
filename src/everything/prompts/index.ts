@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerSimplePrompt } from "./simple.js";
 import { registerComplexPrompt } from "./complex.js";
 import { registerPromptWithCompletions } from "./completions.js";
-import { registerEmbeddedResourcePrompt } from "./resource.js"
+import { registerEmbeddedResourcePrompt } from "./resource.js";
 
 /**
  * Register the prompts with the MCP server.

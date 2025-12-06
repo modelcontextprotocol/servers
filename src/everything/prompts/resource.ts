@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {textResource, textResourceUri} from "../resources/template.js";
+import { textResource, textResourceUri } from "../resources/template.js";
 
 export const registerEmbeddedResourcePrompt = (server: McpServer) => {
   // NOTE: Currently, prompt arguments can only be strings since type is not field of PromptArgument
@@ -18,7 +18,7 @@ export const registerEmbeddedResourcePrompt = (server: McpServer) => {
       argsSchema: promptArgsSchema,
     },
     (args) => {
-      const resourceId = Number(args?.resourceId); // Inspector sends strings only
+      const resourceId = Number(args?.resourceId);
       if (!Number.isFinite(resourceId) || !Number.isInteger(resourceId)) {
         throw new Error(
           `Invalid resourceId: ${args?.resourceId}. Must be a finite integer.`
