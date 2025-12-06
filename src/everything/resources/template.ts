@@ -3,8 +3,52 @@ import {
   ResourceTemplate,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+const uriBase: string = "demo://resource/dynamic";
+const textUriBase: string = `${uriBase}/text`;
+const blobUriBase: string = `${uriBase}/blob`;
+const textUriTemplate: string = `${textUriBase}/{index}`;
+const blobUriTemplate: string = `${blobUriBase}/{index}`;
+
 /**
- * Register dynamic resources with the MCP server.
+ * Create a dynamic text resource
+ * @param uri
+ * @param index
+ */
+export const textResource = (uri: URL, index: number) => {
+  const timestamp = new Date().toLocaleTimeString();
+  return {
+    uri: uri.toString(),
+    mimeType: "text/plain",
+    text: `Resource ${index}: This is a plaintext resource created at ${timestamp}`,
+  };
+};
+
+/**
+ * Create a dynamic blob resource
+ * @param uri
+ * @param index
+ */
+export const blobResource = (uri: URL, index: number) => {
+  const timestamp = new Date().toLocaleTimeString();
+  const resourceText = Buffer.from(
+    `Resource ${index}: This is a base64 blob created at ${timestamp}`
+  ).toString("base64");
+  return {
+    uri: uri.toString(),
+    mimeType: "text/plain",
+    text: resourceText,
+  };
+};
+
+/**
+ * Create a dynamic text resource URI
+ * @param index
+ */
+export const textResourceUri = (index: number) =>
+  new URL(`${textUriBase}/${index}`);
+
+/**
+ * Register resource templates with the MCP server.
  *
  * - Text and blob resources, dynamically generated from the URI {index} variable
  * - Any finite integer is acceptable for the index variable
@@ -18,41 +62,7 @@ import {
  *
  * @param server
  */
-export const registerDynamicResources = (server: McpServer) => {
-  const uriBase: string = "demo://resource/dynamic";
-  const textUriBase: string = `${uriBase}/text`;
-  const blobUriBase: string = `${uriBase}/blob`;
-  const textUriTemplate: string = `${textUriBase}/{index}`;
-  const blobUriTemplate: string = `${blobUriBase}/{index}`;
-
-  // Format a GMT timestamp like "7:30AM GMT on November 3"
-  const formatGmtTimestamp = () => {
-    const d = new Date();
-    const h24 = d.getUTCHours();
-    const minutes = d.getUTCMinutes();
-    const ampm = h24 >= 12 ? "PM" : "AM";
-    let h12 = h24 % 12;
-    if (h12 === 0) h12 = 12;
-    const mm = String(minutes).padStart(2, "0");
-    const months = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ];
-    const monthName = months[d.getUTCMonth()];
-    const day = d.getUTCDate();
-    return `${h12}:${mm}${ampm} GMT on ${monthName} ${day}`;
-  };
-
+export const registerResourceTemplates = (server: McpServer) => {
   const parseIndex = (uri: URL, variables: Record<string, unknown>) => {
     const uriError = `Unknown resource: ${uri.toString()}`;
     if (
@@ -71,7 +81,7 @@ export const registerDynamicResources = (server: McpServer) => {
     }
   };
 
-  // Text resource registration
+  // Text resource template registration
   server.registerResource(
     "Dynamic Text Resource",
     new ResourceTemplate(textUriTemplate, { list: undefined }),
@@ -83,18 +93,12 @@ export const registerDynamicResources = (server: McpServer) => {
     async (uri, variables) => {
       const index = parseIndex(uri, variables);
       return {
-        contents: [
-          {
-            uri: uri.toString(),
-            mimeType: "text/plain",
-            text: `Resource ${index}: This is a plaintext resource created at ${formatGmtTimestamp()}`,
-          },
-        ],
+        contents: [textResource(uri, index)],
       };
     }
   );
 
-  // Blob resource registration
+  // Blob resource template registration
   server.registerResource(
     "Dynamic Blob Resource",
     new ResourceTemplate(blobUriTemplate, { list: undefined }),
@@ -105,17 +109,8 @@ export const registerDynamicResources = (server: McpServer) => {
     },
     async (uri, variables) => {
       const index = parseIndex(uri, variables);
-      const buffer = Buffer.from(
-        `Resource ${index}: This is a base64 blob created at ${formatGmtTimestamp()}`
-      );
       return {
-        contents: [
-          {
-            uri: uri.toString(),
-            mimeType: "application/octet-stream",
-            blob: buffer.toString("base64"),
-          },
-        ],
+        contents: [blobResource(uri, index)],
       };
     }
   );
