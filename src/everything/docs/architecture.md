@@ -29,13 +29,13 @@ src/everything
 ├── prompts
 │   ├── index.ts
 │   ├── simple.ts
-│   ├── complex.ts
+│   ├── args.ts
 │   ├── completions.ts
 │   └── resource.ts
 ├── resources
 │   ├── index.ts
-│   ├── template.ts
-│   └── static.ts
+│   ├── templates.ts
+│   └── files.ts
 ├── docs
 │   ├── server-instructions.md
 │   └── architecture.md
@@ -84,26 +84,26 @@ At `src/everything`:
     - `registerPrompts(server)` orchestrator; delegates to individual prompt registrations.
   - simple.ts
     - Registers `simple-prompt`: a prompt with no arguments that returns a single user message.
-  - complex.ts
-    - Registers `complex-prompt`: a prompt with two arguments (`city` required, `state` optional) used to compose a message.
+  - args.ts
+    - Registers `args-prompt`: a prompt with two arguments (`city` required, `state` optional) used to compose a message.
   - completions.ts
     - Registers `completable-prompt`: a prompt whose arguments support server-driven completions using the SDK’s `completable(...)` helper (e.g., completing `department` and context-aware `name`).
   - resource.ts
-    - Exposes `registerEmbeddedResourcePrompt(server)` which registers `resource-prompt` — a prompt that accepts `resourceId` and embeds a dynamically generated text resource within the returned messages. Internally reuses helpers from `resources/template.ts`.
+    - Exposes `registerEmbeddedResourcePrompt(server)` which registers `resource-prompt` — a prompt that accepts `resourceType` ("Text" or "Blob") and `resourceId` (integer), and embeds a dynamically generated resource of the requested type within the returned messages. Internally reuses helpers from `resources/templates.ts`.
 
 - resources/
 
   - index.ts
-    - `registerResources(server)` orchestrator; delegates to template‑based dynamic resources and static resources by calling `registerResourceTemplates(server)` and `registerStaticResources(server)`.
-  - template.ts
+    - `registerResources(server)` orchestrator; delegates to template‑based dynamic resources and static file-based resources by calling `registerResourceTemplates(server)` and `registerFileResources(server)`.
+  - templates.ts
     - Registers two dynamic, template‑driven resources using `ResourceTemplate`:
       - Text: `demo://resource/dynamic/text/{index}` (MIME: `text/plain`)
       - Blob: `demo://resource/dynamic/blob/{index}` (MIME: `application/octet-stream`, Base64 payload)
     - The `{index}` path variable must be a finite integer. Content is generated on demand with a timestamp.
-    - Exposes helpers `textResource(uri, index)` and `textResourceUri(index)` so other modules can construct and embed text resources directly (e.g., from prompts).
-  - static.ts
-    - Registers static resources for each file in the `docs/` folder.
-    - URIs follow the pattern: `demo://static/docs/<filename>`.
+    - Exposes helpers `textResource(uri, index)`, `textResourceUri(index)`, `blobResource(uri, index)`, and `blobResourceUri(index)` so other modules can construct and embed dynamic resources directly (e.g., from prompts).
+  - files.ts
+    - Registers static file-based resources for each file in the `docs/` folder.
+    - URIs follow the pattern: `demo://resource/static/document/<filename>`.
     - Serves markdown files as `text/markdown`, `.txt` as `text/plain`, `.json` as `application/json`, others default to `text/plain`.
 
 - docs/
@@ -159,14 +159,14 @@ At `src/everything`:
 - Prompts
 
   - `simple-prompt` (prompts/simple.ts): No-argument prompt that returns a static user message.
-  - `complex-prompt` (prompts/complex.ts): Two-argument prompt with `city` (required) and `state` (optional) used to compose a question.
+  - `args-prompt` (prompts/args.ts): Two-argument prompt with `city` (required) and `state` (optional) used to compose a question.
   - `completable-prompt` (prompts/completions.ts): Demonstrates argument auto-completions with the SDK’s `completable` helper; `department` completions drive context-aware `name` suggestions.
-  - `resource-prompt` (prompts/resource.ts): Accepts `resourceId` (string convertible to integer) and returns messages that include an embedded dynamic text resource generated via `resources/template.ts`.
+  - `resource-prompt` (prompts/resource.ts): Accepts `resourceType` ("Text" or "Blob") and `resourceId` (string convertible to integer) and returns messages that include an embedded dynamic resource of the selected type generated via `resources/templates.ts`.
 
 - Resources
   - Dynamic Text: `demo://resource/dynamic/text/{index}` (content generated on the fly)
   - Dynamic Blob: `demo://resource/dynamic/blob/{index}` (base64 payload generated on the fly)
-  - Static Docs: `demo://static/docs/<filename>` (serves files from `src/everything/docs/` as static resources)
+  - Static Docs: `demo://resource/static/document/<filename>` (serves files from `src/everything/docs/` as static file-based resources)
 
 ## Extension Points
 

@@ -11,6 +11,7 @@ const blobUriTemplate: string = `${blobUriBase}/{index}`;
 
 /**
  * Create a dynamic text resource
+ * - Exposed for use by embedded resource prompt example
  * @param uri
  * @param index
  */
@@ -25,6 +26,7 @@ export const textResource = (uri: URL, index: number) => {
 
 /**
  * Create a dynamic blob resource
+ * - Exposed for use by embedded resource prompt example
  * @param uri
  * @param index
  */
@@ -42,14 +44,22 @@ export const blobResource = (uri: URL, index: number) => {
 
 /**
  * Create a dynamic text resource URI
+ * - Exposed for use by embedded resource prompt example
  * @param index
  */
 export const textResourceUri = (index: number) =>
   new URL(`${textUriBase}/${index}`);
 
 /**
+ * Create a dynamic blob resource URI
+ * - Exposed for use by embedded resource prompt example
+ * @param index
+ */
+export const blobResourceUri = (index: number) =>
+  new URL(`${blobUriBase}/${index}`);
+
+/**
  * Register resource templates with the MCP server.
- *
  * - Text and blob resources, dynamically generated from the URI {index} variable
  * - Any finite integer is acceptable for the index variable
  * - List resources method will not return these resources
@@ -63,6 +73,7 @@ export const textResourceUri = (index: number) =>
  * @param server
  */
 export const registerResourceTemplates = (server: McpServer) => {
+  // Parse the index from the URI
   const parseIndex = (uri: URL, variables: Record<string, unknown>) => {
     const uriError = `Unknown resource: ${uri.toString()}`;
     if (
@@ -81,7 +92,7 @@ export const registerResourceTemplates = (server: McpServer) => {
     }
   };
 
-  // Text resource template registration
+  // Register the text resource template
   server.registerResource(
     "Dynamic Text Resource",
     new ResourceTemplate(textUriTemplate, { list: undefined }),
@@ -98,7 +109,7 @@ export const registerResourceTemplates = (server: McpServer) => {
     }
   );
 
-  // Blob resource template registration
+  // Register the blob resource template
   server.registerResource(
     "Dynamic Blob Resource",
     new ResourceTemplate(blobUriTemplate, { list: undefined }),

@@ -1,6 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+/**
+ * Register a simple prompt with no arguments
+ * - Returns the fixed text of the prompt with no modifications
+ *
+ * @param server
+ */
 export const registerSimplePrompt = (server: McpServer) => {
+  // Register the prompt
   server.registerPrompt(
     "simple-prompt",
     {

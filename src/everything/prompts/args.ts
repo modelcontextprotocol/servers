@@ -1,16 +1,25 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export const registerComplexPrompt = (server: McpServer) => {
+/**
+ * Register a prompt with arguments
+ * - Two arguments, one required and one optional
+ * - Combines argument values in the returned prompt
+ *
+ * @param server
+ */
+export const registerArgumentsPrompt = (server: McpServer) => {
+  // Prompt arguments
   const promptArgsSchema = {
     city: z.string().describe("Name of the city"),
     state: z.string().describe("Name of the state").optional(),
   };
 
+  // Register the prompt
   server.registerPrompt(
-    "complex-prompt",
+    "args-prompt",
     {
-      title: "Complex Prompt",
+      title: "Arguments Prompt",
       description: "A prompt with two arguments, one required and one optional",
       argsSchema: promptArgsSchema,
     },
