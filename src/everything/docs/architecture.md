@@ -10,6 +10,8 @@ This document summarizes the current layout and runtime architecture of the `src
   - `server/index.ts`: The lightweight, modular server used by transports in this package.
   - `server/everything.ts`: A comprehensive reference server (much larger, many tools/prompts/resources) kept for reference/testing but not wired up by default in the entry points.
 
+- Multi‑client subscriptions: The server supports multiple concurrent clients. Each client manages its own resource subscriptions and receives notifications only for the URIs it subscribed to, independent of other clients.
+
 ## Directory Layout
 
 ```
@@ -35,7 +37,8 @@ src/everything
 ├── resources
 │   ├── index.ts
 │   ├── templates.ts
-│   └── files.ts
+│   ├── files.ts
+│   └── subscriptions.ts
 ├── docs
 │   ├── server-instructions.md
 │   └── architecture.md
@@ -52,22 +55,23 @@ At `src/everything`:
 
   - index.ts
     - Server factory that creates an `McpServer` with declared capabilities, loads server instructions, and registers tools, prompts, and resources.
-    - Exposes `{ server, cleanup, startNotificationIntervals }` to the chosen transport.
+    - Sets resource subscription handlers via `setSubscriptionHandlers(server)`.
+    - Exposes `{ server, clientConnected, cleanup }` to the chosen transport.
   - everything.ts
     - A full “reference/monolith” implementation demonstrating most MCP features. Not the default path used by the transports in this package.
 
 - transports/
 
   - stdio.ts
-    - Starts a `StdioServerTransport`, creates the server via `createServer()`, and connects it. Handles `SIGINT` to close cleanly.
+    - Starts a `StdioServerTransport`, creates the server via `createServer()`, connects it, and invokes `clientConnected(transport)` so simulated resource updates can begin. Handles `SIGINT` to close cleanly.
   - sse.ts
     - Express server exposing:
       - `GET /sse` to establish an SSE connection per session.
       - `POST /message` for client messages.
-    - Manages a `Map<sessionId, SSEServerTransport>` for sessions. Calls `startNotificationIntervals(sessionId)` after connect (hook currently a no‑op in the factory).
+    - Manages a `Map<sessionId, SSEServerTransport>` for sessions. Calls `clientConnected(transport)` after connect so per‑session simulated resource updates start.
   - streamableHttp.ts
     - Express server exposing a single `/mcp` endpoint for POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `StreamableHTTPServerTransport`.
-    - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`. Connects a fresh server instance on initialization POST, then reuses transport for subsequent requests.
+    - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`. Connects a fresh server instance on initialization POST, invokes `clientConnected(transport)`, then reuses the transport for subsequent requests.
 
 - tools/
 
@@ -140,14 +144,15 @@ At `src/everything`:
    - Registers tools via `registerTools(server)`.
    - Registers resources via `registerResources(server)`.
    - Registers prompts via `registerPrompts(server)`.
+   - Sets up resource subscription handlers via `setSubscriptionHandlers(server)`.
    - Returns the server and two lifecycle hooks:
-     - `cleanup`: transport may call on shutdown (currently a no‑op).
-     - `startNotificationIntervals(sessionId?)`: currently a no‑op; wired in SSE transport for future periodic notifications.
+     - `clientConnected(transport)`: transports call this after connecting so the server can begin per‑session simulated resource update notifications over that specific transport.
+     - `cleanup(sessionId?)`: transports call this on session termination to stop simulated updates and remove session‑scoped state.
 
 4. Each transport is responsible for network/session lifecycle:
-   - STDIO: simple process‑bound connection; closes on `SIGINT`.
-   - SSE: maintains a session map keyed by `sessionId`, hooks server’s `onclose` to clean and remove session, exposes `/sse` (GET) and `/message` (POST) endpoints.
-   - Streamable HTTP: exposes `/mcp` for POST (JSON‑RPC messages), GET (SSE stream), and DELETE (termination). Uses an event store for resumability and stores transports by `sessionId`.
+   - STDIO: simple process‑bound connection; calls `clientConnected(transport)` after connect; closes on `SIGINT` and calls `cleanup()`.
+   - SSE: maintains a session map keyed by `sessionId`, calls `clientConnected(transport)` after connect, hooks server’s `onclose` to clean and remove session, exposes `/sse` (GET) and `/message` (POST) endpoints.
+   - Streamable HTTP: exposes `/mcp` for POST (JSON‑RPC messages), GET (SSE stream), and DELETE (termination). Uses an event store for resumability and stores transports by `sessionId`. Calls `clientConnected(transport)` on initialization and `cleanup(sessionId)` on DELETE.
 
 ## Registered Features (current minimal set)
 
@@ -168,6 +173,11 @@ At `src/everything`:
   - Dynamic Blob: `demo://resource/dynamic/blob/{index}` (base64 payload generated on the fly)
   - Static Docs: `demo://resource/static/document/<filename>` (serves files from `src/everything/docs/` as static file-based resources)
 
+- Resource Subscriptions and Notifications
+  - Clients may subscribe/unsubscribe to resource URIs using the MCP `resources/subscribe` and `resources/unsubscribe` requests.
+  - The server sends simulated update notifications with method `notifications/resources/updated { uri }` only to transports (sessions) that subscribed to that URI.
+  - Multiple concurrent clients are supported; each client’s subscriptions are tracked per session and notifications are delivered independently over that client’s transport.
+
 ## Extension Points
 
 - Adding Tools
@@ -184,6 +194,17 @@ At `src/everything`:
 
   - Create a new file under `resources/` with your `registerXResources(server)` function using `server.registerResource(...)` (optionally with `ResourceTemplate`).
   - Export and call it from `resources/index.ts` inside `registerResources(server)`.
+
+## Resource Subscriptions – How It Works
+
+- Module: `resources/subscriptions.ts`
+  - Tracks subscribers per URI: `Map<uri, Set<sessionId>>`.
+  - Tracks active transports per session: `Map<sessionId, Transport>`.
+  - Installs handlers via `setSubscriptionHandlers(server)` to process subscribe/unsubscribe requests and keep the maps updated.
+  - `clientConnected(transport)` (from the server factory) calls `beginSimulatedResourceUpdates(transport)`, which starts a per‑session interval that scans subscribed URIs and emits `notifications/resources/updated` to that session only when applicable.
+  - `cleanup(sessionId?)` calls `stopSimulatedResourceUpdates(sessionId)` to clear intervals and remove transport/state for the session.
+
+- Design note: Notifications are sent over the specific subscriber’s transport rather than broadcasting via `server.notification`, ensuring that each client receives only the updates for its own subscriptions.
 
 - Adding Transports
   - Implement a new transport module under `transports/`.

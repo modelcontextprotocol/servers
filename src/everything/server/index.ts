@@ -2,6 +2,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { dirname, join } from "path";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
+import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import {
+  setSubscriptionHandlers,
+  beginSimulatedResourceUpdates,
+  stopSimulatedResourceUpdates
+} from "../resources/subscriptions.js";
 import { registerTools } from "../tools/index.js";
 import { registerResources } from "../resources/index.js";
 import { registerPrompts } from "../prompts/index.js";
@@ -40,10 +46,18 @@ export const createServer = () => {
   // Register the prompts
   registerPrompts(server);
 
+  // Set resource subscription handlers
+  setSubscriptionHandlers(server);
+
   return {
     server,
-    cleanup: () => {},
-    startNotificationIntervals: (sessionId?: string) => {},
+    clientConnected: (transport: Transport) => {
+      beginSimulatedResourceUpdates(transport);
+      // TODO simulated logging
+    },
+    cleanup: (sessionId?: string) => {
+      stopSimulatedResourceUpdates(sessionId);
+    },
   };
 };
 

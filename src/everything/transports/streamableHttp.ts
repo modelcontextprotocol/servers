@@ -35,7 +35,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
       // Reuse existing transport
       transport = transports.get(sessionId)!;
     } else if (!sessionId) {
-      const { server } = createServer();
+      const { server, clientConnected, cleanup } = createServer();
 
       // New initialization request
       const eventStore = new InMemoryEventStore();
@@ -43,10 +43,13 @@ app.post("/mcp", async (req: Request, res: Response) => {
         sessionIdGenerator: () => randomUUID(),
         eventStore, // Enable resumability
         onsessioninitialized: (sessionId: string) => {
-          // Store the transport by session ID when session is initialized
+          // Store the transport by session ID when a session is initialized
           // This avoids race conditions where requests might come in before the session is stored
           console.log(`Session initialized with ID: ${sessionId}`);
           transports.set(sessionId, transport);
+
+          // Start simulated logging and subscription updates when a client connects
+          clientConnected(transport);
         },
       });
 
@@ -58,6 +61,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
             `Transport closed for session ${sid}, removing from transports map`
           );
           transports.delete(sid);
+          cleanup(sid);
         }
       };
 
