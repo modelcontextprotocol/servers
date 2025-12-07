@@ -18,7 +18,7 @@ const transports: Map<string | undefined, Transport> = new Map<
 >();
 
 // Interval to send notifications to subscribers
-let subsUpdateIntervals: Map<string | undefined, NodeJS.Timeout | undefined> =
+const subsUpdateIntervals: Map<string | undefined, NodeJS.Timeout | undefined> =
   new Map<string | undefined, NodeJS.Timeout | undefined>();
 
 /**
@@ -151,8 +151,9 @@ export const beginSimulatedResourceUpdates = (transport: Transport) => {
  *
  * This function halts any active intervals associated with the provided session ID
  * and removes the session's corresponding entries from resource management collections.
+ * Session ID can be undefined for stdio.
  *
- * @param {string} [sessionId] - The unique identifier of the session for which simulated resource updates should be stopped. If not provided, no action is performed.
+ * @param {string} [sessionId]
  */
 export const stopSimulatedResourceUpdates = (sessionId?: string) => {
   // Remove active intervals
