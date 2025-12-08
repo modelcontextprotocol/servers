@@ -4,13 +4,12 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import {
   setSubscriptionHandlers,
-  beginSimulatedResourceUpdates,
-  stopSimulatedResourceUpdates
+  stopSimulatedResourceUpdates,
 } from "../resources/subscriptions.js";
 import { registerTools } from "../tools/index.js";
 import { registerResources } from "../resources/index.js";
 import { registerPrompts } from "../prompts/index.js";
-import { beginSimulatedLogging, stopSimulatedLogging } from "./logging.js";
+import { stopSimulatedLogging } from "./logging.js";
 
 // Everything Server factory
 export const createServer = () => {
@@ -49,17 +48,13 @@ export const createServer = () => {
   // Set resource subscription handlers
   setSubscriptionHandlers(server);
 
+  // Return server instance and cleanup function
   return {
     server,
-    // When the client connects, begin simulated resource updates and logging
-    clientConnected: (sessionId?: string) => {
-      beginSimulatedResourceUpdates(server, sessionId);
-      beginSimulatedLogging(server, sessionId);
-    },
-    // When the client disconnects, stop simulated resource updates and logging
     cleanup: (sessionId?: string) => {
-      stopSimulatedResourceUpdates(sessionId);
+      // Stop any simulated logging or resource updates that may have been initiated.
       stopSimulatedLogging(sessionId);
+      stopSimulatedResourceUpdates(sessionId);
     },
   };
 };

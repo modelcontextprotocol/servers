@@ -97,6 +97,38 @@ export const setSubscriptionHandlers = (server: McpServer) => {
 };
 
 /**
+ * Sends simulated resource update notifications to the subscribed client.
+ *
+ * This function iterates through all resource URIs stored in the subscriptions
+ * and checks if the specified session ID is subscribed to them. If so, it sends
+ * a notification through the provided server. If the session ID is no longer valid
+ * (disconnected), it removes the session ID from the list of subscribers.
+ *
+ * @param {McpServer} server - The server instance used to send notifications.
+ * @param {string | undefined} sessionId - The session ID of the client to check for subscriptions.
+ * @returns {Promise<void>} Resolves once all applicable notifications are sent.
+ */
+const sendSimulatedResourceUpdates = async (
+  server: McpServer,
+  sessionId: string | undefined
+): Promise<void> => {
+  // Search all URIs for ones this client is subscribed to
+  for (const uri of subscriptions.keys()) {
+    const subscribers = subscriptions.get(uri) as Set<string | undefined>;
+
+    // If this client is subscribed, send the notification
+    if (subscribers.has(sessionId)) {
+      await server.server.notification({
+        method: "notifications/resources/updated",
+        params: { uri },
+      });
+    } else {
+      subscribers.delete(sessionId); // subscriber has disconnected
+    }
+  }
+};
+
+/**
  * Starts the process of simulating resource updates and sending server notifications
  * to the client for the resources they are subscribed to. If the update interval is
  * already active, invoking this function will not start another interval.
@@ -109,25 +141,13 @@ export const beginSimulatedResourceUpdates = (
   sessionId: string | undefined
 ) => {
   if (!subsUpdateIntervals.has(sessionId)) {
-    // Set the interval to send resource update notifications to this client
+    // Send once immediately
+    sendSimulatedResourceUpdates(server, sessionId);
+
+    // Set the interval to send later resource update notifications to this client
     subsUpdateIntervals.set(
       sessionId,
-      setInterval(async () => {
-        // Search all URIs for ones this client is subscribed to
-        for (const uri of subscriptions.keys()) {
-          const subscribers = subscriptions.get(uri) as Set<string | undefined>;
-
-          // If this client is subscribed, send the notification
-          if (subscribers.has(sessionId)) {
-            await server.server.notification({
-              method: "notifications/resources/updated",
-              params: { uri },
-            });
-          } else {
-            subscribers.delete(sessionId); // subscriber has disconnected
-          }
-        }
-      }, 10000)
+      setInterval(() => sendSimulatedResourceUpdates(server, sessionId), 5000)
     );
   }
 };

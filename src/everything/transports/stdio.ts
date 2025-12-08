@@ -7,10 +7,9 @@ console.error("Starting default (STDIO) server...");
 
 async function main() {
   const transport = new StdioServerTransport();
-  const { server, clientConnected, cleanup } = createServer();
+  const { server, cleanup } = createServer();
 
   await server.connect(transport);
-  clientConnected();
 
   // Cleanup on exit
   process.on("SIGINT", async () => {

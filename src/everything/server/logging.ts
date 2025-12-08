@@ -38,18 +38,27 @@ export const beginSimulatedLogging = (
     },
   ];
 
-  // Set the interval to send logging messages to this client
+  /**
+   * Send a simulated logging message to the client
+   */
+  const sendSimulatedLoggingMessage = async (sessionId: string | undefined) => {
+    // By using the `sendLoggingMessage` function to send the message, we
+    // ensure that the client's chosen logging level will be respected
+    await server.sendLoggingMessage(
+      messages[Math.floor(Math.random() * messages.length)],
+      sessionId
+    );
+  };
+
+  // Set the interval to send later logging messages to this client
   if (!logsUpdateIntervals.has(sessionId)) {
+    // Send once immediately
+    sendSimulatedLoggingMessage(sessionId);
+
+    // Sen
     logsUpdateIntervals.set(
       sessionId,
-      setInterval(async () => {
-        // By using the `sendLoggingMessage` function to send the message, we
-        // ensure that the client's chosen logging level will be respected
-        await server.sendLoggingMessage(
-          messages[Math.floor(Math.random() * messages.length)],
-          sessionId
-        );
-      }, 15000)
+      setInterval(() => sendSimulatedLoggingMessage(sessionId), 5000)
     );
   }
 };

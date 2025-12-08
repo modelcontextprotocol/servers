@@ -35,7 +35,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
       // Reuse existing transport
       transport = transports.get(sessionId)!;
     } else if (!sessionId) {
-      const { server, clientConnected, cleanup } = createServer();
+      const { server, cleanup } = createServer();
 
       // New initialization request
       const eventStore = new InMemoryEventStore();
@@ -47,9 +47,6 @@ app.post("/mcp", async (req: Request, res: Response) => {
           // This avoids race conditions where requests might come in before the session is stored
           console.log(`Session initialized with ID: ${sessionId}`);
           transports.set(sessionId, transport);
-
-          // Start simulated logging and subscription updates when a client connects
-          clientConnected(sessionId);
         },
       });
 

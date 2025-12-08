@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerEchoTool } from "./echo.js";
 import { registerAddTool } from "./add.js";
+import { registerToggleLoggingTool } from "./toggle-logging.js";
+import { registerToggleSubscriberUpdatesTool } from "./toggle-subscriber-updates.js";
 
 /**
  * Register the tools with the MCP server.
@@ -9,4 +11,6 @@ import { registerAddTool } from "./add.js";
 export const registerTools = (server: McpServer) => {
   registerEchoTool(server);
   registerAddTool(server);
+  registerToggleLoggingTool(server);
+  registerToggleSubscriberUpdatesTool(server);
 };
