@@ -5,6 +5,7 @@ import {
   stopSimulatedLogging,
 } from "../server/logging.js";
 
+// Tool configuration
 const name = "toggle-logging";
 const config = {
   title: "Toggle Logging",
@@ -12,18 +13,19 @@ const config = {
   inputSchema: {},
 };
 
+// Track enabled clients by session id
 const clients: Set<string | undefined> = new Set<string | undefined>();
 
 /**
- * Registers a tool that toggles simulated logging for a session on or off.
+ * Registers the `toggle-subscriber-updates` tool with the provided MCP server.
+ * This tool enables or disables sending of periodic, random-leveled logging
+ * messages the connected client.
  *
- * This function allows the server to manage simulated logging for client sessions.
  * When invoked, it either starts or stops simulated logging based on the session's
  * current state. If logging for the specified session is active, it will be stopped;
- * if it is inactive it will be started.
+ * if it is inactive, logging will be started.
  *
  * @param {McpServer} server - The server instance to which the tool is registered.
- * @returns {void}
  */
 export const registerToggleLoggingTool = (server: McpServer) => {
   server.registerTool(
