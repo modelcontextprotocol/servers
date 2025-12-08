@@ -37,10 +37,11 @@ app.get("/sse", async (req, res) => {
 
     // Connect server to transport
     await server.connect(transport);
-    console.error("Client Connected: ", transport.sessionId);
+    const sessionId = transport.sessionId;
+    console.error("Client Connected: ", sessionId);
 
     // Start simulated logging and subscription updates when a client connects
-    clientConnected(transport);
+    clientConnected(sessionId);
 
     // Handle close of connection
     server.server.onclose = async () => {

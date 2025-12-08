@@ -1,5 +1,4 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import {
   SubscribeRequestSchema,
   UnsubscribeRequestSchema,
@@ -9,12 +8,6 @@ import {
 const subscriptions: Map<string, Set<string | undefined>> = new Map<
   string,
   Set<string | undefined>
->();
-
-// Track transport by session id
-const transports: Map<string | undefined, Transport> = new Map<
-  string | undefined,
-  Transport
 >();
 
 // Interval to send notifications to subscribers
@@ -105,35 +98,28 @@ export const setSubscriptionHandlers = (server: McpServer) => {
 
 /**
  * Starts the process of simulating resource updates and sending server notifications
- * to subscribed clients at regular intervals. If the update interval is already active,
- * invoking this function will not start another interval.
+ * to the client for the resources they are subscribed to. If the update interval is
+ * already active, invoking this function will not start another interval.
  *
- * Note that tracking and sending updates on the transport of the subscriber allows for
- * multiple clients to be connected and independently receive only updates about their
- * own subscriptions. Had we used `server.notification` instead, all clients would
- * receive updates for all subscriptions.
- *
- * @param {Transport} transport - The transport to the subscriber
+ * @param server
+ * @param sessionId
  */
-export const beginSimulatedResourceUpdates = (transport: Transport) => {
-  const sessionId = transport?.sessionId;
-  if (!transports.has(sessionId)) {
-    // Store the transport
-    transports.set(sessionId, transport);
-
-    // Set the interval to send notifications to the subscribers
+export const beginSimulatedResourceUpdates = (
+  server: McpServer,
+  sessionId: string | undefined
+) => {
+  if (!subsUpdateIntervals.has(sessionId)) {
+    // Set the interval to send resource update notifications to this client
     subsUpdateIntervals.set(
       sessionId,
       setInterval(async () => {
-        // Send notifications to all subscribers for each URI
+        // Search all URIs for ones this client is subscribed to
         for (const uri of subscriptions.keys()) {
           const subscribers = subscriptions.get(uri) as Set<string | undefined>;
 
-          // Get the transport for the subscriber and send the notification
+          // If this client is subscribed, send the notification
           if (subscribers.has(sessionId)) {
-            const transport = transports.get(sessionId) as Transport;
-            await transport.send({
-              jsonrpc: "2.0",
+            await server.server.notification({
               method: "notifications/resources/updated",
               params: { uri },
             });
@@ -161,9 +147,5 @@ export const stopSimulatedResourceUpdates = (sessionId?: string) => {
     const subsUpdateInterval = subsUpdateIntervals.get(sessionId);
     clearInterval(subsUpdateInterval);
     subsUpdateIntervals.delete(sessionId);
-  }
-  // Remove transport for the session
-  if (transports.has(sessionId)) {
-    transports.delete(sessionId);
   }
 };

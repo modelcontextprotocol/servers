@@ -10,7 +10,7 @@ async function main() {
   const { server, clientConnected, cleanup } = createServer();
 
   await server.connect(transport);
-  clientConnected(transport);
+  clientConnected();
 
   // Cleanup on exit
   process.on("SIGINT", async () => {

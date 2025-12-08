@@ -171,7 +171,6 @@ export const createServer = () => {
 
   let subscriptions: Set<string> = new Set();
   let subsUpdateInterval: NodeJS.Timeout | undefined;
-  let stdErrUpdateInterval: NodeJS.Timeout | undefined;
 
   let logsUpdateInterval: NodeJS.Timeout | undefined;
   // Store client capabilities
@@ -1147,7 +1146,6 @@ export const createServer = () => {
   const cleanup = async () => {
     if (subsUpdateInterval) clearInterval(subsUpdateInterval);
     if (logsUpdateInterval) clearInterval(logsUpdateInterval);
-    if (stdErrUpdateInterval) clearInterval(stdErrUpdateInterval);
   };
 
   return { server, cleanup, startNotificationIntervals };

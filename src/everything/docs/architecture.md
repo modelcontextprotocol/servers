@@ -7,6 +7,7 @@ This document summarizes the current layout and runtime architecture of the `src
 - Purpose: A minimal, modular MCP server showcasing core Model Context Protocol features. It exposes a simple tool, several prompts, and both static and dynamic resources, and can be run over multiple transports (STDIO, SSE, and Streamable HTTP).
 - Design: A small “server factory” constructs the MCP server and registers features. Transports are separate entry points that create/connect the server and handle network concerns. Tools, prompts, and resources are organized in their own submodules.
 - Two server implementations exist:
+
   - `server/index.ts`: The lightweight, modular server used by transports in this package.
   - `server/everything.ts`: A comprehensive reference server (much larger, many tools/prompts/resources) kept for reference/testing but not wired up by default in the entry points.
 
@@ -19,6 +20,7 @@ src/everything
 ├── index.ts
 ├── server
 │   ├── index.ts
+│   ├── logging.ts
 │   └── everything.ts
 ├── transports
 │   ├── stdio.ts
@@ -57,21 +59,23 @@ At `src/everything`:
     - Server factory that creates an `McpServer` with declared capabilities, loads server instructions, and registers tools, prompts, and resources.
     - Sets resource subscription handlers via `setSubscriptionHandlers(server)`.
     - Exposes `{ server, clientConnected, cleanup }` to the chosen transport.
+  - logging.ts
+    - Implements simulated logging. Periodically sends randomized log messages at various levels to the connected client session. Started/stopped via the server factory lifecycle hooks.
   - everything.ts
     - A full “reference/monolith” implementation demonstrating most MCP features. Not the default path used by the transports in this package.
 
 - transports/
 
   - stdio.ts
-    - Starts a `StdioServerTransport`, creates the server via `createServer()`, connects it, and invokes `clientConnected(transport)` so simulated resource updates can begin. Handles `SIGINT` to close cleanly.
+    - Starts a `StdioServerTransport`, creates the server via `createServer()`, connects it, and invokes `clientConnected()` so simulated resource updates and logging can begin. Handles `SIGINT` to close cleanly.
   - sse.ts
     - Express server exposing:
       - `GET /sse` to establish an SSE connection per session.
       - `POST /message` for client messages.
-    - Manages a `Map<sessionId, SSEServerTransport>` for sessions. Calls `clientConnected(transport)` after connect so per‑session simulated resource updates start.
+    - Manages a `Map<sessionId, SSEServerTransport>` for sessions. Calls `clientConnected(sessionId)` after connect so per‑session simulated resource updates and logging start.
   - streamableHttp.ts
     - Express server exposing a single `/mcp` endpoint for POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `StreamableHTTPServerTransport`.
-    - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`. Connects a fresh server instance on initialization POST, invokes `clientConnected(transport)`, then reuses the transport for subsequent requests.
+    - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`. Connects a fresh server instance on initialization POST, invokes `clientConnected(sessionId)`, then reuses the transport for subsequent requests.
 
 - tools/
 
@@ -146,13 +150,13 @@ At `src/everything`:
    - Registers prompts via `registerPrompts(server)`.
    - Sets up resource subscription handlers via `setSubscriptionHandlers(server)`.
    - Returns the server and two lifecycle hooks:
-     - `clientConnected(transport)`: transports call this after connecting so the server can begin per‑session simulated resource update notifications over that specific transport.
-     - `cleanup(sessionId?)`: transports call this on session termination to stop simulated updates and remove session‑scoped state.
+     - `clientConnected(sessionId?)`: transports call this after connecting so the server can begin per‑session simulated resource update notifications and simulated logging for that session.
+     - `cleanup(sessionId?)`: transports call this on session termination to stop simulated resource updates and simulated logging, and remove session‑scoped state.
 
 4. Each transport is responsible for network/session lifecycle:
-   - STDIO: simple process‑bound connection; calls `clientConnected(transport)` after connect; closes on `SIGINT` and calls `cleanup()`.
-   - SSE: maintains a session map keyed by `sessionId`, calls `clientConnected(transport)` after connect, hooks server’s `onclose` to clean and remove session, exposes `/sse` (GET) and `/message` (POST) endpoints.
-   - Streamable HTTP: exposes `/mcp` for POST (JSON‑RPC messages), GET (SSE stream), and DELETE (termination). Uses an event store for resumability and stores transports by `sessionId`. Calls `clientConnected(transport)` on initialization and `cleanup(sessionId)` on DELETE.
+   - STDIO: simple process‑bound connection; calls `clientConnected()` after connect; closes on `SIGINT` and calls `cleanup()`.
+   - SSE: maintains a session map keyed by `sessionId`, calls `clientConnected(sessionId)` after connect, hooks server’s `onclose` to clean and remove session, exposes `/sse` (GET) and `/message` (POST) endpoints.
+   - Streamable HTTP: exposes `/mcp` for POST (JSON‑RPC messages), GET (SSE stream), and DELETE (termination). Uses an event store for resumability and stores transports by `sessionId`. Calls `clientConnected(sessionId)` on initialization and `cleanup(sessionId)` on DELETE.
 
 ## Registered Features (current minimal set)
 
@@ -169,14 +173,18 @@ At `src/everything`:
   - `resource-prompt` (prompts/resource.ts): Accepts `resourceType` ("Text" or "Blob") and `resourceId` (string convertible to integer) and returns messages that include an embedded dynamic resource of the selected type generated via `resources/templates.ts`.
 
 - Resources
+
   - Dynamic Text: `demo://resource/dynamic/text/{index}` (content generated on the fly)
   - Dynamic Blob: `demo://resource/dynamic/blob/{index}` (base64 payload generated on the fly)
   - Static Docs: `demo://resource/static/document/<filename>` (serves files from `src/everything/docs/` as static file-based resources)
 
 - Resource Subscriptions and Notifications
   - Clients may subscribe/unsubscribe to resource URIs using the MCP `resources/subscribe` and `resources/unsubscribe` requests.
-  - The server sends simulated update notifications with method `notifications/resources/updated { uri }` only to transports (sessions) that subscribed to that URI.
-  - Multiple concurrent clients are supported; each client’s subscriptions are tracked per session and notifications are delivered independently over that client’s transport.
+  - The server sends simulated update notifications with method `notifications/resources/updated { uri }` only to sessions that subscribed to that URI.
+  - Multiple concurrent clients are supported; each client’s subscriptions are tracked per session and notifications are delivered independently via the server instance associated with that session.
+
+- Logging
+  - Simulated logging is enabled. The server emits periodic log messages of varying levels (debug, info, notice, warning, error, critical, alert, emergency) per session. Clients can control the minimum level they receive via standard MCP `logging/setLevel` request.
 
 ## Extension Points
 
@@ -198,13 +206,21 @@ At `src/everything`:
 ## Resource Subscriptions – How It Works
 
 - Module: `resources/subscriptions.ts`
-  - Tracks subscribers per URI: `Map<uri, Set<sessionId>>`.
-  - Tracks active transports per session: `Map<sessionId, Transport>`.
-  - Installs handlers via `setSubscriptionHandlers(server)` to process subscribe/unsubscribe requests and keep the maps updated.
-  - `clientConnected(transport)` (from the server factory) calls `beginSimulatedResourceUpdates(transport)`, which starts a per‑session interval that scans subscribed URIs and emits `notifications/resources/updated` to that session only when applicable.
-  - `cleanup(sessionId?)` calls `stopSimulatedResourceUpdates(sessionId)` to clear intervals and remove transport/state for the session.
 
-- Design note: Notifications are sent over the specific subscriber’s transport rather than broadcasting via `server.notification`, ensuring that each client receives only the updates for its own subscriptions.
+  - Tracks subscribers per URI: `Map<uri, Set<sessionId>>`.
+  - Installs handlers via `setSubscriptionHandlers(server)` to process subscribe/unsubscribe requests and keep the map updated.
+  - `clientConnected(sessionId?)` (from the server factory) calls `beginSimulatedResourceUpdates(server, sessionId)`, which starts a per‑session interval that scans subscribed URIs and emits `notifications/resources/updated` from that session’s server instance only when applicable.
+  - `cleanup(sessionId?)` calls `stopSimulatedResourceUpdates(sessionId)` to clear intervals and remove session‑scoped state.
+
+- Design note: Each client session has its own `McpServer` instance; periodic checks run per session and invoke `server.notification(...)` on that instance, so messages are delivered only to the intended client.
+
+## Simulated Logging – How It Works
+
+- Module: `server/logging.ts`
+
+  - Periodically sends randomized log messages at different levels. Messages can include the session ID for clarity during demos.
+  - Started via `beginSimulatedLogging(server, sessionId?)` when a client connects and stopped via `stopSimulatedLogging(sessionId?)` during cleanup.
+  - Uses `server.sendLoggingMessage({ level, data }, sessionId?)` so that the client’s configured minimum logging level is respected by the SDK.
 
 - Adding Transports
   - Implement a new transport module under `transports/`.

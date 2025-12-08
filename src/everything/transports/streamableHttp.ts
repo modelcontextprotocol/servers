@@ -49,7 +49,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
           transports.set(sessionId, transport);
 
           // Start simulated logging and subscription updates when a client connects
-          clientConnected(transport);
+          clientConnected(sessionId);
         },
       });
 

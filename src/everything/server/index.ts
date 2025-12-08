@@ -2,7 +2,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { dirname, join } from "path";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
-import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import {
   setSubscriptionHandlers,
   beginSimulatedResourceUpdates,
@@ -11,6 +10,7 @@ import {
 import { registerTools } from "../tools/index.js";
 import { registerResources } from "../resources/index.js";
 import { registerPrompts } from "../prompts/index.js";
+import { beginSimulatedLogging, stopSimulatedLogging } from "./logging.js";
 
 // Everything Server factory
 export const createServer = () => {
@@ -51,12 +51,15 @@ export const createServer = () => {
 
   return {
     server,
-    clientConnected: (transport: Transport) => {
-      beginSimulatedResourceUpdates(transport);
-      // TODO simulated logging
+    // When the client connects, begin simulated resource updates and logging
+    clientConnected: (sessionId?: string) => {
+      beginSimulatedResourceUpdates(server, sessionId);
+      beginSimulatedLogging(server, sessionId);
     },
+    // When the client disconnects, stop simulated resource updates and logging
     cleanup: (sessionId?: string) => {
       stopSimulatedResourceUpdates(sessionId);
+      stopSimulatedLogging(sessionId);
     },
   };
 };
