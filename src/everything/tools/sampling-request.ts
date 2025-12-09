@@ -7,7 +7,7 @@ import {
 import { z } from "zod";
 
 // Tool input schema
-const SampleLLMSchema = z.object({
+const SamplingRequestSchema = z.object({
   prompt: z.string().describe("The prompt to send to the LLM"),
   maxTokens: z
     .number()
@@ -20,7 +20,7 @@ const name = "sampling-request";
 const config = {
   title: "Sampling Request Tool",
   description: "Sends the Client a Request for LLM Sampling",
-  inputSchema: SampleLLMSchema,
+  inputSchema: SamplingRequestSchema,
 };
 
 /**
@@ -44,7 +44,7 @@ export const registerSamplingRequestTool = (server: McpServer) => {
     name,
     config,
     async (args, extra): Promise<CallToolResult> => {
-      const validatedArgs = SampleLLMSchema.parse(args);
+      const validatedArgs = SamplingRequestSchema.parse(args);
       const { prompt, maxTokens } = validatedArgs;
 
       // Create the sampling request
