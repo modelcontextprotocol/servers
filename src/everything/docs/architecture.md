@@ -84,14 +84,20 @@ At `src/everything`:
 
   - index.ts
     - `registerTools(server)` orchestrator; delegates to basic tools and control tools.
+  - add.ts
+      - Defines an `add` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
   - echo.ts
     - Defines a minimal `echo` tool with a Zod input schema and returns `Echo: {message}`.
-  - add.ts
-    - Defines an `add` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
+  - long-running-operation.ts
+      - Defines `long-running-operation`: simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
+  - print-env.ts
+    - Defines `print-env`: returns the current process environment variables as formatted JSON text; useful for debugging configuration.
   - toggle-logging.ts
     - Defines `toggle-logging`: starts/stops simulated logging for the invoking session.
   - toggle-subscriber-updates.ts
     - Defines `toggle-subscriber-updates`: starts/stops simulated resource subscription update checks for the invoking session.
+  - sampling-request.ts
+      - Defines `sampling-request`: sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
 
 - prompts/
 
@@ -167,8 +173,11 @@ At `src/everything`:
 
 - Tools
 
-  - `echo` (tools/echo.ts): Echoes the provided `message: string`. Uses Zod to validate inputs.
   - `add` (tools/add.ts): Adds two numbers `a` and `b` and returns their sum. Uses Zod to validate inputs.
+  - `echo` (tools/echo.ts): Echoes the provided `message: string`. Uses Zod to validate inputs.
+  - `long-running-operation` (tools/long-running-operation.ts): Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client.
+  - `print-env` (tools/print-env.ts): Returns all environment variables from the running process as pretty-printed JSON text.
+  - `sampling-request` (tools/sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM’s response payload.
   - `toggle-logging` (tools/toggle-logging.ts): Starts or stops simulated, random‑leveled logging for the invoking session. Respects the client’s selected minimum logging level.
   - `toggle-subscriber-updates` (tools/toggle-subscriber-updates.ts): Starts or stops simulated resource update notifications for URIs the invoking session has subscribed to.
 
