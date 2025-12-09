@@ -7,6 +7,7 @@ import { registerPrintEnvTool } from "./print-env.js";
 import { registerSamplingRequestTool } from "./sampling-request.js";
 import { registerToggleLoggingTool } from "./toggle-logging.js";
 import { registerToggleSubscriberUpdatesTool } from "./toggle-subscriber-updates.js";
+import {registerAnnotatedMessageTool} from "./annotated-message.js";
 
 /**
  * Register the tools with the MCP server.
@@ -14,6 +15,7 @@ import { registerToggleSubscriberUpdatesTool } from "./toggle-subscriber-updates
  */
 export const registerTools = (server: McpServer) => {
   registerAddTool(server);
+  registerAnnotatedMessageTool(server);
   registerEchoTool(server);
   registerGetTinyImageTool(server);
   registerLongRunningOperationTool(server);

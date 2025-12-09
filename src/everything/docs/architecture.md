@@ -29,6 +29,7 @@ src/everything
 │   └── streamableHttp.ts
 ├── tools
 │   ├── index.ts
+│   ├── annotated-message.ts
 │   ├── add.ts
 │   ├── echo.ts
 │   ├── get-tiny-image.ts
@@ -90,22 +91,24 @@ At `src/everything`:
 
   - index.ts
     - `registerTools(server)` orchestrator; delegates to basic tools and control tools.
-  - add.ts
-    - Defines an `add` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
-  - echo.ts
-    - Defines a minimal `echo` tool with a Zod input schema and returns `Echo: {message}`.
-  - get-tiny-image.ts
-    - Defines `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
-  - long-running-operation.ts
-    - Defines `long-running-operation`: simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
-  - print-env.ts
-    - Defines `print-env`: returns the current process environment variables as formatted JSON text; useful for debugging configuration.
-  - toggle-logging.ts
-    - Defines `toggle-logging`: starts/stops simulated logging for the invoking session.
-  - toggle-subscriber-updates.ts
-    - Defines `toggle-subscriber-updates`: starts/stops simulated resource subscription update checks for the invoking session.
-  - sampling-request.ts
-    - Defines `sampling-request`: sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
+    - add.ts
+      - Registers an `add` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
+    - annotated-message.ts
+        - Registers an `annotated-message` tool which demonstrates annotated content items by emitting a primary `text` message with `annotations` that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true.
+    - echo.ts
+      - Registers an `echo` tool that takes a message and returns `Echo: {message}`.
+    - get-tiny-image.ts
+      - Registers a `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
+    - long-running-operation.ts
+      - Registers a `long-running-operation` tool that simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
+    - print-env.ts
+      - Registers a `print-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
+    - sampling-request.ts
+        - Registers a `sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
+    - toggle-logging.ts
+      - Registers a `toggle-logging` tool, which starts or stops simulated logging for the invoking session.
+    - toggle-subscriber-updates.ts
+      - Registers a `toggle-subscriber-updates` tool, which starts or stops simulated resource subscription update checks for the invoking session.
 
 - prompts/
 
@@ -182,6 +185,7 @@ At `src/everything`:
 - Tools
 
   - `add` (tools/add.ts): Adds two numbers `a` and `b` and returns their sum. Uses Zod to validate inputs.
+  - `annotated-message` (tools/annotated-message.ts): Returns a `text` message annotated with `priority` and `audience` based on `messageType` (`error`, `success`, or `debug`); can optionally include an annotated `image`.
   - `echo` (tools/echo.ts): Echoes the provided `message: string`. Uses Zod to validate inputs.
   - `get-tiny-image` (tools/get-tiny-image.ts): Returns a tiny PNG MCP logo as an `image` content item with brief descriptive text before and after.
   - `long-running-operation` (tools/long-running-operation.ts): Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client.
