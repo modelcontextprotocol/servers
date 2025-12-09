@@ -24,11 +24,10 @@ const config = {
 };
 
 /**
- * Registers a sampling request tool within the given MCP server.
+ * Registers the 'sampling-request' tool within the provided McpServer instance.
  *
- * This tool allows the server to handle sampling requests by parsing input
- * arguments, generating a sampling request for an LLM, and returning the
- * result to the client.
+ * Allows the server to handle sampling requests by parsing input arguments,
+ * generating a sampling request for an LLM, and returning the result to the client.
  *
  * The registered tool performs the following operations:
  * - Validates incoming arguments using `SampleLLMSchema`.

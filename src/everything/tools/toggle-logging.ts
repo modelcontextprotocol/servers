@@ -18,8 +18,9 @@ const clients: Set<string | undefined> = new Set<string | undefined>();
 
 /**
  * Registers the `toggle-subscriber-updates` tool with the provided MCP server.
- * This tool enables or disables sending of periodic, random-leveled logging
- * messages the connected client.
+ *
+ * The registered tool enables or disables the sending of periodic, random-leveled
+ * logging messages the connected client.
  *
  * When invoked, it either starts or stops simulated logging based on the session's
  * current state. If logging for the specified session is active, it will be stopped;

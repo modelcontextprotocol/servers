@@ -17,17 +17,17 @@ const config = {
 };
 
 /**
- * Registers a tool on the given server to handle addition operations.
- *
- * @param {McpServer} server - The server instance where the addition tool will be registered.
- *
+ * Registers the 'add' tool with the provided McpServer instance.
+ **
  * The registered tool processes input arguments, validates them using a predefined schema,
  * performs addition on two numeric values, and returns the result in a structured format.
  *
- * The tool expects input arguments to conform to a specific schema that includes two numeric properties, `a` and `b`.
+ * Expects input arguments to conform to a specific schema that includes two numeric properties, `a` and `b`.
  * Validation is performed to ensure the input adheres to the expected structure before calculating the sum.
  *
  * The result is returned as a Promise resolving to an object containing the computed sum in a text format.
+ *
+ * @param {McpServer} server - The server instance where the addition tool will be registered.
  */
 export const registerAddTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {

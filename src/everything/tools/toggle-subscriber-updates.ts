@@ -21,9 +21,9 @@ const clients: Set<string | undefined> = new Set<string | undefined>();
  * This tool enables or disables simulated resource update notifications for a client.
  *
  *
- * Toggles the state of the updates based on whether the session is already active.
- * When enabled, the simulated resource updates are sent to the client at a regular interval.
- * When disabled, updates are stopped for the session.
+ * The registered tool toggles the state of the updates based on whether the session is already active.
+ * - When enabled, the simulated resource updates are sent to the client at a regular interval.
+ * - When disabled, updates are stopped for the session.
  *
  * The response provides feedback indicating whether simulated updates were started or stopped,
  * including the session ID.

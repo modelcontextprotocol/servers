@@ -20,13 +20,14 @@ const config = {
 };
 
 /**
- * Registers a tool to demonstrate long-running operations on the server.
+ * Registers the 'long-running-operation' tool with the provided McpServer instance.
  *
  * This function defines and registers a tool with the provided server instance that performs a
  * long-running operation defined by a specific duration and number of steps. The progress
  * of the operation is reported back to the client through notifications.
  *
- * The tool processes the operation in steps, with each step having equal duration.
+ * The registered tool processes the operation in steps, with each step having equal duration.
+ *
  * Progress notifications are sent back to the client at each step, if a `progressToken`
  * is provided in the metadata. At the end of the operation, the tool returns a message
  * indicating the completion of the operation, including the total duration and steps.

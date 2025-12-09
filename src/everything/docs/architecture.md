@@ -24,27 +24,33 @@ src/everything
 │   ├── logging.ts
 │   └── everything.ts
 ├── transports
-│   ├── stdio.ts
 │   ├── sse.ts
+│   ├── stdio.ts
 │   └── streamableHttp.ts
 ├── tools
 │   ├── index.ts
+│   ├── add.ts
 │   ├── echo.ts
-│   └── add.ts
+│   ├── get-tiny-image.ts
+│   ├── long-running-operation.ts
+│   ├── print-env.ts
+│   ├── sampling-request.ts
+│   ├── toggle-logging.ts
+│   └── toggle-subscriber-updates.ts
 ├── prompts
 │   ├── index.ts
-│   ├── simple.ts
 │   ├── args.ts
 │   ├── completions.ts
+│   ├── simple.ts
 │   └── resource.ts
 ├── resources
 │   ├── index.ts
-│   ├── templates.ts
 │   ├── files.ts
-│   └── subscriptions.ts
+│   ├── subscriptions.ts
+│   └── templates.ts
 ├── docs
-│   ├── server-instructions.md
-│   └── architecture.md
+│   ├── architecture.md
+│   └── server-instructions.md
 └── package.json
 ```
 
@@ -88,6 +94,8 @@ At `src/everything`:
     - Defines an `add` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
   - echo.ts
     - Defines a minimal `echo` tool with a Zod input schema and returns `Echo: {message}`.
+  - get-tiny-image.ts
+    - Defines `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
   - long-running-operation.ts
     - Defines `long-running-operation`: simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
   - print-env.ts
@@ -175,6 +183,7 @@ At `src/everything`:
 
   - `add` (tools/add.ts): Adds two numbers `a` and `b` and returns their sum. Uses Zod to validate inputs.
   - `echo` (tools/echo.ts): Echoes the provided `message: string`. Uses Zod to validate inputs.
+  - `get-tiny-image` (tools/get-tiny-image.ts): Returns a tiny PNG MCP logo as an `image` content item with brief descriptive text before and after.
   - `long-running-operation` (tools/long-running-operation.ts): Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client.
   - `print-env` (tools/print-env.ts): Returns all environment variables from the running process as pretty-printed JSON text.
   - `sampling-request` (tools/sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM’s response payload.

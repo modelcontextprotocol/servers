@@ -11,9 +11,10 @@ const config = {
 };
 
 /**
- * Registers the Echo Tool with the given MCP server. This tool, when invoked,
- * retrieves and returns the environment variables of the current process
- * as a JSON-formatted string encapsulated in a text response.
+ * Registers the 'print-env' tool with the given MCP server.
+ *
+ * The registered tool Retrieves and returns the environment variables
+ * of the current process as a JSON-formatted string encapsulated in a text response.
  *
  * @param {McpServer} server - The MCP server instance where the Echo Tool is to be registered.
  * @returns {void}
