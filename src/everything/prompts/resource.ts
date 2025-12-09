@@ -1,11 +1,16 @@
-import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
+import {
+  resourceTypeCompleter,
+  resourceIdForPromptCompleter,
+} from "../resources/templates.js";
 import {
   textResource,
   textResourceUri,
   blobResourceUri,
   blobResource,
+  RESOURCE_TYPE_BLOB,
+  RESOURCE_TYPE_TEXT,
+  RESOURCE_TYPES,
 } from "../resources/templates.js";
 
 /**
@@ -16,29 +21,10 @@ import {
  * @param server
  */
 export const registerEmbeddedResourcePrompt = (server: McpServer) => {
-  // Resource types
-  const BLOB_TYPE = "Blob";
-  const TEXT_TYPE = "Text";
-  const resourceTypes = [BLOB_TYPE, TEXT_TYPE];
-
   // Prompt arguments
   const promptArgsSchema = {
-    resourceType: completable(
-      z.string().describe("Type of resource to fetch"),
-      (value: string) => {
-        return [TEXT_TYPE, BLOB_TYPE].filter((t) => t.startsWith(value));
-      }
-    ),
-    // NOTE: Currently, prompt arguments can only be strings since type is not field of PromptArgument
-    // Consequently, we must define it as a string and convert the argument to number before using it
-    // https://modelcontextprotocol.io/specification/2025-11-25/schema#promptargument
-    resourceId: completable(
-      z.string().describe("ID of the text resource to fetch"),
-      (value: string) => {
-        const resourceId = Number(value);
-        return Number.isInteger(resourceId) ? [value] : [];
-      }
-    ),
+    resourceType: resourceTypeCompleter,
+    resourceId: resourceIdForPromptCompleter,
   };
 
   // Register the prompt
@@ -51,28 +37,36 @@ export const registerEmbeddedResourcePrompt = (server: McpServer) => {
     },
     (args) => {
       // Validate resource type argument
-      const { resourceType } = args;
-      if (!resourceTypes.includes(resourceType)) {
+      const resourceType = args.resourceType;
+      if (
+        !RESOURCE_TYPES.includes(
+          resourceType as typeof RESOURCE_TYPE_TEXT | typeof RESOURCE_TYPE_BLOB
+        )
+      ) {
         throw new Error(
-          `Invalid resourceType: ${args?.resourceType}. Must be ${TEXT_TYPE} or ${BLOB_TYPE}.`
+          `Invalid resourceType: ${args?.resourceType}. Must be ${RESOURCE_TYPE_TEXT} or ${RESOURCE_TYPE_BLOB}.`
         );
       }
 
       // Validate resourceId argument
       const resourceId = Number(args?.resourceId);
-      if (!Number.isFinite(resourceId) || !Number.isInteger(resourceId)) {
+      if (
+        !Number.isFinite(resourceId) ||
+        !Number.isInteger(resourceId) ||
+        resourceId < 1
+      ) {
         throw new Error(
-          `Invalid resourceId: ${args?.resourceId}. Must be a finite integer.`
+          `Invalid resourceId: ${args?.resourceId}. Must be a finite positive integer.`
         );
       }
 
       // Get resource based on the resource type
       const uri =
-        resourceType === TEXT_TYPE
+        resourceType === RESOURCE_TYPE_TEXT
           ? textResourceUri(resourceId)
           : blobResourceUri(resourceId);
       const resource =
-        resourceType === TEXT_TYPE
+        resourceType === RESOURCE_TYPE_TEXT
           ? textResource(uri, resourceId)
           : blobResource(uri, resourceId);
 
