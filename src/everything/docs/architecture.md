@@ -85,11 +85,11 @@ At `src/everything`:
   - index.ts
     - `registerTools(server)` orchestrator; delegates to basic tools and control tools.
   - add.ts
-      - Defines an `add` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
+    - Defines an `add` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
   - echo.ts
     - Defines a minimal `echo` tool with a Zod input schema and returns `Echo: {message}`.
   - long-running-operation.ts
-      - Defines `long-running-operation`: simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
+    - Defines `long-running-operation`: simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
   - print-env.ts
     - Defines `print-env`: returns the current process environment variables as formatted JSON text; useful for debugging configuration.
   - toggle-logging.ts
@@ -97,7 +97,7 @@ At `src/everything`:
   - toggle-subscriber-updates.ts
     - Defines `toggle-subscriber-updates`: starts/stops simulated resource subscription update checks for the invoking session.
   - sampling-request.ts
-      - Defines `sampling-request`: sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
+    - Defines `sampling-request`: sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
 
 - prompts/
 
