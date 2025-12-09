@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import {MCP_TINY_IMAGE} from "./get-tiny-image.js";
+import { MCP_TINY_IMAGE } from "./get-tiny-image.js";
 
 // Tool input schema
 const AnnotatedMessageSchema = z.object({
@@ -18,10 +18,10 @@ const AnnotatedMessageSchema = z.object({
 const name = "annotated-message";
 const config = {
   title: "Annotated Message Tool",
-  description: "Demonstrates how annotations can be used to provide metadata about content.",
+  description:
+    "Demonstrates how annotations can be used to provide metadata about content.",
   inputSchema: AnnotatedMessageSchema,
 };
-
 
 /**
  * Registers the 'annotated-message' tool with the provided McpServer instance.
@@ -39,7 +39,7 @@ export const registerAnnotatedMessageTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {
     const { messageType, includeImage } = AnnotatedMessageSchema.parse(args);
 
-    const content:  CallToolResult["content"]  = [];
+    const content: CallToolResult["content"] = [];
 
     // Main message with different priorities/audiences based on type
     if (messageType === "error") {

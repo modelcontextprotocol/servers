@@ -94,7 +94,7 @@ At `src/everything`:
     - add.ts
       - Registers an `add` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
     - annotated-message.ts
-        - Registers an `annotated-message` tool which demonstrates annotated content items by emitting a primary `text` message with `annotations` that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true.
+      - Registers an `annotated-message` tool which demonstrates annotated content items by emitting a primary `text` message with `annotations` that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true.
     - echo.ts
       - Registers an `echo` tool that takes a message and returns `Echo: {message}`.
     - get-tiny-image.ts
@@ -104,7 +104,7 @@ At `src/everything`:
     - print-env.ts
       - Registers a `print-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
     - sampling-request.ts
-        - Registers a `sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
+      - Registers a `sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
     - toggle-logging.ts
       - Registers a `toggle-logging` tool, which starts or stops simulated logging for the invoking session.
     - toggle-subscriber-updates.ts
@@ -131,7 +131,7 @@ At `src/everything`:
     - Registers two dynamic, template‑driven resources using `ResourceTemplate`:
       - Text: `demo://resource/dynamic/text/{index}` (MIME: `text/plain`)
       - Blob: `demo://resource/dynamic/blob/{index}` (MIME: `application/octet-stream`, Base64 payload)
-    - The `{index}` path variable must be a finite integer. Content is generated on demand with a timestamp.
+    - The `{index}` path variable must be a finite positive integer. Content is generated on demand with a timestamp.
     - Exposes helpers `textResource(uri, index)`, `textResourceUri(index)`, `blobResource(uri, index)`, and `blobResourceUri(index)` so other modules can construct and embed dynamic resources directly (e.g., from prompts).
   - files.ts
     - Registers static file-based resources for each file in the `docs/` folder.
