@@ -4,7 +4,7 @@ import { z } from "zod";
 import { MCP_TINY_IMAGE } from "./get-tiny-image.js";
 
 // Tool input schema
-const AnnotatedMessageSchema = z.object({
+const GetAnnotatedMessageSchema = z.object({
   messageType: z
     .enum(["error", "success", "debug"])
     .describe("Type of message to demonstrate different annotation patterns"),
@@ -15,12 +15,12 @@ const AnnotatedMessageSchema = z.object({
 });
 
 // Tool configuration
-const name = "annotated-message";
+const name = "get-annotated-message";
 const config = {
-  title: "Annotated Message Tool",
+  title: "Get Annotated Message Tool",
   description:
     "Demonstrates how annotations can be used to provide metadata about content.",
-  inputSchema: AnnotatedMessageSchema,
+  inputSchema: GetAnnotatedMessageSchema,
 };
 
 /**
@@ -35,9 +35,9 @@ const config = {
  * @function
  * @param {McpServer} server - The MCP server instance where the Annotated Message Tool is to be registered.
  */
-export const registerAnnotatedMessageTool = (server: McpServer) => {
+export const registerGetAnnotatedMessageTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {
-    const { messageType, includeImage } = AnnotatedMessageSchema.parse(args);
+    const { messageType, includeImage } = GetAnnotatedMessageSchema.parse(args);
 
     const content: CallToolResult["content"] = [];
 

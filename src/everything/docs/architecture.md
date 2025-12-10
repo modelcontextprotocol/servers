@@ -43,14 +43,14 @@ src/everything
 │   └── streamableHttp.ts
 ├── tools
 │   ├── index.ts
-│   ├── add.ts
-│   ├── annotated-message.ts
 │   ├── echo.ts
+│   ├── get-annotated-message.ts
 │   ├── get-env.ts
 │   ├── get-tiny-image.ts
 │   ├── get-resource-links.ts
 │   ├── get-resource-reference.ts
 │   ├── get-structured-content.ts
+│   ├── get-sum.ts
 │   ├── long-running-operation.ts
 │   ├── sampling-request.ts
 │   ├── toggle-logging.ts
@@ -95,16 +95,16 @@ At `src/everything`:
   - index.ts
 
     - `registerTools(server)` orchestrator; delegates to basic tools and control tools.
-    - add.ts
-      - Registers an `add` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
-    - annotated-message.ts
-      - Registers an `annotated-message` tool which demonstrates annotated content items by emitting a primary `text` message with `annotations` that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true.
     - echo.ts
       - Registers an `echo` tool that takes a message and returns `Echo: {message}`.
+    - get-annotated-message.ts
+        - Registers an `annotated-message` tool which demonstrates annotated content items by emitting a primary `text` message with `annotations` that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true.
     - get-env.ts
       - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
     - get-tiny-image.ts
       - Registers a `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
+    - get-sum.ts
+        - Registers an `get-sum` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
     - long-running-operation.ts
       - Registers a `long-running-operation` tool that simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
     - sampling-request.ts
@@ -188,13 +188,13 @@ At `src/everything`:
 
 - Tools
 
-  - `add` (tools/add.ts): Adds two numbers `a` and `b` and returns their sum. Uses Zod to validate inputs.
-  - `annotated-message` (tools/annotated-message.ts): Returns a `text` message annotated with `priority` and `audience` based on `messageType` (`error`, `success`, or `debug`); can optionally include an annotated `image`.
   - `echo` (tools/echo.ts): Echoes the provided `message: string`. Uses Zod to validate inputs.
+  - `get-annotated-message` (tools/get-annotated-message.ts): Returns a `text` message annotated with `priority` and `audience` based on `messageType` (`error`, `success`, or `debug`); can optionally include an annotated `image`.
   - `get-env` (tools/get-env.ts): Returns all environment variables from the running process as pretty-printed JSON text.
   - `get-resource-links` (tools/get-resource-links.ts): Returns an intro `text` block followed by multiple `resource_link` items. For a requested `count` (1–10), alternates between dynamic Text and Blob resources using URIs from `resources/templates.ts`.
   - `get-resource-reference` (tools/get-resource-reference.ts): Accepts `resourceType` (`text` or `blob`) and `resourceId` (positive integer). Returns a concrete `resource` content block (with its `uri`, `mimeType`, and data) with surrounding explanatory `text`.
   - `get-structured-content` (tools/get-structured-content.ts): Demonstrates structured responses. Accepts `location` input and returns both backward‑compatible `content` (a `text` block containing JSON) and `structuredContent` validated by an `outputSchema` (temperature, conditions, humidity).
+  - `get-sum` (tools/get-sum.ts): For two numbers `a` and `b` calculates and returns their sum. Uses Zod to validate inputs.
   - `get-tiny-image` (tools/get-tiny-image.ts): Returns a tiny PNG MCP logo as an `image` content item with brief descriptive text before and after.
   - `long-running-operation` (tools/long-running-operation.ts): Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client.
   - `sampling-request` (tools/sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM’s response payload.
