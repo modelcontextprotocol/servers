@@ -26,7 +26,7 @@ const GetResourceReferenceSchema = z.object({
 const name = "get-resource-reference";
 const config = {
   title: "Get Resource Reference Tool",
-  description: "Adds two numbers",
+  description: "Returns a resource reference that can be used by MCP clients",
   inputSchema: GetResourceReferenceSchema,
 };
 

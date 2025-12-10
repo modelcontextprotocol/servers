@@ -3,6 +3,7 @@ import { registerAddTool } from "./add.js";
 import { registerAnnotatedMessageTool } from "./annotated-message.js";
 import { registerEchoTool } from "./echo.js";
 import { registerGetTinyImageTool } from "./get-tiny-image.js";
+import { registerGetResourceLinksTool } from "./get-resource-links.js";
 import { registerGetResourceReferenceTool } from "./get-resource-reference.js";
 import { registerLongRunningOperationTool } from "./long-running-operation.js";
 import { registerPrintEnvTool } from "./print-env.js";
@@ -19,6 +20,7 @@ export const registerTools = (server: McpServer) => {
   registerAnnotatedMessageTool(server);
   registerEchoTool(server);
   registerGetTinyImageTool(server);
+  registerGetResourceLinksTool(server);
   registerGetResourceReferenceTool(server);
   registerLongRunningOperationTool(server);
   registerPrintEnvTool(server);
