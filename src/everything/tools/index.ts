@@ -10,6 +10,7 @@ import { registerLongRunningOperationTool } from "./long-running-operation.js";
 import { registerSamplingRequestTool } from "./sampling-request.js";
 import { registerToggleLoggingTool } from "./toggle-logging.js";
 import { registerToggleSubscriberUpdatesTool } from "./toggle-subscriber-updates.js";
+import { registerGetStructuredContentTool } from "./get-structured-content.js";
 
 /**
  * Register the tools with the MCP server.
@@ -22,6 +23,7 @@ export const registerTools = (server: McpServer) => {
   registerGetEnvTool(server);
   registerGetResourceLinksTool(server);
   registerGetResourceReferenceTool(server);
+  registerGetStructuredContentTool(server);
   registerGetTinyImageTool(server);
   registerLongRunningOperationTool(server);
   registerSamplingRequestTool(server);

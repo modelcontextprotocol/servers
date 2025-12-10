@@ -19,25 +19,9 @@ This document summarizes the current layout and runtime architecture of the `src
 ```
 src/everything
 ├── index.ts
-├── server
-│   ├── index.ts
-│   ├── logging.ts
-│   └── everything.ts
-├── transports
-│   ├── sse.ts
-│   ├── stdio.ts
-│   └── streamableHttp.ts
-├── tools
-│   ├── index.ts
-│   ├── annotated-message.ts
-│   ├── add.ts
-│   ├── echo.ts
-│   ├── get-tiny-image.ts
-│   ├── long-running-operation.ts
-│   ├── get-env.ts
-│   ├── sampling-request.ts
-│   ├── toggle-logging.ts
-│   └── toggle-subscriber-updates.ts
+├── docs
+│   ├── architecture.md
+│   └── server-instructions.md
 ├── prompts
 │   ├── index.ts
 │   ├── args.ts
@@ -49,9 +33,28 @@ src/everything
 │   ├── files.ts
 │   ├── subscriptions.ts
 │   └── templates.ts
-├── docs
-│   ├── architecture.md
-│   └── server-instructions.md
+├── server
+│   ├── index.ts
+│   ├── logging.ts
+│   └── everything.ts
+├── transports
+│   ├── sse.ts
+│   ├── stdio.ts
+│   └── streamableHttp.ts
+├── tools
+│   ├── index.ts
+│   ├── add.ts
+│   ├── annotated-message.ts
+│   ├── echo.ts
+│   ├── get-env.ts
+│   ├── get-tiny-image.ts
+│   ├── get-resource-links.ts
+│   ├── get-resource-reference.ts
+│   ├── get-structured-content.ts
+│   ├── long-running-operation.ts
+│   ├── sampling-request.ts
+│   ├── toggle-logging.ts
+│   └── toggle-subscriber-updates.ts
 └── package.json
 ```
 
@@ -99,9 +102,7 @@ At `src/everything`:
     - echo.ts
       - Registers an `echo` tool that takes a message and returns `Echo: {message}`.
     - get-env.ts
-
       - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
-
     - get-tiny-image.ts
       - Registers a `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
     - long-running-operation.ts
@@ -190,9 +191,12 @@ At `src/everything`:
   - `add` (tools/add.ts): Adds two numbers `a` and `b` and returns their sum. Uses Zod to validate inputs.
   - `annotated-message` (tools/annotated-message.ts): Returns a `text` message annotated with `priority` and `audience` based on `messageType` (`error`, `success`, or `debug`); can optionally include an annotated `image`.
   - `echo` (tools/echo.ts): Echoes the provided `message: string`. Uses Zod to validate inputs.
+  - `get-env` (tools/get-env.ts): Returns all environment variables from the running process as pretty-printed JSON text.
+  - `get-resource-links` (tools/get-resource-links.ts): Returns an intro `text` block followed by multiple `resource_link` items. For a requested `count` (1–10), alternates between dynamic Text and Blob resources using URIs from `resources/templates.ts`.
+  - `get-resource-reference` (tools/get-resource-reference.ts): Accepts `resourceType` (`text` or `blob`) and `resourceId` (positive integer). Returns a concrete `resource` content block (with its `uri`, `mimeType`, and data) with surrounding explanatory `text`.
+  - `get-structured-content` (tools/get-structured-content.ts): Demonstrates structured responses. Accepts `location` input and returns both backward‑compatible `content` (a `text` block containing JSON) and `structuredContent` validated by an `outputSchema` (temperature, conditions, humidity).
   - `get-tiny-image` (tools/get-tiny-image.ts): Returns a tiny PNG MCP logo as an `image` content item with brief descriptive text before and after.
   - `long-running-operation` (tools/long-running-operation.ts): Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client.
-  - `get-env` (tools/get-env.ts): Returns all environment variables from the running process as pretty-printed JSON text.
   - `sampling-request` (tools/sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM’s response payload.
   - `toggle-logging` (tools/toggle-logging.ts): Starts or stops simulated, random‑leveled logging for the invoking session. Respects the client’s selected minimum logging level.
   - `toggle-subscriber-updates` (tools/toggle-subscriber-updates.ts): Starts or stops simulated resource update notifications for URIs the invoking session has subscribed to.
