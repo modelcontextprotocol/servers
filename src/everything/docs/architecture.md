@@ -93,31 +93,36 @@ At `src/everything`:
 - tools/
 
   - index.ts
-
-    - `registerTools(server)` orchestrator; delegates to basic tools and control tools.
-    - echo.ts
-      - Registers an `echo` tool that takes a message and returns `Echo: {message}`.
-    - get-annotated-message.ts
-        - Registers an `annotated-message` tool which demonstrates annotated content items by emitting a primary `text` message with `annotations` that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true.
-    - get-env.ts
-      - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
-    - get-tiny-image.ts
-      - Registers a `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
-    - get-sum.ts
-        - Registers an `get-sum` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
-    - long-running-operation.ts
-      - Registers a `long-running-operation` tool that simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
-    - sampling-request.ts
-      - Registers a `sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
-    - toggle-logging.ts
-      - Registers a `toggle-logging` tool, which starts or stops simulated logging for the invoking session.
-    - toggle-subscriber-updates.ts
-      - Registers a `toggle-subscriber-updates` tool, which starts or stops simulated resource subscription update checks for the invoking session.
+    - `registerTools(server)` orchestrator; delegates to tool factory/registration methods in individual tool files.
+  - echo.ts
+    - Registers an `echo` tool that takes a message and returns `Echo: {message}`.
+  - get-annotated-message.ts
+    - Registers an `annotated-message` tool which demonstrates annotated content items by emitting a primary `text` message with `annotations` that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true.
+  - get-env.ts
+    - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
+  - get-resource-links.ts
+    - Registers a `get-resource-links` tool that returns an intro `text` block followed by multiple `resource_link` items.
+  - get-resource-reference.ts
+    - Registers a `get-resource-reference` tool that returns a reference for a selected dynamic resource.
+  - get-structured-content.ts
+    - Registers a `get-structured-content` tool that demonstrates structuredContent block responses.
+  - get-sum.ts
+    - Registers an `get-sum` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
+  - get-tiny-image.ts
+    - Registers a `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
+  - long-running-operation.ts
+    - Registers a `long-running-operation` tool that simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
+  - sampling-request.ts
+    - Registers a `sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
+  - toggle-logging.ts
+    - Registers a `toggle-logging` tool, which starts or stops simulated logging for the invoking session.
+  - toggle-subscriber-updates.ts
+    - Registers a `toggle-subscriber-updates` tool, which starts or stops simulated resource subscription update checks for the invoking session.
 
 - prompts/
 
   - index.ts
-    - `registerPrompts(server)` orchestrator; delegates to individual prompt registrations.
+    - `registerPrompts(server)` orchestrator; delegates to prompt factory/registration methods from in individual prompt files.
   - simple.ts
     - Registers `simple-prompt`: a prompt with no arguments that returns a single user message.
   - args.ts
@@ -130,7 +135,7 @@ At `src/everything`:
 - resources/
 
   - index.ts
-    - `registerResources(server)` orchestrator; delegates to template‑based dynamic resources and static file-based resources by calling `registerResourceTemplates(server)` and `registerFileResources(server)`.
+    - `registerResources(server)` orchestrator; delegates to resource factory/registration methods from individual resource files.
   - templates.ts
     - Registers two dynamic, template‑driven resources using `ResourceTemplate`:
       - Text: `demo://resource/dynamic/text/{index}` (MIME: `text/plain`)
@@ -144,9 +149,9 @@ At `src/everything`:
 
 - docs/
 
-  - server-instructions.md
-    - Human‑readable instructions intended to be passed to the client/LLM as MCP server instructions. Loaded by the server at startup.
   - architecture.md (this document)
+  - server-instructions.md
+    - Human‑readable instructions intended to be passed to the client/LLM as for guidance on server use. Loaded by the server at startup and returned in the "initialize" exchange.
 
 - package.json
   - Package metadata and scripts:
