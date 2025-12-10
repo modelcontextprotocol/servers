@@ -90,6 +90,7 @@ At `src/everything`:
 - tools/
 
   - index.ts
+
     - `registerTools(server)` orchestrator; delegates to basic tools and control tools.
     - add.ts
       - Registers an `add` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
@@ -98,7 +99,8 @@ At `src/everything`:
     - echo.ts
       - Registers an `echo` tool that takes a message and returns `Echo: {message}`.
     - get-env.ts
-        - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
+
+      - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
 
     - get-tiny-image.ts
       - Registers a `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
