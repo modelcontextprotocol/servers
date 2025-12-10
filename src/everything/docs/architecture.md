@@ -34,7 +34,7 @@ src/everything
 │   ├── echo.ts
 │   ├── get-tiny-image.ts
 │   ├── long-running-operation.ts
-│   ├── print-env.ts
+│   ├── get-env.ts
 │   ├── sampling-request.ts
 │   ├── toggle-logging.ts
 │   └── toggle-subscriber-updates.ts
@@ -97,12 +97,13 @@ At `src/everything`:
       - Registers an `annotated-message` tool which demonstrates annotated content items by emitting a primary `text` message with `annotations` that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true.
     - echo.ts
       - Registers an `echo` tool that takes a message and returns `Echo: {message}`.
+    - get-env.ts
+        - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
+
     - get-tiny-image.ts
       - Registers a `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
     - long-running-operation.ts
       - Registers a `long-running-operation` tool that simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
-    - print-env.ts
-      - Registers a `print-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
     - sampling-request.ts
       - Registers a `sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
     - toggle-logging.ts
@@ -189,7 +190,7 @@ At `src/everything`:
   - `echo` (tools/echo.ts): Echoes the provided `message: string`. Uses Zod to validate inputs.
   - `get-tiny-image` (tools/get-tiny-image.ts): Returns a tiny PNG MCP logo as an `image` content item with brief descriptive text before and after.
   - `long-running-operation` (tools/long-running-operation.ts): Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client.
-  - `print-env` (tools/print-env.ts): Returns all environment variables from the running process as pretty-printed JSON text.
+  - `get-env` (tools/get-env.ts): Returns all environment variables from the running process as pretty-printed JSON text.
   - `sampling-request` (tools/sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM’s response payload.
   - `toggle-logging` (tools/toggle-logging.ts): Starts or stops simulated, random‑leveled logging for the invoking session. Respects the client’s selected minimum logging level.
   - `toggle-subscriber-updates` (tools/toggle-subscriber-updates.ts): Starts or stops simulated resource update notifications for URIs the invoking session has subscribed to.

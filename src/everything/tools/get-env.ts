@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 // Tool configuration
-const name = "print-env";
+const name = "get-env";
 const config = {
   title: "Print Environment Tool",
   description:
@@ -11,7 +11,7 @@ const config = {
 };
 
 /**
- * Registers the 'print-env' tool with the given MCP server.
+ * Registers the 'get-env' tool with the given MCP server.
  *
  * The registered tool Retrieves and returns the environment variables
  * of the current process as a JSON-formatted string encapsulated in a text response.
@@ -19,7 +19,7 @@ const config = {
  * @param {McpServer} server - The MCP server instance where the Echo Tool is to be registered.
  * @returns {void}
  */
-export const registerPrintEnvTool = (server: McpServer) => {
+export const registerGetEnvTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {
     return {
       content: [
