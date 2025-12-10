@@ -12,7 +12,7 @@ const GetSumSchema = z.object({
 const name = "get-sum";
 const config = {
   title: "Get Sum Tool",
-  description: "Gets the sum of two numbers",
+  description: "Returns the sum of two numbers",
   inputSchema: GetSumSchema,
 };
 

@@ -7,7 +7,7 @@ import {
 import { z } from "zod";
 
 // Tool input schema
-const SamplingRequestSchema = z.object({
+const GetSamplingRequestSchema = z.object({
   prompt: z.string().describe("The prompt to send to the LLM"),
   maxTokens: z
     .number()
@@ -16,34 +16,31 @@ const SamplingRequestSchema = z.object({
 });
 
 // Tool configuration
-const name = "sampling-request";
+const name = "get-sampling-request";
 const config = {
-  title: "Sampling Request Tool",
-  description: "Sends the Client a Request for LLM Sampling",
-  inputSchema: SamplingRequestSchema,
+  title: "Get Sampling Request Tool",
+  description: "Server Sends the Client a Request for LLM Sampling",
+  inputSchema: GetSamplingRequestSchema,
 };
 
 /**
- * Registers the 'sampling-request' tool within the provided McpServer instance.
- *
- * Allows the server to handle sampling requests by parsing input arguments,
- * generating a sampling request for an LLM, and returning the result to the client.
+ * Registers the 'get-sampling-request' tool within the provided McpServer instance.
  *
  * The registered tool performs the following operations:
  * - Validates incoming arguments using `SampleLLMSchema`.
- * - Constructs a request object using provided prompt and maximum tokens.
+ * - Constructs a `sampling/createMessage` request object using provided prompt and maximum tokens.
  * - Sends the request to the server for sampling.
  * - Formats and returns the sampling result content to the client.
  *
  * @param {McpServer} server - The instance of the MCP server where the tool
  *        will be registered.
  */
-export const registerSamplingRequestTool = (server: McpServer) => {
+export const registerGetSamplingRequestTool = (server: McpServer) => {
   server.registerTool(
     name,
     config,
     async (args, extra): Promise<CallToolResult> => {
-      const validatedArgs = SamplingRequestSchema.parse(args);
+      const validatedArgs = GetSamplingRequestSchema.parse(args);
       const { prompt, maxTokens } = validatedArgs;
 
       // Create the sampling request
