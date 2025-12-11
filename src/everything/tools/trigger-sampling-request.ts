@@ -7,7 +7,7 @@ import {
 import { z } from "zod";
 
 // Tool input schema
-const GetSamplingRequestSchema = z.object({
+const TriggerSamplingRequestSchema = z.object({
   prompt: z.string().describe("The prompt to send to the LLM"),
   maxTokens: z
     .number()
@@ -16,15 +16,15 @@ const GetSamplingRequestSchema = z.object({
 });
 
 // Tool configuration
-const name = "get-sampling-request";
+const name = "trigger-sampling-request";
 const config = {
-  title: "Get Sampling Request Tool",
-  description: "Server Sends the Client a Request for LLM Sampling",
-  inputSchema: GetSamplingRequestSchema,
+  title: "Trigger Sampling Request Tool",
+  description: "Trigger a Request from the Server for LLM Sampling",
+  inputSchema: TriggerSamplingRequestSchema,
 };
 
 /**
- * Registers the 'get-sampling-request' tool within the provided McpServer instance.
+ * Registers the 'trigger-sampling-request' tool within the provided McpServer instance.
  *
  * The registered tool performs the following operations:
  * - Validates incoming arguments using `SampleLLMSchema`.
@@ -35,12 +35,12 @@ const config = {
  * @param {McpServer} server - The instance of the MCP server where the tool
  *        will be registered.
  */
-export const registerGetSamplingRequestTool = (server: McpServer) => {
+export const registerTriggerSamplingRequestTool = (server: McpServer) => {
   server.registerTool(
     name,
     config,
     async (args, extra): Promise<CallToolResult> => {
-      const validatedArgs = GetSamplingRequestSchema.parse(args);
+      const validatedArgs = TriggerSamplingRequestSchema.parse(args);
       const { prompt, maxTokens } = validatedArgs;
 
       // Create the sampling request

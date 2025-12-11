@@ -54,9 +54,9 @@ src/everything
 │   ├── get-sum.ts
 │   ├── gzip-file-as-resource.ts
 │   ├── long-running-operation.ts
-│   ├── get-sampling-request.ts
 │   ├── toggle-logging.ts
-│   └── toggle-subscriber-updates.ts
+│   ├── toggle-subscriber-updates.ts
+│   └── trigger-sampling-request.ts
 └── package.json
 ```
 
@@ -115,8 +115,8 @@ At `src/everything`:
       - `GZIP_MAX_FETCH_SIZE` (bytes, default 10 MiB)
       - `GZIP_MAX_FETCH_TIME_MILLIS` (ms, default 30000)
       - `GZIP_ALLOWED_DOMAINS` (comma-separated allowlist; empty means all domains allowed)
-  - get-sampling-request.ts
-    - Registers a `sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
+  - trigger-sampling-request.ts
+    - Registers a `trigger-sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
   - get-structured-content.ts
     - Registers a `get-structured-content` tool that demonstrates structuredContent block responses.
   - get-sum.ts
@@ -210,13 +210,13 @@ At `src/everything`:
   - `get-resource-links` (tools/get-resource-links.ts): Returns an intro `text` block followed by multiple `resource_link` items. For a requested `count` (1–10), alternates between dynamic Text and Blob resources using URIs from `resources/templates.ts`.
   - `get-resource-reference` (tools/get-resource-reference.ts): Accepts `resourceType` (`text` or `blob`) and `resourceId` (positive integer). Returns a concrete `resource` content block (with its `uri`, `mimeType`, and data) with surrounding explanatory `text`.
   - `gzip-file-as-resource` (tools/gzip-file-as-resource.ts): Accepts a `name` and `data` (URL or data URI), fetches the data subject to size/time/domain constraints, compresses it, registers it as a session resource at `demo://resource/session/<name>` with `mimeType: application/gzip`, and returns either a `resource_link` (default) or an inline `resource` depending on `outputType`.
-  - `get-sampling-request` (tools/get-sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM’s response payload.
   - `get-structured-content` (tools/get-structured-content.ts): Demonstrates structured responses. Accepts `location` input and returns both backward‑compatible `content` (a `text` block containing JSON) and `structuredContent` validated by an `outputSchema` (temperature, conditions, humidity).
   - `get-sum` (tools/get-sum.ts): For two numbers `a` and `b` calculates and returns their sum. Uses Zod to validate inputs.
   - `get-tiny-image` (tools/get-tiny-image.ts): Returns a tiny PNG MCP logo as an `image` content item with brief descriptive text before and after.
   - `long-running-operation` (tools/long-running-operation.ts): Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client.
   - `toggle-logging` (tools/toggle-logging.ts): Starts or stops simulated, random‑leveled logging for the invoking session. Respects the client’s selected minimum logging level.
   - `toggle-subscriber-updates` (tools/toggle-subscriber-updates.ts): Starts or stops simulated resource update notifications for URIs the invoking session has subscribed to.
+  - `trigger-sampling-request` (tools/trigger-sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM’s response payload.
 
 - Prompts
 
