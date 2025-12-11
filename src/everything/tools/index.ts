@@ -12,6 +12,7 @@ import { registerLongRunningOperationTool } from "./long-running-operation.js";
 import { registerToggleLoggingTool } from "./toggle-logging.js";
 import { registerToggleSubscriberUpdatesTool } from "./toggle-subscriber-updates.js";
 import { registerTriggerSamplingRequestTool } from "./trigger-sampling-request.js";
+import { registerTriggerElicitationRequestTool } from "./trigger-elicitation-request.js";
 
 /**
  * Register the tools with the MCP server.
@@ -30,5 +31,6 @@ export const registerTools = (server: McpServer) => {
   registerLongRunningOperationTool(server);
   registerToggleLoggingTool(server);
   registerToggleSubscriberUpdatesTool(server);
+  registerTriggerElicitationRequestTool(server);
   registerTriggerSamplingRequestTool(server);
 };
