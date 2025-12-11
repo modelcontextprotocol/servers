@@ -747,7 +747,7 @@ export const createServer = () => {
                 title: 'String with default',
                 type: 'string',
                 description: 'Favorite first line of a story',
-                default: 'It was a dark ant stormy night.',
+                default: 'It was a dark and stormy night.',
               },
               email: {
                 title: 'String with email format',
