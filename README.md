@@ -647,7 +647,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[BigQuery](https://github.com/ergut/mcp-bigquery-server)** (by ergut) - Server implementation for Google BigQuery integration that enables direct BigQuery database access and querying capabilities
 - **[Bilibili](https://github.com/wangshunnn/bilibili-mcp-server)** - This MCP server provides tools to fetch Bilibili user profiles, video metadata, search videos, and more.
 - **[Binance](https://github.com/ethancod1ng/binance-mcp-server)** - Cryptocurrency trading and market data access through Binance API integration.
-- **[Binance](https://github.com/AnalyticAce/BinanceMCPServer)** (by dosseh shalom) - Unofficial tools and server implementation for Binance's Model Context Protocol (MCP). Designed to support developers building crypto trading AI Agents.
+- **[Binance](https://github.com/AnalyticAce/binance-mcp-server)** (by dosseh shalom) - Unofficial tools and server implementation for Binance's Model Context Protocol (MCP). Designed to support developers building crypto trading AI Agents.
 - **[Bing Web Search API](https://github.com/leehanchung/bing-search-mcp)** (by hanchunglee) - Server implementation for Microsoft Bing Web Search API.
 - **[BioMCP](https://github.com/genomoncology/biomcp)** (by imaurer) - Biomedical research assistant server providing access to PubMed, ClinicalTrials.gov, and MyVariant.info.
 - **[bioRxiv](https://github.com/JackKuo666/bioRxiv-MCP-Server)** - 🔍 Enable AI assistants to search and access bioRxiv papers through a simple MCP interface.
