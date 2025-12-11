@@ -776,7 +776,7 @@ export const createServer = () => {
                 default: 42,
               },
               number: {
-                title: 'Number in range 1-100',
+                title: 'Number in range 1-1000',
                 type: 'number',
                 description: 'Favorite number (there are no wrong answers)',
                 minimum: 0,
