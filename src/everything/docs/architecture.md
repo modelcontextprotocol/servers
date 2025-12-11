@@ -105,7 +105,7 @@ At `src/everything`:
   - get-resource-reference.ts
     - Registers a `get-resource-reference` tool that returns a reference for a selected dynamic resource.
   - get-sampling-request.ts
-      - Registers a `sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
+    - Registers a `sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
   - get-structured-content.ts
     - Registers a `get-structured-content` tool that demonstrates structuredContent block responses.
   - get-sum.ts

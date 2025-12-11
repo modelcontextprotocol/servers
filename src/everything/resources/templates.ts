@@ -106,7 +106,7 @@ export const blobResource = (uri: URL, resourceId: number) => {
   return {
     uri: uri.toString(),
     mimeType: "text/plain",
-    text: resourceText,
+    blob: resourceText,
   };
 };
 

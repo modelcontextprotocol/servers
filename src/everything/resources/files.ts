@@ -40,12 +40,11 @@ export const registerFileResources = (server: McpServer) => {
     // Prepare file resource info
     const uri = `demo://resource/static/document/${encodeURIComponent(name)}`;
     const mimeType = getMimeType(name);
-    const displayName = `Docs: ${name}`;
     const description = `Static document file exposed from /docs: ${name}`;
 
     // Register file resource
     server.registerResource(
-      displayName,
+      name,
       uri,
       { mimeType, description },
       async (uri) => {
