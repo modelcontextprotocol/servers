@@ -31,6 +31,7 @@ src/everything
 ├── resources
 │   ├── index.ts
 │   ├── files.ts
+│   ├── session.ts
 │   ├── subscriptions.ts
 │   └── templates.ts
 ├── server
@@ -51,6 +52,7 @@ src/everything
 │   ├── get-resource-reference.ts
 │   ├── get-structured-content.ts
 │   ├── get-sum.ts
+│   ├── gzip-file-as-resource.ts
 │   ├── long-running-operation.ts
 │   ├── get-sampling-request.ts
 │   ├── toggle-logging.ts
@@ -104,6 +106,15 @@ At `src/everything`:
     - Registers a `get-resource-links` tool that returns an intro `text` block followed by multiple `resource_link` items.
   - get-resource-reference.ts
     - Registers a `get-resource-reference` tool that returns a reference for a selected dynamic resource.
+  - gzip-file-as-resource.ts
+    - Registers a `gzip-file-as-resource` tool that fetches content from a URL or data URI, compresses it, and then either:
+      - returns a `resource_link` to a session-scoped resource (default), or
+      - returns an inline `resource` with the gzipped data. The resource will be still discoverable for the duration of the session via `resources/list`.
+    - Uses `resources/session.ts` to register the gzipped blob as a per-session resource at a URI like `demo://resource/session/<name>` with `mimeType: application/gzip`.
+    - Environment controls:
+      - `GZIP_MAX_FETCH_SIZE` (bytes, default 10 MiB)
+      - `GZIP_MAX_FETCH_TIME_MILLIS` (ms, default 30000)
+      - `GZIP_ALLOWED_DOMAINS` (comma-separated allowlist; empty means all domains allowed)
   - get-sampling-request.ts
     - Registers a `sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
   - get-structured-content.ts
@@ -198,6 +209,7 @@ At `src/everything`:
   - `get-env` (tools/get-env.ts): Returns all environment variables from the running process as pretty-printed JSON text.
   - `get-resource-links` (tools/get-resource-links.ts): Returns an intro `text` block followed by multiple `resource_link` items. For a requested `count` (1–10), alternates between dynamic Text and Blob resources using URIs from `resources/templates.ts`.
   - `get-resource-reference` (tools/get-resource-reference.ts): Accepts `resourceType` (`text` or `blob`) and `resourceId` (positive integer). Returns a concrete `resource` content block (with its `uri`, `mimeType`, and data) with surrounding explanatory `text`.
+  - `gzip-file-as-resource` (tools/gzip-file-as-resource.ts): Accepts a `name` and `data` (URL or data URI), fetches the data subject to size/time/domain constraints, compresses it, registers it as a session resource at `demo://resource/session/<name>` with `mimeType: application/gzip`, and returns either a `resource_link` (default) or an inline `resource` depending on `outputType`.
   - `get-sampling-request` (tools/get-sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM’s response payload.
   - `get-structured-content` (tools/get-structured-content.ts): Demonstrates structured responses. Accepts `location` input and returns both backward‑compatible `content` (a `text` block containing JSON) and `structuredContent` validated by an `outputSchema` (temperature, conditions, humidity).
   - `get-sum` (tools/get-sum.ts): For two numbers `a` and `b` calculates and returns their sum. Uses Zod to validate inputs.
@@ -217,7 +229,8 @@ At `src/everything`:
 
   - Dynamic Text: `demo://resource/dynamic/text/{index}` (content generated on the fly)
   - Dynamic Blob: `demo://resource/dynamic/blob/{index}` (base64 payload generated on the fly)
-  - Static Docs: `demo://resource/static/document/<filename>` (serves files from `src/everything/docs/` as static file-based resources)
+  - Static Documents: `demo://resource/static/document/<filename>` (serves files from `src/everything/docs/` as static file-based resources)
+  - Session Scoped: `demo://resource/session/<name>` (per-session resources registered dynamically; available only for the lifetime of the session)
 
 - Resource Subscriptions and Notifications
 
@@ -255,6 +268,14 @@ At `src/everything`:
   - `cleanup(sessionId?)` calls `stopSimulatedResourceUpdates(sessionId)` to clear intervals and remove session‑scoped state.
 
 - Design note: Each client session has its own `McpServer` instance; periodic checks run per session and invoke `server.notification(...)` on that instance, so messages are delivered only to the intended client.
+
+## Session‑scoped Resources – How It Works
+
+- Module: `resources/session.ts`
+
+  - `getSessionResourceURI(name: string)`: Builds a session resource URI: `demo://resource/session/<name>`.
+  - `registerSessionResource(server, resource, type, payload)`: Registers a resource with the given `uri`, `name`, and `mimeType`, returning a `resource_link`. The content is served from memory for the life of the session only. Supports `type: "text" | "blob"` and returns data in the corresponding field.
+  - Intended usage: tools can create and expose per-session artifacts without persisting them. For example, `tools/gzip-file-as-resource.ts` gzips fetched content, registers it as a session resource with `mimeType: application/gzip`, and returns either a `resource_link` or an inline `resource` based on `outputType`.
 
 ## Simulated Logging – How It Works
 
