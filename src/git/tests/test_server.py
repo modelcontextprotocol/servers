@@ -143,13 +143,15 @@ def test_git_diff_staged_empty(test_repository):
     assert result == ""
 
 def test_git_diff(test_repository):
+    # Get the default branch name (could be "main" or "master")
+    default_branch = test_repository.active_branch.name
     test_repository.git.checkout("-b", "feature-diff")
     file_path = Path(test_repository.working_dir) / "test.txt"
     file_path.write_text("feature changes")
     test_repository.index.add(["test.txt"])
     test_repository.index.commit("feature commit")
 
-    result = git_diff(test_repository, "master")
+    result = git_diff(test_repository, default_branch)
 
     assert "test.txt" in result
     assert "feature changes" in result
