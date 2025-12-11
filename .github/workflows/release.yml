@@ -130,7 +130,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: src/${{ matrix.package }}
-        run: uv sync --frozen --all-extras --dev
+        run: uv sync --locked --all-extras --dev
 
       - name: Run pyright
         working-directory: src/${{ matrix.package }}
