@@ -122,8 +122,9 @@ dist
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
 
-# Jetbrains IDEs
+# IDEs
 .idea/
+.vscode/
 
 # yarn v2
 .yarn/cache
