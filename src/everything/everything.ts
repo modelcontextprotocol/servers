@@ -734,23 +734,23 @@ export const createServer = () => {
             type: 'object',
             properties: {
               name: {
-                title: 'Full Name',
+                title: 'String',
                 type: 'string',
                 description: 'Your full, legal name',
               },
               check: {
-                title: 'Agree to terms',
+                title: 'Boolean',
                 type: 'boolean',
-                description: 'A boolean check',
+                description: 'Agree to the terms and conditions',
               },
-              color: {
-                title: 'Favorite Color',
+              firstLine: {
+                title: 'String with default',
                 type: 'string',
-                description: 'Favorite color (open text)',
-                default: 'blue',
+                description: 'Favorite first line of a story',
+                default: 'It was a dark and stormy night.',
               },
               email: {
-                title: 'Email Address',
+                title: 'String with email format',
                 type: 'string',
                 format: 'email',
                 description: 'Your email address (will be verified, and never shared with anyone else)',
@@ -758,16 +758,17 @@ export const createServer = () => {
               homepage: {
                 type: 'string',
                 format: 'uri',
-                description: 'Homepage / personal site',
+                title: 'String with uri format',
+                description: 'Portfolio / personal website',
               },
               birthdate: {
-                title: 'Birthdate',
+                title: 'String with date format',
                 type: 'string',
                 format: 'date',
-                description: 'Your date of birth (will never be shared with anyone else)',
+                description: 'Your date of birth',
               },
               integer: {
-                title: 'Favorite Integer',
+                title: 'Integer',
                 type: 'integer',
                 description: 'Your favorite integer (do not give us your phone number, pin, or other sensitive info)',
                 minimum: 1,
@@ -775,21 +776,63 @@ export const createServer = () => {
                 default: 42,
               },
               number: {
-                title: 'Favorite Number',
+                title: 'Number in range 1-1000',
                 type: 'number',
                 description: 'Favorite number (there are no wrong answers)',
                 minimum: 0,
                 maximum: 1000,
                 default: 3.14,
               },
-              petType: {
-                title: 'Pet type',
+              untitledSingleSelectEnum: {
                 type: 'string',
-                enum: ['cats', 'dogs', 'birds', 'fish', 'reptiles'],
-                enumNames: ['Cats', 'Dogs', 'Birds', 'Fish', 'Reptiles'],
-                default: 'dogs',
-                description: 'Your favorite pet type',
+                title: 'Untitled Single Select Enum',
+                description: 'Choose your favorite friend',
+                enum: ['Monica', 'Rachel', 'Joey', 'Chandler', 'Ross', 'Phoebe'],
+                default: 'Monica'
               },
+              untitledMultipleSelectEnum: {
+                type: 'array',
+                title: 'Untitled Multiple Select Enum',
+                description: 'Choose your favorite instruments',
+                minItems: 1,
+                maxItems: 3,
+                items: { type: 'string', enum: ['Guitar', 'Piano', 'Violin', 'Drums', 'Bass'] },
+                default: ['Guitar']
+              },
+              titledSingleSelectEnum: {
+                type: 'string',
+                title: 'Titled Single Select Enum',
+                description: 'Choose your favorite hero',
+                oneOf: [
+                    { const: 'hero-1', title: 'Superman' },
+                    { const: 'hero-2', title: 'Green Lantern' },
+                    { const: 'hero-3', title: 'Wonder Woman' }
+                ],
+                default: 'hero-1'
+              },
+              titledMultipleSelectEnum: {
+                type: 'array',
+                title: 'Titled Multiple Select Enum',
+                description: 'Choose your favorite types of fish',
+                minItems: 1,
+                maxItems: 3,
+                items: {
+                    anyOf: [
+                        { const: 'fish-1', title: 'Tuna' },
+                        { const: 'fish-2', title: 'Salmon' },
+                        { const: 'fish-3', title: 'Trout' }
+                    ]
+                },
+                default: ['fish-1']
+              },
+              legacyTitledEnum: {
+                  type: 'string',
+                  title: 'Legacy Titled Single Select Enum',
+                  description: 'Choose your favorite type of pet',
+                  enum: ['pet-1', 'pet-2', 'pet-3', 'pet-4', 'pet-5'],
+                  enumNames: ['Cats', 'Dogs', 'Birds', 'Fish', 'Reptiles'],
+                  default: 'pet-1',
+              }
             },
             required: ['name'],
           },
