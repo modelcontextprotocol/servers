@@ -21,7 +21,7 @@ const transports: Map<string, SSEServerTransport> = new Map<
 
 app.get("/sse", async (req, res) => {
   let transport: SSEServerTransport;
-  const { server, cleanup } = createServer();
+  const { server, clientConnected, cleanup } = createServer();
 
   if (req?.query?.sessionId) {
     const sessionId = req?.query?.sessionId as string;
@@ -38,6 +38,8 @@ app.get("/sse", async (req, res) => {
     // Connect server to transport
     await server.connect(transport);
     const sessionId = transport.sessionId;
+    clientConnected(sessionId);
+
     console.error("Client Connected: ", sessionId);
 
     // Handle close of connection

@@ -10,6 +10,7 @@ import { registerTools } from "../tools/index.js";
 import { registerResources } from "../resources/index.js";
 import { registerPrompts } from "../prompts/index.js";
 import { stopSimulatedLogging } from "./logging.js";
+import { setRootsListChangedHandler } from "./roots.js";
 
 // Everything Server factory
 export const createServer = () => {
@@ -48,9 +49,13 @@ export const createServer = () => {
   // Set resource subscription handlers
   setSubscriptionHandlers(server);
 
-  // Return server instance and cleanup function
+  // Return server instance, client connection handler, and cleanup function
   return {
     server,
+    clientConnected: (sessionId?: string) => {
+      // Set the roots list changed handler
+      setRootsListChangedHandler(server, sessionId);
+    },
     cleanup: (sessionId?: string) => {
       // Stop any simulated logging or resource updates that may have been initiated.
       stopSimulatedLogging(sessionId);
