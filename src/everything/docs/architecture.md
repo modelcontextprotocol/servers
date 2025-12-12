@@ -37,6 +37,7 @@ src/everything
 ├── server
 │   ├── index.ts
 │   ├── logging.ts
+│   ├── roots.ts
 │   └── everything.ts
 ├── transports
 │   ├── sse.ts
@@ -50,12 +51,14 @@ src/everything
 │   ├── get-tiny-image.ts
 │   ├── get-resource-links.ts
 │   ├── get-resource-reference.ts
+│   ├── get-roots-list.ts
 │   ├── get-structured-content.ts
 │   ├── get-sum.ts
 │   ├── gzip-file-as-resource.ts
 │   ├── long-running-operation.ts
 │   ├── toggle-logging.ts
 │   ├── toggle-subscriber-updates.ts
+│   ├── trigger-elicitation-request.ts
 │   └── trigger-sampling-request.ts
 └── package.json
 ```
@@ -80,17 +83,22 @@ At `src/everything`:
 - transports/
 
   - stdio.ts
-    - Starts a `StdioServerTransport`, created the server via `createServer()`, and connects it. Handles `SIGINT` to close cleanly and calls `cleanup()` to remove any live intervals.
+    - Starts a `StdioServerTransport`, created the server via `createServer()`, and connects it.
+    - Calls `clientConnected()` to inform the server of the connection.
+    - Handles `SIGINT` to close cleanly and calls `cleanup()` to remove any live intervals.
   - sse.ts
     - Express server exposing:
       - `GET /sse` to establish an SSE connection per session.
       - `POST /message` for client messages.
     - Manages multiple connected clients via a transport map.
     - Starts an `SSEServerTransport`, created the server via `createServer()`, and connects it to a new transport.
+    - Calls `clientConnected(sessionId)` to inform the server of the connection.
     - On server disconnect, calls `cleanup()` to remove any live intervals.
   - streamableHttp.ts
     - Express server exposing a single `/mcp` endpoint for POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `StreamableHTTPServerTransport`.
-    - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`. Connects a fresh server instance on initialization POST and reuses the transport for subsequent requests.
+    - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`.
+    - Connects a fresh server instance on initialization POST and reuses the transport for subsequent requests.
+    - Calls `clientConnected(sessionId)` to inform the server of the connection.
 
 - tools/
 
@@ -106,6 +114,8 @@ At `src/everything`:
     - Registers a `get-resource-links` tool that returns an intro `text` block followed by multiple `resource_link` items.
   - get-resource-reference.ts
     - Registers a `get-resource-reference` tool that returns a reference for a selected dynamic resource.
+  - get-roots-list.ts
+    - Registers a `get-roots-list` tool that returns the last list of roots sent by the client.
   - gzip-file-as-resource.ts
     - Registers a `gzip-file-as-resource` tool that fetches content from a URL or data URI, compresses it, and then either:
       - returns a `resource_link` to a session-scoped resource (default), or
@@ -115,6 +125,8 @@ At `src/everything`:
       - `GZIP_MAX_FETCH_SIZE` (bytes, default 10 MiB)
       - `GZIP_MAX_FETCH_TIME_MILLIS` (ms, default 30000)
       - `GZIP_ALLOWED_DOMAINS` (comma-separated allowlist; empty means all domains allowed)
+  - trigger-elicitation-request.ts
+    - Registers a `trigger-elicitation-request` tool that sends an `elicitation/create` request to the client/LLM and returns the elicitation result.
   - trigger-sampling-request.ts
     - Registers a `trigger-sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
   - get-structured-content.ts
@@ -193,12 +205,12 @@ At `src/everything`:
    - Registers resources via `registerResources(server)`.
    - Registers prompts via `registerPrompts(server)`.
    - Sets up resource subscription handlers via `setSubscriptionHandlers(server)`.
-   - Returns the server and a `cleanup(sessionId?)` hook that stops any active intervals and removes any session‑scoped state.
+   - Returns the server, a `clientConnect(sessionId)` callback, and a `cleanup(sessionId?)` callback that stops any active intervals and removes any session‑scoped state.
 
 4. Each transport is responsible for network/session lifecycle:
-   - STDIO: simple process‑bound connection; closes on `SIGINT` and calls `cleanup()`.
-   - SSE: maintains a session map keyed by `sessionId`; hooks server’s `onclose` to clean and remove session; exposes `/sse` (GET) and `/message` (POST) endpoints.
-   - Streamable HTTP: exposes `/mcp` for POST (JSON‑RPC messages), GET (SSE stream), and DELETE (termination). Uses an event store for resumability and stores transports by `sessionId`. Does not auto‑start simulated features; calls `cleanup(sessionId)` on DELETE.
+   - STDIO: simple process‑bound connection; closes on `SIGINT` and calls`clientConnect()` and `cleanup()`.
+   - SSE: maintains a session map keyed by `sessionId`; calls `clientConnect(sessionId)` on connection, hooks server’s `onclose` to clean and remove session; exposes `/sse` (GET) and `/message` (POST) endpoints.
+   - Streamable HTTP: exposes `/mcp` for POST (JSON‑RPC messages), GET (SSE stream), and DELETE (termination). Uses an event store for resumability and stores transports by `sessionId`. Calls `clientConnect(sessionId)` on connection and calls `cleanup(sessionId)` on DELETE.
 
 ## Registered Features (current minimal set)
 
@@ -209,6 +221,7 @@ At `src/everything`:
   - `get-env` (tools/get-env.ts): Returns all environment variables from the running process as pretty-printed JSON text.
   - `get-resource-links` (tools/get-resource-links.ts): Returns an intro `text` block followed by multiple `resource_link` items. For a requested `count` (1–10), alternates between dynamic Text and Blob resources using URIs from `resources/templates.ts`.
   - `get-resource-reference` (tools/get-resource-reference.ts): Accepts `resourceType` (`text` or `blob`) and `resourceId` (positive integer). Returns a concrete `resource` content block (with its `uri`, `mimeType`, and data) with surrounding explanatory `text`.
+  - `get-roots-list` (tools/get-roots-list.ts): Returns the last list of roots sent by the client.
   - `gzip-file-as-resource` (tools/gzip-file-as-resource.ts): Accepts a `name` and `data` (URL or data URI), fetches the data subject to size/time/domain constraints, compresses it, registers it as a session resource at `demo://resource/session/<name>` with `mimeType: application/gzip`, and returns either a `resource_link` (default) or an inline `resource` depending on `outputType`.
   - `get-structured-content` (tools/get-structured-content.ts): Demonstrates structured responses. Accepts `location` input and returns both backward‑compatible `content` (a `text` block containing JSON) and `structuredContent` validated by an `outputSchema` (temperature, conditions, humidity).
   - `get-sum` (tools/get-sum.ts): For two numbers `a` and `b` calculates and returns their sum. Uses Zod to validate inputs.
