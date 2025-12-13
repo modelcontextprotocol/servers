@@ -6,10 +6,10 @@ import {
 } from "../server/logging.js";
 
 // Tool configuration
-const name = "toggle-logging";
+const name = "toggle-simulated-logging";
 const config = {
-  title: "Toggle Logging",
-  description: "Toggles simulated logging on or off.",
+  title: "Toggle Simulated Logging",
+  description: "Toggles simulated, random-leveled logging on or off.",
   inputSchema: {},
 };
 
@@ -17,7 +17,7 @@ const config = {
 const clients: Set<string | undefined> = new Set<string | undefined>();
 
 /**
- * Registers the `toggle-subscriber-updates` tool with the provided MCP server.
+ * Registers the `toggle-simulated-logging` tool with the provided MCP server.
  *
  * The registered tool enables or disables the sending of periodic, random-leveled
  * logging messages the connected client.
@@ -28,7 +28,7 @@ const clients: Set<string | undefined> = new Set<string | undefined>();
  *
  * @param {McpServer} server - The server instance to which the tool is registered.
  */
-export const registerToggleLoggingTool = (server: McpServer) => {
+export const registerToggleSimulatedLoggingTool = (server: McpServer) => {
   server.registerTool(
     name,
     config,

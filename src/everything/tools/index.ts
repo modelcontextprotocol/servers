@@ -10,7 +10,7 @@ import { registerGetSumTool } from "./get-sum.js";
 import { registerGetTinyImageTool } from "./get-tiny-image.js";
 import { registerGZipFileAsResourceTool } from "./gzip-file-as-resource.js";
 import { registerLongRunningOperationTool } from "./long-running-operation.js";
-import { registerToggleLoggingTool } from "./toggle-logging.js";
+import { registerToggleSimulatedLoggingTool } from "./toggle-simulated-logging.js";
 import { registerToggleSubscriberUpdatesTool } from "./toggle-subscriber-updates.js";
 import { registerTriggerElicitationRequestTool } from "./trigger-elicitation-request.js";
 import { registerTriggerSamplingRequestTool } from "./trigger-sampling-request.js";
@@ -31,7 +31,7 @@ export const registerTools = (server: McpServer) => {
   registerGetTinyImageTool(server);
   registerGZipFileAsResourceTool(server);
   registerLongRunningOperationTool(server);
-  registerToggleLoggingTool(server);
+  registerToggleSimulatedLoggingTool(server);
   registerToggleSubscriberUpdatesTool(server);
   registerTriggerElicitationRequestTool(server);
   registerTriggerSamplingRequestTool(server);

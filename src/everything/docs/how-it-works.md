@@ -30,5 +30,5 @@ Each client manages its own resource subscriptions and receives notifications on
 ### Module: `server/logging.ts`
 
 - Periodically sends randomized log messages at different levels. Messages can include the session ID for clarity during demos.
-- Started/stopped on demand via the `toggle-logging` tool, which calls `beginSimulatedLogging(server, sessionId?)` and `stopSimulatedLogging(sessionId?)`. Note that transport disconnect triggers `cleanup()` which also stops any active intervals.
+- Started/stopped on demand via the `toggle-simulated-logging` tool, which calls `beginSimulatedLogging(server, sessionId?)` and `stopSimulatedLogging(sessionId?)`. Note that transport disconnect triggers `cleanup()` which also stops any active intervals.
 - Uses `server.sendLoggingMessage({ level, data }, sessionId?)` so that the client’s configured minimum logging level is respected by the SDK.

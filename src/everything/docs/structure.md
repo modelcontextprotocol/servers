@@ -29,8 +29,7 @@ src/everything
      ├── server
      │   ├── index.ts
      │   ├── logging.ts
-     │   ├── roots.ts
-     │   └── everything.ts
+     │   └── roots.ts
      ├── tools
      │   ├── index.ts
      │   ├── echo.ts
@@ -44,7 +43,7 @@ src/everything
      │   ├── get-tiny-image.ts
      │   ├── gzip-file-as-resource.ts
      │   ├── long-running-operation.ts
-     │   ├── toggle-logging.ts
+     │   ├── toggle-simulated-logging.ts
      │   ├── toggle-subscriber-updates.ts
      │   ├── trigger-elicitation-request.ts
      │   └── trigger-sampling-request.ts
@@ -113,11 +112,9 @@ src/everything
 - `index.ts`
   - Server factory that creates an `McpServer` with declared capabilities, loads server instructions, and registers tools, prompts, and resources.
   - Sets resource subscription handlers via `setSubscriptionHandlers(server)`.
-  - Exposes `{ server, cleanup }` to the chosen transport. Cleanup stops any running intervals in the server when the transport disconencts.
+  - Exposes `{ server, cleanup }` to the chosen transport. Cleanup stops any running intervals in the server when the transport disconnects.
 - `logging.ts`
   - Implements simulated logging. Periodically sends randomized log messages at various levels to the connected client session. Started/stopped on demand via a dedicated tool.
-- `everything.ts`
-  - A full “reference/monolith” implementation demonstrating most MCP features. Not the default path used by the transports in this package.
 
 ### `tools/`
 
@@ -156,8 +153,8 @@ src/everything
   - Registers a `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
 - `long-running-operation.ts`
   - Registers a `long-running-operation` tool that simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
-- `toggle-logging.ts`
-  - Registers a `toggle-logging` tool, which starts or stops simulated logging for the invoking session.
+- `toggle-simulated-logging.ts`
+  - Registers a `toggle-simulated-logging` tool, which starts or stops simulated logging for the invoking session.
 - `toggle-subscriber-updates.ts`
   - Registers a `toggle-subscriber-updates` tool, which starts or stops simulated resource subscription update checks for the invoking session.
 
