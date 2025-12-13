@@ -19,9 +19,8 @@ const config = {
  * The registered tool interacts with the MCP roots capability, which enables the server to access
  * information about the client's workspace directories or file system roots.
  *
- * When supported by the client, the server automatically retrieves and formats the current list
- * of roots from the client upon connection and whenever the client sends a `roots/list_changed`
- * notification.
+ * When supported, the server automatically retrieves and formats the current list of roots from the
+ * client upon connection and whenever the client sends a `roots/list_changed` notification.
  *
  * Therefore, this tool displays the roots that the server currently knows about for the connected
  * client. If for some reason the server never got the initial roots list, the tool will request the
