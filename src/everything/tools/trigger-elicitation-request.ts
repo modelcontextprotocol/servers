@@ -20,7 +20,7 @@ const config = {
  * or cancellation of the dialog. The process also ensures parsing and validating
  * the elicitation input arguments at runtime.
  *
- * The tool resolves the elicitation dialog response into a structured result,
+ * The elicitation dialog response is returned, formatted into a structured result,
  * which contains both user-submitted input data (if provided) and debugging
  * information, including raw results.
  *
