@@ -17,7 +17,7 @@ export type ServerFactoryResponse = {
 };
 
 /**
- * `ServerInstance` factory
+ * Server Factory
  *
  * This function initializes a `McpServer` with specific capabilities and instructions,
  * registers tools, resources, and prompts, and configures resource subscription handlers.
