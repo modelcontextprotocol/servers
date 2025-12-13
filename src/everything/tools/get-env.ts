@@ -11,7 +11,7 @@ const config = {
 };
 
 /**
- * Registers the 'get-env' tool with the given MCP server.
+ * Registers the 'get-env' tool.
  *
  * The registered tool Retrieves and returns the environment variables
  * of the current process as a JSON-formatted string encapsulated in a text response.

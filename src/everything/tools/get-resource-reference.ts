@@ -31,7 +31,7 @@ const config = {
 };
 
 /**
- * Registers the 'get-resource-reference' tool with the provided McpServer instance.
+ * Registers the 'get-resource-reference' tool.
  *
  * The registered tool validates and processes arguments for retrieving a resource
  * reference. Supported resource types include predefined `RESOURCE_TYPE_TEXT` and

@@ -20,7 +20,7 @@ const config = {
 };
 
 /**
- * Registers the 'trigger-tong-running-operation' tool with the provided McpServer instance.
+ * Registers the 'trigger-tong-running-operation' tool.
  *
  * The registered tool starts a long-running operation defined by a specific duration and
  * number of steps.

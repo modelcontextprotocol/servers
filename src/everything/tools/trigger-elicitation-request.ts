@@ -11,7 +11,7 @@ const config = {
 };
 
 /**
- * Registers the 'trigger-elicitation-request' tool within the provided McpServer instance.
+ * Registers the 'trigger-elicitation-request' tool.
  *
  * The registered tool sends an elicitation request for the user to provide information
  * based on a pre-defined schema of fields including text inputs, booleans, numbers,

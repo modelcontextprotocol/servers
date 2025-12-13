@@ -17,7 +17,7 @@ const config = {
 const clients: Set<string | undefined> = new Set<string | undefined>();
 
 /**
- * Registers the `toggle-simulated-logging` tool with the provided MCP server.
+ * Registers the `toggle-simulated-logging` tool.
  *
  * The registered tool enables or disables the sending of periodic, random-leveled
  * logging messages the connected client.

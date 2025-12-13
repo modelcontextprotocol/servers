@@ -17,7 +17,7 @@ const config = {
 const clients: Set<string | undefined> = new Set<string | undefined>();
 
 /**
- * Registers the `toggle-subscriber-updates` tool with the provided MCP server.
+ * Registers the `toggle-subscriber-updates` tool.
  *
  * The registered tool enables or disables the sending of periodic, simulated resource
  * update messages the connected client for any subscriptions they have made.

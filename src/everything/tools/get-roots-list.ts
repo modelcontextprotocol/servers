@@ -12,7 +12,7 @@ const config = {
 };
 
 /**
- * Registers the 'get-roots-list' tool with the given MCP server.
+ * Registers the 'get-roots-list' tool.
  *
  * If the client does not support the roots capability, the tool is not registered.
  *

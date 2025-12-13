@@ -30,7 +30,7 @@ const config = {
 };
 
 /**
- * Registers the 'get-structured-content' tool with the provided McpServer instance.
+ * Registers the 'get-structured-content' tool.
  *
  * The registered tool processes incoming arguments using a predefined input schema,
  * generates structured content with weather information including temperature,

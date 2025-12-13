@@ -28,7 +28,7 @@ const config = {
 };
 
 /**
- * Registers the 'get-resource-reference' tool with the provided McpServer instance.
+ * Registers the 'get-resource-reference' tool.
  *
  * The registered tool retrieves a specified number of resource links and their metadata.
  * Resource links are dynamically generated as either text or binary blob resources,

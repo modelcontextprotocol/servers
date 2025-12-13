@@ -17,7 +17,7 @@ const config = {
 };
 
 /**
- * Registers the 'get-sum' tool with the provided McpServer instance.
+ * Registers the 'get-sum' tool.
  **
  * The registered tool processes input arguments, validates them using a predefined schema,
  * calculates the sum of two numeric values, and returns the result in a content block.

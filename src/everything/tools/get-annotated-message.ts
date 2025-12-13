@@ -24,7 +24,7 @@ const config = {
 };
 
 /**
- * Registers the 'get-annotated-message' tool with the provided McpServer instance.
+ * Registers the 'get-annotated-message' tool.
  *
  * The registered tool generates and sends messages with specific types, such as error,
  * success, or debug, carrying associated annotations like priority level and intended

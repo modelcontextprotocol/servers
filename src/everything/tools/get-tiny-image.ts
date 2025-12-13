@@ -14,7 +14,7 @@ const config = {
 };
 
 /**
- * Registers the "get-tiny-image" tool with the provided McpServer instance.
+ * Registers the "get-tiny-image" tool.
  *
  * The registered tool returns a response containing a small image alongside some
  * descriptive text.

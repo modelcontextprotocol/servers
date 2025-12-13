@@ -16,7 +16,7 @@ const config = {
 };
 
 /**
- * Registers the 'echo' Tool with the provided McpServer instance.
+ * Registers the 'echo' tool.
  *
  * The registered tool validates input arguments using the EchoSchema and
  * returns a response that echoes the message provided in the arguments.

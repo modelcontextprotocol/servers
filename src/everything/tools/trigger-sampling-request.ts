@@ -24,10 +24,10 @@ const config = {
 };
 
 /**
- * Registers the 'trigger-sampling-request' tool within the provided McpServer instance.
+ * Registers the 'trigger-sampling-request' tool.
  *
  * The registered tool performs the following operations:
- * - Validates incoming arguments using `SampleLLMSchema`.
+ * - Validates incoming arguments using `TriggerSamplingRequestSchema`.
  * - Constructs a `sampling/createMessage` request object using provided prompt and maximum tokens.
  * - Sends the request to the server for sampling.
  * - Formats and returns the sampling result content to the client.

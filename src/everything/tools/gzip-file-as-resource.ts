@@ -51,7 +51,7 @@ const config = {
 };
 
 /**
- * Registers the `gzip-file-as-resource` tool with the provided MCP server.
+ * Registers the `gzip-file-as-resource` tool.
  *
  * The registered tool compresses input data using gzip, and makes the resulting file accessible
  * as a resource for the duration of the session.
