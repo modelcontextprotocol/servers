@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { roots } from "../server/roots.js"
 
 // Tool configuration
 const name = "get-roots-list";
@@ -13,18 +14,20 @@ const config = {
 /**
  * Registers the 'get-roots-list' tool with the given MCP server.
  *
- * If the client does not support the roots protocol, the tool is not registered.
+ * If the client does not support the roots capability, the tool is not registered.
  *
- * The registered tool interacts with the MCP roots protocol, which enables the server to access information about
- * the client's workspace directories or file system roots. When supported by the client, the server retrieves
- * and formats the current list of roots for display.
+ * The registered tool interacts with the MCP roots capability, which enables the server to access
+ * information about the client's workspace directories or file system roots.
  *
- * Key behaviors:
- * - Determines whether the connected MCP client supports the roots protocol by checking client capabilities.
- * - Fetches and formats the list of roots, including their names and URIs, if supported by the client.
- * - Handles cases where roots are not supported, or no roots are currently provided, with explanatory messages.
+ * When supported by the client, the server automatically retrieves and formats the current list
+ * of roots from the client upon connection and whenever the client sends a `roots/list_changed`
+ * notification.
  *
- * @param {McpServer} server - The server instance interacting with the MCP client and managing the roots protocol.
+ * Therefore, this tool displays the roots that the server currently knows about for the connected
+ * client. If for some reason the server never got the initial roots list, the tool will request the
+ * list from the client again.
+ *
+ * @param {McpServer} server - The server instance interacting with the MCP client
  */
 export const registerGetRootsListTool = (server: McpServer) => {
   const clientSupportsRoots =
@@ -34,8 +37,10 @@ export const registerGetRootsListTool = (server: McpServer) => {
       name,
       config,
       async (args, extra): Promise<CallToolResult> => {
-        const currentRoots = (await server.server.listRoots()).roots;
-        if (currentRoots.length === 0) {
+        const currentRoots = roots?.has(extra.sessionId)
+          ? roots.get(extra.sessionId)
+          : (await server.server.listRoots()).roots
+        if (currentRoots && currentRoots.length === 0) {
           return {
             content: [
               {
@@ -51,20 +56,20 @@ export const registerGetRootsListTool = (server: McpServer) => {
           };
         }
 
-        const rootsList = currentRoots
+        const rootsList = currentRoots ?  currentRoots
           .map((root, index) => {
             return `${index + 1}. ${root.name || "Unnamed Root"}\n   URI: ${
               root.uri
             }`;
           })
-          .join("\n\n");
+          .join("\n\n") : 'No roots found'
 
         return {
           content: [
             {
               type: "text",
               text:
-                `Current MCP Roots (${currentRoots.length} total):\n\n${rootsList}\n\n` +
+                `Current MCP Roots (${currentRoots!.length} total):\n\n${rootsList}\n\n` +
                 "Note: This server demonstrates the roots protocol capability but doesn't actually access files. " +
                 "The roots are provided by the MCP client and can be used by servers that need file system access.",
             },

@@ -5,7 +5,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 // Track roots by session id
-const roots: Map<string | undefined, Root[]> = new Map<
+export const roots: Map<string | undefined, Root[]> = new Map<
   string | undefined,
   Root[]
 >();
