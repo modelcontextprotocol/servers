@@ -25,6 +25,7 @@
 - Use PascalCase for types/classes, 
 - Use UPPER_CASE for constants
 - Use kebab-case for file names and registered tools, prompts, and resources.
+- Use verbs for tool names, e.g., `get-annotated-message` instead of `annotated-message`
 
 ## Extending the Server
 
