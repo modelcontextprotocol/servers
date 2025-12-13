@@ -9,6 +9,7 @@
 ```
 src/everything
      ├── index.ts
+     ├── AGENTS.md
      ├── package.json
      ├── docs
      │   ├── architecture.md
@@ -60,6 +61,10 @@ src/everything
 ### `index.ts`
 
 - CLI entry point that selects and runs a specific transport module based on the first CLI argument: `stdio`, `sse`, or `streamableHttp`.
+
+### `AGENTS.md`
+
+- Directions for Agents/LLMs explaining coding guidelines and how to appropriately extend the server. 
 
 ### `package.json`
 
