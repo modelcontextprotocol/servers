@@ -162,6 +162,10 @@ The server sends random-leveled log messages every 15 seconds, e.g.:
 }
 ```
 
+## Installation
+
+> For detailed installation instructions across all clients and methods, see the [Installation Guide](../INSTALLATION.md).
+
 ## Usage with Claude Desktop (uses [stdio Transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#stdio))
 
 Add to your `claude_desktop_config.json`:
