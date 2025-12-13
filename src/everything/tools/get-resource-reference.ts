@@ -42,7 +42,7 @@ const config = {
  * 1. Validates the `resourceType` argument to ensure it matches a supported type.
  * 2. Validates the `resourceId` argument to ensure it is a finite positive integer.
  * 3. Constructs a URI for the resource based on its type (text or blob).
- * 4. Retrieves the resource and returns it in a structured response object.
+ * 4. Retrieves the resource and returns it in a content block.
  *
  * @param {McpServer} server - The server instance where the tool is registered.
  */
