@@ -22,13 +22,14 @@ const config = {
 /**
  * Registers the 'trigger-tong-running-operation' tool with the provided McpServer instance.
  *
- * This function defines and registers a tool with the provided server instance that performs a
- * long-running operation defined by a specific duration and number of steps. The progress
- * of the operation is reported back to the client through notifications.
+ * The registered tool starts a long-running operation defined by a specific duration and
+ * number of steps.
  *
- * Progress notifications are sent back to the client at each step, if a `progressToken`
- * is provided in the metadata. At the end of the operation, the tool returns a message
- * indicating the completion of the operation, including the total duration and steps.
+ * Progress notifications are sent back to the client at each step if a `progressToken`
+ * is provided in the metadata.
+ *
+ * At the end of the operation, the tool returns a message indicating the completion of the
+ * operation, including the total duration and steps.
  *
  * @param {McpServer} server - The server instance where the tool should be registered.
  */

@@ -21,8 +21,8 @@ const config = {
  * the elicitation input arguments at runtime.
  *
  * The elicitation dialog response is returned, formatted into a structured result,
- * which contains both user-submitted input data (if provided) and debugging
- * information, including raw results.
+ * which contains both user-submitted input data (if provided) and debugging information,
+ * including raw results.
  *
  * @param {McpServer} server - The MCP server instance to which the tool will be registered.
  */
