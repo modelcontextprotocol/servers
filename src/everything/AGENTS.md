@@ -21,16 +21,16 @@
 - Handle errors with try/catch blocks and provide clear error messages
 - Use consistent indentation (2 spaces) and trailing commas in multi-line objects
 - Match existing code style, import order, and module layout in the respective folder.
-- Use camelCase for variables/functions, 
-- Use PascalCase for types/classes, 
+- Use camelCase for variables/functions,
+- Use PascalCase for types/classes,
 - Use UPPER_CASE for constants
 - Use kebab-case for file names and registered tools, prompts, and resources.
 - Use verbs for tool names, e.g., `get-annotated-message` instead of `annotated-message`
 
 ## Extending the Server
 
-The Everything Server is designed to be extended at well-defined points. 
-See [Extension Points](docs/extension.md) and [Project Structure](docsstructure.md). 
+The Everything Server is designed to be extended at well-defined points.
+See [Extension Points](docs/extension.md) and [Project Structure](docsstructure.md).
 The server factory is `src/everything/server/index.ts` and registers all features during startup as well as handling post-connection setup.
 
 ### High-level

@@ -1,4 +1,5 @@
 # Everything Server - Project Structure
+
 **[Architecture](architecture.md)
 | Project Structure
 | [Startup Process](startup.md)
@@ -68,7 +69,7 @@ src/everything
 
 ### `AGENTS.md`
 
-- Directions for Agents/LLMs explaining coding guidelines and how to appropriately extend the server. 
+- Directions for Agents/LLMs explaining coding guidelines and how to appropriately extend the server.
 
 ### `package.json`
 

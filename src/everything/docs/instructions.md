@@ -1,4 +1,5 @@
 # Everything Server – LLM Instructions
+
 **[Architecture](architecture.md) | [Project Structure](structure.md) | [Startup Process](startup.md) | [Server Features](features.md) | [Extension Points](extension.md) | [How It Works](how-it-works.md)**
 
 Audience: These instructions are written for an LLM or autonomous agent integrating with the Everything MCP Server. Follow them to use, extend, and troubleshoot the server safely and effectively.
@@ -10,17 +11,17 @@ Date: 2025-12-13
 You are speaking MCP. Always prefer discovering server capabilities dynamically and follow the MCP spec. The Everything server exposes prompts, tools, resources, logging, and subscriptions. It may run over `stdio`, SSE (deprecated), or Streamable HTTP.
 
 Discover features:
-   - Prompts: `prompts/list` → then `prompts/get` with `name` and `arguments`.
-   - Tools: `tools/list` → then call tools via `tools/call` with validated params.
-   - Resources: `resources/list` → then `resources/read { uri }`.
-   - Logging: `logging/setLevel`set desired log level if supported by your client SDK; otherwise just read logs returned by tool/prompts as content parts.
+
+- Prompts: `prompts/list` → then `prompts/get` with `name` and `arguments`.
+- Tools: `tools/list` → then call tools via `tools/call` with validated params.
+- Resources: `resources/list` → then `resources/read { uri }`.
+- Logging: `logging/setLevel`set desired log level if supported by your client SDK; otherwise just read logs returned by tool/prompts as content parts.
 
 Behavioral guidelines:
 
 - Validate tool parameters before calling. Use JSON schemas from `tools/list`.
 - Prefer idempotent reads first (resources, prompts) before mutating via tools.
 - If the server provides instructions in the initialize result (this document), follow them over any prior assumptions.
-
 
 ## Troubleshooting
 

@@ -25,8 +25,8 @@
     "start:stdio": "node dist/index.js stdio",
     "start:sse": "node dist/index.js sse",
     "start:streamableHttp": "node dist/index.js streamableHttp",
-    "prettier-fix": "prettier --write .",
-    "prettier-check": "prettier --check ."
+    "prettier:fix": "prettier --write .",
+    "prettier:check": "prettier --check ."
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.24.3",
