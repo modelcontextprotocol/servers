@@ -26,14 +26,11 @@ const config = {
  * long-running operation defined by a specific duration and number of steps. The progress
  * of the operation is reported back to the client through notifications.
  *
- * The registered tool processes the operation in steps, with each step having equal duration.
- *
  * Progress notifications are sent back to the client at each step, if a `progressToken`
  * is provided in the metadata. At the end of the operation, the tool returns a message
  * indicating the completion of the operation, including the total duration and steps.
  *
  * @param {McpServer} server - The server instance where the tool should be registered.
- * The server is responsible for receiving and handling requests, as well as sending progress notifications.
  */
 export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
   server.registerTool(
