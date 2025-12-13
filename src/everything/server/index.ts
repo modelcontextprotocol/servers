@@ -22,7 +22,6 @@ export type ServerFactoryResponse = {
  * This function initializes a `McpServer` with specific capabilities and instructions,
  * registers tools, resources, and prompts, and configures resource subscription handlers.
  *
- * @function
  * @returns {ServerFactoryResponse} An object containing the server instance, a `clientConnected`
  * callback for post-connection setup, and a `cleanup` function for handling server-side cleanup
  * when a session ends.
