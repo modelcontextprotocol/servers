@@ -13,7 +13,12 @@ src/everything
      ├── package.json
      ├── docs
      │   ├── architecture.md
-     │   └── server-instructions.md
+     │   ├── extension.md
+     │   ├── features.md
+     │   ├── how-it-works.md
+     │   ├── instructions.md
+     │   ├── startup.md
+     │   └── structure.md
      ├── prompts
      │   ├── index.ts
      │   ├── args.ts
