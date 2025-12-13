@@ -1,306 +1,27 @@
-# Everything Server – Architecture and Layout
+# Everything Server – Architecture
+**Architecture
+| [Project Structure](structure.md)
+| [Startup Process](startup.md)
+| [Server Features](features.md)
+| [Extension Points](extension.md)
+| [How It Works](how-it-works.md)**
 
-This document summarizes the current layout and runtime architecture of the `src/everything` package. It explains how the server starts, how transports are wired, where tools, prompts, and resources are registered, and how to extend the system.
+This documentation summarizes the current layout and runtime architecture of the `src/everything` package.
+It explains how the server starts, how transports are wired, where tools, prompts, and resources are registered, and how to extend the system.
 
 ## High‑level Overview
 
-- Purpose: A minimal, modular MCP server showcasing core Model Context Protocol features. It exposes a simple tool, several prompts, and both static and dynamic resources, and can be run over multiple transports (STDIO, SSE, and Streamable HTTP).
-- Design: A small “server factory” constructs the MCP server and registers features. Transports are separate entry points that create/connect the server and handle network concerns. Tools, prompts, and resources are organized in their own submodules.
-- Design: A small “server factory” constructs the MCP server and registers features. Transports are separate entry points that create/connect the server and handle network concerns. Tools, prompts, and resources are organized in their own submodules. Simulated logging and resource‑update notifications are opt‑in and controlled by tools.
-- Two server implementations exist:
+### Purpose
+A minimal, modular MCP server showcasing core Model Context Protocol features. It exposes simple tools, prompts, and resources, and can be run over multiple transports (STDIO, SSE, and Streamable HTTP).
 
-  - `server/index.ts`: The lightweight, modular server used by transports in this package.
-  - `server/everything.ts`: A comprehensive reference server (much larger, many tools/prompts/resources) kept for reference/testing but not wired up by default in the entry points.
+### Design
+A small “server factory” constructs the MCP server and registers features. 
+Transports are separate entry points that create/connect the server and handle network concerns. 
+Tools, prompts, and resources are organized in their own submodules.
 
-- Multi‑client subscriptions: The server supports multiple concurrent clients. Each client manages its own resource subscriptions and receives notifications only for the URIs it subscribed to, independent of other clients.
-
-## Directory Layout
-
-```
-src/everything
-├── index.ts
-├── docs
-│   ├── architecture.md
-│   └── server-instructions.md
-├── prompts
-│   ├── index.ts
-│   ├── args.ts
-│   ├── completions.ts
-│   ├── simple.ts
-│   └── resource.ts
-├── resources
-│   ├── index.ts
-│   ├── files.ts
-│   ├── session.ts
-│   ├── subscriptions.ts
-│   └── templates.ts
-├── server
-│   ├── index.ts
-│   ├── logging.ts
-│   ├── roots.ts
-│   └── everything.ts
-├── transports
-│   ├── sse.ts
-│   ├── stdio.ts
-│   └── streamableHttp.ts
-├── tools
-│   ├── index.ts
-│   ├── echo.ts
-│   ├── get-annotated-message.ts
-│   ├── get-env.ts
-│   ├── get-tiny-image.ts
-│   ├── get-resource-links.ts
-│   ├── get-resource-reference.ts
-│   ├── get-roots-list.ts
-│   ├── get-structured-content.ts
-│   ├── get-sum.ts
-│   ├── gzip-file-as-resource.ts
-│   ├── long-running-operation.ts
-│   ├── toggle-logging.ts
-│   ├── toggle-subscriber-updates.ts
-│   ├── trigger-elicitation-request.ts
-│   └── trigger-sampling-request.ts
-└── package.json
-```
-
-At `src/everything`:
-
-- index.ts
-
-  - CLI entry that selects and runs a specific transport module based on the first CLI argument: `stdio`, `sse`, or `streamableHttp`.
-
-- server/
-
-  - index.ts
-    - Server factory that creates an `McpServer` with declared capabilities, loads server instructions, and registers tools, prompts, and resources.
-    - Sets resource subscription handlers via `setSubscriptionHandlers(server)`.
-    - Exposes `{ server, cleanup }` to the chosen transport. Cleanup stops any running intervals in the server when the transport disconencts.
-  - logging.ts
-    - Implements simulated logging. Periodically sends randomized log messages at various levels to the connected client session. Started/stopped on demand via a dedicated tool.
-  - everything.ts
-    - A full “reference/monolith” implementation demonstrating most MCP features. Not the default path used by the transports in this package.
-
-- transports/
-
-  - stdio.ts
-    - Starts a `StdioServerTransport`, created the server via `createServer()`, and connects it.
-    - Calls `clientConnected()` to inform the server of the connection.
-    - Handles `SIGINT` to close cleanly and calls `cleanup()` to remove any live intervals.
-  - sse.ts
-    - Express server exposing:
-      - `GET /sse` to establish an SSE connection per session.
-      - `POST /message` for client messages.
-    - Manages multiple connected clients via a transport map.
-    - Starts an `SSEServerTransport`, created the server via `createServer()`, and connects it to a new transport.
-    - Calls `clientConnected(sessionId)` to inform the server of the connection.
-    - On server disconnect, calls `cleanup()` to remove any live intervals.
-  - streamableHttp.ts
-    - Express server exposing a single `/mcp` endpoint for POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `StreamableHTTPServerTransport`.
-    - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`.
-    - Connects a fresh server instance on initialization POST and reuses the transport for subsequent requests.
-    - Calls `clientConnected(sessionId)` to inform the server of the connection.
-
-- tools/
-
-  - index.ts
-    - `registerTools(server)` orchestrator; delegates to tool factory/registration methods in individual tool files.
-  - echo.ts
-    - Registers an `echo` tool that takes a message and returns `Echo: {message}`.
-  - get-annotated-message.ts
-    - Registers an `annotated-message` tool which demonstrates annotated content items by emitting a primary `text` message with `annotations` that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true.
-  - get-env.ts
-    - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
-  - get-resource-links.ts
-    - Registers a `get-resource-links` tool that returns an intro `text` block followed by multiple `resource_link` items.
-  - get-resource-reference.ts
-    - Registers a `get-resource-reference` tool that returns a reference for a selected dynamic resource.
-  - get-roots-list.ts
-    - Registers a `get-roots-list` tool that returns the last list of roots sent by the client.
-  - gzip-file-as-resource.ts
-    - Registers a `gzip-file-as-resource` tool that fetches content from a URL or data URI, compresses it, and then either:
-      - returns a `resource_link` to a session-scoped resource (default), or
-      - returns an inline `resource` with the gzipped data. The resource will be still discoverable for the duration of the session via `resources/list`.
-    - Uses `resources/session.ts` to register the gzipped blob as a per-session resource at a URI like `demo://resource/session/<name>` with `mimeType: application/gzip`.
-    - Environment controls:
-      - `GZIP_MAX_FETCH_SIZE` (bytes, default 10 MiB)
-      - `GZIP_MAX_FETCH_TIME_MILLIS` (ms, default 30000)
-      - `GZIP_ALLOWED_DOMAINS` (comma-separated allowlist; empty means all domains allowed)
-  - trigger-elicitation-request.ts
-    - Registers a `trigger-elicitation-request` tool that sends an `elicitation/create` request to the client/LLM and returns the elicitation result.
-  - trigger-sampling-request.ts
-    - Registers a `trigger-sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
-  - get-structured-content.ts
-    - Registers a `get-structured-content` tool that demonstrates structuredContent block responses.
-  - get-sum.ts
-    - Registers an `get-sum` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
-  - get-tiny-image.ts
-    - Registers a `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
-  - long-running-operation.ts
-    - Registers a `long-running-operation` tool that simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
-  - toggle-logging.ts
-    - Registers a `toggle-logging` tool, which starts or stops simulated logging for the invoking session.
-  - toggle-subscriber-updates.ts
-    - Registers a `toggle-subscriber-updates` tool, which starts or stops simulated resource subscription update checks for the invoking session.
-
-- prompts/
-
-  - index.ts
-    - `registerPrompts(server)` orchestrator; delegates to prompt factory/registration methods from in individual prompt files.
-  - simple.ts
-    - Registers `simple-prompt`: a prompt with no arguments that returns a single user message.
-  - args.ts
-    - Registers `args-prompt`: a prompt with two arguments (`city` required, `state` optional) used to compose a message.
-  - completions.ts
-    - Registers `completable-prompt`: a prompt whose arguments support server-driven completions using the SDK’s `completable(...)` helper (e.g., completing `department` and context-aware `name`).
-  - resource.ts
-    - Exposes `registerEmbeddedResourcePrompt(server)` which registers `resource-prompt` — a prompt that accepts `resourceType` ("Text" or "Blob") and `resourceId` (integer), and embeds a dynamically generated resource of the requested type within the returned messages. Internally reuses helpers from `resources/templates.ts`.
-
-- resources/
-
-  - index.ts
-    - `registerResources(server)` orchestrator; delegates to resource factory/registration methods from individual resource files.
-  - templates.ts
-    - Registers two dynamic, template‑driven resources using `ResourceTemplate`:
-      - Text: `demo://resource/dynamic/text/{index}` (MIME: `text/plain`)
-      - Blob: `demo://resource/dynamic/blob/{index}` (MIME: `application/octet-stream`, Base64 payload)
-    - The `{index}` path variable must be a finite positive integer. Content is generated on demand with a timestamp.
-    - Exposes helpers `textResource(uri, index)`, `textResourceUri(index)`, `blobResource(uri, index)`, and `blobResourceUri(index)` so other modules can construct and embed dynamic resources directly (e.g., from prompts).
-  - files.ts
-    - Registers static file-based resources for each file in the `docs/` folder.
-    - URIs follow the pattern: `demo://resource/static/document/<filename>`.
-    - Serves markdown files as `text/markdown`, `.txt` as `text/plain`, `.json` as `application/json`, others default to `text/plain`.
-
-- docs/
-
-  - architecture.md (this document)
-  - server-instructions.md
-    - Human‑readable instructions intended to be passed to the client/LLM as for guidance on server use. Loaded by the server at startup and returned in the "initialize" exchange.
-
-- package.json
-  - Package metadata and scripts:
-    - `build`: TypeScript compile to `dist/`, copies `docs/` into `dist/` and marks the compiled entry scripts as executable.
-    - `start:stdio`, `start:sse`, `start:streamableHttp`: Run built transports from `dist/`.
-  - Declares dependencies on `@modelcontextprotocol/sdk`, `express`, `cors`, `zod`, etc.
-
-## Startup and Runtime Flow
-
-1. A transport is chosen via the CLI entry `index.ts`:
-
-   - `node dist/index.js stdio` → loads `transports/stdio.js`
-   - `node dist/index.js sse` → loads `transports/sse.js`
-   - `node dist/index.js streamableHttp` → loads `transports/streamableHttp.js`
-
-2. The transport creates the server via `createServer()` from `server/index.ts` and connects it to the chosen transport type from the MCP SDK.
-
-3. The server factory (`server/index.ts`) does the following:
-
-   - Creates `new McpServer({ name, title, version }, { capabilities, instructions })`.
-   - Capabilities:
-     - `tools: {}`
-     - `logging: {}`
-     - `prompts: {}`
-     - `resources: { subscribe: true }`
-   - Loads human‑readable “server instructions” from the docs folder (`server-instructions.md`).
-   - Registers tools via `registerTools(server)`.
-   - Registers resources via `registerResources(server)`.
-   - Registers prompts via `registerPrompts(server)`.
-   - Sets up resource subscription handlers via `setSubscriptionHandlers(server)`.
-   - Returns the server, a `clientConnect(sessionId)` callback, and a `cleanup(sessionId?)` callback that stops any active intervals and removes any session‑scoped state.
-
-4. Each transport is responsible for network/session lifecycle:
-   - STDIO: simple process‑bound connection; closes on `SIGINT` and calls`clientConnect()` and `cleanup()`.
-   - SSE: maintains a session map keyed by `sessionId`; calls `clientConnect(sessionId)` on connection, hooks server’s `onclose` to clean and remove session; exposes `/sse` (GET) and `/message` (POST) endpoints.
-   - Streamable HTTP: exposes `/mcp` for POST (JSON‑RPC messages), GET (SSE stream), and DELETE (termination). Uses an event store for resumability and stores transports by `sessionId`. Calls `clientConnect(sessionId)` on connection and calls `cleanup(sessionId)` on DELETE.
-
-## Registered Features (current minimal set)
-
-- Tools
-
-  - `echo` (tools/echo.ts): Echoes the provided `message: string`. Uses Zod to validate inputs.
-  - `get-annotated-message` (tools/get-annotated-message.ts): Returns a `text` message annotated with `priority` and `audience` based on `messageType` (`error`, `success`, or `debug`); can optionally include an annotated `image`.
-  - `get-env` (tools/get-env.ts): Returns all environment variables from the running process as pretty-printed JSON text.
-  - `get-resource-links` (tools/get-resource-links.ts): Returns an intro `text` block followed by multiple `resource_link` items. For a requested `count` (1–10), alternates between dynamic Text and Blob resources using URIs from `resources/templates.ts`.
-  - `get-resource-reference` (tools/get-resource-reference.ts): Accepts `resourceType` (`text` or `blob`) and `resourceId` (positive integer). Returns a concrete `resource` content block (with its `uri`, `mimeType`, and data) with surrounding explanatory `text`.
-  - `get-roots-list` (tools/get-roots-list.ts): Returns the last list of roots sent by the client.
-  - `gzip-file-as-resource` (tools/gzip-file-as-resource.ts): Accepts a `name` and `data` (URL or data URI), fetches the data subject to size/time/domain constraints, compresses it, registers it as a session resource at `demo://resource/session/<name>` with `mimeType: application/gzip`, and returns either a `resource_link` (default) or an inline `resource` depending on `outputType`.
-  - `get-structured-content` (tools/get-structured-content.ts): Demonstrates structured responses. Accepts `location` input and returns both backward‑compatible `content` (a `text` block containing JSON) and `structuredContent` validated by an `outputSchema` (temperature, conditions, humidity).
-  - `get-sum` (tools/get-sum.ts): For two numbers `a` and `b` calculates and returns their sum. Uses Zod to validate inputs.
-  - `get-tiny-image` (tools/get-tiny-image.ts): Returns a tiny PNG MCP logo as an `image` content item with brief descriptive text before and after.
-  - `long-running-operation` (tools/long-running-operation.ts): Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client.
-  - `toggle-logging` (tools/toggle-logging.ts): Starts or stops simulated, random‑leveled logging for the invoking session. Respects the client’s selected minimum logging level.
-  - `toggle-subscriber-updates` (tools/toggle-subscriber-updates.ts): Starts or stops simulated resource update notifications for URIs the invoking session has subscribed to.
-  - `trigger-sampling-request` (tools/trigger-sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM’s response payload.
-
-- Prompts
-
-  - `simple-prompt` (prompts/simple.ts): No-argument prompt that returns a static user message.
-  - `args-prompt` (prompts/args.ts): Two-argument prompt with `city` (required) and `state` (optional) used to compose a question.
-  - `completable-prompt` (prompts/completions.ts): Demonstrates argument auto-completions with the SDK’s `completable` helper; `department` completions drive context-aware `name` suggestions.
-  - `resource-prompt` (prompts/resource.ts): Accepts `resourceType` ("Text" or "Blob") and `resourceId` (string convertible to integer) and returns messages that include an embedded dynamic resource of the selected type generated via `resources/templates.ts`.
-
-- Resources
-
-  - Dynamic Text: `demo://resource/dynamic/text/{index}` (content generated on the fly)
-  - Dynamic Blob: `demo://resource/dynamic/blob/{index}` (base64 payload generated on the fly)
-  - Static Documents: `demo://resource/static/document/<filename>` (serves files from `src/everything/docs/` as static file-based resources)
-  - Session Scoped: `demo://resource/session/<name>` (per-session resources registered dynamically; available only for the lifetime of the session)
-
-- Resource Subscriptions and Notifications
-
-  - Clients may subscribe/unsubscribe to resource URIs using the MCP `resources/subscribe` and `resources/unsubscribe` requests.
-  - Simulated update notifications are opt‑in and off by default. Use the `toggle-subscriber-updates` tool to start/stop a per‑session interval that emits `notifications/resources/updated { uri }` only for URIs that session has subscribed to.
-  - Multiple concurrent clients are supported; each client’s subscriptions are tracked per session and notifications are delivered independently via the server instance associated with that session.
-
-- Logging
-  - Simulated logging is available but off by default. Use the `toggle-logging` tool to start/stop periodic log messages of varying levels (debug, info, notice, warning, error, critical, alert, emergency) per session. Clients can control the minimum level they receive via the standard MCP `logging/setLevel` request.
-
-## Extension Points
-
-- Adding Tools
-
-  - Create a new file under `tools/` with your `registerXTool(server)` function that registers the tool via `server.registerTool(...)`.
-  - Export and call it from `tools/index.ts` inside `registerTools(server)`.
-
-- Adding Prompts
-
-  - Create a new file under `prompts/` with your `registerXPrompt(server)` function that registers the prompt via `server.registerPrompt(...)`.
-  - Export and call it from `prompts/index.ts` inside `registerPrompts(server)`.
-
-- Adding Resources
-
-  - Create a new file under `resources/` with your `registerXResources(server)` function using `server.registerResource(...)` (optionally with `ResourceTemplate`).
-  - Export and call it from `resources/index.ts` inside `registerResources(server)`.
-
-## Resource Subscriptions – How It Works
-
-- Module: `resources/subscriptions.ts`
-
-  - Tracks subscribers per URI: `Map<uri, Set<sessionId>>`.
-  - Installs handlers via `setSubscriptionHandlers(server)` to process subscribe/unsubscribe requests and keep the map updated.
-  - Updates are started/stopped on demand by the `toggle-subscriber-updates` tool, which calls `beginSimulatedResourceUpdates(server, sessionId)` and `stopSimulatedResourceUpdates(sessionId)`.
-  - `cleanup(sessionId?)` calls `stopSimulatedResourceUpdates(sessionId)` to clear intervals and remove session‑scoped state.
-
-- Design note: Each client session has its own `McpServer` instance; periodic checks run per session and invoke `server.notification(...)` on that instance, so messages are delivered only to the intended client.
-
-## Session‑scoped Resources – How It Works
-
-- Module: `resources/session.ts`
-
-  - `getSessionResourceURI(name: string)`: Builds a session resource URI: `demo://resource/session/<name>`.
-  - `registerSessionResource(server, resource, type, payload)`: Registers a resource with the given `uri`, `name`, and `mimeType`, returning a `resource_link`. The content is served from memory for the life of the session only. Supports `type: "text" | "blob"` and returns data in the corresponding field.
-  - Intended usage: tools can create and expose per-session artifacts without persisting them. For example, `tools/gzip-file-as-resource.ts` gzips fetched content, registers it as a session resource with `mimeType: application/gzip`, and returns either a `resource_link` or an inline `resource` based on `outputType`.
-
-## Simulated Logging – How It Works
-
-- Module: `server/logging.ts`
-
-  - Periodically sends randomized log messages at different levels. Messages can include the session ID for clarity during demos.
-  - Started/stopped on demand via the `toggle-logging` tool, which calls `beginSimulatedLogging(server, sessionId?)` and `stopSimulatedLogging(sessionId?)`. Note that transport disconnect triggers `cleanup()` which also stops any active intervals.
-  - Uses `server.sendLoggingMessage({ level, data }, sessionId?)` so that the client’s configured minimum logging level is respected by the SDK.
-
-- Adding Transports
-  - Implement a new transport module under `transports/`.
-  - Add a case to `index.ts` so the CLI can select it.
+### Multi‑client
+The server supports multiple concurrent clients. Tracking per session data is demonstrated with
+resource subscriptions and simulated logging.
 
 ## Build and Distribution
 
@@ -308,6 +29,12 @@ At `src/everything`:
 - The `build` script copies `docs/` into `dist/` so instruction files ship alongside the compiled server.
 - The CLI bin is configured in `package.json` as `mcp-server-everything` → `dist/index.js`.
 
-## Relationship to the Full Reference Server
+## [Project Structure](structure.md)
 
-The large `server/everything.ts` shows a comprehensive MCP server showcasing many features (tools with schemas, prompts, resource operations, notifications, etc.). The current transports in this package use the lean factory from `server/index.ts` instead, keeping the runtime small and focused while preserving the reference implementation for learning and experimentation.
+## [Startup Process](startup.md)
+
+## [Server Features](features.md)
+
+## [Extension Points](extension.md)
+
+## [How It Works](how-it-works.md)

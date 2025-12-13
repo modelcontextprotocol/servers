@@ -55,7 +55,7 @@ export const beginSimulatedLogging = (
     // Send once immediately
     sendSimulatedLoggingMessage(sessionId);
 
-    // Sen
+    // Send a randomly-leveled log message every 5 seconds
     logsUpdateIntervals.set(
       sessionId,
       setInterval(() => sendSimulatedLoggingMessage(sessionId), 5000)

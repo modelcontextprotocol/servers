@@ -5,6 +5,7 @@ import cors from "cors";
 
 console.error("Starting SSE server...");
 
+// Express app with permissive CORS for testing with Inspector direct connect mode
 const app = express();
 app.use(
   cors({
@@ -13,16 +14,20 @@ app.use(
     preflightContinue: false,
     optionsSuccessStatus: 204,
   })
-); // Enable CORS for all routes so Inspector can connect
+);
+
+// Map sessionId to transport for each client
 const transports: Map<string, SSEServerTransport> = new Map<
   string,
   SSEServerTransport
 >();
 
+// Handle GET requests for new SSE streams
 app.get("/sse", async (req, res) => {
   let transport: SSEServerTransport;
   const { server, clientConnected, cleanup } = createServer();
 
+  // Session Id should not exist for GET /sse requests
   if (req?.query?.sessionId) {
     const sessionId = req?.query?.sessionId as string;
     transport = transports.get(sessionId) as SSEServerTransport;
@@ -31,15 +36,14 @@ app.get("/sse", async (req, res) => {
       transport.sessionId
     );
   } else {
-    // Create and store transport for new session
+    // Create and store transport for the new session
     transport = new SSEServerTransport("/message", res);
     transports.set(transport.sessionId, transport);
 
-    // Connect server to transport
+    // Connect server to transport and invoke clientConnected callback
     await server.connect(transport);
     const sessionId = transport.sessionId;
     clientConnected(sessionId);
-
     console.error("Client Connected: ", sessionId);
 
     // Handle close of connection
@@ -47,13 +51,17 @@ app.get("/sse", async (req, res) => {
       const sessionId = transport.sessionId;
       console.error("Client Disconnected: ", sessionId);
       transports.delete(sessionId);
-      await cleanup(sessionId);
+      cleanup(sessionId);
     };
   }
 });
 
+// Handle POST requests for client messages
 app.post("/message", async (req, res) => {
+  // Session Id should exist for POST /message requests
   const sessionId = req?.query?.sessionId as string;
+
+  // Get the transport for this session and use it to handle the request
   const transport = transports.get(sessionId);
   if (transport) {
     console.error("Client Message from", sessionId);
@@ -63,6 +71,7 @@ app.post("/message", async (req, res) => {
   }
 });
 
+// Start the express server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.error(`Server is running on port ${PORT}`);

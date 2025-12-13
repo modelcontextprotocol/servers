@@ -11,53 +11,67 @@ const roots: Map<string | undefined, Root[]> = new Map<
 >();
 
 /**
- * Sets a handler for the "RootsListChanged" notification from the client.
+ * Sync the root directories from the client by requesting and updating the roots list for
+ * the specified session.
  *
- * This handler updates the local roots list when notified and logs relevant
- * acknowledgement or error.
+ * Also sets up a notification handler to listen for changes in the roots list, ensuring that
+ * updates are automatically fetched and handled in real-time.
  *
- * @param {McpServer} mcpServer - The instance of the McpServer managing server communication.
- * @param {string | undefined} sessionId - An optional session ID used for logging purposes.
+ * @param {McpServer} server - An instance of the MCP server used to communicate with the client.
+ * @param {string} [sessionId] - An optional session id used to associate the roots list with a specific client session.
+ *
+ * @throws {Error} In case of a failure to request the roots from the client, an error log message is sent.
  */
-export const setRootsListChangedHandler = (
-  mcpServer: McpServer,
-  sessionId?: string
-) => {
-  const server = mcpServer.server;
+export const syncRoots = (server: McpServer, sessionId?: string) => {
+  // Function to request the updated roots list from the client
+  const requestRoots = async () => {
+    try {
+      // Request the updated roots list from the client
+      const response = await server.server.listRoots();
+      if (response && "roots" in response) {
+        // Store the roots list for this client
+        roots.set(sessionId, response.roots);
 
-  // Set the notification handler
-  server.setNotificationHandler(
-    RootsListChangedNotificationSchema,
-    async () => {
-      try {
-        // Request the updated roots list from the client
-        const response = await server.listRoots();
-        if (response && "roots" in response) {
-          // Store the roots list for this client
-          roots.set(sessionId, response.roots);
-
-          // Notify the client of roots received
-          await server.sendLoggingMessage(
-            {
-              level: "info",
-              logger: "everything-server",
-              data: `Roots updated: ${response.roots.length} root(s) received from client`,
-            },
-            sessionId
-          );
-        }
-      } catch (error) {
+        // Notify the client of roots received
         await server.sendLoggingMessage(
           {
-            level: "error",
+            level: "info",
             logger: "everything-server",
-            data: `Failed to request roots from client: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
+            data: `Roots updated: ${response.roots.length} root(s) received from client`,
+          },
+          sessionId
+        );
+      } else {
+        await server.sendLoggingMessage(
+          {
+            level: "info",
+            logger: "everything-server",
+            data: "Client returned no roots set",
           },
           sessionId
         );
       }
+    } catch (error) {
+      await server.sendLoggingMessage(
+        {
+          level: "error",
+          logger: "everything-server",
+          data: `Failed to request roots from client: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        },
+        sessionId
+      );
     }
+  };
+
+  // Set the list changed notification handler
+  server.server.setNotificationHandler(
+    RootsListChangedNotificationSchema,
+    requestRoots
   );
+
+  // Request initial roots list after a brief delay
+  // Allows initial POST request to complete on streamableHttp transports
+  setTimeout(() => requestRoots(), 350);
 };

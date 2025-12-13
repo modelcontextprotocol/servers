@@ -21,8 +21,13 @@ async function run() {
         await import("./transports/streamableHttp.js");
         break;
       default:
-        console.error(`Unknown script: ${scriptName}`);
-        console.log("Available scripts:");
+        console.error(`-`.repeat(53));
+        console.error(`  Everything Server Launcher`);
+        console.error(`  Usage: node ./index.js [stdio|sse|streamableHttp]`);
+        console.error(`  Default transport: stdio`);
+        console.error(`-`.repeat(53));
+        console.error(`Unknown transport: ${scriptName}`);
+        console.log("Available transports:");
         console.log("- stdio");
         console.log("- sse");
         console.log("- streamableHttp");
@@ -34,4 +39,4 @@ async function run() {
   }
 }
 
-run();
+await run();

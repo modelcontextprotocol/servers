@@ -7,6 +7,7 @@ import cors from "cors";
 
 console.log("Starting Streamable HTTP server...");
 
+// Express app with permissive CORS for testing with Inspector direct connect mode
 const app = express();
 app.use(
   cors({
@@ -16,13 +17,15 @@ app.use(
     optionsSuccessStatus: 204,
     exposedHeaders: ["mcp-session-id", "last-event-id", "mcp-protocol-version"],
   })
-); // Enable CORS for all routes so Inspector can connect
+);
 
+// Map sessionId to server transport for each client
 const transports: Map<string, StreamableHTTPServerTransport> = new Map<
   string,
   StreamableHTTPServerTransport
 >();
 
+// Handle POST requests for client messages
 app.post("/mcp", async (req: Request, res: Response) => {
   console.log("Received MCP POST request");
   try {
@@ -47,7 +50,6 @@ app.post("/mcp", async (req: Request, res: Response) => {
           // This avoids race conditions where requests might come in before the session is stored
           console.log(`Session initialized with ID: ${sessionId}`);
           transports.set(sessionId, transport);
-          clientConnected(sessionId);
         },
       });
 
@@ -66,9 +68,8 @@ app.post("/mcp", async (req: Request, res: Response) => {
       // Connect the transport to the MCP server BEFORE handling the request
       // so responses can flow back through the same transport
       await server.connect(transport);
-
+      clientConnected(transport.sessionId);
       await transport.handleRequest(req, res);
-
       return;
     } else {
       // Invalid request - no session ID or not initialization request
@@ -102,7 +103,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
   }
 });
 
-// Handle GET requests for SSE streams (using built-in support from StreamableHTTP)
+// Handle GET requests for SSE streams
 app.get("/mcp", async (req: Request, res: Response) => {
   console.log("Received MCP GET request");
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
@@ -130,7 +131,7 @@ app.get("/mcp", async (req: Request, res: Response) => {
   await transport!.handleRequest(req, res);
 });
 
-// Handle DELETE requests for session termination (according to MCP spec)
+// Handle DELETE requests for session termination
 app.delete("/mcp", async (req: Request, res: Response) => {
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
   if (!sessionId || !transports.has(sessionId)) {
@@ -172,6 +173,7 @@ const server = app.listen(PORT, () => {
   console.error(`MCP Streamable HTTP Server listening on port ${PORT}`);
 });
 
+// Handle server errors
 server.on("error", (err: unknown) => {
   const code =
     typeof err === "object" && err !== null && "code" in err

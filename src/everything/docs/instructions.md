@@ -1,4 +1,13 @@
-Testing and demonstration server for MCP protocol features.
+# Everything Server - Instructions
+**[Architecture](architecture.md)
+| [Project Structure](structure.md)
+| [Startup Process](startup.md)
+| [Server Features](features.md)
+| [Extension Points](extension.md)
+| [How It Works](how-it-works.md)**
+
+A testing and demonstration server for MCP protocol features. 
+TODO: Update this doc
 
 ## Resources
 
