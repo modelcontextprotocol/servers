@@ -22,8 +22,9 @@ const clients: Set<string | undefined> = new Set<string | undefined>();
  * The registered tool enables or disables the sending of periodic, simulated resource
  * update messages the connected client for any subscriptions they have made.
  *
- * - When enabled, the simulated resource updates are sent to the client at a regular interval.
- * - When disabled, updates are stopped for the session.
+ * When invoked, it either starts or stops simulated resource updates based on the session's
+ * current state. If simulated updates for the specified session is active, it will be stopped;
+ * if it is inactive, simulated updates will be started.
  *
  * The response provides feedback indicating whether simulated updates were started or stopped,
  * including the session ID.
