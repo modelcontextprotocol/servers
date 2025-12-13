@@ -36,10 +36,23 @@ export const registerGetRootsListTool = (server: McpServer) => {
       name,
       config,
       async (args, extra): Promise<CallToolResult> => {
-        const currentRoots = roots?.has(extra.sessionId)
+        // Check if the roots list is already cached for this client
+        const rootsCached = roots?.has(extra.sessionId);
+
+        // Fetch the current roots list from the client if need be
+        const currentRoots = rootsCached
           ? roots.get(extra.sessionId)
           : (await server.server.listRoots()).roots;
-        if (currentRoots && currentRoots.length === 0) {
+
+        // If roots had to be fetched, store them in the cache
+        if (currentRoots && !rootsCached)
+          roots.set(extra.sessionId, currentRoots);
+
+        // Respond if client supports roots but doesn't have any configured
+        if (
+          clientSupportsRoots &&
+          (!currentRoots || currentRoots.length === 0)
+        ) {
           return {
             content: [
               {
@@ -55,6 +68,7 @@ export const registerGetRootsListTool = (server: McpServer) => {
           };
         }
 
+        // Create formatted response if there is a list of roots
         const rootsList = currentRoots
           ? currentRoots
               .map((root, index) => {
