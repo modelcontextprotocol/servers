@@ -9,10 +9,10 @@ import { registerGetStructuredContentTool } from "./get-structured-content.js";
 import { registerGetSumTool } from "./get-sum.js";
 import { registerGetTinyImageTool } from "./get-tiny-image.js";
 import { registerGZipFileAsResourceTool } from "./gzip-file-as-resource.js";
-import { registerLongRunningOperationTool } from "./long-running-operation.js";
 import { registerToggleSimulatedLoggingTool } from "./toggle-simulated-logging.js";
 import { registerToggleSubscriberUpdatesTool } from "./toggle-subscriber-updates.js";
 import { registerTriggerElicitationRequestTool } from "./trigger-elicitation-request.js";
+import { registerTriggerLongRunningOperationTool } from "./trigger-long-running-operation.js";
 import { registerTriggerSamplingRequestTool } from "./trigger-sampling-request.js";
 
 /**
@@ -30,9 +30,9 @@ export const registerTools = (server: McpServer) => {
   registerGetSumTool(server);
   registerGetTinyImageTool(server);
   registerGZipFileAsResourceTool(server);
-  registerLongRunningOperationTool(server);
   registerToggleSimulatedLoggingTool(server);
   registerToggleSubscriberUpdatesTool(server);
   registerTriggerElicitationRequestTool(server);
+  registerTriggerLongRunningOperationTool(server);
   registerTriggerSamplingRequestTool(server);
 };

@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 // Tool input schema
-const LongRunningOperationSchema = z.object({
+const TriggerLongRunningOperationSchema = z.object({
   duration: z
     .number()
     .default(10)
@@ -12,15 +12,15 @@ const LongRunningOperationSchema = z.object({
 });
 
 // Tool configuration
-const name = "long-running-operation";
+const name = "trigger-long-running-operation";
 const config = {
-  title: "Long Running Operation Tool",
-  description: "Demonstrates a long running operation with progress updates",
-  inputSchema: LongRunningOperationSchema,
+  title: "Trigger Long Running Operation Tool",
+  description: "Demonstrates a long running operation with progress updates.",
+  inputSchema: TriggerLongRunningOperationSchema,
 };
 
 /**
- * Registers the 'long-running-operation' tool with the provided McpServer instance.
+ * Registers the 'trigger-tong-running-operation' tool with the provided McpServer instance.
  *
  * This function defines and registers a tool with the provided server instance that performs a
  * long-running operation defined by a specific duration and number of steps. The progress
@@ -35,12 +35,12 @@ const config = {
  * @param {McpServer} server - The server instance where the tool should be registered.
  * The server is responsible for receiving and handling requests, as well as sending progress notifications.
  */
-export const registerLongRunningOperationTool = (server: McpServer) => {
+export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
   server.registerTool(
     name,
     config,
     async (args, extra): Promise<CallToolResult> => {
-      const validatedArgs = LongRunningOperationSchema.parse(args);
+      const validatedArgs = TriggerLongRunningOperationSchema.parse(args);
       const { duration, steps } = validatedArgs;
       const stepDuration = duration / steps;
       const progressToken = extra._meta?.progressToken;

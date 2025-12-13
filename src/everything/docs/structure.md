@@ -47,10 +47,10 @@ src/everything
      │   ├── get-sum.ts
      │   ├── get-tiny-image.ts
      │   ├── gzip-file-as-resource.ts
-     │   ├── long-running-operation.ts
      │   ├── toggle-simulated-logging.ts
      │   ├── toggle-subscriber-updates.ts
      │   ├── trigger-elicitation-request.ts
+     │   ├── trigger-long-running-operation.ts
      │   └── trigger-sampling-request.ts
      └── transports
          ├── sse.ts
@@ -156,7 +156,7 @@ src/everything
   - Registers an `get-sum` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
 - `get-tiny-image.ts`
   - Registers a `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
-- `long-running-operation.ts`
+- `trigger-long-running-operation.ts`
   - Registers a `long-running-operation` tool that simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
 - `toggle-simulated-logging.ts`
   - Registers a `toggle-simulated-logging` tool, which starts or stops simulated logging for the invoking session.
