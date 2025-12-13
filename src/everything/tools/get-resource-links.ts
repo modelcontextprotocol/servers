@@ -36,7 +36,7 @@ const config = {
 
  * The response contains a "text" introductory block and multiple "resource_link" blocks.
  *
- * @param {McpServer} server - An instance of the McpServer on which the tool will be registered.
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerGetResourceLinksTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {

@@ -41,7 +41,7 @@ const config = {
  * - `content`: An array of content blocks, presented as JSON stringified objects.
  * - `structuredContent`: A JSON structured representation of the weather data.
  *
- * @param {McpServer} server - The server instance to which the tool will be registered.
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerGetStructuredContentTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {

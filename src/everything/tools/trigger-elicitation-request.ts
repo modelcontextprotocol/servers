@@ -24,7 +24,7 @@ const config = {
  * which contains both user-submitted input data (if provided) and debugging information,
  * including raw results.
  *
- * @param {McpServer} server - The MCP server instance to which the tool will be registered.
+ * @param {McpServer} server - TThe McpServer instance where the tool will be registered.
  */
 export const registerTriggerElicitationRequestTool = (server: McpServer) => {
   server.registerTool(

@@ -27,7 +27,7 @@ const config = {
  *
  * The result is returned as a Promise resolving to an object containing the computed sum in a text format.
  *
- * @param {McpServer} server - The server instance where the sum tool will be registered.
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerGetSumTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {

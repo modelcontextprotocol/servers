@@ -32,7 +32,7 @@ const config = {
  * - Sends the request to the server for sampling.
  * - Formats and returns the sampling result content to the client.
  *
- * @param {McpServer} server - The instance of the MCP server where the tool will be registered.
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerTriggerSamplingRequestTool = (server: McpServer) => {
   server.registerTool(

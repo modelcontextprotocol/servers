@@ -33,7 +33,7 @@ const config = {
  * The response will have annotations and optionally contain an annotated image.
  *
  * @function
- * @param {McpServer} server - The MCP server instance where the tool is to be registered.
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerGetAnnotatedMessageTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {

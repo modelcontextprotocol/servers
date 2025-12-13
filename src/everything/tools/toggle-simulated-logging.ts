@@ -26,7 +26,7 @@ const clients: Set<string | undefined> = new Set<string | undefined>();
  * current state. If logging for the specified session is active, it will be stopped;
  * if it is inactive, logging will be started.
  *
- * @param {McpServer} server - The server instance to which the tool is registered.
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerToggleSimulatedLoggingTool = (server: McpServer) => {
   server.registerTool(

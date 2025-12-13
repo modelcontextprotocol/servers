@@ -26,7 +26,7 @@ const config = {
  * client. If for some reason the server never got the initial roots list, the tool will request the
  * list from the client again.
  *
- * @param {McpServer} server - The server instance interacting with the MCP client
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerGetRootsListTool = (server: McpServer) => {
   const clientSupportsRoots =

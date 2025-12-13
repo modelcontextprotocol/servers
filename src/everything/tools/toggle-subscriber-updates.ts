@@ -29,7 +29,7 @@ const clients: Set<string | undefined> = new Set<string | undefined>();
  * The response provides feedback indicating whether simulated updates were started or stopped,
  * including the session ID.
  *
- * @param {McpServer} server - The MCP server instance on which the tool is registered.
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerToggleSubscriberUpdatesTool = (server: McpServer) => {
   server.registerTool(

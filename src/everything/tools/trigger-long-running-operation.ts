@@ -31,7 +31,7 @@ const config = {
  * At the end of the operation, the tool returns a message indicating the completion of the
  * operation, including the total duration and steps.
  *
- * @param {McpServer} server - The server instance where the tool should be registered.
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
   server.registerTool(

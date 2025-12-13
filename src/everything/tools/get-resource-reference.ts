@@ -44,7 +44,7 @@ const config = {
  * 3. Constructs a URI for the resource based on its type (text or blob).
  * 4. Retrieves the resource and returns it in a content block.
  *
- * @param {McpServer} server - The server instance where the tool is registered.
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerGetResourceReferenceTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {

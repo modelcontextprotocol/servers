@@ -22,7 +22,7 @@ const config = {
  * The response structure includes textual content before and after the image.
  * The image is served as a PNG data type and represents the default MCP tiny image.
  *
- * @param server - An instance of McpServer where the tool will be registered.
+ * @param server - The McpServer instance where the tool will be registered.
  */
 export const registerGetTinyImageTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {

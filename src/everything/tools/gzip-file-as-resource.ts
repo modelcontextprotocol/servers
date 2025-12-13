@@ -62,7 +62,7 @@ const config = {
  *
  * If an unrecognized `outputType` is provided, the tool throws an error.
  *
- * @param {McpServer} server - The server instance where the tool will be registered.
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
  * @throws {Error} Throws an error if an unknown output type is specified.
  */
 export const registerGZipFileAsResourceTool = (server: McpServer) => {
