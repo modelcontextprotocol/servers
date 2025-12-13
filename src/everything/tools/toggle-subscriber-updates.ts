@@ -19,7 +19,9 @@ const clients: Set<string | undefined> = new Set<string | undefined>();
 /**
  * Registers the `toggle-subscriber-updates` tool with the provided MCP server.
  *
- * The registered tool toggles the state of the simulated resource update mechanism for the client.
+ * The registered tool enables or disables the sending of periodic, simulated resource
+ * update messages the connected client for any subscriptions they have made.
+ *
  * - When enabled, the simulated resource updates are sent to the client at a regular interval.
  * - When disabled, updates are stopped for the session.
  *
