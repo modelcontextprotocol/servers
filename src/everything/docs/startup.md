@@ -1,4 +1,4 @@
-# Everything Server - Startup Flow
+# Everything Server - Startup Process
 **[Architecture](architecture.md)
 | [Project Structure](structure.md)
 | Startup Process
