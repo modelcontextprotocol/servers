@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { roots } from "../server/roots.js"
+import { roots } from "../server/roots.js";
 
 // Tool configuration
 const name = "get-roots-list";
@@ -38,7 +38,7 @@ export const registerGetRootsListTool = (server: McpServer) => {
       async (args, extra): Promise<CallToolResult> => {
         const currentRoots = roots?.has(extra.sessionId)
           ? roots.get(extra.sessionId)
-          : (await server.server.listRoots()).roots
+          : (await server.server.listRoots()).roots;
         if (currentRoots && currentRoots.length === 0) {
           return {
             content: [
@@ -55,20 +55,24 @@ export const registerGetRootsListTool = (server: McpServer) => {
           };
         }
 
-        const rootsList = currentRoots ?  currentRoots
-          .map((root, index) => {
-            return `${index + 1}. ${root.name || "Unnamed Root"}\n   URI: ${
-              root.uri
-            }`;
-          })
-          .join("\n\n") : 'No roots found'
+        const rootsList = currentRoots
+          ? currentRoots
+              .map((root, index) => {
+                return `${index + 1}. ${root.name || "Unnamed Root"}\n   URI: ${
+                  root.uri
+                }`;
+              })
+              .join("\n\n")
+          : "No roots found";
 
         return {
           content: [
             {
               type: "text",
               text:
-                `Current MCP Roots (${currentRoots!.length} total):\n\n${rootsList}\n\n` +
+                `Current MCP Roots (${
+                  currentRoots!.length
+                } total):\n\n${rootsList}\n\n` +
                 "Note: This server demonstrates the roots protocol capability but doesn't actually access files. " +
                 "The roots are provided by the MCP client and can be used by servers that need file system access.",
             },
