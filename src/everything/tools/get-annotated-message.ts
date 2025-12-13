@@ -24,16 +24,16 @@ const config = {
 };
 
 /**
- * Registers the 'annotated-message' tool with the provided McpServer instance.
+ * Registers the 'get-annotated-message' tool with the provided McpServer instance.
  *
  * The registered tool generates and sends messages with specific types, such as error,
  * success, or debug, carrying associated annotations like priority level and intended
  * audience.
  *
- * Optionally, it can include an annotated image in the response.
+ * The response will have annotations and optionally contain an annotated image.
  *
  * @function
- * @param {McpServer} server - The MCP server instance where the Annotated Message Tool is to be registered.
+ * @param {McpServer} server - The MCP server instance where the tool is to be registered.
  */
 export const registerGetAnnotatedMessageTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {
