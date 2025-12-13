@@ -13,13 +13,11 @@ const config = {
 /**
  * Registers the 'trigger-elicitation-request' tool within the provided McpServer instance.
  *
- * The registered tool performs the following operations:
- *
- * This tool sends a detailed request for the user to provide information based
- * on a pre-defined schema of fields including text inputs, booleans, numbers,
- * email, dates, etc. It uses validation and handles multiple possible outcomes
- * from the user's response, such as acceptance with content, decline, or
- * cancellation of the dialog. The process also ensures parsing and validating
+ * The registered tool sends an elicitation request for the user to provide information
+ * based on a pre-defined schema of fields including text inputs, booleans, numbers,
+ * email, dates, enums of various types, etc. It uses validation and handles multiple
+ * possible outcomes from the user's response, such as acceptance with content, decline,
+ * or cancellation of the dialog. The process also ensures parsing and validating
  * the elicitation input arguments at runtime.
  *
  * The tool resolves the elicitation dialog response into a structured result,
