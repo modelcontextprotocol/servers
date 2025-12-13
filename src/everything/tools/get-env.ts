@@ -16,7 +16,7 @@ const config = {
  * The registered tool Retrieves and returns the environment variables
  * of the current process as a JSON-formatted string encapsulated in a text response.
  *
- * @param {McpServer} server - The MCP server instance where the Echo Tool is to be registered.
+ * @param {McpServer} server - The MCP server instance where the tool is to be registered.
  * @returns {void}
  */
 export const registerGetEnvTool = (server: McpServer) => {
