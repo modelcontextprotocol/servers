@@ -21,7 +21,7 @@ const config = {
  * The registered tool validates input arguments using the EchoSchema and
  * returns a response that echoes the message provided in the arguments.
  *
- * @param {McpServer} server - The server instance where the Echo Tool will be registered.
+ * @param {McpServer} server - The server instance where the tool will be registered.
  * @returns {void}
  */
 export const registerEchoTool = (server: McpServer) => {
