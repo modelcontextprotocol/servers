@@ -50,6 +50,21 @@ const config = {
   inputSchema: GZipFileAsResourceSchema,
 };
 
+/**
+ * Registers the `gzip-file-as-resource` tool with the provided MCP server.
+ *
+ * The registered tool compresses input data using gzip, and makes the resulting file accessible
+ * as a resource for the duration of the session.
+ *
+ * The tool supports two output types:
+ * - "resource": Returns the resource directly, including its URI, MIME type, and base64-encoded content.
+ * - "resourceLink": Returns a link to access the resource later.
+ *
+ * If an unrecognized `outputType` is provided, the tool throws an error.
+ *
+ * @param {McpServer} server - The server instance where the tool will be registered.
+ * @throws {Error} Throws an error if an unknown output type is specified.
+ */
 export const registerGZipFileAsResourceTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {
     const {
