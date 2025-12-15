@@ -1,7 +1,5 @@
 # Everything Server – LLM Instructions
 
-**[Architecture](architecture.md) | [Project Structure](structure.md) | [Startup Process](startup.md) | [Server Features](features.md) | [Extension Points](extension.md) | [How It Works](how-it-works.md)**
-
 Audience: These instructions are written for an LLM or autonomous agent integrating with the Everything MCP Server.
 Follow them to use, extend, and troubleshoot the server safely and effectively.
 
