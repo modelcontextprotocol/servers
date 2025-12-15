@@ -25,7 +25,7 @@ const transports: Map<string, SSEServerTransport> = new Map<
 // Handle GET requests for new SSE streams
 app.get("/sse", async (req, res) => {
   let transport: SSEServerTransport;
-  const { server, clientConnected, cleanup } = createServer();
+  const { server, cleanup } = createServer();
 
   // Session Id should not exist for GET /sse requests
   if (req?.query?.sessionId) {
@@ -40,10 +40,9 @@ app.get("/sse", async (req, res) => {
     transport = new SSEServerTransport("/message", res);
     transports.set(transport.sessionId, transport);
 
-    // Connect server to transport and invoke clientConnected callback
+    // Connect server to transport
     await server.connect(transport);
     const sessionId = transport.sessionId;
-    clientConnected(sessionId);
     console.error("Client Connected: ", sessionId);
 
     // Handle close of connection

@@ -8,18 +8,16 @@ console.error("Starting default (STDIO) server...");
 /**
  * The main method
  * - Initializes the StdioServerTransport, sets up the server,
- * - Connects the transport to the server, invokes the `clientConnected` callback,
  * - Handles cleanup on process exit.
  *
  * @return {Promise<void>} A promise that resolves when the main function has executed and the process exits.
  */
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
-  const { server, clientConnected, cleanup } = createServer();
+  const { server, cleanup } = createServer();
 
-  // Connect transport to server and invoke clientConnected callback
+  // Connect transport to server
   await server.connect(transport);
-  clientConnected();
 
   // Cleanup on exit
   process.on("SIGINT", async () => {

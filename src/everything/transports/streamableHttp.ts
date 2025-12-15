@@ -38,7 +38,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
       // Reuse existing transport
       transport = transports.get(sessionId)!;
     } else if (!sessionId) {
-      const { server, clientConnected, cleanup } = createServer();
+      const { server, cleanup } = createServer();
 
       // New initialization request
       const eventStore = new InMemoryEventStore();
@@ -68,7 +68,6 @@ app.post("/mcp", async (req: Request, res: Response) => {
       // Connect the transport to the MCP server BEFORE handling the request
       // so responses can flow back through the same transport
       await server.connect(transport);
-      clientConnected(transport.sessionId);
       await transport.handleRequest(req, res);
       return;
     } else {

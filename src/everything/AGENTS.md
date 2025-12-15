@@ -48,5 +48,5 @@ The server factory is `src/everything/server/index.ts` and registers all feature
 - Export a `registerX(server)` function that registers new items with the MCP SDK in the same style as existing ones.
 - Wire your new module into the central index (e.g., update `tools/index.ts`, `resources/index.ts`, or `prompts/index.ts`).
 - Ensure schemas (for tools) are accurate JSON Schema and include helpful descriptions and examples.
-- If the feature is session‑aware, accept/pass `sessionId` where needed. See the `clientConnected(sessionId)` pattern in `server/index.ts` and usages in `logging.ts` and `subscriptions.ts`.
+  `server/index.ts` and usages in `logging.ts` and `subscriptions.ts`.
 - Keep the docs in `src/everything/docs/` up to date if you add or modify noteworthy features.

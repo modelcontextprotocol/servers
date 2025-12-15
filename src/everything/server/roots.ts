@@ -22,56 +22,65 @@ export const roots: Map<string | undefined, Root[]> = new Map<
  *
  * @throws {Error} In case of a failure to request the roots from the client, an error log message is sent.
  */
-export const syncRoots = (server: McpServer, sessionId?: string) => {
-  // Function to request the updated roots list from the client
-  const requestRoots = async () => {
-    try {
-      // Request the updated roots list from the client
-      const response = await server.server.listRoots();
-      if (response && "roots" in response) {
-        // Store the roots list for this client
-        roots.set(sessionId, response.roots);
+export const syncRoots = async (server: McpServer, sessionId?: string) => {
 
-        // Notify the client of roots received
+  const clientCapabilities = server.server.getClientCapabilities() || {};
+  const clientSupportsRoots: boolean = clientCapabilities.roots !== undefined;
+
+  // If roots have not been fetched for this client, fetch them
+  if (clientSupportsRoots && !roots.has(sessionId)) {
+    // Function to request the updated roots list from the client
+    const requestRoots = async () => {
+      try {
+        // Request the updated roots list from the client
+        const response = await server.server.listRoots();
+        if (response && "roots" in response) {
+          // Store the roots list for this client
+          roots.set(sessionId, response.roots);
+
+          // Notify the client of roots received
+          await server.sendLoggingMessage(
+            {
+              level: "info",
+              logger: "everything-server",
+              data: `Roots updated: ${response.roots.length} root(s) received from client`,
+            },
+            sessionId
+          );
+        } else {
+          await server.sendLoggingMessage(
+            {
+              level: "info",
+              logger: "everything-server",
+              data: "Client returned no roots set",
+            },
+            sessionId
+          );
+        }
+      } catch (error) {
         await server.sendLoggingMessage(
           {
-            level: "info",
+            level: "error",
             logger: "everything-server",
-            data: `Roots updated: ${response.roots.length} root(s) received from client`,
-          },
-          sessionId
-        );
-      } else {
-        await server.sendLoggingMessage(
-          {
-            level: "info",
-            logger: "everything-server",
-            data: "Client returned no roots set",
+            data: `Failed to request roots from client: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
           },
           sessionId
         );
       }
-    } catch (error) {
-      await server.sendLoggingMessage(
-        {
-          level: "error",
-          logger: "everything-server",
-          data: `Failed to request roots from client: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        },
-        sessionId
-      );
-    }
-  };
+    };
 
-  // Set the list changed notification handler
-  server.server.setNotificationHandler(
-    RootsListChangedNotificationSchema,
-    requestRoots
-  );
+    // Set the list changed notification handler
+    server.server.setNotificationHandler(
+      RootsListChangedNotificationSchema,
+      requestRoots
+    );
 
-  // Request initial roots list after a brief delay
-  // Allows initial POST request to complete on streamableHttp transports
-  setTimeout(() => requestRoots(), 350);
+    // Request initial roots list immediatelys
+    await requestRoots();
+
+    // Return the roots list for this client
+    return roots.get(sessionId);
+  }
 };

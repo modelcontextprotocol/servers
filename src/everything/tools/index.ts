@@ -25,14 +25,22 @@ export const registerTools = (server: McpServer) => {
   registerGetEnvTool(server);
   registerGetResourceLinksTool(server);
   registerGetResourceReferenceTool(server);
-  registerGetRootsListTool(server);
   registerGetStructuredContentTool(server);
   registerGetSumTool(server);
   registerGetTinyImageTool(server);
   registerGZipFileAsResourceTool(server);
   registerToggleSimulatedLoggingTool(server);
   registerToggleSubscriberUpdatesTool(server);
-  registerTriggerElicitationRequestTool(server);
   registerTriggerLongRunningOperationTool(server);
+};
+
+/**
+ * Register the tools that are conditional upon client capabilities.
+ * These must be registered conditionally, after initialization.
+ */
+export const registerConditionalTools = (server: McpServer) => {
+  console.log("Registering conditional tools...");
+  registerGetRootsListTool(server);
+  registerTriggerElicitationRequestTool(server);
   registerTriggerSamplingRequestTool(server);
 };

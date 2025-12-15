@@ -7,9 +7,19 @@
 | [Extension Points](extension.md)
 | How It Works**
 
-## Resource Subscriptions
+# Conditional Tool Registration
 
-Each client manages its own resource subscriptions and receives notifications only for the URIs it subscribed to, independent of other clients.
+### Module: `server/index.ts`
+
+- Some tools require client support for the capability they demonstrate. These are:
+  - `get-roots-list`
+  - `trigger-elicitation-request`
+  - `trigger-sampling-request`
+- Client capabilities aren't known until after initilization handshake is complete.
+- Most tools are registered immediately during the Server Factory execution, prior to client connection.
+- To defer registration of these commands until client capabilities are known, a `registerConditionalTools(server)` function is invoked from an `onintitialized` handler.
+
+## Resource Subscriptions
 
 ### Module: `resources/subscriptions.ts`
 

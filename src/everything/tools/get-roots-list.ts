@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { roots } from "../server/roots.js";
+import { roots, syncRoots } from "../server/roots.js";
 
 // Tool configuration
 const name = "get-roots-list";
@@ -29,9 +29,12 @@ const config = {
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerGetRootsListTool = (server: McpServer) => {
-  const clientSupportsRoots =
-    server.server.getClientCapabilities()?.roots?.listChanged;
-  if (!clientSupportsRoots) {
+  // Does client support roots?
+  const clientCapabilities = server.server.getClientCapabilities() || {};
+  const clientSupportsRoots: boolean = clientCapabilities.roots !== undefined;
+
+  // If so, register tool
+  if (clientSupportsRoots) {
     server.registerTool(
       name,
       config,
@@ -42,7 +45,7 @@ export const registerGetRootsListTool = (server: McpServer) => {
         // Fetch the current roots list from the client if need be
         const currentRoots = rootsCached
           ? roots.get(extra.sessionId)
-          : (await server.server.listRoots()).roots;
+          : await syncRoots(server, extra.sessionId);
 
         // If roots had to be fetched, store them in the cache
         if (currentRoots && !rootsCached)

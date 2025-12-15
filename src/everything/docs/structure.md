@@ -168,7 +168,6 @@ src/everything
 
 - `stdio.ts`
   - Starts a `StdioServerTransport`, created the server via `createServer()`, and connects it.
-  - Calls `clientConnected()` to inform the server of the connection.
   - Handles `SIGINT` to close cleanly and calls `cleanup()` to remove any live intervals.
 - `sse.ts`
   - Express server exposing:
@@ -176,10 +175,8 @@ src/everything
     - `POST /message` for client messages.
   - Manages multiple connected clients via a transport map.
   - Starts an `SSEServerTransport`, created the server via `createServer()`, and connects it to a new transport.
-  - Calls `clientConnected(sessionId)` to inform the server of the connection.
   - On server disconnect, calls `cleanup()` to remove any live intervals.
 - `streamableHttp.ts`
   - Express server exposing a single `/mcp` endpoint for POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `StreamableHTTPServerTransport`.
   - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`.
   - Connects a fresh server instance on initialization POST and reuses the transport for subsequent requests.
-  - Calls `clientConnected(sessionId)` to inform the server of the connection.
