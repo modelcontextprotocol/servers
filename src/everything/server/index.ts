@@ -44,12 +44,17 @@ export const createServer: () => ServerFactoryResponse = () => {
     },
     {
       capabilities: {
-        tools: {},
-        logging: {},
-        prompts: {},
+        tools: {
+          listChanged: true,
+        },
+        prompts: {
+          listChanged: true,
+        },
         resources: {
           subscribe: true,
+          listChanged: true,
         },
+        logging: {},
       },
       instructions,
     }
