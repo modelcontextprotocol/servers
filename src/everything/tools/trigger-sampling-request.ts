@@ -58,7 +58,6 @@ export const registerTriggerSamplingRequestTool = (server: McpServer) => {
           systemPrompt: "You are a helpful test server.",
           maxTokens,
           temperature: 0.7,
-          includeContext: "thisServer",
         },
       };
 
