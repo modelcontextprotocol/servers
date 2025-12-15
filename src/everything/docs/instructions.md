@@ -1,4 +1,4 @@
-# Everything Server – LLM Instructions
+# Everything Server – Server Instructions
 
 Audience: These instructions are written for an LLM or autonomous agent integrating with the Everything MCP Server.
 Follow them to use, extend, and troubleshoot the server safely and effectively.
