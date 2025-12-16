@@ -27,8 +27,8 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
   const clientCapabilities = server.server.getClientCapabilities() || {};
   const clientSupportsRoots: boolean = clientCapabilities.roots !== undefined;
 
-  // If roots have not been fetched for this client, fetch them
-  if (clientSupportsRoots && !roots.has(sessionId)) {
+  // Fetch the roots list for this client
+  if (clientSupportsRoots) {
     // Function to request the updated roots list from the client
     const requestRoots = async () => {
       try {
