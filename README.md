@@ -1094,6 +1094,8 @@ search, and comprehensive file analysis.
 - **[Minima](https://github.com/dmayboroda/minima)** - MCP server for RAG on local files
 - **[MLflow](https://github.com/kkruglik/mlflow-mcp)** - MLflow MCP server for ML experiment tracking with advanced querying, run comparison, artifact access, and model registry.
 - **[Mobile MCP](https://github.com/mobile-next/mobile-mcp)** (by Mobile Next) - MCP server for Mobile(iOS/Android) automation, app scraping and development using physical devices or simulators/emulators.
+- ### MockServer
+- [mockserver-mcp](https://github.com/Akkshay10/MCPClientMock) - MCP server for James Bloom's MockServer. Create mock HTTP expectations, verify requests, and manage mock state.
 - **[Modao Proto MCP](https://github.com/modao-dev/modao-proto-mcp)** - AI-powered HTML prototype generation server that converts natural language descriptions into complete HTML code with modern design and responsive layouts. Supports design description expansion and seamless integration with Modao workspace.
 - **[Monday.com (unofficial)](https://github.com/sakce/mcp-server-monday)** - MCP Server to interact with Monday.com boards and items.
 - **[MongoDB](https://github.com/kiliczsh/mcp-mongo-server)** - A Model Context Protocol Server for MongoDB.
