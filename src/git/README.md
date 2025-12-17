@@ -45,20 +45,29 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `message` (string): Commit message
    - Returns: Confirmation with new commit hash
 
-6. `git_add`
+6. `git_commit_signed`
+    - Records changes to the repository and signs the commit with GPG
+    - Inputs:
+      - `repo_path` (string): Path to Git repository
+      - `message` (string): Commit message
+      - `key_id` (string, optional): GPG key ID to use for signing. If omitted, the default signing key configured in Git will be used.
+    - Behavior: Uses the Git CLI `-S`/`--gpg-sign` flag to create a GPG-signed commit. This passes through to the system's `git` and `gpg` configuration, so GPG must be available and configured on the host.
+    - Returns: Confirmation with new commit hash. If signing fails (for example, no GPG key is configured), the underlying Git command will raise an error.
+
+7. `git_add`
    - Adds file contents to the staging area
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `files` (string[]): Array of file paths to stage
    - Returns: Confirmation of staged files
 
-7. `git_reset`
+8. `git_reset`
    - Unstages all staged changes
    - Input:
      - `repo_path` (string): Path to Git repository
    - Returns: Confirmation of reset operation
 
-8. `git_log`
+9. `git_log`
    - Shows the commit logs with optional date filtering
    - Inputs:
      - `repo_path` (string): Path to Git repository
@@ -67,34 +76,36 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `end_timestamp` (string, optional): End timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
    - Returns: Array of commit entries with hash, author, date, and message
 
-9. `git_create_branch`
+10. `git_create_branch`
    - Creates a new branch
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of the new branch
      - `base_branch` (string, optional): Base branch to create from (defaults to current branch)
    - Returns: Confirmation of branch creation
-10. `git_checkout`
+
+11. `git_checkout`
    - Switches branches
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of branch to checkout
    - Returns: Confirmation of branch switch
-11. `git_show`
+
+12. `git_show`
    - Shows the contents of a commit
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `revision` (string): The revision (commit hash, branch name, tag) to show
    - Returns: Contents of the specified commit
 
-12. `git_branch`
-   - List Git branches
-   - Inputs:
-     - `repo_path` (string): Path to the Git repository.
-     - `branch_type` (string): Whether to list local branches ('local'), remote branches ('remote') or all branches('all').
-     - `contains` (string, optional): The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified
-     - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
-   - Returns: List of branches
+13. `git_branch`
+    - List Git branches
+    - Inputs:
+      - `repo_path` (string): Path to the Git repository.
+      - `branch_type` (string): Whether to list local branches ('local'), remote branches ('remote') or all branches('all').
+      - `contains` (string, optional): The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified
+      - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
+    - Returns: List of branches
 
 ## Installation
 
