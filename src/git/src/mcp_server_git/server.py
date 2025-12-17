@@ -116,6 +116,11 @@ def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) 
     return repo.git.diff(f"--unified={context_lines}", "--cached")
 
 def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+    # Defense in depth: reject targets starting with '-' to prevent flag injection,
+    # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
+    if target.startswith("-"):
+        raise git.exc.BadName(f"Invalid target: '{target}' - cannot start with '-'")
+    repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
     return repo.git.diff(f"--unified={context_lines}", target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
@@ -179,6 +184,11 @@ def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None 
     return f"Created branch '{branch_name}' from '{base.name}'"
 
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
+    # Defense in depth: reject branch names starting with '-' to prevent flag injection,
+    # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
+    if branch_name.startswith("-"):
+        raise git.exc.BadName(f"Invalid branch name: '{branch_name}' - cannot start with '-'")
+    repo.rev_parse(branch_name)  # Validates branch_name is a real git ref, throws BadName if not
     repo.git.checkout(branch_name)
     return f"Switched to branch '{branch_name}'"
 
@@ -206,6 +216,27 @@ def git_show(repo: git.Repo, revision: str) -> str:
         else:
             output.append(d.diff)
     return "".join(output)
+
+def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None:
+    """Validate that repo_path is within the allowed repository path."""
+    if allowed_repository is None:
+        return  # No restriction configured
+
+    # Resolve both paths to handle symlinks and relative paths
+    try:
+        resolved_repo = repo_path.resolve()
+        resolved_allowed = allowed_repository.resolve()
+    except (OSError, RuntimeError):
+        raise ValueError(f"Invalid path: {repo_path}")
+
+    # Check if repo_path is the same as or a subdirectory of allowed_repository
+    try:
+        resolved_repo.relative_to(resolved_allowed)
+    except ValueError:
+        raise ValueError(
+            f"Repository path '{repo_path}' is outside the allowed repository '{allowed_repository}'"
+        )
+
 
 def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, not_contains: str | None = None) -> str:
     match contains:
@@ -348,6 +379,9 @@ async def serve(repository: Path | None) -> None:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         repo_path = Path(arguments["repo_path"])
+
+        # Validate repo_path is within allowed repository
+        validate_repo_path(repo_path, repository)
 
         # For all commands, we need an existing repo
         repo = git.Repo(repo_path)
