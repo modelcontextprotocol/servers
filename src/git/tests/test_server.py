@@ -13,7 +13,8 @@ from mcp_server_git.server import (
     git_reset,
     git_log,
     git_create_branch,
-    git_show
+    git_show,
+    validate_repo_path,
 )
 import shutil
 
@@ -250,6 +251,67 @@ def test_git_show_initial_commit(test_repository):
     assert "test.txt" in result
 
 
+# Tests for validate_repo_path (repository scoping security fix)
+
+def test_validate_repo_path_no_restriction():
+    """When no repository restriction is configured, any path should be allowed."""
+    validate_repo_path(Path("/any/path"), None)  # Should not raise
+
+
+def test_validate_repo_path_exact_match(tmp_path: Path):
+    """When repo_path exactly matches allowed_repository, validation should pass."""
+    allowed = tmp_path / "repo"
+    allowed.mkdir()
+    validate_repo_path(allowed, allowed)  # Should not raise
+
+
+def test_validate_repo_path_subdirectory(tmp_path: Path):
+    """When repo_path is a subdirectory of allowed_repository, validation should pass."""
+    allowed = tmp_path / "repo"
+    allowed.mkdir()
+    subdir = allowed / "subdir"
+    subdir.mkdir()
+    validate_repo_path(subdir, allowed)  # Should not raise
+
+
+def test_validate_repo_path_outside_allowed(tmp_path: Path):
+    """When repo_path is outside allowed_repository, validation should raise ValueError."""
+    allowed = tmp_path / "allowed_repo"
+    allowed.mkdir()
+    outside = tmp_path / "other_repo"
+    outside.mkdir()
+
+    with pytest.raises(ValueError) as exc_info:
+        validate_repo_path(outside, allowed)
+    assert "outside the allowed repository" in str(exc_info.value)
+
+
+def test_validate_repo_path_traversal_attempt(tmp_path: Path):
+    """Path traversal attempts (../) should be caught and rejected."""
+    allowed = tmp_path / "allowed_repo"
+    allowed.mkdir()
+    # Attempt to escape via ../
+    traversal_path = allowed / ".." / "other_repo"
+
+    with pytest.raises(ValueError) as exc_info:
+        validate_repo_path(traversal_path, allowed)
+    assert "outside the allowed repository" in str(exc_info.value)
+
+
+def test_validate_repo_path_symlink_escape(tmp_path: Path):
+    """Symlinks pointing outside allowed_repository should be rejected."""
+    allowed = tmp_path / "allowed_repo"
+    allowed.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    # Create a symlink inside allowed that points outside
+    symlink = allowed / "escape_link"
+    symlink.symlink_to(outside)
+
+    with pytest.raises(ValueError) as exc_info:
+        validate_repo_path(symlink, allowed)
+    assert "outside the allowed repository" in str(exc_info.value)
 # Tests for argument injection protection
 
 def test_git_diff_rejects_flag_injection(test_repository):

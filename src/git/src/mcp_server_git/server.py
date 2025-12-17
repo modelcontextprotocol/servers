@@ -217,6 +217,27 @@ def git_show(repo: git.Repo, revision: str) -> str:
             output.append(d.diff)
     return "".join(output)
 
+def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None:
+    """Validate that repo_path is within the allowed repository path."""
+    if allowed_repository is None:
+        return  # No restriction configured
+
+    # Resolve both paths to handle symlinks and relative paths
+    try:
+        resolved_repo = repo_path.resolve()
+        resolved_allowed = allowed_repository.resolve()
+    except (OSError, RuntimeError):
+        raise ValueError(f"Invalid path: {repo_path}")
+
+    # Check if repo_path is the same as or a subdirectory of allowed_repository
+    try:
+        resolved_repo.relative_to(resolved_allowed)
+    except ValueError:
+        raise ValueError(
+            f"Repository path '{repo_path}' is outside the allowed repository '{allowed_repository}'"
+        )
+
+
 def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, not_contains: str | None = None) -> str:
     match contains:
         case None:
@@ -358,6 +379,9 @@ async def serve(repository: Path | None) -> None:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         repo_path = Path(arguments["repo_path"])
+
+        # Validate repo_path is within allowed repository
+        validate_repo_path(repo_path, repository)
 
         # For all commands, we need an existing repo
         repo = git.Repo(repo_path)
