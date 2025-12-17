@@ -1,44 +1,47 @@
 {
-    "name": "@modelcontextprotocol/server-selenium",
-    "version": "1.0.0",
-    "description": "Selenium browser automation MCP server with 21+ tools",
-    "author": "Model Context Protocol Community",
-    "license": "MIT",
-    "type": "module",
-    "bin": {
-        "mcp-server-selenium": "./dist/index.js"
-    },
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "build": "tsc && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
-        "prepare": "npm run build",
-        "watch": "tsc --watch"
-    },
-    "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.25.0",
-        "selenium-webdriver": "^4.27.0"
-    },
-    "devDependencies": {
-        "@types/node": "^22.10.2",
-        "@types/selenium-webdriver": "^4.1.27",
-        "typescript": "^5.7.2"
-    },
-    "keywords": [
-        "mcp",
-        "model-context-protocol",
-        "selenium",
-        "browser-automation",
-        "web-automation",
-        "testing",
-        "scraping",
-        "screenshot"
-    ],
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/modelcontextprotocol/servers.git",
-        "directory": "src/selenium"
-    },
-    "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/selenium"
+  "name": "@modelcontextprotocol/server-selenium",
+  "version": "1.0.0",
+  "description": "Selenium browser automation MCP server with 21+ tools",
+  "author": "Model Context Protocol Community",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "mcp-server-selenium": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
+    "build:fast": "tsgo && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "watch:fast": "tsgo --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.0",
+    "selenium-webdriver": "^4.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/selenium-webdriver": "^4.1.27",
+    "@typescript/native-preview": "^7.0.0-dev.20251217.1",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "selenium",
+    "browser-automation",
+    "web-automation",
+    "testing",
+    "scraping",
+    "screenshot"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/modelcontextprotocol/servers.git",
+    "directory": "src/selenium"
+  },
+  "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/selenium"
 }
