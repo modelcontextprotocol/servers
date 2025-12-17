@@ -7,6 +7,7 @@ import { registerConditionalTools, registerTools } from "../tools/index.js";
 import { registerResources, readInstructions } from "../resources/index.js";
 import { registerPrompts } from "../prompts/index.js";
 import { stopSimulatedLogging } from "./logging.js";
+import { syncRoots } from "./roots.js";
 
 // Server Factory response
 export type ServerFactoryResponse = {
@@ -68,8 +69,18 @@ export const createServer: () => ServerFactoryResponse = () => {
   // Set resource subscription handlers
   setSubscriptionHandlers(server);
 
-  // Register conditional tools until client capabilities are known
-  server.server.oninitialized = () => registerConditionalTools(server);
+  // Perform post-initialization operations
+  server.server.oninitialized = async () => {
+    // Register conditional tools now that client capabilities are known.
+    // This finishes before the `notifications/initialized` handler finishes.
+    registerConditionalTools(server);
+
+    // Sync roots if the client supports them.
+    // This is delayed until after the `notifications/initialized` handler finishes,
+    // otherwise, the request gets lost.
+    const sessionId = server.server.transport?.sessionId;
+    setTimeout(() => syncRoots(server, sessionId), 350);
+  };
 
   // Return the ServerFactoryResponse
   return {

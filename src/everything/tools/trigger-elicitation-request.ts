@@ -131,9 +131,9 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
                     title: "Titled Single Select Enum",
                     description: "Choose your favorite hero",
                     oneOf: [
-                      {const: "hero-1", title: "Superman"},
-                      {const: "hero-2", title: "Green Lantern"},
-                      {const: "hero-3", title: "Wonder Woman"},
+                      { const: "hero-1", title: "Superman" },
+                      { const: "hero-2", title: "Green Lantern" },
+                      { const: "hero-3", title: "Wonder Woman" },
                     ],
                     default: "hero-1",
                   },
@@ -145,9 +145,9 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
                     maxItems: 3,
                     items: {
                       anyOf: [
-                        {const: "fish-1", title: "Tuna"},
-                        {const: "fish-2", title: "Salmon"},
-                        {const: "fish-3", title: "Trout"},
+                        { const: "fish-1", title: "Tuna" },
+                        { const: "fish-2", title: "Salmon" },
+                        { const: "fish-3", title: "Trout" },
                       ],
                     },
                     default: ["fish-1"],
@@ -166,7 +166,7 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
             },
           },
           ElicitResultSchema,
-          {timeout: 10 * 60 * 1000 /* 10 minutes */}
+          { timeout: 10 * 60 * 1000 /* 10 minutes */ }
         );
 
         // Handle different response actions
@@ -220,7 +220,7 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
           text: `\nRaw result: ${JSON.stringify(elicitationResult, null, 2)}`,
         });
 
-        return {content};
+        return { content };
       }
     );
   }

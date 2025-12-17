@@ -11,11 +11,17 @@ export const roots: Map<string | undefined, Root[]> = new Map<
 >();
 
 /**
- * Sync the root directories from the client by requesting and updating the roots list for
- * the specified session.
+ * Get the latest the client roots list for the session.
  *
- * Also sets up a notification handler to listen for changes in the roots list, ensuring that
- * updates are automatically fetched and handled in real-time.
+ * - Request and cache the roots list for the session if it has not been fetched before.
+ * - Return the cached roots list for the session if it exists.
+ *
+ * When requesting the roots list for a session, it also sets up a `roots/list_changed`
+ * notification handler. This ensures that updates are automatically fetched and handled
+ * in real-time.
+ *
+ * Therefore, calls to this function should only request roots from the client once per
+ * session, but the cache will always be up to date after that first call.
  *
  * @param {McpServer} server - An instance of the MCP server used to communicate with the client.
  * @param {string} [sessionId] - An optional session id used to associate the roots list with a specific client session.
@@ -23,7 +29,6 @@ export const roots: Map<string | undefined, Root[]> = new Map<
  * @throws {Error} In case of a failure to request the roots from the client, an error log message is sent.
  */
 export const syncRoots = async (server: McpServer, sessionId?: string) => {
-
   const clientCapabilities = server.server.getClientCapabilities() || {};
   const clientSupportsRoots: boolean = clientCapabilities.roots !== undefined;
 
@@ -71,14 +76,19 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
       }
     };
 
-    // Set the list changed notification handler
-    server.server.setNotificationHandler(
-      RootsListChangedNotificationSchema,
-      requestRoots
-    );
+    // If the roots have not been synced for this client,
+    // set notification handler and request initial roots
+    if (!roots.has(sessionId)) {
+      // Set the list changed notification handler
+      server.server.setNotificationHandler(
+        RootsListChangedNotificationSchema,
+        requestRoots
+      );
 
-    // Request initial roots list immediatelys
-    await requestRoots();
+      // Request the initial roots list immediately
+      await requestRoots();
+      console.log(roots.get(sessionId));
+    }
 
     // Return the roots list for this client
     return roots.get(sessionId);

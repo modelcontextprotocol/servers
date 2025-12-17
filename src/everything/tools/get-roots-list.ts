@@ -40,7 +40,7 @@ export const registerGetRootsListTool = (server: McpServer) => {
       config,
       async (args, extra): Promise<CallToolResult> => {
         // Get the current rootsFetch the current roots list from the client if need be
-        const currentRoots =  await syncRoots(server, extra.sessionId);
+        const currentRoots = await syncRoots(server, extra.sessionId);
 
         // Respond if client supports roots but doesn't have any configured
         if (

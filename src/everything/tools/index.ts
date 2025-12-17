@@ -39,7 +39,6 @@ export const registerTools = (server: McpServer) => {
  * These must be registered conditionally, after initialization.
  */
 export const registerConditionalTools = (server: McpServer) => {
-  console.log("Registering conditional tools...");
   registerGetRootsListTool(server);
   registerTriggerElicitationRequestTool(server);
   registerTriggerSamplingRequestTool(server);
