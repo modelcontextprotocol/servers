@@ -20,8 +20,8 @@ export const roots: Map<string | undefined, Root[]> = new Map<
  * notification handler. This ensures that updates are automatically fetched and handled
  * in real-time.
  *
- * Therefore, calls to this function should only request roots from the client once per
- * session, but the cache will always be up to date after that first call.
+ * This function is idempotent. It should only request roots from the client once per session,
+ * returning the cached version thereafter.
  *
  * @param {McpServer} server - An instance of the MCP server used to communicate with the client.
  * @param {string} [sessionId] - An optional session id used to associate the roots list with a specific client session.
