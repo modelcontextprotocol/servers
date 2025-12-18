@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-filesystem",
-  "version": "0.6.3",
+  "version": "2025.12.18",
   "description": "MCP server for filesystem access",
   "license": "MIT",
   "mcpName": "io.github.modelcontextprotocol/server-filesystem",
