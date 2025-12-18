@@ -69,6 +69,8 @@ jobs:
     if: ${{ needs.create-metadata.outputs.npm_packages != '[]' || needs.create-metadata.outputs.pypi_packages != '[]' }}
     runs-on: ubuntu-latest
     environment: release
+    permissions:
+      contents: write
     outputs:
       changes_made: ${{ steps.commit.outputs.changes_made }}
     steps:
