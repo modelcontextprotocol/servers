@@ -30,7 +30,7 @@
 ## Extending the Server
 
 The Everything Server is designed to be extended at well-defined points.
-See [Extension Points](docs/extension.md) and [Project Structure](docsstructure.md).
+See [Extension Points](docs/extension.md) and [Project Structure](docs/structure.md).
 The server factory is `src/everything/server/index.ts` and registers all features during startup as well as handling post-connection setup.
 
 ### High-level
