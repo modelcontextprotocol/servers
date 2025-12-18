@@ -1,6 +1,7 @@
 import pytest
 from pathlib import Path
 import git
+from git.exc import BadName
 from mcp_server_git.server import (
     git_checkout,
     git_branch,
@@ -40,7 +41,7 @@ def test_git_checkout_existing_branch(test_repository):
 
 def test_git_checkout_nonexistent_branch(test_repository):
 
-    with pytest.raises(git.exc.BadName):
+    with pytest.raises(BadName):
         git_checkout(test_repository, "nonexistent-branch")
 
 def test_git_branch_local(test_repository):
@@ -316,25 +317,25 @@ def test_validate_repo_path_symlink_escape(tmp_path: Path):
 
 def test_git_diff_rejects_flag_injection(test_repository):
     """git_diff should reject flags that could be used for argument injection."""
-    with pytest.raises(git.exc.BadName):
+    with pytest.raises(BadName):
         git_diff(test_repository, "--output=/tmp/evil")
 
-    with pytest.raises(git.exc.BadName):
+    with pytest.raises(BadName):
         git_diff(test_repository, "--help")
 
-    with pytest.raises(git.exc.BadName):
+    with pytest.raises(BadName):
         git_diff(test_repository, "-p")
 
 
 def test_git_checkout_rejects_flag_injection(test_repository):
     """git_checkout should reject flags that could be used for argument injection."""
-    with pytest.raises(git.exc.BadName):
+    with pytest.raises(BadName):
         git_checkout(test_repository, "--help")
 
-    with pytest.raises(git.exc.BadName):
+    with pytest.raises(BadName):
         git_checkout(test_repository, "--orphan=evil")
 
-    with pytest.raises(git.exc.BadName):
+    with pytest.raises(BadName):
         git_checkout(test_repository, "-f")
 
 
@@ -398,7 +399,7 @@ def test_git_diff_rejects_malicious_refs(test_repository):
     malicious_ref_path.write_text(sha)
 
     # Even though the ref exists, it should be rejected
-    with pytest.raises(git.exc.BadName):
+    with pytest.raises(BadName):
         git_diff(test_repository, "--output=evil.txt")
 
     # Verify no file was created (the attack was blocked)
@@ -417,7 +418,7 @@ def test_git_checkout_rejects_malicious_refs(test_repository):
     malicious_ref_path.write_text(sha)
 
     # Even though the ref exists, it should be rejected
-    with pytest.raises(git.exc.BadName):
+    with pytest.raises(BadName):
         git_checkout(test_repository, "--orphan=evil")
 
     # Cleanup

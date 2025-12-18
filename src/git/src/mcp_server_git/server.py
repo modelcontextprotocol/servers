@@ -13,6 +13,7 @@ from mcp.types import (
 )
 from enum import Enum
 import git
+from git.exc import BadName
 from pydantic import BaseModel, Field
 
 # Default number of context lines to show in diff output
@@ -119,7 +120,7 @@ def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_L
     # Defense in depth: reject targets starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if target.startswith("-"):
-        raise git.exc.BadName(f"Invalid target: '{target}' - cannot start with '-'")
+        raise BadName(f"Invalid target: '{target}' - cannot start with '-'")
     repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
     return repo.git.diff(f"--unified={context_lines}", target)
 
@@ -187,7 +188,7 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
     # Defense in depth: reject branch names starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if branch_name.startswith("-"):
-        raise git.exc.BadName(f"Invalid branch name: '{branch_name}' - cannot start with '-'")
+        raise BadName(f"Invalid branch name: '{branch_name}' - cannot start with '-'")
     repo.rev_parse(branch_name)  # Validates branch_name is a real git ref, throws BadName if not
     repo.git.checkout(branch_name)
     return f"Switched to branch '{branch_name}'"

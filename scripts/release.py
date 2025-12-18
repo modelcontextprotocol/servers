@@ -97,6 +97,9 @@ class PyPiPackage:
         with open(self.path / "pyproject.toml", "w") as f:
             f.write(tomlkit.dumps(data))
 
+        # Regenerate uv.lock to match the updated pyproject.toml
+        subprocess.run(["uv", "lock"], cwd=self.path, check=True)
+
 
 def has_changes(path: Path, git_hash: GitHash) -> bool:
     """Check if any files changed between current state and git hash"""
