@@ -47,7 +47,6 @@ export const registerGetStructuredContentTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {
     // Get simulated weather for the chosen city
     let weather;
-    console.log();
     switch (args.location) {
       case "New York":
         weather = {

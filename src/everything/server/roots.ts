@@ -87,7 +87,6 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
 
       // Request the initial roots list immediately
       await requestRoots();
-      console.log(roots.get(sessionId));
     }
 
     // Return the roots list for this client
