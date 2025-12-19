@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-everything",
-  "version": "0.6.2",
+  "version": "2.0.0",
   "description": "MCP server that exercises all the features of the MCP protocol",
   "license": "MIT",
   "mcpName": "io.github.modelcontextprotocol/server-everything",
@@ -19,15 +19,17 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && shx cp instructions.md dist/ && shx chmod +x dist/*.js",
+    "build": "tsc && shx cp -r docs dist/ && shx chmod +x dist/*.js",
     "prepare": "npm run build",
     "watch": "tsc --watch",
-    "start": "node dist/index.js",
-    "start:sse": "node dist/sse.js",
-    "start:streamableHttp": "node dist/streamableHttp.js"
+    "start:stdio": "node dist/index.js stdio",
+    "start:sse": "node dist/index.js sse",
+    "start:streamableHttp": "node dist/index.js streamableHttp",
+    "prettier:fix": "prettier --write .",
+    "prettier:check": "prettier --check ."
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.24.0",
+    "@modelcontextprotocol/sdk": "^1.24.3",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "jszip": "^3.10.1",
@@ -38,6 +40,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "shx": "^0.3.4",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "prettier": "^2.8.8"
   }
 }
