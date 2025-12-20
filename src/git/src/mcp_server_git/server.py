@@ -129,10 +129,11 @@ def git_commit(repo: git.Repo, message: str) -> str:
     return f"Changes committed successfully with hash {commit.hexsha}"
 
 def git_add(repo: git.Repo, files: list[str]) -> str:
-    if files == ["."]:
-        repo.git.add(".")
-    else:
-        repo.index.add(files)
+    # Always use git CLI to avoid GitPython index.add() bugs with:
+    # - "." (stages .git/ directory, adds ./ prefix to paths)
+    # - paths with "./" prefix (preserved incorrectly in index)
+    # See: https://github.com/gitpython-developers/GitPython/issues/375
+    repo.git.add(files)
     return "Files staged successfully"
 
 def git_reset(repo: git.Repo) -> str:
