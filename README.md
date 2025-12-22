@@ -1438,6 +1438,7 @@ search, and comprehensive file analysis.
 - **[Wren Engine](https://github.com/Canner/wren-engine)** - The Semantic Engine for Model Context Protocol(MCP) Clients and AI Agents
 - **[X (Twitter)](https://github.com/EnesCinr/twitter-mcp)** (by EnesCinr) - Interact with twitter API. Post tweets and search for tweets by query.
 - **[X (Twitter)](https://github.com/vidhupv/x-mcp)** (by vidhupv) - Create, manage and publish X/Twitter posts directly through Claude chat.
+- **[X (Twitter) & Web Search](https://github.com/Desearch-ai/mcp-desearch)** Decentralized X (Twitter) and Web Search with AI Search support for Model Context Protocol MCP clients and AI agents
 - **[Xcode](https://github.com/r-huijts/xcode-mcp-server)** - MCP server that brings AI to your Xcode projects, enabling intelligent code assistance, file operations, project management, and automated development tasks.
 - **[Xcode-mcp-server](https://github.com/drewster99/xcode-mcp-server)** (by drewster99) - Best Xcode integration - ClaudeCode and Cursor can build your project *with* Xcode and see the same errors you do. Fast easy setup.
 - **[xcodebuild](https://github.com/ShenghaiWang/xcodebuild)**  - 🍎 Build iOS Xcode workspace/project and feed back errors to llm.
