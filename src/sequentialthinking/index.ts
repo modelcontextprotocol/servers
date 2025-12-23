@@ -2,6 +2,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { SequentialThinkingServer } from './lib.js';
 
@@ -10,7 +11,19 @@ const server = new McpServer({
   version: "0.2.0",
 });
 
-const thinkingServer = new SequentialThinkingServer();
+const thinkingSessions = new Map<string, SequentialThinkingServer>();
+
+function getOrCreateThinkingServer(sessionId?: string): SequentialThinkingServer {
+  if (!sessionId) {
+    return new SequentialThinkingServer();
+  }
+  
+  if (!thinkingSessions.has(sessionId)) {
+    thinkingSessions.set(sessionId, new SequentialThinkingServer());
+  }
+  
+  return thinkingSessions.get(sessionId)!;
+}
 
 server.registerTool(
   "sequentialthinking",
@@ -90,13 +103,13 @@ You should:
     },
   },
   async (args) => {
+    const thinkingServer = getOrCreateThinkingServer();
     const result = thinkingServer.processThought(args);
 
     if (result.isError) {
-      return result;
+      return { content: result.content };
     }
 
-    // Parse the JSON response to get structured content
     const parsedContent = JSON.parse(result.content[0].text);
 
     return {
@@ -107,9 +120,115 @@ You should:
 );
 
 async function runServer() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Sequential Thinking MCP Server running on stdio");
+  if (process.env.MCP_TRANSPORT === 'http') {
+    const { createServer } = await import('http');
+    const transports: Record<string, StreamableHTTPServerTransport> = {};
+    const sessionTimeouts: Record<string, NodeJS.Timeout> = {};
+    const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+    const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB
+
+    function cleanupSession(sid: string) {
+      delete transports[sid];
+      thinkingSessions.delete(sid);
+      if (sessionTimeouts[sid]) {
+        clearTimeout(sessionTimeouts[sid]);
+        delete sessionTimeouts[sid];
+      }
+    }
+
+    function resetSessionTimeout(sid: string) {
+      if (sessionTimeouts[sid]) {
+        clearTimeout(sessionTimeouts[sid]);
+      }
+      sessionTimeouts[sid] = setTimeout(() => cleanupSession(sid), SESSION_TIMEOUT_MS);
+    }
+
+    const httpServer = createServer(async (req, res) => {
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+      if (req.method === 'POST') {
+        const chunks: Buffer[] = [];
+        let totalSize = 0;
+
+        req.on('data', chunk => {
+          totalSize += chunk.length;
+          if (totalSize > MAX_BODY_SIZE) {
+            req.destroy();
+            res.writeHead(413);
+            res.end('Request body too large');
+            return;
+          }
+          chunks.push(chunk);
+        });
+
+        req.on('end', async () => {
+          let parsedBody;
+          try {
+            const body = Buffer.concat(chunks).toString();
+            parsedBody = body.trim() ? JSON.parse(body) : undefined;
+          } catch (error) {
+            res.writeHead(400);
+            res.end('Invalid JSON');
+            return;
+          }
+
+          let transport: StreamableHTTPServerTransport;
+          if (sessionId && transports[sessionId]) {
+            transport = transports[sessionId];
+            resetSessionTimeout(sessionId);
+          } else if (!sessionId) {
+            transport = new StreamableHTTPServerTransport({
+              sessionIdGenerator: () => crypto.randomUUID(),
+              onsessioninitialized: async (sid) => {
+                await server.connect(transport);
+                transports[sid] = transport;
+                resetSessionTimeout(sid);
+                console.error('Session initialized:', sid);
+              },
+              onsessionclosed: (sid) => {
+                cleanupSession(sid);
+                console.error('Session closed:', sid);
+              }
+            });
+          } else {
+            res.writeHead(400);
+            res.end('Invalid session ID');
+            return;
+          }
+
+          await transport.handleRequest(req, res, parsedBody);
+        });
+      } else if (req.method === 'GET') {
+        if (!sessionId || !transports[sessionId]) {
+          res.writeHead(400);
+          res.end('Invalid or missing session ID');
+          return;
+        }
+        resetSessionTimeout(sessionId);
+        await transports[sessionId].handleRequest(req, res);
+      } else if (req.method === 'DELETE') {
+        if (!sessionId || !transports[sessionId]) {
+          res.writeHead(400);
+          res.end('Invalid or missing session ID');
+          return;
+        }
+        await transports[sessionId].handleRequest(req, res);
+        cleanupSession(sessionId);
+      } else {
+        res.writeHead(405);
+        res.end('Method not allowed');
+      }
+    });
+
+    const port = parseInt(process.env.PORT || '3000');
+    httpServer.listen(port, () => {
+      console.error(`Sequential Thinking MCP Server running on HTTP port ${port}`);
+    });
+  } else {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Sequential Thinking MCP Server running on stdio");
+  }
 }
 
 runServer().catch((error) => {
