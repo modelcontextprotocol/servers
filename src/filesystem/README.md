@@ -5,6 +5,8 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 ## Features
 
 - Read/write files
+- Append to existing files
+- Create files or append to existing ones
 - Create/list/delete directories
 - Move files/directories
 - Search files
@@ -91,6 +93,23 @@ The server's directory access control follows this flow:
   - Inputs:
     - `path` (string): File location
     - `content` (string): File content
+
+- **append_file**
+  - Append content to the end of an existing file
+  - Inputs:
+    - `path` (string): File location (must exist)
+    - `content` (string): Content to append
+  - File must already exist - use `write_file` to create new files
+  - Preserves existing content, adds new content at the end
+
+- **write_or_update_file**
+  - Create new file or append to existing file
+  - Inputs:
+    - `path` (string): File location
+    - `content` (string): Content to write or append
+  - If file doesn't exist: creates it with the provided content
+  - If file exists: appends new content to the end
+  - Useful when you want to add content while preserving existing data
 
 - **edit_file**
   - Make selective edits using advanced pattern matching and formatting
@@ -199,6 +218,8 @@ The mapping for filesystem tools is:
 | `list_allowed_directories`  | `true`       | –              | –               | Pure read                                       |
 | `create_directory`          | `false`      | `true`         | `false`         | Re‑creating the same dir is a no‑op             |
 | `write_file`                | `false`      | `true`         | `true`          | Overwrites existing files                       |
+| `append_file`               | `false`      | `false`        | `false`         | Appends to existing files; not idempotent       |
+| `write_or_update_file`      | `false`      | `false`        | `false`         | Creates or appends; behavior depends on state   |
 | `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply      |
 | `move_file`                 | `false`      | `false`        | `false`         | Move/rename only; repeat usually errors         |
 
