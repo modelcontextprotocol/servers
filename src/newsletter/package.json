@@ -1,0 +1,40 @@
+{
+  "name": "@modelcontextprotocol/server-newsletter",
+  "version": "0.1.0",
+  "description": "MCP server for newsletter formatting, email templates, and previews",
+  "license": "MIT",
+  "mcpName": "io.github.modelcontextprotocol/server-newsletter",
+  "author": "Olivier Renoverre",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/modelcontextprotocol/servers.git"
+  },
+  "type": "module",
+  "bin": {
+    "mcp-server-newsletter": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.0",
+    "marked": "^15.0.0",
+    "mjml": "^4.15.3",
+    "highlight.js": "^11.10.0",
+    "sanitize-html": "^2.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/mjml": "^4.7.4",
+    "@types/sanitize-html": "^2.13.0",
+    "shx": "^0.3.4",
+    "typescript": "^5.8.2"
+  }
+}
