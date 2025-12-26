@@ -1074,6 +1074,7 @@ search, and comprehensive file analysis.
 - **[MeasureSpace MCP](https://github.com/MeasureSpace/measure-space-mcp-server)** - A free [Model Context Protocol (MCP) Server](https://smithery.ai/server/@MeasureSpace/measure-space-mcp-server) that provides global weather, climate, air quality forecast and geocoding services by [measurespace.io](https://measurespace.io).
 - **[MediaWiki](https://github.com/ProfessionalWiki/MediaWiki-MCP-Server)** - A Model Context Protocol (MCP) Server that interacts with any MediaWiki wiki
 - **[MediaWiki MCP adapter](https://github.com/lucamauri/MediaWiki-MCP-adapter)** - A custom Model Context Protocol adapter for MediaWiki and WikiBase APIs
+- **[mediawiki-mcp-server](https://github.com/olgasafonova/mediawiki-mcp-server)** - Full-featured MediaWiki integration with 33+ tools. Search, read, edit pages with find/replace, link analysis, revision history, and Markdown conversion. Supports stdio and HTTP transport.
 - **[medRxiv](https://github.com/JackKuo666/medRxiv-MCP-Server)** - Enable AI assistants to search and access medRxiv papers through a simple MCP interface.
 - **[mem0-mcp](https://github.com/mem0ai/mem0-mcp)** - A Model Context Protocol server for Mem0, which helps with managing coding preferences.
 - **[Membase](https://github.com/unibaseio/membase-mcp)** - Save and query your agent memory in distributed way by Membase.
@@ -1091,6 +1092,7 @@ search, and comprehensive file analysis.
 - **[Mifos X](https://github.com/openMF/mcp-mifosx)** - An MCP server for the Mifos X Open Source Banking useful for managing clients, loans, savings, shares, financial transactions and generating financial reports.
 - **[Mikrotik](https://github.com/jeff-nasseri/mikrotik-mcp)** - Mikrotik MCP server which cover networking operations (IP, DHCP, Firewall, etc)
 - **[Mindmap](https://github.com/YuChenSSR/mindmap-mcp-server)** (by YuChenSSR) - A server that generates mindmaps from input containing markdown code.
+- **[miro-mcp-server](https://github.com/olgasafonova/miro-mcp-server)** - Full-featured Miro whiteboard integration with 30+ tools. Create stickies, shapes, frames, connectors, mind maps, and diagrams from Mermaid syntax. Supports bulk operations, search, and board management.
 - **[Minima](https://github.com/dmayboroda/minima)** - MCP server for RAG on local files
 - **[MLflow](https://github.com/kkruglik/mlflow-mcp)** - MLflow MCP server for ML experiment tracking with advanced querying, run comparison, artifact access, and model registry.
 - **[Mobile MCP](https://github.com/mobile-next/mobile-mcp)** (by Mobile Next) - MCP server for Mobile(iOS/Android) automation, app scraping and development using physical devices or simulators/emulators.
