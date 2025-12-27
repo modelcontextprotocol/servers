@@ -109,6 +109,46 @@ def test_git_add_specific_files(test_repository):
     assert "file2.txt" not in staged_files
     assert result == "Files staged successfully"
 
+
+def test_git_add_with_dot_prefix(test_repository):
+    """Regression test for GitPython index.add() bug with ./ prefix paths.
+
+    GitPython's index.add() incorrectly preserves ./ prefixes in the index,
+    causing corrupted commits. This test ensures we handle such paths correctly.
+    See: https://github.com/gitpython-developers/GitPython/issues/375
+    """
+    file_path = Path(test_repository.working_dir) / "dotprefix.txt"
+    file_path.write_text("dot prefix content")
+
+    # Add file with ./ prefix - this would fail with index.add()
+    result = git_add(test_repository, ["./dotprefix.txt"])
+
+    staged_files = [item.a_path for item in test_repository.index.diff("HEAD")]
+    # The file should be staged without the ./ prefix
+    assert "dotprefix.txt" in staged_files
+    assert "./dotprefix.txt" not in staged_files
+    assert result == "Files staged successfully"
+
+
+def test_git_add_mixed_dot_and_files(test_repository):
+    """Test adding . mixed with specific files.
+
+    This is another edge case that would fail with the old implementation
+    which only handled the exact case of ["."].
+    """
+    file1 = Path(test_repository.working_dir) / "mixed1.txt"
+    file2 = Path(test_repository.working_dir) / "mixed2.txt"
+    file1.write_text("mixed 1 content")
+    file2.write_text("mixed 2 content")
+
+    # This would have used index.add() in the old implementation
+    result = git_add(test_repository, [".", "mixed1.txt"])
+
+    staged_files = [item.a_path for item in test_repository.index.diff("HEAD")]
+    assert "mixed1.txt" in staged_files
+    assert "mixed2.txt" in staged_files  # Should also be staged via "."
+    assert result == "Files staged successfully"
+
 def test_git_status(test_repository):
     result = git_status(test_repository)
 
