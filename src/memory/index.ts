@@ -224,17 +224,19 @@ export class KnowledgeGraphManager {
 let knowledgeGraphManager: KnowledgeGraphManager;
 
 // Zod schemas for entities and relations
+// Using passthrough() to allow additional properties that may exist in stored data
+// This prevents schema validation errors when reading entities with extra fields
 const EntitySchema = z.object({
   name: z.string().describe("The name of the entity"),
   entityType: z.string().describe("The type of the entity"),
   observations: z.array(z.string()).describe("An array of observation contents associated with the entity")
-});
+}).passthrough();
 
 const RelationSchema = z.object({
   from: z.string().describe("The name of the entity where the relation starts"),
   to: z.string().describe("The name of the entity where the relation ends"),
   relationType: z.string().describe("The type of the relation")
-});
+}).passthrough();
 
 // The server instance and tools exposed to Claude
 const server = new McpServer({
