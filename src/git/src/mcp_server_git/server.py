@@ -132,6 +132,14 @@ def git_add(repo: git.Repo, files: list[str]) -> str:
     if files == ["."]:
         repo.git.add(".")
     else:
+        # Validate paths are within repository before adding
+        for file in files:
+            try:
+                repo.git.check_attr('-a', file)
+            except git.exc.GitCommandError as e:
+                if 'outside repository' in str(e):
+                    raise ValueError(f"Path '{file}' is outside repository")
+                raise
         repo.index.add(files)
     return "Files staged successfully"
 
