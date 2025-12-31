@@ -1219,6 +1219,7 @@ search, and comprehensive file analysis.
 - **[Prefect](https://github.com/allen-munsch/mcp-prefect)** - MCP Server for workflow orchestration and ELT/ETL with Prefect Server, and Prefect Cloud [https://www.prefect.io/] using the `prefect` python client.
 - **[Producer Pal](https://github.com/adamjmurray/producer-pal)** - MCP server for controlling Ableton Live, embedded in a Max for Live device for easy drag and drop installation.
 - **[Productboard](https://github.com/kenjihikmatullah/productboard-mcp)** - Integrate the Productboard API into agentic workflows via MCP.
+- **[ProductPlan](https://github.com/olgasafonova/productplan-mcp-server)** - MCP server for ProductPlan - enables AI assistants to interact with roadmaps, OKRs, and discovery features.
 - **[Prometheus](https://github.com/pab1it0/prometheus-mcp-server)** - Query and analyze Prometheus - open-source monitoring system.
 - **[Prometheus (Golang)](https://github.com/tjhop/prometheus-mcp-server/)** - A Prometheus MCP server with full API support for comprehensive management and deep interaction with Prometheus beyond basic query support. Written in go, it is a single binary install that is capable of STDIO, SSE, and HTTP transports for complex deployments. 
 - **[Prometheus (TypeScript)](https://github.com/yanmxa/prometheus-mcp-server)** - Enable AI assistants to query Prometheus using natural language with TypeScript implementation.
