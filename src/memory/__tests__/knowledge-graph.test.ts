@@ -360,6 +360,40 @@ describe('KnowledgeGraphManager', () => {
     });
   });
 
+  describe('loading entities with extra properties', () => {
+    it('should strip extra properties from entities when loading (issue #3144)', async () => {
+      // Write JSONL file directly with extra properties (simulating manual edits or legacy data)
+      const jsonlContent = [
+        JSON.stringify({ type: "entity", name: "Test", entityType: "test", observations: ["obs1"], custom_id: "xyz-123", extra_field: true }),
+        JSON.stringify({ type: "relation", from: "Test", to: "Test", relationType: "self", extra_prop: "should be stripped" })
+      ].join('\n');
+      await fs.writeFile(testFilePath, jsonlContent);
+
+      const graph = await manager.readGraph();
+
+      // Entities should only have the schema-defined properties
+      expect(graph.entities).toHaveLength(1);
+      expect(graph.entities[0]).toEqual({
+        name: "Test",
+        entityType: "test",
+        observations: ["obs1"]
+      });
+      expect(graph.entities[0]).not.toHaveProperty('type');
+      expect(graph.entities[0]).not.toHaveProperty('custom_id');
+      expect(graph.entities[0]).not.toHaveProperty('extra_field');
+
+      // Relations should only have the schema-defined properties
+      expect(graph.relations).toHaveLength(1);
+      expect(graph.relations[0]).toEqual({
+        from: "Test",
+        to: "Test",
+        relationType: "self"
+      });
+      expect(graph.relations[0]).not.toHaveProperty('type');
+      expect(graph.relations[0]).not.toHaveProperty('extra_prop');
+    });
+  });
+
   describe('file persistence', () => {
     it('should persist data across manager instances', async () => {
       await manager.createEntities([
