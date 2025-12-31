@@ -518,7 +518,12 @@ server.registerTool(
       path: z.string(),
       excludePatterns: z.array(z.string()).optional().default([])
     },
-    outputSchema: { content: z.string() },
+    outputSchema: {
+      content: z.array(z.object({
+        type: z.literal("text"),
+        text: z.string()
+      }))
+    },
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof DirectoryTreeArgsSchema>) => {
@@ -588,7 +593,12 @@ server.registerTool(
       source: z.string(),
       destination: z.string()
     },
-    outputSchema: { content: z.string() },
+    outputSchema: {
+      content: z.array(z.object({
+        type: z.literal("text"),
+        text: z.string()
+      }))
+    },
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false }
   },
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
