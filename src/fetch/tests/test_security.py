@@ -381,26 +381,28 @@ class TestPayloadLimits:
     def test_max_length_parameter_validation(self):
         """max_length parameter should have upper bounds."""
         from mcp_server_fetch.server import Fetch
-        from pydantic import ValidationError
+        from pydantic import AnyUrl, ValidationError
+
+        test_url = AnyUrl("https://example.com")
 
         # Valid max_length
-        fetch = Fetch(url="https://example.com", max_length=5000)
+        fetch = Fetch(url=test_url, max_length=5000, start_index=0, raw=False)
         assert fetch.max_length == 5000
 
         # max_length at upper bound (lt=1000000 means < 1,000,000)
-        fetch = Fetch(url="https://example.com", max_length=999999)
+        fetch = Fetch(url=test_url, max_length=999999, start_index=0, raw=False)
         assert fetch.max_length == 999999
 
         # max_length exceeding upper bound should fail
         with pytest.raises(ValidationError):
-            Fetch(url="https://example.com", max_length=1_000_001)
+            Fetch(url=test_url, max_length=1_000_001, start_index=0, raw=False)
 
         # max_length must be positive (gt=0)
         with pytest.raises(ValidationError):
-            Fetch(url="https://example.com", max_length=0)
+            Fetch(url=test_url, max_length=0, start_index=0, raw=False)
 
         with pytest.raises(ValidationError):
-            Fetch(url="https://example.com", max_length=-1)
+            Fetch(url=test_url, max_length=-1, start_index=0, raw=False)
 
 
 # =============================================================================
