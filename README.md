@@ -857,6 +857,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[GitHub Repos Manager MCP Server](https://github.com/kurdin/github-repos-manager-mcp)** - Token-based GitHub automation management. No Docker, Flexible configuration, 80+ tools with direct API integration.
 - **[GitMCP](https://github.com/idosal/git-mcp)** - gitmcp.io is a generic remote MCP server to connect to ANY GitHub repository or project documentation effortlessly
 - **[Glean](https://github.com/longyi1207/glean-mcp-server)** - A server that uses Glean API to search and chat.
+- **[gleif-mcp-server](https://github.com/olgasafonova/gleif-mcp-server)** - Access the GLEIF LEI database for legal entity lookups, KYC verification, and corporate ownership research. 15+ tools including LEI validation, BIC/SWIFT and ISIN lookups, and relationship mapping.
 - **[Gmail](https://github.com/GongRzhe/Gmail-MCP-Server)** - A Model Context Protocol (MCP) server for Gmail integration in Claude Desktop with auto authentication support.
 - **[Gmail](https://github.com/Ayush-k-Shukla/gmail-mcp-server)** - A Simple MCP server for Gmail with support for all basic operations with oauth2.0.
 - **[Gmail Headless](https://github.com/baryhuang/mcp-headless-gmail)** - Remote hostable MCP server that can get and send Gmail messages without local credential or file system setup.
