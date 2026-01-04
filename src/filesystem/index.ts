@@ -9,6 +9,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
+import { randomBytes } from "crypto";
 import path from "path";
 import { z } from "zod";
 import { minimatch } from "minimatch";
@@ -128,6 +129,11 @@ const DirectoryTreeArgsSchema = z.object({
 const MoveFileArgsSchema = z.object({
   source: z.string(),
   destination: z.string(),
+});
+
+const CopyFileArgsSchema = z.object({
+  source: z.string().describe("Source path of the file or directory to copy"),
+  destination: z.string().describe("Destination path for the copy"),
 });
 
 const SearchFilesArgsSchema = z.object({
@@ -596,6 +602,90 @@ server.registerTool(
     const validDestPath = await validatePath(args.destination);
     await fs.rename(validSourcePath, validDestPath);
     const text = `Successfully moved ${args.source} to ${args.destination}`;
+    const contentBlock = { type: "text" as const, text };
+    return {
+      content: [contentBlock],
+      structuredContent: { content: text }
+    };
+  }
+);
+
+server.registerTool(
+  "copy_file",
+  {
+    title: "Copy File",
+    description:
+      "Copy a file or directory to a new location. " +
+      "Both source and destination must be within allowed directories. " +
+      "Fails if the destination already exists. " +
+      "For directories, copies recursively while preserving structure and timestamps.",
+    inputSchema: {
+      source: z.string().describe("Source path of the file or directory to copy"),
+      destination: z.string().describe("Destination path for the copy")
+    },
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false }
+  },
+  async (args: z.infer<typeof CopyFileArgsSchema>) => {
+    const validSourcePath = await validatePath(args.source);
+    const validDestPath = await validatePath(args.destination);
+
+    // Check if source exists and get its stats
+    let sourceStats;
+    try {
+      sourceStats = await fs.stat(validSourcePath);
+    } catch (error) {
+      throw new Error(`Source does not exist: ${args.source}`);
+    }
+
+    // Generate a temporary path for atomic operation
+    const tempPath = `${validDestPath}.${randomBytes(16).toString("hex")}.tmp`;
+
+    try {
+      if (sourceStats.isDirectory()) {
+        await fs.cp(validSourcePath, tempPath, {
+          recursive: true,
+          dereference: false,
+          preserveTimestamps: true,
+        });
+      } else {
+        await fs.copyFile(validSourcePath, tempPath);
+      }
+
+      // Atomic rename
+      await fs.rename(tempPath, validDestPath);
+
+    } catch (error) {
+      // Cleanup
+      try {
+        const tempStats = await fs.stat(tempPath).catch(() => null);
+        if (tempStats) {
+          if (tempStats.isDirectory()) {
+            await fs.rm(tempPath, { recursive: true, force: true });
+          } else {
+            await fs.unlink(tempPath);
+          }
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+
+      // Handle error cases
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code === "EEXIST") {
+        throw new Error(`Destination already exists: ${args.destination}`);
+      }
+      if (nodeError.code === "ENOENT") {
+        throw new Error(`Source does not exist: ${args.source}`);
+      }
+      if (nodeError.code === "EACCES") {
+        throw new Error(`Permission denied: ${args.source} or ${args.destination}`);
+      }
+      
+      throw error;
+    }
+
+    const text = `Successfully copied ${args.source} to ${args.destination}`;
     const contentBlock = { type: "text" as const, text };
     return {
       content: [contentBlock],
