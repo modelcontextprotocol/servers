@@ -193,8 +193,90 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  publish-registry-npm:
+    needs: [update-packages, create-metadata, publish-npm]
+    if: ${{ needs.publish-npm.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.create-metadata.outputs.npm_packages) }}
+    name: Registry ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write  # Required for GitHub OIDC
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-metadata.outputs.version }}
+
+      - name: Check for server.json
+        id: check
+        run: |
+          if [ -f "src/${{ matrix.package }}/server.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install mcp-publisher
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        if: steps.check.outputs.exists == 'true'
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        if: steps.check.outputs.exists == 'true'
+        working-directory: src/${{ matrix.package }}
+        run: ../../mcp-publisher publish
+
+  publish-registry-pypi:
+    needs: [update-packages, create-metadata, publish-pypi]
+    if: ${{ needs.publish-pypi.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.create-metadata.outputs.pypi_packages) }}
+    name: Registry ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write  # Required for GitHub OIDC
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-metadata.outputs.version }}
+
+      - name: Check for server.json
+        id: check
+        run: |
+          if [ -f "src/${{ matrix.package }}/server.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install mcp-publisher
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        if: steps.check.outputs.exists == 'true'
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        if: steps.check.outputs.exists == 'true'
+        working-directory: src/${{ matrix.package }}
+        run: ../../mcp-publisher publish
+
   create-release:
-    needs: [update-packages, create-metadata, publish-pypi, publish-npm]
+    needs: [update-packages, create-metadata, publish-pypi, publish-npm, publish-registry-npm, publish-registry-pypi]
     if: |
       always() &&
       needs.update-packages.outputs.changes_made == 'true' &&
