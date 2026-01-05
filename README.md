@@ -1236,6 +1236,7 @@ search, and comprehensive file analysis.
 - **[QuantConnect](https://github.com/taylorwilsdon/quantconnect-mcp)** - QuantConnect Algorithmic Trading Platform Orchestration MCP - Agentic LLM Driven Trading Strategy Design, Research & Implementation.
 - **[Quarkus](https://github.com/quarkiverse/quarkus-mcp-servers)** - MCP servers for the Quarkus Java framework.
 - **[QuickChart](https://github.com/GongRzhe/Quickchart-MCP-Server)** - A Model Context Protocol server for generating charts using QuickChart.io
+- **[Querio](https://querio.ai)** - Allows access to Querio to turn prompts data insights and analysis using previously stored contedt in Querio.
 - **[Qwen_Max](https://github.com/66julienmartin/MCP-server-Qwen_Max)** - A Model Context Protocol (MCP) server implementation for the Qwen models.
 - **[RabbitMQ](https://github.com/kenliao94/mcp-server-rabbitmq)** - The MCP server that interacts with RabbitMQ to publish and consume messages.
 - **[RAE](https://github.com/rae-api-com/rae-mcp)** - MPC Server to connect your preferred model with rae-api.com, Roya Academy of Spanish Dictionary
