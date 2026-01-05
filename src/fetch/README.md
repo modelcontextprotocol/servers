@@ -170,6 +170,45 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
 
+### Customization - Private Network Access
+
+By default, the server blocks requests to private IP ranges (10.x.x.x, 192.168.x.x, 127.x.x.x, etc.) to prevent SSRF attacks. If you need to access internal services, you can configure this behavior:
+
+**Allow all private IPs (use with caution):**
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "env": {
+        "MCP_FETCH_ALLOW_PRIVATE_IPS": "true"
+      }
+    }
+  }
+}
+```
+
+**Whitelist specific internal hosts:**
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "env": {
+        "MCP_FETCH_ALLOWED_PRIVATE_HOSTS": "internal.company.com,api.local"
+      }
+    }
+  }
+}
+```
+
+> [!WARNING]
+> Allowing private network access can expose internal services. Only enable this in trusted environments.
+
 ## Windows Configuration
 
 If you're experiencing timeout issues on Windows, you may need to set the `PYTHONIOENCODING` environment variable to ensure proper character encoding:
