@@ -132,7 +132,8 @@ def git_add(repo: git.Repo, files: list[str]) -> str:
     if files == ["."]:
         repo.git.add(".")
     else:
-        repo.index.add(files)
+        # Use '--' to prevent files starting with '-' from being interpreted as options
+        repo.git.add("--", *files)
     return "Files staged successfully"
 
 def git_reset(repo: git.Repo) -> str:
