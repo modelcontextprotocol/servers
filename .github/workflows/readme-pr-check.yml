@@ -43,15 +43,17 @@ jobs:
               owner,
               repo,
               issue_number: prNumber,
-              body: `Thanks for your contribution!
-
-**We are no longer accepting PRs to add new servers to the README.** The server lists are deprecated and will eventually be removed entirely, replaced by the registry.
-
-👉 **To add a new MCP server:** Please publish it to the [MCP Server Registry](https://github.com/modelcontextprotocol/registry) instead. You can browse published servers at [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io/).
-
-👉 **If this PR updates or removes an existing entry:** We do still accept these changes. Please reply with \`/i-promise-this-is-not-a-new-server\` to continue.
-
-If this PR is adding a new server, please close it and submit to the registry instead.`
+              body: [
+                'Thanks for your contribution!',
+                '',
+                '**We are no longer accepting PRs to add new servers to the README.** The server lists are deprecated and will eventually be removed entirely, replaced by the registry.',
+                '',
+                '👉 **To add a new MCP server:** Please publish it to the [MCP Server Registry](https://github.com/modelcontextprotocol/registry) instead. You can browse published servers at [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io/).',
+                '',
+                '👉 **If this PR updates or removes an existing entry:** We do still accept these changes. Please reply with `/i-promise-this-is-not-a-new-server` to continue.',
+                '',
+                'If this PR is adding a new server, please close it and submit to the registry instead.',
+              ].join('\n'),
             });
 
   handle-confirmation:
