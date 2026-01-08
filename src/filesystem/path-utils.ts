@@ -55,7 +55,7 @@ export function normalizePath(p: string): string {
   if (isUnixPath) {
     // For Unix paths, just normalize without converting to Windows format
     // Replace double slashes with single slashes and remove trailing slashes
-    return p.replace(/\/+/g, '/').replace(/\/+$/, '');
+    return p.replace(/\/+/g, '/').replace(/(?<!^)\/$/, '');
   }
 
   // Convert Unix-style Windows paths (/c/, /d/) to Windows format if on Windows

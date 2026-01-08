@@ -70,6 +70,12 @@ describe('Path Utilities', () => {
         .toBe('/home/user/some path');
       expect(normalizePath('"/usr/local/some app/"'))
         .toBe('/usr/local/some app');
+      expect(normalizePath('/usr/local//bin/app///'))
+        .toBe('/usr/local/bin/app');
+      expect(normalizePath('/'))
+        .toBe('/');
+      expect(normalizePath('///'))
+        .toBe('/');
     });
 
     it('removes surrounding quotes', () => {
