@@ -16,6 +16,7 @@ The fetch tool will truncate the response, but by using the `start_index` argume
     - `max_length` (integer, optional): Maximum number of characters to return (default: 5000)
     - `start_index` (integer, optional): Start content from this character index (default: 0)
     - `raw` (boolean, optional): Get raw content without markdown conversion (default: false)
+    - `distill` (boolean, optional): Aggressively clean HTML to minimize token usage. Removes scripts, styles, navigation, headers, footers, ads, and other non-essential content. Reduces token count by 60-85%. Recommended for cost optimization when only core content is needed (default: false)
 
 ### Prompts
 
