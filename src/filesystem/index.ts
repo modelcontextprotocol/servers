@@ -56,19 +56,43 @@ let allowedDirectories = await Promise.all(
   })
 );
 
-// Validate that all directories exist and are accessible
+// Validate directories and filter out unavailable ones (graceful handling)
+// Instead of crashing when a directory is unavailable, we skip it with a warning
+const unavailableDirectories: string[] = [];
+const validatedDirectories: string[] = [];
+
 await Promise.all(allowedDirectories.map(async (dir) => {
   try {
     const stats = await fs.stat(dir);
     if (!stats.isDirectory()) {
-      console.error(`Error: ${dir} is not a directory`);
-      process.exit(1);
+      console.error(`Warning: Skipping ${dir} - not a directory`);
+      unavailableDirectories.push(dir);
+    } else {
+      validatedDirectories.push(dir);
     }
   } catch (error) {
-    console.error(`Error accessing directory ${dir}:`, error);
-    process.exit(1);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`Warning: Skipping unavailable directory ${dir}: ${errorMessage}`);
+    unavailableDirectories.push(dir);
   }
 }));
+
+// Update allowedDirectories to only include validated ones
+allowedDirectories = validatedDirectories;
+
+// Log summary of directory validation
+if (unavailableDirectories.length > 0) {
+  console.error(`Skipped ${unavailableDirectories.length} unavailable director${unavailableDirectories.length === 1 ? 'y' : 'ies'}: ${unavailableDirectories.join(', ')}`);
+}
+
+if (validatedDirectories.length > 0) {
+  console.error(`Server starting with ${validatedDirectories.length} available director${validatedDirectories.length === 1 ? 'y' : 'ies'}: ${validatedDirectories.join(', ')}`);
+} else if (args.length > 0) {
+  // Only exit if directories were provided but none are available
+  // If no args were provided, the server might still get roots from the client
+  console.error("Error: None of the specified directories are available. Server cannot start.");
+  process.exit(1);
+}
 
 // Initialize the global allowedDirectories in lib.ts
 setAllowedDirectories(allowedDirectories);
