@@ -888,6 +888,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Graylog](https://github.com/Pranavj17/mcp-server-graylog)** - Search Graylog logs by absolute/relative timestamps, filter by streams, and debug production issues directly from Claude Desktop.
 - **[Grok-MCP](https://github.com/merterbak/Grok-MCP)** - MCP server for xAI’s API featuring the latest Grok models, image analysis & generation, and web search.
 - **[gx-mcp-server](https://github.com/davidf9999/gx-mcp-server)** - Expose Great Expectations data validation and quality checks as MCP tools for AI agents.
+- **[Guardrails AI (IBM watsonx)](https://github.com/PurpleSquirrelMedia/guardrails-mcp-server)** - IBM watsonx Guardrails AI for content moderation, risk detection, and safety checks through AI assistants.
 - **[HackMD](https://github.com/yuna0x0/hackmd-mcp)** (by yuna0x0) - An MCP server for HackMD, a collaborative markdown editor. It allows users to create, read, and update documents in HackMD using the Model Context Protocol.
 - **[HAProxy](https://github.com/tuannvm/haproxy-mcp-server)** - A Model Context Protocol (MCP) server for HAProxy implemented in Go, leveraging HAProxy Runtime API.
 - **[Hashing MCP Server](https://github.com/kanad13/MCP-Server-for-Hashing)** - MCP Server with cryptographic hashing functions e.g. SHA256, MD5, etc.
@@ -912,6 +913,8 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[iFlytek SparkAgent Platform](https://github.com/iflytek/ifly-spark-agent-mcp)** - This is a simple example of using MCP Server to invoke the task chain of the  iFlytek SparkAgent Platform.
 - **[iFlytek Workflow](https://github.com/iflytek/ifly-workflow-mcp-server)** - Connect to iFlytek Workflow via the MCP server and run your own Agent.
 - **[IIIF](https://github.com/code4history/IIIF_MCP)** - Comprehensive IIIF (International Image Interoperability Framework) protocol support for searching, navigating, and manipulating digital collections from museums, libraries, and archives worldwide.
+- **[IBM Cloud](https://github.com/PurpleSquirrelMedia/ibmcloud-mcp-server)** - IBM Cloud infrastructure management through MCP, supporting VPC, compute, storage, and Kubernetes operations with 80+ CLI tools.
+- **[IBM Z Mainframe](https://github.com/PurpleSquirrelMedia/ibmz-mcp-server)** - IBM Z mainframe operations enabling AI assistants to interact with z/OS systems, HSM, and manage mainframe workloads.
 - **[Image Generation](https://github.com/GongRzhe/Image-Generation-MCP-Server)** - This MCP server provides image generation capabilities using the Replicate Flux model.
 - **[ImageSorcery MCP](https://github.com/sunriseapps/imagesorcery-mcp)** - ComputerVision-based 🪄 sorcery of image recognition and editing tools for AI assistants.
 - **[IMAP MCP](https://github.com/dominik1001/imap-mcp)** - 📧 An IMAP Model Context Protocol (MCP) server to expose IMAP operations as tools for AI assistants.
@@ -1184,6 +1187,7 @@ search, and comprehensive file analysis.
 - **[Optimade MCP](https://github.com/dianfengxiaobo/optimade-mcp-server)** - An MCP server conducts real-time material science data queries with the Optimade database (for example, elemental composition, crystal structure).
 - **[Oracle](https://github.com/marcelo-ochoa/servers)** (by marcelo-ochoa) - Oracle Database integration in NodeJS with configurable access controls, query explain, stats and schema inspection
 - **[Oracle Cloud Infrastructure (OCI)](https://github.com/karthiksuku/oci-mcp)** (by karthiksukumar) - Python MCP server for OCI infrastructure (Compute, Autonomous Database, Object Storage). Read-heavy by default with safe instance actions (start/stop/reset). Includes Claude Desktop config and `.env` compartment scoping.
+- **[Oracle Cloud Infrastructure (OCI)](https://github.com/PurpleSquirrelMedia/oracle-mcp-server)** (by PurpleSquirrelMedia) - TypeScript MCP server for OCI with comprehensive compute, networking, storage, and database operations.
 - **[Oura MCP server](https://github.com/tomekkorbak/oura-mcp-server)** - MCP server for Oura API to retrieve one's sleep data
 - **[Oura Ring](https://github.com/rajvirtual/oura-mcp-server)** (by Rajesh Vijay) - MCP Server to access and analyze your Oura Ring data. It provides a structured way to fetch and understand your health metrics.
 - **[Outline](https://github.com/Vortiago/mcp-outline)** - MCP Server to interact with [Outline](https://www.getoutline.com) knowledge base to search, read, create, and manage documents and their content, access collections, add comments, and manage document backlinks.
@@ -1409,10 +1413,12 @@ search, and comprehensive file analysis.
 - **[Voice Status Report](https://github.com/tomekkorbak/voice-status-report-mcp-server)** - An MCP server that provides voice status updates using OpenAI's text-to-speech API, to be used with Cursor or Claude Code.
 - **[VoiceMode](https://github.com/mbailey/voicemode)** - Enable voice conversations with Claude using any OpenAI-compatible STT/TTS service [getvoicemode.com](https://getvoicemode.com/)
 - **[VolcEngine TOS](https://github.com/dinghuazhou/sample-mcp-server-tos)** - A sample MCP server for VolcEngine TOS that flexibly get objects from TOS.
+- **[Volcengine (ByteDance)](https://github.com/PurpleSquirrelMedia/volcengine-mcp)** - ByteDance Volcengine cloud platform integration enabling AI assistants to manage cloud resources on China's leading cloud provider.
 - **[Voyp](https://github.com/paulotaylor/voyp-mcp)** - VOYP MCP server for making calls using Artificial Intelligence.
 - **[vscode-ai-model-detector](https://github.com/thisis-romar/vscode-ai-model-detector)** - Real-time AI model detection for VS Code Copilot with 100% accuracy. Enables proper git attribution by identifying active models (Claude, GPT, Gemini) via Chat Participant API.
 - **[vulnicheck](https://github.com/andrasfe/vulnicheck)** - Real-time Python package vulnerability scanner that checks dependencies against OSV and NVD databases, providing comprehensive security analysis with CVE details, lock file support, and actionable upgrade recommendations.
 - **[Wanaku MCP Router](https://github.com/wanaku-ai/wanaku/)** - The Wanaku MCP Router is a SSE-based MCP server that provides an extensible routing engine that allows integrating your enterprise systems with AI agents.
+- **[watsonx.ai](https://github.com/PurpleSquirrelMedia/watsonx-mcp-server)** - IBM watsonx.ai integration for MCP, providing access to foundation models, prompt engineering, and AI workflows through AI assistants.
 - **[weather-mcp-server](https://github.com/devilcoder01/weather-mcp-server)** - Get real-time weather data for any location using weatherapi.
 - **[Web Search MCP](https://github.com/mrkrsl/web-search-mcp)** - A server that provides full web search, summaries and page extration for use with Local LLMs.
 - **[Webex](https://github.com/Kashyap-AI-ML-Solutions/webex-messaging-mcp-server)** - A Model Context Protocol (MCP) server that provides AI assistants with comprehensive access to Cisco Webex messaging capabilities.
