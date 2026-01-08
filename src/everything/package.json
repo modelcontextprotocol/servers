@@ -29,7 +29,7 @@
     "prettier:check": "prettier --check ."
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.24.3",
+    "@modelcontextprotocol/sdk": "^1.25.2",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "jszip": "^3.10.1",
