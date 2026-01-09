@@ -390,5 +390,25 @@ describe('KnowledgeGraphManager', () => {
       expect(JSON.parse(lines[0])).toHaveProperty('type', 'entity');
       expect(JSON.parse(lines[1])).toHaveProperty('type', 'relation');
     });
+
+    it('should handle entities with additional properties in storage (issue #3144)', async () => {
+      // Manually write an entity with extra properties to the file
+      const entityWithExtra = JSON.stringify({
+        type: 'entity',
+        name: 'Test_Entity',
+        entityType: 'test',
+        observations: ['Has an extra field'],
+        custom_id: 'xyz-123',  // Extra property not in schema
+        metadata: { source: 'external' }  // Another extra property
+      });
+      await fs.writeFile(testFilePath, entityWithExtra);
+
+      // Reading the graph should not throw an error
+      const graph = await manager.readGraph();
+      expect(graph.entities).toHaveLength(1);
+      expect(graph.entities[0].name).toBe('Test_Entity');
+      expect(graph.entities[0].entityType).toBe('test');
+      expect(graph.entities[0].observations).toContain('Has an extra field');
+    });
   });
 });
