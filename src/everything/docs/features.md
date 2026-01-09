@@ -22,7 +22,9 @@
 - `trigger-long-running-operation` (tools/trigger-trigger-long-running-operation.ts): Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client.
 - `toggle-simulated-logging` (tools/toggle-simulated-logging.ts): Starts or stops simulated, random‑leveled logging for the invoking session. Respects the client’s selected minimum logging level.
 - `toggle-subscriber-updates` (tools/toggle-subscriber-updates.ts): Starts or stops simulated resource update notifications for URIs the invoking session has subscribed to.
-- `trigger-sampling-request` (tools/trigger-sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM’s response payload.
+- `trigger-sampling-request` (tools/trigger-sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM's response payload. Only registered if the client supports the `sampling` capability.
+- `trigger-agentic-sampling` (tools/trigger-agentic-sampling.ts): Demonstrates SEP-1577 sampling with tools. Sends a `prompt` to the LLM with tools available (`echo`, `add`), handles `tool_use` responses by executing tools locally, and loops until a final response or `maxIterations` is reached. Only registered if the client supports the `sampling.tools` capability.
+- `trigger-elicitation-request` (tools/trigger-elicitation-request.ts): Demonstrates user input elicitation by requesting a form with various field types (string, boolean, number, enum). Only registered if the client supports the `elicitation` capability.
 
 ## Prompts
 
