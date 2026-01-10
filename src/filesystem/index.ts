@@ -56,19 +56,28 @@ let allowedDirectories = await Promise.all(
   })
 );
 
-// Validate that all directories exist and are accessible
-await Promise.all(allowedDirectories.map(async (dir) => {
+// Filter to only accessible directories, warn about inaccessible ones
+const accessibleDirectories: string[] = [];
+for (const dir of allowedDirectories) {
   try {
     const stats = await fs.stat(dir);
-    if (!stats.isDirectory()) {
-      console.error(`Error: ${dir} is not a directory`);
-      process.exit(1);
+    if (stats.isDirectory()) {
+      accessibleDirectories.push(dir);
+    } else {
+      console.error(`Warning: ${dir} is not a directory, skipping`);
     }
   } catch (error) {
-    console.error(`Error accessing directory ${dir}:`, error);
-    process.exit(1);
+    console.error(`Warning: Cannot access directory ${dir}, skipping`);
   }
-}));
+}
+
+// Exit only if ALL paths are inaccessible (and some were specified)
+if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
+  console.error("Error: None of the specified directories are accessible");
+  process.exit(1);
+}
+
+allowedDirectories = accessibleDirectories;
 
 // Initialize the global allowedDirectories in lib.ts
 setAllowedDirectories(allowedDirectories);
