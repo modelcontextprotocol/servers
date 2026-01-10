@@ -41,7 +41,7 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
         const response = await server.server.listRoots();
         if (response && "roots" in response) {
           // Store the roots list for this client
-          roots.set(sessionId, response?.roots);
+          roots.set(sessionId, response.roots);
 
           // Notify the client of roots received
           await server.sendLoggingMessage(
