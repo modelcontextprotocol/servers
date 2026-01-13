@@ -1,0 +1,10 @@
+fastmcp>=0.1.0
+pydantic>=2.0.0
+uvicorn>=0.23.0
+fastapi>=0.100.0
+websockets>=11.0
+anthropic>=0.7.0
+psutil>=5.9.0
+requests>=2.31.0
+click>=8.1.0
+typing-extensions>=4.5.0

@@ -1,0 +1,112 @@
+{
+  "metadata": {
+    "source": "data_trap.jsonl",
+    "total_analyzed": 180412,
+    "version": "v1.0-data-driven"
+  },
+  "modules": {
+    "type_safety": {
+      "keywords": [
+        "api",
+        "function",
+        "data",
+        "pass",
+        "return",
+        "type"
+      ],
+      "questions": [
+        {
+          "id": "dd_strict_typing",
+          "type": "single_choice",
+          "text": "根據大數據分析，這裡最常發生「變數傳錯」的意外（例如把文字當數字傳）。您打算怎麼預防？",
+          "options": [
+            {
+              "label": "A. 嚴格檢查 (Pydantic)",
+              "description": "雖然會慢一點點，但能保證進來的資料絕對沒問題。（推薦）",
+              "risk_score": "性能輕微折損",
+              "value": "pydantic"
+            },
+            {
+              "label": "B. 佛系檢查 (MyPy)",
+              "description": "只在寫程式時幫你檢查，跑起來的時候不管。可能會出錯。",
+              "risk_score": "運行時錯誤風險",
+              "value": "mypy"
+            }
+          ]
+        }
+      ]
+    },
+    "dependency_control": {
+      "keywords": [
+        "import",
+        "lib",
+        "package",
+        "dependency",
+        "module",
+        "依賴",
+        "套件",
+        "引入"
+      ],
+      "questions": [
+        {
+          "id": "dd_dependency_boundary",
+          "type": "single_choice",
+          "text": "很多人寫到這裡，會不小心引入一堆不該用的外部程式庫（把系統弄髒）。您的管制策略是？",
+          "options": [
+            {
+              "label": "A. 只准用白名單 (Whitelist)",
+              "description": "規定只能用哪幾個常用的。雖然麻煩，但最乾淨。",
+              "risk_score": "開發效率降低",
+              "value": "whitelist"
+            },
+            {
+              "label": "B. 寫完再檢查 (Layer Check)",
+              "description": "先讓大家隨便寫，上線前再用工具掃描有沒有違規。",
+              "risk_score": "架構腐化風險",
+              "value": "layer_check"
+            }
+          ]
+        }
+      ]
+    },
+    "numerical_safety": {
+      "keywords": [
+        "calc",
+        "math",
+        "money",
+        "price",
+        "count",
+        "number",
+        "計算",
+        "金額",
+        "買",
+        "下單",
+        "支付",
+        "coin",
+        "區塊鏈",
+        "blockchain"
+      ],
+      "questions": [
+        {
+          "id": "dd_numerical_safety",
+          "type": "single_choice",
+          "text": "如果是牽涉到「錢」的計算，電腦的小數點有時候會算錯（浮點數誤差）。您打算怎麼辦？",
+          "options": [
+            {
+              "label": "A. 用專業金融格式 (Decimal)",
+              "description": "保證一塊錢都不會少。計算速度慢一點，但這是銀行標準。",
+              "risk_score": "運算速度慢",
+              "value": "decimal"
+            },
+            {
+              "label": "B. 多寫幾個檢查 (Defensive)",
+              "description": "到處寫「如果不等於零」這種檢查。程式碼會變很醜。",
+              "risk_score": "代碼維護困難",
+              "value": "defensive"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

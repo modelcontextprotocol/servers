@@ -1,0 +1,1663 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>藍圖小老鼠 - Stop Vibe Coding. Start Engineering.</title>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script>
+        // 🔧 破口修復 #2: 配置化API端點
+        window.APP_CONFIG = {
+            API_URL: 'http://localhost:8001',
+            ENABLE_DEBUG: true,
+            API_TIMEOUT: 5000,
+            // 🆕 v5.3 商業化功能
+            ENTERPRISE_MODE: false,      // 企業版模式（不記錄任何數據）
+            DATA_COLLECTION: true,       // 數據收集開關
+            VERSION: '5.3-minimal'       // 版本標識
+        };
+    </script>
+    <style>
+        /* ===== S15 Neumorphism Token System ===== */
+        :root {
+            /* PANTONE 19-4052 Classic Blue */
+            --bg-primary: #E0E5EC;
+            --text-primary: #0F4C81;
+            --brand-color: #0F4C81;
+            --brand-light: #3A7CA5;
+
+            /* S15 擬態光影系統 */
+            --shadow-raised: 9px 9px 16px rgba(163, 177, 198, 0.6), -9px -9px 16px rgba(255, 255, 255, 0.5);
+            --shadow-pressed: inset 6px 6px 10px 0 rgba(163, 177, 198, 0.7), inset -6px -6px 10px 0 rgba(255, 255, 255, 0.8);
+            --shadow-floating: 12px 12px 24px 0 rgba(163, 177, 198, 0.6), -12px -12px 24px 0 rgba(255, 255, 255, 0.5);
+
+            /* 圓角 */
+            --radius-card: 24px;
+            --radius-btn: 50px;
+
+            /* 字體 */
+            --font-primary: 'Quicksand', sans-serif;
+
+            /* 狀態顏色 */
+            --color-locked: #9CA3AF;
+            --color-validating: #F59E0B;
+            --color-implemented: #10B981;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-primary);
+            overflow-x: hidden;
+        }
+
+        /* ===== Language Switcher (S15 Style) ===== */
+        .lang-switcher {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            z-index: 1000;
+            background: var(--bg-primary);
+            border-radius: var(--radius-btn);
+            padding: 6px;
+            box-shadow: var(--shadow-pressed);
+            display: flex;
+            gap: 0;
+        }
+
+        .lang-btn {
+            padding: 10px 20px;
+            border: none;
+            background: transparent;
+            font-family: var(--font-primary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: var(--radius-btn);
+            transition: all 0.3s ease;
+            color: var(--text-primary);
+        }
+
+        .lang-btn.active {
+            background: var(--bg-primary);
+            box-shadow: var(--shadow-raised);
+            color: var(--brand-color);
+        }
+
+        /* ===== Views Container ===== */
+        .view {
+            min-height: 100vh;
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .view.hidden {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+            position: absolute;
+            width: 100%;
+        }
+
+        /* ===== Landing Page (View A) ===== */
+        .landing {
+            padding: 80px 20px;
+        }
+
+        .hero {
+            max-width: 1080px;
+            margin: 0 auto 120px;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 64px;
+            font-weight: 600;
+            line-height: 1.2;
+            margin-bottom: 24px;
+            color: var(--text-primary);
+            text-shadow: 2px 2px 4px rgba(255, 255, 255, 0.8);
+        }
+
+        .hero p {
+            font-size: 24px;
+            color: var(--text-primary);
+            opacity: 0.8;
+            margin-bottom: 48px;
+            max-width: 48ch;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero-cta {
+            padding: 20px 60px;
+            font-size: 20px;
+            font-weight: 600;
+            border: none;
+            border-radius: var(--radius-btn);
+            background: linear-gradient(135deg, var(--brand-color), var(--brand-light));
+            color: white;
+            cursor: pointer;
+            box-shadow: var(--shadow-floating);
+            transition: all 0.3s ease;
+            font-family: var(--font-primary);
+        }
+
+        .hero-cta:hover {
+            transform: translateY(-4px);
+            box-shadow: 15px 15px 30px rgba(163, 177, 198, 0.7), -15px -15px 30px rgba(255, 255, 255, 0.6);
+        }
+
+        .hero-cta:active {
+            transform: translateY(0);
+            box-shadow: var(--shadow-pressed);
+        }
+
+        /* Pain Section */
+        .pain-section {
+            max-width: 1080px;
+            margin: 0 auto 120px;
+        }
+
+        .pain-section h2 {
+            font-size: 40px;
+            text-align: center;
+            margin-bottom: 60px;
+            color: var(--brand-color);
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+        }
+
+        .comparison-card {
+            background: var(--bg-primary);
+            border-radius: var(--radius-card);
+            padding: 40px;
+            box-shadow: var(--shadow-raised);
+        }
+
+        .comparison-card.bad {
+            border-top: 4px solid #EF4444;
+        }
+
+        .comparison-card.good {
+            border-top: 4px solid var(--color-implemented);
+        }
+
+        .comparison-card h3 {
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+
+        .comparison-card ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .comparison-card li {
+            padding: 12px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .comparison-card.bad li::before {
+            content: "❌";
+            position: absolute;
+            left: 0;
+        }
+
+        .comparison-card.good li::before {
+            content: "✅";
+            position: absolute;
+            left: 0;
+        }
+
+        /* Solution Section */
+        .solution-section {
+            max-width: 1200px;
+            margin: 0 auto 120px;
+        }
+
+        .solution-section h2 {
+            font-size: 40px;
+            text-align: center;
+            margin-bottom: 60px;
+            color: var(--brand-color);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+        }
+
+        .feature-card {
+            background: var(--bg-primary);
+            border-radius: var(--radius-card);
+            padding: 40px;
+            box-shadow: var(--shadow-raised);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-8px);
+        }
+
+        .feature-icon {
+            font-size: 64px;
+            margin-bottom: 24px;
+        }
+
+        .feature-card h3 {
+            font-size: 24px;
+            margin-bottom: 16px;
+            color: var(--brand-color);
+        }
+
+        .feature-card p {
+            font-size: 16px;
+            line-height: 1.6;
+            opacity: 0.8;
+        }
+
+        /* Social Proof */
+        .proof-section {
+            max-width: 1080px;
+            margin: 0 auto;
+            text-align: center;
+            padding: 80px 20px;
+        }
+
+        .proof-section h3 {
+            font-size: 32px;
+            margin-bottom: 40px;
+            color: var(--brand-color);
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 80px;
+        }
+
+        .stat {
+            background: var(--bg-primary);
+            border-radius: var(--radius-card);
+            padding: 30px 40px;
+            box-shadow: var(--shadow-raised);
+        }
+
+        .stat-number {
+            font-size: 48px;
+            font-weight: 600;
+            color: var(--brand-color);
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 16px;
+            opacity: 0.7;
+        }
+
+        /* ===== Workspace (View B) ===== */
+        .workspace {
+            padding: 40px 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .workspace-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .workspace-header h1 {
+            font-size: 48px;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+        }
+
+        .workspace-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .input-panel {
+            background: var(--bg-primary);
+            border-radius: var(--radius-card);
+            padding: 40px;
+            box-shadow: var(--shadow-raised);
+        }
+
+        .input-panel h2 {
+            font-size: 24px;
+            margin-bottom: 24px;
+            color: var(--brand-color);
+        }
+
+        .input-neu {
+            width: 100%;
+            padding: 16px 20px;
+            background: var(--bg-primary);
+            border: none;
+            border-radius: 16px;
+            font-family: var(--font-primary);
+            font-size: 16px;
+            color: var(--text-primary);
+            box-shadow: var(--shadow-pressed);
+            margin-bottom: 20px;
+        }
+
+        textarea.input-neu {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        .traffic-light-panel {
+            background: var(--bg-primary);
+            border-radius: var(--radius-card);
+            padding: 60px;
+            box-shadow: var(--shadow-raised);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .traffic-light {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .light {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            box-shadow: var(--shadow-pressed);
+            transition: all 0.3s ease;
+        }
+
+        .light.active {
+            box-shadow: 0 0 30px;
+        }
+
+        .light.red {
+            background: #9CA3AF;
+        }
+
+        .light.red.active {
+            background: #EF4444;
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.8);
+        }
+
+        .light.orange {
+            background: #9CA3AF;
+        }
+
+        .light.orange.active {
+            background: #F59E0B;
+            box-shadow: 0 0 30px rgba(245, 158, 11, 0.8);
+            animation: spin 1.5s linear infinite;
+        }
+
+        .light.green {
+            background: #9CA3AF;
+        }
+
+        .light.green.active {
+            background: #10B981;
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.8);
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .btn-generate {
+            padding: 18px 60px;
+            font-size: 20px;
+            font-weight: 600;
+            border: none;
+            border-radius: var(--radius-btn);
+            background: linear-gradient(135deg, var(--brand-color), var(--brand-light));
+            color: white;
+            cursor: pointer;
+            box-shadow: var(--shadow-raised);
+            transition: all 0.3s ease;
+            font-family: var(--font-primary);
+        }
+
+        .btn-generate:hover:not(:disabled) {
+            transform: translateY(-3px);
+        }
+
+        .btn-generate:active:not(:disabled) {
+            box-shadow: var(--shadow-pressed);
+        }
+
+        .btn-generate:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .result-panel {
+            background: var(--bg-primary);
+            border-radius: var(--radius-card);
+            padding: 40px;
+            box-shadow: var(--shadow-raised);
+            display: none;
+        }
+
+        .result-panel.active {
+            display: block;
+        }
+
+        /* ===== Socratic Interview Modal ===== */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 76, 129, 0.3);
+            backdrop-filter: blur(10px);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--bg-primary);
+            border-radius: var(--radius-card);
+            padding: 48px;
+            max-width: 700px;
+            width: 90%;
+            box-shadow: var(--shadow-floating);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .modal-header h2 {
+            font-size: 32px;
+            color: var(--brand-color);
+            margin-bottom: 12px;
+        }
+
+        .modal-header p {
+            color: var(--text-secondary);
+            opacity: 0.8;
+        }
+
+        .question-card {
+            background: var(--bg-primary);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 32px;
+            box-shadow: var(--shadow-raised);
+        }
+
+        .question-text {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+
+        .option-card {
+            background: var(--bg-primary);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow-raised);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .option-card:hover {
+            transform: translateX(4px);
+            border-color: var(--brand-color);
+        }
+
+        .option-card.selected {
+            border-color: var(--brand-color);
+            box-shadow: var(--shadow-pressed);
+        }
+
+        .option-label {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--brand-color);
+            margin-bottom: 8px;
+        }
+
+        .option-desc {
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        .option-risk {
+            font-size: 12px;
+            color: #EF4444;
+            font-weight: 600;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 6px 12px;
+            border-radius: 8px;
+            display: inline-block;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 16px;
+            justify-content: flex-end;
+            margin-top: 32px;
+        }
+
+        .btn-modal {
+            padding: 12px 32px;
+            border-radius: var(--radius-btn);
+            border: none;
+            font-family: var(--font-primary);
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-modal-secondary {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            box-shadow: var(--shadow-raised);
+        }
+
+        .btn-modal-primary {
+            background: linear-gradient(135deg, var(--brand-color), var(--brand-light));
+            color: white;
+            box-shadow: var(--shadow-raised);
+        }
+
+        .btn-modal:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+
+            .comparison,
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .workspace-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero h1 {
+                font-size: 40px;
+            }
+
+            .modal-content {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Language Switcher -->
+    <div class="lang-switcher">
+        <button class="lang-btn" onclick="openSettings()" title="Settings" style="margin-right: 8px;">⚙️</button>
+        <button class="lang-btn active" onclick="setLanguage('zh-TW')" id="btn-zh">中文</button>
+        <button class="lang-btn" onclick="setLanguage('en-US')" id="btn-en">EN</button>
+    </div>
+
+    <!-- 需求輸入區 -->
+    <div id="draftNotification"
+        style="display: none; padding: 12px; background: #FEF3C7; border-radius: 8px; margin-bottom: 16px; font-size: 14px;">
+        📝 檢測到未完成的草稿，<a href="#" onclick="restoreDraft(); return false;"
+            style="color: #0F4C81; font-weight: 600;">點擊恢復</a> 或 <a href="#" onclick="clearDraft(); return false;"
+            style="color: #EF4444;">清除</a>
+    </div>
+    <!-- View A: Landing Page -->
+    <div id="viewLanding" class="view landing">
+        <!-- Hero Section -->
+        <section class="hero">
+            <h1 data-i18n="hero_title">拒絕 Vibe Coding，奪回邏輯主權</h1>
+            <p data-i18n="hero_subtitle">全球唯一具備17層邏輯驗證的AI架構師。不亮綠燈，不准生成。</p>
+            <button class="hero-cta" onclick="enterWorkspace()" data-i18n="cta_start">開始免費試用</button>
+        </section>
+
+        <!-- Pain Section -->
+        <section class="pain-section">
+            <h2 data-i18n="pain_title">The Pain: 你的 Copilot 正在產生技術債</h2>
+            <div class="comparison">
+                <div class="comparison-card bad">
+                    <h3 data-i18n="other_ai">Other AI 💩</h3>
+                    <ul>
+                        <li data-i18n="pain_1">憑感覺生成代碼</li>
+                        <li data-i18n="pain_2">邊界情況完全沒考慮</li>
+                        <li data-i18n="pain_3">技術債狂飆</li>
+                        <li data-i18n="pain_4">3個月後無法維護</li>
+                    </ul>
+                </div>
+                <div class="comparison-card good">
+                    <h3 data-i18n="blue_mouse">Blue Mouse 🐭✨</h3>
+                    <ul>
+                        <li data-i18n="solution_1">強制邏輯驗證</li>
+                        <li data-i18n="solution_2">17層嚴格審查</li>
+                        <li data-i18n="solution_3">紅綠燈狀態管控</li>
+                        <li data-i18n="solution_4">5年後依然可讀</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Solution Section -->
+        <section class="solution-section">
+            <h2 data-i18n="solution_title">The Solution: 三道防線</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🚦</div>
+                    <h3 data-i18n="feature_1_title">Traffic Light Sentinel</h3>
+                    <p data-i18n="feature_1_desc">紅綠燈哨兵強制邏輯檢查，依賴未就緒？鎖死。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎓</div>
+                    <h3 data-i18n="feature_2_title">Socratic Interview</h3>
+                    <p data-i18n="feature_2_desc">蘇格拉底式提問，逼你把需求想清楚。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🛡️</div>
+                    <h3 data-i18n="feature_3_title">17-Layer Validation</h3>
+                    <p data-i18n="feature_3_desc">軍規級代碼審查，從語法到安全全覆蓋。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Social Proof -->
+        <section class="proof-section">
+            <h3 data-i18n="proof_title">Trusted by Engineers using Cursor & Antigravity</h3>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-number">180K+</div>
+                    <div class="stat-label" data-i18n="stat_1">次邏輯幻覺已攔截</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">17</div>
+                    <div class="stat-label" data-i18n="stat_2">層驗證防護網</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">100%</div>
+                    <div class="stat-label" data-i18n="stat_3">邏輯完整性保證</div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- View B: Workspace -->
+    <div id="viewWorkspace" class="view workspace hidden">
+        <div class="workspace-header">
+            <h1 data-i18n="workspace_title">🐭 藍圖小老鼠 Workspace</h1>
+            <p data-i18n="workspace_subtitle">智能架構工作台</p>
+        </div>
+
+        <div class="workspace-grid">
+            <!-- Left: Input Panel -->
+            <div class="input-panel">
+                <h2 data-i18n="input_title">需求輸入</h2>
+                <textarea class="input-neu" id="requirement" placeholder="告訴我們您的想法..."
+                    oninput="handleRequirementInput(this)"></textarea>
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 13px; color: #6B7280;">
+                    <span id="charCount">0 / 5000 字</span>
+                    <span id="lengthWarning" style="color: #EF4444; display: none;">⚠️ 輸入過長可能影響性能</span>
+                </div>
+                <select class="input-neu" id="framework">
+                    <option value="django">Django (Python)</option>
+                    <option value="flask">Flask (Python)</option>
+                    <option value="fastapi">FastAPI (Python)</option>
+                    <option value="express">Express.js (JavaScript)</option>
+                    <option value="nestjs">NestJS (TypeScript)</option>
+                    <option value="gin">Gin (Go)</option>
+                </select>
+            </div>
+
+            <!-- Right: Traffic Light Panel -->
+            <div class="traffic-light-panel">
+                <div class="traffic-light">
+                    <div class="light red active" id="lightRed"></div>
+                    <div class="light orange" id="lightOrange"></div>
+                    <div class="light green" id="lightGreen"></div>
+                </div>
+                <h3 id="statusText" data-i18n="status_locked">🔒 依賴未就緒</h3>
+                <button class="btn-generate" onclick="startGeneration()" data-i18n="btn_generate">生成藍圖</button>
+            </div>
+        </div>
+
+        <!-- Result Panel -->
+        <div class="result-panel" id="resultPanel">
+            <h2 data-i18n="result_title">✅ 生成完成</h2>
+            <div id="resultContent"></div>
+        </div>
+    </div>
+
+    <!-- Socratic Interview Modal -->
+    <div class="modal-overlay" id="socratesModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 data-i18n="interview_title">🎓 蘇格拉底邏輯面試</h2>
+                <p data-i18n="interview_subtitle">在生成代碼前，讓我們先把邏輯想清楚</p>
+            </div>
+            <div id="questionsContainer"></div>
+            <div class="modal-actions">
+                <button class="btn-modal btn-modal-secondary" onclick="skipInterview()"
+                    data-i18n="btn_skip">跳過面試</button>
+                <button class="btn-modal btn-modal-secondary" onclick="goBackToPrevious()" style="background: #6B7280;"
+                    data-i18n="btn_previous">↩️ 上一步</button>
+                <button class="btn-modal btn-modal-primary" onclick="submitAnswers()"
+                    data-i18n="btn_submit">提交答案</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>⚙️ API Settings</h2>
+                <p>Unlock full AI intelligence with your own key (BYOK)</p>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">API Key (Anthropic /
+                    OpenAI)</label>
+                <input type="password" id="apiKeyInput" class="input-neu" placeholder="sk-..."
+                    style="width: 100%; font-family: monospace;">
+                <p style="font-size: 12px; color: #6B7280; margin-top: 6px;">
+                    Keys are stored securely in your browser (LocalStorage) and sent directly to your local backend.
+                </p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-modal btn-modal-secondary" onclick="closeSettings()">Cancel</button>
+                <button class="btn-modal btn-modal-primary" onclick="saveSettings()">Save Configuration</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Disconnected Overlay -->
+    <div id="disconnectedOverlay" class="modal-overlay" style="z-index: 3000; background: rgba(0,0,0,0.8);">
+        <div class="modal-content" style="text-align: center; width: 400px;">
+            <div style="font-size: 64px; margin-bottom: 20px;">🔌</div>
+            <h2 style="color: #EF4444; margin-bottom: 10px;">Server Disconnected</h2>
+            <p style="color: var(--text-primary); margin-bottom: 30px;">
+                無法連接到藍圖小老鼠大腦 (API Server)。<br>
+                請確保終端機中的 <b>server.py</b> 正在運行。
+            </p>
+            <button class="btn-modal btn-modal-primary" onclick="checkHealth()" style="width: 100%;">
+                🔄 嘗試重連
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ===== Connection Health Check =====
+        let isConnected = true;
+
+        async function checkHealth() {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+                const response = await fetch(`${window.APP_CONFIG.API_URL}/health`, {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    if (!isConnected) {
+                        console.log("✅ Server reconnected");
+                        document.getElementById('disconnectedOverlay').classList.remove('active');
+                        isConnected = true;
+                    }
+                    return true;
+                }
+            } catch (error) {
+                console.log("❌ Server disconnected");
+            }
+
+            // Disconnected flow
+            document.getElementById('disconnectedOverlay').classList.add('active');
+            isConnected = false;
+            return false;
+        }
+
+        // Start periodic health check
+        setInterval(checkHealth, 5000);
+        // Initial check
+        checkHealth();
+
+        // ===== i18n Dictionary =====
+        const translations = {
+
+            "zh-TW": {
+                "hero_title": "拒絕 Vibe Coding，奪回邏輯主權",
+                "hero_subtitle": "全球唯一具備17層邏輯驗證的AI架構師。不亮綠燈，不准生成。",
+                "cta_start": "開始免費試用",
+                "pain_title": "The Pain: 你的 Copilot 正在產生技術債",
+                "other_ai": "Other AI 💩",
+                "pain_1": "憑感覺生成代碼",
+                "pain_2": "邊界情況完全沒考慮",
+                "pain_3": "技術債狂飆",
+                "pain_4": "3個月後無法維護",
+                "blue_mouse": "Blue Mouse 🐭✨",
+                "solution_1": "強制邏輯驗證",
+                "solution_2": "17層嚴格審查",
+                "solution_3": "紅綠燈狀態管控",
+                "solution_4": "5年後依然可讀",
+                "solution_title": "The Solution: 三道防線",
+                "feature_1_title": "Traffic Light Sentinel",
+                "feature_1_desc": "紅綠燈哨兵強制邏輯檢查，依賴未就緒？鎖死。",
+                "feature_2_title": "Socratic Interview",
+                "feature_2_desc": "蘇格拉底式提問，逼你把需求想清楚。",
+                "feature_3_title": "17-Layer Validation",
+                "feature_3_desc": "軍規級代碼審查，從語法到安全全覆蓋。",
+                "proof_title": "Trusted by Engineers using Cursor & Antigravity",
+                "stat_1": "次邏輯幻覺已攔截",
+                "stat_2": "層驗證防護網",
+                "stat_3": "邏輯完整性保證",
+                "workspace_title": "🐭 藍圖小老鼠 Workspace",
+                "workspace_subtitle": "智能架構工作台",
+                "input_title": "告訴我們您的想法",
+                "placeholder_input": "描述您想建立的系統（例如：我想做一個電商平台，用戶可以...）",
+                "status_locked": "🔍 待確認細節",
+                "status_calibrating": "⚙️ 邏輯校準中",
+                "status_validating": "🔬 深度健檢中",
+                "status_ready": "✨ 準備就緒",
+                "btn_generate": "開始生成",
+                "result_title": "🎉 您的專案已就緒",
+                "interview_title": "💡 讓我們微調一下邏輯",
+                "interview_subtitle": "這幾個選擇會影響系統穩定性，您傾向哪一種方案？",
+                "btn_skip": "稍後決定",
+                "btn_previous": "↩️ 上一步",
+                "btn_submit": "確認選擇",
+                "hint_completing": "還有 {count} 個關鍵決策等您確認 ✨",
+                "validating_concurrency": "正在檢查並發安全性...",
+                "validating_structure": "正在確認資料庫結構...",
+                "validating_security": "正在檢查安全性設定...",
+                "success_message": "邏輯看起來很棒！隨時可以開始生成。"
+            },
+            "en-US": {
+                "hero_title": "Stop Vibe Coding. Start Engineering.",
+                "hero_subtitle": "The only AI architect with 17-layer logic validation. No green light, no generation.",
+                "cta_start": "Start Free Trial",
+                "pain_title": "The Pain: Your Copilot is Creating Tech Debt",
+                "other_ai": "Other AI 💩",
+                "pain_1": "Generates code by vibes",
+                "pain_2": "Edge cases not considered",
+                "pain_3": "Tech debt explosion",
+                "pain_4": "Unmaintainable in 3 months",
+                "blue_mouse": "Blue Mouse 🐭✨",
+                "solution_1": "Forced logic validation",
+                "solution_2": "17-layer strict review",
+                "solution_3": "Traffic light control",
+                "solution_4": "Still readable after 5 years",
+                "solution_title": "The Solution: Triple Defense",
+                "feature_1_title": "Traffic Light Sentinel",
+                "feature_1_desc": "Forced logic check. Dependencies not ready? Locked.",
+                "feature_2_title": "Socratic Interview",
+                "feature_2_desc": "Forces you to think through requirements clearly.",
+                "feature_3_title": "17-Layer Validation",
+                "feature_3_desc": "Military-grade code review from syntax to security.",
+                "proof_title": "Trusted by Engineers using Cursor & Antigravity",
+                "stat_1": "Logic hallucinations blocked",
+                "stat_2": "Validation layers",
+                "stat_3": "Logic integrity guarantee",
+                "workspace_title": "🐭 Blue Mouse Workspace",
+                "workspace_subtitle": "Intelligent Architecture Console",
+                "input_title": "Tell Us Your Vision",
+                "placeholder_input": "Describe the system you want to build (e.g., I want an e-commerce platform where users can...)",
+                "status_locked": "🔍 Needs Clarification",
+                "status_calibrating": "⚙️ Calibrating Logic",
+                "status_validating": "🔬 Running Deep Health Check",
+                "status_ready": "✨ Ready to Build",
+                "btn_generate": "Start Generation",
+                "result_title": "🎉 Your Project is Ready",
+                "interview_title": "💡 Let's Tune the Logic",
+                "interview_subtitle": "These choices will affect system stability. Which approach do you prefer?",
+                "btn_skip": "Decide Later",
+                "btn_back": "Back",
+                "btn_previous": "↩️ Previous Step",
+                "btn_submit": "Confirm Choices",
+                "hint_completing": "{count} key decisions awaiting your input ✨",
+                "validating_concurrency": "Checking concurrency safety...",
+                "validating_structure": "Verifying database structure...",
+                "validating_security": "Checking security settings...",
+                "success_message": "Logic looks great! Ready to proceed."
+            }
+        };
+
+        // currentLang 已在全局變量區聲明
+
+        // ===== i18n Engine =====
+        function setLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('preferredLanguage', lang);
+
+            // 更新所有 data-i18n 元素
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (translations[lang] && translations[lang][key]) {
+                    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                        el.placeholder = translations[lang][key];
+                    } else {
+                        el.textContent = translations[lang][key];
+                    }
+                }
+            });
+
+            // 更新按鈕狀態
+            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(lang === 'zh-TW' ? 'btn-zh' : 'btn-en').classList.add('active');
+        }
+
+        // 自動偵測與初始化
+        window.addEventListener('load', async () => {
+            // 🔧 破口修復 #1: 先檢查API可用性
+            await checkAPIHealth();
+
+            // 然後初始化語言
+            const saved = localStorage.getItem('preferredLanguage');
+            const detected = navigator.language.startsWith('zh') ? 'zh-TW' : 'en-US';
+            setLanguage(saved || detected);
+        });
+
+        // ===== View Transition =====
+        function enterWorkspace() {
+            document.getElementById('viewLanding').classList.add('hidden');
+            document.getElementById('viewWorkspace').classList.remove('hidden');
+        }
+        // ===== 全局變量 =====
+        let currentLang = 'zh-TW';
+        let currentQuestions = [];
+        let userAnswers = {};
+        let answerHistory = []; // 問題4：回退機制
+        const MAX_INPUT_LENGTH = 5000; // 問題5：長度限制
+
+        // ===== 問題5：輸入長度限制與字數統計 =====
+        function handleRequirementInput(textarea) {
+            const length = textarea.value.length;
+            const charCountEl = document.getElementById('charCount');
+            const warningEl = document.getElementById('lengthWarning');
+
+            // 更新字數統計
+            if (charCountEl) {
+                charCountEl.textContent = `${length} / ${MAX_INPUT_LENGTH} 字`;
+
+                if (length > MAX_INPUT_LENGTH) {
+                    charCountEl.style.color = '#EF4444';
+                    warningEl.style.display = 'inline';
+                } else if (length > MAX_INPUT_LENGTH * 0.8) {
+                    charCountEl.style.color = '#F59E0B';
+                    warningEl.style.display = 'none';
+                } else {
+                    charCountEl.style.color = '#6B7280';
+                    warningEl.style.display = 'none';
+                }
+            }
+
+            // 問題4：自動保存草稿
+            autoSaveDraft();
+        }
+
+        // ===== 問題4：localStorage 草稿保存 =====
+        function autoSaveDraft() {
+            const draftData = {
+                requirement: document.getElementById('requirement')?.value || '',
+                framework: document.getElementById('framework')?.value || 'django',
+                timestamp: Date.now()
+            };
+
+            try {
+                localStorage.setItem('bluemouse_draft', JSON.stringify(draftData));
+            } catch (e) {
+                console.warn('無法保存草稿:', e);
+            }
+        }
+
+        function restoreDraft() {
+            try {
+                const draft = JSON.parse(localStorage.getItem('bluemouse_draft'));
+                if (draft) {
+                    const reqEl = document.getElementById('requirement');
+                    const fwEl = document.getElementById('framework');
+
+                    if (reqEl) reqEl.value = draft.requirement;
+                    if (fwEl) fwEl.value = draft.framework;
+
+                    // 更新字數統計
+                    handleRequirementInput(reqEl);
+
+                    // 隱藏通知
+                    document.getElementById('draftNotification').style.display = 'none';
+
+                    showToast('✅ 草稿已恢復');
+                }
+            } catch (e) {
+                console.error('恢復草稿失敗:', e);
+            }
+        }
+
+        function clearDraft() {
+            localStorage.removeItem('bluemouse_draft');
+            document.getElementById('draftNotification').style.display = 'none';
+            showToast('🗑️ 草稿已清除');
+        }
+
+        function checkDraftOnLoad() {
+            try {
+                const draft = JSON.parse(localStorage.getItem('bluemouse_draft'));
+                if (draft && draft.requirement) {
+                    // 檢查是否在24小時內
+                    const age = Date.now() - draft.timestamp;
+                    if (age < 24 * 60 * 60 * 1000) {
+                        document.getElementById('draftNotification').style.display = 'block';
+                    }
+                }
+            } catch (e) {
+                console.warn('檢查草稿失敗:', e);
+            }
+        }
+
+        // ===== 問題3：回退機制 =====
+        function saveAnswerToHistory() {
+            answerHistory.push({
+                questions: [...currentQuestions],
+                answers: { ...userAnswers },
+                timestamp: Date.now()
+            });
+        }
+
+        function goBackToPrevious() {
+            if (answerHistory.length > 0) {
+                const previous = answerHistory.pop();
+                currentQuestions = previous.questions;
+                userAnswers = previous.answers;
+
+                // 重新渲染問題
+                showSocratesModal();
+                showToast(currentLang === 'zh-TW' ? '↩️ 已返回上一步' : '↩️ Previous step restored');
+            } else {
+                showToast(currentLang === 'zh-TW' ? '⚠️ 已經是第一步了' : '⚠️ Already at the first step');
+            }
+        }
+
+        // ===== 問題2：友好錯誤處理 =====
+        function handleAPIError(error, context = '') {
+            console.error(`API錯誤 (${context}):`, error);
+
+            let message = '';
+            let suggestion = '';
+
+            // 網絡錯誤
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                message = '🌐 無法連接到服務器';
+                suggestion = '請確認 API Server 是否已啟動 (python start_v6.py)';
+            }
+            // 超時錯誤
+            else if (error.message && error.message.includes('timeout')) {
+                message = '⏱️ 請求超時';
+                suggestion = '請嘗試縮短需求描述或稍後再試';
+            }
+            // HTTP 錯誤
+            else if (error.status) {
+                switch (error.status) {
+                    case 400:
+                        message = '📝 輸入格式錯誤';
+                        suggestion = '請檢查需求描述是否完整';
+                        break;
+                    case 403:
+                        message = '🔒 訪問被拒絕';
+                        suggestion = '請確認已完成邏輯面試';
+                        break;
+                    case 500:
+                        message = '⚙️ 服務器內部錯誤';
+                        suggestion = '請稍後重試或聯繫技術支持';
+                        break;
+                    case 503:
+                        message = '🚫 服務暫時不可用';
+                        suggestion = '服務器負載過高，請稍後重試';
+                        break;
+                    default:
+                        message = `❌ 請求失敗 (${error.status})`;
+                        suggestion = '請檢查網絡連接';
+                }
+            }
+            // 通用錯誤
+            else {
+                message = currentLang === 'zh-TW' ? '❌ 生成失敗' : '❌ Generation Failed';
+                suggestion = error.message || (currentLang === 'zh-TW' ? '未知錯誤，請重試' : 'Unknown error, please retry');
+            }
+
+            // 顯示友好的錯誤提示
+            showErrorDialog(message, suggestion);
+        }
+
+        function showErrorDialog(message, suggestion) {
+            const errorHTML = `
+                <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                            background: white; padding: 32px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                            max-width: 400px; z-index: 10000;">
+                    <div style="font-size: 48px; text-align: center; margin-bottom: 16px;">😢</div>
+                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #1F2937;">${message}</div>
+                    <div style="font-size: 14px; color: #6B7280; margin-bottom: 24px;">${suggestion}</div>
+                    <button onclick="closeErrorDialog()" 
+                            style="width: 100%; padding: 12px; background: linear-gradient(135deg, #0F4C81, #1E40AF); 
+                                   color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                        我知道了
+                    </button>
+                </div>
+                <div id="errorOverlay" onclick="closeErrorDialog()" 
+                     style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999;"></div>
+            `;
+
+            const container = document.createElement('div');
+            container.id = 'errorDialog';
+            container.innerHTML = errorHTML;
+            document.body.appendChild(container);
+        }
+
+        function closeErrorDialog() {
+            const dialog = document.getElementById('errorDialog');
+            if (dialog) dialog.remove();
+        }
+
+        // ===== Toast 通知增強 =====
+        function showToast(message, duration = 3000) {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                top: 24px;
+                right: 24px;
+                padding: 16px 24px;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                font-size: 14px;
+                font-weight: 500;
+                z-index: 10000;
+                animation: slideInRight 0.3s ease;
+            `;
+            toast.textContent = message;
+
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+
+        // ===== 页面加载时检查草稿 =====
+        window.addEventListener('load', () => {
+            checkDraftOnLoad();
+        });
+        // ===== Socratic Interview System =====
+        // 變量已在上方聲明，這裡不再重複
+        let API_AVAILABLE = false;  // 🔧 破口修復 #1: API可用性狀態
+
+        // 🔧 破口修復 #1: API健康檢查
+        async function checkAPIHealth() {
+            try {
+                const response = await fetch(`${window.APP_CONFIG.API_URL}/health`, {
+                    method: 'GET',
+                    signal: AbortSignal.timeout(1000)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    API_AVAILABLE = data.status === 'healthy';
+
+                    if (window.APP_CONFIG.ENABLE_DEBUG) {
+                        console.log('✅ API Server 連接成功:', data);
+                    }
+                } else if (response.status === 404) {
+                    // 🚨 Hotfix: FastMCP default server has no /health, but responding 404 means it IS running.
+                    console.log('⚠️ API Server Running (No /health endpoint detected, assuming healthy)');
+                    API_AVAILABLE = true;
+                } else {
+                    API_AVAILABLE = false;
+                }
+            } catch (error) {
+                API_AVAILABLE = false;
+
+                if (window.APP_CONFIG.ENABLE_DEBUG) {
+                    console.warn('⚠️ API Server 未運行，將使用離線模式');
+                }
+            }
+
+            return API_AVAILABLE;
+        }
+
+        async function generateDecisionTraps(requirement) {
+            // 調用真實的寄生AI API動態生成問題
+            try {
+                const response = await fetch('http://localhost:8001/api/generate_socratic_questions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        requirement: requirement,
+                        language: currentLang,
+                        api_key: localStorage.getItem('bluemouse_api_key') || null
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = new Error('API call failed');
+                    error.status = response.status;
+                    throw error;
+                }
+
+                const data = await response.json();
+
+                if (data.success && data.questions) {
+                    return data.questions;
+                } else {
+                    throw new Error(data.error || '問題生成失敗');
+                }
+            } catch (error) {
+                console.error('寄生AI調用失敗，使用備用問題:', error);
+                // 使用友好錯誤處理（但不阻斷流程，使用備用）
+                handleAPIError(error, 'Socratic Questions');
+            }
+
+            // 如果API失敗，使用備用固定問題
+            return getFallbackQuestions();
+        }
+
+        function getFallbackQuestions() {
+            // 備用固定問題（當寄生AI無法使用時）
+            const questions = [
+                {
+                    id: 'q1_concurrency',
+                    type: 'single_choice',
+                    text: currentLang === 'zh-TW'
+                        ? '針對「數據一致性」，如果多個用戶同時操作怎麼辦？'
+                        : 'For "data consistency", what if multiple users operate simultaneously?',
+                    options: [
+                        {
+                            label: currentLang === 'zh-TW' ? 'A. 悲觀鎖 (Pessimistic Lock)' : 'A. Pessimistic Lock',
+                            description: currentLang === 'zh-TW'
+                                ? '絕對安全，但效能極差，用戶可能要排隊等待。'
+                                : 'Absolutely safe, but terrible performance. Users may have to queue.',
+                            risk_score: currentLang === 'zh-TW' ? '低風險，高延遲' : 'Low Risk, High Latency',
+                            value: 'pessimistic'
+                        },
+                        {
+                            label: currentLang === 'zh-TW' ? 'B. 樂觀鎖 (Optimistic Lock)' : 'B. Optimistic Lock',
+                            description: currentLang === 'zh-TW'
+                                ? '效能好，但在衝突時會導致大量失敗重試。'
+                                : 'Good performance, but causes many retry failures on conflict.',
+                            risk_score: currentLang === 'zh-TW' ? '高風險，低延遲' : 'High Risk, Low Latency',
+                            value: 'optimistic'
+                        },
+                        {
+                            label: currentLang === 'zh-TW' ? 'C. 分散式鎖 (Redis)' : 'C. Distributed Lock (Redis)',
+                            description: currentLang === 'zh-TW'
+                                ? '極快，但如果 Redis 掛了數據會不一致。'
+                                : 'Extremely fast, but data inconsistency if Redis fails.',
+                            risk_score: currentLang === 'zh-TW' ? '數據一致性風險' : 'Data Consistency Risk',
+                            value: 'redis'
+                        }
+                    ]
+                },
+                {
+                    id: 'q2_error_handling',
+                    type: 'single_choice',
+                    text: currentLang === 'zh-TW'
+                        ? '如果外部 API 調用失敗，系統應該如何處理？'
+                        : 'If external API call fails, how should the system handle it?',
+                    options: [
+                        {
+                            label: currentLang === 'zh-TW' ? 'A. 直接返回錯誤' : 'A. Return error directly',
+                            description: currentLang === 'zh-TW'
+                                ? '用戶立即知道失敗，但體驗差。'
+                                : 'User knows immediately, but poor experience.',
+                            risk_score: currentLang === 'zh-TW' ? '用戶體驗差' : 'Poor UX',
+                            value: 'fail_fast'
+                        },
+                        {
+                            label: currentLang === 'zh-TW' ? 'B. 重試3次' : 'B. Retry 3 times',
+                            description: currentLang === 'zh-TW'
+                                ? '可能成功，但會增加響應時間。'
+                                : 'May succeed, but increases response time.',
+                            risk_score: currentLang === 'zh-TW' ? '延遲增加' : 'Increased Latency',
+                            value: 'retry'
+                        },
+                        {
+                            label: currentLang === 'zh-TW' ? 'C. 降級處理' : 'C. Graceful degradation',
+                            description: currentLang === 'zh-TW'
+                                ? '使用備用方案，但功能可能不完整。'
+                                : 'Use fallback, but functionality may be incomplete.',
+                            risk_score: currentLang === 'zh-TW' ? '功能降級' : 'Feature Degradation',
+                            value: 'degradation'
+                        }
+                    ]
+                }
+            ];
+            return questions;
+        }
+
+        async function showSocratesModal() {
+            const requirement = document.getElementById('requirement').value;
+            // 🚨 關鍵修復: 添加 await 關鍵字
+            currentQuestions = await generateDecisionTraps(requirement);
+            userAnswers = {};
+
+            const container = document.getElementById('questionsContainer');
+            container.innerHTML = '';
+
+            currentQuestions.forEach((q, qIndex) => {
+                const questionHtml = `
+                    <div class="question-card">
+                        <div class="question-text">${q.text}</div>
+                        ${q.options.map((opt, oIndex) => `
+                            <div class="option-card" onclick="selectOption('${q.id}', '${opt.value}', this)">
+                                <div class="option-label">${opt.label || opt.text || 'Option'}</div>
+                                <div class="option-desc">${opt.description || opt.desc || ''}</div>
+                                <div class="option-risk">⚠️ ${opt.risk_score || 'Unknown Risk'}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                container.innerHTML += questionHtml;
+            });
+
+            document.getElementById('socratesModal').classList.add('active');
+        }
+
+        function selectOption(questionId, value, element) {
+            // 清除同一問題的其他選項
+            const parent = element.parentElement;
+            parent.querySelectorAll('.option-card').forEach(card => card.classList.remove('selected'));
+            element.classList.add('selected');
+            userAnswers[questionId] = value;
+        }
+
+        function skipInterview() {
+            document.getElementById('socratesModal').classList.remove('active');
+            proceedToGeneration();
+        }
+
+        function submitAnswers() {
+            if (Object.keys(userAnswers).length < currentQuestions.length) {
+                alert(currentLang === 'zh-TW' ? '請回答所有問題' : 'Please answer all questions');
+                return;
+            }
+
+            // 問題3：保存答案到歷史（用於回退）
+            saveAnswerToHistory();
+
+            document.getElementById('socratesModal').classList.remove('active');
+            proceedToGeneration();
+        }
+
+        async function proceedToGeneration() {
+            // 狀態轉換: 紅 → 橘 (溫暖的提示)
+            document.getElementById('lightRed').classList.remove('active');
+            document.getElementById('lightOrange').classList.add('active');
+            const validatingMsg = currentLang === 'zh-TW' ? '🔬 正在為您進行深度健檢...' : '🔬 Running Deep Health Check...';
+            document.getElementById('statusText').textContent = validatingMsg;
+
+            // 顯示細節提示（微互動）
+            const steps = [
+                currentLang === 'zh-TW' ? '正在檢查並發安全性...' : 'Checking concurrency safety...',
+                currentLang === 'zh-TW' ? '正在確認資料庫結構...' : 'Verifying database structure...',
+                currentLang === 'zh-TW' ? '正在檢查安全性設定...' : 'Checking security settings...'
+            ];
+
+            for (let step of steps) {
+                await sleep(800);
+                document.getElementById('statusText').textContent = step;
+            }
+
+            // 真實的代碼生成 API 調用
+            const requirement = document.getElementById('requirement').value;
+            const framework = document.getElementById('framework').value;
+
+            try {
+                const generatingMsg = currentLang === 'zh-TW' ? '⚙️ 正在生成代碼...' : '⚙️ Generating code...';
+                document.getElementById('statusText').textContent = generatingMsg;
+
+                const response = await fetch('http://localhost:8001/api/generate_code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        module: {
+                            name: 'GeneratedModule',
+                            description: requirement,
+                            functions: []
+                        },
+                        answers: userAnswers,
+                        framework: framework
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = new Error('代碼生成失敗');
+                    error.status = response.status;
+                    throw error;
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // 儲存生成的代碼以供下載
+                    window.generatedCode = data.code;
+
+                    // 狀態轉換: 橘 → 綠 (溫暖的祝賀)
+                    document.getElementById('lightOrange').classList.remove('active');
+                    document.getElementById('lightGreen').classList.add('active');
+                    const readyMsg = currentLang === 'zh-TW' ? '✅ 準備就緒！' : '✅ Ready to Build!';
+                    document.getElementById('statusText').textContent = readyMsg;
+
+                    // 紙屑特效
+                    if (typeof confetti !== 'undefined') {
+                        confetti({
+                            particleCount: 150,
+                            spread: 80,
+                            origin: { y: 0.6 },
+                            colors: ['#0F4C81', '#3A7CA5', '#10B981']
+                        });
+                    }
+
+                    // 顯示結果
+                    showGeneratedResult(data.code);
+                } else if (data.gated) {
+                    // 門禁阻擋
+                    document.getElementById('lightOrange').classList.remove('active');
+                    document.getElementById('lightRed').classList.add('active');
+                    document.getElementById('statusText').textContent = '🔒 ' + data.error;
+
+                    // 使用友好錯誤提示
+                    const error = new Error(data.message || '請先完成邏輯面試');
+                    error.status = 403;
+                    handleAPIError(error, 'Code Generation - Gated');
+                } else {
+                    throw new Error(data.error || '生成失敗');
+                }
+
+            } catch (error) {
+                console.error('生成失敗:', error);
+                document.getElementById('lightOrange').classList.remove('active');
+                document.getElementById('lightRed').classList.remove('active');
+                document.getElementById('statusText').textContent = '❌ 生成失敗';
+
+                // 使用友好錯誤處理
+                handleAPIError(error, 'Code Generation');
+            }
+        }
+
+        function showGeneratedResult(codeData) {
+            // 顯示結果面板
+            document.getElementById('resultPanel').classList.add('active');
+
+            const fileList = Object.keys(codeData.files || codeData || {});
+            const fileCount = fileList.length;
+
+            const successMsg = currentLang === 'zh-TW' ? '邏輯看起來很棒！您的專案已就緒。' : 'Logic looks great! Your project is ready.';
+            document.getElementById('resultContent').innerHTML = `
+            <p style="font-size: 18px; margin-bottom: 20px; color: var(--color-implemented);">
+                ${successMsg}
+            </p>
+                <p style="font-size: 16px; margin-bottom: 20px;">
+                    ${currentLang === 'zh-TW' ? `已生成 ${fileCount} 個核心文件` : `Generated ${fileCount} core files`}
+                </p>
+                <div style="font-size: 14px; color: #666; margin-bottom: 24px;">
+                    ${fileList.join(', ')}
+                </div>
+                <button onclick="downloadProjectZIP()" 
+                    style="padding: 16px 40px; background: linear-gradient(135deg, #10B981, #059669); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+                    📦 ${currentLang === 'zh-TW' ? '下載項目 ZIP' : 'Download Project ZIP'}
+                </button>
+        `;
+        }
+
+        async function downloadProjectZIP() {
+            if (!window.generatedCode) {
+                alert(currentLang === 'zh-TW' ? '沒有可下載的代碼' : 'No code to download');
+                return;
+            }
+
+            const requirement = document.getElementById('requirement').value;
+            const framework = document.getElementById('framework').value;
+
+            try {
+                const response = await fetch('http://localhost:8001/api/export_project', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        blueprint: {
+                            title: `BlueMouse_${framework}_${Date.now()} `
+                        },
+                        code: window.generatedCode,
+                        diagrams: {},
+                        estimation: {}
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('導出失敗');
+                }
+
+                // 下載 ZIP 文件
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `BlueMouse_${framework}_${new Date().getTime()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                alert(currentLang === 'zh-TW' ? '✅ 項目已下載' : '✅ Project downloaded');
+            } catch (error) {
+                console.error('下載失敗:', error);
+                alert(currentLang === 'zh-TW' ? '❌ 下載失敗: ' + error.message : '❌ Download failed: ' + error.message);
+            }
+        }
+
+        // ===== Workspace Logic =====
+        // Settings Management
+        function openSettings() {
+            const key = localStorage.getItem('bluemouse_api_key') || '';
+            document.getElementById('apiKeyInput').value = key;
+            document.getElementById('settingsModal').classList.add('active');
+        }
+
+        function closeSettings() {
+            document.getElementById('settingsModal').classList.remove('active');
+        }
+
+        function saveSettings() {
+            const key = document.getElementById('apiKeyInput').value.trim();
+            if (key) {
+                localStorage.setItem('bluemouse_api_key', key);
+                showToast(currentLang === 'zh-TW' ? '✅ 設定已保存' : '✅ Settings Saved');
+            } else {
+                localStorage.removeItem('bluemouse_api_key');
+                showToast(currentLang === 'zh-TW' ? '🗑️ Key 已清除' : '🗑️ Key Cleared');
+            }
+            closeSettings();
+        }
+
+        async function startGeneration() {
+            const requirement = document.getElementById('requirement').value;
+            const framework = document.getElementById('framework').value;
+            const btn = document.querySelector('.btn-generate');
+
+            if (!requirement.trim()) {
+                alert(currentLang === 'zh-TW' ? '請輸入需求' : 'Please enter requirement');
+                return;
+            }
+
+            // 1. 添加 Loading 狀態 (解決 "卡了" 的感覺)
+            const originalText = btn.textContent;
+            btn.textContent = currentLang === 'zh-TW' ? '🧠 正在思考陷阱...' : '🧠 Thinking...';
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+            btn.style.cursor = 'wait';
+
+            try {
+                // 2. 觸發蘇格拉底面試
+                await showSocratesModal();
+            } catch (e) {
+                console.error(e);
+                showToast(currentLang === 'zh-TW' ? '❌ 啟動失敗' : '❌ Start Failed');
+            } finally {
+                // 3. 恢復按鈕狀態
+                btn.textContent = originalText; // 這裡可能需要根據 data-i18n 恢復，但暫時恢復原文本即可
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            }
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+    </script>
+</body>
+
+</html>
