@@ -679,6 +679,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[CFBD API](https://github.com/lenwood/cfbd-mcp-server)** - An MCP server for the [College Football Data API](https://collegefootballdata.com/).
 - **[ChatMCP](https://github.com/AI-QL/chat-mcp)** – An Open Source Cross-platform GUI Desktop application compatible with Linux, macOS, and Windows, enabling seamless interaction with MCP servers across dynamically selectable LLMs, by **[AIQL](https://github.com/AI-QL)**
 - **[ChatSum](https://github.com/mcpso/mcp-server-chatsum)** - Query and Summarize chat messages with LLM. by [mcpso](https://mcp.so)
+- **[che-ical-mcp](https://github.com/kiki830621/che-ical-mcp)** - macOS Calendar & Reminders MCP with 12 tools using native EventKit. Supports iCloud, Google Calendar, and Outlook. Built with Swift.
 - **[Chess.com](https://github.com/pab1it0/chess-mcp)** - Access Chess.com player data, game records, and other public information through standardized MCP interfaces, allowing AI assistants to search and analyze chess information.
 - **[Chessagine-mcp](https://github.com/jalpp/chessagine-mcp)** - A chess MCP server that integrates Stockfish engine evaluation, positional theme analysis, Lichess opening databases, and chess knowledgebase.
 - **[ChessPal Chess Engine (stockfish)](https://github.com/wilson-urdaneta/chesspal-mcp-engine)** - A Stockfish-powered chess engine exposed as an MCP server. Calculates best moves and supports both HTTP/SSE and stdio transports.
