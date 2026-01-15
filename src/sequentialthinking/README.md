@@ -37,6 +37,10 @@ The Sequential Thinking tool is designed for:
 - Tasks that need to maintain context over multiple steps
 - Situations where irrelevant information needs to be filtered out
 
+## Installation
+
+> For detailed installation instructions across all clients and methods, see the [Installation Guide](../INSTALLATION.md).
+
 ## Configuration
 
 ### Usage with Claude Desktop

@@ -26,6 +26,8 @@ The fetch tool will truncate the response, but by using the `start_index` argume
 
 ## Installation
 
+> For standardized installation patterns across all MCP servers, see the [Installation Guide](../INSTALLATION.md).
+
 Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
 
 ### Using uv (recommended)
