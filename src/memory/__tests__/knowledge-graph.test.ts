@@ -390,5 +390,94 @@ describe('KnowledgeGraphManager', () => {
       expect(JSON.parse(lines[0])).toHaveProperty('type', 'entity');
       expect(JSON.parse(lines[1])).toHaveProperty('type', 'relation');
     });
+
+    it('should strip type field from entities when loading from file', async () => {
+      // Create entities and relations (these get saved with type field)
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: ['test observation'] },
+        { name: 'Bob', entityType: 'person', observations: [] },
+      ]);
+      await manager.createRelations([
+        { from: 'Alice', to: 'Bob', relationType: 'knows' },
+      ]);
+
+      // Verify file contains type field (order may vary)
+      const fileContent = await fs.readFile(testFilePath, 'utf-8');
+      const fileLines = fileContent.split('\n').filter(line => line.trim());
+      const fileItems = fileLines.map(line => JSON.parse(line));
+      const fileEntity = fileItems.find(item => item.type === 'entity');
+      const fileRelation = fileItems.find(item => item.type === 'relation');
+      expect(fileEntity).toBeDefined();
+      expect(fileEntity).toHaveProperty('type', 'entity');
+      expect(fileRelation).toBeDefined();
+      expect(fileRelation).toHaveProperty('type', 'relation');
+
+      // Create new manager instance to force reload from file
+      const manager2 = new KnowledgeGraphManager(testFilePath);
+      const graph = await manager2.readGraph();
+
+      // Verify loaded entities don't have type field
+      expect(graph.entities).toHaveLength(2);
+      graph.entities.forEach(entity => {
+        expect(entity).not.toHaveProperty('type');
+        expect(entity).toHaveProperty('name');
+        expect(entity).toHaveProperty('entityType');
+        expect(entity).toHaveProperty('observations');
+      });
+
+      // Verify loaded relations don't have type field
+      expect(graph.relations).toHaveLength(1);
+      graph.relations.forEach(relation => {
+        expect(relation).not.toHaveProperty('type');
+        expect(relation).toHaveProperty('from');
+        expect(relation).toHaveProperty('to');
+        expect(relation).toHaveProperty('relationType');
+      });
+    });
+
+    it('should strip type field from searchNodes results', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: ['works at Acme'] },
+      ]);
+      await manager.createRelations([
+        { from: 'Alice', to: 'Alice', relationType: 'self' },
+      ]);
+
+      // Create new manager instance to force reload from file
+      const manager2 = new KnowledgeGraphManager(testFilePath);
+      const result = await manager2.searchNodes('Alice');
+
+      // Verify search results don't have type field
+      expect(result.entities).toHaveLength(1);
+      expect(result.entities[0]).not.toHaveProperty('type');
+      expect(result.entities[0].name).toBe('Alice');
+
+      expect(result.relations).toHaveLength(1);
+      expect(result.relations[0]).not.toHaveProperty('type');
+      expect(result.relations[0].from).toBe('Alice');
+    });
+
+    it('should strip type field from openNodes results', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: [] },
+        { name: 'Bob', entityType: 'person', observations: [] },
+      ]);
+      await manager.createRelations([
+        { from: 'Alice', to: 'Bob', relationType: 'knows' },
+      ]);
+
+      // Create new manager instance to force reload from file
+      const manager2 = new KnowledgeGraphManager(testFilePath);
+      const result = await manager2.openNodes(['Alice', 'Bob']);
+
+      // Verify open results don't have type field
+      expect(result.entities).toHaveLength(2);
+      result.entities.forEach(entity => {
+        expect(entity).not.toHaveProperty('type');
+      });
+
+      expect(result.relations).toHaveLength(1);
+      expect(result.relations[0]).not.toHaveProperty('type');
+    });
   });
 });
