@@ -30,7 +30,7 @@ export const roots: Map<string | undefined, Root[]> = new Map<
  */
 export const syncRoots = async (server: McpServer, sessionId?: string) => {
   const clientCapabilities = server.server.getClientCapabilities() || {};
-  const clientSupportsRoots: boolean = clientCapabilities.roots !== undefined;
+  const clientSupportsRoots: boolean = clientCapabilities?.roots !== undefined;
 
   // Fetch the roots list for this client
   if (clientSupportsRoots) {
@@ -48,7 +48,7 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
             {
               level: "info",
               logger: "everything-server",
-              data: `Roots updated: ${response.roots.length} root(s) received from client`,
+              data: `Roots updated: ${response?.roots?.length} root(s) received from client`,
             },
             sessionId
           );
