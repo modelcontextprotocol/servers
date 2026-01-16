@@ -142,18 +142,17 @@ export async function writeFileContent(filePath: string, content: string): Promi
     await fs.writeFile(filePath, content, { encoding: "utf-8", flag: 'wx' });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      // Security: Use atomic rename to prevent race conditions where symlinks
-      // could be created between validation and write. Rename operations
-      // replace the target file atomically and don't follow symlinks.
+      // Security: Write to temp file first, then copy to target.
+      // This prevents partial writes if an error occurs mid-operation.
+      // The temp file is always cleaned up in the finally block.
       const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
       try {
         await fs.writeFile(tempPath, content, 'utf-8');
-        await fs.rename(tempPath, filePath);
-      } catch (renameError) {
+        await fs.copyFile(tempPath, filePath);
+      } finally {
         try {
           await fs.unlink(tempPath);
         } catch {}
-        throw renameError;
       }
     } else {
       throw error;
@@ -240,18 +239,17 @@ export async function applyFileEdits(
   const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
 
   if (!dryRun) {
-    // Security: Use atomic rename to prevent race conditions where symlinks
-    // could be created between validation and write. Rename operations
-    // replace the target file atomically and don't follow symlinks.
+    // Security: Write to temp file first, then copy to target.
+    // This prevents partial writes if an error occurs mid-operation.
+    // The temp file is always cleaned up in the finally block.
     const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
     try {
       await fs.writeFile(tempPath, modifiedContent, 'utf-8');
-      await fs.rename(tempPath, filePath);
-    } catch (error) {
+      await fs.copyFile(tempPath, filePath);
+    } finally {
       try {
         await fs.unlink(tempPath);
       } catch {}
-      throw error;
     }
   }
 
