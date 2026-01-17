@@ -18,7 +18,7 @@ classifiers = [
 dependencies = [
     "httpx<0.28",
     "markdownify>=0.13.1",
-    "mcp>=1.1.3",
+    "mcp>=1.23.0",
     "protego>=0.3.1",
     "pydantic>=2.0.0",
     "readabilipy>=0.2.0",

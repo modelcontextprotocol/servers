@@ -18,7 +18,7 @@ classifiers = [
 dependencies = [
     "click>=8.1.7",
     "gitpython>=3.1.45",
-    "mcp>=1.0.0",
+    "mcp>=1.23.0",
     "pydantic>=2.0.0",
 ]
 
