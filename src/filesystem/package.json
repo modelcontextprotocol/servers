@@ -2,9 +2,9 @@
   "name": "@modelcontextprotocol/server-filesystem",
   "version": "0.6.3",
   "description": "MCP server for filesystem access",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "mcpName": "io.github.modelcontextprotocol/server-filesystem",
-  "author": "Anthropic, PBC (https://anthropic.com)",
+  "author": "Model Context Protocol a Series of LF Projects, LLC.",
   "homepage": "https://modelcontextprotocol.io",
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
   "repository": {
