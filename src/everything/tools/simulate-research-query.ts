@@ -5,8 +5,10 @@ import {
   GetTaskResult,
   Task,
   ElicitResultSchema,
+  ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js";
 import { CreateTaskResult } from "@modelcontextprotocol/sdk/experimental";
+import type { AnySchema, SchemaOutput } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 
 // Tool input schema
 const SimulateResearchQuerySchema = z.object({
@@ -36,7 +38,6 @@ interface ResearchState {
   ambiguous: boolean;
   currentStage: number;
   clarification?: string;
-  waitingForClarification: boolean;
   completed: boolean;
   result?: CallToolResult;
 }
@@ -47,6 +48,7 @@ const researchStates = new Map<string, ResearchState>();
 /**
  * Runs the background research process.
  * Updates task status as it progresses through stages.
+ * If clarification is needed, sends elicitation request directly.
  */
 async function runResearchProcess(
   taskId: string,
@@ -62,7 +64,12 @@ async function runResearchProcess(
       status: "completed" | "failed",
       result: CallToolResult
     ) => Promise<void>;
-  }
+  },
+  sendRequest: <U extends AnySchema>(
+    request: ServerRequest,
+    resultSchema: U,
+    options?: { timeout?: number }
+  ) => Promise<SchemaOutput<U>>
 ): Promise<void> {
   const state = researchStates.get(taskId);
   if (!state) return;
@@ -79,14 +86,59 @@ async function runResearchProcess(
 
     // At synthesis stage (index 2), check if clarification is needed
     if (i === 2 && state.ambiguous && !state.clarification) {
-      state.waitingForClarification = true;
+      // Update status to show we're requesting input
       await taskStore.updateTaskStatus(
         taskId,
         "input_required",
-        `Found multiple interpretations for "${state.topic}". Please clarify your intent.`
+        `Found multiple interpretations for "${state.topic}". Requesting clarification...`
       );
-      // Wait for clarification - the getTaskResult handler will resume this
-      return;
+
+      // Send elicitation directly and await response
+      const elicitationResult = await sendRequest(
+        {
+          method: "elicitation/create",
+          params: {
+            message: `The research query "${state.topic}" could have multiple interpretations. Please clarify what you're looking for:`,
+            requestedSchema: {
+              type: "object",
+              properties: {
+                interpretation: {
+                  type: "string",
+                  title: "Clarification",
+                  description: "Which interpretation of the topic do you mean?",
+                  oneOf: getInterpretationsForTopic(state.topic),
+                },
+              },
+              required: ["interpretation"],
+            },
+          },
+        },
+        ElicitResultSchema,
+        { timeout: 5 * 60 * 1000 /* 5 minutes */ }
+      );
+
+      // Process elicitation response
+      if (
+        elicitationResult.action === "accept" &&
+        elicitationResult.content
+      ) {
+        state.clarification =
+          (elicitationResult.content as { interpretation?: string })
+            .interpretation || "User accepted without selection";
+      } else if (elicitationResult.action === "decline") {
+        state.clarification = "User declined - using default interpretation";
+      } else {
+        state.clarification = "User cancelled - using default interpretation";
+      }
+
+      // Resume with working status
+      await taskStore.updateTaskStatus(
+        taskId,
+        "working",
+        `Received clarification: "${state.clarification}". Continuing...`
+      );
+
+      // Continue processing (no return - just keep going through the loop)
     }
 
     // Simulate work for this stage
@@ -131,17 +183,18 @@ This tool demonstrates MCP's task-based execution pattern for long-running opera
 3. Status progressed: \`working\` → ${state.clarification ? `\`input_required\` → \`working\` → ` : ""}\`completed\`
 4. Client calls \`tasks/result\` → Server returns this final result
 
-${state.clarification ? `**input_required Flow:**
-When the query was ambiguous, the task paused with \`input_required\` status.
-The client called \`tasks/result\` prematurely, which triggered an elicitation
-request via the side-channel. After receiving clarification ("${state.clarification}"),
-the task resumed processing.
+${state.clarification ? `**Elicitation Flow:**
+When the query was ambiguous, the server sent an \`elicitation/create\` request
+directly to the client. The task status changed to \`input_required\` while
+awaiting user input. After receiving clarification ("${state.clarification}"),
+the task resumed processing and completed.
 ` : ""}
 **Key Concepts:**
 - Tasks enable "call now, fetch later" patterns
 - \`statusMessage\` provides human-readable progress updates
 - Tasks have TTL (time-to-live) for automatic cleanup
 - \`pollInterval\` suggests how often to check status
+- Elicitation requests can be sent directly during task execution
 
 *This is a simulated research report from the Everything MCP Server.*
 `;
@@ -178,7 +231,7 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
       description:
         "Simulates a deep research operation that gathers, analyzes, and synthesizes information. " +
         "Demonstrates MCP task-based operations with progress through multiple stages. " +
-        "If 'ambiguous' is true and client supports elicitation, pauses for clarification (input_required status).",
+        "If 'ambiguous' is true and client supports elicitation, sends an elicitation request for clarification.",
       inputSchema: SimulateResearchQuerySchema,
       execution: { taskSupport: "required" },
     },
@@ -200,20 +253,23 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
           topic: validatedArgs.topic,
           ambiguous: validatedArgs.ambiguous && clientSupportsElicitation,
           currentStage: 0,
-          waitingForClarification: false,
           completed: false,
         };
         researchStates.set(task.taskId, state);
 
         // Start background research (don't await - runs asynchronously)
-        runResearchProcess(task.taskId, validatedArgs, extra.taskStore).catch(
-          (error) => {
-            console.error(`Research task ${task.taskId} failed:`, error);
-            extra.taskStore
-              .updateTaskStatus(task.taskId, "failed", String(error))
-              .catch(console.error);
-          }
-        );
+        // Pass sendRequest so elicitation can be sent directly from the background process
+        runResearchProcess(
+          task.taskId,
+          validatedArgs,
+          extra.taskStore,
+          extra.sendRequest
+        ).catch((error) => {
+          console.error(`Research task ${task.taskId} failed:`, error);
+          extra.taskStore
+            .updateTaskStatus(task.taskId, "failed", String(error))
+            .catch(console.error);
+        });
 
         return { task };
       },
@@ -228,77 +284,11 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
       },
 
       /**
-       * Returns the task result, or handles input_required via elicitation side-channel.
+       * Returns the task result.
+       * Elicitation is now handled directly in the background process.
        */
       getTaskResult: async (args, extra): Promise<CallToolResult> => {
-        const task = await extra.taskStore.getTask(extra.taskId);
-        const state = researchStates.get(extra.taskId);
-
-        // Handle input_required - use tasks/result as side-channel for elicitation
-        if (task?.status === "input_required" && state?.waitingForClarification) {
-          // Send elicitation request through the side-channel
-          const elicitationResult = await extra.sendRequest(
-            {
-              method: "elicitation/create",
-              params: {
-                message: `The research query "${state.topic}" could have multiple interpretations. Please clarify what you're looking for:`,
-                requestedSchema: {
-                  type: "object",
-                  properties: {
-                    interpretation: {
-                      type: "string",
-                      title: "Clarification",
-                      description: "Which interpretation of the topic do you mean?",
-                      oneOf: getInterpretationsForTopic(state.topic),
-                    },
-                  },
-                  required: ["interpretation"],
-                },
-              },
-            },
-            ElicitResultSchema,
-            { timeout: 5 * 60 * 1000 /* 5 minutes */ }
-          );
-
-          // Process elicitation response
-          if (
-            elicitationResult.action === "accept" &&
-            elicitationResult.content
-          ) {
-            state.clarification =
-              (elicitationResult.content as { interpretation?: string })
-                .interpretation || "User accepted without selection";
-          } else if (elicitationResult.action === "decline") {
-            state.clarification = "User declined - using default interpretation";
-          } else {
-            state.clarification = "User cancelled - using default interpretation";
-          }
-
-          state.waitingForClarification = false;
-
-          // Resume background processing from current stage
-          runResearchProcess(extra.taskId, {
-            topic: state.topic,
-            ambiguous: false, // Don't ask again
-          }, extra.taskStore).catch((error) => {
-            console.error(`Research task ${extra.taskId} failed:`, error);
-            extra.taskStore
-              .updateTaskStatus(extra.taskId, "failed", String(error))
-              .catch(console.error);
-          });
-
-          // Return indication that work is resuming (client should poll again)
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Resuming research with clarification: "${state.clarification}"`,
-              },
-            ],
-          };
-        }
-
-        // Normal case: return the stored result
+        // Return the stored result
         const result = await extra.taskStore.getTaskResult(extra.taskId);
 
         // Clean up state
