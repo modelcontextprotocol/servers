@@ -4,11 +4,10 @@ import {
   CallToolResult,
   GetTaskResult,
   Task,
+  ElicitResult,
   ElicitResultSchema,
-  ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js";
-import { CreateTaskResult } from "@modelcontextprotocol/sdk/experimental";
-import type { AnySchema, SchemaOutput } from "@modelcontextprotocol/sdk/server/zod-compat.js";
+import { CreateTaskResult } from "@modelcontextprotocol/sdk/experimental/tasks";
 
 // Tool input schema
 const SimulateResearchQuerySchema = z.object({
@@ -48,7 +47,11 @@ const researchStates = new Map<string, ResearchState>();
 /**
  * Runs the background research process.
  * Updates task status as it progresses through stages.
- * If clarification is needed, sends elicitation request directly.
+ * If clarification is needed, attempts elicitation via sendRequest.
+ *
+ * Note: Elicitation only works on STDIO transport. On HTTP transport,
+ * sendRequest will fail and the task will use a default interpretation.
+ * Full HTTP support requires SDK PR #1210's elicitInputStream API.
  */
 async function runResearchProcess(
   taskId: string,
@@ -65,11 +68,8 @@ async function runResearchProcess(
       result: CallToolResult
     ) => Promise<void>;
   },
-  sendRequest: <U extends AnySchema>(
-    request: ServerRequest,
-    resultSchema: U,
-    options?: { timeout?: number }
-  ) => Promise<SchemaOutput<U>>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sendRequest: any
 ): Promise<void> {
   const state = researchStates.get(taskId);
   if (!state) return;
@@ -86,56 +86,63 @@ async function runResearchProcess(
 
     // At synthesis stage (index 2), check if clarification is needed
     if (i === 2 && state.ambiguous && !state.clarification) {
-      // Update status to show we're requesting input
+      // Update status to show we're requesting input (spec SHOULD)
       await taskStore.updateTaskStatus(
         taskId,
         "input_required",
         `Found multiple interpretations for "${state.topic}". Requesting clarification...`
       );
 
-      // Send elicitation directly and await response
-      const elicitationResult = await sendRequest(
-        {
-          method: "elicitation/create",
-          params: {
-            message: `The research query "${state.topic}" could have multiple interpretations. Please clarify what you're looking for:`,
-            requestedSchema: {
-              type: "object",
-              properties: {
-                interpretation: {
-                  type: "string",
-                  title: "Clarification",
-                  description: "Which interpretation of the topic do you mean?",
-                  oneOf: getInterpretationsForTopic(state.topic),
+      try {
+        // Try elicitation via sendRequest (works on STDIO, fails on HTTP)
+        const elicitResult: ElicitResult = await sendRequest(
+          {
+            method: "elicitation/create",
+            params: {
+              message: `The research query "${state.topic}" could have multiple interpretations. Please clarify what you're looking for:`,
+              requestedSchema: {
+                type: "object",
+                properties: {
+                  interpretation: {
+                    type: "string",
+                    title: "Clarification",
+                    description: "Which interpretation of the topic do you mean?",
+                    oneOf: getInterpretationsForTopic(state.topic),
+                  },
                 },
+                required: ["interpretation"],
               },
-              required: ["interpretation"],
             },
           },
-        },
-        ElicitResultSchema,
-        { timeout: 5 * 60 * 1000 /* 5 minutes */ }
-      );
+          ElicitResultSchema
+        );
 
-      // Process elicitation response
-      if (
-        elicitationResult.action === "accept" &&
-        elicitationResult.content
-      ) {
+        // Process elicitation response
+        if (elicitResult.action === "accept" && elicitResult.content) {
+          state.clarification =
+            (elicitResult.content as { interpretation?: string })
+              .interpretation || "User accepted without selection";
+        } else if (elicitResult.action === "decline") {
+          state.clarification = "User declined - using default interpretation";
+        } else {
+          state.clarification = "User cancelled - using default interpretation";
+        }
+      } catch (error) {
+        // Elicitation failed (likely HTTP transport without streaming support)
+        // Use default interpretation and continue - task should still complete
+        console.warn(
+          `Elicitation failed for task ${taskId} (HTTP transport?):`,
+          error instanceof Error ? error.message : String(error)
+        );
         state.clarification =
-          (elicitationResult.content as { interpretation?: string })
-            .interpretation || "User accepted without selection";
-      } else if (elicitationResult.action === "decline") {
-        state.clarification = "User declined - using default interpretation";
-      } else {
-        state.clarification = "User cancelled - using default interpretation";
+          "technical (default - elicitation unavailable on HTTP)";
       }
 
-      // Resume with working status
+      // Resume with working status (spec SHOULD)
       await taskStore.updateTaskStatus(
         taskId,
         "working",
-        `Received clarification: "${state.clarification}". Continuing...`
+        `Continuing with interpretation: "${state.clarification}"...`
       );
 
       // Continue processing (no return - just keep going through the loop)
@@ -185,9 +192,12 @@ This tool demonstrates MCP's task-based execution pattern for long-running opera
 
 ${state.clarification ? `**Elicitation Flow:**
 When the query was ambiguous, the server sent an \`elicitation/create\` request
-directly to the client. The task status changed to \`input_required\` while
-awaiting user input. After receiving clarification ("${state.clarification}"),
-the task resumed processing and completed.
+to the client. The task status changed to \`input_required\` while awaiting user input.
+${state.clarification.includes("unavailable on HTTP") ? `
+**Note:** Elicitation was skipped because this server is running over HTTP transport.
+The current SDK's \`sendRequest\` only works over STDIO. Full HTTP elicitation support
+requires SDK PR #1210's streaming \`elicitInputStream\` API.
+` : `After receiving clarification ("${state.clarification}"), the task resumed processing and completed.`}
 ` : ""}
 **Key Concepts:**
 - Tasks enable "call now, fetch later" patterns
@@ -258,7 +268,7 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
         researchStates.set(task.taskId, state);
 
         // Start background research (don't await - runs asynchronously)
-        // Pass sendRequest so elicitation can be sent directly from the background process
+        // Pass sendRequest for elicitation (works on STDIO, gracefully degrades on HTTP)
         runResearchProcess(
           task.taskId,
           validatedArgs,
