@@ -237,7 +237,7 @@ export class KnowledgeGraphManager {
 
 let knowledgeGraphManager: KnowledgeGraphManager;
 
-// Zod schemas for entities and relations - Patched for Gemini CLI compatibility
+// Zod schemas for entities and relations
 const EntitySchema = z.object({
   type: z.string().optional().describe("Internal type discriminator (entity)"),
   name: z.string().describe("The name of the entity"),
