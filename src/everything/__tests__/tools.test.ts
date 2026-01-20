@@ -9,6 +9,12 @@ import { registerGetAnnotatedMessageTool } from '../tools/get-annotated-message.
 import { registerTriggerLongRunningOperationTool } from '../tools/trigger-long-running-operation.js';
 import { registerGetResourceLinksTool } from '../tools/get-resource-links.js';
 import { registerGetResourceReferenceTool } from '../tools/get-resource-reference.js';
+import { registerToggleSimulatedLoggingTool } from '../tools/toggle-simulated-logging.js';
+import { registerToggleSubscriberUpdatesTool } from '../tools/toggle-subscriber-updates.js';
+import { registerTriggerSamplingRequestTool } from '../tools/trigger-sampling-request.js';
+import { registerTriggerElicitationRequestTool } from '../tools/trigger-elicitation-request.js';
+import { registerGetRootsListTool } from '../tools/get-roots-list.js';
+import { registerGZipFileAsResourceTool } from '../tools/gzip-file-as-resource.js';
 
 // Helper to capture registered tool handlers
 function createMockServer() {
@@ -24,6 +30,8 @@ function createMockServer() {
       getClientCapabilities: vi.fn(() => ({})),
       notification: vi.fn(),
     },
+    sendLoggingMessage: vi.fn(),
+    sendResourceUpdated: vi.fn(),
   } as unknown as McpServer;
 
   return { mockServer, handlers, configs };
@@ -574,6 +582,407 @@ describe('Tools', () => {
       await expect(handler({ resourceType: 'Text', resourceId: 1.5 })).rejects.toThrow(
         'Invalid resourceId'
       );
+    });
+  });
+
+  describe('toggle-simulated-logging', () => {
+    it('should register with correct name and config', () => {
+      const { mockServer } = createMockServer();
+      registerToggleSimulatedLoggingTool(mockServer);
+
+      expect(mockServer.registerTool).toHaveBeenCalledWith(
+        'toggle-simulated-logging',
+        expect.objectContaining({
+          title: 'Toggle Simulated Logging',
+          description: expect.stringContaining('logging'),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('should start logging when not active', async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerToggleSimulatedLoggingTool(mockServer);
+
+      const handler = handlers.get('toggle-simulated-logging')!;
+      const result = await handler({}, { sessionId: 'test-session-1' });
+
+      expect(result.content[0].text).toContain('Started');
+      expect(result.content[0].text).toContain('test-session-1');
+    });
+
+    it('should stop logging when already active', async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerToggleSimulatedLoggingTool(mockServer);
+
+      const handler = handlers.get('toggle-simulated-logging')!;
+
+      // First call starts logging
+      await handler({}, { sessionId: 'test-session-2' });
+
+      // Second call stops logging
+      const result = await handler({}, { sessionId: 'test-session-2' });
+
+      expect(result.content[0].text).toContain('Stopped');
+      expect(result.content[0].text).toContain('test-session-2');
+    });
+
+    it('should handle undefined sessionId', async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerToggleSimulatedLoggingTool(mockServer);
+
+      const handler = handlers.get('toggle-simulated-logging')!;
+      const result = await handler({}, {});
+
+      expect(result.content[0].text).toContain('Started');
+    });
+  });
+
+  describe('toggle-subscriber-updates', () => {
+    it('should register with correct name and config', () => {
+      const { mockServer } = createMockServer();
+      registerToggleSubscriberUpdatesTool(mockServer);
+
+      expect(mockServer.registerTool).toHaveBeenCalledWith(
+        'toggle-subscriber-updates',
+        expect.objectContaining({
+          title: 'Toggle Subscriber Updates',
+          description: expect.stringContaining('subscription updates'),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('should start updates when not active', async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerToggleSubscriberUpdatesTool(mockServer);
+
+      const handler = handlers.get('toggle-subscriber-updates')!;
+      const result = await handler({}, { sessionId: 'sub-session-1' });
+
+      expect(result.content[0].text).toContain('Started');
+      expect(result.content[0].text).toContain('sub-session-1');
+    });
+
+    it('should stop updates when already active', async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerToggleSubscriberUpdatesTool(mockServer);
+
+      const handler = handlers.get('toggle-subscriber-updates')!;
+
+      // First call starts updates
+      await handler({}, { sessionId: 'sub-session-2' });
+
+      // Second call stops updates
+      const result = await handler({}, { sessionId: 'sub-session-2' });
+
+      expect(result.content[0].text).toContain('Stopped');
+      expect(result.content[0].text).toContain('sub-session-2');
+    });
+  });
+
+  describe('trigger-sampling-request', () => {
+    it('should not register when client does not support sampling', () => {
+      const { mockServer } = createMockServer();
+      registerTriggerSamplingRequestTool(mockServer);
+
+      // Tool should not be registered since mock server returns empty capabilities
+      expect(mockServer.registerTool).not.toHaveBeenCalled();
+    });
+
+    it('should register when client supports sampling', () => {
+      const handlers: Map<string, Function> = new Map();
+      const mockServer = {
+        registerTool: vi.fn((name: string, config: any, handler: Function) => {
+          handlers.set(name, handler);
+        }),
+        server: {
+          getClientCapabilities: vi.fn(() => ({ sampling: {} })),
+        },
+      } as unknown as McpServer;
+
+      registerTriggerSamplingRequestTool(mockServer);
+
+      expect(mockServer.registerTool).toHaveBeenCalledWith(
+        'trigger-sampling-request',
+        expect.objectContaining({
+          title: 'Trigger Sampling Request Tool',
+          description: expect.stringContaining('Sampling'),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('should send sampling request and return result', async () => {
+      const handlers: Map<string, Function> = new Map();
+      const mockSendRequest = vi.fn().mockResolvedValue({
+        model: 'test-model',
+        content: { type: 'text', text: 'LLM response' },
+      });
+
+      const mockServer = {
+        registerTool: vi.fn((name: string, config: any, handler: Function) => {
+          handlers.set(name, handler);
+        }),
+        server: {
+          getClientCapabilities: vi.fn(() => ({ sampling: {} })),
+        },
+      } as unknown as McpServer;
+
+      registerTriggerSamplingRequestTool(mockServer);
+
+      const handler = handlers.get('trigger-sampling-request')!;
+      const result = await handler(
+        { prompt: 'Test prompt', maxTokens: 50 },
+        { sendRequest: mockSendRequest }
+      );
+
+      expect(mockSendRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'sampling/createMessage',
+          params: expect.objectContaining({
+            maxTokens: 50,
+          }),
+        }),
+        expect.anything()
+      );
+      expect(result.content[0].text).toContain('LLM sampling result');
+    });
+  });
+
+  describe('trigger-elicitation-request', () => {
+    it('should not register when client does not support elicitation', () => {
+      const { mockServer } = createMockServer();
+      registerTriggerElicitationRequestTool(mockServer);
+
+      expect(mockServer.registerTool).not.toHaveBeenCalled();
+    });
+
+    it('should register when client supports elicitation', () => {
+      const handlers: Map<string, Function> = new Map();
+      const mockServer = {
+        registerTool: vi.fn((name: string, config: any, handler: Function) => {
+          handlers.set(name, handler);
+        }),
+        server: {
+          getClientCapabilities: vi.fn(() => ({ elicitation: {} })),
+        },
+      } as unknown as McpServer;
+
+      registerTriggerElicitationRequestTool(mockServer);
+
+      expect(mockServer.registerTool).toHaveBeenCalledWith(
+        'trigger-elicitation-request',
+        expect.objectContaining({
+          title: 'Trigger Elicitation Request Tool',
+          description: expect.stringContaining('Elicitation'),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('should handle accept action with user content', async () => {
+      const handlers: Map<string, Function> = new Map();
+      const mockSendRequest = vi.fn().mockResolvedValue({
+        action: 'accept',
+        content: {
+          name: 'John Doe',
+          check: true,
+          email: 'john@example.com',
+        },
+      });
+
+      const mockServer = {
+        registerTool: vi.fn((name: string, config: any, handler: Function) => {
+          handlers.set(name, handler);
+        }),
+        server: {
+          getClientCapabilities: vi.fn(() => ({ elicitation: {} })),
+        },
+      } as unknown as McpServer;
+
+      registerTriggerElicitationRequestTool(mockServer);
+
+      const handler = handlers.get('trigger-elicitation-request')!;
+      const result = await handler({}, { sendRequest: mockSendRequest });
+
+      expect(result.content[0].text).toContain('✅');
+      expect(result.content[0].text).toContain('provided');
+      expect(result.content[1].text).toContain('John Doe');
+    });
+
+    it('should handle decline action', async () => {
+      const handlers: Map<string, Function> = new Map();
+      const mockSendRequest = vi.fn().mockResolvedValue({
+        action: 'decline',
+      });
+
+      const mockServer = {
+        registerTool: vi.fn((name: string, config: any, handler: Function) => {
+          handlers.set(name, handler);
+        }),
+        server: {
+          getClientCapabilities: vi.fn(() => ({ elicitation: {} })),
+        },
+      } as unknown as McpServer;
+
+      registerTriggerElicitationRequestTool(mockServer);
+
+      const handler = handlers.get('trigger-elicitation-request')!;
+      const result = await handler({}, { sendRequest: mockSendRequest });
+
+      expect(result.content[0].text).toContain('❌');
+      expect(result.content[0].text).toContain('declined');
+    });
+
+    it('should handle cancel action', async () => {
+      const handlers: Map<string, Function> = new Map();
+      const mockSendRequest = vi.fn().mockResolvedValue({
+        action: 'cancel',
+      });
+
+      const mockServer = {
+        registerTool: vi.fn((name: string, config: any, handler: Function) => {
+          handlers.set(name, handler);
+        }),
+        server: {
+          getClientCapabilities: vi.fn(() => ({ elicitation: {} })),
+        },
+      } as unknown as McpServer;
+
+      registerTriggerElicitationRequestTool(mockServer);
+
+      const handler = handlers.get('trigger-elicitation-request')!;
+      const result = await handler({}, { sendRequest: mockSendRequest });
+
+      expect(result.content[0].text).toContain('⚠️');
+      expect(result.content[0].text).toContain('cancelled');
+    });
+  });
+
+  describe('get-roots-list', () => {
+    it('should not register when client does not support roots', () => {
+      const { mockServer } = createMockServer();
+      registerGetRootsListTool(mockServer);
+
+      expect(mockServer.registerTool).not.toHaveBeenCalled();
+    });
+
+    it('should register when client supports roots', () => {
+      const handlers: Map<string, Function> = new Map();
+      const mockServer = {
+        registerTool: vi.fn((name: string, config: any, handler: Function) => {
+          handlers.set(name, handler);
+        }),
+        server: {
+          getClientCapabilities: vi.fn(() => ({ roots: {} })),
+        },
+      } as unknown as McpServer;
+
+      registerGetRootsListTool(mockServer);
+
+      expect(mockServer.registerTool).toHaveBeenCalledWith(
+        'get-roots-list',
+        expect.objectContaining({
+          title: 'Get Roots List Tool',
+          description: expect.stringContaining('roots'),
+        }),
+        expect.any(Function)
+      );
+    });
+  });
+
+  describe('gzip-file-as-resource', () => {
+    it('should register with correct name and config', () => {
+      const { mockServer } = createMockServer();
+      registerGZipFileAsResourceTool(mockServer);
+
+      expect(mockServer.registerTool).toHaveBeenCalledWith(
+        'gzip-file-as-resource',
+        expect.objectContaining({
+          title: 'GZip File as Resource Tool',
+          description: expect.stringContaining('gzip'),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('should compress data URI and return resource link', async () => {
+      const registeredResources: any[] = [];
+      const mockServer = {
+        registerTool: vi.fn(),
+        registerResource: vi.fn((...args) => {
+          registeredResources.push(args);
+        }),
+      } as unknown as McpServer;
+
+      // Get the handler
+      let handler: Function | null = null;
+      (mockServer.registerTool as any).mockImplementation(
+        (name: string, config: any, h: Function) => {
+          handler = h;
+        }
+      );
+
+      registerGZipFileAsResourceTool(mockServer);
+
+      // Create a data URI with test content
+      const testContent = 'Hello, World!';
+      const dataUri = `data:text/plain;base64,${Buffer.from(testContent).toString('base64')}`;
+
+      const result = await handler!(
+        { name: 'test.txt.gz', data: dataUri, outputType: 'resourceLink' }
+      );
+
+      expect(result.content[0].type).toBe('resource_link');
+      expect(result.content[0].uri).toContain('test.txt.gz');
+    });
+
+    it('should return resource directly when outputType is resource', async () => {
+      const mockServer = {
+        registerTool: vi.fn(),
+        registerResource: vi.fn(),
+      } as unknown as McpServer;
+
+      let handler: Function | null = null;
+      (mockServer.registerTool as any).mockImplementation(
+        (name: string, config: any, h: Function) => {
+          handler = h;
+        }
+      );
+
+      registerGZipFileAsResourceTool(mockServer);
+
+      const testContent = 'Test content for compression';
+      const dataUri = `data:text/plain;base64,${Buffer.from(testContent).toString('base64')}`;
+
+      const result = await handler!(
+        { name: 'output.gz', data: dataUri, outputType: 'resource' }
+      );
+
+      expect(result.content[0].type).toBe('resource');
+      expect(result.content[0].resource.mimeType).toBe('application/gzip');
+      expect(result.content[0].resource.blob).toBeDefined();
+    });
+
+    it('should reject unsupported URL protocols', async () => {
+      const mockServer = {
+        registerTool: vi.fn(),
+        registerResource: vi.fn(),
+      } as unknown as McpServer;
+
+      let handler: Function | null = null;
+      (mockServer.registerTool as any).mockImplementation(
+        (name: string, config: any, h: Function) => {
+          handler = h;
+        }
+      );
+
+      registerGZipFileAsResourceTool(mockServer);
+
+      await expect(
+        handler!({ name: 'test.gz', data: 'ftp://example.com/file.txt', outputType: 'resource' })
+      ).rejects.toThrow('Unsupported URL protocol');
     });
   });
 });
