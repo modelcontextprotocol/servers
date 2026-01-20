@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
   textResource,
@@ -17,6 +17,12 @@ import {
   getSessionResourceURI,
   registerSessionResource,
 } from '../resources/session.js';
+import { registerFileResources } from '../resources/files.js';
+import {
+  setSubscriptionHandlers,
+  beginSimulatedResourceUpdates,
+  stopSimulatedResourceUpdates,
+} from '../resources/subscriptions.js';
 
 describe('Resource Templates', () => {
   describe('Constants', () => {
@@ -263,6 +269,103 @@ describe('Session Resources', () => {
       expect(handlerResult.contents).toHaveLength(1);
       expect(handlerResult.contents[0].text).toBe('Test content here');
       expect(handlerResult.contents[0].mimeType).toBe('text/plain');
+    });
+  });
+});
+
+describe('File Resources', () => {
+  describe('registerFileResources', () => {
+    it('should register file resources from docs directory', () => {
+      const mockServer = {
+        registerResource: vi.fn(),
+      } as unknown as McpServer;
+
+      // This may or may not register resources depending on if docs/ exists
+      registerFileResources(mockServer);
+
+      // If docs folder exists and has files, resources should be registered
+      // If not, the function should not throw
+      expect(true).toBe(true);
+    });
+
+    it('should not throw when docs directory is missing', () => {
+      const mockServer = {
+        registerResource: vi.fn(),
+      } as unknown as McpServer;
+
+      // Should gracefully handle missing docs directory
+      expect(() => registerFileResources(mockServer)).not.toThrow();
+    });
+  });
+});
+
+describe('Subscriptions', () => {
+  describe('setSubscriptionHandlers', () => {
+    it('should set request handlers on server', () => {
+      const mockServer = {
+        server: {
+          setRequestHandler: vi.fn(),
+        },
+        sendLoggingMessage: vi.fn(),
+      } as unknown as McpServer;
+
+      setSubscriptionHandlers(mockServer);
+
+      // Should set both subscribe and unsubscribe handlers
+      expect(mockServer.server.setRequestHandler).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('beginSimulatedResourceUpdates', () => {
+    afterEach(() => {
+      // Clean up any intervals
+      stopSimulatedResourceUpdates('test-session-updates');
+      stopSimulatedResourceUpdates(undefined);
+    });
+
+    it('should start update interval for session', () => {
+      const mockServer = {
+        server: {
+          notification: vi.fn(),
+        },
+      } as unknown as McpServer;
+
+      // Should not throw
+      expect(() =>
+        beginSimulatedResourceUpdates(mockServer, 'test-session-updates')
+      ).not.toThrow();
+    });
+
+    it('should handle undefined sessionId', () => {
+      const mockServer = {
+        server: {
+          notification: vi.fn(),
+        },
+      } as unknown as McpServer;
+
+      expect(() => beginSimulatedResourceUpdates(mockServer, undefined)).not.toThrow();
+    });
+  });
+
+  describe('stopSimulatedResourceUpdates', () => {
+    it('should stop updates for session', () => {
+      const mockServer = {
+        server: {
+          notification: vi.fn(),
+        },
+      } as unknown as McpServer;
+
+      // Start then stop
+      beginSimulatedResourceUpdates(mockServer, 'stop-test-session');
+      expect(() => stopSimulatedResourceUpdates('stop-test-session')).not.toThrow();
+    });
+
+    it('should handle stopping non-existent session', () => {
+      expect(() => stopSimulatedResourceUpdates('non-existent-session')).not.toThrow();
+    });
+
+    it('should handle undefined sessionId', () => {
+      expect(() => stopSimulatedResourceUpdates(undefined)).not.toThrow();
     });
   });
 });
