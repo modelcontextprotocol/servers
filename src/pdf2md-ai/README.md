@@ -1,14 +1,20 @@
-# PDF to Markdown (pdf2md-ai)
+﻿# PDF to Markdown (pdf2md-ai)
 
-AI-powered PDF to Markdown converter using advanced AI. Preserves document structure, tables, and formatting with intelligent content extraction.
+AI-powered PDF to Markdown converter that **preserves complete context**: images (analyzed and described with AI), complex tables (including merged cells), code blocks (with original formatting), and document structure. Uses Gemini and LlamaParse for intelligent processing.
 
-## Features
+## Key Features
 
-- **Intelligent Extraction**: Uses advanced AI (Gemini) for accurate content extraction
-- **Structure Preservation**: Maintains headings, tables, lists, and formatting
-- **Multi-language Support**: Processes documents in any language
-- **Credit-based System**: Transparent usage tracking
-- **Fast Processing**: Typical 1-page PDF converted in seconds
+This is not just a simple PDF text extractor. pdf2md-ai **preserves complete visual and structural context**:
+
+- 📸 **Images with Context**: Each image is analyzed with AI (Gemini) and described in detail, maintaining its context within the document
+- 📊 **Complex Tables**: Preserves complete table structure including merged cells, alignment, and formatting
+- 💻 **Source Code**: Maintains code blocks with original syntax and formatting intact
+- 📝 **Document Structure**: Hierarchies, lists, quotes, and special formatting preserved
+- 🌍 **Multi-language Support**: Processes documents in any language
+- ⚡ **Fast Processing**: Typical 1-page PDF converted in seconds
+- 💳 **Credit-based System**: Transparent usage tracking (1 credit per page)
+
+This means when you convert a technical PDF, a report with graphics, or documentation with code examples, **you don't lose any visual or structural information**.
 
 ## Installation
 
@@ -70,14 +76,16 @@ Convert this PDF to markdown: /path/to/your/document.pdf
 
 The server will:
 1. Read the PDF file from your local system
-2. Process it using advanced AI
-3. Return formatted Markdown with statistics
+2. Analyze images with AI and extract descriptions
+3. Preserve complete table structures
+4. Maintain code blocks with original formatting
+5. Return formatted Markdown with full context preserved
 
 ### Example
 
 **Request:**
 ```
-Convert this contract: C:\Documents\agreement.pdf
+Convert this technical document: C:\Documents\api-guide.pdf
 ```
 
 **Response:**
@@ -89,22 +97,26 @@ Convert this contract: C:\Documents\agreement.pdf
 - Credits used: 8
 - Credits remaining: 492
 
-## Contract Content:
+## API Guide Content:
 
-[Full markdown content here with preserved structure, tables, and formatting...]
+[Full markdown content here with:
+ - Image descriptions in context
+ - Complex tables fully preserved
+ - Code examples with syntax highlighting
+ - Complete document structure maintained...]
 ```
 
 ## Tools
 
 ### convert_pdf_to_markdown
 
-Converts a PDF file to Markdown format.
+Converts a PDF file to Markdown format preserving complete context: images, tables, code blocks, and structure.
 
 **Arguments:**
 - `filePath` (string, required): Absolute path to the PDF file on your local system
 
 **Returns:**
-- Markdown-formatted content
+- Markdown-formatted content with complete context preservation
 - Document statistics (pages, file size)
 - Credit usage information
 
@@ -117,12 +129,13 @@ Converts a PDF file to Markdown format.
 
 ## Use Cases
 
-- **Document Analysis**: Extract text from contracts, reports, invoices
-- **RAG Pipelines**: Convert PDFs to Markdown for vector databases and embeddings
-- **Content Migration**: Batch convert PDF documentation to Markdown format
-- **Research**: Extract academic papers and technical documents
-- **Data Extraction**: Pull structured data from forms and tables
-- **Archiving**: Create searchable text versions of PDF archives
+- **Technical Documentation**: Convert docs with diagrams, tables, and code while preserving all context
+- **Research Papers**: Extract academic papers with figures, complex tables, and references
+- **RAG Pipelines**: Create context-rich markdown for vector databases and embeddings
+- **Contract Analysis**: Process legal documents with tables and structured information
+- **Data Extraction**: Pull structured data from forms and complex tables
+- **Code Documentation**: Extract programming guides with code examples intact
+- **Report Processing**: Convert business reports maintaining charts and table context
 
 ## Requirements
 
