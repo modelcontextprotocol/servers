@@ -89,26 +89,39 @@ export async function validatePath(requestedPath: string): Promise<string> {
 
   // Security: Handle symlinks by checking their real path to prevent symlink attacks
   // This prevents attackers from creating symlinks that point outside allowed directories
+  // Enhanced with better encoding error handling for paths with umlauts
   try {
     const realPath = await fs.realpath(absolute);
+    // Re-normalize after realpath to ensure consistent Unicode representation
+    // This is critical when symlinks point to paths with umlauts
     const normalizedReal = normalizePath(realPath);
     if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
       throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
     }
     return realPath;
   } catch (error) {
+    // Enhanced error handling: Check if this is an encoding issue with umlauts
+    const errCode = (error as NodeJS.ErrnoException).code;
+    if (errCode === 'EILSEQ' || errCode === 'EINVAL') {
+      throw new Error(`Path contains invalid characters or encoding issue (check for umlauts): ${absolute}`);
+    }
     // Security: For new files that don't exist yet, verify parent directory
     // This ensures we can't create files in unauthorized locations
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       const parentDir = path.dirname(absolute);
       try {
         const realParentPath = await fs.realpath(parentDir);
+        // Re-normalize parent path for consistent Unicode representation
         const normalizedParent = normalizePath(realParentPath);
         if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
           throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
         }
         return absolute;
-      } catch {
+      } catch (parentError) {
+        const parentErrCode = (parentError as NodeJS.ErrnoException).code;
+        if (parentErrCode === 'EILSEQ' || parentErrCode === 'EINVAL') {
+          throw new Error(`Parent directory path contains invalid characters or encoding issue: ${parentDir}`);
+        }
         throw new Error(`Parent directory does not exist: ${parentDir}`);
       }
     }
