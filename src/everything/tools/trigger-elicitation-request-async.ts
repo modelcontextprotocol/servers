@@ -54,9 +54,8 @@ export const registerTriggerElicitationRequestAsyncTool = (server: McpServer) =>
           method: "elicitation/create" as const,
           params: {
             task: {
-                ttl: 600000, // 10 minutes (user input may take a while)
-                pollInterval: POLL_INTERVAL,
-              },
+              ttl: 600000, // 10 minutes (user input may take a while)
+            },
             message: "Please provide inputs for the following fields (async task demo):",
             requestedSchema: {
               type: "object" as const,

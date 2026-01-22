@@ -63,13 +63,12 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
         const { prompt, maxTokens } = validatedArgs;
 
         // Create the sampling request WITH task metadata
-        // The _meta.task field signals to the client that this should be executed as a task
-        const request: CreateMessageRequest & { params: { _meta?: { task: { ttl: number; pollInterval: number } } } } = {
+        // The params.task field signals to the client that this should be executed as a task
+        const request: CreateMessageRequest & { params: { task?: { ttl: number } } } = {
           method: "sampling/createMessage",
           params: {
             task: {
               ttl: 300000, // 5 minutes
-              pollInterval: POLL_INTERVAL,
             },
             messages: [
               {
