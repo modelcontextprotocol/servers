@@ -96,7 +96,7 @@ MCP Tasks are bidirectional - both server and client can be task executors:
 | Server -> Client | `elicitation/create` | Client | `trigger-elicitation-request-async` |
 
 For client-side tasks:
-1. Server sends request with task metadata (e.g., `_meta.task.ttl`)
+1. Server sends request with task metadata (e.g., `params.task.ttl`)
 2. Client creates task and returns `CreateTaskResult` with `taskId`
 3. Server polls `tasks/get` for status updates
 4. When complete, server calls `tasks/result` to retrieve the result

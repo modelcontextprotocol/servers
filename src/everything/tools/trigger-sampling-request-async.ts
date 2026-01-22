@@ -67,6 +67,10 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
         const request: CreateMessageRequest & { params: { _meta?: { task: { ttl: number; pollInterval: number } } } } = {
           method: "sampling/createMessage",
           params: {
+            task: {
+              ttl: 300000, // 5 minutes
+              pollInterval: POLL_INTERVAL,
+            },
             messages: [
               {
                 role: "user",
@@ -79,12 +83,6 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
             systemPrompt: "You are a helpful test server.",
             maxTokens,
             temperature: 0.7,
-            _meta: {
-              task: {
-                ttl: 300000, // 5 minutes
-                pollInterval: POLL_INTERVAL,
-              },
-            },
           },
         };
 
