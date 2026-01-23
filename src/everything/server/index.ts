@@ -1,5 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  InMemoryTaskStore,
+  InMemoryTaskMessageQueue,
+} from "@modelcontextprotocol/sdk/experimental/tasks";
+import {
   setSubscriptionHandlers,
   stopSimulatedResourceUpdates,
 } from "../resources/subscriptions.js";
@@ -32,6 +36,10 @@ export const createServer: () => ServerFactoryResponse = () => {
   // Read the server instructions
   const instructions = readInstructions();
 
+  // Create task store and message queue for task support
+  const taskStore = new InMemoryTaskStore();
+  const taskMessageQueue = new InMemoryTaskMessageQueue();
+
   // Create the server
   const server = new McpServer(
     {
@@ -52,8 +60,19 @@ export const createServer: () => ServerFactoryResponse = () => {
           listChanged: true,
         },
         logging: {},
+        tasks: {
+          list: {},
+          cancel: {},
+          requests: {
+            tools: {
+              call: {},
+            },
+          },
+        },
       },
       instructions,
+      taskStore,
+      taskMessageQueue,
     }
   );
 
@@ -89,6 +108,8 @@ export const createServer: () => ServerFactoryResponse = () => {
       // Stop any simulated logging or resource updates that may have been initiated.
       stopSimulatedLogging(sessionId);
       stopSimulatedResourceUpdates(sessionId);
+      // Clean up task store timers
+      taskStore.cleanup();
     },
   } satisfies ServerFactoryResponse;
 };
