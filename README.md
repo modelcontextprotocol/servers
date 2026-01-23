@@ -1181,6 +1181,7 @@ search, and comprehensive file analysis.
 - **[OpenZIM MCP](https://github.com/cameronrye/openzim-mcp)** - Modern, secure, and high-performance MCP server that enables AI models to access and search ZIM format knowledge bases offline, including Wikipedia and educational content archives.
 - **[Operative WebEvalAgent](https://github.com/Operative-Sh/web-eval-agent)** (by [Operative.sh](https://www.operative.sh)) - An MCP server to test, debug, and fix web applications autonomously.
 - **[OPNSense MCP](https://github.com/vespo92/OPNSenseMCP)** - MCP Server for OPNSense Firewall Management and API access
+- **[ORA](https://github.com/black-dash77/ora-mcp)** - Persistent memory for Claude Code. Store solutions, components, files, and conventions locally in SQLite. Retrieve them across any project.
 - **[Optimade MCP](https://github.com/dianfengxiaobo/optimade-mcp-server)** - An MCP server conducts real-time material science data queries with the Optimade database (for example, elemental composition, crystal structure).
 - **[Oracle](https://github.com/marcelo-ochoa/servers)** (by marcelo-ochoa) - Oracle Database integration in NodeJS with configurable access controls, query explain, stats and schema inspection
 - **[Oracle Cloud Infrastructure (OCI)](https://github.com/karthiksuku/oci-mcp)** (by karthiksukumar) - Python MCP server for OCI infrastructure (Compute, Autonomous Database, Object Storage). Read-heavy by default with safe instance actions (start/stop/reset). Includes Claude Desktop config and `.env` compartment scoping.
