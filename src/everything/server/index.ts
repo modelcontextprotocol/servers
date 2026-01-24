@@ -40,6 +40,8 @@ export const createServer: () => ServerFactoryResponse = () => {
   const taskStore = new InMemoryTaskStore();
   const taskMessageQueue = new InMemoryTaskMessageQueue();
 
+  let initializeTimeout: NodeJS.Timeout | null = null;
+
   // Create the server
   const server = new McpServer(
     {
@@ -98,7 +100,7 @@ export const createServer: () => ServerFactoryResponse = () => {
     // This is delayed until after the `notifications/initialized` handler finishes,
     // otherwise, the request gets lost.
     const sessionId = server.server.transport?.sessionId;
-    setTimeout(() => syncRoots(server, sessionId), 350);
+    initializeTimeout = setTimeout(() => syncRoots(server, sessionId), 350);
   };
 
   // Return the ServerFactoryResponse
@@ -110,6 +112,7 @@ export const createServer: () => ServerFactoryResponse = () => {
       stopSimulatedResourceUpdates(sessionId);
       // Clean up task store timers
       taskStore.cleanup();
+      if (initializeTimeout) clearTimeout(initializeTimeout);
     },
   } satisfies ServerFactoryResponse;
 };

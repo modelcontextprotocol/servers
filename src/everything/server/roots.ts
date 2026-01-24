@@ -63,15 +63,10 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
           );
         }
       } catch (error) {
-        await server.sendLoggingMessage(
-          {
-            level: "error",
-            logger: "everything-server",
-            data: `Failed to request roots from client: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          },
-          sessionId
+        console.error(
+          `Failed to request roots from client ${sessionId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
         );
       }
     };

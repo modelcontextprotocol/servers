@@ -48,9 +48,11 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
 
   // Client must support sampling AND tasks.requests.sampling
   const clientSupportsSampling = clientCapabilities.sampling !== undefined;
-  const clientTasksCapability = clientCapabilities.tasks as {
-    requests?: { sampling?: { createMessage?: object } };
-  } | undefined;
+  const clientTasksCapability = clientCapabilities.tasks as
+    | {
+        requests?: { sampling?: { createMessage?: object } };
+      }
+    | undefined;
   const clientSupportsAsyncSampling =
     clientTasksCapability?.requests?.sampling?.createMessage !== undefined;
 
@@ -64,7 +66,9 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
 
         // Create the sampling request WITH task metadata
         // The params.task field signals to the client that this should be executed as a task
-        const request: CreateMessageRequest & { params: { task?: { ttl: number } } } = {
+        const request: CreateMessageRequest & {
+          params: { task?: { ttl: number } };
+        } = {
           method: "sampling/createMessage",
           params: {
             task: {
@@ -112,14 +116,19 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
         );
 
         // Check if client returned CreateTaskResult (has task object)
-        const isTaskResult = 'task' in samplingResponse && samplingResponse.task;
+        const isTaskResult =
+          "task" in samplingResponse && samplingResponse.task;
         if (!isTaskResult) {
           // Client executed synchronously - return the direct response
           return {
             content: [
               {
                 type: "text",
-                text: `[SYNC] Client executed synchronously:\n${JSON.stringify(samplingResponse, null, 2)}`,
+                text: `[SYNC] Client executed synchronously:\n${JSON.stringify(
+                  samplingResponse,
+                  null,
+                  2
+                )}`,
               },
             ],
           };
@@ -150,16 +159,20 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
               method: "tasks/get",
               params: { taskId },
             },
-            z.object({
-              status: z.string(),
-              statusMessage: z.string().optional(),
-            }).passthrough()
+            z
+              .object({
+                status: z.string(),
+                statusMessage: z.string().optional(),
+              })
+              .passthrough()
           );
 
           taskStatus = pollResult.status;
           taskStatusMessage = pollResult.statusMessage;
           statusMessages.push(
-            `Poll ${attempts}: ${taskStatus}${taskStatusMessage ? ` - ${taskStatusMessage}` : ""}`
+            `Poll ${attempts}: ${taskStatus}${
+              taskStatusMessage ? ` - ${taskStatusMessage}` : ""
+            }`
           );
         }
 
@@ -169,7 +182,9 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
             content: [
               {
                 type: "text",
-                text: `[TIMEOUT] Task timed out after ${MAX_POLL_ATTEMPTS} poll attempts\n\nProgress:\n${statusMessages.join("\n")}`,
+                text: `[TIMEOUT] Task timed out after ${MAX_POLL_ATTEMPTS} poll attempts\n\nProgress:\n${statusMessages.join(
+                  "\n"
+                )}`,
               },
             ],
           };
@@ -181,7 +196,9 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
             content: [
               {
                 type: "text",
-                text: `[${taskStatus.toUpperCase()}] ${taskStatusMessage || "No message"}\n\nProgress:\n${statusMessages.join("\n")}`,
+                text: `[${taskStatus.toUpperCase()}] ${
+                  taskStatusMessage || "No message"
+                }\n\nProgress:\n${statusMessages.join("\n")}`,
               },
             ],
           };
@@ -201,7 +218,9 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
           content: [
             {
               type: "text",
-              text: `[COMPLETED] Async sampling completed!\n\n**Progress:**\n${statusMessages.join("\n")}\n\n**Result:**\n${JSON.stringify(result, null, 2)}`,
+              text: `[COMPLETED] Async sampling completed!\n\n**Progress:**\n${statusMessages.join(
+                "\n"
+              )}\n\n**Result:**\n${JSON.stringify(result, null, 2)}`,
             },
           ],
         };
