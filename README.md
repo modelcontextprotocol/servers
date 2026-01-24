@@ -1398,6 +1398,7 @@ search, and comprehensive file analysis.
 - **[User Feedback](https://github.com/mrexodia/user-feedback-mcp)** - Simple MCP Server to enable a human-in-the-loop workflow in tools like Cline and Cursor.
 - **[Useless Toolkit](https://uselesstoolkit.com/apis/mcp-servers)** - MCP-ready server endpoints for utility APIs, including Password Generator, IP2Geo etc., are provided by UselessToolkit.com, allowing seamless integration with AI agents via secure RapidAPI connections.
 - **[USPTO](https://github.com/riemannzeta/patent_mcp_server)** - MCP server for accessing United States Patent & Trademark Office data through its Open Data Protocol (ODP) API.
+- **[UX MCP Server](https://github.com/elsahafy/ux-mcp-server)** - Comprehensive UX toolkit with 28 knowledge resources (WCAG accessibility, Nielsen heuristics, design systems, e-commerce, voice UI, AR/VR, healthcare, finance) and 23 analysis tools for accessibility audits, color contrast checking, typography scales, dark pattern detection, and UX metrics calculation.
 - **[Vectara](https://github.com/vectara/vectara-mcp)** - Query Vectara's trusted RAG-as-a-service platform.
 - **[Vega-Lite](https://github.com/isaacwasserman/mcp-vegalite-server)** - Generate visualizations from fetched data using the VegaLite format and renderer.
 - **[Vertica](https://github.com/nolleh/mcp-vertica)** - Vertica database integration in Python with configurable access controls and schema inspection
