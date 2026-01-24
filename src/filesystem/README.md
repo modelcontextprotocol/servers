@@ -209,6 +209,55 @@ Add this to your `claude_desktop_config.json`:
 
 Note: you can provide sandboxed directories to the server by mounting them to `/projects`. Adding the `ro` flag will make the directory readonly by the server.
 
+## Troubleshooting
+
+### MCP error -32602: "Invalid structured content for tool directory_tree"
+
+If you see an error like:
+
+```
+MCP error -32602: Output validation error
+Invalid structured content for tool directory_tree
+Expected string, received array at path: ["content"]
+```
+
+it usually means the server returned `structuredContent.content` as an array even
+though the tool's `outputSchema` declares `content` as a string.
+
+You can reproduce a correct end-to-end `directory_tree` call with the MCP SDK using
+the following script:
+
+```ts
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'mcp-fs-tree-'));
+const root = await fs.realpath(tmp);
+await fs.writeFile(path.join(root, 'a.txt'), 'hello');
+
+const transport = new StdioClientTransport({
+  command: 'npx',
+  args: ['-y', '@modelcontextprotocol/server-filesystem', root],
+});
+
+const client = new Client({ name: 'debug-client', version: '1.0.0' }, { capabilities: {} });
+await client.connect(transport);
+
+const result = await client.callTool({
+  name: 'directory_tree',
+  arguments: { path: root },
+});
+
+console.log(result.structuredContent);
+await client.close();
+```
+
+If this script still throws `-32602`, make sure you are running a recent
+`@modelcontextprotocol/server-filesystem` build and not a cached older version.
+
 ### Docker
 Note: all directories must be mounted to `/projects` by default.
 
