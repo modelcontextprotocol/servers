@@ -106,7 +106,8 @@ async function runResearchProcess(
                   interpretation: {
                     type: "string",
                     title: "Clarification",
-                    description: "Which interpretation of the topic do you mean?",
+                    description:
+                      "Which interpretation of the topic do you mean?",
                     oneOf: getInterpretationsForTopic(state.topic),
                   },
                 },
@@ -187,18 +188,28 @@ This tool demonstrates MCP's task-based execution pattern for long-running opera
 **Task Lifecycle Demonstrated:**
 1. \`tools/call\` with \`task\` parameter → Server returns \`CreateTaskResult\` (not the final result)
 2. Client polls \`tasks/get\` → Server returns current status and \`statusMessage\`
-3. Status progressed: \`working\` → ${state.clarification ? `\`input_required\` → \`working\` → ` : ""}\`completed\`
+3. Status progressed: \`working\` → ${
+    state.clarification ? `\`input_required\` → \`working\` → ` : ""
+  }\`completed\`
 4. Client calls \`tasks/result\` → Server returns this final result
 
-${state.clarification ? `**Elicitation Flow:**
+${
+  state.clarification
+    ? `**Elicitation Flow:**
 When the query was ambiguous, the server sent an \`elicitation/create\` request
 to the client. The task status changed to \`input_required\` while awaiting user input.
-${state.clarification.includes("unavailable on HTTP") ? `
+${
+  state.clarification.includes("unavailable on HTTP")
+    ? `
 **Note:** Elicitation was skipped because this server is running over HTTP transport.
 The current SDK's \`sendRequest\` only works over STDIO. Full HTTP elicitation support
 requires SDK PR #1210's streaming \`elicitInputStream\` API.
-` : `After receiving clarification ("${state.clarification}"), the task resumed processing and completed.`}
-` : ""}
+`
+    : `After receiving clarification ("${state.clarification}"), the task resumed processing and completed.`
+}
+`
+    : ""
+}
 **Key Concepts:**
 - Tasks enable "call now, fetch later" patterns
 - \`statusMessage\` provides human-readable progress updates
@@ -288,9 +299,7 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
        * Returns the current status of the research task.
        */
       getTask: async (args, extra): Promise<GetTaskResult> => {
-        const task = await extra.taskStore.getTask(extra.taskId);
-        // The SDK's RequestTaskStore.getTask throws if not found, so task is always defined
-        return task;
+        return await extra.taskStore.getTask(extra.taskId);
       },
 
       /**
