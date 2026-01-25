@@ -1,0 +1,36 @@
+{
+  "name": "@modelcontextprotocol/server-consolidated",
+  "version": "1.0.0",
+  "description": "Consolidated MCP server combining multiple functionalities",
+  "type": "module",
+  "bin": {
+    "mcp-server-consolidated": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "diff": "^8.0.3",
+    "glob": "^10.5.0",
+    "minimatch": "^10.0.1",
+    "zod": "^3.25.0",
+    "zod-to-json-schema": "^3.23.5",
+    "chalk": "^5.3.0",
+    "yargs": "^17.7.2",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/diff": "^5.0.9",
+    "@types/minimatch": "^5.1.2",
+    "@types/yargs": "^17.0.32",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "shx": "^0.3.4",
+    "typescript": "^5.8.2"
+  }
+}
