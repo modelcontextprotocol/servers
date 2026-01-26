@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-everything",
-  "version": "2.0.0",
+  "version": "2026.1.26",
   "description": "MCP server that exercises all the features of the MCP protocol",
   "license": "MIT",
   "mcpName": "io.github.modelcontextprotocol/server-everything",
