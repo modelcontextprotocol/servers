@@ -259,6 +259,12 @@ cd path/to/servers/src/time
 npx @modelcontextprotocol/inspector uv run mcp-server-time
 ```
 
+### Usage with Codex CLI
+
+```bash
+codex mcp add time -- uvx mcp-server-time
+```
+
 ## Examples of Questions for Claude
 
 1. "What time is it now?" (will use system timezone)
