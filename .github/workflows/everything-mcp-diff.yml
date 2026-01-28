@@ -42,7 +42,7 @@ jobs:
           ref: ${{ github.event.inputs.target_ref || github.ref }}
 
       - name: Run MCP Server Diff
-        uses: SamMorrowDrums/mcp-server-diff@4ddeb31dd8b3f98f2c20d24d60d4d9b2b9aa6e3b # v2.1.1
+        uses: SamMorrowDrums/mcp-server-diff@a5555e85d68eaa014a334ae7d12b73787f2c49cc # v2.3.5
         with:
           setup_node: 'true'
           node_version: '22'
