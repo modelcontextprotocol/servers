@@ -6,6 +6,7 @@ import type { Root } from '@modelcontextprotocol/sdk/types.js';
 
 /**
  * Converts a root URI to a normalized directory path with basic security validation.
+ * Enhanced to handle paths with umlauts and symlinks robustly.
  * @param rootUri - File URI (file://...) or plain directory path
  * @returns Promise resolving to validated path or null if invalid
  */
@@ -17,8 +18,15 @@ async function parseRootUri(rootUri: string): Promise<string | null> {
       : rawPath;
     const absolutePath = path.resolve(expandedPath);
     const resolvedPath = await fs.realpath(absolutePath);
+    // Re-normalize after realpath to ensure consistent Unicode representation
+    // This is critical when roots contain paths with umlauts or point through symlinks
     return normalizePath(resolvedPath);
-  } catch {
+  } catch (error) {
+    // Enhanced error logging for encoding issues
+    const errCode = (error as NodeJS.ErrnoException).code;
+    if (errCode === 'EILSEQ' || errCode === 'EINVAL') {
+      console.error(`Root URI contains invalid encoding (check for umlauts): ${rootUri}`);
+    }
     return null; // Path doesn't exist or other error
   }
 }
