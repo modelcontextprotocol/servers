@@ -46,12 +46,11 @@ jobs:
         with:
           setup_node: 'true'
           node_version: '22'
-          install_command: npm ci
-          build_command: npm run build
-          start_command: node dist/index.js stdio
+          install_command: cd src/everything && npm ci
+          build_command: cd src/everything && npm run build
+          start_command: node src/everything/dist/index.js stdio
           compare_ref: ${{ github.event.inputs.compare_ref || '' }}
           server_timeout: '15'
-        working-directory: src/everything
 
       - name: Add summary context
         if: always()
