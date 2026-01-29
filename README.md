@@ -770,6 +770,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Discord](https://github.com/v-3/discordmcp)** - An MCP server to connect to Discord guilds through a bot and read and write messages in channels
 - **[Discord](https://github.com/SaseQ/discord-mcp)** - An MCP server, which connects to Discord through a bot, and provides comprehensive integration with Discord.
 - **[Discord](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/discord)** - For Discord API integration by Klavis AI
+- **[Discord](https://github.com/esenbora/discord-mcp)** - Full-featured Discord bot MCP server with 26 tools for messaging, channels, members, roles, and moderation. Available on npm as [@buzzicra/discord-mcp](https://www.npmjs.com/package/@buzzicra/discord-mcp).
 - **[Discourse](https://github.com/AshDevFr/discourse-mcp-server)** - An MCP server to search Discourse posts on a Discourse forum.
 - **[Dispatch Agent](https://github.com/abhinav-mangla/dispatch-agent)** - An intelligent MCP server that provides specialized filesystem operations through ReAct sub-agents.
 - **[DocBase](https://help.docbase.io/posts/3925317)** - Official MCP server for DocBase API integration, enabling post management, user collaboration, group administration, and more.
