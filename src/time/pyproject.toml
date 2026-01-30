@@ -17,10 +17,10 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
-    "mcp>=1.0.0",
+    "mcp>=1.23.0",
     "pydantic>=2.0.0",
     "tzdata>=2024.2",
-    "tzlocal>=5.3.1"
+    "tzlocal>=5.3.1",
 ]
 
 [project.scripts]
