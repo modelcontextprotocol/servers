@@ -1,9 +1,40 @@
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { InMemoryEventStore } from "@modelcontextprotocol/sdk/examples/shared/inMemoryEventStore.js";
+import {
+  StreamableHTTPServerTransport,
+  EventStore,
+} from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express, { Request, Response } from "express";
 import { createServer } from "../server/index.js";
 import { randomUUID } from "node:crypto";
 import cors from "cors";
+
+// Simple in-memory event store for SSE resumability
+class InMemoryEventStore implements EventStore {
+  private events: Map<string, { streamId: string; message: unknown }> =
+    new Map();
+
+  async storeEvent(streamId: string, message: unknown): Promise<string> {
+    const eventId = randomUUID();
+    this.events.set(eventId, { streamId, message });
+    return eventId;
+  }
+
+  async replayEventsAfter(
+    lastEventId: string,
+    { send }: { send: (eventId: string, message: unknown) => Promise<void> }
+  ): Promise<string> {
+    const entries = Array.from(this.events.entries());
+    const startIndex = entries.findIndex(([id]) => id === lastEventId);
+    if (startIndex === -1) return lastEventId;
+
+    let lastId: string = lastEventId;
+    for (let i = startIndex + 1; i < entries.length; i++) {
+      const [eventId, { message }] = entries[i];
+      await send(eventId, message);
+      lastId = eventId;
+    }
+    return lastId;
+  }
+}
 
 console.log("Starting Streamable HTTP server...");
 

@@ -17,7 +17,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Check files and comment if README-only
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -63,7 +63,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Swap labels and minimize comments
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { owner, repo } = context.repo;

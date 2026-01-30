@@ -15,7 +15,7 @@ jobs:
       npm_packages: ${{ steps.create-npm-packages.outputs.npm_packages}}
       pypi_packages: ${{ steps.create-pypi-packages.outputs.pypi_packages}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -43,7 +43,7 @@ jobs:
           cat RELEASE_NOTES.md
 
       - name: Release notes
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-notes
           path: RELEASE_NOTES.md
@@ -74,7 +74,7 @@ jobs:
     outputs:
       changes_made: ${{ steps.commit.outputs.changes_made }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -118,7 +118,7 @@ jobs:
       id-token: write # Required for trusted publishing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.create-metadata.outputs.version }}
 
@@ -126,7 +126,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version-file: "src/${{ matrix.package }}/.python-version"
 
@@ -158,11 +158,11 @@ jobs:
     environment: release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.create-metadata.outputs.version }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -204,10 +204,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download release notes
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: release-notes
 
