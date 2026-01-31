@@ -15,8 +15,8 @@ from pydantic import BaseModel
 
 
 class TimeTools(str, Enum):
-    GET_CURRENT_TIME = "get_current_time"
-    CONVERT_TIME = "convert_time"
+    GET_CURRENT_TIME = "time_get_current"
+    CONVERT_TIME = "time_convert"
 
 
 class TimeResult(BaseModel):
