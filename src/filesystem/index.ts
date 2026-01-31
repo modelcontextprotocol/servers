@@ -56,19 +56,36 @@ let allowedDirectories = await Promise.all(
   })
 );
 
-// Validate that all directories exist and are accessible
-await Promise.all(allowedDirectories.map(async (dir) => {
-  try {
-    const stats = await fs.stat(dir);
-    if (!stats.isDirectory()) {
-      console.error(`Error: ${dir} is not a directory`);
-      process.exit(1);
+// Validate directories and filter to only accessible ones
+const unavailableDirectories: string[] = [];
+const validatedDirectories = await Promise.all(
+  allowedDirectories.map(async (dir) => {
+    try {
+      const stats = await fs.stat(dir);
+      if (!stats.isDirectory()) {
+        console.error(`Warning: ${dir} is not a directory, skipping`);
+        unavailableDirectories.push(dir);
+        return null;
+      }
+      return dir;
+    } catch (error) {
+      // Directory doesn't exist or is inaccessible (e.g., unmounted network volume)
+      console.error(`Warning: Directory ${dir} is not accessible, skipping: ${(error as Error).message}`);
+      unavailableDirectories.push(dir);
+      return null;
     }
-  } catch (error) {
-    console.error(`Error accessing directory ${dir}:`, error);
-    process.exit(1);
-  }
-}));
+  })
+);
+
+// Filter out null entries (unavailable directories)
+allowedDirectories = validatedDirectories.filter((dir): dir is string => dir !== null);
+
+// Only fail if NO directories are available
+if (allowedDirectories.length === 0) {
+  console.error("Error: No accessible directories available. At least one directory must be accessible.");
+  console.error("Unavailable directories:", unavailableDirectories.join(", "));
+  process.exit(1);
+}
 
 // Initialize the global allowedDirectories in lib.ts
 setAllowedDirectories(allowedDirectories);
