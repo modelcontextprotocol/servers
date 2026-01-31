@@ -264,19 +264,117 @@ server.registerTool(
     const mimeType = mimeTypes[extension] || "application/octet-stream";
     const data = await readFileAsBase64Stream(validPath);
 
+    // Determine content type based on MIME type
+    // Note: MCP spec only supports "text", "image", and "audio" types
+    // For other binary files (like Excel, PDF, etc.), we use "image" type
+    // as a workaround since it supports base64 data
     const type = mimeType.startsWith("image/")
       ? "image"
       : mimeType.startsWith("audio/")
         ? "audio"
-        // Fallback for other binary types, not officially supported by the spec but has been used for some time
-        : "blob";
-    const contentItem = { type: type as 'image' | 'audio' | 'blob', data, mimeType };
+        : "image"; // Use "image" for all other binary types as fallback
+    
+    const contentItem = {
+      type: type as 'image' | 'audio',
+      data,
+      mimeType
+    };
+    
     return {
       content: [contentItem],
       structuredContent: { content: [contentItem] }
-    } as unknown as CallToolResult;
+    };
   }
 );
+server.registerTool(
+  "read_binary_file",
+  {
+    title: "Read Binary File",
+    description:
+      "Read any binary file (Excel, PDF, images, etc.) and return it as an embedded resource with base64-encoded content. " +
+      "This is the recommended way to read binary files as it properly handles all file types. " +
+      "Only works within allowed directories.",
+    inputSchema: {
+      path: z.string()
+    },
+    outputSchema: {
+      content: z.array(z.object({
+        type: z.literal("resource"),
+        resource: z.object({
+          uri: z.string(),
+          mimeType: z.string(),
+          blob: z.string()
+        })
+      }))
+    },
+    annotations: { readOnlyHint: true }
+  },
+  async (args: z.infer<typeof ReadMediaFileArgsSchema>): Promise<CallToolResult> => {
+    const validPath = await validatePath(args.path);
+    const extension = path.extname(validPath).toLowerCase();
+    
+    // Extended MIME type mapping for binary files
+    const mimeTypes: Record<string, string> = {
+      // Images
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".gif": "image/gif",
+      ".webp": "image/webp",
+      ".bmp": "image/bmp",
+      ".svg": "image/svg+xml",
+      ".ico": "image/x-icon",
+      // Audio
+      ".mp3": "audio/mpeg",
+      ".wav": "audio/wav",
+      ".ogg": "audio/ogg",
+      ".flac": "audio/flac",
+      ".m4a": "audio/mp4",
+      // Video
+      ".mp4": "video/mp4",
+      ".webm": "video/webm",
+      ".mov": "video/quicktime",
+      // Documents
+      ".pdf": "application/pdf",
+      ".doc": "application/msword",
+      ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".xls": "application/vnd.ms-excel",
+      ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
+      ".ppt": "application/vnd.ms-powerpoint",
+      ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      // Archives
+      ".zip": "application/zip",
+      ".tar": "application/x-tar",
+      ".gz": "application/gzip",
+      ".7z": "application/x-7z-compressed",
+      ".rar": "application/vnd.rar",
+    };
+    
+    const mimeType = mimeTypes[extension] || "application/octet-stream";
+    const blob = await readFileAsBase64Stream(validPath);
+    
+    // Create a file:// URI for the resource
+    const uri = `file://${validPath}`;
+    
+    const resourceContent = {
+      type: "resource" as const,
+      resource: {
+        uri,
+        mimeType,
+        blob
+      }
+    };
+    
+    return {
+      content: [resourceContent],
+      structuredContent: {
+        content: [resourceContent]
+      }
+    };
+  }
+);
+
 
 server.registerTool(
   "read_multiple_files",
