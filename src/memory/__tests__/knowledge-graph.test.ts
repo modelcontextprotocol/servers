@@ -483,7 +483,7 @@ describe('KnowledgeGraphManager', () => {
 
   describe('saveGraph locking', () => {
     it('should guarantee consistency: succeeded operations must be in file', async () => {
-      const chaosManager = new KnowledgeGraphManager(testFilePath, { retries: 100, minTimeout: 10, maxTimeout: 50 });
+      const chaosManager = new KnowledgeGraphManager(testFilePath, { retries: { retries: 100, minTimeout: 10, maxTimeout: 50 } });
       const totalOperations = 10000;
       const promises: Promise<Entity[]>[] = [];
 
