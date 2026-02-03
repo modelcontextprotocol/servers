@@ -236,6 +236,14 @@ export class KnowledgeGraphManager {
   }
 
   async readGraph(): Promise<KnowledgeGraph> {
+    // We intentionally do not use a read lock here.
+    // 1. Performance: Read locks would serialize all reads, significantly degrading performance
+    //    for read-heavy workloads (like LLM context retrieval).
+    // 2. Deadlock risk: Read-write locks increase deadlock probability.
+    // 3. Atomicity: write-file-atomic ensures we either read the old file or the new file,
+    //    never a partial write.
+    // 4. Optimistic concurrency: In the rare case of a race condition (ENOENT/ESTALE),
+    //    it's better for the client to retry than to block all readers.
     return this.loadGraph();
   }
 
