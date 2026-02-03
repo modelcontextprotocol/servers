@@ -153,7 +153,10 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    // Atomic write: write to temp file, then rename
+    const tmpPath = `${this.memoryFilePath}.tmp`;
+    await fs.writeFile(tmpPath, lines.join("\n"));
+    await fs.rename(tmpPath, this.memoryFilePath);
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
