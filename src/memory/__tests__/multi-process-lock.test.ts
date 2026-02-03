@@ -34,9 +34,9 @@ if (isWorker) {
       } catch {
         // Ignore errors if file doesn't exist
       }
-      // Clean up lock file if exists
+      // Clean up lock directory if exists (proper-lockfile creates a directory, not a file)
       try {
-        await fs.unlink(`${testFilePath}.lock`);
+        await fs.rmdir(`${testFilePath}.lock`);
       } catch {
         // Ignore
       }
