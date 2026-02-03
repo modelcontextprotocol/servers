@@ -32,6 +32,7 @@
   "devDependencies": {
     "@types/node": "^22",
     "@types/proper-lockfile": "^4.1.4",
+    "@types/write-file-atomic": "^4.0.3",
     "@vitest/coverage-v8": "^2.1.8",
     "shx": "^0.3.4",
     "tsx": "^4.21.0",
