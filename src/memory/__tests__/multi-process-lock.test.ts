@@ -24,7 +24,7 @@ if (isWorker) {
         path.dirname(currentFilePath),
         `test-multi-process-${Date.now()}.jsonl`
       );
-      // Create empty file for locking (proper-lockfile requires file to exist)
+      // Create empty file for testing
       await fs.writeFile(testFilePath, '');
     });
 
