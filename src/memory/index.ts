@@ -98,21 +98,17 @@ export class KnowledgeGraphManager {
   }
 
   private async withLock<T>(fn: () => Promise<T>): Promise<T> {
-    let release: (() => Promise<void>) | undefined;
-    try {
-      release = await lockfile.lock(this.memoryFilePath, this.lockOptions);
-    } catch (e) {
-      throw new Error(`Failed to acquire lock: ${e instanceof Error ? e.message : String(e)}`);
-    }
+    const release = await lockfile.lock(this.memoryFilePath, this.lockOptions)
+      .catch((e: unknown) => {
+        throw new Error(`Failed to acquire memory file lock: ${e instanceof Error ? e.message : String(e)}`);
+      });
 
     try {
       return await fn();
     } finally {
-      try {
-        await release();
-      } catch (e) {
-        throw new Error(`Failed to release lock: ${e instanceof Error ? e.message : String(e)}`);
-      }
+      await release().catch((e: unknown) => {
+        throw new Error(`Failed to release memory file lock: ${e instanceof Error ? e.message : String(e)}`);
+      });
     }
   }
 
