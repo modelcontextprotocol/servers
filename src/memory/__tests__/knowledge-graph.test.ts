@@ -520,7 +520,7 @@ describe('KnowledgeGraphManager', () => {
 
       // Failed operations should contain correct error message
       failed.forEach(f => {
-        expect(f.reason.message).toContain('Lock operation failed:');
+        expect(f.reason.message).toContain('Failed to acquire');
       });
 
       console.log(`Stress test: ${succeeded.length} succeeded, ${failed.length} failed`);
