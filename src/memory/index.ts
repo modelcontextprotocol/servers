@@ -7,6 +7,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import lockfile from 'proper-lockfile';
 import { fileURLToPath } from 'url';
+import writeFileAtomic from 'write-file-atomic';
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
@@ -153,10 +154,7 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    // Atomic write: write to temp file, then rename
-    const tmpPath = `${this.memoryFilePath}.tmp`;
-    await fs.writeFile(tmpPath, lines.join("\n"));
-    await fs.rename(tmpPath, this.memoryFilePath);
+    await writeFileAtomic(this.memoryFilePath, lines.join("\n"), { fsync: false });
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
