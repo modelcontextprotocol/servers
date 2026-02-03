@@ -66,26 +66,38 @@ export interface KnowledgeGraph {
 }
 
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
-// Default: 50 + 100 + 200 + 400 + 800 + 1000*55 ≈ 56.5s max wait time
-const DEFAULT_LOCK_RETRIES = {
-  retries: 60,
-  minTimeout: 50,
-  maxTimeout: 1000,
+// Lock configuration optimized for both local disk and NFS/network file systems
+//
+// For NFS: stale must be > acregmax (typically 60s) to avoid false stale detection
+// due to attribute caching. Setting stale=60000ms ensures that even if another
+// process sees a 50s-old cached mtime, it won't incorrectly assume the lock is stale.
+//
+// For local disk: These settings work perfectly - the longer stale timeout just means
+// a slightly longer wait if a process actually crashes (60s vs 10s), which is acceptable.
+//
+// Retry strategy: minTimeout=50ms allows fast acquisition on local disk,
+// exponential backoff handles NFS latency.
+// Max wait: 50 + 100 + 200 + 400 + 800 + 1600 + 3200 + 6400 + 12800 + 25600 ≈ 51s
+const DEFAULT_LOCK_OPTIONS = {
+  stale: 60000,    // 60s - safe for NFS acregmax (default 60s)
+  update: 10000,   // 10s heartbeat - ensures lock freshness even with NFS cache delays
+  retries: {
+    retries: 10,
+    minTimeout: 50,
+    factor: 2,
+  },
+  realpath: false,
 };
 
 export class KnowledgeGraphManager {
-  private lockRetries: object;
+  private lockOptions: object;
 
-  constructor(private memoryFilePath: string, lockRetries: object = DEFAULT_LOCK_RETRIES) {
-    this.lockRetries = lockRetries;
+  constructor(private memoryFilePath: string, lockOptions: object = {}) {
+    this.lockOptions = { ...DEFAULT_LOCK_OPTIONS, ...lockOptions };
   }
 
   private async withLock<T>(fn: () => Promise<T>): Promise<T> {
-    return lockfile.lock(this.memoryFilePath, {
-      stale: 10000,
-      retries: this.lockRetries,
-      realpath: false,
-    })
+    return lockfile.lock(this.memoryFilePath, this.lockOptions)
       .then(async (release) => {
         const result = await fn();
         await release();
