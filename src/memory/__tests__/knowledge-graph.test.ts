@@ -480,4 +480,50 @@ describe('KnowledgeGraphManager', () => {
       expect(result.relations[0]).not.toHaveProperty('type');
     });
   });
+
+  describe('saveGraph locking', () => {
+    it('should guarantee consistency: succeeded operations must be in file', async () => {
+      const chaosManager = new KnowledgeGraphManager(testFilePath, { retries: 100, minTimeout: 10, maxTimeout: 50 });
+      const totalOperations = 10000;
+      const promises: Promise<Entity[]>[] = [];
+
+      for (let i = 0; i < totalOperations; i++) {
+        const randomName = `Entity_${Math.random().toString(36).substring(2)}`;
+        promises.push(
+          chaosManager.createEntities([
+            { name: randomName, entityType: 'test', observations: [] }
+          ])
+        );
+      }
+
+      const results = await Promise.allSettled(promises);
+
+      const succeeded = results.filter(r => r.status === 'fulfilled') as PromiseFulfilledResult<Entity[]>[];
+      const failed = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
+
+      // Collect succeeded entity names
+      const succeededNames = new Set(
+        succeeded.flatMap(r => r.value.map(e => e.name))
+      );
+
+      // Read file
+      const graph = await chaosManager.readGraph();
+      const fileNames = new Set(graph.entities.map(e => e.name));
+
+      // Verify: succeeded entities must be in file
+      succeededNames.forEach(name => {
+        expect(fileNames.has(name)).toBe(true);
+      });
+
+      // File entity count should equal succeeded count
+      expect(graph.entities.length).toBe(succeededNames.size);
+
+      // Failed operations should contain correct error message
+      failed.forEach(f => {
+        expect(f.reason.message).toContain('Lock operation failed:');
+      });
+
+      console.log(`Chaos test: ${succeeded.length} succeeded, ${failed.length} failed`);
+    }, 60000);
+  });
 });

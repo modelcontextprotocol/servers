@@ -25,10 +25,12 @@
     "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.2"
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {
     "@types/node": "^22",
+    "@types/proper-lockfile": "^4.1.4",
     "@vitest/coverage-v8": "^2.1.8",
     "shx": "^0.3.4",
     "typescript": "^5.6.2",
