@@ -483,14 +483,14 @@ describe('KnowledgeGraphManager', () => {
 
   describe('saveGraph locking', () => {
     it('should guarantee consistency: succeeded operations must be in file', async () => {
-      const chaosManager = new KnowledgeGraphManager(testFilePath, { retries: { retries: 100, minTimeout: 10, maxTimeout: 50 } });
+      const stressTestManager = new KnowledgeGraphManager(testFilePath, { retries: { retries: 100, minTimeout: 10, maxTimeout: 50 } });
       const totalOperations = 10000;
       const promises: Promise<Entity[]>[] = [];
 
       for (let i = 0; i < totalOperations; i++) {
         const randomName = `Entity_${Math.random().toString(36).substring(2)}`;
         promises.push(
-          chaosManager.createEntities([
+          stressTestManager.createEntities([
             { name: randomName, entityType: 'test', observations: [] }
           ])
         );
@@ -507,7 +507,7 @@ describe('KnowledgeGraphManager', () => {
       );
 
       // Read file
-      const graph = await chaosManager.readGraph();
+      const graph = await stressTestManager.readGraph();
       const fileNames = new Set(graph.entities.map(e => e.name));
 
       // Verify: succeeded entities must be in file
@@ -523,7 +523,7 @@ describe('KnowledgeGraphManager', () => {
         expect(f.reason.message).toContain('Lock operation failed:');
       });
 
-      console.log(`Chaos test: ${succeeded.length} succeeded, ${failed.length} failed`);
+      console.log(`Stress test: ${succeeded.length} succeeded, ${failed.length} failed`);
     }, 60000);
   });
 });
