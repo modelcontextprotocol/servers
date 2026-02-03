@@ -33,6 +33,7 @@
     "@types/proper-lockfile": "^4.1.4",
     "@vitest/coverage-v8": "^2.1.8",
     "shx": "^0.3.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.6.2",
     "vitest": "^2.1.8"
   }
