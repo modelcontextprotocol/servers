@@ -1,5 +1,7 @@
 # Fetch MCP Server
 
+<!-- mcp-name: io.github.modelcontextprotocol/server-fetch -->
+
 A Model Context Protocol server that provides web content fetching capabilities. This server enables LLMs to retrieve and process content from web pages, converting HTML to markdown for easier consumption.
 
 > [!CAUTION]
@@ -167,6 +169,48 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 ### Customization - Proxy
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
+
+## Windows Configuration
+
+If you're experiencing timeout issues on Windows, you may need to set the `PYTHONIOENCODING` environment variable to ensure proper character encoding:
+
+<details>
+<summary>Windows configuration (uvx)</summary>
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      }
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>Windows configuration (pip)</summary>
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "python",
+      "args": ["-m", "mcp_server_fetch"],
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      }
+    }
+  }
+}
+```
+</details>
+
+This addresses character encoding issues that can cause the server to timeout on Windows systems.
 
 ## Debugging
 

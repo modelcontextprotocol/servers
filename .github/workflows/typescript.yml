@@ -14,7 +14,7 @@ jobs:
     outputs:
       packages: ${{ steps.find-packages.outputs.packages }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Find JS packages
         id: find-packages
         working-directory: src
@@ -30,9 +30,9 @@ jobs:
     name: Test ${{ matrix.package }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -41,21 +41,9 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: npm ci
 
-      - name: Check if tests exist
-        id: check-tests
-        working-directory: src/${{ matrix.package }}
-        run: |
-          if npm run test --silent 2>/dev/null; then
-            echo "has-tests=true" >> $GITHUB_OUTPUT
-          else
-            echo "has-tests=false" >> $GITHUB_OUTPUT
-          fi
-        continue-on-error: true
-
       - name: Run tests
-        if: steps.check-tests.outputs.has-tests == 'true'
         working-directory: src/${{ matrix.package }}
-        run: npm test
+        run: npm test --if-present
 
   build:
     needs: [detect-packages, test]
@@ -65,9 +53,9 @@ jobs:
     name: Build ${{ matrix.package }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -96,8 +84,8 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm

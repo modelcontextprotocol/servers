@@ -1,5 +1,7 @@
 # mcp-server-git: A git MCP server
 
+<!-- mcp-name: io.github.modelcontextprotocol/server-git -->
+
 ## Overview
 
 A Model Context Protocol server for Git repository interaction and automation. This server provides tools to read, search, and manipulate Git repositories via Large Language Models.
@@ -57,10 +59,12 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Returns: Confirmation of reset operation
 
 8. `git_log`
-   - Shows the commit logs
+   - Shows the commit logs with optional date filtering
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `max_count` (number, optional): Maximum number of commits to show (default: 10)
+     - `start_timestamp` (string, optional): Start timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
+     - `end_timestamp` (string, optional): End timestamp for filtering commits. Accepts ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')
    - Returns: Array of commit entries with hash, author, date, and message
 
 9. `git_create_branch`
@@ -68,7 +72,7 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of the new branch
-     - `start_point` (string, optional): Starting point for the new branch
+     - `base_branch` (string, optional): Base branch to create from (defaults to current branch)
    - Returns: Confirmation of branch creation
 10. `git_checkout`
    - Switches branches
@@ -82,13 +86,8 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `repo_path` (string): Path to Git repository
      - `revision` (string): The revision (commit hash, branch name, tag) to show
    - Returns: Contents of the specified commit
-12. `git_init`
-   - Initializes a Git repository
-   - Inputs:
-     - `repo_path` (string): Path to directory to initialize git repo
-   - Returns: Confirmation of repository initialization
 
-13. `git_branch`
+12. `git_branch`
    - List Git branches
    - Inputs:
      - `repo_path` (string): Path to the Git repository.
@@ -181,7 +180,7 @@ Add the configuration to your user-level MCP configuration file. Open the Comman
 **Method 2: Workspace Configuration**
 Alternatively, you can add the configuration to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
 
-> For more details about MCP configuration in VS Code, see the [official VS Code MCP documentation](https://code.visualstudio.com/docs/copilot/mcp).
+> For more details about MCP configuration in VS Code, see the [official VS Code MCP documentation](https://code.visualstudio.com/docs/copilot/customization/mcp-servers).
 
 ```json
 {

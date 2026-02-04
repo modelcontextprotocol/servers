@@ -1,53 +1,93 @@
 #!/usr/bin/env node
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Define memory file path using environment variable with fallback
-const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
+export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
 
-// If MEMORY_FILE_PATH is just a filename, put it in the same directory as the script
-const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
-  ? path.isAbsolute(process.env.MEMORY_FILE_PATH)
-    ? process.env.MEMORY_FILE_PATH
-    : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH)
-  : defaultMemoryPath;
+// Handle backward compatibility: migrate memory.json to memory.jsonl if needed
+export async function ensureMemoryFilePath(): Promise<string> {
+  if (process.env.MEMORY_FILE_PATH) {
+    // Custom path provided, use it as-is (with absolute path resolution)
+    return path.isAbsolute(process.env.MEMORY_FILE_PATH)
+      ? process.env.MEMORY_FILE_PATH
+      : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH);
+  }
+  
+  // No custom path set, check for backward compatibility migration
+  const oldMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
+  const newMemoryPath = defaultMemoryPath;
+  
+  try {
+    // Check if old file exists and new file doesn't
+    await fs.access(oldMemoryPath);
+    try {
+      await fs.access(newMemoryPath);
+      // Both files exist, use new one (no migration needed)
+      return newMemoryPath;
+    } catch {
+      // Old file exists, new file doesn't - migrate
+      console.error('DETECTED: Found legacy memory.json file, migrating to memory.jsonl for JSONL format compatibility');
+      await fs.rename(oldMemoryPath, newMemoryPath);
+      console.error('COMPLETED: Successfully migrated memory.json to memory.jsonl');
+      return newMemoryPath;
+    }
+  } catch {
+    // Old file doesn't exist, use new path
+    return newMemoryPath;
+  }
+}
+
+// Initialize memory file path (will be set during startup)
+let MEMORY_FILE_PATH: string;
 
 // We are storing our memory using entities, relations, and observations in a graph structure
-interface Entity {
+export interface Entity {
   name: string;
   entityType: string;
   observations: string[];
 }
 
-interface Relation {
+export interface Relation {
   from: string;
   to: string;
   relationType: string;
 }
 
-interface KnowledgeGraph {
+export interface KnowledgeGraph {
   entities: Entity[];
   relations: Relation[];
 }
 
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
-class KnowledgeGraphManager {
+export class KnowledgeGraphManager {
+  constructor(private memoryFilePath: string) {}
+
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
-      const data = await fs.readFile(MEMORY_FILE_PATH, "utf-8");
+      const data = await fs.readFile(this.memoryFilePath, "utf-8");
       const lines = data.split("\n").filter(line => line.trim() !== "");
       return lines.reduce((graph: KnowledgeGraph, line) => {
         const item = JSON.parse(line);
-        if (item.type === "entity") graph.entities.push(item as Entity);
-        if (item.type === "relation") graph.relations.push(item as Relation);
+        if (item.type === "entity") {
+          graph.entities.push({
+            name: item.name,
+            entityType: item.entityType,
+            observations: item.observations
+          });
+        }
+        if (item.type === "relation") {
+          graph.relations.push({
+            from: item.from,
+            to: item.to,
+            relationType: item.relationType
+          });
+        }
         return graph;
       }, { entities: [], relations: [] });
     } catch (error) {
@@ -60,10 +100,20 @@ class KnowledgeGraphManager {
 
   private async saveGraph(graph: KnowledgeGraph): Promise<void> {
     const lines = [
-      ...graph.entities.map(e => JSON.stringify({ type: "entity", ...e })),
-      ...graph.relations.map(r => JSON.stringify({ type: "relation", ...r })),
+      ...graph.entities.map(e => JSON.stringify({
+        type: "entity",
+        name: e.name,
+        entityType: e.entityType,
+        observations: e.observations
+      })),
+      ...graph.relations.map(r => JSON.stringify({
+        type: "relation",
+        from: r.from,
+        to: r.to,
+        relationType: r.relationType
+      })),
     ];
-    await fs.writeFile(MEMORY_FILE_PATH, lines.join("\n"));
+    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
@@ -183,233 +233,245 @@ class KnowledgeGraphManager {
   }
 }
 
-const knowledgeGraphManager = new KnowledgeGraphManager();
+let knowledgeGraphManager: KnowledgeGraphManager;
 
+// Zod schemas for entities and relations
+const EntitySchema = z.object({
+  name: z.string().describe("The name of the entity"),
+  entityType: z.string().describe("The type of the entity"),
+  observations: z.array(z.string()).describe("An array of observation contents associated with the entity")
+});
+
+const RelationSchema = z.object({
+  from: z.string().describe("The name of the entity where the relation starts"),
+  to: z.string().describe("The name of the entity where the relation ends"),
+  relationType: z.string().describe("The type of the relation")
+});
 
 // The server instance and tools exposed to Claude
-const server = new Server({
+const server = new McpServer({
   name: "memory-server",
   version: "0.6.3",
-},    {
-    capabilities: {
-      tools: {},
+});
+
+// Register create_entities tool
+server.registerTool(
+  "create_entities",
+  {
+    title: "Create Entities",
+    description: "Create multiple new entities in the knowledge graph",
+    inputSchema: {
+      entities: z.array(EntitySchema)
     },
-  },);
-
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: "create_entities",
-        description: "Create multiple new entities in the knowledge graph",
-        inputSchema: {
-          type: "object",
-          properties: {
-            entities: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  name: { type: "string", description: "The name of the entity" },
-                  entityType: { type: "string", description: "The type of the entity" },
-                  observations: { 
-                    type: "array", 
-                    items: { type: "string" },
-                    description: "An array of observation contents associated with the entity"
-                  },
-                },
-                required: ["name", "entityType", "observations"],
-              },
-            },
-          },
-          required: ["entities"],
-        },
-      },
-      {
-        name: "create_relations",
-        description: "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
-        inputSchema: {
-          type: "object",
-          properties: {
-            relations: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  from: { type: "string", description: "The name of the entity where the relation starts" },
-                  to: { type: "string", description: "The name of the entity where the relation ends" },
-                  relationType: { type: "string", description: "The type of the relation" },
-                },
-                required: ["from", "to", "relationType"],
-              },
-            },
-          },
-          required: ["relations"],
-        },
-      },
-      {
-        name: "add_observations",
-        description: "Add new observations to existing entities in the knowledge graph",
-        inputSchema: {
-          type: "object",
-          properties: {
-            observations: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  entityName: { type: "string", description: "The name of the entity to add the observations to" },
-                  contents: { 
-                    type: "array", 
-                    items: { type: "string" },
-                    description: "An array of observation contents to add"
-                  },
-                },
-                required: ["entityName", "contents"],
-              },
-            },
-          },
-          required: ["observations"],
-        },
-      },
-      {
-        name: "delete_entities",
-        description: "Delete multiple entities and their associated relations from the knowledge graph",
-        inputSchema: {
-          type: "object",
-          properties: {
-            entityNames: { 
-              type: "array", 
-              items: { type: "string" },
-              description: "An array of entity names to delete" 
-            },
-          },
-          required: ["entityNames"],
-        },
-      },
-      {
-        name: "delete_observations",
-        description: "Delete specific observations from entities in the knowledge graph",
-        inputSchema: {
-          type: "object",
-          properties: {
-            deletions: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  entityName: { type: "string", description: "The name of the entity containing the observations" },
-                  observations: { 
-                    type: "array", 
-                    items: { type: "string" },
-                    description: "An array of observations to delete"
-                  },
-                },
-                required: ["entityName", "observations"],
-              },
-            },
-          },
-          required: ["deletions"],
-        },
-      },
-      {
-        name: "delete_relations",
-        description: "Delete multiple relations from the knowledge graph",
-        inputSchema: {
-          type: "object",
-          properties: {
-            relations: { 
-              type: "array", 
-              items: {
-                type: "object",
-                properties: {
-                  from: { type: "string", description: "The name of the entity where the relation starts" },
-                  to: { type: "string", description: "The name of the entity where the relation ends" },
-                  relationType: { type: "string", description: "The type of the relation" },
-                },
-                required: ["from", "to", "relationType"],
-              },
-              description: "An array of relations to delete" 
-            },
-          },
-          required: ["relations"],
-        },
-      },
-      {
-        name: "read_graph",
-        description: "Read the entire knowledge graph",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
-      },
-      {
-        name: "search_nodes",
-        description: "Search for nodes in the knowledge graph based on a query",
-        inputSchema: {
-          type: "object",
-          properties: {
-            query: { type: "string", description: "The search query to match against entity names, types, and observation content" },
-          },
-          required: ["query"],
-        },
-      },
-      {
-        name: "open_nodes",
-        description: "Open specific nodes in the knowledge graph by their names",
-        inputSchema: {
-          type: "object",
-          properties: {
-            names: {
-              type: "array",
-              items: { type: "string" },
-              description: "An array of entity names to retrieve",
-            },
-          },
-          required: ["names"],
-        },
-      },
-    ],
-  };
-});
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
-  if (name === "read_graph") {
-    return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.readGraph(), null, 2) }] };
+    outputSchema: {
+      entities: z.array(EntitySchema)
+    }
+  },
+  async ({ entities }) => {
+    const result = await knowledgeGraphManager.createEntities(entities);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: { entities: result }
+    };
   }
+);
 
-  if (!args) {
-    throw new Error(`No arguments provided for tool: ${name}`);
+// Register create_relations tool
+server.registerTool(
+  "create_relations",
+  {
+    title: "Create Relations",
+    description: "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
+    inputSchema: {
+      relations: z.array(RelationSchema)
+    },
+    outputSchema: {
+      relations: z.array(RelationSchema)
+    }
+  },
+  async ({ relations }) => {
+    const result = await knowledgeGraphManager.createRelations(relations);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: { relations: result }
+    };
   }
+);
 
-  switch (name) {
-    case "create_entities":
-      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.createEntities(args.entities as Entity[]), null, 2) }] };
-    case "create_relations":
-      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.createRelations(args.relations as Relation[]), null, 2) }] };
-    case "add_observations":
-      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.addObservations(args.observations as { entityName: string; contents: string[] }[]), null, 2) }] };
-    case "delete_entities":
-      await knowledgeGraphManager.deleteEntities(args.entityNames as string[]);
-      return { content: [{ type: "text", text: "Entities deleted successfully" }] };
-    case "delete_observations":
-      await knowledgeGraphManager.deleteObservations(args.deletions as { entityName: string; observations: string[] }[]);
-      return { content: [{ type: "text", text: "Observations deleted successfully" }] };
-    case "delete_relations":
-      await knowledgeGraphManager.deleteRelations(args.relations as Relation[]);
-      return { content: [{ type: "text", text: "Relations deleted successfully" }] };
-    case "search_nodes":
-      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.searchNodes(args.query as string), null, 2) }] };
-    case "open_nodes":
-      return { content: [{ type: "text", text: JSON.stringify(await knowledgeGraphManager.openNodes(args.names as string[]), null, 2) }] };
-    default:
-      throw new Error(`Unknown tool: ${name}`);
+// Register add_observations tool
+server.registerTool(
+  "add_observations",
+  {
+    title: "Add Observations",
+    description: "Add new observations to existing entities in the knowledge graph",
+    inputSchema: {
+      observations: z.array(z.object({
+        entityName: z.string().describe("The name of the entity to add the observations to"),
+        contents: z.array(z.string()).describe("An array of observation contents to add")
+      }))
+    },
+    outputSchema: {
+      results: z.array(z.object({
+        entityName: z.string(),
+        addedObservations: z.array(z.string())
+      }))
+    }
+  },
+  async ({ observations }) => {
+    const result = await knowledgeGraphManager.addObservations(observations);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      structuredContent: { results: result }
+    };
   }
-});
+);
+
+// Register delete_entities tool
+server.registerTool(
+  "delete_entities",
+  {
+    title: "Delete Entities",
+    description: "Delete multiple entities and their associated relations from the knowledge graph",
+    inputSchema: {
+      entityNames: z.array(z.string()).describe("An array of entity names to delete")
+    },
+    outputSchema: {
+      success: z.boolean(),
+      message: z.string()
+    }
+  },
+  async ({ entityNames }) => {
+    await knowledgeGraphManager.deleteEntities(entityNames);
+    return {
+      content: [{ type: "text" as const, text: "Entities deleted successfully" }],
+      structuredContent: { success: true, message: "Entities deleted successfully" }
+    };
+  }
+);
+
+// Register delete_observations tool
+server.registerTool(
+  "delete_observations",
+  {
+    title: "Delete Observations",
+    description: "Delete specific observations from entities in the knowledge graph",
+    inputSchema: {
+      deletions: z.array(z.object({
+        entityName: z.string().describe("The name of the entity containing the observations"),
+        observations: z.array(z.string()).describe("An array of observations to delete")
+      }))
+    },
+    outputSchema: {
+      success: z.boolean(),
+      message: z.string()
+    }
+  },
+  async ({ deletions }) => {
+    await knowledgeGraphManager.deleteObservations(deletions);
+    return {
+      content: [{ type: "text" as const, text: "Observations deleted successfully" }],
+      structuredContent: { success: true, message: "Observations deleted successfully" }
+    };
+  }
+);
+
+// Register delete_relations tool
+server.registerTool(
+  "delete_relations",
+  {
+    title: "Delete Relations",
+    description: "Delete multiple relations from the knowledge graph",
+    inputSchema: {
+      relations: z.array(RelationSchema).describe("An array of relations to delete")
+    },
+    outputSchema: {
+      success: z.boolean(),
+      message: z.string()
+    }
+  },
+  async ({ relations }) => {
+    await knowledgeGraphManager.deleteRelations(relations);
+    return {
+      content: [{ type: "text" as const, text: "Relations deleted successfully" }],
+      structuredContent: { success: true, message: "Relations deleted successfully" }
+    };
+  }
+);
+
+// Register read_graph tool
+server.registerTool(
+  "read_graph",
+  {
+    title: "Read Graph",
+    description: "Read the entire knowledge graph",
+    inputSchema: {},
+    outputSchema: {
+      entities: z.array(EntitySchema),
+      relations: z.array(RelationSchema)
+    }
+  },
+  async () => {
+    const graph = await knowledgeGraphManager.readGraph();
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
+      structuredContent: { ...graph }
+    };
+  }
+);
+
+// Register search_nodes tool
+server.registerTool(
+  "search_nodes",
+  {
+    title: "Search Nodes",
+    description: "Search for nodes in the knowledge graph based on a query",
+    inputSchema: {
+      query: z.string().describe("The search query to match against entity names, types, and observation content")
+    },
+    outputSchema: {
+      entities: z.array(EntitySchema),
+      relations: z.array(RelationSchema)
+    }
+  },
+  async ({ query }) => {
+    const graph = await knowledgeGraphManager.searchNodes(query);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
+      structuredContent: { ...graph }
+    };
+  }
+);
+
+// Register open_nodes tool
+server.registerTool(
+  "open_nodes",
+  {
+    title: "Open Nodes",
+    description: "Open specific nodes in the knowledge graph by their names",
+    inputSchema: {
+      names: z.array(z.string()).describe("An array of entity names to retrieve")
+    },
+    outputSchema: {
+      entities: z.array(EntitySchema),
+      relations: z.array(RelationSchema)
+    }
+  },
+  async ({ names }) => {
+    const graph = await knowledgeGraphManager.openNodes(names);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
+      structuredContent: { ...graph }
+    };
+  }
+);
 
 async function main() {
+  // Initialize memory file path with backward compatibility
+  MEMORY_FILE_PATH = await ensureMemoryFilePath();
+
+  // Initialize knowledge graph manager with the memory file path
+  knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_FILE_PATH);
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Knowledge Graph MCP Server running on stdio");

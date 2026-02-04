@@ -3,9 +3,14 @@
   "version": "0.6.3",
   "description": "MCP server for enabling memory for Claude through a knowledge graph",
   "license": "MIT",
+  "mcpName": "io.github.modelcontextprotocol/server-memory",
   "author": "Anthropic, PBC (https://anthropic.com)",
   "homepage": "https://modelcontextprotocol.io",
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/modelcontextprotocol/servers.git"
+  },
   "type": "module",
   "bin": {
     "mcp-server-memory": "dist/index.js"
@@ -16,14 +21,17 @@
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.0.1"
+    "@modelcontextprotocol/sdk": "^1.25.2"
   },
   "devDependencies": {
     "@types/node": "^22",
+    "@vitest/coverage-v8": "^2.1.8",
     "shx": "^0.3.4",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.8"
   }
 }

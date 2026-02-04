@@ -1,145 +1,22 @@
 #!/usr/bin/env node
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  Tool,
-} from "@modelcontextprotocol/sdk/types.js";
-// Fixed chalk import for ESM
-import chalk from 'chalk';
+import { z } from "zod";
+import { SequentialThinkingServer } from './lib.js';
 
-interface ThoughtData {
-  thought: string;
-  thoughtNumber: number;
-  totalThoughts: number;
-  isRevision?: boolean;
-  revisesThought?: number;
-  branchFromThought?: number;
-  branchId?: string;
-  needsMoreThoughts?: boolean;
-  nextThoughtNeeded: boolean;
-}
+const server = new McpServer({
+  name: "sequential-thinking-server",
+  version: "0.2.0",
+});
 
-class SequentialThinkingServer {
-  private thoughtHistory: ThoughtData[] = [];
-  private branches: Record<string, ThoughtData[]> = {};
-  private disableThoughtLogging: boolean;
+const thinkingServer = new SequentialThinkingServer();
 
-  constructor() {
-    this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
-  }
-
-  private validateThoughtData(input: unknown): ThoughtData {
-    const data = input as Record<string, unknown>;
-
-    if (!data.thought || typeof data.thought !== 'string') {
-      throw new Error('Invalid thought: must be a string');
-    }
-    if (!data.thoughtNumber || typeof data.thoughtNumber !== 'number') {
-      throw new Error('Invalid thoughtNumber: must be a number');
-    }
-    if (!data.totalThoughts || typeof data.totalThoughts !== 'number') {
-      throw new Error('Invalid totalThoughts: must be a number');
-    }
-    if (typeof data.nextThoughtNeeded !== 'boolean') {
-      throw new Error('Invalid nextThoughtNeeded: must be a boolean');
-    }
-
-    return {
-      thought: data.thought,
-      thoughtNumber: data.thoughtNumber,
-      totalThoughts: data.totalThoughts,
-      nextThoughtNeeded: data.nextThoughtNeeded,
-      isRevision: data.isRevision as boolean | undefined,
-      revisesThought: data.revisesThought as number | undefined,
-      branchFromThought: data.branchFromThought as number | undefined,
-      branchId: data.branchId as string | undefined,
-      needsMoreThoughts: data.needsMoreThoughts as boolean | undefined,
-    };
-  }
-
-  private formatThought(thoughtData: ThoughtData): string {
-    const { thoughtNumber, totalThoughts, thought, isRevision, revisesThought, branchFromThought, branchId } = thoughtData;
-
-    let prefix = '';
-    let context = '';
-
-    if (isRevision) {
-      prefix = chalk.yellow('🔄 Revision');
-      context = ` (revising thought ${revisesThought})`;
-    } else if (branchFromThought) {
-      prefix = chalk.green('🌿 Branch');
-      context = ` (from thought ${branchFromThought}, ID: ${branchId})`;
-    } else {
-      prefix = chalk.blue('💭 Thought');
-      context = '';
-    }
-
-    const header = `${prefix} ${thoughtNumber}/${totalThoughts}${context}`;
-    const border = '─'.repeat(Math.max(header.length, thought.length) + 4);
-
-    return `
-┌${border}┐
-│ ${header} │
-├${border}┤
-│ ${thought.padEnd(border.length - 2)} │
-└${border}┘`;
-  }
-
-  public processThought(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
-    try {
-      const validatedInput = this.validateThoughtData(input);
-
-      if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
-        validatedInput.totalThoughts = validatedInput.thoughtNumber;
-      }
-
-      this.thoughtHistory.push(validatedInput);
-
-      if (validatedInput.branchFromThought && validatedInput.branchId) {
-        if (!this.branches[validatedInput.branchId]) {
-          this.branches[validatedInput.branchId] = [];
-        }
-        this.branches[validatedInput.branchId].push(validatedInput);
-      }
-
-      if (!this.disableThoughtLogging) {
-        const formattedThought = this.formatThought(validatedInput);
-        console.error(formattedThought);
-      }
-
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify({
-            thoughtNumber: validatedInput.thoughtNumber,
-            totalThoughts: validatedInput.totalThoughts,
-            nextThoughtNeeded: validatedInput.nextThoughtNeeded,
-            branches: Object.keys(this.branches),
-            thoughtHistoryLength: this.thoughtHistory.length
-          }, null, 2)
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify({
-            error: error instanceof Error ? error.message : String(error),
-            status: 'failed'
-          }, null, 2)
-        }],
-        isError: true
-      };
-    }
-  }
-}
-
-const SEQUENTIAL_THINKING_TOOL: Tool = {
-  name: "sequentialthinking",
-  description: `A detailed tool for dynamic and reflective problem-solving through thoughts.
+server.registerTool(
+  "sequentialthinking",
+  {
+    title: "Sequential Thinking",
+    description: `A detailed tool for dynamic and reflective problem-solving through thoughts.
 This tool helps analyze problems through a flexible thinking process that can adapt and evolve.
 Each thought can build on, question, or revise previous insights as understanding deepens.
 
@@ -165,21 +42,21 @@ Key features:
 
 Parameters explained:
 - thought: Your current thinking step, which can include:
-* Regular analytical steps
-* Revisions of previous thoughts
-* Questions about previous decisions
-* Realizations about needing more analysis
-* Changes in approach
-* Hypothesis generation
-* Hypothesis verification
-- next_thought_needed: True if you need more thinking, even if at what seemed like the end
-- thought_number: Current number in sequence (can go beyond initial total if needed)
-- total_thoughts: Current estimate of thoughts needed (can be adjusted up/down)
-- is_revision: A boolean indicating if this thought revises previous thinking
-- revises_thought: If is_revision is true, which thought number is being reconsidered
-- branch_from_thought: If branching, which thought number is the branching point
-- branch_id: Identifier for the current branch (if any)
-- needs_more_thoughts: If reaching end but realizing more thoughts needed
+  * Regular analytical steps
+  * Revisions of previous thoughts
+  * Questions about previous decisions
+  * Realizations about needing more analysis
+  * Changes in approach
+  * Hypothesis generation
+  * Hypothesis verification
+- nextThoughtNeeded: True if you need more thinking, even if at what seemed like the end
+- thoughtNumber: Current number in sequence (can go beyond initial total if needed)
+- totalThoughts: Current estimate of thoughts needed (can be adjusted up/down)
+- isRevision: A boolean indicating if this thought revises previous thinking
+- revisesThought: If is_revision is true, which thought number is being reconsidered
+- branchFromThought: If branching, which thought number is the branching point
+- branchId: Identifier for the current branch (if any)
+- needsMoreThoughts: If reaching end but realizing more thoughts needed
 
 You should:
 1. Start with an initial estimate of needed thoughts, but be ready to adjust
@@ -192,86 +69,42 @@ You should:
 8. Verify the hypothesis based on the Chain of Thought steps
 9. Repeat the process until satisfied with the solution
 10. Provide a single, ideally correct answer as the final output
-11. Only set next_thought_needed to false when truly done and a satisfactory answer is reached`,
-  inputSchema: {
-    type: "object",
-    properties: {
-      thought: {
-        type: "string",
-        description: "Your current thinking step"
-      },
-      nextThoughtNeeded: {
-        type: "boolean",
-        description: "Whether another thought step is needed"
-      },
-      thoughtNumber: {
-        type: "integer",
-        description: "Current thought number",
-        minimum: 1
-      },
-      totalThoughts: {
-        type: "integer",
-        description: "Estimated total thoughts needed",
-        minimum: 1
-      },
-      isRevision: {
-        type: "boolean",
-        description: "Whether this revises previous thinking"
-      },
-      revisesThought: {
-        type: "integer",
-        description: "Which thought is being reconsidered",
-        minimum: 1
-      },
-      branchFromThought: {
-        type: "integer",
-        description: "Branching point thought number",
-        minimum: 1
-      },
-      branchId: {
-        type: "string",
-        description: "Branch identifier"
-      },
-      needsMoreThoughts: {
-        type: "boolean",
-        description: "If more thoughts are needed"
-      }
+11. Only set nextThoughtNeeded to false when truly done and a satisfactory answer is reached`,
+    inputSchema: {
+      thought: z.string().describe("Your current thinking step"),
+      nextThoughtNeeded: z.boolean().describe("Whether another thought step is needed"),
+      thoughtNumber: z.number().int().min(1).describe("Current thought number (numeric value, e.g., 1, 2, 3)"),
+      totalThoughts: z.number().int().min(1).describe("Estimated total thoughts needed (numeric value, e.g., 5, 10)"),
+      isRevision: z.boolean().optional().describe("Whether this revises previous thinking"),
+      revisesThought: z.number().int().min(1).optional().describe("Which thought is being reconsidered"),
+      branchFromThought: z.number().int().min(1).optional().describe("Branching point thought number"),
+      branchId: z.string().optional().describe("Branch identifier"),
+      needsMoreThoughts: z.boolean().optional().describe("If more thoughts are needed")
     },
-    required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"]
-  }
-};
-
-const server = new Server(
-  {
-    name: "sequential-thinking-server",
-    version: "0.2.0",
+    outputSchema: {
+      thoughtNumber: z.number(),
+      totalThoughts: z.number(),
+      nextThoughtNeeded: z.boolean(),
+      branches: z.array(z.string()),
+      thoughtHistoryLength: z.number()
+    },
   },
-  {
-    capabilities: {
-      tools: {},
-    },
+  async (args) => {
+    const result = thinkingServer.processThought(args);
+
+    if (result.isError) {
+      return result;
+    }
+
+    // Parse the JSON response to get structured content
+    const parsedContent = JSON.parse(result.content[0].text);
+
+    return {
+      content: result.content,
+      structuredContent: parsedContent
+    };
   }
 );
-
-const thinkingServer = new SequentialThinkingServer();
-
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [SEQUENTIAL_THINKING_TOOL],
-}));
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "sequentialthinking") {
-    return thinkingServer.processThought(request.params.arguments);
-  }
-
-  return {
-    content: [{
-      type: "text",
-      text: `Unknown tool: ${request.params.name}`
-    }],
-    isError: true
-  };
-});
 
 async function runServer() {
   const transport = new StdioServerTransport();

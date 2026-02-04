@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -23,19 +23,19 @@ import {
 } from '../lib.js';
 
 // Mock fs module
-jest.mock('fs/promises');
-const mockFs = fs as jest.Mocked<typeof fs>;
+vi.mock('fs/promises');
+const mockFs = fs as any;
 
 describe('Lib Functions', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Set up allowed directories for tests
     const allowedDirs = process.platform === 'win32' ? ['C:\\Users\\test', 'C:\\temp', 'C:\\allowed'] : ['/home/user', '/tmp', '/allowed'];
     setAllowedDirectories(allowedDirs);
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     // Clear allowed directories after tests
     setAllowedDirectories([]);
   });
@@ -591,8 +591,8 @@ describe('Lib Functions', () => {
         
         // Mock file handle with proper typing
         const mockFileHandle = {
-          read: jest.fn(),
-          close: jest.fn()
+          read: vi.fn(),
+          close: vi.fn()
         } as any;
         
         mockFileHandle.read.mockResolvedValue({ bytesRead: 0 });
@@ -610,8 +610,8 @@ describe('Lib Functions', () => {
         mockFs.stat.mockResolvedValue({ size: 50 } as any);
         
         const mockFileHandle = {
-          read: jest.fn(),
-          close: jest.fn()
+          read: vi.fn(),
+          close: vi.fn()
         } as any;
         
         // Simulate reading file content in chunks
@@ -631,8 +631,8 @@ describe('Lib Functions', () => {
         mockFs.stat.mockResolvedValue({ size: 100 } as any);
         
         const mockFileHandle = {
-          read: jest.fn(),
-          close: jest.fn()
+          read: vi.fn(),
+          close: vi.fn()
         } as any;
         
         mockFileHandle.read.mockResolvedValue({ bytesRead: 0 });
@@ -650,8 +650,8 @@ describe('Lib Functions', () => {
       it('opens file for reading', async () => {
         // Mock file handle with proper typing
         const mockFileHandle = {
-          read: jest.fn(),
-          close: jest.fn()
+          read: vi.fn(),
+          close: vi.fn()
         } as any;
         
         mockFileHandle.read.mockResolvedValue({ bytesRead: 0 });
@@ -666,8 +666,8 @@ describe('Lib Functions', () => {
 
       it('handles files with content and returns first lines', async () => {
         const mockFileHandle = {
-          read: jest.fn(),
-          close: jest.fn()
+          read: vi.fn(),
+          close: vi.fn()
         } as any;
         
         // Simulate reading file content with newlines
@@ -685,8 +685,8 @@ describe('Lib Functions', () => {
 
       it('handles files with leftover content', async () => {
         const mockFileHandle = {
-          read: jest.fn(),
-          close: jest.fn()
+          read: vi.fn(),
+          close: vi.fn()
         } as any;
         
         // Simulate reading file content without final newline
@@ -704,8 +704,8 @@ describe('Lib Functions', () => {
 
       it('handles reaching requested line count', async () => {
         const mockFileHandle = {
-          read: jest.fn(),
-          close: jest.fn()
+          read: vi.fn(),
+          close: vi.fn()
         } as any;
         
         // Simulate reading exactly the requested number of lines
