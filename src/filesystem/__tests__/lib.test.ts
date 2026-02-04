@@ -211,7 +211,7 @@ describe('Lib Functions', () => {
         
         // Mock process.cwd to return a directory outside allowed directories
         const disallowedCwd = process.platform === 'win32' ? 'C:\\Windows\\System32' : '/root';
-        (process as any).cwd = jest.fn(() => disallowedCwd);
+        (process as any).cwd = vi.fn(() => disallowedCwd);
         
         try {
           const result = await validatePath(relativePath);
