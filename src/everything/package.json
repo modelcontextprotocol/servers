@@ -2,9 +2,9 @@
   "name": "@modelcontextprotocol/server-everything",
   "version": "2.0.0",
   "description": "MCP server that exercises all the features of the MCP protocol",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "mcpName": "io.github.modelcontextprotocol/server-everything",
-  "author": "Anthropic, PBC (https://anthropic.com)",
+  "author": "Model Context Protocol a Series of LF Projects, LLC.",
   "homepage": "https://modelcontextprotocol.io",
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
   "repository": {
