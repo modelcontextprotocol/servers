@@ -69,22 +69,24 @@ export interface KnowledgeGraph {
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
 // Lock configuration optimized for both local disk and NFS/network file systems
 //
-// For NFS: stale must be > acregmax (typically 60s) to avoid false stale detection
+// For NFS: stale must be > acdirmax (typically 60s) to avoid false stale detection
 // due to attribute caching. Setting stale=60000ms ensures that even if another
 // process sees a 50s-old cached mtime, it won't incorrectly assume the lock is stale.
+// Note: If your NFS has non-default acdirmax, set stale >= acdirmax via lockOptions in constructor.
 //
 // For local disk: These settings work perfectly - the longer stale timeout just means
 // a slightly longer wait if a process actually crashes (60s vs 10s), which is acceptable.
 //
-// Retry strategy: minTimeout=50ms allows fast acquisition on local disk,
+// Retry strategy: minTimeout=60ms allows fast acquisition on local disk,
 // exponential backoff handles NFS latency.
-// Max wait: 50 + 100 + 200 + 400 + 800 + 1600 + 3200 + 6400 + 12800 + 25600 ≈ 51s
+// Max wait: 60 + 120 + 240 + 480 + 960 + 1920 + 3840 + 7680 + 15360 + 30720 ≈ 61s
+// This exceeds the stale timeout (60s) to ensure we wait long enough for NFS acdirmax cache
 const DEFAULT_LOCK_OPTIONS = {
-  stale: 60000,    // 60s - safe for NFS acregmax (default 60s)
+  stale: 60000,    // 60s - safe for NFS acdirmax (default 60s)
   update: 10000,   // 10s heartbeat - ensures lock freshness even with NFS cache delays
   retries: {
     retries: 10,
-    minTimeout: 50,
+    minTimeout: 60,
     factor: 2,
   },
   realpath: false,
