@@ -5,7 +5,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
+import lockfile from 'proper-lockfile';
 import { fileURLToPath } from 'url';
+import writeFileAtomic from 'write-file-atomic';
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
@@ -65,8 +67,52 @@ export interface KnowledgeGraph {
 }
 
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
+// Lock configuration optimized for both local disk and NFS/network file systems
+//
+// For NFS: stale must be > acdirmax (typically 60s) to avoid false stale detection
+// due to attribute caching. Setting stale=60000ms ensures that even if another
+// process sees a 50s-old cached mtime, it won't incorrectly assume the lock is stale.
+// Note: If your NFS has non-default acdirmax, set stale >= acdirmax via lockOptions in constructor.
+//
+// For local disk: These settings work perfectly - the longer stale timeout just means
+// a slightly longer wait if a process actually crashes (60s vs 10s), which is acceptable.
+//
+// Retry strategy: minTimeout=60ms allows fast acquisition on local disk,
+// exponential backoff handles NFS latency.
+// Max wait: 60 + 120 + 240 + 480 + 960 + 1920 + 3840 + 7680 + 15360 + 30720 ≈ 61s
+// This exceeds the stale timeout (60s) to ensure we wait long enough for NFS acdirmax cache
+const DEFAULT_LOCK_OPTIONS = {
+  stale: 60000,    // 60s - safe for NFS acdirmax (default 60s)
+  update: 10000,   // 10s heartbeat - ensures lock freshness even with NFS cache delays
+  retries: {
+    retries: 10,
+    minTimeout: 60,
+    factor: 2,
+  },
+  realpath: false,
+};
+
 export class KnowledgeGraphManager {
-  constructor(private memoryFilePath: string) {}
+  private lockOptions: object;
+
+  constructor(private memoryFilePath: string, lockOptions: object = {}) {
+    this.lockOptions = { ...DEFAULT_LOCK_OPTIONS, ...lockOptions };
+  }
+
+  private async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    const release = await lockfile.lock(this.memoryFilePath, this.lockOptions)
+      .catch((e: unknown) => {
+        throw new Error(`Failed to acquire memory file lock: ${e instanceof Error ? e.message : String(e)}`);
+      });
+
+    try {
+      return await fn();
+    } finally {
+      await release().catch((e: unknown) => {
+        throw new Error(`Failed to release memory file lock: ${e instanceof Error ? e.message : String(e)}`);
+      });
+    }
+  }
 
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
@@ -113,73 +159,93 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    await writeFileAtomic(this.memoryFilePath, lines.join("\n"), { fsync: false });
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
-    const graph = await this.loadGraph();
-    const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
-    graph.entities.push(...newEntities);
-    await this.saveGraph(graph);
-    return newEntities;
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
+      graph.entities.push(...newEntities);
+      await this.saveGraph(graph);
+      return newEntities;
+    });
   }
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
-    const graph = await this.loadGraph();
-    const newRelations = relations.filter(r => !graph.relations.some(existingRelation => 
-      existingRelation.from === r.from && 
-      existingRelation.to === r.to && 
-      existingRelation.relationType === r.relationType
-    ));
-    graph.relations.push(...newRelations);
-    await this.saveGraph(graph);
-    return newRelations;
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const newRelations = relations.filter(r => !graph.relations.some(existingRelation =>
+        existingRelation.from === r.from &&
+        existingRelation.to === r.to &&
+        existingRelation.relationType === r.relationType
+      ));
+      graph.relations.push(...newRelations);
+      await this.saveGraph(graph);
+      return newRelations;
+    });
   }
 
   async addObservations(observations: { entityName: string; contents: string[] }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
-    const graph = await this.loadGraph();
-    const results = observations.map(o => {
-      const entity = graph.entities.find(e => e.name === o.entityName);
-      if (!entity) {
-        throw new Error(`Entity with name ${o.entityName} not found`);
-      }
-      const newObservations = o.contents.filter(content => !entity.observations.includes(content));
-      entity.observations.push(...newObservations);
-      return { entityName: o.entityName, addedObservations: newObservations };
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const results = observations.map(o => {
+        const entity = graph.entities.find(e => e.name === o.entityName);
+        if (!entity) {
+          throw new Error(`Entity with name ${o.entityName} not found`);
+        }
+        const newObservations = o.contents.filter(content => !entity.observations.includes(content));
+        entity.observations.push(...newObservations);
+        return { entityName: o.entityName, addedObservations: newObservations };
+      });
+      await this.saveGraph(graph);
+      return results;
     });
-    await this.saveGraph(graph);
-    return results;
   }
 
   async deleteEntities(entityNames: string[]): Promise<void> {
-    const graph = await this.loadGraph();
-    graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
-    graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
-    await this.saveGraph(graph);
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
+      graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
+      await this.saveGraph(graph);
+    });
   }
 
   async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
-    const graph = await this.loadGraph();
-    deletions.forEach(d => {
-      const entity = graph.entities.find(e => e.name === d.entityName);
-      if (entity) {
-        entity.observations = entity.observations.filter(o => !d.observations.includes(o));
-      }
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      deletions.forEach(d => {
+        const entity = graph.entities.find(e => e.name === d.entityName);
+        if (entity) {
+          entity.observations = entity.observations.filter(o => !d.observations.includes(o));
+        }
+      });
+      await this.saveGraph(graph);
     });
-    await this.saveGraph(graph);
   }
 
   async deleteRelations(relations: Relation[]): Promise<void> {
-    const graph = await this.loadGraph();
-    graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
-      r.from === delRelation.from && 
-      r.to === delRelation.to && 
-      r.relationType === delRelation.relationType
-    ));
-    await this.saveGraph(graph);
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      graph.relations = graph.relations.filter(r => !relations.some(delRelation =>
+        r.from === delRelation.from &&
+        r.to === delRelation.to &&
+        r.relationType === delRelation.relationType
+      ));
+      await this.saveGraph(graph);
+    });
   }
 
   async readGraph(): Promise<KnowledgeGraph> {
+    // We intentionally do not use a read lock here.
+    // 1. Performance: Read locks would serialize all reads, significantly degrading performance
+    //    for read-heavy workloads (like LLM context retrieval).
+    // 2. Deadlock risk: Read-write locks increase deadlock probability.
+    // 3. Atomicity: write-file-atomic ensures we either read the old file or the new file,
+    //    never a partial write.
+    // 4. Optimistic concurrency: In the rare case of a race condition (ENOENT/ESTALE),
+    //    it's better for the client to retry than to block all readers.
     return this.loadGraph();
   }
 
