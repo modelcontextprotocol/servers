@@ -1,0 +1,33 @@
+name: MCP Safety Scan
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - ".github/workflows/mcp-safety-scan.yml"
+      - ".mcp-safety-baseline.json"
+  pull_request:
+    paths:
+      - "src/**"
+      - ".github/workflows/mcp-safety-scan.yml"
+      - ".mcp-safety-baseline.json"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - uses: TheodorNEngoy/mcp-safety-scanner@v0
+        with:
+          path: src
+          baseline: .mcp-safety-baseline.json
+          fail-on: high
+          format: github
+

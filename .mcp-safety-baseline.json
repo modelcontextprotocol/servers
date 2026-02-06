@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "tool": "mcp-safety-scanner",
+  "generatedAt": "2026-02-06T22:32:45.334Z",
+  "fingerprints": [
+    "02410ad395be4f98efe0dd7d4c3b55f637c6332ad612109194e40f73ddbdc58b",
+    "20ea9924fb8c695dd78758548be2ecb2933cb42ff959f3c554557345ac4b7980",
+    "22116cd74b04c873c1c1973258a48865663129bae24427bedd426f03750aa93f",
+    "5f062db381642e6b9911427afc31ec7badbdfad8a759ffe313afa65241630211",
+    "80481e00889801884b574675f1f4f53b33f46bc9be8af7f43b92c6e81d7193e0",
+    "8963bde5a243de8f8bb4db469176e2348a070c9ce45f69327230b08e6e06afe8",
+    "cae5e08ed72eb1188f4f3dea0bbe754864dd905b7fce3f626b453b904d401e7b",
+    "e719a3e7fd8bcfbcd83b1c415465724f1e9244850d6ff79cd5db22022025fd14",
+    "edc274e6867eb9ba856d66b6be112628fad9cf3e4fadae83a2f563bca94c47ae",
+    "f6fd182ee3cca1e2535a1076c2001d0f71832e644eee80af342a226ecf0e74f3",
+    "f96122a88040d6f0ee21ae245e33196b51a9e3c38ea5aff7e9a5892426229b48",
+    "fd280dede9985170152ebf01cb12126178c34efab6f932636e19fab3971f58cf"
+  ],
+  "entries": [
+    {
+      "fingerprint": "cae5e08ed72eb1188f4f3dea0bbe754864dd905b7fce3f626b453b904d401e7b",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/__tests__/directory-tree.test.ts",
+      "excerpt": "await fs.rm(testDir, { recursive: true, force: true });"
+    },
+    {
+      "fingerprint": "e719a3e7fd8bcfbcd83b1c415465724f1e9244850d6ff79cd5db22022025fd14",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/__tests__/path-validation.test.ts",
+      "excerpt": "await fs.rm(testDir, { recursive: true, force: true });"
+    },
+    {
+      "fingerprint": "e719a3e7fd8bcfbcd83b1c415465724f1e9244850d6ff79cd5db22022025fd14",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/__tests__/path-validation.test.ts",
+      "excerpt": "await fs.rm(testDir, { recursive: true, force: true });"
+    },
+    {
+      "fingerprint": "e719a3e7fd8bcfbcd83b1c415465724f1e9244850d6ff79cd5db22022025fd14",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/__tests__/path-validation.test.ts",
+      "excerpt": "await fs.rm(testDir, { recursive: true, force: true });"
+    },
+    {
+      "fingerprint": "edc274e6867eb9ba856d66b6be112628fad9cf3e4fadae83a2f563bca94c47ae",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/__tests__/path-validation.test.ts",
+      "excerpt": "await fs.unlink(legitFile);"
+    },
+    {
+      "fingerprint": "edc274e6867eb9ba856d66b6be112628fad9cf3e4fadae83a2f563bca94c47ae",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/__tests__/path-validation.test.ts",
+      "excerpt": "await fs.unlink(legitFile);"
+    },
+    {
+      "fingerprint": "f6fd182ee3cca1e2535a1076c2001d0f71832e644eee80af342a226ecf0e74f3",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/__tests__/roots-utils.test.ts",
+      "excerpt": "rmSync(testDir1, { recursive: true, force: true });"
+    },
+    {
+      "fingerprint": "02410ad395be4f98efe0dd7d4c3b55f637c6332ad612109194e40f73ddbdc58b",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/__tests__/roots-utils.test.ts",
+      "excerpt": "rmSync(testDir2, { recursive: true, force: true });"
+    },
+    {
+      "fingerprint": "f96122a88040d6f0ee21ae245e33196b51a9e3c38ea5aff7e9a5892426229b48",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/__tests__/roots-utils.test.ts",
+      "excerpt": "rmSync(testDir3, { recursive: true, force: true });"
+    },
+    {
+      "fingerprint": "80481e00889801884b574675f1f4f53b33f46bc9be8af7f43b92c6e81d7193e0",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/__tests__/startup-validation.test.ts",
+      "excerpt": "await fs.rm(testDir, { recursive: true, force: true });"
+    },
+    {
+      "fingerprint": "fd280dede9985170152ebf01cb12126178c34efab6f932636e19fab3971f58cf",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/__tests__/structured-content.test.ts",
+      "excerpt": "await fs.rm(testDir, { recursive: true, force: true });"
+    },
+    {
+      "fingerprint": "8963bde5a243de8f8bb4db469176e2348a070c9ce45f69327230b08e6e06afe8",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/lib.ts",
+      "excerpt": "await fs.unlink(tempPath);"
+    },
+    {
+      "fingerprint": "8963bde5a243de8f8bb4db469176e2348a070c9ce45f69327230b08e6e06afe8",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/lib.ts",
+      "excerpt": "await fs.unlink(tempPath);"
+    },
+    {
+      "fingerprint": "5f062db381642e6b9911427afc31ec7badbdfad8a759ffe313afa65241630211",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "memory/__tests__/file-path.test.ts",
+      "excerpt": "await fs.unlink(oldMemoryPath);"
+    },
+    {
+      "fingerprint": "20ea9924fb8c695dd78758548be2ecb2933cb42ff959f3c554557345ac4b7980",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "memory/__tests__/file-path.test.ts",
+      "excerpt": "await fs.unlink(newMemoryPath);"
+    },
+    {
+      "fingerprint": "22116cd74b04c873c1c1973258a48865663129bae24427bedd426f03750aa93f",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "memory/__tests__/knowledge-graph.test.ts",
+      "excerpt": "await fs.unlink(testFilePath);"
+    }
+  ]
+}
