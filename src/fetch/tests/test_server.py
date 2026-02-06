@@ -322,5 +322,5 @@ class TestFetchUrl:
                 proxy_url="http://proxy.example.com:8080"
             )
 
-            # Verify AsyncClient was called with proxy
-            mock_client_class.assert_called_once_with(proxies="http://proxy.example.com:8080")
+            # Verify AsyncClient was called with proxy and verify
+            mock_client_class.assert_called_once_with(proxies="http://proxy.example.com:8080", verify=True)
