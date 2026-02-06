@@ -32,9 +32,9 @@
   "devDependencies": {
     "@types/node": "^22",
     "@types/yargs": "^17.0.32",
-    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/coverage-v8": "^4.0.18",
     "shx": "^0.3.4",
     "typescript": "^5.3.3",
-    "vitest": "^2.1.8"
+    "vitest": "^4.0.18"
   }
 }
