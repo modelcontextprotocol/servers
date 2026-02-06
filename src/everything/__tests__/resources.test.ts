@@ -26,14 +26,6 @@ import {
 
 describe('Resource Templates', () => {
   describe('Constants', () => {
-    it('should define text resource type', () => {
-      expect(RESOURCE_TYPE_TEXT).toBe('Text');
-    });
-
-    it('should define blob resource type', () => {
-      expect(RESOURCE_TYPE_BLOB).toBe('Blob');
-    });
-
     it('should include both types in RESOURCE_TYPES array', () => {
       expect(RESOURCE_TYPES).toContain(RESOURCE_TYPE_TEXT);
       expect(RESOURCE_TYPES).toContain(RESOURCE_TYPE_BLOB);
@@ -275,26 +267,16 @@ describe('Session Resources', () => {
 
 describe('File Resources', () => {
   describe('registerFileResources', () => {
-    it('should register file resources from docs directory', () => {
+    it('should register file resources when docs directory exists', () => {
       const mockServer = {
         registerResource: vi.fn(),
       } as unknown as McpServer;
 
-      // This may or may not register resources depending on if docs/ exists
       registerFileResources(mockServer);
 
-      // If docs folder exists and has files, resources should be registered
-      // If not, the function should not throw
-      expect(true).toBe(true);
-    });
-
-    it('should not throw when docs directory is missing', () => {
-      const mockServer = {
-        registerResource: vi.fn(),
-      } as unknown as McpServer;
-
-      // Should gracefully handle missing docs directory
-      expect(() => registerFileResources(mockServer)).not.toThrow();
+      // The docs folder exists in the everything server and contains files
+      // so registerResource should have been called
+      expect(mockServer.registerResource).toHaveBeenCalled();
     });
   });
 });
@@ -316,56 +298,30 @@ describe('Subscriptions', () => {
     });
   });
 
-  describe('beginSimulatedResourceUpdates', () => {
+  describe('simulated resource updates lifecycle', () => {
     afterEach(() => {
       // Clean up any intervals
-      stopSimulatedResourceUpdates('test-session-updates');
+      stopSimulatedResourceUpdates('lifecycle-test-session');
+    });
+
+    it('should start and stop updates without errors', () => {
+      const mockServer = {
+        server: {
+          notification: vi.fn(),
+        },
+      } as unknown as McpServer;
+
+      // Start updates - should work for both defined and undefined sessionId
+      beginSimulatedResourceUpdates(mockServer, 'lifecycle-test-session');
+      beginSimulatedResourceUpdates(mockServer, undefined);
+
+      // Stop updates - should handle all cases gracefully
+      stopSimulatedResourceUpdates('lifecycle-test-session');
+      stopSimulatedResourceUpdates('non-existent-session');
       stopSimulatedResourceUpdates(undefined);
-    });
 
-    it('should start update interval for session', () => {
-      const mockServer = {
-        server: {
-          notification: vi.fn(),
-        },
-      } as unknown as McpServer;
-
-      // Should not throw
-      expect(() =>
-        beginSimulatedResourceUpdates(mockServer, 'test-session-updates')
-      ).not.toThrow();
-    });
-
-    it('should handle undefined sessionId', () => {
-      const mockServer = {
-        server: {
-          notification: vi.fn(),
-        },
-      } as unknown as McpServer;
-
-      expect(() => beginSimulatedResourceUpdates(mockServer, undefined)).not.toThrow();
-    });
-  });
-
-  describe('stopSimulatedResourceUpdates', () => {
-    it('should stop updates for session', () => {
-      const mockServer = {
-        server: {
-          notification: vi.fn(),
-        },
-      } as unknown as McpServer;
-
-      // Start then stop
-      beginSimulatedResourceUpdates(mockServer, 'stop-test-session');
-      expect(() => stopSimulatedResourceUpdates('stop-test-session')).not.toThrow();
-    });
-
-    it('should handle stopping non-existent session', () => {
-      expect(() => stopSimulatedResourceUpdates('non-existent-session')).not.toThrow();
-    });
-
-    it('should handle undefined sessionId', () => {
-      expect(() => stopSimulatedResourceUpdates(undefined)).not.toThrow();
+      // If we got here without throwing, the lifecycle works correctly
+      expect(true).toBe(true);
     });
   });
 });

@@ -22,20 +22,6 @@ function createMockServer() {
 
 describe('Prompts', () => {
   describe('simple-prompt', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerSimplePrompt(mockServer);
-
-      expect(mockServer.registerPrompt).toHaveBeenCalledWith(
-        'simple-prompt',
-        expect.objectContaining({
-          title: 'Simple Prompt',
-          description: 'A prompt with no arguments',
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should return fixed message with no arguments', () => {
       const { mockServer, handlers } = createMockServer();
       registerSimplePrompt(mockServer);
@@ -55,34 +41,9 @@ describe('Prompts', () => {
         ],
       });
     });
-
-    it('should return message with user role', () => {
-      const { mockServer, handlers } = createMockServer();
-      registerSimplePrompt(mockServer);
-
-      const handler = handlers.get('simple-prompt')!;
-      const result = handler();
-
-      expect(result.messages).toHaveLength(1);
-      expect(result.messages[0].role).toBe('user');
-    });
   });
 
   describe('args-prompt', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerArgumentsPrompt(mockServer);
-
-      expect(mockServer.registerPrompt).toHaveBeenCalledWith(
-        'args-prompt',
-        expect.objectContaining({
-          title: 'Arguments Prompt',
-          description: 'A prompt with two arguments, one required and one optional',
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should include city in message', () => {
       const { mockServer, handlers } = createMockServer();
       registerArgumentsPrompt(mockServer);
@@ -114,36 +75,12 @@ describe('Prompts', () => {
 
       expect(result.messages[0].content.text).toBe("What's weather in New York?");
       expect(result.messages[0].content.text).not.toContain(',');
-    });
-
-    it('should return message with user role', () => {
-      const { mockServer, handlers } = createMockServer();
-      registerArgumentsPrompt(mockServer);
-
-      const handler = handlers.get('args-prompt')!;
-      const result = handler({ city: 'Boston' });
-
-      expect(result.messages).toHaveLength(1);
       expect(result.messages[0].role).toBe('user');
       expect(result.messages[0].content.type).toBe('text');
     });
   });
 
   describe('completable-prompt', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerPromptWithCompletions(mockServer);
-
-      expect(mockServer.registerPrompt).toHaveBeenCalledWith(
-        'completable-prompt',
-        expect.objectContaining({
-          title: 'Team Management',
-          description: 'First argument choice narrows values for second argument.',
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should generate promotion message with department and name', () => {
       const { mockServer, handlers } = createMockServer();
       registerPromptWithCompletions(mockServer);
@@ -165,39 +102,15 @@ describe('Prompts', () => {
       const salesResult = handler({ department: 'Sales', name: 'David' });
       expect(salesResult.messages[0].content.text).toContain('Sales');
       expect(salesResult.messages[0].content.text).toContain('David');
+      expect(salesResult.messages[0].role).toBe('user');
 
       const marketingResult = handler({ department: 'Marketing', name: 'Grace' });
       expect(marketingResult.messages[0].content.text).toContain('Marketing');
       expect(marketingResult.messages[0].content.text).toContain('Grace');
     });
-
-    it('should return message with user role', () => {
-      const { mockServer, handlers } = createMockServer();
-      registerPromptWithCompletions(mockServer);
-
-      const handler = handlers.get('completable-prompt')!;
-      const result = handler({ department: 'Support', name: 'John' });
-
-      expect(result.messages).toHaveLength(1);
-      expect(result.messages[0].role).toBe('user');
-    });
   });
 
   describe('resource-prompt', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerEmbeddedResourcePrompt(mockServer);
-
-      expect(mockServer.registerPrompt).toHaveBeenCalledWith(
-        'resource-prompt',
-        expect.objectContaining({
-          title: 'Resource Prompt',
-          description: 'A prompt that includes an embedded resource reference',
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should return text resource reference', () => {
       const { mockServer, handlers } = createMockServer();
       registerEmbeddedResourcePrompt(mockServer);

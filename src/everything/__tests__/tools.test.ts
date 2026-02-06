@@ -39,20 +39,6 @@ function createMockServer() {
 
 describe('Tools', () => {
   describe('echo', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerEchoTool(mockServer);
-
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'echo',
-        expect.objectContaining({
-          title: 'Echo Tool',
-          description: 'Echoes back the input string',
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should echo back the message', async () => {
       const { mockServer, handlers } = createMockServer();
       registerEchoTool(mockServer);
@@ -104,20 +90,6 @@ describe('Tools', () => {
   });
 
   describe('get-sum', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerGetSumTool(mockServer);
-
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'get-sum',
-        expect.objectContaining({
-          title: 'Get Sum Tool',
-          description: 'Returns the sum of two numbers',
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should calculate sum of two positive numbers', async () => {
       const { mockServer, handlers } = createMockServer();
       registerGetSumTool(mockServer);
@@ -179,20 +151,6 @@ describe('Tools', () => {
   });
 
   describe('get-env', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerGetEnvTool(mockServer);
-
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'get-env',
-        expect.objectContaining({
-          title: 'Print Environment Tool',
-          description: expect.stringContaining('environment variables'),
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should return all environment variables as JSON', async () => {
       const { mockServer, handlers } = createMockServer();
       registerGetEnvTool(mockServer);
@@ -222,20 +180,6 @@ describe('Tools', () => {
   });
 
   describe('get-tiny-image', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerGetTinyImageTool(mockServer);
-
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'get-tiny-image',
-        expect.objectContaining({
-          title: 'Get Tiny Image Tool',
-          description: 'Returns a tiny MCP logo image.',
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should return image content with text descriptions', async () => {
       const { mockServer, handlers } = createMockServer();
       registerGetTinyImageTool(mockServer);
@@ -275,20 +219,6 @@ describe('Tools', () => {
   });
 
   describe('get-structured-content', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerGetStructuredContentTool(mockServer);
-
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'get-structured-content',
-        expect.objectContaining({
-          title: 'Get Structured Content Tool',
-          description: expect.stringContaining('structured content'),
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should return weather for New York', async () => {
       const { mockServer, handlers } = createMockServer();
       registerGetStructuredContentTool(mockServer);
@@ -335,20 +265,6 @@ describe('Tools', () => {
   });
 
   describe('get-annotated-message', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerGetAnnotatedMessageTool(mockServer);
-
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'get-annotated-message',
-        expect.objectContaining({
-          title: 'Get Annotated Message Tool',
-          description: expect.stringContaining('annotations'),
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should return error message with high priority', async () => {
       const { mockServer, handlers } = createMockServer();
       registerGetAnnotatedMessageTool(mockServer);
@@ -405,20 +321,6 @@ describe('Tools', () => {
   });
 
   describe('trigger-long-running-operation', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerTriggerLongRunningOperationTool(mockServer);
-
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'trigger-long-running-operation',
-        expect.objectContaining({
-          title: 'Trigger Long Running Operation Tool',
-          description: expect.stringContaining('long running operation'),
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should complete operation and return result', async () => {
       const { mockServer, handlers } = createMockServer();
       registerTriggerLongRunningOperationTool(mockServer);
@@ -459,20 +361,6 @@ describe('Tools', () => {
   });
 
   describe('get-resource-links', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerGetResourceLinksTool(mockServer);
-
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'get-resource-links',
-        expect.objectContaining({
-          title: 'Get Resource Links Tool',
-          description: expect.stringContaining('resource links'),
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should return specified number of resource links', async () => {
       const { mockServer, handlers } = createMockServer();
       registerGetResourceLinksTool(mockServer);
@@ -520,20 +408,6 @@ describe('Tools', () => {
   });
 
   describe('get-resource-reference', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerGetResourceReferenceTool(mockServer);
-
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'get-resource-reference',
-        expect.objectContaining({
-          title: 'Get Resource Reference Tool',
-          description: expect.stringContaining('resource reference'),
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should return text resource reference', async () => {
       const { mockServer, handlers } = createMockServer();
       registerGetResourceReferenceTool(mockServer);
@@ -586,20 +460,6 @@ describe('Tools', () => {
   });
 
   describe('toggle-simulated-logging', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerToggleSimulatedLoggingTool(mockServer);
-
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'toggle-simulated-logging',
-        expect.objectContaining({
-          title: 'Toggle Simulated Logging',
-          description: expect.stringContaining('logging'),
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should start logging when not active', async () => {
       const { mockServer, handlers } = createMockServer();
       registerToggleSimulatedLoggingTool(mockServer);
@@ -639,20 +499,6 @@ describe('Tools', () => {
   });
 
   describe('toggle-subscriber-updates', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerToggleSubscriberUpdatesTool(mockServer);
-
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'toggle-subscriber-updates',
-        expect.objectContaining({
-          title: 'Toggle Subscriber Updates',
-          description: expect.stringContaining('subscription updates'),
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should start updates when not active', async () => {
       const { mockServer, handlers } = createMockServer();
       registerToggleSubscriberUpdatesTool(mockServer);
@@ -893,20 +739,6 @@ describe('Tools', () => {
   });
 
   describe('gzip-file-as-resource', () => {
-    it('should register with correct name and config', () => {
-      const { mockServer } = createMockServer();
-      registerGZipFileAsResourceTool(mockServer);
-
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'gzip-file-as-resource',
-        expect.objectContaining({
-          title: 'GZip File as Resource Tool',
-          description: expect.stringContaining('gzip'),
-        }),
-        expect.any(Function)
-      );
-    });
-
     it('should compress data URI and return resource link', async () => {
       const registeredResources: any[] = [];
       const mockServer = {

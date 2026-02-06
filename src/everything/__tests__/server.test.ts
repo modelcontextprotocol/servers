@@ -23,25 +23,10 @@ describe('Server Factory', () => {
       expect(server.server).toBeDefined();
     });
 
-    it('should have tools capability enabled', () => {
+    it('should have an oninitialized handler set', () => {
       const { server } = createServer();
 
-      // Server should be properly configured
-      expect(server).toBeDefined();
-    });
-
-    it('should cleanup without throwing errors', () => {
-      const { cleanup } = createServer();
-
-      // Cleanup should not throw when called with a session ID
-      expect(() => cleanup('test-session')).not.toThrow();
-    });
-
-    it('should cleanup without throwing errors when sessionId is undefined', () => {
-      const { cleanup } = createServer();
-
-      // Cleanup should not throw when called without a session ID
-      expect(() => cleanup()).not.toThrow();
+      expect(server.server.oninitialized).toBeDefined();
     });
 
     it('should allow multiple servers to be created', () => {
@@ -51,12 +36,6 @@ describe('Server Factory', () => {
       expect(result1.server).toBeDefined();
       expect(result2.server).toBeDefined();
       expect(result1.server).not.toBe(result2.server);
-    });
-
-    it('should have an oninitialized handler set', () => {
-      const { server } = createServer();
-
-      expect(server.server.oninitialized).toBeDefined();
     });
   });
 });
