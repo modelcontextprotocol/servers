@@ -72,7 +72,7 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
 
     robot_txt_url = get_robots_txt_url(url)
 
-    async with AsyncClient(proxies=proxy_url) as client:
+    async with AsyncClient(proxy=proxy_url) as client:
         try:
             response = await client.get(
                 robot_txt_url,
@@ -116,7 +116,7 @@ async def fetch_url(
     """
     from httpx import AsyncClient, HTTPError
 
-    async with AsyncClient(proxies=proxy_url) as client:
+    async with AsyncClient(proxy=proxy_url) as client:
         try:
             response = await client.get(
                 url,
