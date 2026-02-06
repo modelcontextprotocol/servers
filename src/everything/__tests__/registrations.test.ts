@@ -48,7 +48,7 @@ describe('Registration Index Files', () => {
     it('should register conditional tools based on capabilities', async () => {
       const { registerConditionalTools } = await import('../tools/index.js');
 
-      // Server with all capabilities
+      // Server with all capabilities including experimental tasks API
       const mockServerWithCapabilities = {
         registerTool: vi.fn(),
         server: {
@@ -58,11 +58,16 @@ describe('Registration Index Files', () => {
             sampling: {},
           })),
         },
+        experimental: {
+          tasks: {
+            registerToolTask: vi.fn(),
+          },
+        },
       } as unknown as McpServer;
 
       registerConditionalTools(mockServerWithCapabilities);
 
-      // Should register 3 conditional tools when all capabilities present
+      // Should register 3 conditional tools + 3 task-based tools when all capabilities present
       expect(mockServerWithCapabilities.registerTool).toHaveBeenCalledTimes(3);
 
       const registeredTools = (
@@ -71,6 +76,9 @@ describe('Registration Index Files', () => {
       expect(registeredTools).toContain('get-roots-list');
       expect(registeredTools).toContain('trigger-elicitation-request');
       expect(registeredTools).toContain('trigger-sampling-request');
+
+      // Task-based tools are registered via experimental.tasks.registerToolTask
+      expect(mockServerWithCapabilities.experimental.tasks.registerToolTask).toHaveBeenCalled();
     });
 
     it('should not register conditional tools when capabilities missing', async () => {
@@ -81,11 +89,16 @@ describe('Registration Index Files', () => {
         server: {
           getClientCapabilities: vi.fn(() => ({})),
         },
+        experimental: {
+          tasks: {
+            registerToolTask: vi.fn(),
+          },
+        },
       } as unknown as McpServer;
 
       registerConditionalTools(mockServerNoCapabilities);
 
-      // Should not register any tools when capabilities are missing
+      // Should not register any capability-gated tools when capabilities are missing
       expect(mockServerNoCapabilities.registerTool).not.toHaveBeenCalled();
     });
   });
