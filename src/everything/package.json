@@ -2,9 +2,9 @@
   "name": "@modelcontextprotocol/server-everything",
   "version": "2.0.0",
   "description": "MCP server that exercises all the features of the MCP protocol",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "mcpName": "io.github.modelcontextprotocol/server-everything",
-  "author": "Anthropic, PBC (https://anthropic.com)",
+  "author": "Model Context Protocol a Series of LF Projects, LLC.",
   "homepage": "https://modelcontextprotocol.io",
   "bugs": "https://github.com/modelcontextprotocol/servers/issues",
   "repository": {
@@ -26,10 +26,11 @@
     "start:sse": "node dist/index.js sse",
     "start:streamableHttp": "node dist/index.js streamableHttp",
     "prettier:fix": "prettier --write .",
-    "prettier:check": "prettier --check ."
+    "prettier:check": "prettier --check .",
+    "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "jszip": "^3.10.1",
@@ -39,8 +40,10 @@
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@vitest/coverage-v8": "^2.1.8",
     "shx": "^0.3.4",
     "typescript": "^5.6.2",
-    "prettier": "^2.8.8"
+    "prettier": "^2.8.8",
+    "vitest": "^2.1.8"
   }
 }
