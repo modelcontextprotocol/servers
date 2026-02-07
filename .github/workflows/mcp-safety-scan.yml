@@ -14,6 +14,9 @@ on:
       - ".github/workflows/mcp-safety-scan.yml"
       - ".mcp-safety-baseline.json"
 
+permissions:
+  contents: read
+
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -24,10 +27,10 @@ jobs:
         with:
           node-version: 20
 
-      - uses: TheodorNEngoy/mcp-safety-scanner@v0
+      # Pin the action version for supply-chain safety.
+      - uses: TheodorNEngoy/mcp-safety-scanner@7fd13fc55cb5c21cb1611f0eda4c9ac4da411b71 # v0.3.3
         with:
           path: src
           baseline: .mcp-safety-baseline.json
           fail-on: high
           format: github
-
