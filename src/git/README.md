@@ -266,6 +266,12 @@ Add to your Zed settings.json:
 ```
 </details>
 
+### Usage with Codex CLI
+
+```bash
+codex mcp add git -- uvx mcp-server-git
+```
+
 ## Debugging
 
 You can use the MCP inspector to debug the server. For uvx installations:
