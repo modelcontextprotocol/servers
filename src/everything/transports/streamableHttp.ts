@@ -6,6 +6,7 @@ import express, { Request, Response } from "express";
 import { createServer } from "../server/index.js";
 import { randomUUID } from "node:crypto";
 import cors from "cors";
+import { createCorsOptions } from "./cors.js";
 
 // Simple in-memory event store for SSE resumability
 class InMemoryEventStore implements EventStore {
@@ -38,16 +39,20 @@ class InMemoryEventStore implements EventStore {
 
 console.log("Starting Streamable HTTP server...");
 
-// Express app with permissive CORS for testing with Inspector direct connect mode
+// Express app with loopback-only CORS by default for Inspector direct connect mode.
+// Override via MCP_CORS_ORIGIN_REGEX if you intentionally need a wider allowlist.
 const app = express();
 app.use(
-  cors({
-    origin: "*", // use "*" with caution in production
-    methods: "GET,POST,DELETE",
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
-    exposedHeaders: ["mcp-session-id", "last-event-id", "mcp-protocol-version"],
-  })
+  cors(
+    createCorsOptions({
+      methods: "GET,POST,DELETE",
+      exposedHeaders: [
+        "mcp-session-id",
+        "last-event-id",
+        "mcp-protocol-version",
+      ],
+    })
+  )
 );
 
 // Map sessionId to server transport for each client
@@ -198,9 +203,15 @@ app.delete("/mcp", async (req: Request, res: Response) => {
 });
 
 // Start the server
-const PORT = process.env.PORT || 3001;
-const server = app.listen(PORT, () => {
-  console.error(`MCP Streamable HTTP Server listening on port ${PORT}`);
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
+if (!Number.isFinite(PORT)) {
+  throw new Error(`Invalid PORT=${JSON.stringify(process.env.PORT)}`);
+}
+const HOST = process.env.HOST || "127.0.0.1";
+const server = app.listen(PORT, HOST, () => {
+  console.error(
+    `MCP Streamable HTTP Server listening on http://${HOST}:${PORT}`
+  );
 });
 
 // Handle server errors
