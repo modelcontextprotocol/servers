@@ -11,6 +11,12 @@ const config = {
     "Demonstrates bidirectional MCP tasks where the server sends an elicitation request and " +
     "the client handles user input asynchronously, allowing the server to poll for completion.",
   inputSchema: {},
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
 };
 
 // Poll interval in milliseconds
