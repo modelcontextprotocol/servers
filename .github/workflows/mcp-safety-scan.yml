@@ -28,7 +28,7 @@ jobs:
           node-version: 20
 
       # Pin the action version for supply-chain safety.
-      - uses: TheodorNEngoy/mcp-safety-scanner@7fd13fc55cb5c21cb1611f0eda4c9ac4da411b71 # v0.3.3
+      - uses: TheodorNEngoy/mcp-safety-scanner@dcf124b4f97aa893867ced9028264a298e2b4292 # v0.3.5
         with:
           path: src
           baseline: .mcp-safety-baseline.json
