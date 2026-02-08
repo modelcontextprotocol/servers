@@ -290,7 +290,21 @@ async function loadCredentialsAndRunServer() {
   }
 
   const credentials = JSON.parse(fs.readFileSync(credentialsPath, "utf-8"));
-  const auth = new google.auth.OAuth2();
+
+  // Load client_id and client_secret from OAuth keys so the client can
+  // auto-refresh expired access tokens using the refresh_token.
+  const oauthKeysPath = process.env.GDRIVE_OAUTH_PATH || path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../../../gcp-oauth.keys.json",
+  );
+  const oauthKeys = JSON.parse(fs.readFileSync(oauthKeysPath, "utf-8"));
+  const keyData = oauthKeys.installed || oauthKeys.web;
+
+  const auth = new google.auth.OAuth2(
+    keyData.client_id,
+    keyData.client_secret,
+    keyData.redirect_uris?.[0],
+  );
   auth.setCredentials(credentials);
   google.options({ auth });
 
