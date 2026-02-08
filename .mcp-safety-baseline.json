@@ -1,33 +1,53 @@
 {
-  "version": 1,
+  "version": 2,
   "tool": "mcp-safety-scanner",
-  "generatedAt": "2026-02-08T01:11:19.241Z",
+  "generatedAt": "2026-02-08T18:53:00.598Z",
   "fingerprints": [
-    "5b247d1df57644d8c2fcf020c4a1bebb0df81a6206f3e28ca63a36f9ad8629ce",
-    "8963bde5a243de8f8bb4db469176e2348a070c9ce45f69327230b08e6e06afe8",
-    "8c6d459b9fe3fd08e618346ea8642343203edc21ba8e7d2aad85c3603aef3529"
+    "1080301ccc119b431825933246b66e42e8bb0e6aa4a286a27f6bf38639054e48",
+    "92abe3840e2e6c28655320eb095aefaaa3c766c73c9bb2e2a68b0255a3a8fcb6",
+    "b9bbbaf2acab0552d78b2e857daeb99e6d3f3ca0abfa1710540e97bb1998db97",
+    "e7805b7df03dde0ac35d234b54585a60d470e869e45d59b87f6d941757fc20a6"
   ],
   "entries": [
     {
-      "fingerprint": "5b247d1df57644d8c2fcf020c4a1bebb0df81a6206f3e28ca63a36f9ad8629ce",
-      "ruleId": "cors-wildcard-origin",
-      "severity": "high",
-      "file": "everything/transports/sse.ts",
-      "excerpt": "cors({"
-    },
-    {
-      "fingerprint": "8c6d459b9fe3fd08e618346ea8642343203edc21ba8e7d2aad85c3603aef3529",
-      "ruleId": "cors-wildcard-origin",
-      "severity": "high",
-      "file": "everything/transports/streamableHttp.ts",
-      "excerpt": "cors({"
-    },
-    {
-      "fingerprint": "8963bde5a243de8f8bb4db469176e2348a070c9ce45f69327230b08e6e06afe8",
+      "fingerprint": "1080301ccc119b431825933246b66e42e8bb0e6aa4a286a27f6bf38639054e48",
       "ruleId": "file-delete-apis",
       "severity": "medium",
       "file": "filesystem/lib.ts",
-      "excerpt": "await fs.unlink(tempPath);"
+      "excerpt": "await fs.unlink(tempPath);",
+      "context": "",
+      "line": 154,
+      "column": 20
+    },
+    {
+      "fingerprint": "92abe3840e2e6c28655320eb095aefaaa3c766c73c9bb2e2a68b0255a3a8fcb6",
+      "ruleId": "file-delete-apis",
+      "severity": "medium",
+      "file": "filesystem/lib.ts",
+      "excerpt": "await fs.unlink(tempPath);",
+      "context": "",
+      "line": 252,
+      "column": 18
+    },
+    {
+      "fingerprint": "b9bbbaf2acab0552d78b2e857daeb99e6d3f3ca0abfa1710540e97bb1998db97",
+      "ruleId": "cors-wildcard-origin",
+      "severity": "high",
+      "file": "everything/transports/streamableHttp.ts",
+      "excerpt": "cors({",
+      "context": "cors({ origin: \"*\", // use \"*\" with caution in production methods: \"GET,POST,DELETE\", preflightContinue: false, optionsSuccessStatus: 204, exposedHeaders: [\"mcp-session-id\", \"last-event-id\", \"mcp-protocol-version\"], }) );",
+      "line": 44,
+      "column": 3
+    },
+    {
+      "fingerprint": "e7805b7df03dde0ac35d234b54585a60d470e869e45d59b87f6d941757fc20a6",
+      "ruleId": "cors-wildcard-origin",
+      "severity": "high",
+      "file": "everything/transports/sse.ts",
+      "excerpt": "cors({",
+      "context": "cors({ origin: \"*\", // use \"*\" with caution in production methods: \"GET,POST\", preflightContinue: false, optionsSuccessStatus: 204, }) ); const transports: Map<string, SSEServerTransport> = new Map<",
+      "line": 11,
+      "column": 3
     }
   ]
 }
