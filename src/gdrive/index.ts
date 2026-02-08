@@ -16,6 +16,12 @@ import { fileURLToPath } from 'url';
 
 const drive = google.drive("v3");
 
+// Resource handlers call drive.files.list() on every resources/list request,
+// which some MCP clients invoke during initialization.  Set this env var to
+// "true" to expose Drive files as MCP resources; leave unset for tools-only
+// mode (search + download), which is compatible with all MCP clients.
+const enableResources = process.env.GDRIVE_ENABLE_RESOURCES === "true";
+
 const server = new Server(
   {
     name: "example-servers/gdrive",
@@ -23,109 +29,111 @@ const server = new Server(
   },
   {
     capabilities: {
-      resources: {},
+      ...(enableResources ? { resources: {} } : {}),
       tools: {},
     },
   },
 );
 
-server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
-  const pageSize = 10;
-  const params: any = {
-    pageSize,
-    fields: "nextPageToken, files(id, name, mimeType)",
-  };
+if (enableResources) {
+  server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
+    const pageSize = 10;
+    const params: any = {
+      pageSize,
+      fields: "nextPageToken, files(id, name, mimeType)",
+    };
 
-  if (request.params?.cursor) {
-    params.pageToken = request.params.cursor;
-  }
-
-  const res = await drive.files.list(params);
-  const files = res.data.files!;
-
-  return {
-    resources: files.map((file) => ({
-      uri: `gdrive:///${file.id}`,
-      mimeType: file.mimeType,
-      name: file.name,
-    })),
-    nextCursor: res.data.nextPageToken,
-  };
-});
-
-server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-  const fileId = request.params.uri.replace("gdrive:///", "");
-
-  // First get file metadata to check mime type
-  const file = await drive.files.get({
-    fileId,
-    fields: "mimeType",
-  });
-
-  // For Google Docs/Sheets/etc we need to export
-  if (file.data.mimeType?.startsWith("application/vnd.google-apps")) {
-    let exportMimeType: string;
-    switch (file.data.mimeType) {
-      case "application/vnd.google-apps.document":
-        exportMimeType = "text/markdown";
-        break;
-      case "application/vnd.google-apps.spreadsheet":
-        exportMimeType = "text/csv";
-        break;
-      case "application/vnd.google-apps.presentation":
-        exportMimeType = "text/plain";
-        break;
-      case "application/vnd.google-apps.drawing":
-        exportMimeType = "image/png";
-        break;
-      default:
-        exportMimeType = "text/plain";
+    if (request.params?.cursor) {
+      params.pageToken = request.params.cursor;
     }
 
-    const res = await drive.files.export(
-      { fileId, mimeType: exportMimeType },
-      { responseType: "text" },
+    const res = await drive.files.list(params);
+    const files = res.data.files!;
+
+    return {
+      resources: files.map((file) => ({
+        uri: `gdrive:///${file.id}`,
+        mimeType: file.mimeType,
+        name: file.name,
+      })),
+      nextCursor: res.data.nextPageToken,
+    };
+  });
+
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const fileId = request.params.uri.replace("gdrive:///", "");
+
+    // First get file metadata to check mime type
+    const file = await drive.files.get({
+      fileId,
+      fields: "mimeType",
+    });
+
+    // For Google Docs/Sheets/etc we need to export
+    if (file.data.mimeType?.startsWith("application/vnd.google-apps")) {
+      let exportMimeType: string;
+      switch (file.data.mimeType) {
+        case "application/vnd.google-apps.document":
+          exportMimeType = "text/markdown";
+          break;
+        case "application/vnd.google-apps.spreadsheet":
+          exportMimeType = "text/csv";
+          break;
+        case "application/vnd.google-apps.presentation":
+          exportMimeType = "text/plain";
+          break;
+        case "application/vnd.google-apps.drawing":
+          exportMimeType = "image/png";
+          break;
+        default:
+          exportMimeType = "text/plain";
+      }
+
+      const res = await drive.files.export(
+        { fileId, mimeType: exportMimeType },
+        { responseType: "text" },
+      );
+
+      return {
+        contents: [
+          {
+            uri: request.params.uri,
+            mimeType: exportMimeType,
+            text: res.data,
+          },
+        ],
+      };
+    }
+
+    // For regular files download content
+    const res = await drive.files.get(
+      { fileId, alt: "media" },
+      { responseType: "arraybuffer" },
     );
-
-    return {
-      contents: [
-        {
-          uri: request.params.uri,
-          mimeType: exportMimeType,
-          text: res.data,
-        },
-      ],
-    };
-  }
-
-  // For regular files download content
-  const res = await drive.files.get(
-    { fileId, alt: "media" },
-    { responseType: "arraybuffer" },
-  );
-  const mimeType = file.data.mimeType || "application/octet-stream";
-  if (mimeType.startsWith("text/") || mimeType === "application/json") {
-    return {
-      contents: [
-        {
-          uri: request.params.uri,
-          mimeType: mimeType,
-          text: Buffer.from(res.data as ArrayBuffer).toString("utf-8"),
-        },
-      ],
-    };
-  } else {
-    return {
-      contents: [
-        {
-          uri: request.params.uri,
-          mimeType: mimeType,
-          blob: Buffer.from(res.data as ArrayBuffer).toString("base64"),
-        },
-      ],
-    };
-  }
-});
+    const mimeType = file.data.mimeType || "application/octet-stream";
+    if (mimeType.startsWith("text/") || mimeType === "application/json") {
+      return {
+        contents: [
+          {
+            uri: request.params.uri,
+            mimeType: mimeType,
+            text: Buffer.from(res.data as ArrayBuffer).toString("utf-8"),
+          },
+        ],
+      };
+    } else {
+      return {
+        contents: [
+          {
+            uri: request.params.uri,
+            mimeType: mimeType,
+            blob: Buffer.from(res.data as ArrayBuffer).toString("base64"),
+          },
+        ],
+      };
+    }
+  });
+}
 
 const DOWNLOAD_DIR = process.env.GDRIVE_DOWNLOAD_DIR || "/tmp/gdrive-downloads";
 
