@@ -203,7 +203,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     const file = await drive.files.get({ fileId, fields: "name, mimeType" });
     const fileName = (file.data.name || "unnamed").replace(
-      /[/\\:*?"<>|]/g,
+      /[/\\:*?"<>|\u00A0\u202F\u2000-\u200A\u2028\u2029\u205F\u3000\uFEFF]/g,
       "_",
     );
     const mimeType = file.data.mimeType;
