@@ -65,8 +65,10 @@ describe('Lib Functions', () => {
       });
 
       it('handles negative numbers', () => {
-        // Negative numbers will result in NaN for the log calculation
-        expect(formatSize(-1024)).toContain('NaN');
+        // Negative numbers should return '0 B' as file sizes cannot be negative
+        expect(formatSize(-1)).toBe('0 B');
+        expect(formatSize(-1024)).toBe('0 B');
+        expect(formatSize(-1000000)).toBe('0 B');
         expect(formatSize(-0)).toBe('0 B');
       });
 
