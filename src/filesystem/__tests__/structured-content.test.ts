@@ -21,7 +21,9 @@ describe('structuredContent schema compliance', () => {
 
   beforeEach(async () => {
     // Create a temp directory for testing
-    testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcp-fs-test-'));
+    // Use realpath to resolve symlinks (on macOS, /var -> /private/var)
+    const tmpBase = await fs.realpath(os.tmpdir());
+    testDir = await fs.mkdtemp(path.join(tmpBase, 'mcp-fs-test-'));
 
     // Create test files
     await fs.writeFile(path.join(testDir, 'test.txt'), 'test content');
@@ -39,7 +41,9 @@ describe('structuredContent schema compliance', () => {
       name: 'test-client',
       version: '1.0.0',
     }, {
-      capabilities: {}
+      capabilities: {
+        tools: { structuredContent: true }
+      }
     });
 
     await client.connect(transport);
