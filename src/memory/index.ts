@@ -465,6 +465,30 @@ server.registerTool(
   }
 );
 
+// Expose the knowledge graph as a readable MCP Resource.
+// This demonstrates the Resources protocol feature, enabling clients
+// to discover and read the graph without calling a tool.
+server.registerResource(
+  "knowledge_graph",
+  "memory://knowledge-graph",
+  {
+    description: "The full knowledge graph with all entities and relations",
+    mimeType: "application/json",
+  },
+  async (uri) => {
+    const graph = await knowledgeGraphManager.readGraph();
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: "application/json",
+          text: JSON.stringify(graph, null, 2),
+        },
+      ],
+    };
+  }
+);
+
 async function main() {
   // Initialize memory file path with backward compatibility
   MEMORY_FILE_PATH = await ensureMemoryFilePath();
