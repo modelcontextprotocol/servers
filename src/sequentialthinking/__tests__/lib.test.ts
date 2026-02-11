@@ -251,6 +251,81 @@ describe('SequentialThinkingServer', () => {
     });
   });
 
+  describe('clearHistory', () => {
+    it('should clear all thoughts and branches', () => {
+      server.processThought({
+        thought: 'First', thoughtNumber: 1, totalThoughts: 3, nextThoughtNeeded: true
+      });
+      server.processThought({
+        thought: 'Branch', thoughtNumber: 2, totalThoughts: 3, nextThoughtNeeded: true,
+        branchFromThought: 1, branchId: 'b1'
+      });
+
+      const result = server.clearHistory();
+      const data = JSON.parse(result.content[0].text);
+
+      expect(data.cleared).toBe(true);
+      expect(data.previousThoughtCount).toBe(2);
+      expect(data.previousBranchCount).toBe(1);
+
+      // Verify history is actually empty
+      const nextResult = server.processThought({
+        thought: 'After clear', thoughtNumber: 1, totalThoughts: 1, nextThoughtNeeded: false
+      });
+      const nextData = JSON.parse(nextResult.content[0].text);
+      expect(nextData.thoughtHistoryLength).toBe(1);
+      expect(nextData.branches).toEqual([]);
+    });
+  });
+
+  describe('memory management', () => {
+    it('should trim history when exceeding max limit', () => {
+      // Default max is 1000, but we can test the trimming behavior
+      // by adding more thoughts than the limit
+      const maxHistory = 1000;
+      for (let i = 1; i <= maxHistory + 50; i++) {
+        server.processThought({
+          thought: `Thought ${i}`,
+          thoughtNumber: i,
+          totalThoughts: maxHistory + 50,
+          nextThoughtNeeded: i < maxHistory + 50
+        });
+      }
+
+      const lastResult = server.processThought({
+        thought: 'Final check',
+        thoughtNumber: maxHistory + 51,
+        totalThoughts: maxHistory + 51,
+        nextThoughtNeeded: false
+      });
+      const data = JSON.parse(lastResult.content[0].text);
+      // History should be capped at maxHistory
+      expect(data.thoughtHistoryLength).toBeLessThanOrEqual(maxHistory);
+    });
+
+    it('should respect SEQUENTIAL_THINKING_MAX_HISTORY env var', () => {
+      process.env.SEQUENTIAL_THINKING_MAX_HISTORY = '5';
+      const limitedServer = new SequentialThinkingServer();
+
+      for (let i = 1; i <= 10; i++) {
+        limitedServer.processThought({
+          thought: `Thought ${i}`,
+          thoughtNumber: i,
+          totalThoughts: 10,
+          nextThoughtNeeded: i < 10
+        });
+      }
+
+      const result = limitedServer.processThought({
+        thought: 'Check', thoughtNumber: 11, totalThoughts: 11, nextThoughtNeeded: false
+      });
+      const data = JSON.parse(result.content[0].text);
+      expect(data.thoughtHistoryLength).toBeLessThanOrEqual(5);
+
+      delete process.env.SEQUENTIAL_THINKING_MAX_HISTORY;
+    });
+  });
+
   describe('processThought - with logging enabled', () => {
     let serverWithLogging: SequentialThinkingServer;
 
