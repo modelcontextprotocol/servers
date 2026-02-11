@@ -1252,6 +1252,7 @@ search, and comprehensive file analysis.
 - **[Redfish](https://github.com/nokia/mcp-redfish)** - Redfish MCP server that provides support for interacting with [DMTF Redfish API](https://www.dmtf.org/standards/redfish).
 - **[Redis](https://github.com/GongRzhe/REDIS-MCP-Server)** - Redis database operations and caching microservice server with support for key-value operations, expiration management, and pattern-based key listing.
 - **[Redis](https://github.com/prajwalnayak7/mcp-server-redis)** MCP server to interact with Redis Server, AWS Memory DB, etc for caching or other use-cases where in-memory and key-value based storage is appropriate
+- **[Reddit (No API)](https://github.com/iris-alights/reddit-mcp)** - Read and write Reddit without API keys. Read-only works with no setup; write mode uses browser session cookies.
 - **[RedNote MCP](https://github.com/ifuryst/rednote-mcp)** - MCP server for accessing RedNote(XiaoHongShu, xhs) content
 - **[Reed Jobs](https://github.com/kld3v/reed_jobs_mcp)** - Search and retrieve job listings from Reed.co.uk.
 - **[Rememberizer AI](https://github.com/skydeckai/mcp-server-rememberizer)** - An MCP server designed for interacting with the Rememberizer data source, facilitating enhanced knowledge retrieval.
