@@ -102,15 +102,6 @@ Security Notes:
       needsMoreThoughts: z.boolean().optional().describe('If more thoughts are needed'),
       sessionId: z.string().optional().describe('Session identifier for tracking'),
     },
-    outputSchema: {
-      thoughtNumber: z.number(),
-      totalThoughts: z.number(),
-      nextThoughtNeeded: z.boolean(),
-      branches: z.array(z.string()),
-      thoughtHistoryLength: z.number(),
-      sessionId: z.string().optional(),
-      timestamp: z.number(),
-    },
   },
   async (args) => {
     const result = await thinkingServer.processThought(args as ProcessThoughtRequest);
@@ -146,13 +137,6 @@ server.registerTool(
     title: 'Health Check',
     description: 'Check the health and status of the Sequential Thinking server',
     inputSchema: {},
-    outputSchema: {
-      status: z.enum(['healthy', 'unhealthy', 'degraded']),
-      checks: z.object({}),
-      summary: z.string(),
-      uptime: z.number(),
-      timestamp: z.date(),
-    },
   },
   async () => {
     try {
@@ -187,11 +171,6 @@ server.registerTool(
     title: 'Server Metrics',
     description: 'Get detailed metrics and statistics about the server',
     inputSchema: {},
-    outputSchema: {
-      requests: z.object({}),
-      thoughts: z.object({}),
-      system: z.object({}),
-    },
   },
   async () => {
     try {

@@ -24,6 +24,10 @@
     "prepare": "npm run build",
     "watch": "tsc --watch",
     "test": "vitest run",
+    "test:unit": "vitest run __tests__/unit",
+    "test:integration": "vitest run __tests__/integration",
+    "test:e2e": "vitest run __tests__/e2e",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
     "lint": "eslint --config .eslintrc.cjs \"*.ts\"",
     "lint:fix": "eslint --config .eslintrc.cjs \"*.ts\" --fix",
     "type-check": "tsc --noEmit"
