@@ -111,6 +111,7 @@ describe('BoundedThoughtManager', () => {
     it('should remove old session stats', () => {
       vi.useFakeTimers();
       try {
+        sessionTracker.recordThought('old-session'); // Record in tracker first
         manager.addThought(makeThought({ sessionId: 'old-session' }));
         const statsBefore = manager.getStats();
         expect(statsBefore.sessionCount).toBe(1);
@@ -128,6 +129,7 @@ describe('BoundedThoughtManager', () => {
 
   describe('session stats use numeric timestamps', () => {
     it('should store and retrieve sessions correctly', () => {
+      sessionTracker.recordThought('num-sess'); // Record in tracker first
       manager.addThought(makeThought({ sessionId: 'num-sess' }));
       expect(manager.getStats().sessionCount).toBe(1);
     });
@@ -135,6 +137,7 @@ describe('BoundedThoughtManager', () => {
     it('should expire sessions based on numeric comparison', () => {
       vi.useFakeTimers();
       try {
+        sessionTracker.recordThought('timed-sess'); // Record in tracker first
         manager.addThought(makeThought({ sessionId: 'timed-sess' }));
         expect(manager.getStats().sessionCount).toBe(1);
 
@@ -167,6 +170,7 @@ describe('BoundedThoughtManager', () => {
     });
 
     it('should reflect added thoughts', () => {
+      sessionTracker.recordThought('s1'); // Record in tracker first
       manager.addThought(makeThought({ branchId: 'b1', sessionId: 's1' }));
       const stats = manager.getStats();
       expect(stats.historySize).toBe(1);

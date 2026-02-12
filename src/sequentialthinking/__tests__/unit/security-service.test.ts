@@ -156,8 +156,8 @@ describe('SecureThoughtSecurity', () => {
         SecurityServiceConfigSchema.parse({ maxThoughtsPerMinute: 5 }),
         tracker,
       );
+      // validateThought now records automatically
       for (let i = 0; i < 5; i++) {
-        tracker.recordThought('rate-sess'); // Record thought first
         expect(() => security.validateThought('test thought', 'rate-sess')).not.toThrow();
       }
       tracker.destroy();
@@ -169,15 +169,11 @@ describe('SecureThoughtSecurity', () => {
         SecurityServiceConfigSchema.parse({ maxThoughtsPerMinute: 3 }),
         tracker,
       );
-      // Use up the limit - record then validate
-      tracker.recordThought('rate-sess');
+      // Use up the limit - validateThought records automatically
       security.validateThought('thought 1', 'rate-sess');
-      tracker.recordThought('rate-sess');
       security.validateThought('thought 2', 'rate-sess');
-      tracker.recordThought('rate-sess');
       security.validateThought('thought 3', 'rate-sess');
       // 4th should exceed
-      tracker.recordThought('rate-sess');
       expect(() => security.validateThought('thought 4', 'rate-sess')).toThrow(SecurityError);
       expect(() => security.validateThought('thought 4', 'rate-sess')).toThrow('Rate limit exceeded');
       tracker.destroy();
@@ -189,12 +185,10 @@ describe('SecureThoughtSecurity', () => {
         SecurityServiceConfigSchema.parse({ maxThoughtsPerMinute: 2 }),
         tracker,
       );
-      tracker.recordThought('sess-a');
+      // validateThought records automatically
       security.validateThought('thought 1', 'sess-a');
-      tracker.recordThought('sess-a');
       security.validateThought('thought 2', 'sess-a');
       // sess-a is at limit, but sess-b should still work
-      tracker.recordThought('sess-b');
       expect(() => security.validateThought('thought 1', 'sess-b')).not.toThrow();
       tracker.destroy();
     });

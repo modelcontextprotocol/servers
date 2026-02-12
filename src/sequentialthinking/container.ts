@@ -119,7 +119,8 @@ export class SequentialThinkingApp {
   }
 
   private createMetrics(): MetricsCollector {
-    return new BasicMetricsCollector(this.sessionTracker);
+    const storage = this.container.get<ThoughtStorage>('storage');
+    return new BasicMetricsCollector(this.sessionTracker, storage);
   }
 
   private createHealthChecker(): HealthChecker {

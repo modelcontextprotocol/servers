@@ -84,18 +84,6 @@ export class SessionTracker {
     return count;
   }
 
-  /**
-   * Get session statistics.
-   */
-  getSessionStats(sessionId: string): { count: number; lastAccess: number } | undefined {
-    const session = this.sessions.get(sessionId);
-    if (!session) return undefined;
-
-    return {
-      count: session.thoughtCount,
-      lastAccess: session.lastAccess,
-    };
-  }
 
   /**
    * Clean up expired sessions (older than 1 hour).

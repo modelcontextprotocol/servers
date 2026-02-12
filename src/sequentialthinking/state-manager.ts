@@ -67,8 +67,8 @@ export class BoundedThoughtManager implements ThoughtStorage {
 
     entry.timestamp = Date.now();
 
-    // Record thought in unified session tracker
-    this.sessionTracker.recordThought(entry.sessionId);
+    // Session recording now happens atomically in security validation
+    // to prevent race conditions
 
     // Add to main history
     this.thoughtHistory.add(entry);

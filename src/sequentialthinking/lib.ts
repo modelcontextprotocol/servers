@@ -117,11 +117,22 @@ export class SequentialThinkingServer {
     sessionId: string | undefined,
     security: SecurityService,
   ): string {
-    const resolved = sessionId ?? security.generateSessionId();
-    if (!security.validateSession(resolved)) {
-      throw new SecurityError('Invalid session ID');
+    // If user provided a sessionId, validate it first
+    if (sessionId !== undefined && sessionId !== null) {
+      if (!security.validateSession(sessionId)) {
+        throw new SecurityError(
+          `Invalid session ID format: must be 1-100 characters (got ${sessionId.length})`,
+        );
+      }
+      return sessionId;
     }
-    return resolved;
+
+    // No sessionId provided: generate a new one
+    const generated = security.generateSessionId();
+    if (!security.validateSession(generated)) {
+      throw new SecurityError('Failed to generate valid session ID');
+    }
+    return generated;
   }
 
   private async processWithServices(

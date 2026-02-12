@@ -54,9 +54,7 @@ export class SecureThoughtSecurity implements SecurityService {
       }
     }
 
-    // Rate limiting using unified session tracker
-    // NOTE: Rate limit is checked but NOT recorded here - recording happens
-    // in state-manager when thought is actually stored
+    // Rate limiting: check AND record atomically to prevent race conditions
     if (sessionId) {
       const withinLimit = this.sessionTracker.checkRateLimit(
         sessionId,
@@ -65,6 +63,9 @@ export class SecureThoughtSecurity implements SecurityService {
       if (!withinLimit) {
         throw new SecurityError('Rate limit exceeded');
       }
+      // IMMEDIATELY record the thought to prevent race condition
+      // between validation and storage
+      this.sessionTracker.recordThought(sessionId);
     }
   }
 

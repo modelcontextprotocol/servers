@@ -1,18 +1,28 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BasicMetricsCollector } from '../../metrics.js';
 import { SessionTracker } from '../../session-tracker.js';
+import { BoundedThoughtManager } from '../../state-manager.js';
 import { createTestThought as makeThought } from '../helpers/factories.js';
 
 describe('BasicMetricsCollector', () => {
   let metrics: BasicMetricsCollector;
   let sessionTracker: SessionTracker;
+  let storage: BoundedThoughtManager;
 
   beforeEach(() => {
     sessionTracker = new SessionTracker(0);
-    metrics = new BasicMetricsCollector(sessionTracker);
+    storage = new BoundedThoughtManager({
+      maxHistorySize: 100,
+      maxBranchAge: 3600000,
+      maxThoughtLength: 5000,
+      maxThoughtsPerBranch: 50,
+      cleanupInterval: 0,
+    }, sessionTracker);
+    metrics = new BasicMetricsCollector(sessionTracker, storage);
   });
 
   afterEach(() => {
+    storage.destroy();
     sessionTracker.destroy();
   });
 
@@ -55,9 +65,19 @@ describe('BasicMetricsCollector', () => {
     });
 
     it('should track unique branches', () => {
-      metrics.recordThoughtProcessed(makeThought({ branchId: 'b1' }));
-      metrics.recordThoughtProcessed(makeThought({ branchId: 'b1' }));
-      metrics.recordThoughtProcessed(makeThought({ branchId: 'b2' }));
+      // Branch count is now queried from storage, so add to storage first
+      const t1 = makeThought({ branchId: 'b1' });
+      storage.addThought(t1);
+      metrics.recordThoughtProcessed(t1);
+
+      const t2 = makeThought({ branchId: 'b1' });
+      storage.addThought(t2);
+      metrics.recordThoughtProcessed(t2);
+
+      const t3 = makeThought({ branchId: 'b2' });
+      storage.addThought(t3);
+      metrics.recordThoughtProcessed(t3);
+
       expect(metrics.getMetrics().thoughts.branchCount).toBe(2);
     });
 

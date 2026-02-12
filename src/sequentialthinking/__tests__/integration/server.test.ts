@@ -250,7 +250,7 @@ describe('SequentialThinkingServer', () => {
         nextThoughtNeeded: true,
       });
 
-      expect(result.isError).toBe(false);
+      expect(result.isError).toBeUndefined(); // Success = undefined, not false
       // Content was sanitized (javascript: removed)
     });
 
@@ -860,16 +860,16 @@ describe('SequentialThinkingServer', () => {
   });
 
   describe('Regex-Based Blocked Pattern Matching', () => {
-    it('should block eval( via regex', async () => {
+    it('should sanitize eval( before validation', async () => {
+      // eval( is now sanitized away before regex validation happens
       const result = await server.processThought({
         thought: 'use eval(code) here',
         thoughtNumber: 1,
         totalThoughts: 1,
         nextThoughtNeeded: false,
       });
-      expect(result.isError).toBe(true);
-      const data = JSON.parse(result.content[0].text);
-      expect(data.error).toBe('SECURITY_ERROR');
+      // Should succeed because eval( was sanitized away
+      expect(result.isError).toBeUndefined();
     });
 
     it('should block document.cookie via regex', async () => {

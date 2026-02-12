@@ -1,8 +1,6 @@
-import type { MetricsCollector, ThoughtData, RequestMetrics, ThoughtMetrics, SystemMetrics } from './interfaces.js';
+import type { MetricsCollector, ThoughtData, RequestMetrics, ThoughtMetrics, SystemMetrics, ThoughtStorage } from './interfaces.js';
 import { CircularBuffer } from './circular-buffer.js';
 import type { SessionTracker } from './session-tracker.js';
-
-const MAX_UNIQUE_BRANCH_IDS = 10000;
 
 export class BasicMetricsCollector implements MetricsCollector {
   private readonly requestMetrics: RequestMetrics = {
@@ -24,13 +22,14 @@ export class BasicMetricsCollector implements MetricsCollector {
   };
 
   private readonly responseTimes = new CircularBuffer<number>(100);
-  private readonly requestTimestamps: number[] = [];
-  private readonly thoughtTimestamps: number[] = [];
-  private readonly uniqueBranchIds = new Set<string>();
+  private readonly requestTimestamps = new CircularBuffer<number>(1000);
+  private readonly thoughtTimestamps = new CircularBuffer<number>(1000);
   private readonly sessionTracker: SessionTracker;
+  private readonly storage: ThoughtStorage;
 
-  constructor(sessionTracker: SessionTracker) {
+  constructor(sessionTracker: SessionTracker, storage: ThoughtStorage) {
     this.sessionTracker = sessionTracker;
+    this.storage = storage;
   }
 
   recordRequest(duration: number, success: boolean): void {
@@ -53,10 +52,10 @@ export class BasicMetricsCollector implements MetricsCollector {
       allTimes.reduce((sum, time) => sum + time, 0) / allTimes.length;
 
     // Update requests per minute
-    this.requestTimestamps.push(now);
-    this.cleanupOldTimestamps(this.requestTimestamps, 60 * 1000);
+    this.requestTimestamps.add(now);
+    const cutoff = now - 60 * 1000;
     this.requestMetrics.requestsPerMinute =
-      this.requestTimestamps.length;
+      this.requestTimestamps.getAll().filter(ts => ts > cutoff).length;
   }
 
   recordError(_error: Error): void {
@@ -68,7 +67,7 @@ export class BasicMetricsCollector implements MetricsCollector {
     const now = Date.now();
 
     this.thoughtMetrics.totalThoughts++;
-    this.thoughtTimestamps.push(now);
+    this.thoughtTimestamps.add(now);
 
     // Update average thought length
     const prevTotal =
@@ -78,40 +77,22 @@ export class BasicMetricsCollector implements MetricsCollector {
     this.thoughtMetrics.averageThoughtLength =
       Math.round(totalLength / this.thoughtMetrics.totalThoughts);
 
-    // Track revisions and branches
+    // Track revisions
     if (thought.isRevision) {
       this.thoughtMetrics.revisionCount++;
     }
 
-    if (thought.branchId) {
-      if (this.uniqueBranchIds.size >= MAX_UNIQUE_BRANCH_IDS) {
-        this.uniqueBranchIds.clear();
-      }
-      this.uniqueBranchIds.add(thought.branchId);
-      this.thoughtMetrics.branchCount = this.uniqueBranchIds.size;
-    }
+    // Branch count is queried from storage (single source of truth)
+    this.thoughtMetrics.branchCount = this.storage.getBranches().length;
 
     // Update thoughts per minute
-    this.cleanupOldTimestamps(this.thoughtTimestamps, 60 * 1000);
+    const cutoff = now - 60 * 1000;
     this.thoughtMetrics.thoughtsPerMinute =
-      this.thoughtTimestamps.length;
+      this.thoughtTimestamps.getAll().filter(ts => ts > cutoff).length;
 
     // Session tracking now handled by unified SessionTracker
     this.thoughtMetrics.activeSessions =
       this.sessionTracker.getActiveSessionCount();
-  }
-
-  private cleanupOldTimestamps(
-    timestamps: number[],
-    maxAge: number,
-  ): void {
-    const cutoff = Date.now() - maxAge;
-    for (let i = timestamps.length - 1; i >= 0; i--) {
-      if (timestamps[i] < cutoff) {
-        timestamps.splice(0, i + 1);
-        break;
-      }
-    }
   }
 
   getMetrics(): {
@@ -137,9 +118,8 @@ export class BasicMetricsCollector implements MetricsCollector {
 
   destroy(): void {
     this.responseTimes.clear();
-    this.requestTimestamps.length = 0;
-    this.thoughtTimestamps.length = 0;
-    this.uniqueBranchIds.clear();
+    this.requestTimestamps.clear();
+    this.thoughtTimestamps.clear();
     this.requestMetrics.totalRequests = 0;
     this.requestMetrics.successfulRequests = 0;
     this.requestMetrics.failedRequests = 0;
