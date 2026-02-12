@@ -57,3 +57,9 @@ export class BusinessLogicError extends SequentialThinkingError {
   readonly statusCode = 422;
   readonly category = 'BUSINESS_LOGIC' as const;
 }
+
+export class TreeError extends SequentialThinkingError {
+  readonly code = 'TREE_ERROR';
+  readonly statusCode = 404;
+  readonly category = 'BUSINESS_LOGIC' as const;
+}

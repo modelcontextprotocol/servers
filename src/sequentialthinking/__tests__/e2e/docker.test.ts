@@ -305,6 +305,100 @@ describe('Docker E2E Tests', () => {
     }, TIMEOUT);
   });
 
+  describe('Get Thought History Tool', () => {
+    it('should list get_thought_history in tools', async () => {
+      const response = await sendMessage({
+        jsonrpc: '2.0',
+        id: 20,
+        method: 'tools/list',
+        params: {},
+      }) as any;
+
+      const historyTool = response.result.tools.find(
+        (tool: any) => tool.name === 'get_thought_history'
+      );
+      expect(historyTool).toBeDefined();
+      expect(historyTool.inputSchema).toBeDefined();
+    }, TIMEOUT);
+
+    it('should return empty history for unknown session', async () => {
+      const response = await sendMessage({
+        jsonrpc: '2.0',
+        id: 21,
+        method: 'tools/call',
+        params: {
+          name: 'get_thought_history',
+          arguments: {
+            sessionId: 'nonexistent-session',
+          },
+        },
+      }) as any;
+
+      expect(response.result.isError).toBeUndefined();
+      const data = JSON.parse(response.result.content[0].text);
+      expect(data.sessionId).toBe('nonexistent-session');
+      expect(data.count).toBe(0);
+      expect(data.thoughts).toEqual([]);
+    }, TIMEOUT);
+  });
+
+  describe('MCTS Tools', () => {
+    it('should list MCTS tools and set_thinking_mode in tools/list', async () => {
+      const response = await sendMessage({
+        jsonrpc: '2.0',
+        id: 30,
+        method: 'tools/list',
+        params: {},
+      }) as any;
+
+      const toolNames = response.result.tools.map((t: any) => t.name);
+      expect(toolNames).toContain('backtrack');
+      expect(toolNames).toContain('evaluate_thought');
+      expect(toolNames).toContain('suggest_next_thought');
+      expect(toolNames).toContain('get_thinking_summary');
+      expect(toolNames).toContain('set_thinking_mode');
+    }, TIMEOUT);
+
+    it('should return tree error for backtrack with invalid session', async () => {
+      const response = await sendMessage({
+        jsonrpc: '2.0',
+        id: 31,
+        method: 'tools/call',
+        params: {
+          name: 'backtrack',
+          arguments: {
+            sessionId: 'nonexistent-session',
+            nodeId: 'nonexistent-node',
+          },
+        },
+      }) as any;
+
+      expect(response.result.isError).toBe(true);
+      const data = JSON.parse(response.result.content[0].text);
+      expect(data.error).toBe('TREE_ERROR');
+    }, TIMEOUT);
+
+    it('should return tree error for evaluate_thought with invalid session', async () => {
+      const response = await sendMessage({
+        jsonrpc: '2.0',
+        id: 32,
+        method: 'tools/call',
+        params: {
+          name: 'evaluate_thought',
+          arguments: {
+            sessionId: 'nonexistent-session',
+            nodeId: 'nonexistent-node',
+            value: 0.5,
+          },
+        },
+      }) as any;
+
+      expect(response.result.isError).toBe(true);
+      const data = JSON.parse(response.result.content[0].text);
+      expect(data.error).toBe('TREE_ERROR');
+    }, TIMEOUT);
+  });
+
   describe('Environment Configuration', () => {
     it('should respect MAX_THOUGHT_LENGTH environment variable', async () => {
       // The container is configured with MAX_THOUGHT_LENGTH=5000

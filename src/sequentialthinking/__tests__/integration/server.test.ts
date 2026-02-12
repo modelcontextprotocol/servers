@@ -817,6 +817,169 @@ describe('SequentialThinkingServer', () => {
     });
   });
 
+  describe('Enriched Response Context', () => {
+    it('should include revisionContext when revising an existing thought', async () => {
+      const sessionId = 'revision-context-test';
+      await server.processThought({
+        thought: 'Original idea about sorting',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId,
+      });
+
+      const result = await server.processThought({
+        thought: 'Actually, merge sort is better',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        isRevision: true,
+        revisesThought: 1,
+        sessionId,
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.revisionContext).toBeDefined();
+      expect(data.revisionContext.originalThoughtNumber).toBe(1);
+      expect(data.revisionContext.originalThought).toContain('sorting');
+    });
+
+    it('should not include revisionContext for non-revision thoughts', async () => {
+      const result = await server.processThought({
+        thought: 'Regular thought',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.revisionContext).toBeUndefined();
+    });
+
+    it('should include branchContext when branch has prior thoughts', async () => {
+      const sessionId = 'branch-context-test';
+      await server.processThought({
+        thought: 'First branch thought',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        branchFromThought: 1,
+        branchId: 'ctx-branch',
+        sessionId,
+      });
+
+      const result = await server.processThought({
+        thought: 'Second branch thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        branchFromThought: 1,
+        branchId: 'ctx-branch',
+        sessionId,
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.branchContext).toBeDefined();
+      expect(data.branchContext.branchId).toBe('ctx-branch');
+      expect(data.branchContext.existingThoughts.length).toBeGreaterThanOrEqual(1);
+      expect(data.branchContext.existingThoughts[0].thought).toContain('First branch');
+    });
+
+    it('should not include branchContext for first thought in a branch', async () => {
+      const result = await server.processThought({
+        thought: 'First and only branch thought',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+        branchFromThought: 1,
+        branchId: 'solo-branch',
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.branchContext).toBeUndefined();
+    });
+  });
+
+  describe('getFilteredHistory', () => {
+    it('should return thoughts for a specific session', async () => {
+      const sessionId = 'filter-test';
+      await server.processThought({
+        thought: 'Thought A',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+        sessionId,
+      });
+      await server.processThought({
+        thought: 'Thought B',
+        thoughtNumber: 2,
+        totalThoughts: 2,
+        nextThoughtNeeded: false,
+        sessionId,
+      });
+      // Different session
+      await server.processThought({
+        thought: 'Other session',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+        sessionId: 'other-session',
+      });
+
+      const history = server.getFilteredHistory({ sessionId });
+      expect(history).toHaveLength(2);
+      expect(history.every((t) => t.sessionId === sessionId)).toBe(true);
+    });
+
+    it('should filter by branchId', async () => {
+      const sessionId = 'branch-filter-test';
+      await server.processThought({
+        thought: 'Branch thought',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+        branchFromThought: 1,
+        branchId: 'filter-branch',
+        sessionId,
+      });
+      await server.processThought({
+        thought: 'Main thought',
+        thoughtNumber: 2,
+        totalThoughts: 2,
+        nextThoughtNeeded: false,
+        sessionId,
+      });
+
+      const branchHistory = server.getFilteredHistory({ sessionId, branchId: 'filter-branch' });
+      expect(branchHistory).toHaveLength(1);
+      expect(branchHistory[0].thought).toContain('Branch thought');
+    });
+
+    it('should respect limit parameter', async () => {
+      const sessionId = 'limit-test';
+      for (let i = 1; i <= 5; i++) {
+        await server.processThought({
+          thought: `Thought ${i}`,
+          thoughtNumber: i,
+          totalThoughts: 5,
+          nextThoughtNeeded: i < 5,
+          sessionId,
+        });
+      }
+
+      const limited = server.getFilteredHistory({ sessionId, limit: 2 });
+      expect(limited).toHaveLength(2);
+      // Should return the most recent
+      expect(limited[0].thoughtNumber).toBe(4);
+      expect(limited[1].thoughtNumber).toBe(5);
+    });
+
+    it('should return empty array for unknown session', () => {
+      const history = server.getFilteredHistory({ sessionId: 'nonexistent' });
+      expect(history).toEqual([]);
+    });
+  });
+
   describe('Whitespace-only thought rejection', () => {
     it('should reject whitespace-only thought', async () => {
       const result = await server.processThought({

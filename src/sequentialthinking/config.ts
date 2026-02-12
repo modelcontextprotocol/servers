@@ -17,6 +17,12 @@ function parseIntOrDefault(value: string | undefined, defaultValue: number): num
   return Number.isNaN(parsed) ? defaultValue : parsed;
 }
 
+function parseFloatOrDefault(value: string | undefined, defaultValue: number): number {
+  if (value === undefined) return defaultValue;
+  const parsed = parseFloat(value);
+  return Number.isNaN(parsed) ? defaultValue : parsed;
+}
+
 export class ConfigManager {
   static load(): AppConfig {
     return {
@@ -25,6 +31,7 @@ export class ConfigManager {
       security: this.loadSecurityConfig(),
       logging: this.loadLoggingConfig(),
       monitoring: this.loadMonitoringConfig(),
+      mcts: this.loadMctsConfig(),
     };
   }
 
@@ -113,6 +120,7 @@ export class ConfigManager {
   static validate(config: AppConfig): void {
     this.validateState(config.state);
     this.validateSecurity(config.security);
+    this.validateMcts(config.mcts);
   }
 
   private static validateState(state: AppConfig['state']): void {
@@ -136,6 +144,27 @@ export class ConfigManager {
   private static validateSecurity(security: AppConfig['security']): void {
     if (security.maxThoughtsPerMinute < 1 || security.maxThoughtsPerMinute > 1000) {
       throw new Error('maxThoughtsPerMinute must be between 1 and 1000');
+    }
+  }
+
+  private static loadMctsConfig(): AppConfig['mcts'] {
+    return {
+      maxNodesPerTree: parseIntOrDefault(process.env.MCTS_MAX_NODES, 500),
+      maxTreeAge: parseIntOrDefault(process.env.MCTS_MAX_TREE_AGE, 3600000),
+      explorationConstant: parseFloatOrDefault(process.env.MCTS_EXPLORATION_CONSTANT, Math.SQRT2),
+      enableAutoTree: process.env.MCTS_DISABLE_AUTO_TREE !== 'true',
+    };
+  }
+
+  private static validateMcts(mcts: AppConfig['mcts']): void {
+    if (mcts.maxNodesPerTree < 1 || mcts.maxNodesPerTree > 100000) {
+      throw new Error('MCTS_MAX_NODES must be between 1 and 100000');
+    }
+    if (mcts.maxTreeAge < 0) {
+      throw new Error('MCTS_MAX_TREE_AGE must be >= 0');
+    }
+    if (mcts.explorationConstant < 0 || mcts.explorationConstant > 10) {
+      throw new Error('MCTS_EXPLORATION_CONSTANT must be between 0 and 10');
     }
   }
 

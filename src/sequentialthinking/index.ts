@@ -101,6 +101,7 @@ Security Notes:
       branchId: z.string().optional().describe('Branch identifier'),
       needsMoreThoughts: z.boolean().optional().describe('If more thoughts are needed'),
       sessionId: z.string().optional().describe('Session identifier for tracking'),
+      thinkingMode: z.enum(['fast', 'expert', 'deep']).optional().describe('Set thinking mode on first thought: fast (3-5 linear steps), expert (balanced branching), deep (exhaustive exploration)'),
     },
   },
   async (args) => {
@@ -113,19 +114,49 @@ Security Notes:
       };
     }
 
-    // Parse JSON response to get structured content
-    let parsed;
-    try {
-      parsed = JSON.parse(result.content[0].text);
-    } catch {
-      return { content: result.content };
-    }
+    return { content: result.content };
+  },
+);
+
+// Register the thought history retrieval tool
+server.registerTool(
+  'get_thought_history',
+  {
+    title: 'Get Thought History',
+    description: 'Retrieve past thoughts from a session. Use this to review thinking history, examine branch contents, or recall earlier reasoning steps.',
+    inputSchema: {
+      sessionId: z.string().describe('Session identifier to retrieve thoughts for'),
+      branchId: z.string().optional().describe('Optional branch identifier to filter thoughts by branch'),
+      limit: z.number().int().min(1).optional().describe('Maximum number of thoughts to return (most recent first)'),
+    },
+  },
+  async (args) => {
+    const thoughts = thinkingServer.getFilteredHistory({
+      sessionId: args.sessionId,
+      branchId: args.branchId,
+      limit: args.limit,
+    });
 
     return {
-      content: result.content,
-      _meta: {
-        structuredContent: parsed,
-      },
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          sessionId: args.sessionId,
+          branchId: args.branchId ?? null,
+          count: thoughts.length,
+          thoughts: thoughts.map((t) => ({
+            thoughtNumber: t.thoughtNumber,
+            totalThoughts: t.totalThoughts,
+            thought: t.thought,
+            nextThoughtNeeded: t.nextThoughtNeeded,
+            isRevision: t.isRevision ?? false,
+            revisesThought: t.revisesThought ?? null,
+            branchId: t.branchId ?? null,
+            branchFromThought: t.branchFromThought ?? null,
+            timestamp: t.timestamp,
+          })),
+        }, null, 2),
+      }],
     };
   },
 );
@@ -193,6 +224,109 @@ server.registerTool(
         isError: true,
       };
     }
+  },
+);
+
+// Register thinking mode tool
+server.registerTool(
+  'set_thinking_mode',
+  {
+    title: 'Set Thinking Mode',
+    description: `Set a thinking mode for a session to shape exploration behavior. Modes:
+- fast: Linear, exploit-focused. 3-5 steps, no branching, auto-evaluation.
+- expert: Balanced exploration with targeted branching, backtracking on low scores, convergence at 0.7.
+- deep: Exhaustive exploration. Wide branching (up to 5), aggressive backtracking, convergence at 0.85.
+
+Once set, each processThought response includes modeGuidance with recommended actions.`,
+    inputSchema: {
+      sessionId: z.string().describe('Session identifier'),
+      mode: z.enum(['fast', 'expert', 'deep']).describe('Thinking mode to activate'),
+    },
+  },
+  async (args) => {
+    const result = await thinkingServer.setThinkingMode(args.sessionId, args.mode);
+    if (result.isError === true) {
+      return { content: result.content, isError: true };
+    }
+    return { content: result.content };
+  },
+);
+
+// Register MCTS tree exploration tools
+server.registerTool(
+  'backtrack',
+  {
+    title: 'Backtrack',
+    description: 'Move the thought tree cursor back to a previous node, allowing exploration of alternative paths from that point. Returns the node info, its children, and tree statistics.',
+    inputSchema: {
+      sessionId: z.string().describe('Session identifier'),
+      nodeId: z.string().describe('The node ID to backtrack to'),
+    },
+  },
+  async (args) => {
+    const result = await thinkingServer.backtrack(args.sessionId, args.nodeId);
+    if (result.isError === true) {
+      return { content: result.content, isError: true };
+    }
+    return { content: result.content };
+  },
+);
+
+server.registerTool(
+  'evaluate_thought',
+  {
+    title: 'Evaluate Thought',
+    description: 'Score a thought node with a value between 0 and 1. The value is backpropagated up the tree to all ancestors, updating their visit counts and total values. This drives the MCTS selection process.',
+    inputSchema: {
+      sessionId: z.string().describe('Session identifier'),
+      nodeId: z.string().describe('The node ID to evaluate'),
+      value: z.number().min(0).max(1).describe('Evaluation score between 0 (poor) and 1 (excellent)'),
+    },
+  },
+  async (args) => {
+    const result = await thinkingServer.evaluateThought(args.sessionId, args.nodeId, args.value);
+    if (result.isError === true) {
+      return { content: result.content, isError: true };
+    }
+    return { content: result.content };
+  },
+);
+
+server.registerTool(
+  'suggest_next_thought',
+  {
+    title: 'Suggest Next Thought',
+    description: 'Use UCB1-based selection to suggest the most promising node to explore next. Strategies: "explore" favors unvisited nodes, "exploit" favors high-value nodes, "balanced" (default) balances both.',
+    inputSchema: {
+      sessionId: z.string().describe('Session identifier'),
+      strategy: z.enum(['explore', 'exploit', 'balanced']).optional().describe('Selection strategy (default: balanced)'),
+    },
+  },
+  async (args) => {
+    const result = await thinkingServer.suggestNextThought(args.sessionId, args.strategy);
+    if (result.isError === true) {
+      return { content: result.content, isError: true };
+    }
+    return { content: result.content };
+  },
+);
+
+server.registerTool(
+  'get_thinking_summary',
+  {
+    title: 'Get Thinking Summary',
+    description: 'Get a comprehensive summary of the thought tree including the best reasoning path (highest average value), full tree structure, and statistics.',
+    inputSchema: {
+      sessionId: z.string().describe('Session identifier'),
+      maxDepth: z.number().int().min(0).optional().describe('Maximum depth to include in tree structure (omit for full tree)'),
+    },
+  },
+  async (args) => {
+    const result = await thinkingServer.getThinkingSummary(args.sessionId, args.maxDepth);
+    if (result.isError === true) {
+      return { content: result.content, isError: true };
+    }
+    return { content: result.content };
   },
 );
 

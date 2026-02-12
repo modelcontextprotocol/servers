@@ -1,4 +1,5 @@
 import type { ThoughtData } from './circular-buffer.js';
+export type { ThinkingMode, ThinkingModeConfig, ModeGuidance } from './thinking-modes.js';
 
 export type { ThoughtData };
 
@@ -17,6 +18,7 @@ export interface ThoughtStorage {
   addThought(thought: ThoughtData): void;
   getHistory(limit?: number): ThoughtData[];
   getBranches(): string[];
+  getBranchThoughts(branchId: string): ThoughtData[];
   getStats(): StorageStats;
   destroy(): void;
 }
@@ -107,6 +109,90 @@ export interface ServiceContainer {
   destroy(): void;
 }
 
+export interface MCTSConfig {
+  maxNodesPerTree: number;
+  maxTreeAge: number;
+  explorationConstant: number;
+  enableAutoTree: boolean;
+}
+
+export interface TreeStats {
+  totalNodes: number;
+  maxDepth: number;
+  unexploredCount: number;
+  averageValue: number;
+  terminalCount: number;
+}
+
+export interface TreeNodeInfo {
+  nodeId: string;
+  thoughtNumber: number;
+  thought: string;
+  depth: number;
+  visitCount: number;
+  averageValue: number;
+  childCount: number;
+  isTerminal: boolean;
+}
+
+export interface BacktrackResult {
+  node: TreeNodeInfo;
+  children: TreeNodeInfo[];
+  treeStats: TreeStats;
+}
+
+export interface EvaluateResult {
+  nodeId: string;
+  newVisitCount: number;
+  newAverageValue: number;
+  nodesUpdated: number;
+  treeStats: TreeStats;
+}
+
+export interface SuggestResult {
+  suggestion: {
+    nodeId: string;
+    thoughtNumber: number;
+    thought: string;
+    ucb1Score: number;
+    reason: string;
+  } | null;
+  alternatives: Array<{
+    nodeId: string;
+    thoughtNumber: number;
+    ucb1Score: number;
+  }>;
+  treeStats: TreeStats;
+}
+
+export interface ThinkingSummary {
+  bestPath: TreeNodeInfo[];
+  treeStructure: unknown;
+  treeStats: TreeStats;
+}
+
+export interface ThoughtTreeRecordResult {
+  nodeId: string;
+  parentNodeId: string | null;
+  treeStats: TreeStats;
+  modeGuidance?: import('./thinking-modes.js').ModeGuidance;
+}
+
+export interface ThoughtTreeService {
+  recordThought(data: ThoughtData): ThoughtTreeRecordResult | null;
+  backtrack(sessionId: string, nodeId: string): BacktrackResult;
+  setMode(sessionId: string, mode: import('./thinking-modes.js').ThinkingMode): import('./thinking-modes.js').ThinkingModeConfig;
+  getMode(sessionId: string): import('./thinking-modes.js').ThinkingModeConfig | null;
+  cleanup(): void;
+  destroy(): void;
+}
+
+export interface MCTSService {
+  evaluate(sessionId: string, nodeId: string, value: number): EvaluateResult;
+  suggest(sessionId: string, strategy?: 'explore' | 'exploit' | 'balanced'): SuggestResult;
+  getSummary(sessionId: string, maxDepth?: number): ThinkingSummary;
+}
+
 export interface AppConfig {
   server: {
     name: string;
@@ -139,4 +225,5 @@ export interface AppConfig {
       errorRateUnhealthy: number;
     };
   };
+  mcts: MCTSConfig;
 }

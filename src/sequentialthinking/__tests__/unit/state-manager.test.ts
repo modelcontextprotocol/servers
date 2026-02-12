@@ -77,6 +77,28 @@ describe('BoundedThoughtManager', () => {
     });
   });
 
+  describe('getBranchThoughts', () => {
+    it('should return empty array for non-existent branch', () => {
+      expect(manager.getBranchThoughts('no-such-branch')).toEqual([]);
+    });
+
+    it('should return thoughts for an existing branch', () => {
+      manager.addThought(makeThought({ branchId: 'b1', thoughtNumber: 1, thought: 'first' }));
+      manager.addThought(makeThought({ branchId: 'b1', thoughtNumber: 2, thought: 'second' }));
+      const thoughts = manager.getBranchThoughts('b1');
+      expect(thoughts).toHaveLength(2);
+      expect(thoughts[0].thought).toBe('first');
+      expect(thoughts[1].thought).toBe('second');
+    });
+
+    it('should return a copy that does not mutate internal state', () => {
+      manager.addThought(makeThought({ branchId: 'b1', thoughtNumber: 1 }));
+      const thoughts = manager.getBranchThoughts('b1');
+      thoughts.push(makeThought({ thoughtNumber: 99 }));
+      expect(manager.getBranchThoughts('b1')).toHaveLength(1);
+    });
+  });
+
   describe('isExpired (via cleanup)', () => {
     it('should remove expired branches', () => {
       vi.useFakeTimers();

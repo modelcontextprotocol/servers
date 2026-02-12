@@ -13,6 +13,19 @@ export function createTestThought(
   };
 }
 
+export function createSessionThoughtSequence(
+  sessionId: string,
+  count: number,
+): ProcessThoughtRequest[] {
+  return Array.from({ length: count }, (_, i) => ({
+    thought: `Thought ${i + 1} for ${sessionId}`,
+    thoughtNumber: i + 1,
+    totalThoughts: count,
+    nextThoughtNeeded: i < count - 1,
+    sessionId,
+  }));
+}
+
 export function expectErrorResponse(
   result: { content: Array<{ type: string; text: string }>; isError?: boolean },
   errorCode: string,

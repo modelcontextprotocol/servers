@@ -30,6 +30,9 @@ class BranchData {
     return this.thoughts.length;
   }
 
+  getThoughts(): ThoughtData[] {
+    return [...this.thoughts];
+  }
 }
 
 interface StateConfig {
@@ -101,6 +104,13 @@ export class BoundedThoughtManager implements ThoughtStorage {
 
   getBranches(): string[] {
     return Array.from(this.branches.keys());
+  }
+
+  getBranchThoughts(branchId: string): ThoughtData[] {
+    const branch = this.branches.get(branchId);
+    if (!branch) return [];
+    branch.updateLastAccessed();
+    return branch.getThoughts();
   }
 
   getBranch(branchId: string): BranchData | undefined {

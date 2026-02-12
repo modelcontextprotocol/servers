@@ -21,6 +21,7 @@ import {
 import { BasicMetricsCollector } from './metrics.js';
 import { ComprehensiveHealthChecker } from './health-checker.js';
 import { SessionTracker } from './session-tracker.js';
+import { ThoughtTreeManager } from './thought-tree-manager.js';
 
 export class SimpleContainer implements ServiceContainer {
   private readonly services = new Map<string, () => unknown>();
@@ -91,6 +92,8 @@ export class SequentialThinkingApp {
     this.container.register('security', () => this.createSecurity());
     this.container.register('metrics', () => this.createMetrics());
     this.container.register('healthChecker', () => this.createHealthChecker());
+    this.container.register('thoughtTreeManager', () =>
+      new ThoughtTreeManager(this.config.mcts));
   }
 
   private createLogger(): Logger {
