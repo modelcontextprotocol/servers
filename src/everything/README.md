@@ -70,12 +70,24 @@ npm install
 npm run start:sse
 ```
 
+Note: the SSE transport binds to `127.0.0.1` by default and only enables CORS for loopback origins (for Inspector direct connect). To intentionally expose it, set:
+
+```shell
+HOST=0.0.0.0 MCP_CORS_ORIGIN_REGEX='^https?://your-allowed-origin(:\\d+)?$' npm run start:sse
+```
+
 ## Run from source with [Streamable HTTP Transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http)
 
 ```shell
 cd src/everything
 npm install
 npm run start:streamableHttp
+```
+
+Note: the Streamable HTTP transport binds to `127.0.0.1` by default and only enables CORS for loopback origins (for Inspector direct connect). To intentionally expose it, set:
+
+```shell
+HOST=0.0.0.0 MCP_CORS_ORIGIN_REGEX='^https?://your-allowed-origin(:\\d+)?$' npm run start:streamableHttp
 ```
 
 ## Running as an installed package
@@ -103,4 +115,3 @@ npx @modelcontextprotocol/server-everything sse
 ```shell
 npx @modelcontextprotocol/server-everything streamableHttp
 ```
-
