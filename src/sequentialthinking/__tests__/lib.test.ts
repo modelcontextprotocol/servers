@@ -3,10 +3,16 @@ import { SequentialThinkingServer, ThoughtData } from '../lib.js';
 
 // Mock chalk to avoid ESM issues
 vi.mock('chalk', () => {
+  const identity = (str: string) => str;
   const chalkMock = {
-    yellow: (str: string) => str,
-    green: (str: string) => str,
-    blue: (str: string) => str,
+    yellow: identity,
+    green: identity,
+    blue: identity,
+    gray: identity,
+    cyan: identity,
+    red: identity,
+    white: identity,
+    bold: identity,
   };
   return {
     default: chalkMock,
@@ -22,11 +28,17 @@ describe('SequentialThinkingServer', () => {
     server = new SequentialThinkingServer();
   });
 
+  afterEach(() => {
+    if (server && typeof server.destroy === 'function') {
+      server.destroy();
+    }
+  });
+
   // Note: Input validation tests removed - validation now happens at the tool
   // registration layer via Zod schemas before processThought is called
 
   describe('processThought - valid inputs', () => {
-    it('should accept valid basic thought', () => {
+    it('should accept valid basic thought', async () => {
       const input = {
         thought: 'This is my first thought',
         thoughtNumber: 1,
@@ -34,7 +46,7 @@ describe('SequentialThinkingServer', () => {
         nextThoughtNeeded: true
       };
 
-      const result = server.processThought(input);
+      const result = await server.processThought(input);
       expect(result.isError).toBeUndefined();
 
       const data = JSON.parse(result.content[0].text);
@@ -44,7 +56,7 @@ describe('SequentialThinkingServer', () => {
       expect(data.thoughtHistoryLength).toBe(1);
     });
 
-    it('should accept thought with optional fields', () => {
+    it('should accept thought with optional fields', async () => {
       const input = {
         thought: 'Revising my earlier idea',
         thoughtNumber: 2,
@@ -55,7 +67,7 @@ describe('SequentialThinkingServer', () => {
         needsMoreThoughts: false
       };
 
-      const result = server.processThought(input);
+      const result = await server.processThought(input);
       expect(result.isError).toBeUndefined();
 
       const data = JSON.parse(result.content[0].text);
@@ -63,7 +75,7 @@ describe('SequentialThinkingServer', () => {
       expect(data.thoughtHistoryLength).toBe(1);
     });
 
-    it('should track multiple thoughts in history', () => {
+    it('should track multiple thoughts in history', async () => {
       const input1 = {
         thought: 'First thought',
         thoughtNumber: 1,
@@ -85,16 +97,16 @@ describe('SequentialThinkingServer', () => {
         nextThoughtNeeded: false
       };
 
-      server.processThought(input1);
-      server.processThought(input2);
-      const result = server.processThought(input3);
+      await server.processThought(input1);
+      await server.processThought(input2);
+      const result = await server.processThought(input3);
 
       const data = JSON.parse(result.content[0].text);
       expect(data.thoughtHistoryLength).toBe(3);
       expect(data.nextThoughtNeeded).toBe(false);
     });
 
-    it('should auto-adjust totalThoughts if thoughtNumber exceeds it', () => {
+    it('should auto-adjust totalThoughts if thoughtNumber exceeds it', async () => {
       const input = {
         thought: 'Thought 5',
         thoughtNumber: 5,
@@ -102,7 +114,7 @@ describe('SequentialThinkingServer', () => {
         nextThoughtNeeded: true
       };
 
-      const result = server.processThought(input);
+      const result = await server.processThought(input);
       const data = JSON.parse(result.content[0].text);
 
       expect(data.totalThoughts).toBe(5);
@@ -110,7 +122,7 @@ describe('SequentialThinkingServer', () => {
   });
 
   describe('processThought - branching', () => {
-    it('should track branches correctly', () => {
+    it('should track branches correctly', async () => {
       const input1 = {
         thought: 'Main thought',
         thoughtNumber: 1,
@@ -136,9 +148,9 @@ describe('SequentialThinkingServer', () => {
         branchId: 'branch-b'
       };
 
-      server.processThought(input1);
-      server.processThought(input2);
-      const result = server.processThought(input3);
+      await server.processThought(input1);
+      await server.processThought(input2);
+      const result = await server.processThought(input3);
 
       const data = JSON.parse(result.content[0].text);
       expect(data.branches).toContain('branch-a');
@@ -147,7 +159,7 @@ describe('SequentialThinkingServer', () => {
       expect(data.thoughtHistoryLength).toBe(3);
     });
 
-    it('should allow multiple thoughts in same branch', () => {
+    it('should allow multiple thoughts in same branch', async () => {
       const input1 = {
         thought: 'Branch thought 1',
         thoughtNumber: 1,
@@ -166,8 +178,8 @@ describe('SequentialThinkingServer', () => {
         branchId: 'branch-a'
       };
 
-      server.processThought(input1);
-      const result = server.processThought(input2);
+      await server.processThought(input1);
+      const result = await server.processThought(input2);
 
       const data = JSON.parse(result.content[0].text);
       expect(data.branches).toContain('branch-a');
@@ -176,19 +188,19 @@ describe('SequentialThinkingServer', () => {
   });
 
   describe('processThought - edge cases', () => {
-    it('should handle very long thought strings', () => {
+    it('should handle thought strings within limits', async () => {
       const input = {
-        thought: 'a'.repeat(10000),
+        thought: 'a'.repeat(4000), // Within default 5000 limit
         thoughtNumber: 1,
         totalThoughts: 1,
         nextThoughtNeeded: false
       };
 
-      const result = server.processThought(input);
+      const result = await server.processThought(input);
       expect(result.isError).toBeUndefined();
     });
 
-    it('should handle thoughtNumber = 1, totalThoughts = 1', () => {
+    it('should handle thoughtNumber = 1, totalThoughts = 1', async () => {
       const input = {
         thought: 'Only thought',
         thoughtNumber: 1,
@@ -196,7 +208,7 @@ describe('SequentialThinkingServer', () => {
         nextThoughtNeeded: false
       };
 
-      const result = server.processThought(input);
+      const result = await server.processThought(input);
       expect(result.isError).toBeUndefined();
 
       const data = JSON.parse(result.content[0].text);
@@ -204,7 +216,7 @@ describe('SequentialThinkingServer', () => {
       expect(data.totalThoughts).toBe(1);
     });
 
-    it('should handle nextThoughtNeeded = false', () => {
+    it('should handle nextThoughtNeeded = false', async () => {
       const input = {
         thought: 'Final thought',
         thoughtNumber: 3,
@@ -212,7 +224,7 @@ describe('SequentialThinkingServer', () => {
         nextThoughtNeeded: false
       };
 
-      const result = server.processThought(input);
+      const result = await server.processThought(input);
       const data = JSON.parse(result.content[0].text);
 
       expect(data.nextThoughtNeeded).toBe(false);
@@ -220,7 +232,7 @@ describe('SequentialThinkingServer', () => {
   });
 
   describe('processThought - response format', () => {
-    it('should return correct response structure on success', () => {
+    it('should return correct response structure on success', async () => {
       const input = {
         thought: 'Test thought',
         thoughtNumber: 1,
@@ -228,7 +240,7 @@ describe('SequentialThinkingServer', () => {
         nextThoughtNeeded: false
       };
 
-      const result = server.processThought(input);
+      const result = await server.processThought(input);
 
       expect(result).toHaveProperty('content');
       expect(Array.isArray(result.content)).toBe(true);
@@ -237,7 +249,7 @@ describe('SequentialThinkingServer', () => {
       expect(result.content[0]).toHaveProperty('text');
     });
 
-    it('should return valid JSON in response', () => {
+    it('should return valid JSON in response', async () => {
       const input = {
         thought: 'Test thought',
         thoughtNumber: 1,
@@ -245,7 +257,7 @@ describe('SequentialThinkingServer', () => {
         nextThoughtNeeded: false
       };
 
-      const result = server.processThought(input);
+      const result = await server.processThought(input);
 
       expect(() => JSON.parse(result.content[0].text)).not.toThrow();
     });
@@ -263,9 +275,12 @@ describe('SequentialThinkingServer', () => {
     afterEach(() => {
       // Reset to disabled for other tests
       process.env.DISABLE_THOUGHT_LOGGING = 'true';
+      if (serverWithLogging && typeof serverWithLogging.destroy === 'function') {
+        serverWithLogging.destroy();
+      }
     });
 
-    it('should format and log regular thoughts', () => {
+    it('should format and log regular thoughts', async () => {
       const input = {
         thought: 'Test thought with logging',
         thoughtNumber: 1,
@@ -273,11 +288,11 @@ describe('SequentialThinkingServer', () => {
         nextThoughtNeeded: true
       };
 
-      const result = serverWithLogging.processThought(input);
+      const result = await serverWithLogging.processThought(input);
       expect(result.isError).toBeUndefined();
     });
 
-    it('should format and log revision thoughts', () => {
+    it('should format and log revision thoughts', async () => {
       const input = {
         thought: 'Revised thought',
         thoughtNumber: 2,
@@ -287,11 +302,11 @@ describe('SequentialThinkingServer', () => {
         revisesThought: 1
       };
 
-      const result = serverWithLogging.processThought(input);
+      const result = await serverWithLogging.processThought(input);
       expect(result.isError).toBeUndefined();
     });
 
-    it('should format and log branch thoughts', () => {
+    it('should format and log branch thoughts', async () => {
       const input = {
         thought: 'Branch thought',
         thoughtNumber: 2,
@@ -301,7 +316,7 @@ describe('SequentialThinkingServer', () => {
         branchId: 'branch-a'
       };
 
-      const result = serverWithLogging.processThought(input);
+      const result = await serverWithLogging.processThought(input);
       expect(result.isError).toBeUndefined();
     });
   });

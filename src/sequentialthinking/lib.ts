@@ -1,99 +1,254 @@
-import chalk from 'chalk';
+import type { ThoughtData } from './circular-buffer.js';
+import { SequentialThinkingApp } from './container.js';
+import { CompositeErrorHandler } from './error-handlers.js';
+import { ValidationError, SecurityError, BusinessLogicError } from './errors.js';
+import type { Logger, ThoughtStorage, SecurityService, ThoughtFormatter, MetricsCollector, HealthChecker } from './interfaces.js';
 
-export interface ThoughtData {
-  thought: string;
-  thoughtNumber: number;
-  totalThoughts: number;
-  isRevision?: boolean;
-  revisesThought?: number;
-  branchFromThought?: number;
-  branchId?: string;
-  needsMoreThoughts?: boolean;
-  nextThoughtNeeded: boolean;
+export interface ProcessThoughtRequest extends ThoughtData {
+  sessionId?: string;
+  origin?: string;
+  ipAddress?: string;
+}
+
+export interface ProcessThoughtResponse {
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+  statusCode?: number;
 }
 
 export class SequentialThinkingServer {
-  private thoughtHistory: ThoughtData[] = [];
-  private branches: Record<string, ThoughtData[]> = {};
-  private disableThoughtLogging: boolean;
-
+  private readonly app: SequentialThinkingApp;
+  private readonly errorHandler: CompositeErrorHandler;
+  
   constructor() {
-    this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
+    this.app = new SequentialThinkingApp();
+    this.errorHandler = new CompositeErrorHandler();
   }
 
-  private formatThought(thoughtData: ThoughtData): string {
-    const { thoughtNumber, totalThoughts, thought, isRevision, revisesThought, branchFromThought, branchId } = thoughtData;
+  private async validateInput(
+    input: ProcessThoughtRequest,
+  ): Promise<void> {
+    this.validateStructure(input);
+    this.validateBusinessLogic(input);
+  }
 
-    let prefix = '';
-    let context = '';
-
-    if (isRevision) {
-      prefix = chalk.yellow('🔄 Revision');
-      context = ` (revising thought ${revisesThought})`;
-    } else if (branchFromThought) {
-      prefix = chalk.green('🌿 Branch');
-      context = ` (from thought ${branchFromThought}, ID: ${branchId})`;
-    } else {
-      prefix = chalk.blue('💭 Thought');
-      context = '';
+  private validateStructure(input: ProcessThoughtRequest): void {
+    if (!input.thought || typeof input.thought !== 'string') {
+      throw new ValidationError(
+        'Thought is required and must be a string',
+      );
     }
-
-    const header = `${prefix} ${thoughtNumber}/${totalThoughts}${context}`;
-    const border = '─'.repeat(Math.max(header.length, thought.length) + 4);
-
-    return `
-┌${border}┐
-│ ${header} │
-├${border}┤
-│ ${thought.padEnd(border.length - 2)} │
-└${border}┘`;
+    if (typeof input.thoughtNumber !== 'number'
+      || input.thoughtNumber < 1) {
+      throw new ValidationError(
+        'thoughtNumber must be a positive integer',
+      );
+    }
+    if (typeof input.totalThoughts !== 'number'
+      || input.totalThoughts < 1) {
+      throw new ValidationError(
+        'totalThoughts must be a positive integer',
+      );
+    }
+    if (typeof input.nextThoughtNeeded !== 'boolean') {
+      throw new ValidationError(
+        'nextThoughtNeeded must be a boolean',
+      );
+    }
   }
 
-  public processThought(input: ThoughtData): { content: Array<{ type: "text"; text: string }>; isError?: boolean } {
+  private validateBusinessLogic(
+    input: ProcessThoughtRequest,
+  ): void {
+    if (input.isRevision && !input.revisesThought) {
+      throw new BusinessLogicError(
+        'isRevision requires revisesThought to be specified',
+      );
+    }
+    if (input.branchFromThought && !input.branchId) {
+      throw new BusinessLogicError(
+        'branchFromThought requires branchId to be specified',
+      );
+    }
+  }
+
+  private buildThoughtData(
+    input: ProcessThoughtRequest,
+    sanitizedThought: string,
+    sessionId: string,
+  ): ThoughtData {
+    const thoughtData: ThoughtData = {
+      ...input,
+      thought: sanitizedThought,
+      sessionId,
+      timestamp: Date.now(),
+    };
+    if (thoughtData.thoughtNumber > thoughtData.totalThoughts) {
+      thoughtData.totalThoughts = thoughtData.thoughtNumber;
+    }
+    return thoughtData;
+  }
+
+  private getServices(): {
+      logger: Logger;
+      storage: ThoughtStorage;
+      security: SecurityService;
+      formatter: ThoughtFormatter;
+      metrics: MetricsCollector;
+      } {
+    const container = this.app.getContainer();
+    return {
+      logger: container.get<Logger>('logger'),
+      storage: container.get<ThoughtStorage>('storage'),
+      security: container.get<SecurityService>('security'),
+      formatter: container.get<ThoughtFormatter>('formatter'),
+      metrics: container.get<MetricsCollector>('metrics'),
+    };
+  }
+
+  private resolveSession(
+    sessionId: string | undefined,
+    security: SecurityService,
+  ): string {
+    const resolved = sessionId ?? security.generateSessionId();
+    if (!security.validateSession(resolved)) {
+      throw new SecurityError('Invalid session ID');
+    }
+    return resolved;
+  }
+
+  private async processWithServices(
+    input: ProcessThoughtRequest,
+  ): Promise<ProcessThoughtResponse> {
+    const { logger, storage, security, formatter, metrics } =
+      this.getServices();
+    const startTime = Date.now();
+
     try {
-      // Validation happens at the tool registration layer via Zod
-      // Adjust totalThoughts if thoughtNumber exceeds it
-      if (input.thoughtNumber > input.totalThoughts) {
-        input.totalThoughts = input.thoughtNumber;
-      }
+      const sessionId = this.resolveSession(
+        input.sessionId, security,
+      );
+      security.validateThought(
+        input.thought, sessionId, input.origin, input.ipAddress,
+      );
+      const sanitized = security.sanitizeContent(input.thought);
+      const thoughtData = this.buildThoughtData(
+        input, sanitized, sessionId,
+      );
 
-      this.thoughtHistory.push(input);
+      storage.addThought(thoughtData);
+      const stats = storage.getStats();
 
-      if (input.branchFromThought && input.branchId) {
-        if (!this.branches[input.branchId]) {
-          this.branches[input.branchId] = [];
-        }
-        this.branches[input.branchId].push(input);
-      }
-
-      if (!this.disableThoughtLogging) {
-        const formattedThought = this.formatThought(input);
-        console.error(formattedThought);
-      }
-
-      return {
+      const response = {
         content: [{
-          type: "text" as const,
+          type: 'text' as const,
           text: JSON.stringify({
-            thoughtNumber: input.thoughtNumber,
-            totalThoughts: input.totalThoughts,
-            nextThoughtNeeded: input.nextThoughtNeeded,
-            branches: Object.keys(this.branches),
-            thoughtHistoryLength: this.thoughtHistory.length
-          }, null, 2)
-        }]
+            thoughtNumber: thoughtData.thoughtNumber,
+            totalThoughts: thoughtData.totalThoughts,
+            nextThoughtNeeded: thoughtData.nextThoughtNeeded,
+            branches: storage.getBranches(),
+            thoughtHistoryLength: stats.historySize,
+            sessionId,
+            timestamp: thoughtData.timestamp,
+          }, null, 2),
+        }],
       };
+
+      if (process.env.DISABLE_THOUGHT_LOGGING !== 'true') {
+        logger.logThought(sessionId, thoughtData);
+        console.error(formatter.format(thoughtData));
+      }
+
+      const duration = Date.now() - startTime;
+      metrics.recordRequest(duration, true);
+      metrics.recordThoughtProcessed(thoughtData);
+      return response;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      metrics.recordRequest(duration, false);
+      metrics.recordError(error as Error);
+      throw error;
+    }
+  }
+
+  public async processThought(input: ProcessThoughtRequest): Promise<ProcessThoughtResponse> {
+    try {
+      // Validate input first
+      await this.validateInput(input);
+      
+      // Process with services
+      return await this.processWithServices(input);
+      
+    } catch (error) {
+      // Handle errors using composite error handler
+      return this.errorHandler.handle(error as Error);
+    }
+  }
+
+  // Health check method
+  public async getHealthStatus(): Promise<Record<string, unknown>> {
+    try {
+      const container = this.app.getContainer();
+      const healthChecker = container.get<HealthChecker>('healthChecker');
+      return await healthChecker.checkHealth();
     } catch (error) {
       return {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            error: error instanceof Error ? error.message : String(error),
-            status: 'failed'
-          }, null, 2)
-        }],
-        isError: true
+        status: 'unhealthy',
+        summary: 'Health check failed',
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date(),
       };
+    }
+  }
+
+  // Metrics method
+  public getMetrics(): Record<string, unknown> {
+    try {
+      const container = this.app.getContainer();
+      const metrics = container.get<MetricsCollector>('metrics');
+      return metrics.getMetrics();
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date(),
+      };
+    }
+  }
+
+  // Cleanup method
+  public destroy(): void {
+    try {
+      const container = this.app.getContainer();
+      const storage = container.get<ThoughtStorage>('storage');
+      
+      if (storage && typeof storage.destroy === 'function') {
+        storage.destroy();
+      }
+      
+      this.app.destroy();
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+    }
+  }
+
+  // Legacy compatibility methods
+  public getThoughtHistory(limit?: number): ThoughtData[] {
+    try {
+      const container = this.app.getContainer();
+      const storage = container.get<ThoughtStorage>('storage');
+      return storage.getHistory(limit);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  public getBranches(): string[] {
+    try {
+      const container = this.app.getContainer();
+      const storage = container.get<ThoughtStorage>('storage');
+      return storage.getBranches();
+    } catch (error) {
+      return [];
     }
   }
 }
