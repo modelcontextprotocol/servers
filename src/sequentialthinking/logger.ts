@@ -17,6 +17,10 @@ export class StructuredLogger implements Logger {
     'auth',
     'authorization',
     'credential',
+    'apikey',
+    'accesskey',
+    'privatekey',
+    'sessiontoken',
   ];
 
   constructor(private readonly config: AppConfig['logging']) {}

@@ -42,15 +42,24 @@ export class CircularBuffer<T> {
   
   getRange(start: number, count: number): T[] {
     const result: T[] = [];
-    
+
     for (let i = 0; i < count; i++) {
+      // Calculate buffer index using modular arithmetic:
+      // (head - size + start + i + capacity) % capacity
+      // This accounts for:
+      // - head: current write position
+      // - size: number of valid items in buffer
+      // - start: offset from oldest item
+      // - i: iteration counter
+      // - capacity: added to prevent negative intermediate values
+      // Result: proper index even when buffer wraps around
       const index = (this.head - this.size + start + i + this.capacity) % this.capacity;
       const item = this.buffer[index];
       if (item !== undefined) {
         result.push(item);
       }
     }
-    
+
     return result;
   }
   

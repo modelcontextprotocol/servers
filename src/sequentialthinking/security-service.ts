@@ -65,16 +65,34 @@ export class SecureThoughtSecurity implements SecurityService {
     }
   }
 
+  private pruneExpiredSessions(cutoff: number): void {
+    // Proactively clean up sessions with no recent activity
+    if (this.requestLog.size > MAX_RATE_LIMIT_SESSIONS * 0.9) {
+      for (const [id, timestamps] of this.requestLog.entries()) {
+        // Remove old timestamps from this session
+        while (timestamps.length > 0 && timestamps[0] < cutoff) {
+          timestamps.shift();
+        }
+        // Remove session if no requests in current window
+        if (timestamps.length === 0) {
+          this.requestLog.delete(id);
+        }
+      }
+    }
+  }
+
   private checkRateLimit(sessionId: string): void {
     const now = Date.now();
     const cutoff = now - RATE_LIMIT_WINDOW_MS;
 
+    this.pruneExpiredSessions(cutoff);
+
     let timestamps = this.requestLog.get(sessionId);
     if (!timestamps) {
       timestamps = [];
-      // Cap map size
+      // Cap map size with FIFO eviction if needed
       if (this.requestLog.size >= MAX_RATE_LIMIT_SESSIONS) {
-        // Remove oldest session
+        // Remove oldest session (FIFO order)
         const firstKey = this.requestLog.keys().next().value;
         if (firstKey !== undefined) {
           this.requestLog.delete(firstKey);
@@ -83,7 +101,7 @@ export class SecureThoughtSecurity implements SecurityService {
       this.requestLog.set(sessionId, timestamps);
     }
 
-    // Prune old timestamps
+    // Prune old timestamps from current session
     while (timestamps.length > 0 && timestamps[0] < cutoff) {
       timestamps.shift();
     }
