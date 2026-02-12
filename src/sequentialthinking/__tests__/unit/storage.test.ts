@@ -1,22 +1,26 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { SecureThoughtStorage } from '../../storage.js';
+import { BoundedThoughtManager } from '../../state-manager.js';
+import { SessionTracker } from '../../session-tracker.js';
 import { createTestThought as makeThought } from '../helpers/factories.js';
 
-describe('SecureThoughtStorage', () => {
-  let storage: SecureThoughtStorage;
+describe('BoundedThoughtManager (Storage Interface)', () => {
+  let storage: BoundedThoughtManager;
+  let sessionTracker: SessionTracker;
 
   afterEach(() => {
     storage?.destroy();
+    sessionTracker?.destroy();
   });
 
   function createStorage() {
-    storage = new SecureThoughtStorage({
+    sessionTracker = new SessionTracker(0);
+    storage = new BoundedThoughtManager({
       maxHistorySize: 100,
       maxBranchAge: 3600000,
       maxThoughtLength: 5000,
       maxThoughtsPerBranch: 50,
       cleanupInterval: 0,
-    });
+    }, sessionTracker);
     return storage;
   }
 
@@ -40,7 +44,7 @@ describe('SecureThoughtStorage', () => {
     expect(history[0].sessionId).toBe('my-session');
   });
 
-  it('should delegate getHistory to manager', () => {
+  it('should return history', () => {
     const s = createStorage();
     s.addThought(makeThought());
     s.addThought(makeThought({ thoughtNumber: 2 }));
@@ -48,13 +52,13 @@ describe('SecureThoughtStorage', () => {
     expect(s.getHistory(1)).toHaveLength(1);
   });
 
-  it('should delegate getBranches to manager', () => {
+  it('should track branches', () => {
     const s = createStorage();
     s.addThought(makeThought({ branchId: 'b1' }));
     expect(s.getBranches()).toContain('b1');
   });
 
-  it('should delegate getStats to manager', () => {
+  it('should return stats', () => {
     const s = createStorage();
     const stats = s.getStats();
     expect(stats).toHaveProperty('historySize');

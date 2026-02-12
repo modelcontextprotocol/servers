@@ -1,12 +1,10 @@
 import { z } from 'zod';
 import type { SecurityService } from './interfaces.js';
 import { SecurityError } from './errors.js';
+import type { SessionTracker } from './session-tracker.js';
 
 // eslint-disable-next-line no-script-url
 const JS_PROTOCOL = 'javascript:';
-
-const MAX_RATE_LIMIT_SESSIONS = 10000;
-const RATE_LIMIT_WINDOW_MS = 60000;
 
 export const SecurityServiceConfigSchema = z.object({
   maxThoughtLength: z.number().default(5000),
@@ -25,12 +23,14 @@ type SecurityServiceConfig = z.infer<typeof SecurityServiceConfigSchema>;
 export class SecureThoughtSecurity implements SecurityService {
   private readonly config: SecurityServiceConfig;
   private readonly compiledPatterns: RegExp[];
-  private readonly requestLog = new Map<string, number[]>();
+  private readonly sessionTracker: SessionTracker;
 
   constructor(
     config: SecurityServiceConfig = SecurityServiceConfigSchema.parse({}),
+    sessionTracker: SessionTracker,
   ) {
     this.config = config;
+    this.sessionTracker = sessionTracker;
     this.compiledPatterns = [];
     for (const pattern of this.config.blockedPatterns) {
       try {
@@ -45,12 +45,7 @@ export class SecureThoughtSecurity implements SecurityService {
     thought: string,
     sessionId: string = '',
   ): void {
-    if (thought.length > this.config.maxThoughtLength) {
-      throw new SecurityError(
-        `Thought exceeds maximum length of ${this.config.maxThoughtLength}`,
-      );
-    }
-
+    // Check for blocked patterns (length validation happens in lib.ts)
     for (const regex of this.compiledPatterns) {
       if (regex.test(thought)) {
         throw new SecurityError(
@@ -59,58 +54,18 @@ export class SecureThoughtSecurity implements SecurityService {
       }
     }
 
-    // Rate limiting
+    // Rate limiting using unified session tracker
+    // NOTE: Rate limit is checked but NOT recorded here - recording happens
+    // in state-manager when thought is actually stored
     if (sessionId) {
-      this.checkRateLimit(sessionId);
-    }
-  }
-
-  private pruneExpiredSessions(cutoff: number): void {
-    // Proactively clean up sessions with no recent activity
-    if (this.requestLog.size > MAX_RATE_LIMIT_SESSIONS * 0.9) {
-      for (const [id, timestamps] of this.requestLog.entries()) {
-        // Remove old timestamps from this session
-        while (timestamps.length > 0 && timestamps[0] < cutoff) {
-          timestamps.shift();
-        }
-        // Remove session if no requests in current window
-        if (timestamps.length === 0) {
-          this.requestLog.delete(id);
-        }
+      const withinLimit = this.sessionTracker.checkRateLimit(
+        sessionId,
+        this.config.maxThoughtsPerMinute,
+      );
+      if (!withinLimit) {
+        throw new SecurityError('Rate limit exceeded');
       }
     }
-  }
-
-  private checkRateLimit(sessionId: string): void {
-    const now = Date.now();
-    const cutoff = now - RATE_LIMIT_WINDOW_MS;
-
-    this.pruneExpiredSessions(cutoff);
-
-    let timestamps = this.requestLog.get(sessionId);
-    if (!timestamps) {
-      timestamps = [];
-      // Cap map size with FIFO eviction if needed
-      if (this.requestLog.size >= MAX_RATE_LIMIT_SESSIONS) {
-        // Remove oldest session (FIFO order)
-        const firstKey = this.requestLog.keys().next().value;
-        if (firstKey !== undefined) {
-          this.requestLog.delete(firstKey);
-        }
-      }
-      this.requestLog.set(sessionId, timestamps);
-    }
-
-    // Prune old timestamps from current session
-    while (timestamps.length > 0 && timestamps[0] < cutoff) {
-      timestamps.shift();
-    }
-
-    if (timestamps.length >= this.config.maxThoughtsPerMinute) {
-      throw new SecurityError('Rate limit exceeded');
-    }
-
-    timestamps.push(now);
   }
 
   sanitizeContent(content: string): string {
@@ -135,7 +90,7 @@ export class SecureThoughtSecurity implements SecurityService {
   ): Record<string, unknown> {
     return {
       status: 'healthy',
-      activeSessions: this.requestLog.size,
+      activeSessions: this.sessionTracker.getActiveSessionCount(),
       ipConnections: 0,
       blockedPatterns: this.config.blockedPatterns.length,
     };

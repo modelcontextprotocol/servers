@@ -1,6 +1,6 @@
 import type { MetricsCollector, ThoughtData, RequestMetrics, ThoughtMetrics, SystemMetrics } from './interfaces.js';
 import { CircularBuffer } from './circular-buffer.js';
-import { SESSION_EXPIRY_MS } from './config.js';
+import type { SessionTracker } from './session-tracker.js';
 
 const MAX_UNIQUE_BRANCH_IDS = 10000;
 
@@ -26,8 +26,12 @@ export class BasicMetricsCollector implements MetricsCollector {
   private readonly responseTimes = new CircularBuffer<number>(100);
   private readonly requestTimestamps: number[] = [];
   private readonly thoughtTimestamps: number[] = [];
-  private readonly recentSessionIds = new Map<string, number>();
   private readonly uniqueBranchIds = new Set<string>();
+  private readonly sessionTracker: SessionTracker;
+
+  constructor(sessionTracker: SessionTracker) {
+    this.sessionTracker = sessionTracker;
+  }
 
   recordRequest(duration: number, success: boolean): void {
     const now = Date.now();
@@ -74,11 +78,6 @@ export class BasicMetricsCollector implements MetricsCollector {
     this.thoughtMetrics.averageThoughtLength =
       Math.round(totalLength / this.thoughtMetrics.totalThoughts);
 
-    // Track sessions (with timestamp for cleanup)
-    if (thought.sessionId) {
-      this.recentSessionIds.set(thought.sessionId, now);
-    }
-
     // Track revisions and branches
     if (thought.isRevision) {
       this.thoughtMetrics.revisionCount++;
@@ -97,13 +96,9 @@ export class BasicMetricsCollector implements MetricsCollector {
     this.thoughtMetrics.thoughtsPerMinute =
       this.thoughtTimestamps.length;
 
-    // Evict sessions older than 1 hour and update count
-    const sessionCutoff = now - SESSION_EXPIRY_MS;
-    for (const [id, ts] of this.recentSessionIds) {
-      if (ts < sessionCutoff) this.recentSessionIds.delete(id);
-    }
+    // Session tracking now handled by unified SessionTracker
     this.thoughtMetrics.activeSessions =
-      this.recentSessionIds.size;
+      this.sessionTracker.getActiveSessionCount();
   }
 
   private cleanupOldTimestamps(
@@ -144,7 +139,6 @@ export class BasicMetricsCollector implements MetricsCollector {
     this.responseTimes.clear();
     this.requestTimestamps.length = 0;
     this.thoughtTimestamps.length = 0;
-    this.recentSessionIds.clear();
     this.uniqueBranchIds.clear();
     this.requestMetrics.totalRequests = 0;
     this.requestMetrics.successfulRequests = 0;

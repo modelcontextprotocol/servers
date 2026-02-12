@@ -13,13 +13,14 @@ import type {
 import { ConfigManager } from './config.js';
 import { StructuredLogger } from './logger.js';
 import { ConsoleThoughtFormatter } from './formatter.js';
-import { SecureThoughtStorage } from './storage.js';
+import { BoundedThoughtManager } from './state-manager.js';
 import {
   SecureThoughtSecurity,
   SecurityServiceConfigSchema,
 } from './security-service.js';
 import { BasicMetricsCollector } from './metrics.js';
 import { ComprehensiveHealthChecker } from './health-checker.js';
+import { SessionTracker } from './session-tracker.js';
 
 export class SimpleContainer implements ServiceContainer {
   private readonly services = new Map<string, () => unknown>();
@@ -70,16 +71,20 @@ export class SimpleContainer implements ServiceContainer {
 export class SequentialThinkingApp {
   private readonly container: ServiceContainer;
   private readonly config: AppConfig;
+  private readonly sessionTracker: SessionTracker;
 
   constructor(config?: AppConfig) {
     this.config = config ?? ConfigManager.load();
     ConfigManager.validate(this.config);
+    // Create session tracker once for all services
+    this.sessionTracker = new SessionTracker(this.config.state.cleanupInterval);
     this.container = new SimpleContainer();
     this.registerServices();
   }
 
   private registerServices(): void {
     this.container.register('config', () => this.config);
+    this.container.register('sessionTracker', () => this.sessionTracker);
     this.container.register('logger', () => this.createLogger());
     this.container.register('formatter', () => this.createFormatter());
     this.container.register('storage', () => this.createStorage());
@@ -97,7 +102,7 @@ export class SequentialThinkingApp {
   }
 
   private createStorage(): ThoughtStorage {
-    return new SecureThoughtStorage(this.config.state);
+    return new BoundedThoughtManager(this.config.state, this.sessionTracker);
   }
 
   private createSecurity(): SecurityService {
@@ -109,11 +114,12 @@ export class SequentialThinkingApp {
           (p: RegExp) => p.source,
         ),
       }),
+      this.sessionTracker,
     );
   }
 
   private createMetrics(): MetricsCollector {
-    return new BasicMetricsCollector();
+    return new BasicMetricsCollector(this.sessionTracker);
   }
 
   private createHealthChecker(): HealthChecker {
@@ -134,6 +140,7 @@ export class SequentialThinkingApp {
   }
 
   destroy(): void {
+    this.sessionTracker.destroy();
     this.container.destroy();
   }
 }

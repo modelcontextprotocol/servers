@@ -1,12 +1,19 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BasicMetricsCollector } from '../../metrics.js';
+import { SessionTracker } from '../../session-tracker.js';
 import { createTestThought as makeThought } from '../helpers/factories.js';
 
 describe('BasicMetricsCollector', () => {
   let metrics: BasicMetricsCollector;
+  let sessionTracker: SessionTracker;
 
   beforeEach(() => {
-    metrics = new BasicMetricsCollector();
+    sessionTracker = new SessionTracker(0);
+    metrics = new BasicMetricsCollector(sessionTracker);
+  });
+
+  afterEach(() => {
+    sessionTracker.destroy();
   });
 
   describe('recordRequest', () => {
@@ -55,7 +62,10 @@ describe('BasicMetricsCollector', () => {
     });
 
     it('should track sessions', () => {
+      // Record thoughts in tracker first (mimics what happens in real flow)
+      sessionTracker.recordThought('s1');
       metrics.recordThoughtProcessed(makeThought({ sessionId: 's1' }));
+      sessionTracker.recordThought('s2');
       metrics.recordThoughtProcessed(makeThought({ sessionId: 's2' }));
       expect(metrics.getMetrics().thoughts.activeSessions).toBe(2);
     });

@@ -1,7 +1,8 @@
 import type { ThoughtData } from './circular-buffer.js';
+import type { ThoughtStorage } from './interfaces.js';
 import { CircularBuffer } from './circular-buffer.js';
 import { StateError } from './errors.js';
-import { SESSION_EXPIRY_MS } from './config.js';
+import type { SessionTracker } from './session-tracker.js';
 
 class BranchData {
   private thoughts: ThoughtData[] = [];
@@ -39,35 +40,35 @@ interface StateConfig {
   cleanupInterval: number;
 }
 
-export class BoundedThoughtManager {
+export class BoundedThoughtManager implements ThoughtStorage {
   private readonly thoughtHistory: CircularBuffer<ThoughtData>;
   private readonly branches: Map<string, BranchData>;
   private readonly config: StateConfig;
   private cleanupTimer: NodeJS.Timeout | null = null;
-  private readonly sessionStats: Map<string, { count: number; lastAccess: number }> = new Map();
+  private readonly sessionTracker: SessionTracker;
 
-  constructor(config: StateConfig) {
+  constructor(config: StateConfig, sessionTracker: SessionTracker) {
     this.config = config;
+    this.sessionTracker = sessionTracker;
     this.thoughtHistory = new CircularBuffer(config.maxHistorySize);
     this.branches = new Map();
     this.startCleanupTimer();
   }
 
   addThought(thought: ThoughtData): void {
-    // Validate input size
-    if (thought.thought.length > this.config.maxThoughtLength) {
-      throw new StateError(
-        `Thought exceeds maximum length of ${this.config.maxThoughtLength} characters`,
-        { maxLength: this.config.maxThoughtLength, actualLength: thought.thought.length },
-      );
-    }
-
+    // Length validation happens in lib.ts before reaching here
     // Work on a shallow copy to avoid mutating the caller's object
     const entry = { ...thought };
+
+    // Ensure session ID for tracking
+    if (!entry.sessionId) {
+      entry.sessionId = 'anonymous-' + crypto.randomUUID();
+    }
+
     entry.timestamp = Date.now();
 
-    // Update session stats
-    this.updateSessionStats(entry.sessionId ?? 'anonymous');
+    // Record thought in unified session tracker
+    this.sessionTracker.recordThought(entry.sessionId);
 
     // Add to main history
     this.thoughtHistory.add(entry);
@@ -94,13 +95,6 @@ export class BoundedThoughtManager {
     return branch;
   }
 
-  private updateSessionStats(sessionId: string): void {
-    const stats = this.sessionStats.get(sessionId) ?? { count: 0, lastAccess: Date.now() };
-    stats.count++;
-    stats.lastAccess = Date.now();
-    this.sessionStats.set(sessionId, stats);
-  }
-
   getHistory(limit?: number): ThoughtData[] {
     return this.thoughtHistory.getAll(limit);
   }
@@ -120,7 +114,6 @@ export class BoundedThoughtManager {
   clearHistory(): void {
     this.thoughtHistory.clear();
     this.branches.clear();
-    this.sessionStats.clear();
   }
 
   cleanup(): void {
@@ -142,13 +135,7 @@ export class BoundedThoughtManager {
         this.branches.delete(branchId);
       }
 
-      // Clean up old session stats (older than 1 hour)
-      const oneHourAgo = Date.now() - SESSION_EXPIRY_MS;
-      for (const [sessionId, stats] of this.sessionStats.entries()) {
-        if (stats.lastAccess < oneHourAgo) {
-          this.sessionStats.delete(sessionId);
-        }
-      }
+      // Session cleanup is now handled by SessionTracker
 
     } catch (error) {
       throw new StateError('Cleanup operation failed', { error });
@@ -186,7 +173,7 @@ export class BoundedThoughtManager {
       historySize: this.thoughtHistory.currentSize,
       historyCapacity: this.config.maxHistorySize,
       branchCount: this.branches.size,
-      sessionCount: this.sessionStats.size,
+      sessionCount: this.sessionTracker.getActiveSessionCount(),
     };
   }
 

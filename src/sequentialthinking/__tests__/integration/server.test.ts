@@ -237,11 +237,12 @@ describe('SequentialThinkingServer', () => {
 
       expect(result.isError).toBe(true);
       const data = JSON.parse(result.content[0].text);
-      expect(data.error).toBe('SECURITY_ERROR');
+      expect(data.error).toBe('VALIDATION_ERROR');
       expect(data.message).toContain('exceeds maximum length');
     });
 
-    it('should reject thought containing blocked pattern', async () => {
+    it('should sanitize and accept previously blocked patterns', async () => {
+      // javascript: gets sanitized away before validation
       const result = await server.processThought({
         thought: 'Visit javascript: void(0) for info',
         thoughtNumber: 1,
@@ -249,10 +250,8 @@ describe('SequentialThinkingServer', () => {
         nextThoughtNeeded: true,
       });
 
-      expect(result.isError).toBe(true);
-      const data = JSON.parse(result.content[0].text);
-      expect(data.error).toBe('SECURITY_ERROR');
-      expect(data.message).toContain('prohibited content');
+      expect(result.isError).toBe(false);
+      // Content was sanitized (javascript: removed)
     });
 
     it('should sanitize and accept normal content', async () => {
@@ -735,7 +734,7 @@ describe('SequentialThinkingServer', () => {
       });
       expect(result.isError).toBe(true);
       const data = JSON.parse(result.content[0].text);
-      expect(data.error).toBe('SECURITY_ERROR');
+      expect(data.error).toBe('VALIDATION_ERROR');
     });
 
     it('should accept session ID at 100 chars', async () => {

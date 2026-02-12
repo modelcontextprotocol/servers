@@ -24,7 +24,8 @@ export class SequentialThinkingServer {
   private validateInput(
     input: ProcessThoughtRequest,
   ): void {
-    this.validateStructure(input);
+    const config = this.app.getContainer().get<AppConfig>('config');
+    this.validateStructure(input, config.state.maxThoughtLength);
     this.validateBusinessLogic(input);
   }
 
@@ -32,10 +33,16 @@ export class SequentialThinkingServer {
     return typeof value === 'number' && value >= 1 && Number.isInteger(value);
   }
 
-  private validateStructure(input: ProcessThoughtRequest): void {
+  private validateStructure(input: ProcessThoughtRequest, maxThoughtLength: number): void {
     if (!input.thought || typeof input.thought !== 'string' || input.thought.trim().length === 0) {
       throw new ValidationError(
         'Thought is required and must be a non-empty string',
+      );
+    }
+    // Unified length validation - single source of truth
+    if (input.thought.length > maxThoughtLength) {
+      throw new ValidationError(
+        `Thought exceeds maximum length of ${maxThoughtLength} characters (actual: ${input.thought.length})`,
       );
     }
     if (!SequentialThinkingServer.isPositiveInteger(input.thoughtNumber)) {
@@ -128,8 +135,10 @@ export class SequentialThinkingServer {
       const sessionId = this.resolveSession(
         input.sessionId, security,
       );
-      security.validateThought(input.thought, sessionId);
+      // Sanitize content first to remove harmful patterns
       const sanitized = security.sanitizeContent(input.thought);
+      // Then validate the sanitized content (checks rate limiting, blocked patterns on clean text)
+      security.validateThought(sanitized, sessionId);
       const thoughtData = this.buildThoughtData(
         input, sanitized, sessionId,
       );
