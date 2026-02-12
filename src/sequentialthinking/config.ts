@@ -1,12 +1,20 @@
 import type { AppConfig } from './interfaces.js';
 
-interface EnvironmentInfo {
+export const SESSION_EXPIRY_MS = 3600000;
+
+export interface EnvironmentInfo {
   nodeVersion: string;
   platform: string;
   arch: string;
   pid: number;
   memoryUsage: NodeJS.MemoryUsage;
   uptime: number;
+}
+
+function parseIntOrDefault(value: string | undefined, defaultValue: number): number {
+  if (value === undefined) return defaultValue;
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? defaultValue : parsed;
 }
 
 export class ConfigManager {
@@ -29,33 +37,31 @@ export class ConfigManager {
 
   private static loadStateConfig(): AppConfig['state'] {
     return {
-      maxHistorySize: parseInt(process.env.MAX_HISTORY_SIZE ?? '1000', 10),
-      maxBranchAge: parseInt(process.env.MAX_BRANCH_AGE ?? '3600000', 10), // 1 hour
-      maxThoughtLength: parseInt(process.env.MAX_THOUGHT_LENGTH ?? '5000', 10),
-      maxThoughtsPerBranch: parseInt(process.env.MAX_THOUGHTS_PER_BRANCH ?? '100', 10),
-      cleanupInterval: parseInt(process.env.CLEANUP_INTERVAL ?? '300000', 10), // 5 minutes
-      enablePersistence: process.env.ENABLE_PERSISTENCE === 'true',
+      maxHistorySize: parseIntOrDefault(process.env.MAX_HISTORY_SIZE, 1000),
+      maxBranchAge: parseIntOrDefault(process.env.MAX_BRANCH_AGE, 3600000),
+      maxThoughtLength: parseIntOrDefault(process.env.MAX_THOUGHT_LENGTH, 5000),
+      maxThoughtsPerBranch: parseIntOrDefault(process.env.MAX_THOUGHTS_PER_BRANCH, 100),
+      cleanupInterval: parseIntOrDefault(process.env.CLEANUP_INTERVAL, 300000),
     };
   }
 
   private static loadSecurityConfig(): AppConfig['security'] {
     return {
-      maxThoughtLength: parseInt(process.env.MAX_THOUGHT_LENGTH ?? '5000', 10),
-      maxThoughtsPerMinute: parseInt(process.env.MAX_THOUGHTS_PER_MIN ?? '60', 10),
-      maxThoughtsPerHour: parseInt(process.env.MAX_THOUGHTS_PER_HOUR ?? '1000', 10),
-      maxConcurrentSessions: parseInt(process.env.MAX_CONCURRENT_SESSIONS ?? '100', 10),
+      maxThoughtsPerMinute: parseIntOrDefault(process.env.MAX_THOUGHTS_PER_MIN, 60),
       blockedPatterns: this.loadBlockedPatterns(),
-      allowedOrigins: (process.env.ALLOWED_ORIGINS ?? '*').split(',').map(o => o.trim()),
-      enableContentSanitization: process.env.SANITIZE_CONTENT !== 'false',
-      maxSessionsPerIP: parseInt(process.env.MAX_SESSIONS_PER_IP ?? '5', 10),
     };
   }
 
   private static loadLoggingConfig(): AppConfig['logging'] {
+    const validLevels: AppConfig['logging']['level'][] = ['debug', 'info', 'warn', 'error'];
+    const envLevel = process.env.LOG_LEVEL;
+    const level = envLevel && validLevels.includes(envLevel as AppConfig['logging']['level'])
+      ? (envLevel as AppConfig['logging']['level'])
+      : 'info';
     return {
-      level: (process.env.LOG_LEVEL as AppConfig['logging']['level']) ?? 'info',
+      level,
       enableColors: process.env.ENABLE_COLORS !== 'false',
-      sanitizeContent: process.env.SANITIZE_LOGS !== 'false',
+      enableThoughtLogging: process.env.DISABLE_THOUGHT_LOGGING !== 'true',
     };
   }
 
@@ -63,54 +69,73 @@ export class ConfigManager {
     return {
       enableMetrics: process.env.ENABLE_METRICS !== 'false',
       enableHealthChecks: process.env.ENABLE_HEALTH_CHECKS !== 'false',
-      metricsInterval: parseInt(process.env.METRICS_INTERVAL ?? '60000', 10), // 1 minute
+      healthThresholds: {
+        maxMemoryPercent: parseIntOrDefault(process.env.HEALTH_MAX_MEMORY, 90),
+        maxStoragePercent: parseIntOrDefault(process.env.HEALTH_MAX_STORAGE, 80),
+        maxResponseTimeMs: parseIntOrDefault(process.env.HEALTH_MAX_RESPONSE_TIME, 200),
+        errorRateDegraded: parseIntOrDefault(process.env.HEALTH_ERROR_RATE_DEGRADED, 2),
+        errorRateUnhealthy: parseIntOrDefault(process.env.HEALTH_ERROR_RATE_UNHEALTHY, 5),
+      },
     };
+  }
+
+  private static defaultBlockedPatterns(): RegExp[] {
+    return [
+      /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/i,
+      /javascript:/i,
+      /data:text\/html/i,
+      /eval\s*\(/i,
+      /function\s*\(/i,
+      /document\./i,
+      /window\./i,
+      /\.php/i,
+      /\.exe/i,
+      /\.bat/i,
+      /\.cmd/i,
+    ];
   }
 
   private static loadBlockedPatterns(): RegExp[] {
     const patterns = process.env.BLOCKED_PATTERNS;
     if (!patterns) {
-      // Default patterns for security
-      return [
-        /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
-        /javascript:/gi,
-        /data:text\/html/gi,
-        /eval\s*\(/gi,
-        /function\s*\(/gi,
-        /document\./gi,
-        /window\./gi,
-        /\.php/gi,
-        /\.exe/gi,
-        /\.bat/gi,
-        /\.cmd/gi,
-      ];
+      return this.defaultBlockedPatterns();
     }
 
     try {
       const patternStrings = patterns.split(',').map(p => p.trim());
-      return patternStrings.map(pattern => new RegExp(pattern, 'gi'));
+      return patternStrings.map(pattern => new RegExp(pattern, 'i'));
     } catch (error: unknown) {
       console.warn('Invalid BLOCKED_PATTERNS, using defaults:', error);
-      return this.loadBlockedPatterns(); // Recursively return defaults
+      return this.defaultBlockedPatterns();
     }
   }
 
   static validate(config: AppConfig): void {
-    // Validate critical configuration values
-    if (config.state.maxHistorySize < 1 || config.state.maxHistorySize > 10000) {
+    this.validateState(config.state);
+    this.validateSecurity(config.security);
+  }
+
+  private static validateState(state: AppConfig['state']): void {
+    if (state.maxHistorySize < 1 || state.maxHistorySize > 10000) {
       throw new Error('MAX_HISTORY_SIZE must be between 1 and 10000');
     }
-
-    if (config.security.maxThoughtLength < 1 || config.security.maxThoughtLength > 100000) {
+    if (state.maxThoughtLength < 1 || state.maxThoughtLength > 100000) {
       throw new Error('maxThoughtLength must be between 1 and 100000');
     }
-
-    if (config.security.maxThoughtsPerMinute < 1 || config.security.maxThoughtsPerMinute > 1000) {
-      throw new Error('maxThoughtsPerMinute must be between 1 and 1000');
+    if (state.maxBranchAge < 0) {
+      throw new Error('maxBranchAge must be >= 0');
     }
+    if (state.maxThoughtsPerBranch < 1 || state.maxThoughtsPerBranch > 10000) {
+      throw new Error('maxThoughtsPerBranch must be between 1 and 10000');
+    }
+    if (state.cleanupInterval < 0) {
+      throw new Error('cleanupInterval must be >= 0');
+    }
+  }
 
-    if (config.security.maxThoughtsPerHour < 1 || config.security.maxThoughtsPerHour > 10000) {
-      throw new Error('maxThoughtsPerHour must be between 1 and 10000');
+  private static validateSecurity(security: AppConfig['security']): void {
+    if (security.maxThoughtsPerMinute < 1 || security.maxThoughtsPerMinute > 1000) {
+      throw new Error('maxThoughtsPerMinute must be between 1 and 1000');
     }
   }
 

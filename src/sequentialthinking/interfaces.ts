@@ -4,8 +4,6 @@ export type { ThoughtData };
 
 export interface ThoughtFormatter {
   format(thought: ThoughtData): string;
-  formatHeader?(thought: ThoughtData): string;
-  formatBody?(thought: ThoughtData): string;
 }
 
 export interface StorageStats {
@@ -13,19 +11,14 @@ export interface StorageStats {
   historyCapacity: number;
   branchCount: number;
   sessionCount: number;
-  oldestThought?: ThoughtData;
-  newestThought?: ThoughtData;
 }
 
 export interface ThoughtStorage {
   addThought(thought: ThoughtData): void;
   getHistory(limit?: number): ThoughtData[];
   getBranches(): string[];
-  getBranch(branchId: string): Record<string, unknown> | undefined;
-  clearHistory(): void;
-  cleanup(): Promise<void>;
   getStats(): StorageStats;
-  destroy?(): void;
+  destroy(): void;
 }
 
 export interface Logger {
@@ -34,27 +27,14 @@ export interface Logger {
   debug(message: string, meta?: Record<string, unknown>): void;
   warn(message: string, meta?: Record<string, unknown>): void;
   logThought(sessionId: string, thought: ThoughtData): void;
-  logPerformance(
-    operation: string,
-    duration: number,
-    success: boolean,
-  ): void;
-  logSecurityEvent(
-    event: string,
-    sessionId: string,
-    details: Record<string, unknown>,
-  ): void;
 }
 
 export interface SecurityService {
   validateThought(
     thought: string,
     sessionId: string,
-    origin?: string,
-    ipAddress?: string,
   ): void;
   sanitizeContent(content: string): string;
-  cleanupSession(sessionId: string): void;
   getSecurityStatus(
     sessionId?: string,
   ): Record<string, unknown>;
@@ -62,34 +42,68 @@ export interface SecurityService {
   validateSession(sessionId: string): boolean;
 }
 
-export interface ErrorHandler {
-  handle(error: Error): {
-    content: Array<{ type: 'text'; text: string }>;
-    isError?: boolean;
-    statusCode?: number;
-  };
+export interface RequestMetrics {
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  averageResponseTime: number;
+  lastRequestTime: Date | null;
+  requestsPerMinute: number;
+}
+
+export interface ThoughtMetrics {
+  totalThoughts: number;
+  averageThoughtLength: number;
+  thoughtsPerMinute: number;
+  revisionCount: number;
+  branchCount: number;
+  activeSessions: number;
+}
+
+export interface SystemMetrics {
+  memoryUsage: NodeJS.MemoryUsage;
+  cpuUsage: NodeJS.CpuUsage;
+  uptime: number;
+  timestamp: Date;
 }
 
 export interface MetricsCollector {
   recordRequest(duration: number, success: boolean): void;
   recordError(error: Error): void;
   recordThoughtProcessed(thought: ThoughtData): void;
-  getMetrics(): Record<string, unknown>;
+  getMetrics(): { requests: RequestMetrics; thoughts: ThoughtMetrics; system: SystemMetrics };
+  destroy(): void;
+}
+
+export interface HealthCheckResult {
+  status: 'healthy' | 'unhealthy' | 'degraded';
+  message: string;
+  details?: unknown;
+  responseTime: number;
+  timestamp: Date;
+}
+
+export interface HealthStatus {
+  status: 'healthy' | 'unhealthy' | 'degraded';
+  checks: {
+    memory: HealthCheckResult;
+    responseTime: HealthCheckResult;
+    errorRate: HealthCheckResult;
+    storage: HealthCheckResult;
+    security: HealthCheckResult;
+  };
+  summary: string;
+  uptime: number;
+  timestamp: Date;
 }
 
 export interface HealthChecker {
-  checkHealth(): Promise<Record<string, unknown>>;
-}
-
-export interface CircuitBreaker {
-  execute<T>(operation: () => Promise<T>): Promise<T>;
-  getState(): string;
+  checkHealth(): Promise<HealthStatus>;
 }
 
 export interface ServiceContainer {
   register<T>(key: string, factory: () => T): void;
   get<T>(key: string): T;
-  has(key: string): boolean;
   destroy(): void;
 }
 
@@ -104,26 +118,25 @@ export interface AppConfig {
     maxThoughtLength: number;
     maxThoughtsPerBranch: number;
     cleanupInterval: number;
-    enablePersistence: boolean;
   };
   security: {
-    maxThoughtLength: number;
     maxThoughtsPerMinute: number;
-    maxThoughtsPerHour: number;
-    maxConcurrentSessions: number;
     blockedPatterns: RegExp[];
-    allowedOrigins: string[];
-    enableContentSanitization: boolean;
-    maxSessionsPerIP: number;
   };
   logging: {
     level: 'debug' | 'info' | 'warn' | 'error';
     enableColors: boolean;
-    sanitizeContent: boolean;
+    enableThoughtLogging: boolean;
   };
   monitoring: {
     enableMetrics: boolean;
     enableHealthChecks: boolean;
-    metricsInterval: number;
+    healthThresholds: {
+      maxMemoryPercent: number;
+      maxStoragePercent: number;
+      maxResponseTimeMs: number;
+      errorRateDegraded: number;
+      errorRateUnhealthy: number;
+    };
   };
 }

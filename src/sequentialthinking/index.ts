@@ -6,7 +6,7 @@ import { z } from 'zod';
 import type { ProcessThoughtRequest } from './lib.js';
 import { SequentialThinkingServer } from './lib.js';
 import type { AppConfig } from './interfaces.js';
-import { ConfigManager } from './container.js';
+import { ConfigManager } from './config.js';
 
 // Load configuration
 let config: AppConfig;
@@ -101,8 +101,6 @@ Security Notes:
       branchId: z.string().optional().describe('Branch identifier'),
       needsMoreThoughts: z.boolean().optional().describe('If more thoughts are needed'),
       sessionId: z.string().optional().describe('Session identifier for tracking'),
-      origin: z.string().optional().describe('Origin of the request'),
-      ipAddress: z.string().optional().describe('IP address for rate limiting'),
     },
     outputSchema: {
       thoughtNumber: z.number(),
@@ -117,7 +115,7 @@ Security Notes:
   async (args) => {
     const result = await thinkingServer.processThought(args as ProcessThoughtRequest);
 
-    if (result.isError) {
+    if (result.isError === true || result.content.length === 0) {
       return {
         content: result.content,
         isError: true,
@@ -125,12 +123,17 @@ Security Notes:
     }
 
     // Parse JSON response to get structured content
-    const parsedContent = JSON.parse(result.content[0].text);
+    let parsed;
+    try {
+      parsed = JSON.parse(result.content[0].text);
+    } catch {
+      return { content: result.content };
+    }
 
     return {
       content: result.content,
       _meta: {
-        structuredContent: parsedContent,
+        structuredContent: parsed,
       },
     };
   },

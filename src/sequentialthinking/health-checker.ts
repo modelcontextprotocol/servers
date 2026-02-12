@@ -1,52 +1,22 @@
 import type {
+  AppConfig,
   HealthChecker,
+  HealthCheckResult,
+  HealthStatus,
   MetricsCollector,
+  RequestMetrics,
   ThoughtStorage,
   SecurityService,
 } from './interfaces.js';
-import { z } from 'zod';
 
-export const HealthCheckResultSchema = z.object({
-  status: z.enum(['healthy', 'unhealthy', 'degraded']),
-  message: z.string(),
-  details: z.unknown().optional(),
-  responseTime: z.number(),
-  timestamp: z.date(),
-});
-
-export const HealthStatusSchema = z.object({
-  status: z.enum(['healthy', 'unhealthy', 'degraded']),
-  checks: z.object({
-    memory: HealthCheckResultSchema,
-    responseTime: HealthCheckResultSchema,
-    errorRate: HealthCheckResultSchema,
-    storage: HealthCheckResultSchema,
-    security: HealthCheckResultSchema,
-  }),
-  summary: z.string(),
-  uptime: z.number(),
-  timestamp: z.date(),
-});
-
-export type HealthCheckResult = z.infer<typeof HealthCheckResultSchema>;
-export type HealthStatus = z.infer<typeof HealthStatusSchema>;
-
-interface RequestMetricsData {
-  averageResponseTime: number;
-  totalRequests: number;
-  failedRequests: number;
+function createFallbackCheck(): HealthCheckResult {
+  return {
+    status: 'unhealthy',
+    message: 'Check failed',
+    responseTime: 0,
+    timestamp: new Date(),
+  };
 }
-
-interface MetricsData {
-  requests: RequestMetricsData;
-}
-
-const FALLBACK_CHECK: HealthCheckResult = {
-  status: 'unhealthy',
-  message: 'Check failed',
-  responseTime: 0,
-  timestamp: new Date(),
-};
 
 function unwrapSettled(
   result: PromiseSettledResult<HealthCheckResult>,
@@ -54,19 +24,32 @@ function unwrapSettled(
   if (result.status === 'fulfilled') {
     return result.value;
   }
-  return { ...FALLBACK_CHECK, timestamp: new Date() };
+  return createFallbackCheck();
 }
 
 export class ComprehensiveHealthChecker implements HealthChecker {
-  private readonly maxMemoryUsage = 90;
-  private readonly maxStorageUsage = 80;
-  private readonly maxResponseTime = 200;
+  private readonly maxMemoryUsage: number;
+  private readonly maxStorageUsage: number;
+  private readonly maxResponseTime: number;
+  private readonly errorRateDegraded: number;
+  private readonly errorRateUnhealthy: number;
 
   constructor(
     private readonly metrics: MetricsCollector,
     private readonly storage: ThoughtStorage,
     private readonly security: SecurityService,
-  ) {}
+    thresholds?: AppConfig['monitoring']['healthThresholds'],
+  ) {
+    this.maxMemoryUsage = thresholds?.maxMemoryPercent ?? 90;
+    this.maxStorageUsage = thresholds?.maxStoragePercent ?? 80;
+    this.maxResponseTime = thresholds?.maxResponseTimeMs ?? 200;
+    this.errorRateDegraded = thresholds?.errorRateDegraded ?? 2;
+    this.errorRateUnhealthy = thresholds?.errorRateUnhealthy ?? 5;
+  }
+
+  private getRequestMetrics(): RequestMetrics {
+    return this.metrics.getMetrics().requests;
+  }
 
   async checkHealth(): Promise<HealthStatus> {
     try {
@@ -97,7 +80,7 @@ export class ComprehensiveHealthChecker implements HealthChecker {
       const hasUnhealthy = statuses.includes('unhealthy');
       const hasDegraded = statuses.includes('degraded');
 
-      const result = {
+      return {
         status: hasUnhealthy
           ? ('unhealthy' as const)
           : hasDegraded
@@ -114,27 +97,8 @@ export class ComprehensiveHealthChecker implements HealthChecker {
         uptime: process.uptime(),
         timestamp: new Date(),
       };
-
-      const validationResult = HealthStatusSchema.safeParse(result);
-      if (!validationResult.success) {
-        return {
-          status: 'unhealthy',
-          checks: {
-            memory: memoryResult,
-            responseTime: responseTimeResult,
-            errorRate: errorRateResult,
-            storage: storageResult,
-            security: securityResult,
-          },
-          summary: `Validation failed: ${validationResult.error.message}`,
-          uptime: process.uptime(),
-          timestamp: new Date(),
-        };
-      }
-
-      return validationResult.data;
     } catch {
-      const fallback = { ...FALLBACK_CHECK, timestamp: new Date() };
+      const fallback = createFallbackCheck();
       return {
         status: 'unhealthy',
         checks: {
@@ -211,26 +175,25 @@ export class ComprehensiveHealthChecker implements HealthChecker {
     const startTime = Date.now();
 
     try {
-      const metricsData = this.metrics.getMetrics() as unknown as MetricsData;
-      const avgResponseTime =
-        metricsData.requests.averageResponseTime;
+      const requests = this.getRequestMetrics();
+      const avgResponseTime = requests.averageResponseTime;
 
       const responseTimeData = {
         avgResponseTime: Math.round(avgResponseTime),
-        requestCount: metricsData.requests.totalRequests,
+        requestCount: requests.totalRequests,
       };
 
       if (avgResponseTime > this.maxResponseTime) {
         return this.makeResult(
-          'degraded',
-          `Response time elevated: ${avgResponseTime.toFixed(0)}ms`,
+          'unhealthy',
+          `Response time too high: ${avgResponseTime.toFixed(0)}ms`,
           startTime,
           responseTimeData,
         );
-      } else if (avgResponseTime > this.maxResponseTime * 0.6) {
+      } else if (avgResponseTime > this.maxResponseTime * 0.8) {
         return this.makeResult(
           'degraded',
-          `Response time slightly elevated: ${avgResponseTime.toFixed(0)}ms`,
+          `Response time elevated: ${avgResponseTime.toFixed(0)}ms`,
           startTime,
           responseTimeData,
         );
@@ -254,20 +217,22 @@ export class ComprehensiveHealthChecker implements HealthChecker {
     const startTime = Date.now();
 
     try {
-      const metricsData = this.metrics.getMetrics() as unknown as MetricsData;
-      const { totalRequests, failedRequests } = metricsData.requests;
+      const requests = this.getRequestMetrics();
+      const { totalRequests, failedRequests } = requests;
 
       const errorRate =
-        totalRequests > 0 ? (failedRequests / totalRequests) * 100 : 0;
+        totalRequests > 0
+          ? Math.min((failedRequests / totalRequests) * 100, 100)
+          : 0;
 
-      if (errorRate > 5) {
+      if (errorRate > this.errorRateUnhealthy) {
         return this.makeResult(
           'unhealthy',
           `Error rate: ${errorRate.toFixed(1)}%`,
           startTime,
           { totalRequests, failedRequests, errorRate },
         );
-      } else if (errorRate > 2) {
+      } else if (errorRate > this.errorRateDegraded) {
         return this.makeResult(
           'degraded',
           `Error rate: ${errorRate.toFixed(1)}%`,
@@ -295,8 +260,9 @@ export class ComprehensiveHealthChecker implements HealthChecker {
 
     try {
       const stats = this.storage.getStats();
-      const usagePercent =
-        (stats.historySize / stats.historyCapacity) * 100;
+      const usagePercent = stats.historyCapacity > 0
+        ? (stats.historySize / stats.historyCapacity) * 100
+        : 0;
 
       const storageData = {
         historySize: stats.historySize,
@@ -306,15 +272,15 @@ export class ComprehensiveHealthChecker implements HealthChecker {
 
       if (usagePercent > this.maxStorageUsage) {
         return this.makeResult(
-          'degraded',
-          `Storage usage elevated: ${usagePercent.toFixed(1)}%`,
+          'unhealthy',
+          `Storage usage too high: ${usagePercent.toFixed(1)}%`,
           startTime,
           storageData,
         );
       } else if (usagePercent > this.maxStorageUsage * 0.8) {
         return this.makeResult(
           'degraded',
-          `Storage usage slightly elevated: ${usagePercent.toFixed(1)}%`,
+          `Storage usage elevated: ${usagePercent.toFixed(1)}%`,
           startTime,
           storageData,
         );

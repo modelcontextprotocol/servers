@@ -1,0 +1,163 @@
+import type { MetricsCollector, ThoughtData, RequestMetrics, ThoughtMetrics, SystemMetrics } from './interfaces.js';
+import { CircularBuffer } from './circular-buffer.js';
+import { SESSION_EXPIRY_MS } from './config.js';
+
+const MAX_UNIQUE_BRANCH_IDS = 10000;
+
+export class BasicMetricsCollector implements MetricsCollector {
+  private readonly requestMetrics: RequestMetrics = {
+    totalRequests: 0,
+    successfulRequests: 0,
+    failedRequests: 0,
+    averageResponseTime: 0,
+    lastRequestTime: null,
+    requestsPerMinute: 0,
+  };
+
+  private readonly thoughtMetrics: ThoughtMetrics = {
+    totalThoughts: 0,
+    averageThoughtLength: 0,
+    thoughtsPerMinute: 0,
+    revisionCount: 0,
+    branchCount: 0,
+    activeSessions: 0,
+  };
+
+  private readonly responseTimes = new CircularBuffer<number>(100);
+  private readonly requestTimestamps: number[] = [];
+  private readonly thoughtTimestamps: number[] = [];
+  private readonly recentSessionIds = new Map<string, number>();
+  private readonly uniqueBranchIds = new Set<string>();
+
+  recordRequest(duration: number, success: boolean): void {
+    const now = Date.now();
+
+    this.requestMetrics.totalRequests++;
+    this.requestMetrics.lastRequestTime = new Date(now);
+
+    if (success) {
+      this.requestMetrics.successfulRequests++;
+    } else {
+      this.requestMetrics.failedRequests++;
+    }
+
+    // Update response time metrics using circular buffer
+    this.responseTimes.add(duration);
+
+    const allTimes = this.responseTimes.getAll();
+    this.requestMetrics.averageResponseTime =
+      allTimes.reduce((sum, time) => sum + time, 0) / allTimes.length;
+
+    // Update requests per minute
+    this.requestTimestamps.push(now);
+    this.cleanupOldTimestamps(this.requestTimestamps, 60 * 1000);
+    this.requestMetrics.requestsPerMinute =
+      this.requestTimestamps.length;
+  }
+
+  recordError(_error: Error): void {
+    // No-op: the caller (lib.ts) already calls recordRequest(duration, false)
+    // before calling recordError, so we don't double-count.
+  }
+
+  recordThoughtProcessed(thought: ThoughtData): void {
+    const now = Date.now();
+
+    this.thoughtMetrics.totalThoughts++;
+    this.thoughtTimestamps.push(now);
+
+    // Update average thought length
+    const prevTotal =
+      this.thoughtMetrics.averageThoughtLength *
+      (this.thoughtMetrics.totalThoughts - 1);
+    const totalLength = prevTotal + thought.thought.length;
+    this.thoughtMetrics.averageThoughtLength =
+      Math.round(totalLength / this.thoughtMetrics.totalThoughts);
+
+    // Track sessions (with timestamp for cleanup)
+    if (thought.sessionId) {
+      this.recentSessionIds.set(thought.sessionId, now);
+    }
+
+    // Track revisions and branches
+    if (thought.isRevision) {
+      this.thoughtMetrics.revisionCount++;
+    }
+
+    if (thought.branchId) {
+      if (this.uniqueBranchIds.size >= MAX_UNIQUE_BRANCH_IDS) {
+        this.uniqueBranchIds.clear();
+      }
+      this.uniqueBranchIds.add(thought.branchId);
+      this.thoughtMetrics.branchCount = this.uniqueBranchIds.size;
+    }
+
+    // Update thoughts per minute
+    this.cleanupOldTimestamps(this.thoughtTimestamps, 60 * 1000);
+    this.thoughtMetrics.thoughtsPerMinute =
+      this.thoughtTimestamps.length;
+
+    // Evict sessions older than 1 hour and update count
+    const sessionCutoff = now - SESSION_EXPIRY_MS;
+    for (const [id, ts] of this.recentSessionIds) {
+      if (ts < sessionCutoff) this.recentSessionIds.delete(id);
+    }
+    this.thoughtMetrics.activeSessions =
+      this.recentSessionIds.size;
+  }
+
+  private cleanupOldTimestamps(
+    timestamps: number[],
+    maxAge: number,
+  ): void {
+    const cutoff = Date.now() - maxAge;
+    for (let i = timestamps.length - 1; i >= 0; i--) {
+      if (timestamps[i] < cutoff) {
+        timestamps.splice(0, i + 1);
+        break;
+      }
+    }
+  }
+
+  getMetrics(): {
+    requests: RequestMetrics;
+    thoughts: ThoughtMetrics;
+    system: SystemMetrics;
+    } {
+    return {
+      requests: { ...this.requestMetrics },
+      thoughts: { ...this.thoughtMetrics },
+      system: this.getSystemMetrics(),
+    };
+  }
+
+  private getSystemMetrics(): SystemMetrics {
+    return {
+      memoryUsage: process.memoryUsage(),
+      cpuUsage: process.cpuUsage(),
+      uptime: process.uptime(),
+      timestamp: new Date(),
+    };
+  }
+
+  destroy(): void {
+    this.responseTimes.clear();
+    this.requestTimestamps.length = 0;
+    this.thoughtTimestamps.length = 0;
+    this.recentSessionIds.clear();
+    this.uniqueBranchIds.clear();
+    this.requestMetrics.totalRequests = 0;
+    this.requestMetrics.successfulRequests = 0;
+    this.requestMetrics.failedRequests = 0;
+    this.requestMetrics.averageResponseTime = 0;
+    this.requestMetrics.lastRequestTime = null;
+    this.requestMetrics.requestsPerMinute = 0;
+    this.thoughtMetrics.totalThoughts = 0;
+    this.thoughtMetrics.averageThoughtLength = 0;
+    this.thoughtMetrics.thoughtsPerMinute = 0;
+    this.thoughtMetrics.revisionCount = 0;
+    this.thoughtMetrics.branchCount = 0;
+    this.thoughtMetrics.activeSessions = 0;
+  }
+
+}

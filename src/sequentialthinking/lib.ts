@@ -2,13 +2,9 @@ import type { ThoughtData } from './circular-buffer.js';
 import { SequentialThinkingApp } from './container.js';
 import { CompositeErrorHandler } from './error-handlers.js';
 import { ValidationError, SecurityError, BusinessLogicError } from './errors.js';
-import type { Logger, ThoughtStorage, SecurityService, ThoughtFormatter, MetricsCollector, HealthChecker } from './interfaces.js';
+import type { Logger, ThoughtStorage, SecurityService, ThoughtFormatter, MetricsCollector, HealthChecker, HealthStatus, RequestMetrics, ThoughtMetrics, SystemMetrics, AppConfig } from './interfaces.js';
 
-export interface ProcessThoughtRequest extends ThoughtData {
-  sessionId?: string;
-  origin?: string;
-  ipAddress?: string;
-}
+export type ProcessThoughtRequest = ThoughtData;
 
 export interface ProcessThoughtResponse {
   content: Array<{ type: 'text'; text: string }>;
@@ -19,33 +15,35 @@ export interface ProcessThoughtResponse {
 export class SequentialThinkingServer {
   private readonly app: SequentialThinkingApp;
   private readonly errorHandler: CompositeErrorHandler;
-  
+
   constructor() {
     this.app = new SequentialThinkingApp();
     this.errorHandler = new CompositeErrorHandler();
   }
 
-  private async validateInput(
+  private validateInput(
     input: ProcessThoughtRequest,
-  ): Promise<void> {
+  ): void {
     this.validateStructure(input);
     this.validateBusinessLogic(input);
   }
 
+  private static isPositiveInteger(value: unknown): value is number {
+    return typeof value === 'number' && value >= 1 && Number.isInteger(value);
+  }
+
   private validateStructure(input: ProcessThoughtRequest): void {
-    if (!input.thought || typeof input.thought !== 'string') {
+    if (!input.thought || typeof input.thought !== 'string' || input.thought.trim().length === 0) {
       throw new ValidationError(
-        'Thought is required and must be a string',
+        'Thought is required and must be a non-empty string',
       );
     }
-    if (typeof input.thoughtNumber !== 'number'
-      || input.thoughtNumber < 1) {
+    if (!SequentialThinkingServer.isPositiveInteger(input.thoughtNumber)) {
       throw new ValidationError(
         'thoughtNumber must be a positive integer',
       );
     }
-    if (typeof input.totalThoughts !== 'number'
-      || input.totalThoughts < 1) {
+    if (!SequentialThinkingServer.isPositiveInteger(input.totalThoughts)) {
       throw new ValidationError(
         'totalThoughts must be a positive integer',
       );
@@ -95,6 +93,7 @@ export class SequentialThinkingServer {
       security: SecurityService;
       formatter: ThoughtFormatter;
       metrics: MetricsCollector;
+      config: AppConfig;
       } {
     const container = this.app.getContainer();
     return {
@@ -103,6 +102,7 @@ export class SequentialThinkingServer {
       security: container.get<SecurityService>('security'),
       formatter: container.get<ThoughtFormatter>('formatter'),
       metrics: container.get<MetricsCollector>('metrics'),
+      config: container.get<AppConfig>('config'),
     };
   }
 
@@ -120,7 +120,7 @@ export class SequentialThinkingServer {
   private async processWithServices(
     input: ProcessThoughtRequest,
   ): Promise<ProcessThoughtResponse> {
-    const { logger, storage, security, formatter, metrics } =
+    const { logger, storage, security, formatter, metrics, config } =
       this.getServices();
     const startTime = Date.now();
 
@@ -128,9 +128,7 @@ export class SequentialThinkingServer {
       const sessionId = this.resolveSession(
         input.sessionId, security,
       );
-      security.validateThought(
-        input.thought, sessionId, input.origin, input.ipAddress,
-      );
+      security.validateThought(input.thought, sessionId);
       const sanitized = security.sanitizeContent(input.thought);
       const thoughtData = this.buildThoughtData(
         input, sanitized, sessionId,
@@ -154,9 +152,13 @@ export class SequentialThinkingServer {
         }],
       };
 
-      if (process.env.DISABLE_THOUGHT_LOGGING !== 'true') {
+      if (config.logging.enableThoughtLogging) {
         logger.logThought(sessionId, thoughtData);
-        console.error(formatter.format(thoughtData));
+        try {
+          console.error(formatter.format(thoughtData));
+        } catch {
+          console.error(`[Thought] ${thoughtData.thoughtNumber}/${thoughtData.totalThoughts}`);
+        }
       }
 
       const duration = Date.now() - startTime;
@@ -174,11 +176,11 @@ export class SequentialThinkingServer {
   public async processThought(input: ProcessThoughtRequest): Promise<ProcessThoughtResponse> {
     try {
       // Validate input first
-      await this.validateInput(input);
-      
+      this.validateInput(input);
+
       // Process with services
       return await this.processWithServices(input);
-      
+
     } catch (error) {
       // Handle errors using composite error handler
       return this.errorHandler.handle(error as Error);
@@ -186,7 +188,7 @@ export class SequentialThinkingServer {
   }
 
   // Health check method
-  public async getHealthStatus(): Promise<Record<string, unknown>> {
+  public async getHealthStatus(): Promise<HealthStatus> {
     try {
       const container = this.app.getContainer();
       const healthChecker = container.get<HealthChecker>('healthChecker');
@@ -195,36 +197,38 @@ export class SequentialThinkingServer {
       return {
         status: 'unhealthy',
         summary: 'Health check failed',
-        error: error instanceof Error ? error.message : String(error),
+        checks: {
+          memory: { status: 'unhealthy', message: 'Health check failed', responseTime: 0, timestamp: new Date() },
+          responseTime: { status: 'unhealthy', message: 'Health check failed', responseTime: 0, timestamp: new Date() },
+          errorRate: { status: 'unhealthy', message: 'Health check failed', responseTime: 0, timestamp: new Date() },
+          storage: { status: 'unhealthy', message: 'Health check failed', responseTime: 0, timestamp: new Date() },
+          security: { status: 'unhealthy', message: 'Health check failed', responseTime: 0, timestamp: new Date() },
+        },
+        uptime: process.uptime(),
         timestamp: new Date(),
       };
     }
   }
 
   // Metrics method
-  public getMetrics(): Record<string, unknown> {
-    try {
-      const container = this.app.getContainer();
-      const metrics = container.get<MetricsCollector>('metrics');
-      return metrics.getMetrics();
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : String(error),
-        timestamp: new Date(),
-      };
-    }
+  public getMetrics(): {
+      requests: RequestMetrics;
+      thoughts: ThoughtMetrics;
+      system: SystemMetrics;
+      } {
+    const container = this.app.getContainer();
+    const metrics = container.get<MetricsCollector>('metrics');
+    return metrics.getMetrics();
   }
 
-  // Cleanup method
+  // Cleanup method (idempotent — safe to call multiple times)
+  private destroyed = false;
+
   public destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+
     try {
-      const container = this.app.getContainer();
-      const storage = container.get<ThoughtStorage>('storage');
-      
-      if (storage && typeof storage.destroy === 'function') {
-        storage.destroy();
-      }
-      
       this.app.destroy();
     } catch (error) {
       console.error('Error during cleanup:', error);
@@ -238,6 +242,7 @@ export class SequentialThinkingServer {
       const storage = container.get<ThoughtStorage>('storage');
       return storage.getHistory(limit);
     } catch (error) {
+      console.error('Warning: failed to get thought history:', error);
       return [];
     }
   }
@@ -248,6 +253,7 @@ export class SequentialThinkingServer {
       const storage = container.get<ThoughtStorage>('storage');
       return storage.getBranches();
     } catch (error) {
+      console.error('Warning: failed to get branches:', error);
       return [];
     }
   }

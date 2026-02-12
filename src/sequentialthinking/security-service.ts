@@ -5,17 +5,12 @@ import { SecurityError } from './errors.js';
 // eslint-disable-next-line no-script-url
 const JS_PROTOCOL = 'javascript:';
 
+const MAX_RATE_LIMIT_SESSIONS = 10000;
+const RATE_LIMIT_WINDOW_MS = 60000;
+
 export const SecurityServiceConfigSchema = z.object({
-  enableContentSanitization: z.boolean().default(true),
-  blockDangerousPatterns: z.array(z.string()).default([
-    '<script',
-    'forbidden',
-    JS_PROTOCOL,
-  ]),
   maxThoughtLength: z.number().default(5000),
-  maxThoughtsPerMinute: z.number().default(10),
-  maxConcurrentSessions: z.number().default(10),
-  maxSessionsPerIP: z.number().default(3),
+  maxThoughtsPerMinute: z.number().default(60),
   blockedPatterns: z.array(z.string()).default([
     'test-block',
     'forbidden',
@@ -23,36 +18,32 @@ export const SecurityServiceConfigSchema = z.object({
     'eval(',
     'Function(',
   ]),
-  allowedOrigins: z.array(z.string()).default([
-    'http://localhost:3000',
-    'https://example.com',
-  ]),
-  enableRateLimiting: z.boolean().default(true),
-  rateLimiting: z
-    .object({
-      enabled: z.boolean().default(true),
-      maxRequests: z.number().default(1000),
-      windowMs: z.number().default(60000),
-    })
-    .default({}),
 });
 
-export type SecurityServiceConfig = z.infer<typeof SecurityServiceConfigSchema>;
+type SecurityServiceConfig = z.infer<typeof SecurityServiceConfigSchema>;
 
 export class SecureThoughtSecurity implements SecurityService {
   private readonly config: SecurityServiceConfig;
+  private readonly compiledPatterns: RegExp[];
+  private readonly requestLog = new Map<string, number[]>();
 
   constructor(
     config: SecurityServiceConfig = SecurityServiceConfigSchema.parse({}),
   ) {
     this.config = config;
+    this.compiledPatterns = [];
+    for (const pattern of this.config.blockedPatterns) {
+      try {
+        this.compiledPatterns.push(new RegExp(pattern, 'i'));
+      } catch {
+        // Skip malformed regex patterns
+      }
+    }
   }
 
   validateThought(
     thought: string,
     sessionId: string = '',
-    _origin: string = '',
-    _ipAddress: string = '',
   ): void {
     if (thought.length > this.config.maxThoughtLength) {
       throw new SecurityError(
@@ -60,13 +51,48 @@ export class SecureThoughtSecurity implements SecurityService {
       );
     }
 
-    for (const pattern of this.config.blockedPatterns) {
-      if (thought.includes(pattern)) {
+    for (const regex of this.compiledPatterns) {
+      if (regex.test(thought)) {
         throw new SecurityError(
           `Thought contains prohibited content in session ${sessionId}`,
         );
       }
     }
+
+    // Rate limiting
+    if (sessionId) {
+      this.checkRateLimit(sessionId);
+    }
+  }
+
+  private checkRateLimit(sessionId: string): void {
+    const now = Date.now();
+    const cutoff = now - RATE_LIMIT_WINDOW_MS;
+
+    let timestamps = this.requestLog.get(sessionId);
+    if (!timestamps) {
+      timestamps = [];
+      // Cap map size
+      if (this.requestLog.size >= MAX_RATE_LIMIT_SESSIONS) {
+        // Remove oldest session
+        const firstKey = this.requestLog.keys().next().value;
+        if (firstKey !== undefined) {
+          this.requestLog.delete(firstKey);
+        }
+      }
+      this.requestLog.set(sessionId, timestamps);
+    }
+
+    // Prune old timestamps
+    while (timestamps.length > 0 && timestamps[0] < cutoff) {
+      timestamps.shift();
+    }
+
+    if (timestamps.length >= this.config.maxThoughtsPerMinute) {
+      throw new SecurityError('Rate limit exceeded');
+    }
+
+    timestamps.push(now);
   }
 
   sanitizeContent(content: string): string {
@@ -78,12 +104,8 @@ export class SecureThoughtSecurity implements SecurityService {
       .replace(/on\w+=/gi, '');
   }
 
-  cleanupSession(_sessionId: string): void {
-    // No per-session state in this simple implementation
-  }
-
   generateSessionId(): string {
-    return 'session-' + Math.random().toString(36).substring(2, 15);
+    return crypto.randomUUID();
   }
 
   validateSession(sessionId: string): boolean {
@@ -95,7 +117,7 @@ export class SecureThoughtSecurity implements SecurityService {
   ): Record<string, unknown> {
     return {
       status: 'healthy',
-      activeSessions: 0,
+      activeSessions: this.requestLog.size,
       ipConnections: 0,
       blockedPatterns: this.config.blockedPatterns.length,
     };
