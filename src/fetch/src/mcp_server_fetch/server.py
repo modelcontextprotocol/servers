@@ -2,9 +2,11 @@ import ipaddress
 import os
 import socket
 import ssl
+from types import TracebackType
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
+import httpx
 import markdownify
 import readabilipy.simple_json
 from mcp.shared.exceptions import McpError
@@ -237,9 +239,9 @@ def validate_url_for_ssrf(url: str) -> None:
         McpError: If the URL is potentially dangerous
 
     Security Note:
-        This validation happens BEFORE the request is made, but DNS rebinding
-        attacks could still occur. For maximum security, use network-level
-        controls (firewall rules, egress filtering).
+        This validation provides early rejection of obviously dangerous URLs.
+        DNS rebinding protection is handled at the transport layer by
+        SSRFSafeTransport, which validates resolved IPs at connection time.
     """
     try:
         parsed = urlparse(url)
@@ -332,6 +334,94 @@ def validate_url_for_ssrf(url: str) -> None:
                 ))
 
 
+class SSRFSafeTransport(httpx.AsyncBaseTransport):
+    """
+    Custom async transport that prevents DNS rebinding attacks.
+
+    DNS rebinding TOCTOU (Time-of-Check-Time-of-Use) attack:
+    1. validate_url_for_ssrf() resolves DNS → gets public IP → passes check
+    2. Attacker's DNS server changes the record to a private IP (e.g., 169.254.169.254)
+    3. httpx resolves DNS again → gets private IP → connects to internal service
+
+    This transport eliminates the TOCTOU window by:
+    1. Resolving DNS ourselves
+    2. Validating the resolved IP
+    3. Replacing the hostname in the URL with the validated IP
+    4. Preserving the original Host header for correct HTTP routing
+    """
+
+    def __init__(self, proxy: str | None = None, verify: bool = True):
+        kwargs: dict = {"verify": verify}
+        if proxy:
+            kwargs["proxy"] = proxy
+        self._transport = httpx.AsyncHTTPTransport(**kwargs)
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        hostname = request.url.host
+        # Skip IP validation for already-resolved IPs
+        try:
+            ipaddress.ip_address(hostname)
+            # Already an IP - validation was done in validate_url_for_ssrf()
+            return await self._transport.handle_async_request(request)
+        except ValueError:
+            pass  # It's a hostname, resolve it
+
+        # Resolve DNS
+        try:
+            addr_info = socket.getaddrinfo(
+                hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM
+            )
+            if not addr_info:
+                raise McpError(ErrorData(
+                    code=INVALID_PARAMS,
+                    message=f"Failed to resolve hostname '{hostname}': no addresses found",
+                ))
+            resolved_ip = addr_info[0][4][0]
+        except socket.gaierror as e:
+            raise McpError(ErrorData(
+                code=INVALID_PARAMS,
+                message=f"Failed to resolve hostname '{hostname}': {str(e)}",
+            ))
+
+        # Validate resolved IP against SSRF rules
+        if not ALLOW_PRIVATE_IPS and _is_ip_private_or_reserved(resolved_ip):
+            raise McpError(ErrorData(
+                code=INVALID_PARAMS,
+                message=f"DNS rebinding protection: hostname '{hostname}' resolved to "
+                f"private/internal IP '{resolved_ip}' at connection time. "
+                f"Set MCP_FETCH_ALLOW_PRIVATE_IPS=true to allow internal network access.",
+            ))
+
+        # Replace hostname with validated IP to prevent DNS rebinding
+        # The Host header is already set to the original hostname by httpx
+        new_url = request.url.copy_with(host=resolved_ip)
+        # Create new request with the IP-based URL but same headers (including Host)
+        new_request = httpx.Request(
+            method=request.method,
+            url=new_url,
+            headers=request.headers,
+            stream=request.stream,
+            extensions=request.extensions,
+        )
+
+        return await self._transport.handle_async_request(new_request)
+
+    async def aclose(self):
+        await self._transport.aclose()
+
+    async def __aenter__(self):
+        await self._transport.__aenter__()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc_val: BaseException | None = None,
+        exc_tb: TracebackType | None = None,
+    ) -> None:
+        await self._transport.__aexit__(exc_type, exc_val, exc_tb)
+
+
 def extract_content_from_html(html: str) -> str:
     """Extract and convert HTML content to Markdown format.
 
@@ -381,14 +471,13 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
     - SSL certificate verification (configurable via SSL_VERIFY)
     - Comprehensive SSL error handling
     """
-    import httpx
-
     robot_txt_url = get_robots_txt_url(url)
 
     # SSRF Protection: Validate robots.txt URL before fetching
     validate_url_for_ssrf(robot_txt_url)
 
-    async with httpx.AsyncClient(proxies=proxy_url, verify=SSL_VERIFY) as client:
+    transport = SSRFSafeTransport(proxy=proxy_url, verify=SSL_VERIFY)
+    async with httpx.AsyncClient(transport=transport) as client:
         try:
             response = await client.get(
                 robot_txt_url,
@@ -461,12 +550,11 @@ async def fetch_url(
     - User-Agent header for transparency
     - Comprehensive SSL error handling (catches wrapped exceptions)
     """
-    import httpx
-
     # SSRF Protection: Validate URL before fetching
     validate_url_for_ssrf(url)
 
-    async with httpx.AsyncClient(proxies=proxy_url, verify=SSL_VERIFY) as client:
+    transport = SSRFSafeTransport(proxy=proxy_url, verify=SSL_VERIFY)
+    async with httpx.AsyncClient(transport=transport) as client:
         try:
             response = await client.get(
                 url,

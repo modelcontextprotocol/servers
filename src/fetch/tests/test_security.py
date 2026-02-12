@@ -25,6 +25,7 @@ from mcp_server_fetch.server import (
     _parse_obfuscated_ip,
     fetch_url,
     extract_content_from_html,
+    SSRFSafeTransport,
     BLOCKED_HOSTNAMES,
     CLOUD_METADATA_IPS,
 )
@@ -134,8 +135,9 @@ class TestSSLToggle:
         import mcp_server_fetch.server as server_module
         importlib.reload(server_module)
 
-        # Mock httpx.AsyncClient to verify verify=False is passed
-        with patch('httpx.AsyncClient') as mock_client:
+        # Mock httpx.AsyncClient and AsyncHTTPTransport to verify verify=False is passed
+        with patch('httpx.AsyncClient') as mock_client, \
+             patch('httpx.AsyncHTTPTransport') as mock_transport_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.text = "<html><body>Test</body></html>"
@@ -155,9 +157,9 @@ class TestSSLToggle:
                     "TestAgent/1.0"
                 )
 
-            # Verify AsyncClient was called with verify=False
-            mock_client.assert_called_once()
-            call_kwargs = mock_client.call_args[1]
+            # Verify AsyncHTTPTransport was created with verify=False
+            mock_transport_class.assert_called_once()
+            call_kwargs = mock_transport_class.call_args[1]
             assert call_kwargs.get('verify') is False
 
 
@@ -644,6 +646,141 @@ class TestEdgeCases:
 
         with pytest.raises(McpError):
             validate_url_for_ssrf("http://127.0.0.1:65535/")
+
+
+# =============================================================================
+# 8. DNS REBINDING PROTECTION TESTS
+# =============================================================================
+
+class TestDNSRebindingProtection:
+    """Test suite for DNS rebinding TOCTOU protection via SSRFSafeTransport."""
+
+    @pytest.mark.asyncio
+    async def test_transport_blocks_private_ip_at_connection_time(self):
+        """SSRFSafeTransport must block requests when DNS resolves to private IP."""
+        import httpx
+
+        transport = SSRFSafeTransport(verify=False)
+
+        # Simulate DNS resolving to a private IP (127.0.0.1)
+        with patch("socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (2, 1, 6, '', ('127.0.0.1', 0)),
+            ]
+            request = httpx.Request("GET", "http://evil-rebind.example.com/secret")
+
+            with pytest.raises(McpError, match="DNS rebinding protection"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_transport_blocks_metadata_ip_at_connection_time(self):
+        """SSRFSafeTransport must block DNS rebinding to cloud metadata IP."""
+        import httpx
+
+        transport = SSRFSafeTransport(verify=False)
+
+        # Simulate DNS rebinding: attacker DNS returns metadata IP
+        with patch("socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (2, 1, 6, '', ('169.254.169.254', 0)),
+            ]
+            request = httpx.Request("GET", "http://evil-rebind.example.com/metadata")
+
+            with pytest.raises(McpError, match="DNS rebinding protection"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_transport_allows_public_ip(self):
+        """SSRFSafeTransport must allow requests when DNS resolves to public IP."""
+        import httpx
+
+        transport = SSRFSafeTransport(verify=False)
+
+        # Simulate DNS resolving to a public IP
+        with patch("socket.getaddrinfo") as mock_dns, \
+             patch.object(transport, '_transport') as mock_inner:
+            mock_dns.return_value = [
+                (2, 1, 6, '', ('93.184.216.34', 0)),
+            ]
+            mock_response = httpx.Response(200, text="OK")
+            mock_inner.handle_async_request = AsyncMock(return_value=mock_response)
+
+            request = httpx.Request("GET", "http://example.com/page")
+            response = await transport.handle_async_request(request)
+
+            assert response.status_code == 200
+            # Verify the inner transport was called with the IP-based URL
+            called_request = mock_inner.handle_async_request.call_args[0][0]
+            assert called_request.url.host == "93.184.216.34"
+            # Verify Host header preserved
+            assert called_request.headers["host"] == "example.com"
+
+    @pytest.mark.asyncio
+    async def test_transport_skips_validation_for_direct_ip(self):
+        """SSRFSafeTransport should skip DNS resolution for direct IP URLs."""
+        import httpx
+
+        transport = SSRFSafeTransport(verify=False)
+
+        # Direct IP URL - should go straight to inner transport (IP already validated by validate_url_for_ssrf)
+        with patch.object(transport, '_transport') as mock_inner, \
+             patch("socket.getaddrinfo") as mock_dns:
+            mock_response = httpx.Response(200, text="OK")
+            mock_inner.handle_async_request = AsyncMock(return_value=mock_response)
+
+            request = httpx.Request("GET", "http://93.184.216.34/page")
+            await transport.handle_async_request(request)
+
+            # DNS should NOT be called for direct IP
+            mock_dns.assert_not_called()
+            mock_inner.handle_async_request.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_transport_blocks_dns_failure(self):
+        """SSRFSafeTransport must raise error when DNS resolution fails."""
+        import httpx
+        import socket as socket_module
+
+        transport = SSRFSafeTransport(verify=False)
+
+        with patch("socket.getaddrinfo") as mock_dns:
+            mock_dns.side_effect = socket_module.gaierror("Name resolution failed")
+            request = httpx.Request("GET", "http://nonexistent.example.com/")
+
+            with pytest.raises(McpError, match="Failed to resolve"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_dns_rebinding_scenario(self):
+        """
+        Full DNS rebinding attack scenario:
+        1. validate_url_for_ssrf() sees public IP (passes)
+        2. SSRFSafeTransport resolves DNS again and sees private IP (blocks)
+        """
+        import httpx
+
+        call_count = 0
+
+        def rebinding_dns(hostname, *args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First call (validate_url_for_ssrf): return public IP
+                return [(2, 1, 6, '', ('93.184.216.34', 0))]
+            else:
+                # Second call (SSRFSafeTransport): return private IP (rebinding!)
+                return [(2, 1, 6, '', ('169.254.169.254', 0))]
+
+        with patch("socket.getaddrinfo", side_effect=rebinding_dns):
+            # First validation passes (public IP)
+            validate_url_for_ssrf("http://evil-rebind.example.com/")
+
+            # But transport-level check catches the rebinding
+            transport = SSRFSafeTransport(verify=False)
+            request = httpx.Request("GET", "http://evil-rebind.example.com/metadata")
+
+            with pytest.raises(McpError, match="DNS rebinding protection"):
+                await transport.handle_async_request(request)
 
 
 # =============================================================================
