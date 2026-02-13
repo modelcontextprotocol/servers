@@ -335,6 +335,244 @@ export class Metacognition {
     return patterns[problemType] || [];
   }
 
+  getProblemTypeMetadata(problemType: string): {
+    phases: string[];
+    successIndicators: string[];
+    antiPatterns: string[];
+    recommendedMode: 'fast' | 'expert' | 'deep';
+    estimatedEffort: 'low' | 'medium' | 'high';
+  } {
+    const metadata: Record<string, {
+      phases: string[];
+      successIndicators: string[];
+      antiPatterns: string[];
+      recommendedMode: 'fast' | 'expert' | 'deep';
+      estimatedEffort: 'low' | 'medium' | 'high';
+    }> = {
+      analysis: {
+        phases: ['Define scope', 'Gather information', 'Identify components', 'Analyze relationships', 'Synthesize findings'],
+        successIndicators: ['Clear breakdown', 'All components identified', 'Relationships understood', 'Root cause found'],
+        antiPatterns: ['Jumping to conclusions', 'Missing components', 'Ignoring evidence', 'Overcomplicating'],
+        recommendedMode: 'expert',
+        estimatedEffort: 'medium',
+      },
+      design: {
+        phases: ['Requirements', 'Architecture', 'Component design', 'Interface design', 'Review'],
+        successIndicators: ['Scalable architecture', 'Clear interfaces', 'SOLID principles', 'Documented decisions'],
+        antiPatterns: ['Over-engineering', 'Premature optimization', 'Tight coupling', 'Missing error handling'],
+        recommendedMode: 'deep',
+        estimatedEffort: 'high',
+      },
+      debugging: {
+        phases: ['Reproduce', 'Gather info', 'Form hypothesis', 'Test hypothesis', 'Fix', 'Verify'],
+        successIndicators: ['Reproduced consistently', 'Root cause identified', 'Fix works', 'No regression'],
+        antiPatterns: ['Guessing fix', 'Not reproducing', 'Breaking other things', 'Not verifying'],
+        recommendedMode: 'fast',
+        estimatedEffort: 'low',
+      },
+      planning: {
+        phases: ['Define goal', 'Identify tasks', 'Estimate effort', 'Sequence tasks', 'Define timeline'],
+        successIndicators: ['Clear milestones', 'Realistic timeline', 'Risks identified', 'Dependencies mapped'],
+        antiPatterns: ['Unrealistic estimates', 'Missing tasks', 'No buffer', 'Unclear goals'],
+        recommendedMode: 'expert',
+        estimatedEffort: 'medium',
+      },
+      optimization: {
+        phases: ['Measure baseline', 'Identify bottleneck', 'Optimize', 'Measure again', 'Verify'],
+        successIndicators: ['Measured improvement', 'No regression', 'Maintainable', 'Worth the cost'],
+        antiPatterns: ['Premature optimization', 'Not measuring', 'Breaking functionality', 'Over-optimizing'],
+        recommendedMode: 'expert',
+        estimatedEffort: 'medium',
+      },
+      decision: {
+        phases: ['Define criteria', 'List options', 'Evaluate', 'Make choice', 'Plan execution'],
+        successIndicators: ['Clear criteria', 'All options considered', 'Tradeoffs understood', 'Commitment to choice'],
+        antiPatterns: ['Analysis paralysis', 'Ignoring tradeoffs', 'No clear criteria', 'Reversing frequently'],
+        recommendedMode: 'fast',
+        estimatedEffort: 'low',
+      },
+      creative: {
+        phases: ['Explore', 'Generate ideas', 'Evaluate', 'Select', 'Refine'],
+        successIndicators: ['Novel solutions', 'Multiple options', 'Feasible approach', 'Stakeholder buy-in'],
+        antiPatterns: ['Self-censoring', 'First idea is best', 'Ignoring constraints', 'Perfectionism'],
+        recommendedMode: 'deep',
+        estimatedEffort: 'high',
+      },
+      refactoring: {
+        phases: ['Ensure tests', 'Make small change', 'Test', 'Commit', 'Repeat'],
+        successIndicators: ['Tests pass', 'Cleaner code', 'No regression', 'Intent clearer'],
+        antiPatterns: ['Big changes', 'No tests', 'Breaking builds', 'Mixing refactor with new features'],
+        recommendedMode: 'expert',
+        estimatedEffort: 'medium',
+      },
+      testing: {
+        phases: ['Identify behaviors', 'Write test', 'Watch fail', 'Make pass', 'Refactor'],
+        successIndicators: ['Good coverage', 'Meaningful assertions', 'Fast tests', 'Maintainable'],
+        antiPatterns: ['No failing test first', 'Testing implementation', 'Fragile tests', 'Slow tests'],
+        recommendedMode: 'fast',
+        estimatedEffort: 'medium',
+      },
+      security: {
+        phases: ['Identify assets', 'Find threats', 'Assess risk', 'Implement controls', 'Verify'],
+        successIndicators: ['No vulnerabilities', 'Defense in depth', 'Compliance', 'Security tested'],
+        antiPatterns: ['Security after', 'Ignoring threats', 'Single point of failure', 'Hardcoded secrets'],
+        recommendedMode: 'deep',
+        estimatedEffort: 'high',
+      },
+      performance: {
+        phases: ['Profile', 'Identify hotspot', 'Optimize', 'Measure', 'Verify'],
+        successIndicators: ['Measured gains', 'Scalability improved', 'No regression', 'Worth the complexity'],
+        antiPatterns: ['Guessing', 'Not profiling', 'Breaking correctness', 'Premature optimization'],
+        recommendedMode: 'expert',
+        estimatedEffort: 'medium',
+      },
+      integration: {
+        phases: ['Define contract', 'Implement', 'Test', 'Deploy', 'Monitor'],
+        successIndicators: ['Works end-to-end', 'Error handling', 'Documented', 'Monitored'],
+        antiPatterns: ['No contract', 'Tight coupling', 'Ignoring failures', 'No rollback'],
+        recommendedMode: 'expert',
+        estimatedEffort: 'medium',
+      },
+      migration: {
+        phases: ['Audit source', 'Plan migration', 'Implement', 'Validate', 'Switchover'],
+        successIndicators: ['Data intact', 'Zero downtime', 'Rollback plan', 'Validated'],
+        antiPatterns: ['No rollback', 'Data loss', 'Long downtime', 'Not testing'],
+        recommendedMode: 'deep',
+        estimatedEffort: 'high',
+      },
+      documentation: {
+        phases: ['Identify audience', 'Outline', 'Write', 'Review', 'Publish'],
+        successIndicators: ['Clear', 'Accurate', 'Complete', 'Maintained'],
+        antiPatterns: ['Outdated', 'Missing', 'Too long', 'Wrong audience'],
+        recommendedMode: 'fast',
+        estimatedEffort: 'low',
+      },
+      research: {
+        phases: ['Define question', 'Gather sources', 'Analyze', 'Synthesize', 'Present'],
+        successIndicators: ['Clear answer', 'Sources cited', 'Tradeoffs understood', 'Actionable'],
+        antiPatterns: ['No clear question', 'Single source', 'Ignoring evidence', 'Overcomplicating'],
+        recommendedMode: 'deep',
+        estimatedEffort: 'high',
+      },
+      review: {
+        phases: ['Understand context', 'Read code', 'Note issues', 'Categorize', 'Report'],
+        successIndicators: ['Constructive', 'Specific', 'Balanced', 'Actionable'],
+        antiPatterns: ['Personal', 'Vague', 'Nitpicking', 'Ignoring context'],
+        recommendedMode: 'fast',
+        estimatedEffort: 'low',
+      },
+      deployment: {
+        phases: ['Prepare', 'Deploy', 'Verify', 'Monitor', 'Rollback if needed'],
+        successIndicators: ['Works in prod', 'Rollback ready', 'Monitored', 'No incidents'],
+        antiPatterns: ['No testing', 'No rollback', 'Not monitoring', 'Big bang'],
+        recommendedMode: 'expert',
+        estimatedEffort: 'medium',
+      },
+      troubleshooting: {
+        phases: ['Gather symptoms', 'Identify cause', 'Fix', 'Verify', 'Prevent'],
+        successIndicators: ['Root cause fixed', 'No recurrence', 'Documented', 'Automated'],
+        antiPatterns: ['Treating symptoms', 'Not gathering data', 'Not documenting', 'Quick fix only'],
+        recommendedMode: 'fast',
+        estimatedEffort: 'low',
+      },
+      architecture: {
+        phases: ['Requirements', 'High-level design', 'Detailed design', 'Review', 'Validate'],
+        successIndicators: ['Scalable', 'Maintainable', 'Secure', 'Documented'],
+        antiPatterns: ['Over-engineering', 'Single point of failure', 'Tight coupling', 'No consideration for scale'],
+        recommendedMode: 'deep',
+        estimatedEffort: 'high',
+      },
+      api_design: {
+        phases: ['Define use cases', 'Design endpoints', 'Define schema', 'Document', 'Version'],
+        successIndicators: ['Intuitive', 'Consistent', 'Documented', 'Versioned'],
+        antiPatterns: ['Breaking changes', 'Inconsistent', 'Poor naming', 'No documentation'],
+        recommendedMode: 'expert',
+        estimatedEffort: 'medium',
+      },
+      data_modeling: {
+        phases: ['Requirements', 'Conceptual model', 'Logical model', 'Physical model', 'Optimize'],
+        successIndicators: ['Normalized', 'Indexed', 'Documented', 'Performant'],
+        antiPatterns: ['Denormalized too early', 'Missing relationships', 'No indexes', 'Not documented'],
+        recommendedMode: 'expert',
+        estimatedEffort: 'medium',
+      },
+      ux_design: {
+        phases: ['Research', 'Define user flow', 'Wireframe', 'Prototype', 'Test'],
+        successIndicators: ['User-friendly', 'Accessible', 'Consistent', 'Tested with users'],
+        antiPatterns: ['No research', 'Complex', 'Inconsistent', 'Not tested'],
+        recommendedMode: 'deep',
+        estimatedEffort: 'high',
+      },
+      technical_writing: {
+        phases: ['Identify audience', 'Outline', 'Write', 'Review', 'Publish'],
+        successIndicators: ['Clear', 'Concise', 'Complete', 'Up-to-date'],
+        antiPatterns: ['Jargon', 'Outdated', 'Incomplete', 'Wrong level'],
+        recommendedMode: 'fast',
+        estimatedEffort: 'low',
+      },
+      code_generation: {
+        phases: ['Define spec', 'Generate', 'Review', 'Refine', 'Test'],
+        successIndicators: ['Correct', 'Clean', 'Documented', 'Tested'],
+        antiPatterns: ['No review', 'Not testing', 'Wrong assumptions', 'Not understanding generated code'],
+        recommendedMode: 'expert',
+        estimatedEffort: 'medium',
+      },
+      unknown: {
+        phases: ['Clarify', 'Explore', 'Define', 'Approach', 'Solve'],
+        successIndicators: ['Clear goal', 'Known approach', 'Progress made', 'Learning documented'],
+        antiPatterns: ['No clarity', 'Random exploration', 'No progress', 'Not learning'],
+        recommendedMode: 'fast',
+        estimatedEffort: 'low',
+      },
+    };
+
+    return metadata[problemType] || metadata.unknown;
+  }
+
+  assessCompleteness(thoughts: ThoughtData[], problemType: string): {
+    completeness: number;
+    phase: string;
+    suggestions: string[];
+  } {
+    if (thoughts.length < 2) {
+      return { completeness: 0.1, phase: 'starting', suggestions: ['Define your goal clearly'] };
+    }
+
+    const metadata = this.getProblemTypeMetadata(problemType);
+    const lastThought = thoughts[thoughts.length - 1]?.thought.toLowerCase() || '';
+    const allText = thoughts.map(t => t.thought).join(' ').toLowerCase();
+
+    const completionMarkers = [
+      'con', 'therefore', 'thusclusion', 'summary', 'final', 'decision made',
+      'implemented', 'resolved', 'fixed', 'completed', 'done', 'finished',
+      'recommend', 'suggest', 'next step', 'action item',
+    ];
+    const hasConclusion = completionMarkers.some(m => lastThought.includes(m));
+
+    const questionMarkers = allText.match(/\?/g) || [];
+    const openQuestions = questionMarkers.length;
+
+    const phaseIndex = Math.min(
+      Math.floor((thoughts.length / 10) * metadata.phases.length),
+      metadata.phases.length - 1,
+    );
+    const phase = metadata.phases[phaseIndex] || 'starting';
+
+    let completeness = Math.min(0.95, thoughts.length / 10);
+    if (hasConclusion) completeness = Math.min(1.0, completeness + 0.1);
+    completeness -= openQuestions * 0.05;
+
+    const suggestions: string[] = [];
+    if (openQuestions > 2) suggestions.push('Answer remaining questions before concluding');
+    if (!hasConclusion && thoughts.length > 5) suggestions.push('Consider wrapping up with a conclusion');
+    if (thoughts.length < 5) suggestions.push('May need more exploration');
+    if (phase === metadata.phases[metadata.phases.length - 1]) {
+      suggestions.push('You appear to be in the final phase - ready to conclude?');
+    }
+
+    return { completeness: Math.max(0, Math.min(1, completeness)), phase, suggestions };
+  }
+
   detectReasoningStyle(thoughts: ThoughtData[]): { style: string; confidence: number } {
     if (thoughts.length === 0) {
       return { style: 'deductive', confidence: 0 };
