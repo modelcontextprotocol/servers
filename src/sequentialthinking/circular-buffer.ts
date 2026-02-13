@@ -1,7 +1,7 @@
 export class CircularBuffer<T> {
   private buffer: T[];
-  private head: number = 0;
-  private size: number = 0;
+  private head = 0;
+  private size = 0;
   
   constructor(private readonly capacity: number) {
     if (capacity < 1 || !Number.isInteger(capacity)) {

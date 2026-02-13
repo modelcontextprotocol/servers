@@ -402,9 +402,7 @@ export class SequentialThinkingServer {
     try {
       this.validateSessionId(sessionId);
       const validated = this.validateWithZod(backtrackSchema, { sessionId, nodeId }, 'Invalid backtrack input');
-      return await this.withMetrics(() => {
-        return this.services.thoughtTreeManager.backtrack(validated.sessionId, validated.nodeId);
-      });
+      return await this.withMetrics(() => this.services.thoughtTreeManager.backtrack(validated.sessionId, validated.nodeId));
     } catch (error) {
       return this.handleError(error as Error);
     }
@@ -418,13 +416,11 @@ export class SequentialThinkingServer {
     try {
       this.validateSessionId(sessionId);
       const validated = this.validateWithZod(evaluateThoughtSchema, { sessionId, nodeId, value }, 'Invalid evaluate thought input');
-      return await this.withMetrics(() => {
-        return this.services.thoughtTreeManager.evaluate(
+      return await this.withMetrics(() => this.services.thoughtTreeManager.evaluate(
           validated.sessionId,
           validated.nodeId,
           validated.value,
-        );
-      });
+        ));
     } catch (error) {
       return this.handleError(error as Error);
     }
@@ -437,9 +433,7 @@ export class SequentialThinkingServer {
     try {
       this.validateSessionId(sessionId);
       const validated = this.validateWithZod(suggestNextThoughtSchema, { sessionId, strategy }, 'Invalid suggest next thought input');
-      return await this.withMetrics(() => {
-        return this.services.thoughtTreeManager.suggest(validated.sessionId, validated.strategy);
-      });
+      return await this.withMetrics(() => this.services.thoughtTreeManager.suggest(validated.sessionId, validated.strategy));
     } catch (error) {
       return this.handleError(error as Error);
     }
@@ -452,9 +446,7 @@ export class SequentialThinkingServer {
     try {
       this.validateSessionId(sessionId);
       const validated = this.validateWithZod(getThinkingSummarySchema, { sessionId, maxDepth }, 'Invalid get thinking summary input');
-      return await this.withMetrics(() => {
-        return this.services.thoughtTreeManager.getSummary(validated.sessionId, validated.maxDepth);
-      });
+      return await this.withMetrics(() => this.services.thoughtTreeManager.getSummary(validated.sessionId, validated.maxDepth));
     } catch (error) {
       return this.handleError(error as Error);
     }

@@ -31,55 +31,89 @@ export default [
       '@typescript-eslint': tseslint,
     },
     rules: {
-      // Relaxed TypeScript
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // TypeScript - stricter
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['error', {
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
       }],
-
-      // Disable strict rules
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': ['error', {
+        checksVoidReturn: false,
+      }],
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/consistent-type-definitions': 'off',
-      '@typescript-eslint/require-await': 'off',
-      '@typescript-eslint/no-misused-promises': 'off',
-      '@typescript-eslint/no-floating-promises': 'off',
+      '@typescript-eslint/consistent-type-definitions': 'error',
+      '@typescript-eslint/no-inferrable-types': 'error',
+      '@typescript-eslint/prefer-nullish-coalescing': 'off',
+      '@typescript-eslint/prefer-optional-chain': 'off',
 
-      // Security
+      // Security - strict
       'no-eval': 'error',
       'no-implied-eval': 'error',
       'no-new-func': 'error',
       'no-script-url': 'error',
       'no-alert': 'error',
+      'no-proto': 'error',
+      'no-new-wrappers': 'error',
 
-      // Code Quality
+      // Code Quality - strict
       'prefer-const': 'error',
       'no-var': 'error',
       'no-unused-vars': 'off',
       'no-undef': 'off',
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-dupe-else-if': 'error',
+      'no-unreachable': 'error',
+      'no-unreachable-loop': 'error',
+      'no-useless-escape': 'error',
+      'no-empty': 'error',
+      'no-empty-function': 'error',
+      'no-else-return': 'error',
+      'no-unused-expressions': 'error',
+      'default-case': 'error',
+      'default-case-last': 'error',
+      'no-duplicate-imports': 'off',
 
-      // Style
+      // Style - strict
       'semi': ['error', 'always'],
       'quotes': ['error', 'single', { avoidEscape: true }],
       'indent': ['error', 2],
       'object-curly-spacing': ['error', 'always'],
       'comma-dangle': ['error', 'always-multiline'],
       'max-len': ['error', {
-        code: 120,
+        code: 100,
         ignoreUrls: true,
         ignoreStrings: true,
         ignoreTemplateLiterals: true,
       }],
+      'comma-style': 'error',
+      'block-spacing': 'error',
+      'operator-linebreak': ['error', 'before'],
+      'prefer-arrow-callback': 'error',
+      'arrow-body-style': ['error', 'as-needed', { requireReturnForObjectLiteral: false }],
+      'brace-style': ['error', '1tbs'],
+      'one-var': ['error', 'never'],
 
-      // Complexity
-      'complexity': 'off',
-      'max-depth': 'off',
+      // Complexity - moderate
+      'complexity': ['error', 15],
+      'max-depth': ['error', 4],
+      'max-nested-callbacks': ['error', 3],
+      'max-params': ['error', 5],
+      'max-statements': ['error', 25],
 
-      // Best Practices
+      // Best Practices - strict
       'eqeqeq': ['error', 'always', { null: 'ignore' }],
       'no-throw-literal': 'error',
       'no-useless-return': 'error',
+      'no-sequences': 'error',
+      'radix': 'error',
+      'no-return-await': 'error',
+      'no-await-in-loop': 'error',
+      'no-promise-executor-return': 'error',
+      'require-yield': 'error',
 
       // Prettier
       ...prettier.rules,

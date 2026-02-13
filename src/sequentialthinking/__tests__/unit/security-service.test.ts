@@ -20,29 +20,16 @@ describe('SecureThoughtSecurity', () => {
       security = new SecureThoughtSecurity(undefined, sessionTracker);
     });
 
-    it('should strip <script> tags', () => {
-      const result = security.sanitizeContent('hello <script>alert(1)</script> world');
-      expect(result).toBe('hello  world');
-    });
+    const sanitizeCases = [
+      { input: 'hello <script>alert(1)</script> world', expected: 'hello  world' },
+      { input: 'visit javascript:void(0)', expected: 'visit void(0)' },
+      { input: 'call eval(x)', expected: 'call x)' },
+      { input: 'new Function(code)', expected: 'new code)' },
+      { input: '<div onclick=alert(1)>', expected: '<div alert(1)>' },
+    ];
 
-    it('should strip javascript: protocol', () => {
-      const result = security.sanitizeContent('visit javascript:void(0)');
-      expect(result).toBe('visit void(0)');
-    });
-
-    it('should strip eval(', () => {
-      const result = security.sanitizeContent('call eval(x)');
-      expect(result).toBe('call x)');
-    });
-
-    it('should strip Function(', () => {
-      const result = security.sanitizeContent('new Function(code)');
-      expect(result).toBe('new code)');
-    });
-
-    it('should strip event handlers', () => {
-      const result = security.sanitizeContent('<div onclick=alert(1)>');
-      expect(result).toBe('<div alert(1)>');
+    it.each(sanitizeCases)('should sanitize: $input', ({ input, expected }) => {
+      expect(security.sanitizeContent(input)).toBe(expected);
     });
   });
 
@@ -52,20 +39,15 @@ describe('SecureThoughtSecurity', () => {
       security = new SecureThoughtSecurity(undefined, sessionTracker);
     });
 
-    it('should accept 100-char session ID', () => {
-      expect(security.validateSession('a'.repeat(100))).toBe(true);
-    });
+    const sessionCases = [
+      { id: 'a'.repeat(100), valid: true },
+      { id: 'a'.repeat(101), valid: false },
+      { id: '', valid: false },
+      { id: 'session-123', valid: true },
+    ];
 
-    it('should reject 101-char session ID', () => {
-      expect(security.validateSession('a'.repeat(101))).toBe(false);
-    });
-
-    it('should reject empty session ID', () => {
-      expect(security.validateSession('')).toBe(false);
-    });
-
-    it('should accept normal session ID', () => {
-      expect(security.validateSession('session-123')).toBe(true);
+    it.each(sessionCases)('should $valid ? "accept" : "reject" session ID of length $id.length', ({ id, valid }) => {
+      expect(security.validateSession(id)).toBe(valid);
     });
   });
 

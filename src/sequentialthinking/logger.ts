@@ -34,7 +34,7 @@ export class StructuredLogger implements Logger {
 
   private sanitize(
     obj: unknown,
-    depth: number = 0,
+    depth = 0,
     visited: WeakSet<object> = new WeakSet(),
   ): unknown {
     if (!obj || typeof obj !== 'object') {

@@ -44,7 +44,7 @@ export class SecureThoughtSecurity implements SecurityService {
 
   validateThought(
     thought: string,
-    sessionId: string = '',
+    sessionId = '',
   ): void {
     for (const regex of this.config.blockedPatterns) {
       if (regex.test(thought)) {

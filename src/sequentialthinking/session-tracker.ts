@@ -34,7 +34,7 @@ export class SessionTracker {
     this.periodicCleanupCallbacks.push(callback);
   }
 
-  constructor(cleanupInterval: number = 60000) {
+  constructor(cleanupInterval = 60000) {
     if (cleanupInterval > 0) {
       this.startCleanupTimer(cleanupInterval);
     }

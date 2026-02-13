@@ -68,53 +68,21 @@ describe('StructuredLogger', () => {
   });
 
   describe('word-boundary-aware sensitive field matching', () => {
-    it('should redact authorization', () => {
-      const logger = new StructuredLogger({ level: 'debug', enableColors: false, enableThoughtLogging: true });
-      logger.info('test', { authorization: 'Bearer xyz' });
-      const entry = JSON.parse(errorSpy.mock.calls[0][0] as string);
-      expect(entry.meta.authorization).toBe('[REDACTED]');
-    });
+    const sensitiveCases = [
+      { field: 'authorization', value: 'Bearer xyz', shouldRedact: true },
+      { field: 'password', value: 'secret', shouldRedact: true },
+      { field: 'mySecretKey', value: 'value', shouldRedact: true },
+      { field: 'api_key', value: 'abc123', shouldRedact: true },
+      { field: 'authoritativeSource', value: 'docs.example.com', shouldRedact: false },
+      { field: 'keyboard', value: 'mechanical', shouldRedact: false },
+      { field: 'monkey', value: 'see monkey do', shouldRedact: false },
+    ];
 
-    it('should redact password', () => {
+    it.each(sensitiveCases)('should redact $field: $shouldRedact ? "REDACTED" : "original"', ({ field, value, shouldRedact }) => {
       const logger = new StructuredLogger({ level: 'debug', enableColors: false, enableThoughtLogging: true });
-      logger.info('test', { password: 'secret' });
+      logger.info('test', { [field]: value });
       const entry = JSON.parse(errorSpy.mock.calls[0][0] as string);
-      expect(entry.meta.password).toBe('[REDACTED]');
-    });
-
-    it('should NOT redact authoritativeSource', () => {
-      const logger = new StructuredLogger({ level: 'debug', enableColors: false, enableThoughtLogging: true });
-      logger.info('test', { authoritativeSource: 'docs.example.com' });
-      const entry = JSON.parse(errorSpy.mock.calls[0][0] as string);
-      expect(entry.meta.authoritativeSource).toBe('docs.example.com');
-    });
-
-    it('should redact mySecretKey (camelCase boundary)', () => {
-      const logger = new StructuredLogger({ level: 'debug', enableColors: false, enableThoughtLogging: true });
-      logger.info('test', { mySecretKey: 'value' });
-      const entry = JSON.parse(errorSpy.mock.calls[0][0] as string);
-      expect(entry.meta.mySecretKey).toBe('[REDACTED]');
-    });
-
-    it('should redact api_key (underscore boundary)', () => {
-      const logger = new StructuredLogger({ level: 'debug', enableColors: false, enableThoughtLogging: true });
-      logger.info('test', { api_key: 'abc123' });
-      const entry = JSON.parse(errorSpy.mock.calls[0][0] as string);
-      expect(entry.meta.api_key).toBe('[REDACTED]');
-    });
-
-    it('should NOT redact keyboard', () => {
-      const logger = new StructuredLogger({ level: 'debug', enableColors: false, enableThoughtLogging: true });
-      logger.info('test', { keyboard: 'mechanical' });
-      const entry = JSON.parse(errorSpy.mock.calls[0][0] as string);
-      expect(entry.meta.keyboard).toBe('mechanical');
-    });
-
-    it('should NOT redact monkey', () => {
-      const logger = new StructuredLogger({ level: 'debug', enableColors: false, enableThoughtLogging: true });
-      logger.info('test', { monkey: 'see monkey do' });
-      const entry = JSON.parse(errorSpy.mock.calls[0][0] as string);
-      expect(entry.meta.monkey).toBe('see monkey do');
+      expect(entry.meta[field]).toBe(shouldRedact ? '[REDACTED]' : value);
     });
   });
 

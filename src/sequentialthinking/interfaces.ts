@@ -34,8 +34,7 @@ const validateThoughtContent = (val: string): boolean => {
   const normalized = sanitizeAndNormalizeThought(val);
   if (normalized.length === 0) return false;
   const consecutiveWhitespace = normalized.match(PRE_COMPILED_VALIDATE_PATTERN);
-  if (consecutiveWhitespace &&
-      consecutiveWhitespace.some((m) => m.length > MAX_CONSECUTIVE_WHITESPACE)) {
+  if (consecutiveWhitespace?.some((m) => m.length > MAX_CONSECUTIVE_WHITESPACE)) {
     return false;
   }
   return true;

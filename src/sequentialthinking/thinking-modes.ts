@@ -621,7 +621,7 @@ export class ThinkingModeEngine {
     let count = 0;
     for (let i = 1; i < bestPath.length; i++) {
       const parentNode = tree.getNode(bestPath[i - 1].nodeId);
-      if (parentNode && parentNode.children.length === 1) {
+      if (parentNode?.children.length === 1) {
         count++;
       }
     }

@@ -2,7 +2,7 @@ import type { ThoughtFormatter, ThoughtData } from './interfaces.js';
 import chalk from 'chalk';
 
 export class ConsoleThoughtFormatter implements ThoughtFormatter {
-  constructor(private readonly useColors: boolean = true) {}
+  constructor(private readonly useColors = true) {}
 
   private getHeaderParts(thought: ThoughtData): { prefix: string; context: string } {
     const { isRevision, revisesThought, branchFromThought, branchId } = thought;
@@ -40,18 +40,17 @@ export class ConsoleThoughtFormatter implements ThoughtFormatter {
       const coloredBorder = chalk.gray(border);
 
       return `
-${chalk.gray('┌')}${coloredBorder}${chalk.gray('┐')}
-${chalk.gray('│')} ${chalk.cyan(header)} ${chalk.gray('│')}
-${chalk.gray('├')}${coloredBorder}${chalk.gray('┤')}
-${chalk.gray('│')} ${body.padEnd(maxLength)} ${chalk.gray('│')}
-${chalk.gray('└')}${coloredBorder}${chalk.gray('┘')}`.trim();
-    } else {
-      return `
+ ${chalk.gray('┌')}${coloredBorder}${chalk.gray('┐')}
+ ${chalk.gray('│')} ${chalk.cyan(header)} ${chalk.gray('│')}
+ ${chalk.gray('├')}${coloredBorder}${chalk.gray('┤')}
+ ${chalk.gray('│')} ${body.padEnd(maxLength)} ${chalk.gray('│')}
+ ${chalk.gray('└')}${coloredBorder}${chalk.gray('┘')}`.trim();
+    }
+    return `
 ┌${border}┐
 │ ${headerPlain} │
 ├${border}┤
 │ ${body.padEnd(maxLength)} │
 └${border}┘`.trim();
-    }
   }
 }
