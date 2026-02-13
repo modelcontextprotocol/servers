@@ -65,7 +65,9 @@ export const rawSessionIdSchema = z
     message: 'Session ID must contain only letters, numbers, underscores, and hyphens',
   });
 
-export const thinkingModeSchema = z.enum(VALID_THINKING_MODES);
+export const thinkingModeSchema = z.enum(VALID_THINKING_MODES, {
+  description: 'Thinking mode: fast=quick decisions (3-5 steps), expert=complex analysis (5-10 steps), deep=thorough exploration (10-20 steps)',
+});
 
 export const THOUGHT_CATEGORIES = [
   'analysis',
@@ -77,9 +79,71 @@ export const THOUGHT_CATEGORIES = [
   'evaluation',
 ] as const;
 
+export const THOUGHT_CATEGORY_DESCRIPTIONS: Record<string, string> = {
+  analysis: 'Breaking down a problem into components',
+  hypothesis: 'Forming a testable assumption or theory',
+  conclusion: 'Drawing a final inference from evidence',
+  question: 'Asking for clarification or more information',
+  reflection: 'Thinking about the thinking process itself',
+  planning: 'Outlining steps to achieve a goal',
+  evaluation: 'Assessing the merit or quality of something',
+};
+
 export type ThoughtCategory = (typeof THOUGHT_CATEGORIES)[number];
 
-export const thoughtCategorySchema = z.enum(THOUGHT_CATEGORIES);
+export const thoughtCategorySchema = z.enum(THOUGHT_CATEGORIES, {
+  description: 'Category of thought: analysis|hypothesis|conclusion|question|reflection|planning|evaluation',
+});
+
+export const STRATEGY_TYPES = ['explore', 'exploit', 'balanced'] as const;
+
+export const STRATEGY_DESCRIPTIONS: Record<string, string> = {
+  explore: 'Favor unvisited nodes - good for discovery',
+  exploit: 'Favor high-value nodes - good for optimization',
+  balanced: 'Balance exploration and exploitation - default',
+};
+
+export type StrategyType = (typeof STRATEGY_TYPES)[number];
+
+export const strategySchema = z.enum(STRATEGY_TYPES, {
+  description: 'MCTS selection strategy: explore=find new paths, exploit=follow best path, balanced=mix both',
+});
+
+export const PROBLEM_TYPES = ['analysis', 'design', 'debugging', 'planning', 'optimization', 'decision', 'creative', 'unknown'] as const;
+
+export const PROBLEM_TYPE_DESCRIPTIONS: Record<string, string> = {
+  analysis: 'Breaking down and understanding a problem',
+  design: 'Creating a solution or system architecture',
+  debugging: 'Finding and fixing errors',
+  planning: 'Mapping out steps to achieve a goal',
+  optimization: 'Improving efficiency or performance',
+  decision: 'Choosing between alternatives',
+  creative: 'Generating novel ideas or solutions',
+  unknown: 'Unable to classify the problem type',
+};
+
+export type ProblemType = (typeof PROBLEM_TYPES)[number];
+
+export const CONFIDENCE_TRENDS = ['improving', 'declining', 'stable', 'insufficient'] as const;
+
+export const CONFIDENCE_TREND_DESCRIPTIONS: Record<string, string> = {
+  improving: 'Confidence is increasing over time',
+  declining: 'Confidence is decreasing over time',
+  stable: 'Confidence is consistent',
+  insufficient: 'Not enough data to determine trend',
+};
+
+export type ConfidenceTrend = (typeof CONFIDENCE_TRENDS)[number];
+
+export const COMPLEXITY_LEVELS = ['simple', 'moderate', 'complex'] as const;
+
+export const COMPLEXITY_DESCRIPTIONS: Record<string, string> = {
+  simple: 'Straightforward, few factors to consider',
+  moderate: 'Multiple factors with some tradeoffs',
+  complex: 'Many factors, significant tradeoffs, requires deep analysis',
+};
+
+export type ComplexityLevel = (typeof COMPLEXITY_LEVELS)[number];
 
 export const thoughtTagSchema = z
   .string()
