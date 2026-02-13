@@ -471,8 +471,8 @@ describe('Docker E2E Tests', () => {
         },
       }) as any;
 
-      // Should succeed (sanitized, not blocked)
-      expect(response.result.isError).toBeUndefined();
+      // javascript: protocol is blocked as security threat
+      expect(response.result.isError).toBe(true);
     }, TIMEOUT);
   });
 

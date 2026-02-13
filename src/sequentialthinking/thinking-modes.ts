@@ -235,11 +235,11 @@ export class ThinkingModeEngine {
     const critique = this.generateCritique(config, tree, bestPath, stats);
 
     const thoughtHistory = tree.getAllNodes().map(n => ({
-      thought: n.thoughtData?.thought || '',
-      thoughtNumber: n.thoughtData?.thoughtNumber || 0,
-      totalThoughts: n.thoughtData?.totalThoughts || 0,
-      nextThoughtNeeded: n.thoughtData?.nextThoughtNeeded || false,
-    })) as ThoughtData[];
+      thought: n.thought,
+      thoughtNumber: n.thoughtNumber,
+      totalThoughts: n.thoughtNumber,
+      nextThoughtNeeded: true,
+    }));
 
     const circularity = metacognition.detectCircularity(thoughtHistory);
     const confidence = metacognition.assessConfidence(
