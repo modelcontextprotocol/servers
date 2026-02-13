@@ -1,3 +1,8 @@
+/**
+ * Metacognition module for self-aware problem-solving.
+ * Provides circularity detection, confidence scoring, perspective switching,
+ * problem type classification, reasoning gap analysis, and adaptive learning.
+ */
 import type { ThoughtData } from './interfaces.js';
 
 const STOP_WORDS = new Set([
