@@ -201,6 +201,64 @@ export const COMPLEXITY_DESCRIPTIONS: Record<string, string> = {
 
 export type ComplexityLevel = (typeof COMPLEXITY_LEVELS)[number];
 
+export const INSIGHT_TYPES = [
+  'breakthrough',
+  'connection',
+  'pivot',
+  'validation',
+  'dead_end',
+  'simplification',
+  'pattern_recognition',
+  'question_reframing',
+] as const;
+
+export const INSIGHT_TYPE_DESCRIPTIONS: Record<string, string> = {
+  breakthrough: 'A major realization that changes the approach entirely',
+  connection: 'Linking two previously unrelated ideas or concepts',
+  pivot: 'Shifting to a completely different solution direction',
+  validation: 'Confirming an approach or assumption is correct',
+  dead_end: 'Recognizing the current path will not succeed',
+  simplification: 'Finding a simpler solution than originally thought',
+  pattern_recognition: 'Identifying a familiar pattern in the problem',
+  question_reframing: 'Asking a better question that leads to progress',
+};
+
+export type InsightType = (typeof INSIGHT_TYPES)[number];
+
+export const DOMAIN_TYPES = [
+  'frontend',
+  'backend',
+  'devops',
+  'data',
+  'machine_learning',
+  'security',
+  'mobile',
+  'desktop',
+  'embedded',
+  'networking',
+  'gaming',
+  'blockchain',
+  'general',
+] as const;
+
+export const DOMAIN_DESCRIPTIONS: Record<string, string> = {
+  frontend: 'User interfaces, web apps, UI/UX',
+  backend: 'Server-side logic, APIs, databases',
+  devops: 'CI/CD, infrastructure, containers, cloud',
+  data: 'Data engineering, pipelines, analytics',
+  machine_learning: 'ML models, training, inference',
+  security: 'Security auditing, vulnerabilities, auth',
+  mobile: 'iOS, Android, cross-platform apps',
+  desktop: 'Native desktop applications',
+  embedded: 'IoT, firmware, hardware',
+  networking: 'Protocols, distributed systems',
+  gaming: 'Game development, graphics',
+  blockchain: 'Smart contracts, dApps',
+  general: 'General programming problem',
+};
+
+export type DomainType = (typeof DOMAIN_TYPES)[number];
+
 export const thoughtTagSchema = z
   .string()
   .min(1, 'Tag must be non-empty')

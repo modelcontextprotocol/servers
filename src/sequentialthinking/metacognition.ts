@@ -331,6 +331,125 @@ export class Metacognition {
         '4. Refactor if needed',
         '5. Add edge cases',
       ],
+      security: [
+        '1. Identify assets',
+        '2. Find threats',
+        '3. Assess risks',
+        '4. Implement controls',
+        '5. Test and verify',
+      ],
+      performance: [
+        '1. Profile baseline',
+        '2. Find hotspots',
+        '3. Optimize',
+        '4. Measure improvement',
+        '5. Verify no regression',
+      ],
+      integration: [
+        '1. Define contract',
+        '2. Implement interface',
+        '3. Test integration',
+        '4. Handle errors',
+        '5. Deploy and monitor',
+      ],
+      migration: [
+        '1. Audit source',
+        '2. Plan migration',
+        '3. Implement',
+        '4. Validate data',
+        '5. Switchover',
+      ],
+      documentation: [
+        '1. Identify audience',
+        '2. Outline structure',
+        '3. Write content',
+        '4. Review and edit',
+        '5. Publish and maintain',
+      ],
+      research: [
+        '1. Define question',
+        '2. Gather sources',
+        '3. Analyze findings',
+        '4. Synthesize',
+        '5. Present conclusions',
+      ],
+      review: [
+        '1. Understand context',
+        '2. Read thoroughly',
+        '3. Note issues',
+        '4. Categorize priority',
+        '5. Provide feedback',
+      ],
+      deployment: [
+        '1. Prepare release',
+        '2. Deploy to staging',
+        '3. Run smoke tests',
+        '4. Deploy to prod',
+        '5. Monitor health',
+      ],
+      troubleshooting: [
+        '1. Gather symptoms',
+        '2. Identify scope',
+        '3. Form hypothesis',
+        '4. Test fix',
+        '5. Document solution',
+      ],
+      architecture: [
+        '1. Gather requirements',
+        '2. Design high-level',
+        '3. Detail components',
+        '4. Review design',
+        '5. Document decisions',
+      ],
+      api_design: [
+        '1. Define use cases',
+        '2. Design endpoints',
+        '3. Define schema',
+        '4. Document',
+        '5. Version API',
+      ],
+      data_modeling: [
+        '1. Define entities',
+        '2. Define relationships',
+        '3. Normalize schema',
+        '4. Add indexes',
+        '5. Document model',
+      ],
+      ux_design: [
+        '1. Research users',
+        '2. Define flows',
+        '3. Create wireframes',
+        '4. Build prototype',
+        '5. Test with users',
+      ],
+      technical_writing: [
+        '1. Know audience',
+        '2. Outline',
+        '3. Write draft',
+        '4. Review',
+        '5. Publish',
+      ],
+      code_generation: [
+        '1. Define spec',
+        '2. Generate code',
+        '3. Review output',
+        '4. Refine',
+        '5. Test',
+      ],
+      creative: [
+        '1. Explore broadly',
+        '2. Generate ideas',
+        '3. Combine concepts',
+        '4. Evaluate',
+        '5. Refine solution',
+      ],
+      unknown: [
+        '1. Clarify goal',
+        '2. Explore context',
+        '3. Identify type',
+        '4. Apply approach',
+        '5. Validate',
+      ],
     };
     return patterns[problemType] || [];
   }
@@ -828,6 +947,190 @@ export class Metacognition {
       .map(([solution, { total, count }]) => ({ solution, avgScore: total / count }))
       .sort((a, b) => b.avgScore - a.avgScore)
       .slice(0, 3);
+  }
+
+  getProblemTypeRecommendations(currentType: string): {
+    follows: string[];
+    precedes: string[];
+    related: string[];
+  } {
+    const workflow: Record<string, { follows: string[]; precedes: string[]; related: string[] }> = {
+      debugging: {
+        follows: ['refactoring', 'testing'],
+        precedes: [],
+        related: ['troubleshooting', 'performance', 'security'],
+      },
+      refactoring: {
+        follows: ['testing', 'documentation'],
+        precedes: ['debugging'],
+        related: ['optimization', 'code_generation'],
+      },
+      testing: {
+        follows: ['deployment', 'documentation'],
+        precedes: ['refactoring', 'debugging'],
+        related: ['integration', 'code_generation'],
+      },
+      security: {
+        follows: ['deployment', 'documentation'],
+        precedes: [],
+        related: ['review', 'architecture'],
+      },
+      performance: {
+        follows: ['deployment', 'testing'],
+        precedes: [],
+        related: ['optimization', 'architecture'],
+      },
+      architecture: {
+        follows: ['api_design', 'data_modeling', 'integration'],
+        precedes: [],
+        related: ['design', 'devops'],
+      },
+      api_design: {
+        follows: ['code_generation', 'integration', 'documentation'],
+        precedes: ['architecture'],
+        related: ['backend', 'mobile'],
+      },
+      data_modeling: {
+        follows: ['migration', 'integration'],
+        precedes: ['architecture'],
+        related: ['backend', 'data'],
+      },
+      planning: {
+        follows: ['design', 'architecture', 'deployment'],
+        precedes: [],
+        related: ['decision', 'research'],
+      },
+      research: {
+        follows: ['planning', 'decision', 'design'],
+        precedes: [],
+        related: ['analysis', 'architecture'],
+      },
+      migration: {
+        follows: ['deployment', 'testing'],
+        precedes: ['data_modeling'],
+        related: ['integration', 'devops'],
+      },
+      deployment: {
+        follows: [],
+        precedes: ['testing', 'security', 'migration'],
+        related: ['devops', 'monitoring'],
+      },
+      design: {
+        follows: ['architecture', 'api_design', 'ux_design'],
+        precedes: ['planning', 'research'],
+        related: ['creative', 'code_generation'],
+      },
+      documentation: {
+        follows: [],
+        precedes: ['testing', 'refactoring', 'deployment'],
+        related: ['technical_writing', 'code_generation'],
+      },
+      review: {
+        follows: ['refactoring', 'testing'],
+        precedes: [],
+        related: ['security', 'documentation'],
+      },
+      optimization: {
+        follows: ['testing', 'deployment'],
+        precedes: ['performance'],
+        related: ['refactoring', 'architecture'],
+      },
+      decision: {
+        follows: ['planning', 'design'],
+        precedes: ['research'],
+        related: ['planning', 'architecture'],
+      },
+      creative: {
+        follows: ['design', 'code_generation'],
+        precedes: [],
+        related: ['ux_design', 'architecture'],
+      },
+      integration: {
+        follows: ['deployment', 'testing'],
+        precedes: ['api_design', 'data_modeling'],
+        related: ['devops', 'migration'],
+      },
+      troubleshooting: {
+        follows: ['debugging', 'fixing'],
+        precedes: [],
+        related: ['debugging', 'performance'],
+      },
+      unknown: {
+        follows: ['analysis', 'research'],
+        precedes: [],
+        related: [],
+      },
+    };
+
+    return workflow[currentType] || { follows: [], precedes: [], related: [] };
+  }
+
+  detectInsightType(thoughts: ThoughtData[]): { type: string; confidence: number } {
+    if (thoughts.length < 2) {
+      return { type: 'question_reframing', confidence: 0.1 };
+    }
+
+    const allText = thoughts.map(t => t.thought.toLowerCase()).join(' ');
+
+    const insightIndicators = {
+      breakthrough: ['completely changed', 'realized', 'suddenly understood', 'the key was', 'game changer', 'paradigm shift'],
+      connection: ['linked to', 'connected to', 'similar to', 'like', 'relates to', 'brings together'],
+      pivot: ['instead', 'change direction', 'switch to', 'rather than', 'new approach', 'different strategy'],
+      validation: ['confirmed', 'verified', 'validated', 'proved correct', 'as expected', 'checked'],
+      dead_end: ['wont work', 'doesnt work', 'failed', 'stuck', 'no progress', 'not possible', 'impractical'],
+      simplification: ['simpler', 'easier way', 'overcomplicated', 'actually just', 'in other words'],
+      pattern_recognition: ['same pattern', 'like before', 'reminds me of', 'similar problem', 'seen this before'],
+      question_reframing: ['better question', 'reframe', 'what if', 'instead ask', 'wrong question', 'real issue'],
+    };
+
+    const scores: Record<string, number> = {};
+    for (const [insight, keywords] of Object.entries(insightIndicators)) {
+      scores[insight] = keywords.filter(kw => allText.includes(kw)).length;
+    }
+
+    const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+    const [topInsight, topScore] = entries[0];
+
+    return {
+      type: topScore > 0 ? topInsight : 'question_reframing',
+      confidence: topScore > 0 ? Math.min(0.9, 0.3 + topScore * 0.2) : 0.2,
+    };
+  }
+
+  detectDomain(thoughts: ThoughtData[]): { domain: string; confidence: number } {
+    if (thoughts.length === 0) {
+      return { domain: 'general', confidence: 0 };
+    }
+
+    const allText = thoughts.map(t => t.thought.toLowerCase()).join(' ');
+
+    const domainIndicators = {
+      frontend: ['react', 'vue', 'angular', 'css', 'html', 'javascript', 'typescript', 'browser', 'dom', 'ui', 'component', 'render'],
+      backend: ['server', 'api', 'database', 'rest', 'graphql', 'sql', 'node', 'express', 'endpoint', 'authentication'],
+      devops: ['docker', 'kubernetes', 'ci', 'cd', 'pipeline', 'aws', 'azure', 'gcp', 'deploy', 'infrastructure', 'terraform'],
+      data: ['data', 'pipeline', 'etl', 'analytics', 'warehouse', 'sql', 'query', 'dataset', 'streaming'],
+      machine_learning: ['model', 'training', 'neural', 'tensorflow', 'pytorch', 'inference', 'accuracy', 'dataset', 'feature', 'gradient'],
+      security: ['auth', 'security', 'vulnerability', 'encryption', 'token', 'permission', 'oauth', 'ssl', 'certificate'],
+      mobile: ['ios', 'android', 'react native', 'flutter', 'mobile', 'app', 'device', 'swift', 'kotlin'],
+      desktop: ['desktop', 'electron', 'native', 'gui', 'window', 'application'],
+      embedded: ['arduino', 'raspberry', 'firmware', 'microcontroller', 'hardware', 'embedded', 'rtos'],
+      networking: ['protocol', 'tcp', 'http', 'socket', 'network', 'dns', 'load balancer', 'distributed'],
+      gaming: ['game', 'unity', 'unreal', 'graphics', 'physics', 'rendering', 'sprite'],
+      blockchain: ['blockchain', 'smart contract', 'ethereum', 'solidity', 'token', 'web3', ' decentralization'],
+    };
+
+    const scores: Record<string, number> = {};
+    for (const [domain, keywords] of Object.entries(domainIndicators)) {
+      scores[domain] = keywords.filter(kw => allText.includes(kw)).length;
+    }
+
+    const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+    const [topDomain, topScore] = entries[0];
+
+    return {
+      domain: topScore > 0 ? topDomain : 'general',
+      confidence: topScore > 0 ? Math.min(0.9, 0.3 + topScore * 0.15) : 0.2,
+    };
   }
 }
 
