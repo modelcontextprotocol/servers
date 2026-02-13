@@ -63,6 +63,11 @@ export class ConfigManager {
       maxThoughtLength: parseIntOrDefault(process.env.MAX_THOUGHT_LENGTH, 5000),
       maxThoughtsPerBranch: parseIntOrDefault(process.env.MAX_THOUGHTS_PER_BRANCH, 100),
       cleanupInterval: parseIntOrDefault(process.env.CLEANUP_INTERVAL, 300000),
+      persistence: {
+        enabled: process.env.PERSISTENCE_ENABLED === 'true',
+        path: process.env.PERSISTENCE_PATH ?? './data',
+        saveInterval: parseIntOrDefault(process.env.PERSISTENCE_SAVE_INTERVAL, 60000),
+      },
     };
   }
 

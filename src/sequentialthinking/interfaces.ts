@@ -418,6 +418,11 @@ export interface AppConfig {
     maxThoughtLength: number;
     maxThoughtsPerBranch: number;
     cleanupInterval: number;
+    persistence: {
+      enabled: boolean;
+      path: string;
+      saveInterval: number;
+    };
   };
   security: {
     maxThoughtsPerMinute: number;

@@ -29,7 +29,7 @@ describe('Metacognition', () => {
     it('should return multiple prompts for concluded phase', () => {
       const result = metacognition.generateReflectionPrompt('concluded', 'stable', false, 0.7);
       expect(result).not.toBeNull();
-      expect(result).toContain('wrong');
+      expect(result === 'What is the single strongest counterargument to your conclusion?' || result === 'If you were wrong, what would prove it?').toBe(true);
     });
 
     it('should not prompt for evaluating phase even with issues', () => {
@@ -167,6 +167,44 @@ describe('Metacognition', () => {
     it('should filter short words', () => {
       const result = metacognition.tokenize('I am ok');
       expect(result.size).toBe(0);
+    });
+  });
+
+  describe('analyzeComplexity', () => {
+    it('should return simple for insufficient thoughts', () => {
+      const thoughts = [{ thought: 'Just one thought', thoughtNumber: 1, totalThoughts: 1, nextThoughtNeeded: true }];
+      const result = metacognition.analyzeComplexity(thoughts);
+      expect(result.complexity).toBe('simple');
+      expect(result.recommendedMode).toBe('fast');
+    });
+
+    it('should detect complex technical problems', () => {
+      const thoughts = [
+        { thought: 'I need to design and implement a complex algorithm to optimize the system architecture for performance', thoughtNumber: 1, totalThoughts: 3, nextThoughtNeeded: true },
+        { thought: 'The current implementation has O(n^2) complexity, however there are multiple tradeoffs to consider', thoughtNumber: 2, totalThoughts: 3, nextThoughtNeeded: true },
+        { thought: 'How can I reduce it to O(n log n) versus using alternative data structures?', thoughtNumber: 3, totalThoughts: 3, nextThoughtNeeded: false },
+      ];
+      const result = metacognition.analyzeComplexity(thoughts);
+      expect(['moderate', 'complex']).toContain(result.complexity);
+    });
+
+    it('should detect moderate complexity with tradeoffs', () => {
+      const thoughts = [
+        { thought: 'We need to decide between option A or B', thoughtNumber: 1, totalThoughts: 2, nextThoughtNeeded: true },
+        { thought: 'Option A is faster but more expensive, however option B has tradeoffs', thoughtNumber: 2, totalThoughts: 2, nextThoughtNeeded: false },
+      ];
+      const result = metacognition.analyzeComplexity(thoughts);
+      expect(['moderate', 'complex']).toContain(result.complexity);
+    });
+
+    it('should suggest fast for simple questions', () => {
+      const thoughts = [
+        { thought: 'What is 2 + 2?', thoughtNumber: 1, totalThoughts: 2, nextThoughtNeeded: true },
+        { thought: 'It is 4', thoughtNumber: 2, totalThoughts: 2, nextThoughtNeeded: false },
+      ];
+      const result = metacognition.analyzeComplexity(thoughts);
+      expect(result.complexity).toBe('simple');
+      expect(result.recommendedMode).toBe('fast');
     });
   });
 });

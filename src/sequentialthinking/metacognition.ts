@@ -404,6 +404,38 @@ export class Metacognition {
     return prompts.length > 0 ? prompts[Math.floor(Math.random() * prompts.length)] : null;
   }
 
+  analyzeComplexity(thoughts: ThoughtData[]): {
+    complexity: 'simple' | 'moderate' | 'complex';
+    reasoning: string;
+    recommendedMode: 'fast' | 'expert' | 'deep';
+  } {
+    if (thoughts.length < 2) {
+      return { complexity: 'simple', reasoning: 'Insufficient thoughts for analysis', recommendedMode: 'fast' };
+    }
+
+    const allText = thoughts.map(t => t.thought).join(' ').toLowerCase();
+    const patterns = [
+      /\b(code|algorithm|function|implement|optimize|debug|error|bug|system|architecture|api|database)\b/gi,
+      /\b(analyze|compare|evaluate|assess|determine|calculate|measure|model|simulate)\b/gi,
+      /\b(plan|strategy|roadmap|approach|method|technique|process|workflow)\b/gi,
+      /\b(invent|design|create|imagine|explore|discover|innovate|brainstorm)\b/gi,
+      /\b(decide|choose|select|option|alternative|tradeoff|priority)\b/gi,
+    ];
+
+    const totalIndicators = patterns.reduce((sum, p) => sum + (allText.match(p) || []).length, 0);
+    const hasMultipleCategories = patterns.filter(p => (allText.match(p) || []).length > 0).length;
+    const hasTradeoffs = /\b(however|but|although|tradeoff|alternative|versus|vs)\b/i.test(allText);
+    const complexityScore = Math.min(totalIndicators / 10, 3) + hasMultipleCategories * 0.5 + (hasTradeoffs ? 1 : 0);
+
+    const result = complexityScore >= 3
+      ? { complexity: 'complex' as const, recommendedMode: 'deep' as const }
+      : complexityScore >= 1.5
+        ? { complexity: 'moderate' as const, recommendedMode: 'expert' as const }
+        : { complexity: 'simple' as const, recommendedMode: 'fast' as const };
+
+    return { ...result, reasoning: `Score: ${complexityScore.toFixed(1)}, indicators: ${totalIndicators}` };
+  }
+
   private crossBranchPatterns: Map<string, Array<{ problemType: string; solution: string; score: number }>> = new Map();
 
   recordCrossBranchPattern(

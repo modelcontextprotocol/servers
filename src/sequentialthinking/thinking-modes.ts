@@ -59,6 +59,11 @@ export interface ModeGuidance {
   reasoningGapWarning: string | null;
   adaptiveStrategyReasoning: string | null;
   reflectionPrompt: string | null;
+  complexityAnalysis: {
+    complexity: 'simple' | 'moderate' | 'complex';
+    reasoning: string;
+    recommendedMode: 'fast' | 'expert' | 'deep';
+  } | null;
 }
 
 const PRESETS: Record<ThinkingMode, ThinkingModeConfig> = {
@@ -271,6 +276,7 @@ export class ThinkingModeEngine {
       reasoningGapWarning: metacog.reasoningGapWarning,
       adaptiveStrategyReasoning: metacog.adaptiveStrategyReasoning,
       reflectionPrompt: metacog.reflectionPrompt,
+      complexityAnalysis: metacog.complexityAnalysis,
     };
   }
 
@@ -301,6 +307,7 @@ export class ThinkingModeEngine {
     reasoningGapWarning: string | null;
     adaptiveStrategyReasoning: string | null;
     reflectionPrompt: string | null;
+    complexityAnalysis: ReturnType<typeof metacognition.analyzeComplexity> | null;
   } {
     const thoughtHistory = tree.getAllNodes().map(n => ({
       thought: n.thought,
@@ -361,6 +368,10 @@ export class ThinkingModeEngine {
       confidence.confidence,
     );
 
+    const complexityAnalysis = thoughtHistory.length >= 1
+      ? metacognition.analyzeComplexity(thoughtHistory)
+      : null;
+
     return {
       circularity,
       confidence,
@@ -372,6 +383,7 @@ export class ThinkingModeEngine {
       reasoningGapWarning,
       adaptiveStrategyReasoning: adaptiveStrategy.reasoning || null,
       reflectionPrompt,
+      complexityAnalysis,
     };
   }
 
