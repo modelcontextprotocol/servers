@@ -31,13 +31,18 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint --config eslint.config.mjs \"*.ts\"",
     "lint:fix": "eslint --config eslint.config.mjs \"*.ts\" --fix",
+    "lint:docker": "hadolint Dockerfile",
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"*.ts\"",
     "format:check": "prettier --check \"*.ts\"",
     "check": "npm run type-check && npm run lint && npm run format:check",
+    "check:all": "npm run check && npm run lint:docker && npm run test:all",
     "update:deps": "npm update --save && npm install",
     "clean": "rm -rf dist coverage",
     "rebuild": "npm run clean && npm run build",
+    "docker:build": "docker build -t sequential-thinking .",
+    "docker:run": "docker run --rm sequential-thinking",
+    "docker:size": "docker build -t sequential-thinking . && docker images sequential-thinking",
     "prepublishOnly": "npm run check && npm run test:all"
   },
   "dependencies": {
