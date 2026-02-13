@@ -1,6 +1,7 @@
 import type { ThoughtTree } from './thought-tree.js';
 import type { MCTSEngine } from './mcts.js';
-import type { TreeStats, TreeNodeInfo } from './interfaces.js';
+import type { TreeStats, TreeNodeInfo, ThoughtData } from './interfaces.js';
+import { metacognition } from './metacognition.js';
 
 export const VALID_THINKING_MODES = ['fast', 'expert', 'deep'] as const;
 export type ThinkingMode = (typeof VALID_THINKING_MODES)[number];
@@ -49,6 +50,10 @@ export interface ModeGuidance {
   thoughtPrompt: string;
   progressOverview: string | null;
   critique: string | null;
+  circularityWarning: string | null;
+  confidenceScore: number | null;
+  perspectiveSuggestions: Array<{ perspective: string; description: string }>;
+  problemType: string | null;
 }
 
 const PRESETS: Record<ThinkingMode, ThinkingModeConfig> = {
@@ -229,6 +234,25 @@ export class ThinkingModeEngine {
     );
     const critique = this.generateCritique(config, tree, bestPath, stats);
 
+    const thoughtHistory = tree.getAllNodes().map(n => ({
+      thought: n.thoughtData?.thought || '',
+      thoughtNumber: n.thoughtData?.thoughtNumber || 0,
+      totalThoughts: n.thoughtData?.totalThoughts || 0,
+      nextThoughtNeeded: n.thoughtData?.nextThoughtNeeded || false,
+    })) as ThoughtData[];
+
+    const circularity = metacognition.detectCircularity(thoughtHistory);
+    const confidence = metacognition.assessConfidence(
+      thoughtHistory[thoughtHistory.length - 1]?.thought || '',
+      thoughtHistory.slice(0, -1),
+      null,
+    );
+    const problemType = metacognition.classifyProblemType(thoughtHistory);
+    const perspectiveSuggestions = metacognition.suggestPerspective(
+      recommendedAction === 'evaluate',
+      stats.totalNodes - stats.terminalCount,
+    );
+
     return {
       mode: config.mode,
       currentPhase,
@@ -241,6 +265,13 @@ export class ThinkingModeEngine {
       thoughtPrompt,
       progressOverview,
       critique,
+      circularityWarning: circularity.warning,
+      confidenceScore: confidence.confidence,
+      perspectiveSuggestions: perspectiveSuggestions.map(p => ({
+        perspective: p.perspective,
+        description: p.description,
+      })),
+      problemType: problemType.type !== 'unknown' ? problemType.type : null,
     };
   }
 
