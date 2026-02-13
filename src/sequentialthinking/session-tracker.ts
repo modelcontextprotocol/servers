@@ -62,21 +62,35 @@ export class SessionTracker {
   }
 
   /**
-   * Check if session exceeds rate limit for given window.
-   * Returns true if within limit, throws if exceeded.
+   * Atomically check rate limit and record the thought if within limit.
+   * Closes the race condition between separate check + record calls.
+   * Returns true if within limit (and thought was recorded), false if exceeded.
    */
-  checkRateLimit(sessionId: string, maxRequests: number): boolean {
+  checkAndRecordThought(sessionId: string, maxRequests: number): boolean {
     const now = Date.now();
     const cutoff = now - RATE_LIMIT_WINDOW_MS;
 
-    const session = this.sessions.get(sessionId);
-    if (!session) {
-      return true; // New session, no history
-    }
+    const session = this.sessions.get(sessionId) ?? {
+      lastAccess: now,
+      rateTimestamps: [],
+    };
 
     pruneTimestamps(session.rateTimestamps, cutoff);
 
-    return session.rateTimestamps.length < maxRequests;
+    if (session.rateTimestamps.length >= maxRequests) {
+      return false;
+    }
+
+    // Atomically record: update access + push timestamp in one operation
+    session.lastAccess = now;
+    session.rateTimestamps.push(now);
+    this.sessions.set(sessionId, session);
+
+    if (this.sessions.size > MAX_TRACKED_SESSIONS * 0.9) {
+      this.cleanup();
+    }
+
+    return true;
   }
 
   /**

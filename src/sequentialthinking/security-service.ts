@@ -1,44 +1,35 @@
-import { z } from 'zod';
 import type { SecurityService } from './interfaces.js';
 import { SecurityError } from './errors.js';
 import type { SessionTracker } from './session-tracker.js';
 
-// eslint-disable-next-line no-script-url
-const JS_PROTOCOL = 'javascript:';
+export interface SecurityServiceConfig {
+  maxThoughtLength: number;
+  maxThoughtsPerMinute: number;
+  blockedPatterns: RegExp[];
+}
 
-export const SecurityServiceConfigSchema = z.object({
-  maxThoughtLength: z.number().default(5000),
-  maxThoughtsPerMinute: z.number().default(60),
-  blockedPatterns: z.array(z.string()).default([
-    'test-block',
-    'forbidden',
-    JS_PROTOCOL,
-    'eval(',
-    'Function(',
-  ]),
-});
-
-type SecurityServiceConfig = z.infer<typeof SecurityServiceConfigSchema>;
+const DEFAULT_CONFIG: SecurityServiceConfig = {
+  maxThoughtLength: 5000,
+  maxThoughtsPerMinute: 60,
+  blockedPatterns: [
+    /test-block/i,
+    /forbidden/i,
+    /javascript:/i,
+    /eval\s*\(/i,
+    /Function\s*\(/i,
+  ],
+};
 
 export class SecureThoughtSecurity implements SecurityService {
   private readonly config: SecurityServiceConfig;
-  private readonly compiledPatterns: RegExp[];
   private readonly sessionTracker: SessionTracker;
 
   constructor(
-    config: SecurityServiceConfig = SecurityServiceConfigSchema.parse({}),
+    config: Partial<SecurityServiceConfig> = {},
     sessionTracker: SessionTracker,
   ) {
-    this.config = config;
+    this.config = { ...DEFAULT_CONFIG, ...config };
     this.sessionTracker = sessionTracker;
-    this.compiledPatterns = [];
-    for (const pattern of this.config.blockedPatterns) {
-      try {
-        this.compiledPatterns.push(new RegExp(pattern, 'i'));
-      } catch (error) {
-        console.warn(`Skipping malformed blocked pattern "${pattern}":`, error);
-      }
-    }
   }
 
   validateThought(
@@ -46,7 +37,7 @@ export class SecureThoughtSecurity implements SecurityService {
     sessionId: string = '',
   ): void {
     // Check for blocked patterns (length validation happens in lib.ts)
-    for (const regex of this.compiledPatterns) {
+    for (const regex of this.config.blockedPatterns) {
       if (regex.test(thought)) {
         throw new SecurityError(
           `Thought contains prohibited content in session ${sessionId}`,
@@ -54,18 +45,15 @@ export class SecureThoughtSecurity implements SecurityService {
       }
     }
 
-    // Rate limiting: check AND record atomically to prevent race conditions
+    // Rate limiting: single atomic check-and-record to prevent race conditions
     if (sessionId) {
-      const withinLimit = this.sessionTracker.checkRateLimit(
+      const withinLimit = this.sessionTracker.checkAndRecordThought(
         sessionId,
         this.config.maxThoughtsPerMinute,
       );
       if (!withinLimit) {
         throw new SecurityError('Rate limit exceeded');
       }
-      // IMMEDIATELY record the thought to prevent race condition
-      // between validation and storage
-      this.sessionTracker.recordThought(sessionId);
     }
   }
 

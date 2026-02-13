@@ -1,8 +1,7 @@
-import type { ThoughtData } from './circular-buffer.js';
 import { SequentialThinkingApp } from './container.js';
-import { CompositeErrorHandler } from './error-handlers.js';
-import { ValidationError, SecurityError, BusinessLogicError, TreeError } from './errors.js';
-import type { Logger, ThoughtStorage, SecurityService, ThoughtFormatter, MetricsCollector, HealthChecker, HealthStatus, RequestMetrics, ThoughtMetrics, SystemMetrics, AppConfig, ThoughtTreeService, MCTSService, ThinkingMode } from './interfaces.js';
+import { SequentialThinkingError, ValidationError, SecurityError, BusinessLogicError } from './errors.js';
+import type { ThoughtData, Logger, ThoughtStorage, SecurityService, ThoughtFormatter, MetricsCollector, HealthChecker, HealthStatus, RequestMetrics, ThoughtMetrics, SystemMetrics, AppConfig, ThoughtTreeService, MCTSService, ThinkingMode, ThoughtTreeRecordResult } from './interfaces.js';
+import { VALID_THINKING_MODES } from './interfaces.js';
 
 export type ProcessThoughtRequest = ThoughtData;
 
@@ -12,20 +11,44 @@ export interface ProcessThoughtResponse {
   statusCode?: number;
 }
 
+interface ServiceBundle {
+  logger: Logger;
+  storage: ThoughtStorage;
+  security: SecurityService;
+  formatter: ThoughtFormatter;
+  metrics: MetricsCollector;
+  config: AppConfig;
+  thoughtTreeManager: ThoughtTreeService & MCTSService;
+}
+
 export class SequentialThinkingServer {
   private readonly app: SequentialThinkingApp;
-  private readonly errorHandler: CompositeErrorHandler;
+  private _services: ServiceBundle | null = null;
 
   constructor() {
     this.app = new SequentialThinkingApp();
-    this.errorHandler = new CompositeErrorHandler();
+  }
+
+  private get services(): ServiceBundle {
+    if (!this._services) {
+      const container = this.app.getContainer();
+      this._services = {
+        logger: container.get<Logger>('logger'),
+        storage: container.get<ThoughtStorage>('storage'),
+        security: container.get<SecurityService>('security'),
+        formatter: container.get<ThoughtFormatter>('formatter'),
+        metrics: container.get<MetricsCollector>('metrics'),
+        config: container.get<AppConfig>('config'),
+        thoughtTreeManager: container.get<ThoughtTreeService & MCTSService>('thoughtTreeManager'),
+      };
+    }
+    return this._services;
   }
 
   private validateInput(
     input: ProcessThoughtRequest,
   ): void {
-    const config = this.app.getContainer().get<AppConfig>('config');
-    this.validateStructure(input, config.state.maxThoughtLength);
+    this.validateStructure(input, this.services.config.state.maxThoughtLength);
     this.validateBusinessLogic(input);
   }
 
@@ -94,34 +117,41 @@ export class SequentialThinkingServer {
     return thoughtData;
   }
 
-  private getServices(): {
-      logger: Logger;
-      storage: ThoughtStorage;
-      security: SecurityService;
-      formatter: ThoughtFormatter;
-      metrics: MetricsCollector;
-      config: AppConfig;
-      thoughtTreeManager: ThoughtTreeService & MCTSService;
-      } {
-    const container = this.app.getContainer();
-    return {
-      logger: container.get<Logger>('logger'),
-      storage: container.get<ThoughtStorage>('storage'),
-      security: container.get<SecurityService>('security'),
-      formatter: container.get<ThoughtFormatter>('formatter'),
-      metrics: container.get<MetricsCollector>('metrics'),
-      config: container.get<AppConfig>('config'),
-      thoughtTreeManager: container.get<ThoughtTreeService & MCTSService>('thoughtTreeManager'),
-    };
+  private validateSessionId(sessionId: string): void {
+    if (!sessionId) throw new ValidationError('sessionId is required');
+    if (!this.services.security.validateSession(sessionId)) {
+      throw new SecurityError('Invalid session ID format: must be 1-100 characters');
+    }
   }
 
-  private resolveSession(
-    sessionId: string | undefined,
-    security: SecurityService,
-  ): string {
+  private static safeStringify(value: unknown): string {
+    const seen = new WeakSet();
+    return JSON.stringify(value, (_key: string, val: unknown) => {
+      if (typeof val === 'object' && val !== null) {
+        if (seen.has(val)) return '[Circular]';
+        seen.add(val);
+      }
+      return val;
+    }, 2);
+  }
+
+  private async withMetrics<T>(fn: () => T | Promise<T>): Promise<ProcessThoughtResponse> {
+    const { metrics } = this.services;
+    const startTime = Date.now();
+    try {
+      const result = await fn();
+      metrics.recordRequest(Date.now() - startTime, true);
+      return { content: [{ type: 'text', text: SequentialThinkingServer.safeStringify(result) }] };
+    } catch (error) {
+      metrics.recordRequest(Date.now() - startTime, false);
+      throw error;
+    }
+  }
+
+  private resolveSession(sessionId: string | undefined): string {
     // If user provided a sessionId, validate it first
-    if (sessionId !== undefined && sessionId !== null) {
-      if (!security.validateSession(sessionId)) {
+    if (sessionId !== undefined) {
+      if (!this.services.security.validateSession(sessionId)) {
         throw new SecurityError(
           `Invalid session ID format: must be 1-100 characters (got ${sessionId.length})`,
         );
@@ -130,117 +160,175 @@ export class SequentialThinkingServer {
     }
 
     // No sessionId provided: generate a new one
-    const generated = security.generateSessionId();
-    if (!security.validateSession(generated)) {
-      throw new SecurityError('Failed to generate valid session ID');
+    return this.services.security.generateSessionId();
+  }
+
+  private autoSetThinkingMode(
+    input: ProcessThoughtRequest,
+    thoughtData: ThoughtData,
+    sessionId: string,
+  ): void {
+    const { thinkingMode: mode } = input;
+    if (!mode || thoughtData.thoughtNumber !== 1) return;
+    if ((VALID_THINKING_MODES as readonly string[]).includes(mode)) {
+      this.services.thoughtTreeManager.setMode(
+        sessionId, mode as ThinkingMode,
+      );
+    } else {
+      this.services.logger.warn(
+        `Invalid thinking mode "${mode}", ignoring. Valid: ${VALID_THINKING_MODES.join(', ')}`,
+      );
     }
-    return generated;
+  }
+
+  private enrichTreeResult(
+    responseData: Record<string, unknown>,
+    treeResult: ThoughtTreeRecordResult | null,
+  ): void {
+    if (!treeResult) return;
+    responseData.nodeId = treeResult.nodeId;
+    responseData.parentNodeId = treeResult.parentNodeId;
+    responseData.treeStats = treeResult.treeStats;
+    if (treeResult.modeGuidance) {
+      responseData.modeGuidance = treeResult.modeGuidance;
+    }
+  }
+
+  private enrichRevisionContext(
+    responseData: Record<string, unknown>,
+    thoughtData: ThoughtData,
+    sessionId: string,
+  ): void {
+    if (!thoughtData.isRevision || !thoughtData.revisesThought) return;
+    const { thoughtTreeManager, storage } = this.services;
+    const treeNode = thoughtTreeManager.findNodeByThoughtNumber(
+      sessionId, thoughtData.revisesThought,
+    );
+    if (treeNode) {
+      responseData.revisionContext = {
+        originalThought: treeNode.thought,
+        originalThoughtNumber: treeNode.thoughtNumber,
+      };
+      return;
+    }
+    const history = storage.getHistory();
+    const original = history.find(
+      (t) =>
+        t.thoughtNumber === thoughtData.revisesThought
+        && t.sessionId === sessionId,
+    );
+    if (original) {
+      responseData.revisionContext = {
+        originalThought: original.thought,
+        originalThoughtNumber: original.thoughtNumber,
+      };
+    }
+  }
+
+  private enrichBranchContext(
+    responseData: Record<string, unknown>,
+    thoughtData: ThoughtData,
+  ): void {
+    if (!thoughtData.branchId) return;
+    const branchThoughts = this.services.storage.getBranchThoughts(
+      thoughtData.branchId,
+    );
+    const prior = branchThoughts
+      .filter(
+        (t) =>
+          t !== thoughtData
+          && t.thoughtNumber !== thoughtData.thoughtNumber,
+      )
+      .map((t) => ({
+        thoughtNumber: t.thoughtNumber, thought: t.thought,
+      }));
+    if (prior.length > 0) {
+      responseData.branchContext = {
+        branchId: thoughtData.branchId,
+        existingThoughts: prior,
+      };
+    }
+  }
+
+  private recordToTree(
+    thoughtData: ThoughtData,
+    sessionId: string,
+  ): ThoughtTreeRecordResult | null {
+    const { thoughtTreeManager, logger } = this.services;
+    try {
+      return thoughtTreeManager.recordThought(thoughtData);
+    } catch (treeError) {
+      logger.warn(
+        'Tree write failed after storage write succeeded',
+        { error: treeError, sessionId },
+      );
+      return null;
+    }
+  }
+
+  private logThought(
+    sessionId: string,
+    thoughtData: ThoughtData,
+  ): void {
+    const { config, logger, formatter } = this.services;
+    if (!config.logging.enableThoughtLogging) return;
+    logger.logThought(sessionId, thoughtData);
+    try {
+      console.error(formatter.format(thoughtData));
+    } catch {
+      console.error(
+        `[Thought] ${thoughtData.thoughtNumber}/${thoughtData.totalThoughts}`,
+      );
+    }
   }
 
   private async processWithServices(
     input: ProcessThoughtRequest,
   ): Promise<ProcessThoughtResponse> {
-    const { logger, storage, security, formatter, metrics, config, thoughtTreeManager } =
-      this.getServices();
+    const { storage, security, metrics } = this.services;
     const startTime = Date.now();
 
     try {
-      const sessionId = this.resolveSession(
-        input.sessionId, security,
-      );
-      // Sanitize content first to remove harmful patterns
+      const sessionId = this.resolveSession(input.sessionId);
+      security.validateThought(input.thought, sessionId);
       const sanitized = security.sanitizeContent(input.thought);
-      // Then validate the sanitized content (checks rate limiting, blocked patterns on clean text)
-      security.validateThought(sanitized, sessionId);
       const thoughtData = this.buildThoughtData(
         input, sanitized, sessionId,
       );
 
-      // Auto-set thinking mode if provided on input
-      const thinkingMode = (input as unknown as Record<string, unknown>).thinkingMode as string | undefined;
-      if (thinkingMode && thoughtData.thoughtNumber === 1) {
-        const validModes = ['fast', 'expert', 'deep'];
-        if (validModes.includes(thinkingMode)) {
-          thoughtTreeManager.setMode(sessionId, thinkingMode as ThinkingMode);
-        }
-      }
-
+      this.autoSetThinkingMode(input, thoughtData, sessionId);
       storage.addThought(thoughtData);
-      const treeResult = thoughtTreeManager.recordThought(thoughtData);
-      const stats = storage.getStats();
+      const treeResult = this.recordToTree(thoughtData, sessionId);
 
       const responseData: Record<string, unknown> = {
         thoughtNumber: thoughtData.thoughtNumber,
         totalThoughts: thoughtData.totalThoughts,
         nextThoughtNeeded: thoughtData.nextThoughtNeeded,
         branches: storage.getBranches(),
-        thoughtHistoryLength: stats.historySize,
+        thoughtHistoryLength: storage.getStats().historySize,
         sessionId,
         timestamp: thoughtData.timestamp,
       };
 
-      if (treeResult) {
-        responseData.nodeId = treeResult.nodeId;
-        responseData.parentNodeId = treeResult.parentNodeId;
-        responseData.treeStats = treeResult.treeStats;
-        if (treeResult.modeGuidance) {
-          responseData.modeGuidance = treeResult.modeGuidance;
-        }
+      this.enrichTreeResult(responseData, treeResult);
+      if (!treeResult) {
+        responseData.warning = 'Tree recording failed; MCTS features unavailable for this thought';
       }
-
-      // Enrich with revision context when applicable
-      if (thoughtData.isRevision && thoughtData.revisesThought) {
-        const history = storage.getHistory();
-        const original = history.find(
-          (t) => t.thoughtNumber === thoughtData.revisesThought && t.sessionId === sessionId,
-        );
-        if (original) {
-          responseData.revisionContext = {
-            originalThought: original.thought,
-            originalThoughtNumber: original.thoughtNumber,
-          };
-        }
-      }
-
-      // Enrich with branch context when applicable
-      if (thoughtData.branchId) {
-        const branchThoughts = storage.getBranchThoughts(thoughtData.branchId);
-        // Exclude the thought we just added to show only prior context
-        const prior = branchThoughts
-          .filter((t) => t !== thoughtData && t.thoughtNumber !== thoughtData.thoughtNumber)
-          .map((t) => ({ thoughtNumber: t.thoughtNumber, thought: t.thought }));
-        if (prior.length > 0) {
-          responseData.branchContext = {
-            branchId: thoughtData.branchId,
-            existingThoughts: prior,
-          };
-        }
-      }
-
-      const response = {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify(responseData, null, 2),
-        }],
-      };
-
-      if (config.logging.enableThoughtLogging) {
-        logger.logThought(sessionId, thoughtData);
-        try {
-          console.error(formatter.format(thoughtData));
-        } catch {
-          console.error(`[Thought] ${thoughtData.thoughtNumber}/${thoughtData.totalThoughts}`);
-        }
-      }
+      this.enrichRevisionContext(responseData, thoughtData, sessionId);
+      this.enrichBranchContext(responseData, thoughtData);
+      this.logThought(sessionId, thoughtData);
 
       const duration = Date.now() - startTime;
       metrics.recordRequest(duration, true);
       metrics.recordThoughtProcessed(thoughtData);
-      return response;
+      return {
+        content: [{
+          type: 'text' as const,
+          text: SequentialThinkingServer.safeStringify(responseData),
+        }],
+      };
     } catch (error) {
-      const duration = Date.now() - startTime;
-      metrics.recordRequest(duration, false);
-      metrics.recordError(error as Error);
+      metrics.recordRequest(Date.now() - startTime, false);
       throw error;
     }
   }
@@ -254,17 +342,14 @@ export class SequentialThinkingServer {
       return await this.processWithServices(input);
 
     } catch (error) {
-      // Handle errors using composite error handler
-      return this.errorHandler.handle(error as Error);
+      return this.handleError(error as Error);
     }
   }
 
   // Health check method
   public async getHealthStatus(): Promise<HealthStatus> {
     try {
-      const container = this.app.getContainer();
-      const healthChecker = container.get<HealthChecker>('healthChecker');
-      return await healthChecker.checkHealth();
+      return await this.app.getContainer().get<HealthChecker>('healthChecker').checkHealth();
     } catch (error) {
       return {
         status: 'unhealthy',
@@ -288,9 +373,7 @@ export class SequentialThinkingServer {
       thoughts: ThoughtMetrics;
       system: SystemMetrics;
       } {
-    const container = this.app.getContainer();
-    const metrics = container.get<MetricsCollector>('metrics');
-    return metrics.getMetrics();
+    return this.services.metrics.getMetrics();
   }
 
   // Cleanup method (idempotent — safe to call multiple times)
@@ -307,69 +390,95 @@ export class SequentialThinkingServer {
     }
   }
 
+  private handleError(error: Error): ProcessThoughtResponse {
+    if (error instanceof SequentialThinkingError) {
+      return {
+        content: [{ type: 'text', text: JSON.stringify(error.toJSON(), null, 2) }],
+        isError: true,
+        statusCode: error.statusCode,
+      };
+    }
+    return {
+      content: [{ type: 'text', text: JSON.stringify({
+        error: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred',
+        category: 'SYSTEM',
+        statusCode: 500,
+        timestamp: new Date().toISOString(),
+      }, null, 2) }],
+      isError: true,
+      statusCode: 500,
+    };
+  }
+
   // MCTS tree operations
   public async backtrack(sessionId: string, nodeId: string): Promise<ProcessThoughtResponse> {
     try {
-      const { thoughtTreeManager } = this.getServices();
-      const result = thoughtTreeManager.backtrack(sessionId, nodeId);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-      };
+      this.validateSessionId(sessionId);
+      return await this.withMetrics(() => {
+        return this.services.thoughtTreeManager.backtrack(sessionId, nodeId);
+      });
     } catch (error) {
-      return this.errorHandler.handle(error as Error);
+      return this.handleError(error as Error);
     }
   }
 
-  public async evaluateThought(sessionId: string, nodeId: string, value: number): Promise<ProcessThoughtResponse> {
+  public async evaluateThought(
+    sessionId: string,
+    nodeId: string,
+    value: number,
+  ): Promise<ProcessThoughtResponse> {
     try {
+      this.validateSessionId(sessionId);
       if (value < 0 || value > 1) {
         throw new ValidationError('value must be between 0 and 1');
       }
-      const { thoughtTreeManager } = this.getServices();
-      const result = thoughtTreeManager.evaluate(sessionId, nodeId, value);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-      };
+      return await this.withMetrics(() => {
+        return this.services.thoughtTreeManager.evaluate(sessionId, nodeId, value);
+      });
     } catch (error) {
-      return this.errorHandler.handle(error as Error);
+      return this.handleError(error as Error);
     }
   }
 
-  public async suggestNextThought(sessionId: string, strategy?: 'explore' | 'exploit' | 'balanced'): Promise<ProcessThoughtResponse> {
+  public async suggestNextThought(
+    sessionId: string,
+    strategy?: 'explore' | 'exploit' | 'balanced',
+  ): Promise<ProcessThoughtResponse> {
     try {
-      const { thoughtTreeManager } = this.getServices();
-      const result = thoughtTreeManager.suggest(sessionId, strategy);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-      };
+      this.validateSessionId(sessionId);
+      return await this.withMetrics(() => {
+        return this.services.thoughtTreeManager.suggest(sessionId, strategy);
+      });
     } catch (error) {
-      return this.errorHandler.handle(error as Error);
+      return this.handleError(error as Error);
     }
   }
 
-  public async getThinkingSummary(sessionId: string, maxDepth?: number): Promise<ProcessThoughtResponse> {
+  public async getThinkingSummary(
+    sessionId: string,
+    maxDepth?: number,
+  ): Promise<ProcessThoughtResponse> {
     try {
-      const { thoughtTreeManager } = this.getServices();
-      const result = thoughtTreeManager.getSummary(sessionId, maxDepth);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-      };
+      this.validateSessionId(sessionId);
+      return await this.withMetrics(() => {
+        return this.services.thoughtTreeManager.getSummary(sessionId, maxDepth);
+      });
     } catch (error) {
-      return this.errorHandler.handle(error as Error);
+      return this.handleError(error as Error);
     }
   }
 
   // Set thinking mode for a session
   public async setThinkingMode(sessionId: string, mode: string): Promise<ProcessThoughtResponse> {
     try {
-      const validModes = ['fast', 'expert', 'deep'];
-      if (!validModes.includes(mode)) {
-        throw new ValidationError(`Invalid thinking mode: "${mode}". Must be one of: ${validModes.join(', ')}`);
+      this.validateSessionId(sessionId);
+      if (!(VALID_THINKING_MODES as readonly string[]).includes(mode)) {
+        throw new ValidationError(`Invalid thinking mode: "${mode}". Must be one of: ${VALID_THINKING_MODES.join(', ')}`);
       }
-      const { thoughtTreeManager } = this.getServices();
-      const config = thoughtTreeManager.setMode(sessionId, mode as ThinkingMode);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify({
+      return await this.withMetrics(() => {
+        const config = this.services.thoughtTreeManager.setMode(sessionId, mode as ThinkingMode);
+        return {
           sessionId,
           mode: config.mode,
           config: {
@@ -381,10 +490,10 @@ export class SequentialThinkingServer {
             enableBacktracking: config.enableBacktracking,
             convergenceThreshold: config.convergenceThreshold,
           },
-        }, null, 2) }],
-      };
+        };
+      });
     } catch (error) {
-      return this.errorHandler.handle(error as Error);
+      return this.handleError(error as Error);
     }
   }
 
@@ -395,24 +504,12 @@ export class SequentialThinkingServer {
     limit?: number;
   }): ThoughtData[] {
     try {
-      const container = this.app.getContainer();
-      const storage = container.get<ThoughtStorage>('storage');
-
-      if (options.branchId) {
-        const branchThoughts = storage.getBranchThoughts(options.branchId);
-        const filtered = branchThoughts.filter((t) => t.sessionId === options.sessionId);
-        if (options.limit && options.limit > 0) {
-          return filtered.slice(-options.limit);
-        }
-        return filtered;
-      }
-
-      const history = storage.getHistory();
-      const filtered = history.filter((t) => t.sessionId === options.sessionId);
-      if (options.limit && options.limit > 0) {
-        return filtered.slice(-options.limit);
-      }
-      return filtered;
+      const { storage } = this.services;
+      const source = options.branchId
+        ? storage.getBranchThoughts(options.branchId)
+        : storage.getHistory();
+      const filtered = source.filter((t) => t.sessionId === options.sessionId);
+      return options.limit && options.limit > 0 ? filtered.slice(-options.limit) : filtered;
     } catch (error) {
       console.error('Warning: failed to get filtered history:', error);
       return [];
@@ -422,9 +519,7 @@ export class SequentialThinkingServer {
   // Legacy compatibility methods
   public getThoughtHistory(limit?: number): ThoughtData[] {
     try {
-      const container = this.app.getContainer();
-      const storage = container.get<ThoughtStorage>('storage');
-      return storage.getHistory(limit);
+      return this.services.storage.getHistory(limit);
     } catch (error) {
       console.error('Warning: failed to get thought history:', error);
       return [];
@@ -433,9 +528,7 @@ export class SequentialThinkingServer {
 
   public getBranches(): string[] {
     try {
-      const container = this.app.getContainer();
-      const storage = container.get<ThoughtStorage>('storage');
-      return storage.getBranches();
+      return this.services.storage.getBranches();
     } catch (error) {
       console.error('Warning: failed to get branches:', error);
       return [];

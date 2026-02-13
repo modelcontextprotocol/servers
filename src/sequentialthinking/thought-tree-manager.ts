@@ -1,10 +1,10 @@
-import type { ThoughtData } from './circular-buffer.js';
 import type {
+  ThoughtData,
   MCTSConfig,
   ThoughtTreeService,
   ThoughtTreeRecordResult,
   MCTSService,
-  TreeStats,
+  TreeNodeInfo,
   BacktrackResult,
   EvaluateResult,
   SuggestResult,
@@ -15,9 +15,9 @@ import { MCTSEngine } from './mcts.js';
 import { TreeError } from './errors.js';
 import { ThinkingModeEngine } from './thinking-modes.js';
 import type { ThinkingMode, ThinkingModeConfig } from './thinking-modes.js';
+import type { SessionTracker } from './session-tracker.js';
 
 const MAX_CONCURRENT_TREES = 100;
-const CLEANUP_INTERVAL_MS = 300000; // 5 minutes
 
 export class ThoughtTreeManager implements ThoughtTreeService, MCTSService {
   private readonly trees = new Map<string, ThoughtTree>();
@@ -25,18 +25,26 @@ export class ThoughtTreeManager implements ThoughtTreeService, MCTSService {
   private readonly config: MCTSConfig;
   private readonly modes = new Map<string, ThinkingModeConfig>();
   private readonly modeEngine = new ThinkingModeEngine();
-  private cleanupTimer: NodeJS.Timeout | null = null;
 
-  constructor(config: MCTSConfig) {
+  constructor(config: MCTSConfig, sessionTracker?: SessionTracker) {
     this.config = config;
     this.engine = new MCTSEngine(config.explorationConstant);
-    this.startCleanupTimer();
+
+    if (sessionTracker) {
+      sessionTracker.onEviction((evictedIds) => {
+        for (const sessionId of evictedIds) {
+          this.trees.delete(sessionId);
+          this.modes.delete(sessionId);
+        }
+      });
+      sessionTracker.onPeriodicCleanup(() => this.cleanup());
+    }
   }
 
   recordThought(data: ThoughtData): ThoughtTreeRecordResult | null {
     if (!this.config.enableAutoTree) return null;
 
-    const sessionId = data.sessionId;
+    const { sessionId } = data;
     if (!sessionId) return null;
 
     const tree = this.getOrCreateTree(sessionId);
@@ -59,9 +67,11 @@ export class ThoughtTreeManager implements ThoughtTreeService, MCTSService {
       treeStats,
     };
 
-    // Generate mode guidance if mode is active
+    // Generate mode guidance if mode is active (reuse pre-computed stats)
     if (modeConfig) {
-      result.modeGuidance = this.modeEngine.generateGuidance(modeConfig, tree, this.engine);
+      result.modeGuidance = this.modeEngine.generateGuidance(
+        modeConfig, tree, this.engine, treeStats,
+      );
     }
 
     return result;
@@ -77,6 +87,13 @@ export class ThoughtTreeManager implements ThoughtTreeService, MCTSService {
       children: children.map(c => this.engine.toNodeInfo(c)),
       treeStats: this.engine.getTreeStats(tree),
     };
+  }
+
+  findNodeByThoughtNumber(sessionId: string, thoughtNumber: number): TreeNodeInfo | null {
+    const tree = this.trees.get(sessionId);
+    if (!tree) return null;
+    const node = tree.findNodeByThoughtNumber(thoughtNumber);
+    return node ? this.engine.toNodeInfo(node) : null;
   }
 
   evaluate(sessionId: string, nodeId: string, value: number): EvaluateResult {
@@ -149,15 +166,12 @@ export class ThoughtTreeManager implements ThoughtTreeService, MCTSService {
       const toRemove = this.trees.size - MAX_CONCURRENT_TREES;
       for (let i = 0; i < toRemove; i++) {
         this.trees.delete(sorted[i][0]);
+        this.modes.delete(sorted[i][0]);
       }
     }
   }
 
   destroy(): void {
-    if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer);
-      this.cleanupTimer = null;
-    }
     this.trees.clear();
     this.modes.clear();
   }
@@ -180,14 +194,4 @@ export class ThoughtTreeManager implements ThoughtTreeService, MCTSService {
     return tree;
   }
 
-  private startCleanupTimer(): void {
-    this.cleanupTimer = setInterval(() => {
-      try {
-        this.cleanup();
-      } catch (error) {
-        console.error('Tree cleanup error:', error);
-      }
-    }, CLEANUP_INTERVAL_MS);
-    this.cleanupTimer.unref();
-  }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SecureThoughtSecurity, SecurityServiceConfigSchema } from '../../security-service.js';
+import { SecureThoughtSecurity } from '../../security-service.js';
 import { SessionTracker } from '../../session-tracker.js';
 import { SecurityError } from '../../errors.js';
 
@@ -91,9 +91,7 @@ describe('SecureThoughtSecurity', () => {
   describe('validateThought', () => {
     it('should block eval( via regex matching', () => {
       const security = new SecureThoughtSecurity(
-        SecurityServiceConfigSchema.parse({
-          blockedPatterns: ['eval\\s*\\('],
-        }),
+        { blockedPatterns: [/eval\s*\(/i] },
         sessionTracker,
       );
       expect(() => security.validateThought('call eval(x)', 'sess')).toThrow(SecurityError);
@@ -105,15 +103,13 @@ describe('SecureThoughtSecurity', () => {
       expect(() => security.validateThought('visit javascript:void(0)', 'sess')).toThrow(SecurityError);
     });
 
-    it('should skip malformed regex patterns gracefully', () => {
+    it('should accept pre-compiled RegExp patterns', () => {
       const security = new SecureThoughtSecurity(
-        SecurityServiceConfigSchema.parse({
-          blockedPatterns: ['(invalid[', 'eval\\('],
-        }),
+        { blockedPatterns: [/eval\(/i, /forbidden/i] },
         sessionTracker,
       );
-      // Should not throw on the malformed pattern, but should catch eval(
       expect(() => security.validateThought('call eval(x)', 'sess')).toThrow(SecurityError);
+      expect(() => security.validateThought('this is forbidden', 'sess2')).toThrow(SecurityError);
     });
 
     it('should allow safe content', () => {
@@ -153,7 +149,7 @@ describe('SecureThoughtSecurity', () => {
     it('should allow requests within limit', () => {
       const tracker = new SessionTracker(0);
       const security = new SecureThoughtSecurity(
-        SecurityServiceConfigSchema.parse({ maxThoughtsPerMinute: 5 }),
+        { maxThoughtsPerMinute: 5 },
         tracker,
       );
       // validateThought now records automatically
@@ -166,7 +162,7 @@ describe('SecureThoughtSecurity', () => {
     it('should throw SecurityError when rate limit exceeded', () => {
       const tracker = new SessionTracker(0);
       const security = new SecureThoughtSecurity(
-        SecurityServiceConfigSchema.parse({ maxThoughtsPerMinute: 3 }),
+        { maxThoughtsPerMinute: 3 },
         tracker,
       );
       // Use up the limit - validateThought records automatically
@@ -182,7 +178,7 @@ describe('SecureThoughtSecurity', () => {
     it('should not rate-limit different sessions', () => {
       const tracker = new SessionTracker(0);
       const security = new SecureThoughtSecurity(
-        SecurityServiceConfigSchema.parse({ maxThoughtsPerMinute: 2 }),
+        { maxThoughtsPerMinute: 2 },
         tracker,
       );
       // validateThought records automatically
@@ -196,7 +192,7 @@ describe('SecureThoughtSecurity', () => {
     it('should not rate-limit when sessionId is empty', () => {
       const tracker = new SessionTracker(0);
       const security = new SecureThoughtSecurity(
-        SecurityServiceConfigSchema.parse({ maxThoughtsPerMinute: 1 }),
+        { maxThoughtsPerMinute: 1 },
         tracker,
       );
       // Empty sessionId should skip rate limiting entirely

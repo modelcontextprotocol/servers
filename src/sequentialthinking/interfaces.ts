@@ -1,7 +1,20 @@
-import type { ThoughtData } from './circular-buffer.js';
-export type { ThinkingMode, ThinkingModeConfig, ModeGuidance } from './thinking-modes.js';
+import type { ThinkingMode, ThinkingModeConfig, ModeGuidance } from './thinking-modes.js';
+export type { ThinkingMode, ThinkingModeConfig, ModeGuidance };
+export { VALID_THINKING_MODES } from './thinking-modes.js';
 
-export type { ThoughtData };
+export interface ThoughtData {
+  thought: string;
+  thoughtNumber: number;
+  totalThoughts: number;
+  isRevision?: boolean;
+  revisesThought?: number;
+  branchFromThought?: number;
+  branchId?: string;
+  nextThoughtNeeded: boolean;
+  timestamp?: number;
+  sessionId?: string;
+  thinkingMode?: string;
+}
 
 export interface ThoughtFormatter {
   format(thought: ThoughtData): string;
@@ -37,9 +50,7 @@ export interface SecurityService {
     sessionId: string,
   ): void;
   sanitizeContent(content: string): string;
-  getSecurityStatus(
-    sessionId?: string,
-  ): Record<string, unknown>;
+  getSecurityStatus(): Record<string, unknown>;
   generateSessionId(): string;
   validateSession(sessionId: string): boolean;
 }
@@ -71,7 +82,6 @@ export interface SystemMetrics {
 
 export interface MetricsCollector {
   recordRequest(duration: number, success: boolean): void;
-  recordError(error: Error): void;
   recordThoughtProcessed(thought: ThoughtData): void;
   getMetrics(): { requests: RequestMetrics; thoughts: ThoughtMetrics; system: SystemMetrics };
   destroy(): void;
@@ -175,14 +185,15 @@ export interface ThoughtTreeRecordResult {
   nodeId: string;
   parentNodeId: string | null;
   treeStats: TreeStats;
-  modeGuidance?: import('./thinking-modes.js').ModeGuidance;
+  modeGuidance?: ModeGuidance;
 }
 
 export interface ThoughtTreeService {
   recordThought(data: ThoughtData): ThoughtTreeRecordResult | null;
   backtrack(sessionId: string, nodeId: string): BacktrackResult;
-  setMode(sessionId: string, mode: import('./thinking-modes.js').ThinkingMode): import('./thinking-modes.js').ThinkingModeConfig;
-  getMode(sessionId: string): import('./thinking-modes.js').ThinkingModeConfig | null;
+  findNodeByThoughtNumber(sessionId: string, thoughtNumber: number): TreeNodeInfo | null;
+  setMode(sessionId: string, mode: ThinkingMode): ThinkingModeConfig;
+  getMode(sessionId: string): ThinkingModeConfig | null;
   cleanup(): void;
   destroy(): void;
 }

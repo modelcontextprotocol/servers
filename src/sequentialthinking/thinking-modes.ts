@@ -2,7 +2,8 @@ import type { ThoughtTree } from './thought-tree.js';
 import type { MCTSEngine } from './mcts.js';
 import type { TreeStats, TreeNodeInfo } from './interfaces.js';
 
-export type ThinkingMode = 'fast' | 'expert' | 'deep';
+export const VALID_THINKING_MODES = ['fast', 'expert', 'deep'] as const;
+export type ThinkingMode = (typeof VALID_THINKING_MODES)[number];
 
 export interface ThinkingModeConfig {
   mode: ThinkingMode;
@@ -19,6 +20,9 @@ export interface ThinkingModeConfig {
   progressOverviewInterval: number;
   maxThoughtDisplayLength: number;
   enableCritique: boolean;
+  backtrackThreshold: number;
+  branchMinDepth: number;
+  useMCTSForBranching: boolean;
 }
 
 export interface ModeGuidance {
@@ -63,6 +67,9 @@ const PRESETS: Record<ThinkingMode, ThinkingModeConfig> = {
     progressOverviewInterval: 3,
     maxThoughtDisplayLength: 150,
     enableCritique: false,
+    backtrackThreshold: 0,
+    branchMinDepth: Infinity,
+    useMCTSForBranching: false,
   },
   expert: {
     mode: 'expert',
@@ -79,6 +86,9 @@ const PRESETS: Record<ThinkingMode, ThinkingModeConfig> = {
     progressOverviewInterval: 4,
     maxThoughtDisplayLength: 250,
     enableCritique: true,
+    backtrackThreshold: 0.4,
+    branchMinDepth: 2,
+    useMCTSForBranching: false,
   },
   deep: {
     mode: 'deep',
@@ -95,6 +105,9 @@ const PRESETS: Record<ThinkingMode, ThinkingModeConfig> = {
     progressOverviewInterval: 5,
     maxThoughtDisplayLength: 300,
     enableCritique: true,
+    backtrackThreshold: 0.5,
+    branchMinDepth: 0,
+    useMCTSForBranching: true,
   },
 };
 
@@ -120,6 +133,32 @@ interface TemplateParams {
   branchFromNodeId: string;
   backtrackToNodeId: string;
   backtrackDepth: number;
+}
+
+interface BuildTemplateContext {
+  config: ThinkingModeConfig;
+  tree: ThoughtTree;
+  stats: TreeStats;
+  bestPath: TreeNodeInfo[];
+  convergenceStatus: ModeGuidance['convergenceStatus'];
+  branchingSuggestion: ModeGuidance['branchingSuggestion'];
+  backtrackSuggestion: ModeGuidance['backtrackSuggestion'];
+}
+
+interface DetermineActionContext {
+  config: ThinkingModeConfig;
+  tree: ThoughtTree;
+  engine: MCTSEngine;
+  currentPhase: ModeGuidance['currentPhase'];
+  currentDepth: number;
+  convergenceStatus: ModeGuidance['convergenceStatus'];
+}
+
+interface ActionResult {
+  recommendedAction: ModeGuidance['recommendedAction'];
+  reasoning: string;
+  branchingSuggestion: ModeGuidance['branchingSuggestion'];
+  backtrackSuggestion: ModeGuidance['backtrackSuggestion'];
 }
 
 const TEMPLATES: Record<string, string> = {
@@ -151,29 +190,43 @@ export class ThinkingModeEngine {
     return config.autoEvaluate ? config.autoEvalValue : null;
   }
 
-  generateGuidance(config: ThinkingModeConfig, tree: ThoughtTree, engine: MCTSEngine): ModeGuidance {
-    const stats = engine.getTreeStats(tree);
+  generateGuidance(
+    config: ThinkingModeConfig,
+    tree: ThoughtTree,
+    engine: MCTSEngine,
+    precomputedStats?: TreeStats,
+  ): ModeGuidance {
+    const stats = precomputedStats ?? engine.getTreeStats(tree);
     const bestPath = engine.extractBestPath(tree);
     const currentDepth = stats.maxDepth;
     const totalEvaluated = stats.totalNodes - stats.unexploredCount;
 
-    // Compute convergence status
-    const convergenceStatus = this.computeConvergenceStatus(config, bestPath, totalEvaluated);
-
-    // Determine current phase
-    const currentPhase = this.determinePhase(config, currentDepth, totalEvaluated, convergenceStatus);
-
-    // Determine recommended action + reasoning + suggestions
-    const { recommendedAction, reasoning, branchingSuggestion, backtrackSuggestion } =
-      this.determineAction(config, tree, engine, currentPhase, currentDepth, convergenceStatus);
-
-    const templateParams = this.buildTemplateParams(
-      config, tree, stats, bestPath, convergenceStatus, branchingSuggestion, backtrackSuggestion,
+    const convergenceStatus = this.computeConvergenceStatus(
+      config, bestPath, totalEvaluated,
     );
-    const template = this.selectTemplate(config.mode, recommendedAction);
-    const thoughtPrompt = this.renderTemplate(template, { ...templateParams, recommendedAction });
+    const currentPhase = this.determinePhase(
+      config, currentDepth, totalEvaluated, convergenceStatus,
+    );
 
-    const progressOverview = this.generateProgressOverview(config, tree, stats, bestPath);
+    const actionResult = this.determineAction({
+      config, tree, engine,
+      currentPhase, currentDepth, convergenceStatus,
+    });
+    const { recommendedAction, reasoning } = actionResult;
+    const { branchingSuggestion, backtrackSuggestion } = actionResult;
+
+    const templateParams = this.buildTemplateParams({
+      config, tree, stats, bestPath,
+      convergenceStatus, branchingSuggestion, backtrackSuggestion,
+    });
+    const template = this.selectTemplate(config.mode, recommendedAction);
+    const thoughtPrompt = this.renderTemplate(
+      template, { ...templateParams, recommendedAction },
+    );
+
+    const progressOverview = this.generateProgressOverview(
+      config, tree, stats, bestPath,
+    );
     const critique = this.generateCritique(config, tree, bestPath, stats);
 
     return {
@@ -202,71 +255,101 @@ export class ThinkingModeEngine {
     });
   }
 
-  private buildTemplateParams(
-    config: ThinkingModeConfig,
-    tree: ThoughtTree,
-    stats: TreeStats,
-    bestPath: TreeNodeInfo[],
-    convergenceStatus: ModeGuidance['convergenceStatus'],
-    branchingSuggestion: ModeGuidance['branchingSuggestion'],
-    backtrackSuggestion: ModeGuidance['backtrackSuggestion'],
-  ): TemplateParams {
-    const cursor = tree.cursor;
-    const cursorDepth = cursor?.depth ?? 0;
-    const cursorAvg = cursor && cursor.visitCount > 0
-      ? (cursor.totalValue / cursor.visitCount).toFixed(2)
-      : 'unscored';
+  private computeCursorValue(
+    cursor: ThoughtTree['cursor'],
+  ): string {
+    if (!cursor || cursor.visitCount === 0) return 'unscored';
+    return (cursor.totalValue / cursor.visitCount).toFixed(2);
+  }
 
-    const bestPathValue = bestPath.length > 0
-      ? bestPath[bestPath.length - 1].averageValue.toFixed(2)
-      : '0.00';
+  private computeBestPathValue(
+    bestPath: TreeNodeInfo[],
+  ): string {
+    if (bestPath.length === 0) return '0.00';
+    return bestPath[bestPath.length - 1].averageValue.toFixed(2);
+  }
+
+  private getParentThought(
+    tree: ThoughtTree,
+    maxLen: number,
+  ): string {
+    const { cursor } = tree;
+    if (!cursor?.parentId) return '(root)';
+    const parent = tree.getNode(cursor.parentId);
+    if (!parent) return '(root)';
+    return this.compressThought(parent.thought, maxLen);
+  }
+
+  private computeProgress(
+    cursorDepth: number,
+    targetDepthMax: number,
+  ): string {
+    if (targetDepthMax <= 0) return '0.00';
+    return (cursorDepth / targetDepthMax).toFixed(2);
+  }
+
+  private getCursorFields(
+    tree: ThoughtTree,
+    maxLen: number,
+  ): Pick<
+    TemplateParams,
+    'thoughtNumber' | 'currentDepth' | 'branchCount' | 'currentThought'
+  > {
+    const { cursor } = tree;
+    if (!cursor) {
+      return {
+        thoughtNumber: 0,
+        currentDepth: 0,
+        branchCount: 0,
+        currentThought: '(none)',
+      };
+    }
+    return {
+      thoughtNumber: cursor.thoughtNumber,
+      currentDepth: cursor.depth,
+      branchCount: cursor.children.length,
+      currentThought: this.compressThought(cursor.thought, maxLen),
+    };
+  }
+
+  private buildTemplateParams(ctx: BuildTemplateContext): TemplateParams {
+    const {
+      config, tree, stats, bestPath,
+      convergenceStatus, branchingSuggestion, backtrackSuggestion,
+    } = ctx;
+    const maxLen = config.maxThoughtDisplayLength;
+    const cf = this.getCursorFields(tree, maxLen);
 
     const bestPathSummary = bestPath.length > 0
       ? bestPath.map(n => n.thoughtNumber).join(' -> ')
       : '(none)';
 
-    const leaves = tree.getLeafNodes();
-
-    const maxLen = config.maxThoughtDisplayLength;
-    const currentThought = cursor ? this.compressThought(cursor.thought, maxLen) : '(none)';
-
-    let parentThought = '(root)';
-    if (cursor?.parentId) {
-      const parent = tree.getNode(cursor.parentId);
-      if (parent) {
-        parentThought = this.compressThought(parent.thought, maxLen);
-      }
-    }
-
-    const backtrackTarget = backtrackSuggestion?.toNodeId
-      ? tree.getNode(backtrackSuggestion.toNodeId)
-      : undefined;
+    const backtrackNodeId = backtrackSuggestion?.toNodeId;
+    const backtrackTarget = backtrackNodeId
+      ? tree.getNode(backtrackNodeId) : undefined;
 
     return {
-      thoughtNumber: cursor?.thoughtNumber ?? 0,
-      currentDepth: cursorDepth,
+      ...cf,
       targetDepthMin: config.targetDepthMin,
       targetDepthMax: config.targetDepthMax,
       totalNodes: stats.totalNodes,
       unexploredCount: stats.unexploredCount,
-      leafCount: leaves.length,
+      leafCount: tree.getLeafNodes().length,
       terminalCount: stats.terminalCount,
-      progress: config.targetDepthMax > 0
-        ? (cursorDepth / config.targetDepthMax).toFixed(2)
-        : '0.00',
-      cursorValue: cursorAvg,
-      bestPathValue,
+      progress: this.computeProgress(
+        cf.currentDepth, config.targetDepthMax,
+      ),
+      cursorValue: this.computeCursorValue(tree.cursor),
+      bestPathValue: this.computeBestPathValue(bestPath),
       convergenceScore: convergenceStatus
         ? convergenceStatus.score.toFixed(2)
         : 'N/A',
-      branchCount: cursor?.children.length ?? 0,
       maxBranches: config.maxBranchingFactor,
       convergenceThreshold: config.convergenceThreshold,
-      currentThought,
-      parentThought,
+      parentThought: this.getParentThought(tree, maxLen),
       bestPathSummary,
       branchFromNodeId: branchingSuggestion?.fromNodeId ?? '',
-      backtrackToNodeId: backtrackSuggestion?.toNodeId ?? '',
+      backtrackToNodeId: backtrackNodeId ?? '',
       backtrackDepth: backtrackTarget?.depth ?? 0,
     };
   }
@@ -284,11 +367,19 @@ export class ThinkingModeEngine {
       ? bestPath[bestPath.length - 1].averageValue
       : 0;
 
-    // Average value across best path nodes that have been visited
+    // Average value across visited nodes, penalized by visited ratio.
+    // Prevents premature convergence when most of the path is unexplored.
     const visitedNodes = bestPath.filter(n => n.visitCount > 0);
-    const score = visitedNodes.length > 0
-      ? visitedNodes.reduce((sum, n) => sum + n.averageValue, 0) / visitedNodes.length
-      : 0;
+    let score: number;
+    if (visitedNodes.length === 0 || bestPath.length === 0) {
+      score = 0;
+    } else {
+      const avgValue = visitedNodes.reduce(
+        (sum, n) => sum + n.averageValue, 0,
+      ) / visitedNodes.length;
+      const visitedRatio = visitedNodes.length / bestPath.length;
+      score = avgValue * visitedRatio;
+    }
 
     const isConverged =
       totalEvaluated >= config.minEvaluationsBeforeConverge &&
@@ -326,216 +417,115 @@ export class ThinkingModeEngine {
     return 'exploring';
   }
 
-  private determineAction(
-    config: ThinkingModeConfig,
-    tree: ThoughtTree,
-    engine: MCTSEngine,
-    currentPhase: ModeGuidance['currentPhase'],
-    currentDepth: number,
-    convergenceStatus: ModeGuidance['convergenceStatus'],
-  ): {
-    recommendedAction: ModeGuidance['recommendedAction'];
-    reasoning: string;
-    branchingSuggestion: ModeGuidance['branchingSuggestion'];
-    backtrackSuggestion: ModeGuidance['backtrackSuggestion'];
-  } {
-    switch (config.mode) {
-      case 'fast':
-        return this.determineFastAction(config, currentPhase, currentDepth);
-      case 'expert':
-        return this.determineExpertAction(config, tree, engine, currentPhase, currentDepth, convergenceStatus);
-      case 'deep':
-        return this.determineDeepAction(config, tree, engine, currentPhase, currentDepth, convergenceStatus);
+  private checkBacktrack(
+    ctx: DetermineActionContext,
+  ): ActionResult | null {
+    const { config, tree, engine, currentDepth } = ctx;
+    const { cursor } = tree;
+    if (!cursor || !config.enableBacktracking) return null;
+    if (cursor.visitCount === 0 || config.backtrackThreshold <= 0) {
+      return null;
     }
+    const cursorAvg = cursor.totalValue / cursor.visitCount;
+    const eligible = cursor.children.length > 0 || currentDepth > 1;
+    if (cursorAvg >= config.backtrackThreshold || !eligible) {
+      return null;
+    }
+    const ancestor = this.findBestAncestorForBacktrack(
+      tree, engine, cursor.nodeId,
+    );
+    if (!ancestor) return null;
+    return {
+      recommendedAction: 'backtrack',
+      reasoning: `Current path scoring ${cursorAvg.toFixed(2)} (threshold ${config.backtrackThreshold}). Backtrack to explore alternatives.`,
+      branchingSuggestion: null,
+      backtrackSuggestion: {
+        shouldBacktrack: true,
+        toNodeId: ancestor.nodeId,
+        reason: `Node at depth ${ancestor.depth} has better potential for branching.`,
+      },
+    };
   }
 
-  private determineFastAction(
-    config: ThinkingModeConfig,
-    currentPhase: ModeGuidance['currentPhase'],
-    currentDepth: number,
-  ) {
-    if (currentPhase === 'concluded' || currentDepth >= config.targetDepthMax) {
-      return {
-        recommendedAction: 'conclude' as const,
-        reasoning: `Target depth reached (${currentDepth}/${config.targetDepthMax}). Fast mode — conclude now.`,
-        branchingSuggestion: null,
-        backtrackSuggestion: null,
-      };
-    }
+  private checkBranch(ctx: DetermineActionContext): ActionResult | null {
+    const { config, tree, engine, currentDepth } = ctx;
+    const { cursor } = tree;
+    if (!cursor) return null;
+    const belowCap = cursor.children.length < config.maxBranchingFactor;
+    if (!belowCap || cursor.isTerminal) return null;
+    if (currentDepth < config.branchMinDepth) return null;
 
+    let branchFrom = cursor.nodeId;
+    if (config.useMCTSForBranching) {
+      const s = engine.suggestNext(tree, config.suggestStrategy);
+      if (s.suggestion) branchFrom = s.suggestion.nodeId;
+    }
+    const remaining = config.maxBranchingFactor - cursor.children.length;
     return {
-      recommendedAction: 'continue' as const,
-      reasoning: `Fast mode — continue linear exploration (${currentDepth}/${config.targetDepthMax}).`,
-      branchingSuggestion: null,
+      recommendedAction: 'branch',
+      reasoning: `${config.mode} mode — ${cursor.children.length}/${config.maxBranchingFactor} branches explored. Consider alternative approaches.`,
+      branchingSuggestion: {
+        shouldBranch: true,
+        fromNodeId: branchFrom,
+        reason: `Node has capacity for ${remaining} more branches.`,
+      },
       backtrackSuggestion: null,
     };
   }
 
-  private determineExpertAction(
-    config: ThinkingModeConfig,
-    tree: ThoughtTree,
-    engine: MCTSEngine,
-    currentPhase: ModeGuidance['currentPhase'],
-    currentDepth: number,
-    convergenceStatus: ModeGuidance['convergenceStatus'],
-  ) {
-    // Concluded
-    if (currentPhase === 'concluded') {
+  private determineAction(ctx: DetermineActionContext): ActionResult {
+    const { config, currentPhase, currentDepth, convergenceStatus } = ctx;
+    const none = { branchingSuggestion: null, backtrackSuggestion: null };
+
+    // 1. Concluded check
+    const concluded = currentPhase === 'concluded'
+      || (config.convergenceThreshold === 0
+        && currentDepth >= config.targetDepthMax);
+    if (concluded) {
+      const scoreInfo = convergenceStatus?.score != null
+        ? ` (score: ${convergenceStatus.score.toFixed(2)}, threshold: ${config.convergenceThreshold})`
+        : ` (${currentDepth}/${config.targetDepthMax})`;
       return {
-        recommendedAction: 'conclude' as const,
-        reasoning: `Convergence reached (score: ${convergenceStatus?.score?.toFixed(2)}). Expert mode — conclude.`,
-        branchingSuggestion: null,
-        backtrackSuggestion: null,
+        recommendedAction: 'conclude',
+        reasoning: `Target reached${scoreInfo}. ${config.mode} mode — conclude.`,
+        ...none,
       };
     }
 
-    const cursor = tree.cursor;
-    if (!cursor) {
+    // 2. No cursor → continue
+    if (!ctx.tree.cursor) {
       return {
-        recommendedAction: 'continue' as const,
+        recommendedAction: 'continue',
         reasoning: 'No cursor — submit a thought to begin.',
-        branchingSuggestion: null,
-        backtrackSuggestion: null,
+        ...none,
       };
     }
 
-    // Check for backtracking: current path scores low
-    if (config.enableBacktracking && cursor.visitCount > 0) {
-      const cursorAvg = cursor.totalValue / cursor.visitCount;
-      if (cursorAvg < 0.4 && currentDepth > 1) {
-        const ancestor = this.findBestAncestorForBacktrack(tree, engine, cursor.nodeId);
-        if (ancestor) {
-          return {
-            recommendedAction: 'backtrack' as const,
-            reasoning: `Current path scoring low (${cursorAvg.toFixed(2)}). Backtrack to explore alternatives.`,
-            branchingSuggestion: null,
-            backtrackSuggestion: {
-              shouldBacktrack: true,
-              toNodeId: ancestor.nodeId,
-              reason: `Node at depth ${ancestor.depth} has better potential for branching.`,
-            },
-          };
-        }
-      }
-    }
+    // 3. Backtrack check
+    const backtrack = this.checkBacktrack(ctx);
+    if (backtrack) return backtrack;
 
-    // Check for branching: cursor has few children relative to max
-    if (cursor.children.length < config.maxBranchingFactor && !cursor.isTerminal && currentDepth >= 2) {
-      return {
-        recommendedAction: 'branch' as const,
-        reasoning: `Decision point — ${cursor.children.length}/${config.maxBranchingFactor} branches explored. Consider alternative approaches.`,
-        branchingSuggestion: {
-          shouldBranch: true,
-          fromNodeId: cursor.nodeId,
-          reason: `Node has capacity for ${config.maxBranchingFactor - cursor.children.length} more branches.`,
-        },
-        backtrackSuggestion: null,
-      };
-    }
+    // 4. Branch check
+    const branch = this.checkBranch(ctx);
+    if (branch) return branch;
 
-    // Check for evaluation: leaves need scoring
-    const leaves = tree.getLeafNodes();
+    // 5. Evaluate unevaluated leaves
+    const leaves = !config.autoEvaluate
+      ? ctx.tree.getLeafNodes() : [];
     const unevaluated = leaves.filter(l => l.visitCount === 0);
     if (unevaluated.length > 0) {
       return {
-        recommendedAction: 'evaluate' as const,
+        recommendedAction: 'evaluate',
         reasoning: `${unevaluated.length} leaf node(s) unevaluated. Score them to guide exploration.`,
-        branchingSuggestion: null,
-        backtrackSuggestion: null,
+        ...none,
       };
     }
 
+    // 6. Default continue
     return {
-      recommendedAction: 'continue' as const,
-      reasoning: `Expert mode — continue exploring (depth ${currentDepth}/${config.targetDepthMax}).`,
-      branchingSuggestion: null,
-      backtrackSuggestion: null,
-    };
-  }
-
-  private determineDeepAction(
-    config: ThinkingModeConfig,
-    tree: ThoughtTree,
-    engine: MCTSEngine,
-    currentPhase: ModeGuidance['currentPhase'],
-    currentDepth: number,
-    convergenceStatus: ModeGuidance['convergenceStatus'],
-  ) {
-    // Concluded
-    if (currentPhase === 'concluded') {
-      return {
-        recommendedAction: 'conclude' as const,
-        reasoning: `High convergence reached (score: ${convergenceStatus?.score?.toFixed(2)}, threshold: ${config.convergenceThreshold}). Deep mode — conclude.`,
-        branchingSuggestion: null,
-        backtrackSuggestion: null,
-      };
-    }
-
-    const cursor = tree.cursor;
-    if (!cursor) {
-      return {
-        recommendedAction: 'continue' as const,
-        reasoning: 'No cursor — submit a thought to begin.',
-        branchingSuggestion: null,
-        backtrackSuggestion: null,
-      };
-    }
-
-    // Deep mode: aggressive backtracking to visit alternatives
-    if (config.enableBacktracking && cursor.visitCount > 0 && cursor.children.length > 0) {
-      const cursorAvg = cursor.totalValue / cursor.visitCount;
-      if (cursorAvg < 0.5) {
-        const ancestor = this.findBestAncestorForBacktrack(tree, engine, cursor.nodeId);
-        if (ancestor) {
-          return {
-            recommendedAction: 'backtrack' as const,
-            reasoning: `Deep exploration — current path at ${cursorAvg.toFixed(2)}. Backtrack to explore more alternatives.`,
-            branchingSuggestion: null,
-            backtrackSuggestion: {
-              shouldBacktrack: true,
-              toNodeId: ancestor.nodeId,
-              reason: `Revisit node at depth ${ancestor.depth} for wider exploration.`,
-            },
-          };
-        }
-      }
-    }
-
-    // Deep mode: aggressive branching
-    if (cursor.children.length < config.maxBranchingFactor && !cursor.isTerminal) {
-      // Use MCTS suggestion for best branching point
-      const suggestion = engine.suggestNext(tree, config.suggestStrategy);
-      const branchFrom = suggestion.suggestion ? suggestion.suggestion.nodeId : cursor.nodeId;
-
-      return {
-        recommendedAction: 'branch' as const,
-        reasoning: `Deep mode — aggressively branch (${cursor.children.length}/${config.maxBranchingFactor}). Explore diverse perspectives.`,
-        branchingSuggestion: {
-          shouldBranch: true,
-          fromNodeId: branchFrom,
-          reason: `Wide exploration: up to ${config.maxBranchingFactor} branches per node.`,
-        },
-        backtrackSuggestion: null,
-      };
-    }
-
-    // Evaluate unevaluated leaves
-    const leaves = tree.getLeafNodes();
-    const unevaluated = leaves.filter(l => l.visitCount === 0);
-    if (unevaluated.length > 0) {
-      return {
-        recommendedAction: 'evaluate' as const,
-        reasoning: `${unevaluated.length} unevaluated leaf node(s). Score them before convergence check.`,
-        branchingSuggestion: null,
-        backtrackSuggestion: null,
-      };
-    }
-
-    return {
-      recommendedAction: 'continue' as const,
-      reasoning: `Deep mode — continue exploration (depth ${currentDepth}/${config.targetDepthMax}).`,
-      branchingSuggestion: null,
-      backtrackSuggestion: null,
+      recommendedAction: 'continue',
+      reasoning: `${config.mode} mode — continue exploring (depth ${currentDepth}/${config.targetDepthMax}).`,
+      ...none,
     };
   }
 
@@ -552,7 +542,7 @@ export class ThinkingModeEngine {
       return text.substring(0, breakAt) + '...';
     }
 
-    const first = sentences[0];
+    const [first] = sentences;
     const last = sentences[sentences.length - 1];
     const combined = `${first} [...] ${last}`;
     if (combined.length <= maxLen) return combined;
@@ -610,6 +600,49 @@ export class ThinkingModeEngine {
     return `PROGRESS [${stats.totalNodes} thoughts, depth ${stats.maxDepth}/${config.targetDepthMax}]: Evaluated ${totalEvaluated}/${stats.totalNodes} | Leaves ${leafCount} | Terminal ${stats.terminalCount}.\nBest path (score ${bestPathScore}): ${bestPathSummary}.\nGaps: ${stats.unexploredCount} unscored, ${singleChildBranchPoints} single-child branch points to expand.`;
   }
 
+  private findWeakestNode(
+    bestPath: TreeNodeInfo[],
+  ): { node: TreeNodeInfo; value: number } | null {
+    let weakest: TreeNodeInfo | null = null;
+    let weakestValue = Infinity;
+    for (const node of bestPath) {
+      if (node.visitCount > 0 && node.averageValue < weakestValue) {
+        weakestValue = node.averageValue;
+        weakest = node;
+      }
+    }
+    return weakest ? { node: weakest, value: weakestValue } : null;
+  }
+
+  private countUnchallenged(
+    tree: ThoughtTree,
+    bestPath: TreeNodeInfo[],
+  ): number {
+    let count = 0;
+    for (let i = 1; i < bestPath.length; i++) {
+      const parentNode = tree.getNode(bestPath[i - 1].nodeId);
+      if (parentNode && parentNode.children.length === 1) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  private computeBranchCoverage(
+    bestPath: TreeNodeInfo[],
+    maxBranchingFactor: number,
+  ): { totalChildren: number; theoreticalMax: number; percent: number } {
+    let totalChildren = 0;
+    for (const node of bestPath) {
+      totalChildren += node.childCount;
+    }
+    const theoreticalMax = bestPath.length * maxBranchingFactor;
+    const percent = theoreticalMax > 0
+      ? Math.round((totalChildren / theoreticalMax) * 100)
+      : 0;
+    return { totalChildren, theoreticalMax, percent };
+  }
+
   private generateCritique(
     config: ThinkingModeConfig,
     tree: ThoughtTree,
@@ -620,36 +653,12 @@ export class ThinkingModeEngine {
       return null;
     }
 
-    // Find weakest link: lowest averageValue on bestPath among visited nodes
-    let weakestNode: TreeNodeInfo | null = null;
-    let weakestValue = Infinity;
-    for (const node of bestPath) {
-      if (node.visitCount > 0 && node.averageValue < weakestValue) {
-        weakestValue = node.averageValue;
-        weakestNode = node;
-      }
-    }
+    const weakest = this.findWeakestNode(bestPath);
+    const unchallenged = this.countUnchallenged(tree, bestPath);
+    const coverage = this.computeBranchCoverage(
+      bestPath, config.maxBranchingFactor,
+    );
 
-    // Unchallenged steps: bestPath nodes whose parent has only 1 child
-    let unchallengedCount = 0;
-    for (let i = 1; i < bestPath.length; i++) {
-      const parentNode = tree.getNode(bestPath[i - 1].nodeId);
-      if (parentNode && parentNode.children.length === 1) {
-        unchallengedCount++;
-      }
-    }
-
-    // Branch coverage: actual children across bestPath / theoretical max
-    let totalChildren = 0;
-    for (const node of bestPath) {
-      totalChildren += node.childCount;
-    }
-    const theoreticalMax = bestPath.length * config.maxBranchingFactor;
-    const coveragePercent = theoreticalMax > 0
-      ? Math.round((totalChildren / theoreticalMax) * 100)
-      : 0;
-
-    // Balance: bestPath.length / totalNodes ratio
     const balanceRatio = stats.totalNodes > 0
       ? bestPath.length / stats.totalNodes
       : 0;
@@ -663,11 +672,16 @@ export class ThinkingModeEngine {
       balanceLabel = 'well-balanced';
     }
 
-    const weakestInfo = weakestNode
-      ? `Weakest: step ${weakestNode.thoughtNumber} (score ${weakestValue.toFixed(2)}) \u2014 "${this.compressThought(weakestNode.thought, 60)}".`
+    const weakestInfo = weakest
+      ? `Weakest: step ${weakest.node.thoughtNumber} (score ${weakest.value.toFixed(2)}) \u2014 "${this.compressThought(weakest.node.thought, 60)}".`
       : 'Weakest: N/A (no scored nodes).';
 
-    return `CRITIQUE: ${weakestInfo}\nUnchallenged: ${unchallengedCount}/${bestPath.length - 1} steps have no alternatives. Coverage: ${totalChildren}/${theoreticalMax} branches (${coveragePercent}%).\nBalance: ${balanceLabel} \u2014 ${balancePercent}% of nodes on best path.`;
+    const { totalChildren, theoreticalMax, percent } = coverage;
+    return [
+      `CRITIQUE: ${weakestInfo}`,
+      `Unchallenged: ${unchallenged}/${bestPath.length - 1} steps have no alternatives. Coverage: ${totalChildren}/${theoreticalMax} branches (${percent}%).`,
+      `Balance: ${balanceLabel} \u2014 ${balancePercent}% of nodes on best path.`,
+    ].join('\n');
   }
 
   private findBestAncestorForBacktrack(

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SecureThoughtSecurity, SecurityServiceConfigSchema } from '../../security-service.js';
+import { SecureThoughtSecurity } from '../../security-service.js';
 import { SessionTracker } from '../../session-tracker.js';
 import { SecurityError } from '../../errors.js';
 
@@ -10,7 +10,7 @@ describe('Race Condition: Rate Limit Recording', () => {
   beforeEach(() => {
     sessionTracker = new SessionTracker(0);
     security = new SecureThoughtSecurity(
-      SecurityServiceConfigSchema.parse({ maxThoughtsPerMinute: 3 }),
+      { maxThoughtsPerMinute: 3 },
       sessionTracker,
     );
   });
@@ -67,10 +67,10 @@ describe('Race Condition: Rate Limit Recording', () => {
   it('should handle validation failure without recording', () => {
     // Create security with blocked pattern
     const securityWithBlock = new SecureThoughtSecurity(
-      SecurityServiceConfigSchema.parse({
+      {
         maxThoughtsPerMinute: 5,
-        blockedPatterns: ['forbidden'],
-      }),
+        blockedPatterns: [/forbidden/i],
+      },
       sessionTracker,
     );
 
@@ -104,7 +104,7 @@ describe('Race Condition: Rate Limit Recording', () => {
     // This test verifies that old entries don't prevent new thoughts
     const tracker = new SessionTracker(0);
     const sec = new SecureThoughtSecurity(
-      SecurityServiceConfigSchema.parse({ maxThoughtsPerMinute: 2 }),
+      { maxThoughtsPerMinute: 2 },
       tracker,
     );
 

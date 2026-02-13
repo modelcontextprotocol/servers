@@ -14,10 +14,7 @@ import { ConfigManager } from './config.js';
 import { StructuredLogger } from './logger.js';
 import { ConsoleThoughtFormatter } from './formatter.js';
 import { BoundedThoughtManager } from './state-manager.js';
-import {
-  SecureThoughtSecurity,
-  SecurityServiceConfigSchema,
-} from './security-service.js';
+import { SecureThoughtSecurity } from './security-service.js';
 import { BasicMetricsCollector } from './metrics.js';
 import { ComprehensiveHealthChecker } from './health-checker.js';
 import { SessionTracker } from './session-tracker.js';
@@ -85,7 +82,6 @@ export class SequentialThinkingApp {
 
   private registerServices(): void {
     this.container.register('config', () => this.config);
-    this.container.register('sessionTracker', () => this.sessionTracker);
     this.container.register('logger', () => this.createLogger());
     this.container.register('formatter', () => this.createFormatter());
     this.container.register('storage', () => this.createStorage());
@@ -93,7 +89,7 @@ export class SequentialThinkingApp {
     this.container.register('metrics', () => this.createMetrics());
     this.container.register('healthChecker', () => this.createHealthChecker());
     this.container.register('thoughtTreeManager', () =>
-      new ThoughtTreeManager(this.config.mcts));
+      new ThoughtTreeManager(this.config.mcts, this.sessionTracker));
   }
 
   private createLogger(): Logger {
@@ -110,13 +106,11 @@ export class SequentialThinkingApp {
 
   private createSecurity(): SecurityService {
     return new SecureThoughtSecurity(
-      SecurityServiceConfigSchema.parse({
-        ...this.config.security,
+      {
+        maxThoughtsPerMinute: this.config.security.maxThoughtsPerMinute,
         maxThoughtLength: this.config.state.maxThoughtLength,
-        blockedPatterns: this.config.security.blockedPatterns.map(
-          (p: RegExp) => p.source,
-        ),
-      }),
+        blockedPatterns: this.config.security.blockedPatterns,
+      },
       this.sessionTracker,
     );
   }
