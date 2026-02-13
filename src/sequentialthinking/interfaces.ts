@@ -109,7 +109,33 @@ export const strategySchema = z.enum(STRATEGY_TYPES, {
   description: 'MCTS selection strategy: explore=find new paths, exploit=follow best path, balanced=mix both',
 });
 
-export const PROBLEM_TYPES = ['analysis', 'design', 'debugging', 'planning', 'optimization', 'decision', 'creative', 'unknown'] as const;
+export const PROBLEM_TYPES = [
+  'analysis',
+  'design',
+  'debugging',
+  'planning',
+  'optimization',
+  'decision',
+  'creative',
+  'refactoring',
+  'testing',
+  'security',
+  'performance',
+  'integration',
+  'migration',
+  'documentation',
+  'research',
+  'review',
+  'deployment',
+  'troubleshooting',
+  'architecture',
+  'api_design',
+  'data_modeling',
+  'ux_design',
+  'technical_writing',
+  'code_generation',
+  'unknown',
+] as const;
 
 export const PROBLEM_TYPE_DESCRIPTIONS: Record<string, string> = {
   analysis: 'Breaking down and understanding a problem',
@@ -119,10 +145,40 @@ export const PROBLEM_TYPE_DESCRIPTIONS: Record<string, string> = {
   optimization: 'Improving efficiency or performance',
   decision: 'Choosing between alternatives',
   creative: 'Generating novel ideas or solutions',
+  refactoring: 'Improving existing code structure',
+  testing: 'Creating or improving test coverage',
+  security: 'Identifying or fixing security vulnerabilities',
+  performance: 'Improving speed or resource usage',
+  integration: 'Connecting systems or components',
+  migration: 'Moving data or systems to new platforms',
+  documentation: 'Creating or updating documentation',
+  research: 'Investigating options or technologies',
+  review: 'Evaluating code or designs for quality',
+  deployment: 'Releasing to production environments',
+  troubleshooting: 'Diagnosing and resolving issues',
+  architecture: 'Designing system-level structures',
+  api_design: 'Designing programmatic interfaces',
+  data_modeling: 'Designing data structures and relationships',
+  ux_design: 'Designing user experiences',
+  technical_writing: 'Creating technical content',
+  code_generation: 'Writing code from specifications',
   unknown: 'Unable to classify the problem type',
 };
 
 export type ProblemType = (typeof PROBLEM_TYPES)[number];
+
+export const REASONING_STYLES = ['deductive', 'inductive', 'abductive', 'analogical', 'recursive', 'systems'] as const;
+
+export const REASONING_STYLE_DESCRIPTIONS: Record<string, string> = {
+  deductive: 'Reasoning from general principles to specific conclusions',
+  inductive: 'Reasoning from specific observations to general rules',
+  abductive: 'Reasoning to best explanation from incomplete info',
+  analogical: 'Reasoning from similar known cases',
+  recursive: 'Breaking problem into self-similar subproblems',
+  systems: 'Thinking about component interactions and relationships',
+};
+
+export type ReasoningStyle = (typeof REASONING_STYLES)[number];
 
 export const CONFIDENCE_TRENDS = ['improving', 'declining', 'stable', 'insufficient'] as const;
 

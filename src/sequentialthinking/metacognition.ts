@@ -197,14 +197,31 @@ export class Metacognition {
 
     const allText = thoughts.map(t => t.thought.toLowerCase()).join(' ');
 
-    const typeIndicators = {
-      analysis: ['analyze', 'examine', 'investigate', 'break down', 'understand', 'assess', 'evaluate', 'review'],
-      design: ['design', 'create', 'build', 'develop', 'architect', 'structure', 'plan', 'construct'],
-      debugging: ['bug', 'error', 'fix', 'issue', 'problem', 'wrong', 'broken', 'fail', 'exception'],
-      planning: ['plan', 'strategy', 'roadmap', 'milestone', 'goal', 'objective', 'future', 'execute'],
-      optimization: ['optimize', 'improve', 'better', 'performance', 'efficient', 'faster', 'reduce', 'enhance'],
-      decision: ['choose', 'decision', 'option', 'alternative', 'select', 'pick', 'compare', 'tradeoff'],
-      creative: ['creative', 'innovative', 'novel', 'new', 'idea', 'brainstorm', 'imagine', 'invent'],
+    const typeIndicators: Record<string, string[]> = {
+      analysis: ['analyze', 'examine', 'investigate', 'break down', 'understand', 'assess', 'evaluate', 'review', 'explore', 'diagnose'],
+      design: ['design', 'create', 'build', 'develop', 'architect', 'structure', 'plan', 'construct', 'interface', 'schema'],
+      debugging: ['bug', 'error', 'fix', 'issue', 'problem', 'wrong', 'broken', 'fail', 'exception', 'crash', 'stack trace'],
+      planning: ['plan', 'strategy', 'roadmap', 'milestone', 'goal', 'objective', 'future', 'execute', 'timeline', 'deliverable'],
+      optimization: ['optimize', 'improve', 'better', 'performance', 'efficient', 'faster', 'reduce', 'enhance', 'latency', 'throughput'],
+      decision: ['choose', 'decision', 'option', 'alternative', 'select', 'pick', 'compare', 'tradeoff', 'pros', 'cons'],
+      creative: ['creative', 'innovative', 'novel', 'new', 'idea', 'brainstorm', 'imagine', 'invent', 'discover', 'generate'],
+      refactoring: ['refactor', 'restructure', 'cleanup', 'simplify', 'debt', 'technical debt', 'improve code', 'reorganize'],
+      testing: ['test', 'coverage', 'unit test', 'integration test', 'test case', 'assertion', 'mock', 'verify', 'spec'],
+      security: ['security', 'vulnerability', 'attack', 'breach', 'auth', 'authorization', 'authentication', 'encryption', 'permission', 'threat'],
+      performance: ['performance', 'speed', 'memory', 'cpu', 'bottleneck', 'profiling', 'load', 'scalability', 'cache'],
+      integration: ['integrate', 'connect', 'api', 'interface', 'bridge', 'compatibility', 'interop', 'dependency'],
+      migration: ['migrate', 'upgrade', 'convert', 'transform', 'import', 'export', 'backup', 'restore', 'transition'],
+      documentation: ['document', 'doc', 'readme', 'specification', 'manual', 'guide', 'explain', 'describe'],
+      research: ['research', 'investigate', 'explore', 'study', 'compare', 'alternatives', 'options', 'feasibility'],
+      review: ['review', 'audit', 'assess', 'quality', 'best practice', 'standard', 'compliance', 'check'],
+      deployment: ['deploy', 'release', 'publish', 'environment', 'staging', 'production', 'ci', 'cd', 'pipeline'],
+      troubleshooting: ['troubleshoot', 'debug', 'solve', 'resolve', 'root cause', 'diagnostic', 'symptom'],
+      architecture: ['architecture', 'system design', 'microservice', 'monolith', 'distributed', 'component', 'layer', 'pattern'],
+      api_design: ['api', 'endpoint', 'rest', 'graphql', 'protocol', 'request', 'response', 'payload', 'schema'],
+      data_modeling: ['database', 'schema', 'entity', 'relationship', 'table', 'model', 'normalization', 'query'],
+      ux_design: ['user experience', 'ui', 'interface', 'design', 'accessibility', 'usability', 'user flow', 'prototype'],
+      technical_writing: ['documentation', 'manual', 'guide', 'tutorial', 'spec', 'readme', 'changelog'],
+      code_generation: ['generate', 'create code', 'scaffold', 'boilerplate', 'template', 'auto-generate', 'write code'],
     };
 
     const scores: Record<string, number> = {};
@@ -215,7 +232,7 @@ export class Metacognition {
     const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
     const [topType, topScore] = entries[0];
 
-    const confidence = topScore > 0 ? Math.min(0.9, 0.3 + topScore * 0.2) : 0.1;
+    const confidence = topScore > 0 ? Math.min(0.9, 0.3 + topScore * 0.15) : 0.1;
     const indicators = typeIndicators[topType as keyof typeof typeIndicators]
       ?.filter(kw => allText.includes(kw)) || [];
 
@@ -228,16 +245,124 @@ export class Metacognition {
 
   getStrategyGuidance(problemType: string): string {
     const strategies: Record<string, string> = {
-      analysis: 'Focus on breaking down the problem. What are the key components? What evidence supports each component?',
-      design: 'Consider the architecture. What are the main components? How do they interact? What patterns apply?',
-      debugging: 'Identify the root cause. What is the expected vs actual behavior? What changed? Where is the failure?',
-      planning: 'Define milestones. What are the key deliverables? What dependencies exist? What is the timeline?',
-      optimization: 'Measure first. What is the current performance? What are the bottlenecks? What has the most impact?',
-      decision: 'Weigh alternatives. What are the tradeoffs? What criteria matter most? What are the risks of each option?',
-      creative: 'Explore possibilities. What are 3 different approaches? What would a novice try? What would an expert do differently?',
+      analysis: 'Break down the problem. What are the key components? What evidence supports each? Consider root causes.',
+      design: 'Define the architecture. What are the main components? How do they interact? What patterns apply?',
+      debugging: 'Identify the root cause. What is expected vs actual? What changed? Where does it fail? Check logs and traces.',
+      planning: 'Define milestones. What are deliverables? What dependencies? What is the timeline? Identify risks.',
+      optimization: 'Measure first. What is current performance? What are bottlenecks? What has most impact? Profile before optimizing.',
+      decision: 'Weigh alternatives. What are tradeoffs? What criteria matter most? What are risks of each option?',
+      creative: 'Explore possibilities. What are 3 different approaches? What would a novice try? An expert?',
+      refactoring: 'Start small. What code is hardest to change? What has most dependencies? Ensure tests pass after each change.',
+      testing: 'Write failing test first. What behavior must be preserved? What edge cases matter? Test boundaries.',
+      security: 'Think like an attacker. What could go wrong? Validate all input. Follow principle of least privilege.',
+      performance: 'Profile to find hotspots. Measure before and after. Focus on algorithmic improvements first.',
+      integration: 'Define contracts first. What is the interface? How handle failures? Version your APIs.',
+      migration: 'Plan for rollback. Migrate incrementally. Keep old and new in sync during transition.',
+      documentation: 'Explain the why, not just what. Include examples. Keep docs near code.',
+      research: 'Start with questions. What have others tried? What worked? What are tradeoffs?',
+      review: 'Focus on logic, not style. Look for edge cases. Verify error handling. Check security.',
+      deployment: 'Automate everything. Roll back easily. Deploy in small increments. Monitor aggressively.',
+      troubleshooting: 'Gather evidence first. What changed? When did it break? Reproduce consistently.',
+      architecture: 'Consider scalability and maintainability. Keep it simple. Define clear boundaries.',
+      api_design: 'Make it simple and consistent. Version early. Document with examples.',
+      data_modeling: 'Normalize for consistency. Denormalize for performance. Index wisely.',
+      ux_design: 'Know your user. Test with real people. Iterate based on feedback.',
+      technical_writing: 'Know your audience. Use simple words. Show, dont just tell.',
+      code_generation: 'Provide clear specs. Review generated code. Handle edge cases.',
       unknown: 'Clarify the goal. What does success look like? What constraints exist? What have you tried?',
     };
     return strategies[problemType] || strategies.unknown;
+  }
+
+  getCanonicalPatterns(problemType: string): string[] {
+    const patterns: Record<string, string[]> = {
+      analysis: [
+        '1. Define the problem clearly',
+        '2. Break into components',
+        '3. Analyze each component',
+        '4. Synthesize findings',
+      ],
+      design: [
+        '1. Understand requirements',
+        '2. Identify components',
+        '3. Define interfaces',
+        '4. Choose patterns',
+        '5. Validate with stakeholders',
+      ],
+      debugging: [
+        '1. Reproduce the issue',
+        '2. Gather diagnostic info',
+        '3. Form hypothesis',
+        '4. Test hypothesis',
+        '5. Fix and verify',
+      ],
+      planning: [
+        '1. Define the goal',
+        '2. Identify milestones',
+        '3. Assess dependencies',
+        '4. Allocate resources',
+        '5. Define timeline',
+      ],
+      optimization: [
+        '1. Measure baseline',
+        '2. Identify bottleneck',
+        '3. Try simplest fix',
+        '4. Measure improvement',
+        '5. Repeat if needed',
+      ],
+      decision: [
+        '1. Define criteria',
+        '2. List options',
+        '3. Evaluate each',
+        '4. Make decision',
+        '5. Plan execution',
+      ],
+      refactoring: [
+        '1. Ensure tests exist',
+        '2. Make one small change',
+        '3. Run tests',
+        '4. Commit if passing',
+        '5. Repeat',
+      ],
+      testing: [
+        '1. Identify behaviors',
+        '2. Write failing test',
+        '3. Make test pass',
+        '4. Refactor if needed',
+        '5. Add edge cases',
+      ],
+    };
+    return patterns[problemType] || [];
+  }
+
+  detectReasoningStyle(thoughts: ThoughtData[]): { style: string; confidence: number } {
+    if (thoughts.length === 0) {
+      return { style: 'deductive', confidence: 0 };
+    }
+
+    const allText = thoughts.map(t => t.thought.toLowerCase()).join(' ');
+
+    const styleIndicators = {
+      deductive: ['therefore', 'thus', 'hence', 'consequently', 'it follows', 'must be', 'all', 'every', 'if then'],
+      inductive: ['suggests', 'appears', 'seems', 'likely', 'probably', 'often', 'sometimes', 'typically', 'in general'],
+      abductive: ['probably', 'most likely', 'best explanation', 'likely cause', 'makes sense', 'would explain'],
+      analogical: ['similar to', 'like', 'analogous', 'compared to', 'just as', 'similarly', 'in the same way'],
+      recursive: ['repeat', 'again', 'iterate', 'loop', 'same problem', 'self-similar', 'fractal'],
+      systems: ['component', 'interaction', 'feedback', 'loop', 'ecosystem', 'network', 'relationship', 'dependency'],
+    };
+
+    const scores: Record<string, number> = {};
+    for (const [style, keywords] of Object.entries(styleIndicators)) {
+      scores[style] = keywords.filter(kw => allText.includes(kw)).length;
+    }
+
+    const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+    const [topStyle, topScore] = entries[0];
+
+    return {
+      style: topScore > 0 ? topStyle : 'deductive',
+      confidence: topScore > 0 ? Math.min(0.9, 0.3 + topScore * 0.2) : 0.3,
+    };
   }
 
   computeConfidenceTrend(history: number[]): 'improving' | 'declining' | 'stable' | 'insufficient' {
