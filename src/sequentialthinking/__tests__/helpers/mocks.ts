@@ -10,7 +10,5 @@ vi.mock('chalk', () => ({
     gray: identity,
     cyan: identity,
     red: identity,
-    white: identity,
-    bold: identity,
   },
 }));

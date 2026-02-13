@@ -48,7 +48,6 @@ describe('SequentialThinkingServer', () => {
         nextThoughtNeeded: true,
         isRevision: true,
         revisesThought: 1,
-        needsMoreThoughts: false,
       };
 
       const result = await server.processThought(input);
@@ -241,8 +240,8 @@ describe('SequentialThinkingServer', () => {
       expect(data.message).toContain('exceeds maximum length');
     });
 
-    it('should sanitize and accept previously blocked patterns', async () => {
-      // javascript: gets sanitized away before validation
+    it('should reject blocked patterns before sanitization', async () => {
+      // javascript: is a blocked pattern and should be rejected on raw input
       const result = await server.processThought({
         thought: 'Visit javascript: void(0) for info',
         thoughtNumber: 1,
@@ -250,8 +249,9 @@ describe('SequentialThinkingServer', () => {
         nextThoughtNeeded: true,
       });
 
-      expect(result.isError).toBeUndefined(); // Success = undefined, not false
-      // Content was sanitized (javascript: removed)
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('SECURITY_ERROR');
     });
 
     it('should sanitize and accept normal content', async () => {
@@ -263,6 +263,24 @@ describe('SequentialThinkingServer', () => {
       });
 
       expect(result.isError).toBeUndefined();
+    });
+
+    it('should sanitize content that passes validation before storage', async () => {
+      const sessionId = 'sanitize-storage-test';
+      // onclick=handler is not in blocked patterns but is stripped by sanitizeContent
+      const result = await server.processThought({
+        thought: 'Click handler onclick=doSomething for the button',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+        sessionId,
+      });
+
+      expect(result.isError).toBeUndefined();
+      // Verify the stored thought was sanitized (onclick= removed)
+      const history = server.getFilteredHistory({ sessionId });
+      expect(history).toHaveLength(1);
+      expect(history[0].thought).not.toContain('onclick=');
     });
   });
 
@@ -1023,16 +1041,17 @@ describe('SequentialThinkingServer', () => {
   });
 
   describe('Regex-Based Blocked Pattern Matching', () => {
-    it('should sanitize eval( before validation', async () => {
-      // eval( is now sanitized away before regex validation happens
+    it('should reject blocked input before sanitization', async () => {
+      // eval( is a blocked pattern and should be rejected on raw input
       const result = await server.processThought({
         thought: 'use eval(code) here',
         thoughtNumber: 1,
         totalThoughts: 1,
         nextThoughtNeeded: false,
       });
-      // Should succeed because eval( was sanitized away
-      expect(result.isError).toBeUndefined();
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('SECURITY_ERROR');
     });
 
     it('should block document.cookie via regex', async () => {

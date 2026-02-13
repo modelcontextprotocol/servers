@@ -14,10 +14,16 @@ export class MCTSEngine {
     this.defaultC = explorationConstant;
   }
 
-  computeUCB1(nodeVisits: number, nodeValue: number, parentVisits: number, C: number): number {
+  computeUCB1(
+    nodeVisits: number,
+    nodeValue: number,
+    parentVisits: number,
+    explorationC: number,
+  ): number {
     if (nodeVisits === 0) return Infinity;
     const exploitation = nodeValue / nodeVisits;
-    const exploration = C * Math.sqrt(Math.log(parentVisits) / nodeVisits);
+    const exploration = explorationC
+      * Math.sqrt(Math.log(parentVisits) / nodeVisits);
     return exploitation + exploration;
   }
 
@@ -34,11 +40,24 @@ export class MCTSEngine {
     return updated;
   }
 
-  suggestNext(tree: ThoughtTree, strategy: 'explore' | 'exploit' | 'balanced' = 'balanced'): {
-    suggestion: { nodeId: string; thoughtNumber: number; thought: string; ucb1Score: number; reason: string } | null;
-    alternatives: Array<{ nodeId: string; thoughtNumber: number; ucb1Score: number }>;
+  suggestNext(
+    tree: ThoughtTree,
+    strategy: 'explore' | 'exploit' | 'balanced' = 'balanced',
+  ): {
+    suggestion: {
+      nodeId: string;
+      thoughtNumber: number;
+      thought: string;
+      ucb1Score: number;
+      reason: string;
+    } | null;
+    alternatives: Array<{
+      nodeId: string;
+      thoughtNumber: number;
+      ucb1Score: number;
+    }>;
   } {
-    const C = STRATEGY_CONSTANTS[strategy] ?? this.defaultC;
+    const explorationC = STRATEGY_CONSTANTS[strategy] ?? this.defaultC;
     const expandable = tree.getExpandableNodes();
 
     if (expandable.length === 0) {
@@ -50,13 +69,13 @@ export class MCTSEngine {
 
     const scored = expandable.map(node => ({
       node,
-      ucb1: this.computeUCB1(node.visitCount, node.totalValue, totalVisits, C),
+      ucb1: this.computeUCB1(node.visitCount, node.totalValue, totalVisits, explorationC),
     }));
 
     // Sort descending by UCB1 score
     scored.sort((a, b) => b.ucb1 - a.ucb1);
 
-    const best = scored[0];
+    const [best] = scored;
     const reason = best.node.visitCount === 0
       ? 'Unexplored node — never evaluated'
       : `UCB1 score ${best.ucb1.toFixed(4)} (${strategy} strategy)`;
@@ -78,7 +97,7 @@ export class MCTSEngine {
   }
 
   extractBestPath(tree: ThoughtTree): TreeNodeInfo[] {
-    const root = tree.root;
+    const { root } = tree;
     if (!root) return [];
 
     const path: TreeNodeInfo[] = [];

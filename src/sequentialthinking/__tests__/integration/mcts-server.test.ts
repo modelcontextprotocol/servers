@@ -633,6 +633,107 @@ describe('MCTS Server Integration', () => {
     });
   });
 
+  describe('MCTS Metrics Instrumentation', () => {
+    it('should increment totalRequests and successfulRequests on successful ops', async () => {
+      const sessionId = 'metrics-success';
+      await server.processThought({
+        thought: 'Setup',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId,
+      });
+
+      const metricsBefore = server.getMetrics() as Record<string, any>;
+      const totalBefore = metricsBefore.requests.totalRequests;
+      const successBefore = metricsBefore.requests.successfulRequests;
+
+      await server.setThinkingMode(sessionId, 'fast');
+      await server.suggestNextThought(sessionId);
+
+      const metricsAfter = server.getMetrics() as Record<string, any>;
+      expect(metricsAfter.requests.totalRequests).toBe(totalBefore + 2);
+      expect(metricsAfter.requests.successfulRequests).toBe(successBefore + 2);
+    });
+
+    it('should increment failedRequests on tree errors inside withMetrics', async () => {
+      const metricsBefore = server.getMetrics() as Record<string, any>;
+      const failedBefore = metricsBefore.requests.failedRequests;
+
+      // backtrack on nonexistent session: validateSessionId passes, tree error inside withMetrics
+      await server.backtrack('valid-but-no-tree', 'node-1');
+
+      const metricsAfter = server.getMetrics() as Record<string, any>;
+      expect(metricsAfter.requests.failedRequests).toBe(failedBefore + 1);
+    });
+  });
+
+  describe('Session Validation for MCTS Operations', () => {
+    it('should reject empty sessionId on backtrack', async () => {
+      const result = await server.backtrack('', 'node-1');
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('should reject oversized sessionId on evaluateThought', async () => {
+      const result = await server.evaluateThought('a'.repeat(101), 'node-1', 0.5);
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('SECURITY_ERROR');
+    });
+
+    it('should reject empty sessionId on suggestNextThought', async () => {
+      const result = await server.suggestNextThought('');
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('should reject empty sessionId on getThinkingSummary', async () => {
+      const result = await server.getThinkingSummary('');
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('should reject empty sessionId on setThinkingMode', async () => {
+      const result = await server.setThinkingMode('', 'fast');
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('should accept valid sessionId on all operations', async () => {
+      const sessionId = 'valid-session';
+      // Set up a tree with a thought first
+      const t1 = await server.processThought({
+        thought: 'Setup thought',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId,
+      });
+      const d1 = JSON.parse(t1.content[0].text);
+
+      // All should succeed (not return validation/security errors)
+      const btResult = await server.backtrack(sessionId, d1.nodeId);
+      expect(btResult.isError).toBeUndefined();
+
+      const evalResult = await server.evaluateThought(sessionId, d1.nodeId, 0.5);
+      expect(evalResult.isError).toBeUndefined();
+
+      const suggestResult = await server.suggestNextThought(sessionId);
+      expect(suggestResult.isError).toBeUndefined();
+
+      const summaryResult = await server.getThinkingSummary(sessionId);
+      expect(summaryResult.isError).toBeUndefined();
+
+      const modeResult = await server.setThinkingMode(sessionId, 'fast');
+      expect(modeResult.isError).toBeUndefined();
+    });
+  });
+
   describe('Backward Compatibility', () => {
     it('should not break existing processThought response structure', async () => {
       const result = await server.processThought({

@@ -1,17 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ThoughtTree } from '../../thought-tree.js';
-import type { ThoughtData } from '../../circular-buffer.js';
-
-function makeThought(overrides: Partial<ThoughtData> = {}): ThoughtData {
-  return {
-    thought: 'Test thought',
-    thoughtNumber: 1,
-    totalThoughts: 5,
-    nextThoughtNeeded: true,
-    sessionId: 'test-session',
-    ...overrides,
-  };
-}
+import { createTestThoughtData as makeThought } from '../helpers/factories.js';
 
 describe('ThoughtTree', () => {
   describe('addThought', () => {

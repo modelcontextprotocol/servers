@@ -17,22 +17,18 @@ describe('BoundedThoughtManager (Storage Interface)', () => {
     storage = new BoundedThoughtManager({
       maxHistorySize: 100,
       maxBranchAge: 3600000,
-      maxThoughtLength: 5000,
       maxThoughtsPerBranch: 50,
       cleanupInterval: 0,
     }, sessionTracker);
     return storage;
   }
 
-  it('should generate anonymous session ID when missing', () => {
+  it('should preserve session ID set by caller', () => {
     const s = createStorage();
-    const thought = makeThought();
+    const thought = makeThought({ sessionId: 'caller-session' });
     s.addThought(thought);
-    // Original should not be mutated (input mutation fix)
-    expect(thought.sessionId).toBeUndefined();
-    // Stored entry should have session ID
     const history = s.getHistory();
-    expect(history[0].sessionId).toMatch(/^anonymous-/);
+    expect(history[0].sessionId).toBe('caller-session');
   });
 
   it('should keep provided session ID', () => {

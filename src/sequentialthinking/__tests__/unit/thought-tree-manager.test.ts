@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ThoughtTreeManager } from '../../thought-tree-manager.js';
+import { SessionTracker } from '../../session-tracker.js';
 import type { MCTSConfig } from '../../interfaces.js';
-import type { ThoughtData } from '../../circular-buffer.js';
+import { createTestThoughtData as makeThought } from '../helpers/factories.js';
 
 function defaultConfig(): MCTSConfig {
   return {
@@ -9,17 +10,6 @@ function defaultConfig(): MCTSConfig {
     maxTreeAge: 3600000,
     explorationConstant: Math.SQRT2,
     enableAutoTree: true,
-  };
-}
-
-function makeThought(overrides: Partial<ThoughtData> = {}): ThoughtData {
-  return {
-    thought: 'Test thought',
-    thoughtNumber: 1,
-    totalThoughts: 5,
-    nextThoughtNeeded: true,
-    sessionId: 'test-session',
-    ...overrides,
   };
 }
 
@@ -271,6 +261,29 @@ describe('ThoughtTreeManager', () => {
     });
   });
 
+  describe('findNodeByThoughtNumber', () => {
+    it('should find existing node by thought number', () => {
+      manager.recordThought(makeThought({ sessionId: 's1', thoughtNumber: 1, thought: 'First' }));
+      manager.recordThought(makeThought({ sessionId: 's1', thoughtNumber: 2, thought: 'Second' }));
+
+      const found = manager.findNodeByThoughtNumber('s1', 1);
+      expect(found).not.toBeNull();
+      expect(found!.thoughtNumber).toBe(1);
+      expect(found!.thought).toBe('First');
+    });
+
+    it('should return null for missing session', () => {
+      const found = manager.findNodeByThoughtNumber('nonexistent', 1);
+      expect(found).toBeNull();
+    });
+
+    it('should return null for missing thought number', () => {
+      manager.recordThought(makeThought({ sessionId: 's1', thoughtNumber: 1 }));
+      const found = manager.findNodeByThoughtNumber('s1', 99);
+      expect(found).toBeNull();
+    });
+  });
+
   describe('cleanup', () => {
     it('should remove expired trees', async () => {
       const shortLivedManager = new ThoughtTreeManager({
@@ -301,6 +314,41 @@ describe('ThoughtTreeManager', () => {
         manager.destroy();
         manager.destroy();
       }).not.toThrow();
+    });
+  });
+
+  describe('session eviction coordination', () => {
+    it('should remove tree and mode when session is evicted from tracker', () => {
+      vi.useFakeTimers();
+      try {
+        // Create tracker with cleanup disabled (we trigger it manually)
+        const tracker = new SessionTracker(0);
+        const coordManager = new ThoughtTreeManager(defaultConfig(), tracker);
+
+        // Record a thought so the session has a tree
+        tracker.recordThought('evict-me');
+        coordManager.recordThought(makeThought({ sessionId: 'evict-me', thoughtNumber: 1 }));
+        coordManager.setMode('evict-me', 'fast');
+
+        // Verify tree and mode exist
+        expect(coordManager.findNodeByThoughtNumber('evict-me', 1)).not.toBeNull();
+        expect(coordManager.getMode('evict-me')).not.toBeNull();
+
+        // Advance time past SESSION_EXPIRY_MS (1 hour)
+        vi.advanceTimersByTime(3600001);
+
+        // Trigger cleanup on the tracker — this evicts the session
+        tracker.cleanup();
+
+        // Tree and mode should now be gone
+        expect(coordManager.findNodeByThoughtNumber('evict-me', 1)).toBeNull();
+        expect(coordManager.getMode('evict-me')).toBeNull();
+
+        coordManager.destroy();
+        tracker.destroy();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

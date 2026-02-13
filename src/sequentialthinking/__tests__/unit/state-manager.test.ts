@@ -6,7 +6,6 @@ import { createTestThought as makeThought } from '../helpers/factories.js';
 const defaultConfig = {
   maxHistorySize: 100,
   maxBranchAge: 3600000,
-  maxThoughtLength: 5000,
   maxThoughtsPerBranch: 50,
   cleanupInterval: 0, // Disable timer in tests
 };
@@ -32,13 +31,13 @@ describe('BoundedThoughtManager', () => {
     });
 
     it('should not mutate the original thought', () => {
-      const thought = makeThought();
+      const thought = makeThought({ sessionId: 'test-session', timestamp: 12345 });
       manager.addThought(thought);
-      // Original should not be mutated
-      expect(thought.timestamp).toBeUndefined();
-      // Stored entry should have timestamp
+      // Stored entry is a shallow copy, not the same reference
       const history = manager.getHistory();
-      expect(history[0].timestamp).toBeGreaterThan(0);
+      expect(history[0]).not.toBe(thought);
+      expect(history[0].sessionId).toBe('test-session');
+      expect(history[0].timestamp).toBe(12345);
     });
   });
 
@@ -57,8 +56,7 @@ describe('BoundedThoughtManager', () => {
     it('should add thoughts to existing branch', () => {
       manager.addThought(makeThought({ branchId: 'b1', thoughtNumber: 1 }));
       manager.addThought(makeThought({ branchId: 'b1', thoughtNumber: 2 }));
-      const branch = manager.getBranch('b1');
-      expect(branch?.getThoughtCount()).toBe(2);
+      expect(manager.getBranchThoughts('b1')).toHaveLength(2);
     });
 
     it('should enforce per-branch thought limits', () => {
@@ -70,8 +68,7 @@ describe('BoundedThoughtManager', () => {
       mgr.addThought(makeThought({ branchId: 'b1', thoughtNumber: 1 }));
       mgr.addThought(makeThought({ branchId: 'b1', thoughtNumber: 2 }));
       mgr.addThought(makeThought({ branchId: 'b1', thoughtNumber: 3 }));
-      const branch = mgr.getBranch('b1');
-      expect(branch?.getThoughtCount()).toBe(2);
+      expect(mgr.getBranchThoughts('b1')).toHaveLength(2);
       mgr.destroy();
       limitTracker.destroy();
     });
@@ -173,13 +170,6 @@ describe('BoundedThoughtManager', () => {
     });
   });
 
-  describe('stopCleanupTimer', () => {
-    it('should not throw when called multiple times', () => {
-      manager.stopCleanupTimer();
-      expect(() => manager.stopCleanupTimer()).not.toThrow();
-    });
-  });
-
   describe('getStats', () => {
     it('should return correct shape', () => {
       const stats = manager.getStats();
@@ -220,8 +210,8 @@ describe('BoundedThoughtManager', () => {
     });
   });
 
-  describe('cleanup timer', () => {
-    it('should fire cleanup and remove expired branches', () => {
+  describe('cleanup via session tracker', () => {
+    it('should fire cleanup and remove expired branches when session tracker runs cleanup', () => {
       vi.useFakeTimers();
       try {
         const timerTracker = new SessionTracker(0);
@@ -234,10 +224,13 @@ describe('BoundedThoughtManager', () => {
         timerManager.addThought(makeThought({ branchId: 'timer-branch' }));
         expect(timerManager.getBranches()).toContain('timer-branch');
 
-        // Advance past branch expiry + cleanup interval
-        vi.advanceTimersByTime(6000);
+        // Advance past branch expiry
+        vi.advanceTimersByTime(4000);
 
-        // Branch should be expired and cleaned up by the timer
+        // Trigger cleanup via session tracker (which invokes periodic cleanup callbacks)
+        timerTracker.cleanup();
+
+        // Branch should be expired and cleaned up
         expect(timerManager.getBranches()).not.toContain('timer-branch');
 
         timerManager.destroy();

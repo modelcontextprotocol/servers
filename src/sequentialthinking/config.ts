@@ -11,16 +11,30 @@ export interface EnvironmentInfo {
   uptime: number;
 }
 
-function parseIntOrDefault(value: string | undefined, defaultValue: number): number {
+export const RATE_LIMIT_WINDOW_MS = 60000;
+
+function parseNumberOrDefault(
+  value: string | undefined,
+  parser: (v: string) => number,
+  defaultValue: number,
+): number {
   if (value === undefined) return defaultValue;
-  const parsed = parseInt(value, 10);
+  const parsed = parser(value);
   return Number.isNaN(parsed) ? defaultValue : parsed;
 }
 
-function parseFloatOrDefault(value: string | undefined, defaultValue: number): number {
-  if (value === undefined) return defaultValue;
-  const parsed = parseFloat(value);
-  return Number.isNaN(parsed) ? defaultValue : parsed;
+function parseIntOrDefault(
+  value: string | undefined,
+  defaultValue: number,
+): number {
+  return parseNumberOrDefault(value, (v) => parseInt(v, 10), defaultValue);
+}
+
+function parseFloatOrDefault(
+  value: string | undefined,
+  defaultValue: number,
+): number {
+  return parseNumberOrDefault(value, parseFloat, defaultValue);
 }
 
 export class ConfigManager {

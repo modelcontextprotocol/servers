@@ -4,7 +4,6 @@ import type {
   HealthCheckResult,
   HealthStatus,
   MetricsCollector,
-  RequestMetrics,
   ThoughtStorage,
   SecurityService,
 } from './interfaces.js';
@@ -45,10 +44,6 @@ export class ComprehensiveHealthChecker implements HealthChecker {
     this.maxResponseTime = thresholds?.maxResponseTimeMs ?? 200;
     this.errorRateDegraded = thresholds?.errorRateDegraded ?? 2;
     this.errorRateUnhealthy = thresholds?.errorRateUnhealthy ?? 5;
-  }
-
-  private getRequestMetrics(): RequestMetrics {
-    return this.metrics.getMetrics().requests;
   }
 
   async checkHealth(): Promise<HealthStatus> {
@@ -130,42 +125,54 @@ export class ComprehensiveHealthChecker implements HealthChecker {
     };
   }
 
+  private evaluateMetric(opts: {
+    label: string;
+    value: number;
+    threshold: number;
+    degradedThreshold: number;
+    startTime: number;
+    details: unknown;
+  }): HealthCheckResult {
+    const { label, value, threshold, degradedThreshold } = opts;
+    const { startTime, details } = opts;
+    const formatted = `${value.toFixed(1)}%`;
+    if (value > threshold) {
+      return this.makeResult(
+        'unhealthy', `${label} too high: ${formatted}`,
+        startTime, details,
+      );
+    }
+    if (value > degradedThreshold) {
+      return this.makeResult(
+        'degraded', `${label} elevated: ${formatted}`,
+        startTime, details,
+      );
+    }
+    return this.makeResult(
+      'healthy', `${label} normal: ${formatted}`,
+      startTime, details,
+    );
+  }
+
   private async checkMemory(): Promise<HealthCheckResult> {
     const startTime = Date.now();
-
     try {
-      const memoryUsage = process.memoryUsage();
-      const heapUsedPercent =
-        (memoryUsage.heapUsed / memoryUsage.heapTotal) * 100;
-
-      const memoryData = {
+      const mem = process.memoryUsage();
+      const heapUsedPercent = (mem.heapUsed / mem.heapTotal) * 100;
+      const details = {
         heapUsed: Math.round(heapUsedPercent),
-        heapTotal: Math.round(memoryUsage.heapTotal),
-        external: Math.round(memoryUsage.external),
-        rss: Math.round(memoryUsage.rss),
+        heapTotal: Math.round(mem.heapTotal),
+        external: Math.round(mem.external),
+        rss: Math.round(mem.rss),
       };
-
-      if (heapUsedPercent > this.maxMemoryUsage) {
-        return this.makeResult(
-          'unhealthy',
-          `Memory usage too high: ${heapUsedPercent.toFixed(1)}%`,
-          startTime,
-          memoryData,
-        );
-      } else if (heapUsedPercent > this.maxMemoryUsage * 0.8) {
-        return this.makeResult(
-          'degraded',
-          `Memory usage elevated: ${heapUsedPercent.toFixed(1)}%`,
-          startTime,
-          memoryData,
-        );
-      }
-      return this.makeResult(
-        'healthy',
-        `Memory usage normal: ${heapUsedPercent.toFixed(1)}%`,
+      return this.evaluateMetric({
+        label: 'Memory usage',
+        value: heapUsedPercent,
+        threshold: this.maxMemoryUsage,
+        degradedThreshold: this.maxMemoryUsage * 0.8,
         startTime,
-        memoryData,
-      );
+        details,
+      });
     } catch {
       return this.makeResult('unhealthy', 'Memory check failed', startTime);
     }
@@ -173,151 +180,80 @@ export class ComprehensiveHealthChecker implements HealthChecker {
 
   private async checkResponseTime(): Promise<HealthCheckResult> {
     const startTime = Date.now();
-
     try {
-      const requests = this.getRequestMetrics();
-      const avgResponseTime = requests.averageResponseTime;
-
-      const responseTimeData = {
-        avgResponseTime: Math.round(avgResponseTime),
-        requestCount: requests.totalRequests,
-      };
-
-      if (avgResponseTime > this.maxResponseTime) {
-        return this.makeResult(
-          'unhealthy',
-          `Response time too high: ${avgResponseTime.toFixed(0)}ms`,
-          startTime,
-          responseTimeData,
-        );
-      } else if (avgResponseTime > this.maxResponseTime * 0.8) {
-        return this.makeResult(
-          'degraded',
-          `Response time elevated: ${avgResponseTime.toFixed(0)}ms`,
-          startTime,
-          responseTimeData,
-        );
+      const { requests } = this.metrics.getMetrics();
+      const { averageResponseTime: avg, totalRequests } = requests;
+      const details = { avgResponseTime: Math.round(avg), requestCount: totalRequests };
+      // Response time uses absolute ms values, not percentages — format without %
+      if (avg > this.maxResponseTime) {
+        return this.makeResult('unhealthy', `Response time too high: ${avg.toFixed(0)}ms`, startTime, details);
       }
-      return this.makeResult(
-        'healthy',
-        `Response time normal: ${avgResponseTime.toFixed(0)}ms`,
-        startTime,
-        responseTimeData,
-      );
+      if (avg > this.maxResponseTime * 0.8) {
+        return this.makeResult('degraded', `Response time elevated: ${avg.toFixed(0)}ms`, startTime, details);
+      }
+      return this.makeResult('healthy', `Response time normal: ${avg.toFixed(0)}ms`, startTime, details);
     } catch {
-      return this.makeResult(
-        'unhealthy',
-        'Response time check failed',
-        startTime,
-      );
+      return this.makeResult('unhealthy', 'Response time check failed', startTime);
     }
   }
 
   private async checkErrorRate(): Promise<HealthCheckResult> {
     const startTime = Date.now();
-
     try {
-      const requests = this.getRequestMetrics();
-      const { totalRequests, failedRequests } = requests;
-
-      const errorRate =
-        totalRequests > 0
-          ? Math.min((failedRequests / totalRequests) * 100, 100)
-          : 0;
-
-      if (errorRate > this.errorRateUnhealthy) {
-        return this.makeResult(
-          'unhealthy',
-          `Error rate: ${errorRate.toFixed(1)}%`,
-          startTime,
-          { totalRequests, failedRequests, errorRate },
-        );
-      } else if (errorRate > this.errorRateDegraded) {
-        return this.makeResult(
-          'degraded',
-          `Error rate: ${errorRate.toFixed(1)}%`,
-          startTime,
-          { totalRequests, failedRequests, errorRate },
-        );
-      }
-      return this.makeResult(
-        'healthy',
-        `Error rate: ${errorRate.toFixed(1)}%`,
+      const { totalRequests, failedRequests } =
+        this.metrics.getMetrics().requests;
+      const errorRate = totalRequests > 0
+        ? Math.min((failedRequests / totalRequests) * 100, 100)
+        : 0;
+      const details = { totalRequests, failedRequests, errorRate };
+      return this.evaluateMetric({
+        label: 'Error rate',
+        value: errorRate,
+        threshold: this.errorRateUnhealthy,
+        degradedThreshold: this.errorRateDegraded,
         startTime,
-        { totalRequests, failedRequests, errorRate },
-      );
+        details,
+      });
     } catch {
       return this.makeResult(
-        'unhealthy',
-        'Error rate check failed',
-        startTime,
+        'unhealthy', 'Error rate check failed', startTime,
       );
     }
   }
 
   private async checkStorage(): Promise<HealthCheckResult> {
     const startTime = Date.now();
-
     try {
       const stats = this.storage.getStats();
       const usagePercent = stats.historyCapacity > 0
         ? (stats.historySize / stats.historyCapacity) * 100
         : 0;
-
-      const storageData = {
+      const details = {
         historySize: stats.historySize,
         historyCapacity: stats.historyCapacity,
         usagePercent: Math.round(usagePercent),
       };
-
-      if (usagePercent > this.maxStorageUsage) {
-        return this.makeResult(
-          'unhealthy',
-          `Storage usage too high: ${usagePercent.toFixed(1)}%`,
-          startTime,
-          storageData,
-        );
-      } else if (usagePercent > this.maxStorageUsage * 0.8) {
-        return this.makeResult(
-          'degraded',
-          `Storage usage elevated: ${usagePercent.toFixed(1)}%`,
-          startTime,
-          storageData,
-        );
-      }
-      return this.makeResult(
-        'healthy',
-        `Storage usage normal: ${usagePercent.toFixed(1)}%`,
+      return this.evaluateMetric({
+        label: 'Storage usage',
+        value: usagePercent,
+        threshold: this.maxStorageUsage,
+        degradedThreshold: this.maxStorageUsage * 0.8,
         startTime,
-        storageData,
-      );
+        details,
+      });
     } catch {
       return this.makeResult(
-        'unhealthy',
-        'Storage check failed',
-        startTime,
+        'unhealthy', 'Storage check failed', startTime,
       );
     }
   }
 
   private async checkSecurity(): Promise<HealthCheckResult> {
     const startTime = Date.now();
-
     try {
-      const securityStatus = this.security.getSecurityStatus();
-
-      return this.makeResult(
-        'healthy',
-        'Security systems operational',
-        startTime,
-        securityStatus,
-      );
+      return this.makeResult('healthy', 'Security systems operational', startTime, this.security.getSecurityStatus());
     } catch {
-      return this.makeResult(
-        'unhealthy',
-        'Security check failed',
-        startTime,
-      );
+      return this.makeResult('unhealthy', 'Security check failed', startTime);
     }
   }
 }

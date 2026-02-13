@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { ProcessThoughtRequest } from './lib.js';
 import { SequentialThinkingServer } from './lib.js';
 import type { AppConfig } from './interfaces.js';
+import { VALID_THINKING_MODES } from './interfaces.js';
 import { ConfigManager } from './config.js';
 
 // Load configuration
@@ -23,6 +24,35 @@ const server = new McpServer({
 });
 
 const thinkingServer = new SequentialThinkingServer();
+
+// Shared schema fragments
+const sessionIdSchema = z.string().describe('Session identifier');
+const thinkingModeSchema = z.enum(VALID_THINKING_MODES);
+
+// Shared result wrapper
+interface ToolInput {
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}
+
+interface ToolResult {
+  [key: string]: unknown;
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: true;
+}
+
+function wrapToolResult(
+  result: ToolInput,
+  treatEmptyAsError = false,
+): ToolResult {
+  if (
+    result.isError === true
+    || (treatEmptyAsError && result.content.length === 0)
+  ) {
+    return { content: result.content, isError: true as const };
+  }
+  return { content: result.content };
+}
 
 // Register the main sequential thinking tool
 server.registerTool(
@@ -70,8 +100,6 @@ Parameters explained:
 - revisesThought: If is_revision is true, which thought number is being reconsidered
 - branchFromThought: If branching, which thought number is the branching point
 - branchId: Identifier for the current branch (if any)
-- needsMoreThoughts: If reaching end but realizing more thoughts needed
-
 You should:
 1. Start with an initial estimate of needed thoughts, but be ready to adjust
 2. Feel free to question or revise previous thoughts
@@ -99,23 +127,16 @@ Security Notes:
       revisesThought: z.number().int().min(1).optional().describe('Which thought is being reconsidered'),
       branchFromThought: z.number().int().min(1).optional().describe('Branching point thought number'),
       branchId: z.string().optional().describe('Branch identifier'),
-      needsMoreThoughts: z.boolean().optional().describe('If more thoughts are needed'),
-      sessionId: z.string().optional().describe('Session identifier for tracking'),
-      thinkingMode: z.enum(['fast', 'expert', 'deep']).optional().describe('Set thinking mode on first thought: fast (3-5 linear steps), expert (balanced branching), deep (exhaustive exploration)'),
+      sessionId: sessionIdSchema.optional().describe('Session identifier for tracking'),
+      thinkingMode: thinkingModeSchema.optional().describe('Set thinking mode on first thought: fast (3-5 linear steps), expert (balanced branching), deep (exhaustive exploration)'),
     },
   },
-  async (args) => {
-    const result = await thinkingServer.processThought(args as ProcessThoughtRequest);
-
-    if (result.isError === true || result.content.length === 0) {
-      return {
-        content: result.content,
-        isError: true,
-      };
-    }
-
-    return { content: result.content };
-  },
+  async (args) => wrapToolResult(
+    await thinkingServer.processThought(
+      args as ProcessThoughtRequest,
+    ),
+    true,
+  ),
 );
 
 // Register the thought history retrieval tool
@@ -125,7 +146,7 @@ server.registerTool(
     title: 'Get Thought History',
     description: 'Retrieve past thoughts from a session. Use this to review thinking history, examine branch contents, or recall earlier reasoning steps.',
     inputSchema: {
-      sessionId: z.string().describe('Session identifier to retrieve thoughts for'),
+      sessionId: sessionIdSchema.describe('Session identifier to retrieve thoughts for'),
       branchId: z.string().optional().describe('Optional branch identifier to filter thoughts by branch'),
       limit: z.number().int().min(1).optional().describe('Maximum number of thoughts to return (most recent first)'),
     },
@@ -239,17 +260,11 @@ server.registerTool(
 
 Once set, each processThought response includes modeGuidance with recommended actions.`,
     inputSchema: {
-      sessionId: z.string().describe('Session identifier'),
-      mode: z.enum(['fast', 'expert', 'deep']).describe('Thinking mode to activate'),
+      sessionId: sessionIdSchema,
+      mode: thinkingModeSchema.describe('Thinking mode to activate'),
     },
   },
-  async (args) => {
-    const result = await thinkingServer.setThinkingMode(args.sessionId, args.mode);
-    if (result.isError === true) {
-      return { content: result.content, isError: true };
-    }
-    return { content: result.content };
-  },
+  async (args) => wrapToolResult(await thinkingServer.setThinkingMode(args.sessionId, args.mode)),
 );
 
 // Register MCTS tree exploration tools
@@ -259,17 +274,11 @@ server.registerTool(
     title: 'Backtrack',
     description: 'Move the thought tree cursor back to a previous node, allowing exploration of alternative paths from that point. Returns the node info, its children, and tree statistics.',
     inputSchema: {
-      sessionId: z.string().describe('Session identifier'),
+      sessionId: sessionIdSchema,
       nodeId: z.string().describe('The node ID to backtrack to'),
     },
   },
-  async (args) => {
-    const result = await thinkingServer.backtrack(args.sessionId, args.nodeId);
-    if (result.isError === true) {
-      return { content: result.content, isError: true };
-    }
-    return { content: result.content };
-  },
+  async (args) => wrapToolResult(await thinkingServer.backtrack(args.sessionId, args.nodeId)),
 );
 
 server.registerTool(
@@ -278,18 +287,16 @@ server.registerTool(
     title: 'Evaluate Thought',
     description: 'Score a thought node with a value between 0 and 1. The value is backpropagated up the tree to all ancestors, updating their visit counts and total values. This drives the MCTS selection process.',
     inputSchema: {
-      sessionId: z.string().describe('Session identifier'),
+      sessionId: sessionIdSchema,
       nodeId: z.string().describe('The node ID to evaluate'),
       value: z.number().min(0).max(1).describe('Evaluation score between 0 (poor) and 1 (excellent)'),
     },
   },
-  async (args) => {
-    const result = await thinkingServer.evaluateThought(args.sessionId, args.nodeId, args.value);
-    if (result.isError === true) {
-      return { content: result.content, isError: true };
-    }
-    return { content: result.content };
-  },
+  async (args) => wrapToolResult(
+    await thinkingServer.evaluateThought(
+      args.sessionId, args.nodeId, args.value,
+    ),
+  ),
 );
 
 server.registerTool(
@@ -298,17 +305,15 @@ server.registerTool(
     title: 'Suggest Next Thought',
     description: 'Use UCB1-based selection to suggest the most promising node to explore next. Strategies: "explore" favors unvisited nodes, "exploit" favors high-value nodes, "balanced" (default) balances both.',
     inputSchema: {
-      sessionId: z.string().describe('Session identifier'),
+      sessionId: sessionIdSchema,
       strategy: z.enum(['explore', 'exploit', 'balanced']).optional().describe('Selection strategy (default: balanced)'),
     },
   },
-  async (args) => {
-    const result = await thinkingServer.suggestNextThought(args.sessionId, args.strategy);
-    if (result.isError === true) {
-      return { content: result.content, isError: true };
-    }
-    return { content: result.content };
-  },
+  async (args) => wrapToolResult(
+    await thinkingServer.suggestNextThought(
+      args.sessionId, args.strategy,
+    ),
+  ),
 );
 
 server.registerTool(
@@ -317,17 +322,15 @@ server.registerTool(
     title: 'Get Thinking Summary',
     description: 'Get a comprehensive summary of the thought tree including the best reasoning path (highest average value), full tree structure, and statistics.',
     inputSchema: {
-      sessionId: z.string().describe('Session identifier'),
+      sessionId: sessionIdSchema,
       maxDepth: z.number().int().min(0).optional().describe('Maximum depth to include in tree structure (omit for full tree)'),
     },
   },
-  async (args) => {
-    const result = await thinkingServer.getThinkingSummary(args.sessionId, args.maxDepth);
-    if (result.isError === true) {
-      return { content: result.content, isError: true };
-    }
-    return { content: result.content };
-  },
+  async (args) => wrapToolResult(
+    await thinkingServer.getThinkingSummary(
+      args.sessionId, args.maxDepth,
+    ),
+  ),
 );
 
 // Setup graceful shutdown

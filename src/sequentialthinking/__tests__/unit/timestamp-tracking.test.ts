@@ -14,7 +14,6 @@ describe('Timestamp Tracking with CircularBuffer', () => {
     storage = new BoundedThoughtManager({
       maxHistorySize: 100,
       maxBranchAge: 3600000,
-      maxThoughtLength: 5000,
       maxThoughtsPerBranch: 50,
       cleanupInterval: 0,
     }, sessionTracker);

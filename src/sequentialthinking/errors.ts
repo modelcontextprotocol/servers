@@ -46,12 +46,6 @@ export class SecurityError extends SequentialThinkingError {
   readonly category = 'SECURITY' as const;
 }
 
-export class StateError extends SequentialThinkingError {
-  readonly code = 'STATE_ERROR';
-  readonly statusCode = 500;
-  readonly category = 'SYSTEM' as const;
-}
-
 export class BusinessLogicError extends SequentialThinkingError {
   readonly code = 'BUSINESS_LOGIC_ERROR';
   readonly statusCode = 422;

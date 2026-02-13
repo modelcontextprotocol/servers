@@ -1,4 +1,4 @@
-import type { ThoughtData } from './circular-buffer.js';
+import type { ThoughtData } from './interfaces.js';
 
 export interface ThoughtNode {
   nodeId: string;
@@ -15,7 +15,6 @@ export interface ThoughtNode {
   isRevision?: boolean;
   revisesThought?: number;
   branchFromThought?: number;
-  createdAt: number;
 }
 
 export class ThoughtTree {
@@ -49,51 +48,75 @@ export class ThoughtTree {
     return this.nodes.get(nodeId);
   }
 
+  private cursorFallback(): { parentId: string | null; depth: number } {
+    return {
+      parentId: this.cursorId,
+      depth: this.cursor ? this.cursor.depth + 1 : 0,
+    };
+  }
+
+  private resolveBranchParent(
+    branchFromThought: number,
+  ): { parentId: string | null; depth: number } {
+    const branchParent = this.findNodeByThoughtNumber(
+      branchFromThought,
+    );
+    if (!branchParent) return this.cursorFallback();
+    return {
+      parentId: branchParent.nodeId,
+      depth: branchParent.depth + 1,
+    };
+  }
+
+  private resolveRevisionParent(
+    revisesThought: number,
+  ): { parentId: string | null; depth: number } {
+    const revisedNode = this.findNodeByThoughtNumber(revisesThought);
+    if (!revisedNode) return this.cursorFallback();
+    if (revisedNode.parentId === null) {
+      return {
+        parentId: revisedNode.nodeId,
+        depth: revisedNode.depth + 1,
+      };
+    }
+    const { parentId } = revisedNode;
+    const parent = parentId
+      ? this.nodes.get(parentId) : undefined;
+    return { parentId, depth: parent ? parent.depth + 1 : 0 };
+  }
+
+  private resolveParent(
+    data: ThoughtData,
+  ): { parentId: string | null; depth: number } {
+    if (this.rootId === null) return { parentId: null, depth: 0 };
+    if (data.branchFromThought) {
+      return this.resolveBranchParent(data.branchFromThought);
+    }
+    if (data.isRevision && data.revisesThought) {
+      return this.resolveRevisionParent(data.revisesThought);
+    }
+    return this.cursorFallback();
+  }
+
+  private linkToParent(nodeId: string, parentId: string | null): void {
+    if (parentId === null) return;
+    const parent = this.nodes.get(parentId);
+    if (parent) parent.children.push(nodeId);
+  }
+
+  private indexThoughtNumber(
+    thoughtNumber: number,
+    nodeId: string,
+  ): void {
+    const existing = this.thoughtNumberIndex.get(thoughtNumber) ?? [];
+    existing.push(nodeId);
+    this.thoughtNumberIndex.set(thoughtNumber, existing);
+  }
+
   addThought(data: ThoughtData): ThoughtNode {
     this.lastAccessed = Date.now();
     const nodeId = this.generateNodeId();
-
-    let parentId: string | null = null;
-    let depth = 0;
-
-    if (this.rootId === null) {
-      // First node becomes root
-      parentId = null;
-      depth = 0;
-    } else if (data.branchFromThought) {
-      // Branch: child of the node at branchFromThought
-      const branchParent = this.findNodeByThoughtNumber(data.branchFromThought);
-      if (branchParent) {
-        parentId = branchParent.nodeId;
-        depth = branchParent.depth + 1;
-      } else {
-        // Fallback to cursor if branch target not found
-        parentId = this.cursorId;
-        depth = this.cursor ? this.cursor.depth + 1 : 0;
-      }
-    } else if (data.isRevision && data.revisesThought) {
-      // Revision: sibling of the revised node (child of revised node's parent)
-      const revisedNode = this.findNodeByThoughtNumber(data.revisesThought);
-      if (revisedNode) {
-        if (revisedNode.parentId === null) {
-          // Revising root: new node becomes child of root
-          parentId = revisedNode.nodeId;
-          depth = revisedNode.depth + 1;
-        } else {
-          parentId = revisedNode.parentId;
-          const parent = this.nodes.get(revisedNode.parentId);
-          depth = parent ? parent.depth + 1 : 0;
-        }
-      } else {
-        // Fallback to cursor
-        parentId = this.cursorId;
-        depth = this.cursor ? this.cursor.depth + 1 : 0;
-      }
-    } else {
-      // Sequential: child of cursor
-      parentId = this.cursorId;
-      depth = this.cursor ? this.cursor.depth + 1 : 0;
-    }
+    const { parentId, depth } = this.resolveParent(data);
 
     const node: ThoughtNode = {
       nodeId,
@@ -110,36 +133,16 @@ export class ThoughtTree {
       isRevision: data.isRevision,
       revisesThought: data.revisesThought,
       branchFromThought: data.branchFromThought,
-      createdAt: Date.now(),
     };
 
     this.nodes.set(nodeId, node);
+    this.linkToParent(nodeId, parentId);
+    this.indexThoughtNumber(data.thoughtNumber, nodeId);
 
-    // Update parent's children list
-    if (parentId !== null) {
-      const parent = this.nodes.get(parentId);
-      if (parent) {
-        parent.children.push(nodeId);
-      }
-    }
-
-    // Update thought number index
-    const existing = this.thoughtNumberIndex.get(data.thoughtNumber) ?? [];
-    existing.push(nodeId);
-    this.thoughtNumberIndex.set(data.thoughtNumber, existing);
-
-    // Set root if first node
-    if (this.rootId === null) {
-      this.rootId = nodeId;
-    }
-
-    // Move cursor to new node
+    if (this.rootId === null) this.rootId = nodeId;
     this.cursorId = nodeId;
 
-    // Prune if over capacity
-    if (this.nodes.size > this.maxNodes) {
-      this.prune();
-    }
+    if (this.nodes.size > this.maxNodes) this.prune();
 
     return node;
   }
@@ -180,10 +183,11 @@ export class ThoughtTree {
     const path: ThoughtNode[] = [];
     let current = this.nodes.get(nodeId);
     while (current) {
-      path.unshift(current);
+      path.push(current);
       if (current.parentId === null) break;
       current = this.nodes.get(current.parentId);
     }
+    path.reverse();
     return path;
   }
 
@@ -257,25 +261,21 @@ export class ThoughtTree {
   }
 
   prune(): void {
-    while (this.nodes.size > this.maxNodes) {
-      const leaves = this.getLeafNodes();
+    if (this.nodes.size <= this.maxNodes) return;
 
-      // Find the lowest-value leaf that isn't root or cursor
-      let worstLeaf: ThoughtNode | null = null;
-      let worstValue = Infinity;
+    // Collect all prunable leaves (not root, not cursor), sorted by value ascending
+    const prunableLeaves = this.getLeafNodes()
+      .filter(leaf => leaf.nodeId !== this.rootId && leaf.nodeId !== this.cursorId)
+      .map(leaf => ({
+        leaf,
+        avgValue: leaf.visitCount > 0 ? leaf.totalValue / leaf.visitCount : 0,
+      }))
+      .sort((a, b) => a.avgValue - b.avgValue);
 
-      for (const leaf of leaves) {
-        if (leaf.nodeId === this.rootId || leaf.nodeId === this.cursorId) continue;
-        const avgValue = leaf.visitCount > 0 ? leaf.totalValue / leaf.visitCount : 0;
-        if (avgValue < worstValue) {
-          worstValue = avgValue;
-          worstLeaf = leaf;
-        }
-      }
-
-      if (!worstLeaf) break; // Nothing safe to prune
-
-      this.removeNode(worstLeaf.nodeId);
+    // Remove worst leaves until under capacity
+    for (const { leaf } of prunableLeaves) {
+      if (this.nodes.size <= this.maxNodes) break;
+      this.removeNode(leaf.nodeId);
     }
   }
 

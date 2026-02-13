@@ -1,9 +1,10 @@
 import type { MetricsCollector, ThoughtData, RequestMetrics, ThoughtMetrics, SystemMetrics, ThoughtStorage } from './interfaces.js';
 import { CircularBuffer } from './circular-buffer.js';
 import type { SessionTracker } from './session-tracker.js';
+import { RATE_LIMIT_WINDOW_MS } from './config.js';
 
 export class BasicMetricsCollector implements MetricsCollector {
-  private readonly requestMetrics: RequestMetrics = {
+  private requestMetrics: RequestMetrics = {
     totalRequests: 0,
     successfulRequests: 0,
     failedRequests: 0,
@@ -12,7 +13,7 @@ export class BasicMetricsCollector implements MetricsCollector {
     requestsPerMinute: 0,
   };
 
-  private readonly thoughtMetrics: ThoughtMetrics = {
+  private thoughtMetrics: ThoughtMetrics = {
     totalThoughts: 0,
     averageThoughtLength: 0,
     thoughtsPerMinute: 0,
@@ -53,14 +54,9 @@ export class BasicMetricsCollector implements MetricsCollector {
 
     // Update requests per minute
     this.requestTimestamps.add(now);
-    const cutoff = now - 60 * 1000;
+    const cutoff = now - RATE_LIMIT_WINDOW_MS;
     this.requestMetrics.requestsPerMinute =
       this.requestTimestamps.getAll().filter(ts => ts > cutoff).length;
-  }
-
-  recordError(_error: Error): void {
-    // No-op: the caller (lib.ts) already calls recordRequest(duration, false)
-    // before calling recordError, so we don't double-count.
   }
 
   recordThoughtProcessed(thought: ThoughtData): void {
@@ -86,7 +82,7 @@ export class BasicMetricsCollector implements MetricsCollector {
     this.thoughtMetrics.branchCount = this.storage.getBranches().length;
 
     // Update thoughts per minute
-    const cutoff = now - 60 * 1000;
+    const cutoff = now - RATE_LIMIT_WINDOW_MS;
     this.thoughtMetrics.thoughtsPerMinute =
       this.thoughtTimestamps.getAll().filter(ts => ts > cutoff).length;
 
@@ -120,18 +116,14 @@ export class BasicMetricsCollector implements MetricsCollector {
     this.responseTimes.clear();
     this.requestTimestamps.clear();
     this.thoughtTimestamps.clear();
-    this.requestMetrics.totalRequests = 0;
-    this.requestMetrics.successfulRequests = 0;
-    this.requestMetrics.failedRequests = 0;
-    this.requestMetrics.averageResponseTime = 0;
-    this.requestMetrics.lastRequestTime = null;
-    this.requestMetrics.requestsPerMinute = 0;
-    this.thoughtMetrics.totalThoughts = 0;
-    this.thoughtMetrics.averageThoughtLength = 0;
-    this.thoughtMetrics.thoughtsPerMinute = 0;
-    this.thoughtMetrics.revisionCount = 0;
-    this.thoughtMetrics.branchCount = 0;
-    this.thoughtMetrics.activeSessions = 0;
+    this.requestMetrics = {
+      totalRequests: 0, successfulRequests: 0, failedRequests: 0,
+      averageResponseTime: 0, lastRequestTime: null, requestsPerMinute: 0,
+    };
+    this.thoughtMetrics = {
+      totalThoughts: 0, averageThoughtLength: 0, thoughtsPerMinute: 0,
+      revisionCount: 0, branchCount: 0, activeSessions: 0,
+    };
   }
 
 }

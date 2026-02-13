@@ -14,7 +14,7 @@ describe('Branch Tracking Consistency', () => {
     storage = new BoundedThoughtManager({
       maxHistorySize: 100,
       maxBranchAge: 3600000,
-      maxThoughtLength: 5000,
+
       maxThoughtsPerBranch: 50,
       cleanupInterval: 0,
     }, sessionTracker);
@@ -52,7 +52,7 @@ describe('Branch Tracking Consistency', () => {
       const shortStorage = new BoundedThoughtManager({
         maxHistorySize: 100,
         maxBranchAge: 1000, // 1 second
-        maxThoughtLength: 5000,
+  
         maxThoughtsPerBranch: 50,
         cleanupInterval: 0,
       }, sessionTracker);

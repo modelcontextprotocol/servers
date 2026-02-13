@@ -1,7 +1,8 @@
+import type { z } from 'zod';
 import { SequentialThinkingApp } from './container.js';
 import { SequentialThinkingError, ValidationError, SecurityError, BusinessLogicError } from './errors.js';
 import type { ThoughtData, Logger, ThoughtStorage, SecurityService, ThoughtFormatter, MetricsCollector, HealthChecker, HealthStatus, RequestMetrics, ThoughtMetrics, SystemMetrics, AppConfig, ThoughtTreeService, MCTSService, ThinkingMode, ThoughtTreeRecordResult } from './interfaces.js';
-import { VALID_THINKING_MODES } from './interfaces.js';
+import { VALID_THINKING_MODES, thoughtDataSchema, getThoughtHistorySchema, setThinkingModeSchema, backtrackSchema, evaluateThoughtSchema, suggestNextThoughtSchema, getThinkingSummarySchema } from './interfaces.js';
 
 export type ProcessThoughtRequest = ThoughtData;
 
@@ -45,49 +46,34 @@ export class SequentialThinkingServer {
     return this._services;
   }
 
+  private validateWithZod<T>(schema: z.ZodSchema<T>, data: unknown, errorContext: string): T {
+    const result = schema.safeParse(data);
+    if (!result.success) {
+      const errors = result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
+      throw new ValidationError(`${errorContext}: ${errors}`);
+    }
+    return result.data;
+  }
+
   private validateInput(
     input: ProcessThoughtRequest,
-  ): void {
-    this.validateStructure(input, this.services.config.state.maxThoughtLength);
-    this.validateBusinessLogic(input);
+  ): ProcessThoughtRequest {
+    const validated = this.validateWithZod(thoughtDataSchema, input, 'Invalid thought input');
+    this.validateBusinessLogic(validated);
+    this.validateMaxLength(validated);
+    return validated;
   }
 
-  private static isPositiveInteger(value: unknown): value is number {
-    return typeof value === 'number' && value >= 1 && Number.isInteger(value);
-  }
-
-  private validateStructure(input: ProcessThoughtRequest, maxThoughtLength: number): void {
-    if (!input.thought || typeof input.thought !== 'string' || input.thought.trim().length === 0) {
+  private validateMaxLength(input: ProcessThoughtRequest): void {
+    const maxLength = this.services.config.state.maxThoughtLength;
+    if (input.thought.length > maxLength) {
       throw new ValidationError(
-        'Thought is required and must be a non-empty string',
-      );
-    }
-    // Unified length validation - single source of truth
-    if (input.thought.length > maxThoughtLength) {
-      throw new ValidationError(
-        `Thought exceeds maximum length of ${maxThoughtLength} characters (actual: ${input.thought.length})`,
-      );
-    }
-    if (!SequentialThinkingServer.isPositiveInteger(input.thoughtNumber)) {
-      throw new ValidationError(
-        'thoughtNumber must be a positive integer',
-      );
-    }
-    if (!SequentialThinkingServer.isPositiveInteger(input.totalThoughts)) {
-      throw new ValidationError(
-        'totalThoughts must be a positive integer',
-      );
-    }
-    if (typeof input.nextThoughtNeeded !== 'boolean') {
-      throw new ValidationError(
-        'nextThoughtNeeded must be a boolean',
+        `Thought exceeds maximum length of ${maxLength} characters (actual: ${input.thought.length})`,
       );
     }
   }
 
-  private validateBusinessLogic(
-    input: ProcessThoughtRequest,
-  ): void {
+  private validateBusinessLogic(input: ProcessThoughtRequest): void {
     if (input.isRevision && !input.revisesThought) {
       throw new BusinessLogicError(
         'isRevision requires revisesThought to be specified',
@@ -415,8 +401,9 @@ export class SequentialThinkingServer {
   public async backtrack(sessionId: string, nodeId: string): Promise<ProcessThoughtResponse> {
     try {
       this.validateSessionId(sessionId);
+      const validated = this.validateWithZod(backtrackSchema, { sessionId, nodeId }, 'Invalid backtrack input');
       return await this.withMetrics(() => {
-        return this.services.thoughtTreeManager.backtrack(sessionId, nodeId);
+        return this.services.thoughtTreeManager.backtrack(validated.sessionId, validated.nodeId);
       });
     } catch (error) {
       return this.handleError(error as Error);
@@ -430,11 +417,13 @@ export class SequentialThinkingServer {
   ): Promise<ProcessThoughtResponse> {
     try {
       this.validateSessionId(sessionId);
-      if (value < 0 || value > 1) {
-        throw new ValidationError('value must be between 0 and 1');
-      }
+      const validated = this.validateWithZod(evaluateThoughtSchema, { sessionId, nodeId, value }, 'Invalid evaluate thought input');
       return await this.withMetrics(() => {
-        return this.services.thoughtTreeManager.evaluate(sessionId, nodeId, value);
+        return this.services.thoughtTreeManager.evaluate(
+          validated.sessionId,
+          validated.nodeId,
+          validated.value,
+        );
       });
     } catch (error) {
       return this.handleError(error as Error);
@@ -447,8 +436,9 @@ export class SequentialThinkingServer {
   ): Promise<ProcessThoughtResponse> {
     try {
       this.validateSessionId(sessionId);
+      const validated = this.validateWithZod(suggestNextThoughtSchema, { sessionId, strategy }, 'Invalid suggest next thought input');
       return await this.withMetrics(() => {
-        return this.services.thoughtTreeManager.suggest(sessionId, strategy);
+        return this.services.thoughtTreeManager.suggest(validated.sessionId, validated.strategy);
       });
     } catch (error) {
       return this.handleError(error as Error);
@@ -461,8 +451,9 @@ export class SequentialThinkingServer {
   ): Promise<ProcessThoughtResponse> {
     try {
       this.validateSessionId(sessionId);
+      const validated = this.validateWithZod(getThinkingSummarySchema, { sessionId, maxDepth }, 'Invalid get thinking summary input');
       return await this.withMetrics(() => {
-        return this.services.thoughtTreeManager.getSummary(sessionId, maxDepth);
+        return this.services.thoughtTreeManager.getSummary(validated.sessionId, validated.maxDepth);
       });
     } catch (error) {
       return this.handleError(error as Error);
@@ -473,11 +464,12 @@ export class SequentialThinkingServer {
   public async setThinkingMode(sessionId: string, mode: string): Promise<ProcessThoughtResponse> {
     try {
       this.validateSessionId(sessionId);
-      if (!(VALID_THINKING_MODES as readonly string[]).includes(mode)) {
-        throw new ValidationError(`Invalid thinking mode: "${mode}". Must be one of: ${VALID_THINKING_MODES.join(', ')}`);
-      }
+      const validated = this.validateWithZod(setThinkingModeSchema, { sessionId, mode }, 'Invalid set thinking mode input');
       return await this.withMetrics(() => {
-        const config = this.services.thoughtTreeManager.setMode(sessionId, mode as ThinkingMode);
+        const config = this.services.thoughtTreeManager.setMode(
+          validated.sessionId,
+          validated.mode,
+        );
         return {
           sessionId,
           mode: config.mode,
@@ -504,12 +496,13 @@ export class SequentialThinkingServer {
     limit?: number;
   }): ThoughtData[] {
     try {
+      const validated = this.validateWithZod(getThoughtHistorySchema, options, 'Invalid get thought history input');
       const { storage } = this.services;
-      const source = options.branchId
-        ? storage.getBranchThoughts(options.branchId)
+      const source = validated.branchId
+        ? storage.getBranchThoughts(validated.branchId)
         : storage.getHistory();
-      const filtered = source.filter((t) => t.sessionId === options.sessionId);
-      return options.limit && options.limit > 0 ? filtered.slice(-options.limit) : filtered;
+      const filtered = source.filter((t) => t.sessionId === validated.sessionId);
+      return validated.limit ? filtered.slice(-validated.limit) : filtered;
     } catch (error) {
       console.error('Warning: failed to get filtered history:', error);
       return [];

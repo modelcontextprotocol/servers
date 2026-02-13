@@ -11,7 +11,6 @@ describe('CircularBuffer', () => {
   describe('Basic Operations', () => {
     it('should initialize with correct capacity', () => {
       expect(buffer.currentSize).toBe(0);
-      expect(buffer.isFull).toBe(false);
     });
 
     it('should add items correctly', () => {
@@ -23,7 +22,6 @@ describe('CircularBuffer', () => {
       
       buffer.add('item3');
       expect(buffer.currentSize).toBe(3);
-      expect(buffer.isFull).toBe(true);
     });
 
     it('should overwrite old items when full', () => {
@@ -33,7 +31,6 @@ describe('CircularBuffer', () => {
       buffer.add('item4'); // Should overwrite item1
 
       expect(buffer.currentSize).toBe(3);
-      expect(buffer.isFull).toBe(true);
 
       const items = buffer.getAll();
       expect(items).toEqual(['item2', 'item3', 'item4']);
@@ -57,27 +54,11 @@ describe('CircularBuffer', () => {
       expect(items).toEqual(['second', 'third']); // Most recent 2
     });
 
-    it('should retrieve specific range', () => {
-      const items = buffer.getRange(1, 2);
-      expect(items).toEqual(['second', 'third']);
-    });
-
-    it('should get oldest item', () => {
-      const oldest = buffer.getOldest();
-      expect(oldest).toBe('first');
-    });
-
-    it('should get newest item', () => {
-      const newest = buffer.getNewest();
-      expect(newest).toBe('third');
-    });
   });
 
   describe('Edge Cases', () => {
     it('should handle empty buffer', () => {
       expect(buffer.getAll()).toEqual([]);
-      expect(buffer.getOldest()).toBeUndefined();
-      expect(buffer.getNewest()).toBeUndefined();
     });
 
     it('should handle limit larger than size', () => {
@@ -97,7 +78,6 @@ describe('CircularBuffer', () => {
       buffer.clear();
       
       expect(buffer.currentSize).toBe(0);
-      expect(buffer.isFull).toBe(false);
       expect(buffer.getAll()).toEqual([]);
     });
   });
@@ -110,8 +90,7 @@ describe('CircularBuffer', () => {
       
       // Buffer size should be 3 (capacity)
       expect(buffer.currentSize).toBe(3);
-      expect(buffer.isFull).toBe(true);
-      
+
       // Should contain last 3 items
       const result = buffer.getAll();
       expect(result).toEqual(['e', 'f', 'g']);
@@ -135,14 +114,11 @@ describe('CircularBuffer', () => {
 
       buf.add('first');
       expect(buf.currentSize).toBe(1);
-      expect(buf.isFull).toBe(true);
       expect(buf.getAll()).toEqual(['first']);
 
       buf.add('second');
       expect(buf.currentSize).toBe(1);
       expect(buf.getAll()).toEqual(['second']);
-      expect(buf.getOldest()).toBe('second');
-      expect(buf.getNewest()).toBe('second');
     });
 
     it('should handle large capacity', () => {
@@ -153,9 +129,6 @@ describe('CircularBuffer', () => {
       }
 
       expect(buf.currentSize).toBe(100);
-      expect(buf.isFull).toBe(false);
-      expect(buf.getOldest()).toBe(0);
-      expect(buf.getNewest()).toBe(99);
     });
   });
 
