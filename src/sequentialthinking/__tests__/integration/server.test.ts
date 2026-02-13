@@ -149,7 +149,7 @@ describe('SequentialThinkingServer', () => {
       expect(result.isError).toBe(true);
       const data = JSON.parse(result.content[0].text);
       expect(data.error).toBe('VALIDATION_ERROR');
-      expect(data.message).toContain('nextThoughtNeeded must be a boolean');
+      expect(data.message).toContain('nextThoughtNeeded');
     });
 
     it('should handle malformed input gracefully', async () => {

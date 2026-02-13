@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package.json ./
 
 # Install ALL dependencies (including dev for TypeScript)
-RUN npm install --ignore-scripts
+RUN npm install --ignore-scripts --legacy-peer-deps
 
 # Copy source code
 COPY . .
@@ -35,7 +35,7 @@ COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nodejs:nodejs /app/package.json ./
 
 # Install production dependencies only
-RUN npm install --ignore-scripts --omit=dev && \
+RUN npm install --ignore-scripts --omit=dev --legacy-peer-deps && \
     npm cache clean --force
 
 # Switch to non-root user

@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "build": "tsc && shx chmod +x dist/*.js",
-    "prepare": "npm run build",
+    "prepare": "husky",
     "watch": "tsc --watch",
     "test": "vitest run",
     "test:unit": "vitest run __tests__/unit",
@@ -48,22 +48,23 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "chalk": "^5.0.0",
-    "zod": "^3.24.0"
+    "chalk": "^5.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
-    "@types/node": "^22",
+    "@types/node": "^25.2.3",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
-    "@vitest/coverage-v8": "^3.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.0",
+    "husky": "^9.1.7",
     "prettier": "^3.4.0",
     "shx": "^0.4.0",
     "typedoc": "^0.27.0",
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18",
+    "zod": "^4.3.6"
   },
   "engines": {
     "node": ">=22.0.0"

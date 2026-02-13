@@ -1105,18 +1105,18 @@ export class Metacognition {
     const allText = thoughts.map(t => t.thought.toLowerCase()).join(' ');
 
     const domainIndicators = {
-      frontend: ['react', 'vue', 'angular', 'css', 'html', 'javascript', 'typescript', 'browser', 'dom', 'ui', 'component', 'render'],
-      backend: ['server', 'api', 'database', 'rest', 'graphql', 'sql', 'node', 'express', 'endpoint', 'authentication'],
-      devops: ['docker', 'kubernetes', 'ci', 'cd', 'pipeline', 'aws', 'azure', 'gcp', 'deploy', 'infrastructure', 'terraform'],
-      data: ['data', 'pipeline', 'etl', 'analytics', 'warehouse', 'sql', 'query', 'dataset', 'streaming'],
-      machine_learning: ['model', 'training', 'neural', 'tensorflow', 'pytorch', 'inference', 'accuracy', 'dataset', 'feature', 'gradient'],
-      security: ['auth', 'security', 'vulnerability', 'encryption', 'token', 'permission', 'oauth', 'ssl', 'certificate'],
-      mobile: ['ios', 'android', 'react native', 'flutter', 'mobile', 'app', 'device', 'swift', 'kotlin'],
-      desktop: ['desktop', 'electron', 'native', 'gui', 'window', 'application'],
-      embedded: ['arduino', 'raspberry', 'firmware', 'microcontroller', 'hardware', 'embedded', 'rtos'],
-      networking: ['protocol', 'tcp', 'http', 'socket', 'network', 'dns', 'load balancer', 'distributed'],
-      gaming: ['game', 'unity', 'unreal', 'graphics', 'physics', 'rendering', 'sprite'],
-      blockchain: ['blockchain', 'smart contract', 'ethereum', 'solidity', 'token', 'web3', ' decentralization'],
+      reasoning: ['therefore', 'thus', 'hence', 'consequently', 'logically', 'implies', 'because', 'reason', 'argue', 'premise', 'conclusion', 'deduce'],
+      decision: ['choose', 'option', 'alternative', 'decision', 'select', 'pick', 'commit', 'risk', 'benefit', 'tradeoff', 'weigh'],
+      learning: ['learn', 'understand', 'discover', 'acquire', 'master', 'practice', 'study', 'experience', 'knowledge', 'skill'],
+      memory: ['remember', 'recall', 'forget', 'remind', 'stored', 'retrieve', 'encode', 'recognize', 'familiar', 'past'],
+      attention: ['focus', 'concentrate', 'distract', 'attention', 'notice', 'observe', 'aware', 'filter', 'ignore', 'miss'],
+      perception: ['see', 'perceive', 'observe', 'interpret', 'sense', 'appear', 'seem', 'look', 'sound', 'feel'],
+      language: ['word', 'sentence', 'describe', 'explain', 'communicate', 'express', 'meaning', 'text', 'write', 'read', 'speak'],
+      emotion: ['feel', 'emotion', 'happy', 'sad', 'fear', 'anger', 'anxious', 'frustrated', 'excited', 'worried', 'hope'],
+      metacognition: ['think about', 'meta', 'aware', 'reflect', 'self', 'monitor', 'evaluate', 'understand myself'],
+      creativity: ['imagine', 'novel', 'creative', 'invent', 'generate', 'idea', 'brainstorm', 'innovate', 'original', 'new approach'],
+      problem_solving: ['solve', 'problem', 'solution', 'fix', 'resolve', 'approach', 'strategy', 'method', 'way', 'how to'],
+      social: ['others', 'people', 'team', 'collaborate', 'share', 'communicate', 'together', 'group', 'society', 'relationship'],
     };
 
     const scores: Record<string, number> = {};
@@ -1130,6 +1130,86 @@ export class Metacognition {
     return {
       domain: topScore > 0 ? topDomain : 'general',
       confidence: topScore > 0 ? Math.min(0.9, 0.3 + topScore * 0.15) : 0.2,
+    };
+  }
+
+  detectCognitiveProcess(thoughts: ThoughtData[]): { process: string; confidence: number } {
+    if (thoughts.length === 0) {
+      return { process: 'understanding', confidence: 0 };
+    }
+
+    const allText = thoughts.map(t => t.thought.toLowerCase()).join(' ');
+
+    const processIndicators = {
+      understanding: ['understand', 'sense', 'grasp', 'comprehend', 'make sense', 'clear', 'meaning', 'interpret'],
+      creating: ['create', 'generate', 'invent', 'design', 'build', 'make', 'new', 'synthesize', 'produce'],
+      deciding: ['choose', 'decide', 'select', 'pick', 'option', 'alternative', 'commit', 'choice'],
+      remembering: ['remember', 'recall', 'memory', 'past', 'before', 'previously', 'familiar', 'stored'],
+      explaining: ['because', 'explain', 'reason', 'cause', 'effect', 'mechanism', 'how', 'why'],
+      predicting: ['predict', 'future', 'will', 'expect', 'forecast', 'anticipate', 'likely', 'probably'],
+      evaluating: ['evaluate', 'assess', 'judge', 'quality', 'worth', 'better', 'best', 'compare', 'value'],
+      planning: ['plan', 'future', 'will', 'next', 'then', 'step', 'sequence', 'roadmap', 'milestone'],
+      communicating: ['tell', 'explain', 'share', 'describe', 'say', 'write', 'express', 'communicate'],
+      transforming: ['change', 'convert', 'transform', 'convert', 'adapt', 'modify', 'convert', 'translate'],
+    };
+
+    const scores: Record<string, number> = {};
+    for (const [proc, keywords] of Object.entries(processIndicators)) {
+      scores[proc] = keywords.filter(kw => allText.includes(kw)).length;
+    }
+
+    const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+    const [topProc, topScore] = entries[0];
+
+    return {
+      process: topScore > 0 ? topProc : 'understanding',
+      confidence: topScore > 0 ? Math.min(0.9, 0.3 + topScore * 0.2) : 0.2,
+    };
+  }
+
+  detectMetaState(thoughts: ThoughtData[]): { state: string; severity: number } {
+    if (thoughts.length < 2) {
+      return { state: 'clarity', severity: 0 };
+    }
+
+    const allText = thoughts.map(t => t.thought.toLowerCase()).join(' ');
+    const lastThought = thoughts[thoughts.length - 1]?.thought.toLowerCase() || '';
+    const prevThought = thoughts[thoughts.length - 2]?.thought.toLowerCase() || '';
+
+    const similarity = this.jaccardSimilarity(
+      this.tokenize(lastThought),
+      this.tokenize(prevThought),
+    );
+
+    const metaIndicators = {
+      clarity: ['clear', 'confused', 'unclear', 'understand', 'confusing', 'vague', 'precise'],
+      certainty: ['sure', 'certain', 'doubt', 'probably', 'maybe', 'confident', 'unsure'],
+      progress: ['progress', 'forward', 'advance', 'stuck', '原地踏步', 'no progress', 'moving'],
+      blockage: ['stuck', 'block', 'cannot', 'blocked', 'stopped', 'halt', 'barrier'],
+      scope_narrow: ['focus', 'specific', 'narrow', 'detail', 'granular', 'limited'],
+      scope_broad: ['overall', 'big picture', 'general', 'broad', 'abstract', 'summary'],
+      bias: ['assume', 'probably', 'likely', 'always', 'never', 'bias', 'blind spot'],
+      momentum_gaining: ['progress', 'moving forward', 'gaining', 'building', 'more', 'increasing'],
+      momentum_losing: ['stuck', 'losing', 'less', 'decreasing', 'harder', 'slowing'],
+      stuck: ['stuck', 'cannot proceed', 'no idea', 'blocked', 'halted', 'dead end'],
+    };
+
+    const scores: Record<string, number> = {};
+    for (const [state, keywords] of Object.entries(metaIndicators)) {
+      scores[state] = keywords.filter(kw => allText.includes(kw)).length;
+    }
+
+    if (similarity > 0.7) {
+      scores['stuck'] += 2;
+      scores['blockage'] += 1;
+    }
+
+    const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+    const [topState, topScore] = entries[0];
+
+    return {
+      state: topScore > 0 ? topState : 'progress',
+      severity: Math.min(1, topScore / 3),
     };
   }
 }

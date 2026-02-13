@@ -65,9 +65,8 @@ export const rawSessionIdSchema = z
     message: 'Session ID must contain only letters, numbers, underscores, and hyphens',
   });
 
-export const thinkingModeSchema = z.enum(VALID_THINKING_MODES, {
-  description: 'Thinking mode: fast=quick decisions (3-5 steps), expert=complex analysis (5-10 steps), deep=thorough exploration (10-20 steps)',
-});
+export const thinkingModeSchema = z.enum(VALID_THINKING_MODES)
+  .describe('Thinking mode: fast=quick decisions (3-5 steps), expert=complex analysis (5-10 steps), deep=thorough exploration (10-20 steps)');
 
 export const THOUGHT_CATEGORIES = [
   'analysis',
@@ -91,9 +90,8 @@ export const THOUGHT_CATEGORY_DESCRIPTIONS: Record<string, string> = {
 
 export type ThoughtCategory = (typeof THOUGHT_CATEGORIES)[number];
 
-export const thoughtCategorySchema = z.enum(THOUGHT_CATEGORIES, {
-  description: 'Category of thought: analysis|hypothesis|conclusion|question|reflection|planning|evaluation',
-});
+export const thoughtCategorySchema = z.enum(THOUGHT_CATEGORIES)
+  .describe('Category of thought: analysis|hypothesis|conclusion|question|reflection|planning|evaluation');
 
 export const STRATEGY_TYPES = ['explore', 'exploit', 'balanced'] as const;
 
@@ -105,9 +103,8 @@ export const STRATEGY_DESCRIPTIONS: Record<string, string> = {
 
 export type StrategyType = (typeof STRATEGY_TYPES)[number];
 
-export const strategySchema = z.enum(STRATEGY_TYPES, {
-  description: 'MCTS selection strategy: explore=find new paths, exploit=follow best path, balanced=mix both',
-});
+export const strategySchema = z.enum(STRATEGY_TYPES)
+  .describe('MCTS selection strategy: explore=find new paths, exploit=follow best path, balanced=mix both');
 
 export const PROBLEM_TYPES = [
   'analysis',
@@ -226,38 +223,92 @@ export const INSIGHT_TYPE_DESCRIPTIONS: Record<string, string> = {
 export type InsightType = (typeof INSIGHT_TYPES)[number];
 
 export const DOMAIN_TYPES = [
-  'frontend',
-  'backend',
-  'devops',
-  'data',
-  'machine_learning',
-  'security',
-  'mobile',
-  'desktop',
-  'embedded',
-  'networking',
-  'gaming',
-  'blockchain',
+  'reasoning',
+  'decision',
+  'learning',
+  'memory',
+  'attention',
+  'perception',
+  'language',
+  'emotion',
+  'metacognition',
+  'creativity',
+  'problem_solving',
+  'social',
   'general',
 ] as const;
 
 export const DOMAIN_DESCRIPTIONS: Record<string, string> = {
-  frontend: 'User interfaces, web apps, UI/UX',
-  backend: 'Server-side logic, APIs, databases',
-  devops: 'CI/CD, infrastructure, containers, cloud',
-  data: 'Data engineering, pipelines, analytics',
-  machine_learning: 'ML models, training, inference',
-  security: 'Security auditing, vulnerabilities, auth',
-  mobile: 'iOS, Android, cross-platform apps',
-  desktop: 'Native desktop applications',
-  embedded: 'IoT, firmware, hardware',
-  networking: 'Protocols, distributed systems',
-  gaming: 'Game development, graphics',
-  blockchain: 'Smart contracts, dApps',
-  general: 'General programming problem',
+  reasoning: 'Logical thinking, deduction, induction, analysis',
+  decision: 'Making choices under uncertainty',
+  learning: 'Acquiring knowledge or skills',
+  memory: 'Encoding, storing, retrieving information',
+  attention: 'Focus, filtering, managing cognitive load',
+  perception: 'Interpreting sensory information',
+  language: 'Communication, comprehension, expression',
+  emotion: 'Feeling states affecting cognition',
+  metacognition: 'Thinking about thinking, self-awareness',
+  creativity: 'Generating novel ideas',
+  problem_solving: 'Goal-directed thinking',
+  social: 'Understanding others, collaboration',
+  general: 'General cognitive task',
 };
 
 export type DomainType = (typeof DOMAIN_TYPES)[number];
+
+export const COGNITIVE_PROCESS_TYPES = [
+  'understanding',
+  'creating',
+  'deciding',
+  'remembering',
+  'explaining',
+  'predicting',
+  'evaluating',
+  'planning',
+  'communicating',
+  'transforming',
+] as const;
+
+export const COGNITIVE_PROCESS_DESCRIPTIONS: Record<string, string> = {
+  understanding: 'Making sense of something, grasping meaning',
+  creating: 'Generating something new, synthesis',
+  deciding: 'Choosing between alternatives',
+  remembering: 'Retrieving or storing information',
+  explaining: 'Cause and effect, making things clear',
+  predicting: 'Forecasting future outcomes',
+  evaluating: 'Assessing quality, value, or merit',
+  planning: 'Mapping out future actions',
+  communicating: 'Conveying meaning to others',
+  transforming: 'Changing form, converting, adapting',
+};
+
+export type CognitiveProcessType = (typeof COGNITIVE_PROCESS_TYPES)[number];
+
+export const META_STATES = [
+  'clarity',
+  'certainty',
+  'progress',
+  'blockage',
+  'scope_narrow',
+  'scope_broad',
+  'bias',
+  'momentum_gaining',
+  'momentum_losing',
+  'stuck',
+] as const;
+
+export const META_STATE_DESCRIPTIONS: Record<string, string> = {
+  clarity: 'How clear is the current thinking?',
+  certainty: 'How confident/sure is the thinker?',
+  progress: 'Is the thinking making forward progress?',
+  blockage: 'Is the thinker stuck or blocked?',
+  scope_narrow: 'Thinking is too narrow or focused',
+  scope_broad: 'Thinking is too broad or scattered',
+  bias: 'Potential blind spots or biases detected',
+  momentum_gaining: 'Gaining momentum, productive flow',
+  momentum_losing: 'Losing momentum, productivity declining',
+  stuck: 'Completely stuck with no progress',
+};
 
 export const thoughtTagSchema = z
   .string()
@@ -295,9 +346,7 @@ export const thoughtDataSchema = z
       .number()
       .int('totalThoughts must be a positive integer')
       .min(THOUGHT_NUMBER_MIN, 'totalThoughts must be a positive integer'),
-    nextThoughtNeeded: z.boolean({
-      invalid_type_error: 'nextThoughtNeeded must be a boolean',
-    }),
+    nextThoughtNeeded: z.boolean().describe('must be a boolean'),
     isRevision: z.boolean().optional(),
     revisesThought: z
       .number()

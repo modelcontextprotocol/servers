@@ -6,6 +6,7 @@ export default defineConfig({
     environment: 'node',
     include: ['**/__tests__/**/**/*.test.ts'],
     setupFiles: ['./__tests__/helpers/mocks.ts'],
+    clearMocks: true,
     coverage: {
       provider: 'v8',
       include: ['**/*.ts'],
