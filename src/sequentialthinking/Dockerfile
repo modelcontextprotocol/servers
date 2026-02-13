@@ -1,7 +1,6 @@
 FROM node:22.12-alpine AS builder
 
-COPY src/sequentialthinking /app
-COPY tsconfig.json /tsconfig.json
+COPY . /app
 
 WORKDIR /app
 
@@ -19,6 +18,6 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-RUN npm ci --ignore-scripts --omit-dev
+RUN npm ci --ignore-scripts --omit=dev
 
 ENTRYPOINT ["node", "dist/index.js"]
