@@ -26,7 +26,8 @@
     "start:sse": "node dist/index.js sse",
     "start:streamableHttp": "node dist/index.js streamableHttp",
     "prettier:fix": "prettier --write .",
-    "prettier:check": "prettier --check ."
+    "prettier:check": "prettier --check .",
+    "test": "vitest run --coverage"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
@@ -39,8 +40,10 @@
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@vitest/coverage-v8": "^2.1.8",
     "shx": "^0.3.4",
     "typescript": "^5.6.2",
-    "prettier": "^2.8.8"
+    "prettier": "^2.8.8",
+    "vitest": "^2.1.8"
   }
 }

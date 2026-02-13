@@ -23,6 +23,10 @@ A Model Context Protocol server that provides time and timezone conversion capab
 When using [`uv`](https://docs.astral.sh/uv/) no specific installation is needed. We will
 use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run *mcp-server-time*.
 
+```bash
+uvx mcp-server-time
+```
+
 ### Using PIP
 
 Alternatively you can install `mcp-server-time` via pip:
