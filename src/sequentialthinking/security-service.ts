@@ -20,6 +20,16 @@ const DEFAULT_CONFIG: SecurityServiceConfig = {
   ],
 };
 
+const PRE_COMPILED_SANITIZE_PATTERNS: RegExp[] = [
+  /<script[^>]*>.*?<\/script>/gi,
+  /javascript:/gi,
+  /eval\(/gi,
+  /Function\(/gi,
+  /on\w+=/gi,
+];
+
+const SANITIZE_REPLACEMENTS = ['', '', '', '', ''];
+
 export class SecureThoughtSecurity implements SecurityService {
   private readonly config: SecurityServiceConfig;
   private readonly sessionTracker: SessionTracker;
@@ -36,7 +46,6 @@ export class SecureThoughtSecurity implements SecurityService {
     thought: string,
     sessionId: string = '',
   ): void {
-    // Check for blocked patterns (length validation happens in lib.ts)
     for (const regex of this.config.blockedPatterns) {
       if (regex.test(thought)) {
         throw new SecurityError(
@@ -45,7 +54,6 @@ export class SecureThoughtSecurity implements SecurityService {
       }
     }
 
-    // Rate limiting: single atomic check-and-record to prevent race conditions
     if (sessionId) {
       const withinLimit = this.sessionTracker.checkAndRecordThought(
         sessionId,
@@ -58,12 +66,11 @@ export class SecureThoughtSecurity implements SecurityService {
   }
 
   sanitizeContent(content: string): string {
-    return content
-      .replace(/<script[^>]*>.*?<\/script>/gi, '')
-      .replace(/javascript:/gi, '')
-      .replace(/eval\(/gi, '')
-      .replace(/Function\(/gi, '')
-      .replace(/on\w+=/gi, '');
+    let result = content;
+    for (let i = 0; i < PRE_COMPILED_SANITIZE_PATTERNS.length; i++) {
+      result = result.replace(PRE_COMPILED_SANITIZE_PATTERNS[i], SANITIZE_REPLACEMENTS[i]);
+    }
+    return result;
   }
 
   generateSessionId(): string {

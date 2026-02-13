@@ -9,25 +9,31 @@ const SESSION_ID_MAX_LENGTH = 100;
 const THOUGHT_NUMBER_MIN = 1;
 const MAX_CONSECUTIVE_WHITESPACE = 10;
 
+const PRE_COMPILED_NORMALIZE_PATTERNS: RegExp[] = [
+  /\r\n/g,
+  /\r/g,
+  /\t/g,
+  / {2,}/g,
+  /\n\n+/g,
+];
+
+const PRE_COMPILED_VALIDATE_PATTERN = /[ \n]{2,}/g;
+
 const sanitizeAndNormalizeThought = (val: string): string => {
-  let normalized = val
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/\t/g, ' ')
-    .trim();
-  while (normalized.includes('  ')) {
-    normalized = normalized.replace(/ {2}/g, ' ');
-  }
-  while (normalized.includes('\n\n')) {
-    normalized = normalized.replace(/\n\n/g, '\n');
-  }
+  const normalized = val
+    .replace(PRE_COMPILED_NORMALIZE_PATTERNS[0], '\n')
+    .replace(PRE_COMPILED_NORMALIZE_PATTERNS[1], '\n')
+    .replace(PRE_COMPILED_NORMALIZE_PATTERNS[2], ' ')
+    .trim()
+    .replace(PRE_COMPILED_NORMALIZE_PATTERNS[3], ' ')
+    .replace(PRE_COMPILED_NORMALIZE_PATTERNS[4], '\n');
   return normalized;
 };
 
 const validateThoughtContent = (val: string): boolean => {
   const normalized = sanitizeAndNormalizeThought(val);
   if (normalized.length === 0) return false;
-  const consecutiveWhitespace = normalized.match(/[ \n]{2,}/g);
+  const consecutiveWhitespace = normalized.match(PRE_COMPILED_VALIDATE_PATTERN);
   if (consecutiveWhitespace &&
       consecutiveWhitespace.some((m) => m.length > MAX_CONSECUTIVE_WHITESPACE)) {
     return false;
