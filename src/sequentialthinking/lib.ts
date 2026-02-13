@@ -336,7 +336,7 @@ export class SequentialThinkingServer {
   public async getHealthStatus(): Promise<HealthStatus> {
     try {
       return await this.app.getContainer().get<HealthChecker>('healthChecker').checkHealth();
-    } catch (error) {
+    } catch {
       return {
         status: 'unhealthy',
         summary: 'Health check failed',
