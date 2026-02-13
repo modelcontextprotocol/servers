@@ -21,32 +21,22 @@ export class ConsoleThoughtFormatter implements ThoughtFormatter {
     return { prefix: '[Thought]', context: '' };
   }
 
-  formatHeader(thought: ThoughtData): string {
-    const { prefix, context } = this.getHeaderParts(thought);
-    let coloredPrefix = prefix;
-    if (this.useColors) {
-      if (thought.isRevision) coloredPrefix = chalk.yellow(prefix);
-      else if (thought.branchFromThought) coloredPrefix = chalk.green(prefix);
-      else coloredPrefix = chalk.blue(prefix);
-    }
-    return `${coloredPrefix} ${thought.thoughtNumber}/${thought.totalThoughts}${context}`;
-  }
-
-  formatBody(thought: ThoughtData): string {
-    return thought.thought;
-  }
-
   format(thought: ThoughtData): string {
-    const headerPlain = this.formatHeaderPlain(thought);
-    const body = this.formatBody(thought);
+    const { prefix, context } = this.getHeaderParts(thought);
+    const suffix = ` ${thought.thoughtNumber}/${thought.totalThoughts}${context}`;
+    const headerPlain = `${prefix}${suffix}`;
+    const body = thought.thought;
 
-    // Calculate border length based on plain text content (no ANSI codes)
     const bodyLines = body.split('\n');
     const maxLength = Math.max(headerPlain.length, ...bodyLines.map(l => l.length));
     const border = '─'.repeat(maxLength + 4);
 
     if (this.useColors) {
-      const header = this.formatHeader(thought);
+      let coloredPrefix: string;
+      if (thought.isRevision) coloredPrefix = chalk.yellow(prefix);
+      else if (thought.branchFromThought) coloredPrefix = chalk.green(prefix);
+      else coloredPrefix = chalk.blue(prefix);
+      const header = `${coloredPrefix}${suffix}`;
       const coloredBorder = chalk.gray(border);
 
       return `
@@ -63,10 +53,5 @@ ${chalk.gray('└')}${coloredBorder}${chalk.gray('┘')}`.trim();
 │ ${body.padEnd(maxLength)} │
 └${border}┘`.trim();
     }
-  }
-
-  private formatHeaderPlain(thought: ThoughtData): string {
-    const { prefix, context } = this.getHeaderParts(thought);
-    return `${prefix} ${thought.thoughtNumber}/${thought.totalThoughts}${context}`;
   }
 }

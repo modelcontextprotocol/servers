@@ -5,7 +5,6 @@ import type { MetricsCollector, ThoughtStorage, SecurityService, StorageStats, R
 function makeMockMetrics(overrides?: Partial<RequestMetrics>): MetricsCollector {
   return {
     recordRequest: () => {},
-    recordError: () => {},
     recordThoughtProcessed: () => {},
     destroy: () => {},
     getMetrics: () => ({
@@ -56,7 +55,7 @@ function makeMockSecurity(): SecurityService {
   return {
     validateThought: () => {},
     sanitizeContent: (c: string) => c,
-    getSecurityStatus: () => ({ status: 'healthy', activeSessions: 0, ipConnections: 0, blockedPatterns: 5 }),
+    getSecurityStatus: () => ({ status: 'healthy', activeSessions: 0, blockedPatterns: 5 }),
     generateSessionId: () => 'test-id',
     validateSession: () => true,
   };

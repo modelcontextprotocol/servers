@@ -35,8 +35,8 @@ export class SecureThoughtSecurity implements SecurityService {
     for (const pattern of this.config.blockedPatterns) {
       try {
         this.compiledPatterns.push(new RegExp(pattern, 'i'));
-      } catch {
-        // Skip malformed regex patterns
+      } catch (error) {
+        console.warn(`Skipping malformed blocked pattern "${pattern}":`, error);
       }
     }
   }
@@ -86,13 +86,10 @@ export class SecureThoughtSecurity implements SecurityService {
     return sessionId.length > 0 && sessionId.length <= 100;
   }
 
-  getSecurityStatus(
-    _sessionId?: string,
-  ): Record<string, unknown> {
+  getSecurityStatus(): Record<string, unknown> {
     return {
       status: 'healthy',
       activeSessions: this.sessionTracker.getActiveSessionCount(),
-      ipConnections: 0,
       blockedPatterns: this.config.blockedPatterns.length,
     };
   }

@@ -1,13 +1,20 @@
-import { SESSION_EXPIRY_MS } from './config.js';
+import { SESSION_EXPIRY_MS, RATE_LIMIT_WINDOW_MS } from './config.js';
 
 interface SessionData {
   lastAccess: number;
-  thoughtCount: number;
   rateTimestamps: number[]; // For rate limiting (60s window)
 }
-
-const RATE_LIMIT_WINDOW_MS = 60000;
 const MAX_TRACKED_SESSIONS = 10000;
+
+/** Remove all timestamps before cutoff in O(n) instead of O(n²) shift loop. */
+function pruneTimestamps(timestamps: number[], cutoff: number): void {
+  const firstValid = timestamps.findIndex(ts => ts >= cutoff);
+  if (firstValid > 0) {
+    timestamps.splice(0, firstValid);
+  } else if (firstValid === -1 && timestamps.length > 0) {
+    timestamps.length = 0;
+  }
+}
 
 /**
  * Centralized session tracking for state, security, and metrics.
@@ -16,6 +23,16 @@ const MAX_TRACKED_SESSIONS = 10000;
 export class SessionTracker {
   private readonly sessions = new Map<string, SessionData>();
   private cleanupTimer: NodeJS.Timeout | null = null;
+  private readonly evictionCallbacks: Array<(sessionIds: string[]) => void> = [];
+  private readonly periodicCleanupCallbacks: Array<() => void> = [];
+
+  onEviction(callback: (sessionIds: string[]) => void): void {
+    this.evictionCallbacks.push(callback);
+  }
+
+  onPeriodicCleanup(callback: () => void): void {
+    this.periodicCleanupCallbacks.push(callback);
+  }
 
   constructor(cleanupInterval: number = 60000) {
     if (cleanupInterval > 0) {
@@ -30,12 +47,10 @@ export class SessionTracker {
     const now = Date.now();
     const session = this.sessions.get(sessionId) ?? {
       lastAccess: now,
-      thoughtCount: 0,
       rateTimestamps: [],
     };
 
     session.lastAccess = now;
-    session.thoughtCount++;
     session.rateTimestamps.push(now);
 
     this.sessions.set(sessionId, session);
@@ -59,10 +74,7 @@ export class SessionTracker {
       return true; // New session, no history
     }
 
-    // Prune old timestamps from rate window
-    while (session.rateTimestamps.length > 0 && session.rateTimestamps[0] < cutoff) {
-      session.rateTimestamps.shift();
-    }
+    pruneTimestamps(session.rateTimestamps, cutoff);
 
     return session.rateTimestamps.length < maxRequests;
   }
@@ -92,18 +104,17 @@ export class SessionTracker {
     const now = Date.now();
     const cutoff = now - SESSION_EXPIRY_MS;
     const rateCutoff = now - RATE_LIMIT_WINDOW_MS;
+    const evictedIds: string[] = [];
 
     for (const [id, session] of this.sessions.entries()) {
       // Remove sessions with no activity in 1 hour
       if (session.lastAccess < cutoff) {
         this.sessions.delete(id);
+        evictedIds.push(id);
         continue;
       }
 
-      // Prune old rate timestamps
-      while (session.rateTimestamps.length > 0 && session.rateTimestamps[0] < rateCutoff) {
-        session.rateTimestamps.shift();
-      }
+      pruneTimestamps(session.rateTimestamps, rateCutoff);
     }
 
     // If still at capacity, remove oldest sessions (FIFO)
@@ -115,6 +126,27 @@ export class SessionTracker {
 
       for (const [id] of sortedSessions) {
         this.sessions.delete(id);
+        evictedIds.push(id);
+      }
+    }
+
+    // Notify subscribers of evicted sessions
+    if (evictedIds.length > 0) {
+      for (const callback of this.evictionCallbacks) {
+        try {
+          callback(evictedIds);
+        } catch (error) {
+          console.error('Eviction callback error:', error);
+        }
+      }
+    }
+
+    // Invoke periodic cleanup subscribers
+    for (const callback of this.periodicCleanupCallbacks) {
+      try {
+        callback();
+      } catch (error) {
+        console.error('Periodic cleanup callback error:', error);
       }
     }
   }
@@ -137,7 +169,7 @@ export class SessionTracker {
     this.cleanupTimer.unref();
   }
 
-  stopCleanupTimer(): void {
+  private stopCleanupTimer(): void {
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
@@ -147,5 +179,7 @@ export class SessionTracker {
   destroy(): void {
     this.stopCleanupTimer();
     this.clear();
+    this.evictionCallbacks.length = 0;
+    this.periodicCleanupCallbacks.length = 0;
   }
 }
