@@ -221,6 +221,37 @@ export class Metacognition {
     };
   }
 
+  getStrategyGuidance(problemType: string): string {
+    const strategies: Record<string, string> = {
+      analysis: 'Focus on breaking down the problem. What are the key components? What evidence supports each component?',
+      design: 'Consider the architecture. What are the main components? How do they interact? What patterns apply?',
+      debugging: 'Identify the root cause. What is the expected vs actual behavior? What changed? Where is the failure?',
+      planning: 'Define milestones. What are the key deliverables? What dependencies exist? What is the timeline?',
+      optimization: 'Measure first. What is the current performance? What are the bottlenecks? What has the most impact?',
+      decision: 'Weigh alternatives. What are the tradeoffs? What criteria matter most? What are the risks of each option?',
+      creative: 'Explore possibilities. What are 3 different approaches? What would a novice try? What would an expert do differently?',
+      unknown: 'Clarify the goal. What does success look like? What constraints exist? What have you tried?',
+    };
+    return strategies[problemType] || strategies.unknown;
+  }
+
+  computeConfidenceTrend(history: number[]): 'improving' | 'declining' | 'stable' | 'insufficient' {
+    if (history.length < 3) return 'insufficient';
+    const recent = history.slice(-3);
+    const diff1 = recent[1] - recent[0];
+    const diff2 = recent[2] - recent[1];
+    const avgDiff = (diff1 + diff2) / 2;
+    if (avgDiff > 0.1) return 'improving';
+    if (avgDiff < -0.1) return 'declining';
+    return 'stable';
+  }
+
+  getActivePerspectivePrompt(suggestions: PerspectiveSuggestion[]): string | null {
+    if (suggestions.length === 0) return null;
+    const primary = suggestions[0];
+    return `[${primary.perspective.toUpperCase()} VIEWPOINT] ${primary.description}`;
+  }
+
   findSimilarPatterns(currentProblem: string, patternDatabase: PatternMatch[] = []): PatternMatch[] {
     if (patternDatabase.length === 0) {
       return [];
@@ -235,6 +266,167 @@ export class Metacognition {
     return scored
       .filter(p => p.similarity > 0.2)
       .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 3);
+  }
+
+  private evaluationHistory: Array<{
+    problemType: string;
+    strategy: string;
+    perspective: string;
+    value: number;
+  }> = [];
+
+  recordEvaluation(
+    problemType: string,
+    strategy: string,
+    perspective: string,
+    value: number,
+  ): void {
+    this.evaluationHistory.push({ problemType, strategy, perspective, value });
+    if (this.evaluationHistory.length > 100) {
+      this.evaluationHistory = this.evaluationHistory.slice(-100);
+    }
+  }
+
+  private computeAverageScores(
+    relevant: Array<{ strategy: string; perspective: string; value: number }>,
+  ): { strategy: Record<string, number>; perspective: Record<string, number> } {
+    const strategyScores: Record<string, { total: number; count: number }> = {};
+    const perspectiveScores: Record<string, { total: number; count: number }> = {};
+
+    for (const e of relevant) {
+      if (!strategyScores[e.strategy]) strategyScores[e.strategy] = { total: 0, count: 0 };
+      strategyScores[e.strategy].total += e.value;
+      strategyScores[e.strategy].count++;
+
+      if (!perspectiveScores[e.perspective]) perspectiveScores[e.perspective] = { total: 0, count: 0 };
+      perspectiveScores[e.perspective].total += e.value;
+      perspectiveScores[e.perspective].count++;
+    }
+
+    const avg = (s: { total: number; count: number }) => s.total / s.count;
+
+    return {
+      strategy: Object.fromEntries(
+        Object.entries(strategyScores).map(([k, v]) => [k, avg(v)]),
+      ),
+      perspective: Object.fromEntries(
+        Object.entries(perspectiveScores).map(([k, v]) => [k, avg(v)]),
+      ),
+    };
+  }
+
+  getAdaptiveStrategy(problemType: string): {
+    recommendedStrategy: string | null;
+    recommendedPerspective: string | null;
+    reasoning: string;
+  } {
+    const relevant = this.evaluationHistory.filter(e => e.problemType === problemType);
+    if (relevant.length < 3) {
+      return { recommendedStrategy: null, recommendedPerspective: null, reasoning: 'Insufficient evaluation history.' };
+    }
+
+    const scores = this.computeAverageScores(relevant);
+    const bestStrat = Object.entries(scores.strategy).sort((a, b) => b[1] - a[1])[0];
+    const bestPersp = Object.entries(scores.perspective).sort((a, b) => b[1] - a[1])[0];
+
+    return {
+      recommendedStrategy: bestStrat?.[0] ?? null,
+      recommendedPerspective: bestPersp?.[0] ?? null,
+      reasoning: `From ${relevant.length} evals: "${bestStrat?.[0]}" (${bestStrat?.[1]?.toFixed(2)}), "${bestPersp?.[0]}" (${bestPersp?.[1]?.toFixed(2)}) best.`,
+    };
+  }
+
+  analyzeReasoningGaps(thoughts: ThoughtData[]): {
+    hasGaps: boolean;
+    gaps: Array<{ thoughtNumber: number; issue: string }>;
+  } {
+    const gaps: Array<{ thoughtNumber: number; issue: string }> = [];
+    const conclusionIndices: number[] = [];
+
+    for (let i = 0; i < thoughts.length; i++) {
+      const t = thoughts[i].thought.toLowerCase();
+      if (/\b(therefore|thus|so|conclude|conclusion|therefore|hence|accordingly)\b/.test(t)) {
+        conclusionIndices.push(i);
+      }
+    }
+
+    for (const idx of conclusionIndices) {
+      if (idx < 2) {
+        gaps.push({ thoughtNumber: thoughts[idx].thoughtNumber, issue: 'Premature conclusion - too few prior thoughts' });
+        continue;
+      }
+
+      const priorThoughts = thoughts.slice(0, idx);
+      const hasEvidence = priorThoughts.some(t =>
+        /\b(because|since|evidence|shown|demonstrated|proved|however|although|but)\b/.test(t.thought.toLowerCase()),
+      );
+      if (!hasEvidence) {
+        gaps.push({ thoughtNumber: thoughts[idx].thoughtNumber, issue: 'Conclusion lacks supporting evidence' });
+      }
+    }
+
+    return { hasGaps: gaps.length > 0, gaps };
+  }
+
+  generateReflectionPrompt(
+    phase: 'exploring' | 'evaluating' | 'converging' | 'concluded',
+    confidenceTrend: string,
+    circularity: boolean,
+    confidenceScore: number,
+  ): string | null {
+    if (phase !== 'converging' && phase !== 'concluded') return null;
+
+    const prompts: string[] = [];
+
+    if (circularity) {
+      prompts.push('What assumption is causing you to loop back to the same ideas?');
+    }
+
+    if (confidenceTrend === 'declining') {
+      prompts.push('Your confidence is declining. What evidence contradicts your current path?');
+    }
+
+    if (confidenceTrend === 'improving' && confidenceScore > 0.8) {
+      prompts.push('High confidence detected. What might you be missing? Consider a skeptic\'s view.');
+    }
+
+    if (phase === 'concluded') {
+      prompts.push('What is the single strongest counterargument to your conclusion?');
+      prompts.push('If you were wrong, what would prove it?');
+    }
+
+    return prompts.length > 0 ? prompts[Math.floor(Math.random() * prompts.length)] : null;
+  }
+
+  private crossBranchPatterns: Map<string, Array<{ problemType: string; solution: string; score: number }>> = new Map();
+
+  recordCrossBranchPattern(
+    problemKey: string,
+    problemType: string,
+    solution: string,
+    score: number,
+  ): void {
+    const existing = this.crossBranchPatterns.get(problemKey) || [];
+    existing.push({ problemType, solution, score });
+    if (existing.length > 20) existing.shift();
+    this.crossBranchPatterns.set(problemKey, existing);
+  }
+
+  findCrossBranchPattern(problemKey: string): Array<{ solution: string; avgScore: number }> {
+    const patterns = this.crossBranchPatterns.get(problemKey);
+    if (!patterns || patterns.length === 0) return [];
+
+    const bySolution: Record<string, { total: number; count: number }> = {};
+    for (const p of patterns) {
+      if (!bySolution[p.solution]) bySolution[p.solution] = { total: 0, count: 0 };
+      bySolution[p.solution].total += p.score;
+      bySolution[p.solution].count++;
+    }
+
+    return Object.entries(bySolution)
+      .map(([solution, { total, count }]) => ({ solution, avgScore: total / count }))
+      .sort((a, b) => b.avgScore - a.avgScore)
       .slice(0, 3);
   }
 }

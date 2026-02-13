@@ -1,6 +1,6 @@
 import type { ThoughtTree } from './thought-tree.js';
 import type { MCTSEngine } from './mcts.js';
-import type { TreeStats, TreeNodeInfo, ThoughtData } from './interfaces.js';
+import type { TreeStats, TreeNodeInfo } from './interfaces.js';
 import { metacognition } from './metacognition.js';
 
 export const VALID_THINKING_MODES = ['fast', 'expert', 'deep'] as const;
@@ -54,6 +54,11 @@ export interface ModeGuidance {
   confidenceScore: number | null;
   perspectiveSuggestions: Array<{ perspective: string; description: string }>;
   problemType: string | null;
+  strategyGuidance: string | null;
+  confidenceTrend: 'improving' | 'declining' | 'stable' | 'insufficient' | null;
+  reasoningGapWarning: string | null;
+  adaptiveStrategyReasoning: string | null;
+  reflectionPrompt: string | null;
 }
 
 const PRESETS: Record<ThinkingMode, ThinkingModeConfig> = {
@@ -234,6 +239,69 @@ export class ThinkingModeEngine {
     );
     const critique = this.generateCritique(config, tree, bestPath, stats);
 
+    const metacog = this.computeMetacognitionData(
+      tree, recommendedAction, stats, thoughtPrompt,
+    );
+
+    const finalThoughtPrompt = metacog.strategyGuidance
+      ? `${metacog.enhancedThoughtPrompt}\n\n${metacog.strategyGuidance}`
+      : metacog.enhancedThoughtPrompt;
+
+    return {
+      mode: config.mode,
+      currentPhase,
+      recommendedAction,
+      reasoning,
+      targetTotalThoughts: config.targetDepthMax,
+      convergenceStatus,
+      branchingSuggestion,
+      backtrackSuggestion,
+      thoughtPrompt: finalThoughtPrompt,
+      progressOverview,
+      critique,
+      circularityWarning: metacog.circularity.warning,
+      confidenceScore: metacog.confidence.confidence,
+      perspectiveSuggestions: metacog.perspectiveSuggestions.map(p => ({
+        perspective: p.perspective,
+        description: p.description,
+      })),
+      problemType: metacog.problemType.type !== 'unknown' ? metacog.problemType.type : null,
+      strategyGuidance: metacog.strategyGuidance,
+      confidenceTrend: metacog.confidenceTrend,
+      reasoningGapWarning: metacog.reasoningGapWarning,
+      adaptiveStrategyReasoning: metacog.adaptiveStrategyReasoning,
+      reflectionPrompt: metacog.reflectionPrompt,
+    };
+  }
+
+  private selectTemplate(mode: ThinkingMode, action: ModeGuidance['recommendedAction']): string {
+    return TEMPLATES[`${mode}_${action}`] ?? FALLBACK_TEMPLATE;
+  }
+
+  private renderTemplate(template: string, params: Record<string, unknown>): string {
+    return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+      const val = params[key as keyof typeof params];
+      return val !== undefined && val !== null ? String(val) : '';
+    });
+  }
+
+  private computeMetacognitionData(
+    tree: ThoughtTree,
+    recommendedAction: ModeGuidance['recommendedAction'],
+    stats: TreeStats,
+    thoughtPrompt: string,
+  ): {
+    circularity: ReturnType<typeof metacognition.detectCircularity>;
+    confidence: ReturnType<typeof metacognition.assessConfidence>;
+    problemType: ReturnType<typeof metacognition.classifyProblemType>;
+    perspectiveSuggestions: ReturnType<typeof metacognition.suggestPerspective>;
+    strategyGuidance: string | null;
+    confidenceTrend: ReturnType<typeof metacognition.computeConfidenceTrend> | 'insufficient';
+    enhancedThoughtPrompt: string;
+    reasoningGapWarning: string | null;
+    adaptiveStrategyReasoning: string | null;
+    reflectionPrompt: string | null;
+  } {
     const thoughtHistory = tree.getAllNodes().map(n => ({
       thought: n.thought,
       thoughtNumber: n.thoughtNumber,
@@ -248,42 +316,63 @@ export class ThinkingModeEngine {
       null,
     );
     const problemType = metacognition.classifyProblemType(thoughtHistory);
+
+    const reasoningGaps = metacognition.analyzeReasoningGaps(thoughtHistory);
+    const reasoningGapWarning = reasoningGaps.hasGaps
+      ? `Reasoning gaps detected: ${reasoningGaps.gaps.map(g => g.issue).join('; ')}`
+      : null;
+
     const perspectiveSuggestions = metacognition.suggestPerspective(
       recommendedAction === 'evaluate',
       stats.totalNodes - stats.terminalCount,
     );
 
+    const staticStrategy = problemType.type !== 'unknown'
+      ? metacognition.getStrategyGuidance(problemType.type)
+      : null;
+
+    const adaptiveStrategy = problemType.type !== 'unknown'
+      ? metacognition.getAdaptiveStrategy(problemType.type)
+      : { recommendedStrategy: null, recommendedPerspective: null, reasoning: '' };
+
+    const strategyGuidance = adaptiveStrategy.recommendedStrategy
+      ? `${staticStrategy || ''}\n\n[Adaptive] ${adaptiveStrategy.reasoning}`.trim()
+      : staticStrategy;
+
+    const allNodes = tree.getAllNodes();
+    const confidenceHistory = allNodes
+      .map(n => n.confidence)
+      .filter((c): c is number => c !== undefined);
+    const confidenceTrend = confidenceHistory.length >= 3
+      ? metacognition.computeConfidenceTrend(confidenceHistory)
+      : 'insufficient';
+
+    const activePerspective = adaptiveStrategy.recommendedPerspective
+      ? metacognition.getActivePerspectivePrompt([{ ...perspectiveSuggestions[0], perspective: adaptiveStrategy.recommendedPerspective }])
+      : metacognition.getActivePerspectivePrompt(perspectiveSuggestions);
+    const enhancedThoughtPrompt = activePerspective
+      ? `${thoughtPrompt}\n\n${activePerspective}`
+      : thoughtPrompt;
+
+    const reflectionPrompt = metacognition.generateReflectionPrompt(
+      'exploring',
+      confidenceTrend,
+      circularity.isCircular,
+      confidence.confidence,
+    );
+
     return {
-      mode: config.mode,
-      currentPhase,
-      recommendedAction,
-      reasoning,
-      targetTotalThoughts: config.targetDepthMax,
-      convergenceStatus,
-      branchingSuggestion,
-      backtrackSuggestion,
-      thoughtPrompt,
-      progressOverview,
-      critique,
-      circularityWarning: circularity.warning,
-      confidenceScore: confidence.confidence,
-      perspectiveSuggestions: perspectiveSuggestions.map(p => ({
-        perspective: p.perspective,
-        description: p.description,
-      })),
-      problemType: problemType.type !== 'unknown' ? problemType.type : null,
+      circularity,
+      confidence,
+      problemType,
+      perspectiveSuggestions,
+      strategyGuidance,
+      confidenceTrend,
+      enhancedThoughtPrompt,
+      reasoningGapWarning,
+      adaptiveStrategyReasoning: adaptiveStrategy.reasoning || null,
+      reflectionPrompt,
     };
-  }
-
-  private selectTemplate(mode: ThinkingMode, action: ModeGuidance['recommendedAction']): string {
-    return TEMPLATES[`${mode}_${action}`] ?? FALLBACK_TEMPLATE;
-  }
-
-  private renderTemplate(template: string, params: Record<string, unknown>): string {
-    return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-      const val = params[key as keyof typeof params];
-      return val !== undefined && val !== null ? String(val) : '';
-    });
   }
 
   private computeCursorValue(

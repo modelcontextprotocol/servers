@@ -15,6 +15,9 @@ export interface ThoughtNode {
   isRevision?: boolean;
   revisesThought?: number;
   branchFromThought?: number;
+  confidence?: number;
+  strategyUsed?: string;
+  perspectiveUsed?: string;
 }
 
 export class ThoughtTree {

@@ -14,6 +14,7 @@ import { ThoughtTree } from './thought-tree.js';
 import { MCTSEngine } from './mcts.js';
 import { TreeError } from './errors.js';
 import { ThinkingModeEngine } from './thinking-modes.js';
+import { metacognition } from './metacognition.js';
 import type { ThinkingMode, ThinkingModeConfig } from './thinking-modes.js';
 import type { SessionTracker } from './session-tracker.js';
 
@@ -50,6 +51,22 @@ export class ThoughtTreeManager implements ThoughtTreeService, MCTSService {
     const tree = this.getOrCreateTree(sessionId);
     const node = tree.addThought(data);
 
+    const allNodes = tree.getAllNodes();
+    const thoughtHistory = allNodes.map(n => ({
+      thought: n.thought,
+      thoughtNumber: n.thoughtNumber,
+      totalThoughts: n.thoughtNumber,
+      nextThoughtNeeded: true,
+    }));
+    const context = thoughtHistory.slice(0, -1);
+    const prevConfidence = node.confidence ?? null;
+    const confidenceResult = metacognition.assessConfidence(
+      data.thought,
+      context,
+      prevConfidence,
+    );
+    node.confidence = confidenceResult.confidence;
+
     // Auto-evaluate in fast mode
     const modeConfig = this.modes.get(sessionId);
     if (modeConfig) {
@@ -72,6 +89,12 @@ export class ThoughtTreeManager implements ThoughtTreeService, MCTSService {
       result.modeGuidance = this.modeEngine.generateGuidance(
         modeConfig, tree, this.engine, treeStats,
       );
+
+      if (result.modeGuidance) {
+        node.strategyUsed = result.modeGuidance.strategyGuidance ?? modeConfig.suggestStrategy;
+        const primaryPersp = result.modeGuidance.perspectiveSuggestions[0];
+        node.perspectiveUsed = primaryPersp?.perspective ?? 'none';
+      }
     }
 
     return result;
@@ -104,6 +127,19 @@ export class ThoughtTreeManager implements ThoughtTreeService, MCTSService {
     }
 
     const nodesUpdated = this.engine.backpropagate(tree, nodeId, value);
+
+    const modeConfig = this.modes.get(sessionId);
+    if (modeConfig) {
+      const guidance = this.modeEngine.generateGuidance(
+        modeConfig, tree, this.engine,
+      );
+      metacognition.recordEvaluation(
+        guidance.problemType ?? 'unknown',
+        node.strategyUsed ?? modeConfig.suggestStrategy,
+        node.perspectiveUsed ?? 'none',
+        value,
+      );
+    }
 
     return {
       nodeId,
