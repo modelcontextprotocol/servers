@@ -10,5 +10,6 @@
   },
   "npm": {
     "publish": false
-  }
+  },
+  "confirm": false
 }
