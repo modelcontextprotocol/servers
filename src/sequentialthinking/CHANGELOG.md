@@ -1,5 +1,17 @@
 # Changelog
 
+# [0.8.0](https://github.com/vlordier/servers/compare/v0.6.3...v0.8.0) (2026-02-14)
+
+
+### Bug Fixes
+
+* Sync version script regex pattern ([0938f67](https://github.com/vlordier/servers/commit/0938f67d2dd37e4b6bb3c7da2a73305be37b01be))
+
+
+### Features
+
+* Add auto-versioning with standard-version ([d2a1513](https://github.com/vlordier/servers/commit/d2a151353f59b8cccecf470341daf91581f5c6f7))
+
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
 ### 0.6.3 (2026-02-14)
