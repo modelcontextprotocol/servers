@@ -1,0 +1,523 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="."><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>Sequential Thinking MCP Server - v0.6.2</title><meta name="description" content="Documentation for Sequential Thinking MCP Server"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="assets/style.css"/><link rel="stylesheet" href="assets/highlight.css"/><script defer src="assets/main.js"></script><script async src="assets/icons.js" id="tsd-icons-script"></script><script async src="assets/search.js" id="tsd-search-script"></script><script async src="assets/navigation.js" id="tsd-nav-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar"><div class="tsd-toolbar-contents container"><div class="table-cell" id="tsd-search"><div class="field"><label for="tsd-search-field" class="tsd-widget tsd-toolbar-icon search no-caption"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-search"></use></svg></label><input type="text" id="tsd-search-field" aria-label="Search"/></div><div class="field"><div id="tsd-toolbar-links"><a href="https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking">GitHub</a></div></div><ul class="results"><li class="state loading">Preparing search index...</li><li class="state failure">The search index is not available</li></ul><a href="index.html" class="title">Sequential Thinking MCP Server - v0.6.2</a></div><div class="table-cell" id="tsd-widgets"><a href="#" class="tsd-widget tsd-toolbar-icon menu no-caption" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-menu"></use></svg></a></div></div></header><div class="container container-main"><div class="col-content"><div class="tsd-page-title"><h1>Sequential Thinking MCP Server - v0.6.2</h1></div><div class="tsd-panel tsd-typography"><a id="sequential-thinking-mcp-server" class="tsd-anchor"></a><h1 class="tsd-anchor-link">Sequential Thinking MCP Server<a href="#sequential-thinking-mcp-server" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1><p>An MCP server for dynamic, reflective problem-solving through sequential thoughts with MCTS-based tree exploration and metacognitive self-awareness.</p>
+<a id="overview" class="tsd-anchor"></a><h2 class="tsd-anchor-link">Overview<a href="#overview" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>This server provides structured, step-by-step thinking with support for:</p>
+<ul>
+<li><strong>Revisions</strong> - Reconsider previous thoughts</li>
+<li><strong>Branching</strong> - Explore alternative reasoning paths</li>
+<li><strong>Session tracking</strong> - Maintain context across requests</li>
+<li><strong>MCTS exploration</strong> - Monte Carlo Tree Search for optimal reasoning paths</li>
+<li><strong>Thinking modes</strong> - Fast, Expert, and Deep exploration strategies</li>
+<li><strong>Metacognition</strong> - Self-awareness for confidence, circularity detection, problem classification</li>
+</ul>
+<a id="tools" class="tsd-anchor"></a><h2 class="tsd-anchor-link">Tools<a href="#tools" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><a id="sequentialthinking" class="tsd-anchor"></a><h3 class="tsd-anchor-link"><code>sequentialthinking</code><a href="#sequentialthinking" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>Process a single thought in a sequential chain.</p>
+<p><strong>Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>thought</code></td>
+<td>string</td>
+<td>yes</td>
+<td>The current thinking step</td>
+</tr>
+<tr>
+<td><code>nextThoughtNeeded</code></td>
+<td>boolean</td>
+<td>yes</td>
+<td>Whether another thought step is needed</td>
+</tr>
+<tr>
+<td><code>thoughtNumber</code></td>
+<td>number</td>
+<td>yes</td>
+<td>Current thought number (1-based)</td>
+</tr>
+<tr>
+<td><code>totalThoughts</code></td>
+<td>number</td>
+<td>yes</td>
+<td>Estimated total thoughts needed</td>
+</tr>
+<tr>
+<td><code>isRevision</code></td>
+<td>boolean</td>
+<td>no</td>
+<td>Whether this revises previous thinking</td>
+</tr>
+<tr>
+<td><code>revisesThought</code></td>
+<td>number</td>
+<td>no</td>
+<td>Which thought number is being reconsidered</td>
+</tr>
+<tr>
+<td><code>branchFromThought</code></td>
+<td>number</td>
+<td>no</td>
+<td>Branching point thought number</td>
+</tr>
+<tr>
+<td><code>branchId</code></td>
+<td>string</td>
+<td>no</td>
+<td>Branch identifier</td>
+</tr>
+<tr>
+<td><code>needsMoreThoughts</code></td>
+<td>boolean</td>
+<td>no</td>
+<td>If more thoughts are needed beyond estimate</td>
+</tr>
+<tr>
+<td><code>sessionId</code></td>
+<td>string</td>
+<td>no</td>
+<td>Session identifier for tracking</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Response fields:</strong> <code>thoughtNumber</code>, <code>totalThoughts</code>, <code>nextThoughtNeeded</code>, <code>branches</code>, <code>thoughtHistoryLength</code>, <code>sessionId</code>, <code>timestamp</code></p>
+<a id="get_thought_history" class="tsd-anchor"></a><h3 class="tsd-anchor-link"><code>get_thought_history</code><a href="#get_thought_history" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>Retrieve the thought history for a session.</p>
+<p><strong>Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sessionId</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Session identifier</td>
+</tr>
+<tr>
+<td><code>branchId</code></td>
+<td>string</td>
+<td>no</td>
+<td>Filter by branch</td>
+</tr>
+</tbody>
+</table>
+<a id="set_thinking_mode" class="tsd-anchor"></a><h3 class="tsd-anchor-link"><code>set_thinking_mode</code><a href="#set_thinking_mode" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>Configure the thinking mode for a session (enables MCTS exploration).</p>
+<p><strong>Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sessionId</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Session identifier</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Thinking mode: <code>fast</code>, <code>expert</code>, or <code>deep</code></td>
+</tr>
+</tbody>
+</table>
+<a id="suggest_next_thought" class="tsd-anchor"></a><h3 class="tsd-anchor-link"><code>suggest_next_thought</code><a href="#suggest_next_thought" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>Get AI-powered suggestions for the next thought using MCTS.</p>
+<p><strong>Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sessionId</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Session identifier</td>
+</tr>
+<tr>
+<td><code>strategy</code></td>
+<td>string</td>
+<td>no</td>
+<td>Selection strategy: <code>explore</code>, <code>exploit</code>, or <code>balanced</code></td>
+</tr>
+</tbody>
+</table>
+<a id="evaluate_thought" class="tsd-anchor"></a><h3 class="tsd-anchor-link"><code>evaluate_thought</code><a href="#evaluate_thought" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>Evaluate a thought's quality (0-1 scale) for MCTS backpropagation.</p>
+<p><strong>Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sessionId</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Session identifier</td>
+</tr>
+<tr>
+<td><code>nodeId</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Node ID to evaluate</td>
+</tr>
+<tr>
+<td><code>value</code></td>
+<td>number</td>
+<td>yes</td>
+<td>Quality score (0-1)</td>
+</tr>
+</tbody>
+</table>
+<a id="backtrack" class="tsd-anchor"></a><h3 class="tsd-anchor-link"><code>backtrack</code><a href="#backtrack" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>Move the thought tree cursor back to a previous node.</p>
+<p><strong>Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sessionId</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Session identifier</td>
+</tr>
+<tr>
+<td><code>nodeId</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Target node ID</td>
+</tr>
+</tbody>
+</table>
+<a id="get_thinking_summary" class="tsd-anchor"></a><h3 class="tsd-anchor-link"><code>get_thinking_summary</code><a href="#get_thinking_summary" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>Get a comprehensive summary of the thought tree.</p>
+<p><strong>Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sessionId</code></td>
+<td>string</td>
+<td>yes</td>
+<td>Session identifier</td>
+</tr>
+<tr>
+<td><code>maxDepth</code></td>
+<td>number</td>
+<td>no</td>
+<td>Maximum depth to include</td>
+</tr>
+</tbody>
+</table>
+<a id="health_check" class="tsd-anchor"></a><h3 class="tsd-anchor-link"><code>health_check</code><a href="#health_check" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>Returns server health status including memory, response time, error rate, storage, and security checks.</p>
+<a id="metrics" class="tsd-anchor"></a><h3 class="tsd-anchor-link"><code>metrics</code><a href="#metrics" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>Returns request metrics (counts, response times), thought metrics (totals, branches), and system metrics.</p>
+<a id="thinking-modes" class="tsd-anchor"></a><h2 class="tsd-anchor-link">Thinking Modes<a href="#thinking-modes" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>The server supports three thinking modes for MCTS exploration:</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Exploration</th>
+<th>Target Depth</th>
+<th>Best For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fast</code></td>
+<td>Low (0.5)</td>
+<td>3-5</td>
+<td>Quick decisions</td>
+</tr>
+<tr>
+<td><code>expert</code></td>
+<td>Balanced (1.41)</td>
+<td>5-10</td>
+<td>Complex analysis</td>
+</tr>
+<tr>
+<td><code>deep</code></td>
+<td>High (2.0)</td>
+<td>10-20</td>
+<td>Thorough exploration</td>
+</tr>
+</tbody>
+</table>
+<a id="mode-configuration" class="tsd-anchor"></a><h3 class="tsd-anchor-link">Mode Configuration<a href="#mode-configuration" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>fast</th>
+<th>expert</th>
+<th>deep</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>explorationConstant</code></td>
+<td>0.5</td>
+<td>√2 (~1.41)</td>
+<td>2.0</td>
+</tr>
+<tr>
+<td><code>maxBranchingFactor</code></td>
+<td>1</td>
+<td>3</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>targetDepthMin</code></td>
+<td>3</td>
+<td>5</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>targetDepthMax</code></td>
+<td>5</td>
+<td>10</td>
+<td>20</td>
+</tr>
+<tr>
+<td><code>autoEvaluate</code></td>
+<td>true</td>
+<td>false</td>
+<td>false</td>
+</tr>
+<tr>
+<td><code>enableBacktracking</code></td>
+<td>false</td>
+<td>true</td>
+<td>true</td>
+</tr>
+</tbody>
+</table>
+<a id="metacognition" class="tsd-anchor"></a><h2 class="tsd-anchor-link">Metacognition<a href="#metacognition" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>The server includes self-awareness features that analyze thought patterns:</p>
+<a id="features" class="tsd-anchor"></a><h3 class="tsd-anchor-link">Features<a href="#features" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li><strong>Circularity Detection</strong> - Detects repetitive thinking patterns using Jaccard similarity</li>
+<li><strong>Confidence Scoring</strong> - Assesses thought confidence based on linguistic markers</li>
+<li><strong>Problem Type Classification</strong> - Identifies problem type (analysis, design, debugging, planning, optimization, decision, creative)</li>
+<li><strong>Perspective Switching</strong> - Suggests alternative viewpoints (optimist, pessimist, expert, beginner, skeptic)</li>
+<li><strong>Reasoning Gap Analysis</strong> - Detects premature conclusions and missing evidence</li>
+<li><strong>Adaptive Strategy</strong> - Learns from evaluation history to recommend better strategies</li>
+</ul>
+<a id="modeguidance-response" class="tsd-anchor"></a><h3 class="tsd-anchor-link">ModeGuidance Response<a href="#modeguidance-response" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>When thinking mode is active, responses include:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mode</code></td>
+<td>string</td>
+<td>Current thinking mode</td>
+</tr>
+<tr>
+<td><code>currentPhase</code></td>
+<td>string</td>
+<td>Phase: exploring, evaluating, converging, concluded</td>
+</tr>
+<tr>
+<td><code>recommendedAction</code></td>
+<td>string</td>
+<td>Suggested next action</td>
+</tr>
+<tr>
+<td><code>confidenceScore</code></td>
+<td>number</td>
+<td>Thought confidence (0-1)</td>
+</tr>
+<tr>
+<td><code>circularityWarning</code></td>
+<td>boolean</td>
+<td>Whether circular thinking detected</td>
+</tr>
+<tr>
+<td><code>problemType</code></td>
+<td>string</td>
+<td>Classified problem type</td>
+</tr>
+<tr>
+<td><code>strategyGuidance</code></td>
+<td>string</td>
+<td>Problem-type-specific strategy</td>
+</tr>
+<tr>
+<td><code>confidenceTrend</code></td>
+<td>string</td>
+<td>improving, declining, stable, insufficient</td>
+</tr>
+<tr>
+<td><code>reasoningGapWarning</code></td>
+<td>string</td>
+<td>Detected reasoning gaps</td>
+</tr>
+<tr>
+<td><code>reflectionPrompt</code></td>
+<td>string</td>
+<td>Metacognitive reflection question</td>
+</tr>
+</tbody>
+</table>
+<a id="configuration" class="tsd-anchor"></a><h2 class="tsd-anchor-link">Configuration<a href="#configuration" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>All configuration is via environment variables with sensible defaults:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SERVER_NAME</code></td>
+<td><code>sequential-thinking-server</code></td>
+<td>Server name reported in MCP metadata</td>
+</tr>
+<tr>
+<td><code>SERVER_VERSION</code></td>
+<td><code>1.0.0</code></td>
+<td>Server version reported in MCP metadata</td>
+</tr>
+<tr>
+<td><code>MAX_HISTORY_SIZE</code></td>
+<td><code>1000</code></td>
+<td>Maximum thoughts stored in circular buffer</td>
+</tr>
+<tr>
+<td><code>MAX_THOUGHT_LENGTH</code></td>
+<td><code>5000</code></td>
+<td>Maximum character length per thought</td>
+</tr>
+<tr>
+<td><code>MAX_THOUGHTS_PER_MIN</code></td>
+<td><code>60</code></td>
+<td>Rate limit per minute per session</td>
+</tr>
+<tr>
+<td><code>MAX_THOUGHTS_PER_BRANCH</code></td>
+<td><code>100</code></td>
+<td>Maximum thoughts stored per branch</td>
+</tr>
+<tr>
+<td><code>MAX_BRANCH_AGE</code></td>
+<td><code>3600000</code></td>
+<td>Branch expiration time (ms)</td>
+</tr>
+<tr>
+<td><code>CLEANUP_INTERVAL</code></td>
+<td><code>300000</code></td>
+<td>Periodic cleanup interval (ms)</td>
+</tr>
+<tr>
+<td><code>BLOCKED_PATTERNS</code></td>
+<td><em>(built-in list)</em></td>
+<td>Comma-separated regex patterns to block</td>
+</tr>
+<tr>
+<td><code>DISABLE_THOUGHT_LOGGING</code></td>
+<td><code>false</code></td>
+<td>Disable console thought formatting</td>
+</tr>
+<tr>
+<td><code>LOG_LEVEL</code></td>
+<td><code>info</code></td>
+<td>Logging level (<code>debug</code>, <code>info</code>, <code>warn</code>, <code>error</code>)</td>
+</tr>
+<tr>
+<td><code>ENABLE_COLORS</code></td>
+<td><code>true</code></td>
+<td>Enable colored console output</td>
+</tr>
+<tr>
+<td><code>ENABLE_METRICS</code></td>
+<td><code>true</code></td>
+<td>Enable metrics collection</td>
+</tr>
+<tr>
+<td><code>ENABLE_HEALTH_CHECKS</code></td>
+<td><code>true</code></td>
+<td>Enable health check endpoint</td>
+</tr>
+<tr>
+<td><code>HEALTH_MAX_MEMORY</code></td>
+<td><code>90</code></td>
+<td>Memory usage % threshold for unhealthy status</td>
+</tr>
+<tr>
+<td><code>HEALTH_MAX_STORAGE</code></td>
+<td><code>80</code></td>
+<td>Storage usage % threshold for unhealthy status</td>
+</tr>
+<tr>
+<td><code>HEALTH_MAX_RESPONSE_TIME</code></td>
+<td><code>200</code></td>
+<td>Response time (ms) threshold for unhealthy status</td>
+</tr>
+<tr>
+<td><code>HEALTH_ERROR_RATE_DEGRADED</code></td>
+<td><code>2</code></td>
+<td>Error rate % threshold for degraded status</td>
+</tr>
+<tr>
+<td><code>HEALTH_ERROR_RATE_UNHEALTHY</code></td>
+<td><code>5</code></td>
+<td>Error rate % threshold for unhealthy status</td>
+</tr>
+</tbody>
+</table>
+<a id="development" class="tsd-anchor"></a><h2 class="tsd-anchor-link">Development<a href="#development" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><pre><code class="bash"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">install</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">build</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">test</span>
+</code><button type="button">Copy</button></pre>
+
+<a id="scripts" class="tsd-anchor"></a><h3 class="tsd-anchor-link">Scripts<a href="#scripts" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li><code>npm run build</code> — Compile TypeScript</li>
+<li><code>npm run watch</code> — Compile in watch mode</li>
+<li><code>npm run test</code> — Run tests</li>
+<li><code>npm run lint</code> — Run ESLint</li>
+<li><code>npm run lint:fix</code> — Auto-fix lint issues</li>
+<li><code>npm run type-check</code> — TypeScript type checking</li>
+<li><code>npm run check</code> — Run type-check, lint, and format</li>
+<li><code>npm run docs</code> — Generate TypeDoc documentation</li>
+<li><code>npm run docker:build</code> — Build Docker image</li>
+</ul>
+<a id="documentation" class="tsd-anchor"></a><h2 class="tsd-anchor-link">Documentation<a href="#documentation" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>Generated API documentation is available at <a href="docs/">docs/</a>.</p>
+<a id="license" class="tsd-anchor"></a><h2 class="tsd-anchor-link">License<a href="#license" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>SEE LICENSE IN LICENSE</p>
+</div></div><div class="col-sidebar"><div class="page-menu"><div class="tsd-navigation settings"><details class="tsd-accordion"><summary class="tsd-accordion-summary"><h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg>Settings</h3></summary><div class="tsd-accordion-details"><div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span><ul id="tsd-filter-options"><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-protected" name="protected"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Protected</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div><div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div><details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg>On This Page</h3></summary><div class="tsd-accordion-details"><a href="#sequential-thinking-mcp-server"><span>Sequential <wbr/>Thinking MCP <wbr/>Server</span></a><ul><li><a href="#overview"><span>Overview</span></a></li><li><a href="#tools"><span>Tools</span></a></li><li><ul><li><a href="#sequentialthinking"><span>sequentialthinking</span></a></li><li><a href="#get_thought_history"><span>get_<wbr/>thought_<wbr/>history</span></a></li><li><a href="#set_thinking_mode"><span>set_<wbr/>thinking_<wbr/>mode</span></a></li><li><a href="#suggest_next_thought"><span>suggest_<wbr/>next_<wbr/>thought</span></a></li><li><a href="#evaluate_thought"><span>evaluate_<wbr/>thought</span></a></li><li><a href="#backtrack"><span>backtrack</span></a></li><li><a href="#get_thinking_summary"><span>get_<wbr/>thinking_<wbr/>summary</span></a></li><li><a href="#health_check"><span>health_<wbr/>check</span></a></li><li><a href="#metrics"><span>metrics</span></a></li></ul></li><li><a href="#thinking-modes"><span>Thinking <wbr/>Modes</span></a></li><li><ul><li><a href="#mode-configuration"><span>Mode <wbr/>Configuration</span></a></li></ul></li><li><a href="#metacognition"><span>Metacognition</span></a></li><li><ul><li><a href="#features"><span>Features</span></a></li><li><a href="#modeguidance-response"><span>Mode<wbr/>Guidance <wbr/>Response</span></a></li></ul></li><li><a href="#configuration"><span>Configuration</span></a></li><li><a href="#development"><span>Development</span></a></li><li><ul><li><a href="#scripts"><span>Scripts</span></a></li></ul></li><li><a href="#documentation"><span>Documentation</span></a></li><li><a href="#license"><span>License</span></a></li></ul></div></details></div><div class="site-menu"><nav id="tsd-sidebar-links" class="tsd-navigation"><a href="https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking" class="tsd-nav-link">GitHub</a></nav><nav class="tsd-navigation"><a href="modules.html">Sequential Thinking MCP Server - v0.6.2</a><ul class="tsd-small-nested-navigation" id="tsd-nav-container"><li>Loading...</li></ul></nav></div></div></div><footer><p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer><div class="overlay"></div></body></html>

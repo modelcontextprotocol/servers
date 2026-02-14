@@ -1,24 +1,49 @@
-FROM node:22.12-alpine AS builder
+# syntax=docker/dockerfile:1
 
-COPY src/sequentialthinking /app
-COPY tsconfig.json /tsconfig.json
+# =============================================================================
+# Stage 1: Builder - Compile TypeScript
+# =============================================================================
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-RUN --mount=type=cache,target=/root/.npm npm install
+# Copy package files first for better layer caching
+COPY package.json ./
 
-RUN --mount=type=cache,target=/root/.npm-production npm ci --ignore-scripts --omit-dev
+# Install ALL dependencies (including dev for TypeScript)
+RUN npm install --ignore-scripts --legacy-peer-deps
 
+# Copy source code
+COPY . .
+
+# Build the application
+RUN npx tsc && npx shx chmod +x dist/*.js
+
+# =============================================================================
+# Stage 2: Production - Minimal runtime image
+# =============================================================================
 FROM node:22-alpine AS release
 
-COPY --from=builder /app/dist /app/dist
-COPY --from=builder /app/package.json /app/package.json
-COPY --from=builder /app/package-lock.json /app/package-lock.json
-
-ENV NODE_ENV=production
+# Security: Run as non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
 
 WORKDIR /app
 
-RUN npm ci --ignore-scripts --omit-dev
+# Copy only the built artifacts and needed files
+COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nodejs:nodejs /app/package.json ./
 
+# Install production dependencies only
+RUN npm install --ignore-scripts --omit=dev --legacy-peer-deps && \
+    npm cache clean --force
+
+# Switch to non-root user
+USER nodejs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD node -e "process.exit(0)"
+
+# Run the application
 ENTRYPOINT ["node", "dist/index.js"]
