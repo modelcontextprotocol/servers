@@ -45,10 +45,7 @@
     "docker:run": "docker run --rm sequential-thinking",
     "docker:size": "docker build -t sequential-thinking . && docker images sequential-thinking",
     "prepublishOnly": "npm run check && npm run test:all",
-    "release": "standard-version",
-    "release:minor": "standard-version --release-as minor",
-    "release:major": "standard-version --release-as major",
-    "release:patch": "standard-version --release-as patch",
+    "release": "release-it",
     "postinstall": "node scripts/sync-version.js"
   },
   "dependencies": {
@@ -57,6 +54,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
+    "@release-it/conventional-changelog": "^10.0.5",
     "@types/node": "^25.2.3",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
@@ -65,8 +63,8 @@
     "eslint-config-prettier": "^10.0.0",
     "husky": "^9.1.7",
     "prettier": "^3.4.0",
+    "release-it": "^19.2.4",
     "shx": "^0.4.0",
-    "standard-version": "^9.5.0",
     "typedoc": "^0.27.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
