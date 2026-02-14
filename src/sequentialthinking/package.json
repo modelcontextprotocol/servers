@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-sequential-thinking",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "MCP server for sequential thinking and problem solving",
   "license": "SEE LICENSE IN LICENSE",
   "mcpName": "io.github.modelcontextprotocol/server-sequential-thinking",
@@ -44,7 +44,12 @@
     "docker:build": "docker build -t sequential-thinking .",
     "docker:run": "docker run --rm sequential-thinking",
     "docker:size": "docker build -t sequential-thinking . && docker images sequential-thinking",
-    "prepublishOnly": "npm run check && npm run test:all"
+    "prepublishOnly": "npm run check && npm run test:all",
+    "release": "standard-version",
+    "release:minor": "standard-version --release-as minor",
+    "release:major": "standard-version --release-as major",
+    "release:patch": "standard-version --release-as patch",
+    "postinstall": "node scripts/sync-version.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
@@ -61,6 +66,7 @@
     "husky": "^9.1.7",
     "prettier": "^3.4.0",
     "shx": "^0.4.0",
+    "standard-version": "^9.5.0",
     "typedoc": "^0.27.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
