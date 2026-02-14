@@ -52,6 +52,8 @@ src/everything
      │   ├── toggle-subscriber-updates.ts
      │   ├── trigger-elicitation-request.ts
      │   ├── trigger-long-running-operation.ts
+     │   ├── trigger-url-elicitation-required-error.ts
+     │   ├── trigger-url-elicitation-request.ts
      │   └── trigger-sampling-request.ts
      └── transports
          ├── sse.ts
@@ -149,6 +151,10 @@ src/everything
     - `GZIP_ALLOWED_DOMAINS` (comma-separated allowlist; empty means all domains allowed)
 - `trigger-elicitation-request.ts`
   - Registers a `trigger-elicitation-request` tool that sends an `elicitation/create` request to the client/LLM and returns the elicitation result.
+- `trigger-url-elicitation-request.ts`
+  - Registers a `trigger-url-elicitation-request` tool that sends an out-of-band URL-mode `elicitation/create` request (`mode: "url"`) including an `elicitationId`, and can optionally emit `notifications/elicitation/complete` after acceptance.
+- `trigger-url-elicitation-required-error.ts`
+  - Registers a `trigger-url-elicitation-required-error` tool that throws MCP error `-32042` (`UrlElicitationRequiredError`) with required URL-mode elicitation params in `error.data.elicitations`.
 - `trigger-sampling-request.ts`
   - Registers a `trigger-sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
 - `get-structured-content.ts`
