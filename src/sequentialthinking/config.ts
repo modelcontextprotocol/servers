@@ -52,7 +52,7 @@ export class ConfigManager {
   private static loadServerConfig(): AppConfig['server'] {
     return {
       name: process.env.SERVER_NAME ?? 'sequential-thinking-server',
-      version: process.env.SERVER_VERSION ?? '1.0.0',
+      version: process.env.SERVER_VERSION ?? '0.6.2',
     };
   }
 
