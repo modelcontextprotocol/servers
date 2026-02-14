@@ -416,4 +416,99 @@ describe('Metacognition', () => {
       expect(result.state).toBeDefined();
     });
   });
+
+  describe('detectInsightType', () => {
+    const makeThought = (text: string, num: number) => ({
+      thought: text,
+      thoughtNumber: num,
+      totalThoughts: num,
+      nextThoughtNeeded: true,
+    });
+
+    it('should detect breakthrough insight', () => {
+      const thoughts = [
+        makeThought('I have been analyzing this problem', 1),
+        makeThought('Suddenly I see the solution clearly now!', 2),
+      ];
+      const result = metacognition.detectInsightType(thoughts);
+      expect(result.type).toBeDefined();
+    });
+
+    it('should detect connection insight', () => {
+      const thoughts = [
+        makeThought('Problem A is like problem B', 1),
+        makeThought('They connect through this mechanism', 2),
+      ];
+      const result = metacognition.detectInsightType(thoughts);
+      expect(result.confidence).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should handle empty thoughts', () => {
+      const result = metacognition.detectInsightType([]);
+      expect(result.type).toBe('question_reframing');
+    });
+  });
+
+  describe('getProblemTypeRecommendations', () => {
+    it('should recommend related problem types', () => {
+      const result = metacognition.getProblemTypeRecommendations('analysis');
+      expect(result).toHaveProperty('follows');
+      expect(result).toHaveProperty('precedes');
+      expect(result).toHaveProperty('related');
+      expect(Array.isArray(result.follows)).toBe(true);
+    });
+
+    it('should handle unknown problem type', () => {
+      const result = metacognition.getProblemTypeRecommendations('unknown-type-xyz');
+      expect(result).toHaveProperty('follows');
+      expect(result).toHaveProperty('precedes');
+      expect(result).toHaveProperty('related');
+    });
+  });
+
+  describe('recordCrossBranchPattern', () => {
+    const TEST_KEY = 'test-cross-branch-key';
+
+    it('should record pattern without error', () => {
+      expect(() => {
+        metacognition.recordCrossBranchPattern(TEST_KEY, 'problem-type-1', 'solution1', 0.8);
+        metacognition.recordCrossBranchPattern(TEST_KEY, 'problem-type-2', 'solution2', 0.9);
+      }).not.toThrow();
+    });
+
+    it('should find recorded patterns', () => {
+      const patterns = metacognition.findCrossBranchPattern(TEST_KEY);
+      expect(patterns).toBeDefined();
+    });
+  });
+
+  describe('findSimilarPatterns', () => {
+    it('should find similar patterns', () => {
+      const result = metacognition.findSimilarPatterns('testing code', []);
+      expect(result).toBeDefined();
+      expect(Array.isArray(result)).toBe(true);
+    });
+  });
+
+  describe('computeConfidenceTrend', () => {
+    it('should detect improving trend', () => {
+      const result = metacognition.computeConfidenceTrend([0.3, 0.5, 0.7, 0.9]);
+      expect(result).toBe('improving');
+    });
+
+    it('should detect declining trend', () => {
+      const result = metacognition.computeConfidenceTrend([0.9, 0.7, 0.5, 0.3]);
+      expect(result).toBe('declining');
+    });
+
+    it('should detect stable trend', () => {
+      const result = metacognition.computeConfidenceTrend([0.5, 0.5, 0.5, 0.5]);
+      expect(result).toBe('stable');
+    });
+
+    it('should return insufficient for too few values', () => {
+      const result = metacognition.computeConfidenceTrend([0.5]);
+      expect(result).toBe('insufficient');
+    });
+  });
 });

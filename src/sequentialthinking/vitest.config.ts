@@ -10,7 +10,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['**/*.ts'],
-      exclude: ['**/__tests__/**', '**/dist/**'],
+      exclude: ['**/__tests__/**', '**/dist/**', '**/index.ts'],
     },
   },
 });
