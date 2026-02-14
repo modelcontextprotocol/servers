@@ -45,7 +45,7 @@
     "docker:run": "docker run --rm sequential-thinking",
     "docker:size": "docker build -t sequential-thinking . && docker images sequential-thinking",
     "prepublishOnly": "npm run check && npm run test:all",
-    "release": "release-it",
+    "release": "release-it --ci",
     "postinstall": "node scripts/sync-version.js"
   },
   "dependencies": {
