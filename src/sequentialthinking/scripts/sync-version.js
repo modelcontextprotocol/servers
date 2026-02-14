@@ -12,7 +12,7 @@ let configContent = fs.readFileSync(configPath, 'utf-8');
 
 // Update the default version in config.ts
 configContent = configContent.replace(
-  /version: process\.env\.SERVER_VERSION \?\s*['"][^'"]+['"]/,
+  /version: process\.env\.SERVER_VERSION \?\? ['"][^'"]+['"]/,
   `version: process.env.SERVER_VERSION ?? '${version}'`
 );
 
