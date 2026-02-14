@@ -188,21 +188,23 @@ server.registerTool(
   {
     title: 'Health Check',
     description: 'Check the health and status of the Sequential Thinking server',
-    inputSchema: {},
+    inputSchema: {
+      _dummy: z.string().optional(),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
   },
   async () => {
     try {
       const healthStatus = await thinkingServer.getHealthStatus();
       return {
         content: [{
-          type: 'text',
+          type: 'text' as const,
           text: JSON.stringify(healthStatus, null, 2),
         }],
       };
     } catch (error) {
       return {
         content: [{
-          type: 'text',
+          type: 'text' as const,
           text: JSON.stringify({
             status: 'unhealthy',
             summary: 'Health check failed',
@@ -216,30 +218,32 @@ server.registerTool(
   },
 );
 
-// Add metrics tool for monitoring
+// Add metrics tool
 server.registerTool(
   'metrics',
   {
-    title: 'Server Metrics',
+    title: 'Get Metrics',
     description: 'Get detailed metrics and statistics about the server',
-    inputSchema: {},
+    inputSchema: {
+      _dummy: z.string().optional(),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
   },
   async () => {
     try {
-      const metrics = thinkingServer.getMetrics();
+      const metrics = await thinkingServer.getMetrics();
       return {
         content: [{
-          type: 'text',
+          type: 'text' as const,
           text: JSON.stringify(metrics, null, 2),
         }],
       };
     } catch (error) {
       return {
         content: [{
-          type: 'text',
+          type: 'text' as const,
           text: JSON.stringify({
-            error: error instanceof Error ? error.message : String(error),
-            timestamp: new Date(),
+            error: 'Failed to retrieve metrics',
+            message: error instanceof Error ? error.message : String(error),
           }, null, 2),
         }],
         isError: true,
@@ -248,7 +252,7 @@ server.registerTool(
   },
 );
 
-// Register thinking mode tool
+// Set thinking mode tool
 server.registerTool(
   'set_thinking_mode',
   {
@@ -269,6 +273,7 @@ Once set, each processThought response includes modeGuidance with recommended ac
   ),
 );
 
+// Register MCTS tree exploration tools
 server.registerTool(
   'backtrack',
   {
@@ -327,9 +332,40 @@ server.registerTool(
     inputSchema: {
       sessionId: sessionIdSchema,
       maxDepth: z.number().int().min(0).optional().describe('Maximum depth to include in tree structure (omit for full tree)'),
-} as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
   },
-  async (args: any) => wrapToolResult(await thinkingServer.setThinkingMode(args.sessionId, args.mode)), // eslint-disable-line @typescript-eslint/no-explicit-any
+  async (args: any) => wrapToolResult( // eslint-disable-line @typescript-eslint/no-explicit-any
+    await thinkingServer.getThinkingSummary(
+      args.sessionId, args.maxDepth,
+    ),
+  ),
+);
+
+// Version tool
+server.registerTool(
+  'get_version',
+  {
+    title: 'Get Server Version',
+    description: 'Get the version of the Sequential Thinking MCP server along with system information.',
+    inputSchema: {
+      _dummy: z.string().optional(),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  },
+  async () => {
+    const envInfo = ConfigManager.getEnvironmentInfo();
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          serverVersion: config.server.version,
+          nodeVersion: envInfo.nodeVersion,
+          platform: envInfo.platform,
+          arch: envInfo.arch,
+          pid: envInfo.pid,
+        }, null, 2),
+      }],
+    };
+  },
 );
 
 // Setup graceful shutdown
