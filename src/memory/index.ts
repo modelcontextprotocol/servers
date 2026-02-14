@@ -219,9 +219,12 @@ export class KnowledgeGraphManager {
     // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
   
-    // Filter relations to only include those between filtered entities
+    // Filter relations to include:
+    // 1. Relations between filtered entities (both endpoints in the list)
+    // 2. Outgoing relations from filtered entities (from is in the list)
     const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
+      (filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)) ||
+      filteredEntityNames.has(r.from)
     );
   
     const filteredGraph: KnowledgeGraph = {
@@ -447,7 +450,7 @@ server.registerTool(
   "open_nodes",
   {
     title: "Open Nodes",
-    description: "Open specific nodes in the knowledge graph by their names",
+    description: "Open specific nodes in the knowledge graph by their names. Returns entities and their outgoing relations (relations where the entity is the 'from' endpoint).",
     inputSchema: {
       names: z.array(z.string()).describe("An array of entity names to retrieve")
     },
