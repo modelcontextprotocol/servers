@@ -40,7 +40,7 @@ describe('ConfigManager', () => {
       const config = ConfigManager.load();
 
       expect(config.server.name).toBe('sequential-thinking-server');
-      expect(config.server.version).toBe('1.0.0');
+      expect(config.server.version).toBe('0.6.2');
       expect(config.state.maxHistorySize).toBe(1000);
       expect(config.state.maxThoughtLength).toBe(5000);
       expect(config.state.maxBranchAge).toBe(3600000);
