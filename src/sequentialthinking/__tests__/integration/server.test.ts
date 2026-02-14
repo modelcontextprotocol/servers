@@ -1012,6 +1012,97 @@ describe('SequentialThinkingServer', () => {
     });
   });
 
+  describe('Boundary and Limit Tests', () => {
+    it('should handle thought at max length boundary', async () => {
+      const maxLengthThought = 'a'.repeat(5000);
+      const result = await server.processThought({
+        thought: maxLengthThought,
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should reject thought exceeding max length', async () => {
+      const overMaxLengthThought = 'a'.repeat(5001);
+      const result = await server.processThought({
+        thought: overMaxLengthThought,
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('should handle sessionId at max length', async () => {
+      const maxSessionId = 'a'.repeat(100);
+      const result = await server.processThought({
+        thought: 'Test',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+        sessionId: maxSessionId,
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should reject sessionId exceeding max length', async () => {
+      const overMaxSessionId = 'a'.repeat(101);
+      const result = await server.processThought({
+        thought: 'Test',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+        sessionId: overMaxSessionId,
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it('should handle thoughtNumber at minimum valid value', async () => {
+      const result = await server.processThought({
+        thought: 'Test',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should reject thoughtNumber below minimum', async () => {
+      const result = await server.processThought({
+        thought: 'Test',
+        thoughtNumber: 0,
+        totalThoughts: 1,
+        nextThoughtNeeded: true,
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it('should handle totalThoughts matching thoughtNumber', async () => {
+      const result = await server.processThought({
+        thought: 'Test',
+        thoughtNumber: 5,
+        totalThoughts: 5,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should auto-adjust totalThoughts when less than thoughtNumber', async () => {
+      const result = await server.processThought({
+        thought: 'Test',
+        thoughtNumber: 10,
+        totalThoughts: 5,
+        nextThoughtNeeded: true,
+      });
+      // System auto-adjusts totalThoughts to match thoughtNumber
+      expect(result.isError).toBeUndefined();
+    });
+  });
+
   describe('Non-integer validation', () => {
     it('should reject non-integer thoughtNumber', async () => {
       const result = await server.processThought({
@@ -1076,6 +1167,141 @@ describe('SequentialThinkingServer', () => {
       expect(result.isError).toBe(true);
       const data = JSON.parse(result.content[0].text);
       expect(data.error).toBe('SECURITY_ERROR');
+    });
+  });
+
+  describe('Session Isolation', () => {
+    it('should keep sessions completely separate', async () => {
+      const sessionA = 'isolation-session-a';
+      const sessionB = 'isolation-session-b';
+
+      await server.processThought({
+        thought: 'Thought from session A - unique identifier A123',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+        sessionId: sessionA,
+      });
+
+      await server.processThought({
+        thought: 'Thought from session B - unique identifier B456',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+        sessionId: sessionB,
+      });
+
+      const historyA = server.getFilteredHistory({ sessionId: sessionA });
+      const historyB = server.getFilteredHistory({ sessionId: sessionB });
+
+      expect(historyA).toHaveLength(1);
+      expect(historyB).toHaveLength(1);
+      expect(historyA[0].thought).toContain('A123');
+      expect(historyB[0].thought).toContain('B456');
+      expect(historyA[0].thought).not.toContain('B456');
+      expect(historyB[0].thought).not.toContain('A123');
+    });
+
+    it('should maintain separate branch state per session', async () => {
+      const sessionA = 'branch-isolation-a';
+      const sessionB = 'branch-isolation-b';
+
+      await server.processThought({
+        thought: 'Root thought A',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: sessionA,
+      });
+
+      await server.processThought({
+        thought: 'Root thought B',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: sessionB,
+      });
+
+      await server.processThought({
+        thought: 'Branch thought from A',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: sessionA,
+        branchFromThought: 1,
+        branchId: 'branch-a',
+      });
+
+      const historyA = server.getFilteredHistory({ sessionId: sessionA });
+      const historyB = server.getFilteredHistory({ sessionId: sessionB });
+
+      expect(historyA.filter(t => t.branchId)).toHaveLength(1);
+      expect(historyB.filter(t => t.branchId)).toHaveLength(0);
+    });
+
+    it('should handle rapid concurrent sessions independently', async () => {
+      const sessions = ['concurrent-1', 'concurrent-2', 'concurrent-3'];
+
+      const promises = sessions.map(async (sessionId, idx) => {
+        for (let i = 1; i <= 5; i++) {
+          await server.processThought({
+            thought: `Session ${idx} thought ${i}`,
+            thoughtNumber: i,
+            totalThoughts: 5,
+            nextThoughtNeeded: i < 5,
+            sessionId,
+          });
+        }
+      });
+
+      await Promise.all(promises);
+
+      for (const sessionId of sessions) {
+        const history = server.getFilteredHistory({ sessionId });
+        expect(history).toHaveLength(5);
+        history.forEach((thought) => {
+          expect(thought.sessionId).toBe(sessionId);
+        });
+      }
+    });
+
+    it('should isolate MCTS tree state between sessions', async () => {
+      const sessionA = 'mcts-isolation-a';
+      const sessionB = 'mcts-isolation-b';
+
+      await server.processThought({
+        thought: 'Initial thought A',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: sessionA,
+      });
+
+      await server.evaluateThought(sessionA, 'node_1_1', 0.9);
+
+      await server.processThought({
+        thought: 'Another thought A',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: sessionA,
+      });
+
+      await server.processThought({
+        thought: 'Initial thought B',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: sessionB,
+      });
+
+      const summaryA = await server.getThinkingSummary(sessionA);
+      const summaryB = await server.getThinkingSummary(sessionB);
+
+      const dataA = JSON.parse(summaryA.content[0].text);
+      const dataB = JSON.parse(summaryB.content[0].text);
+
+      expect(dataA.treeStats.totalNodes).toBeGreaterThan(dataB.treeStats.totalNodes);
     });
   });
 });

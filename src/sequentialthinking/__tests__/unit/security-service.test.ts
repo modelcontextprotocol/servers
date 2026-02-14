@@ -183,4 +183,40 @@ describe('SecureThoughtSecurity', () => {
       tracker.destroy();
     });
   });
+
+  describe('Unicode and Edge Cases', () => {
+    let security: SecureThoughtSecurity;
+    beforeEach(() => {
+      security = new SecureThoughtSecurity(undefined, sessionTracker);
+    });
+
+    it('should handle Unicode characters', () => {
+      const result = security.sanitizeContent('こんにちは世界 🌍 émoji');
+      expect(result).toContain('こんにちは世界');
+    });
+
+    it('should handle zero-width characters', () => {
+      const result = security.sanitizeContent('test\u200B\u200C\u200Dhidden');
+      expect(result).toContain('test');
+    });
+
+    it('should handle mixed Unicode and ASCII', () => {
+      const result = security.sanitizeContent('Hello <script>alert(1)</script> 世界');
+      expect(result).not.toContain('<script>');
+    });
+
+    it('should handle newlines and tabs', () => {
+      const result = security.sanitizeContent('line1\nline2\ttabbed');
+      expect(result).toContain('line1');
+      expect(result).toContain('line2');
+    });
+
+    it('should handle very long strings efficiently', () => {
+      const longInput = 'a'.repeat(100000);
+      const startTime = Date.now();
+      const result = security.sanitizeContent(longInput);
+      const duration = Date.now() - startTime;
+      expect(duration).toBeLessThan(100); // Should process in < 100ms
+    });
+  });
 });

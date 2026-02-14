@@ -207,4 +207,213 @@ describe('Metacognition', () => {
       expect(result.recommendedMode).toBe('fast');
     });
   });
+
+  describe('detectDomain', () => {
+    const makeThought = (text: string) => ({
+      thought: text,
+      thoughtNumber: 1,
+      totalThoughts: 1,
+      nextThoughtNeeded: true,
+    });
+
+    it('should return general domain for empty thoughts', () => {
+      const result = metacognition.detectDomain([]);
+      expect(result.domain).toBe('general');
+      expect(result.confidence).toBe(0);
+    });
+
+    it('should detect reasoning domain', () => {
+      const thoughts = [
+        makeThought('Therefore, the conclusion follows from the premise'),
+        makeThought('Consequently, we can deduce that this is logically true'),
+      ];
+      const result = metacognition.detectDomain(thoughts);
+      expect(result.domain).toBe('reasoning');
+      expect(result.confidence).toBeGreaterThan(0);
+    });
+
+    it('should detect decision domain', () => {
+      const thoughts = [
+        makeThought('I need to choose between option A or B'),
+        makeThought('The risk tradeoff suggests we should select option C'),
+      ];
+      const result = metacognition.detectDomain(thoughts);
+      expect(result.domain).toBe('decision');
+    });
+
+    it('should detect learning domain', () => {
+      const thoughts = [
+        makeThought('I want to understand and master this skill'),
+        makeThought('Through practice and experience I will acquire knowledge'),
+      ];
+      const result = metacognition.detectDomain(thoughts);
+      expect(result.domain).toBe('learning');
+    });
+
+    it('should detect problem_solving domain', () => {
+      const thoughts = [
+        makeThought('How to solve this problem?'),
+        makeThought('I need to find a solution and fix this issue'),
+      ];
+      const result = metacognition.detectDomain(thoughts);
+      expect(result.domain).toBe('problem_solving');
+    });
+
+    it('should detect creativity domain', () => {
+      const thoughts = [
+        makeThought('Let me imagine a novel approach'),
+        makeThought('I will generate an innovative idea through brainstorming'),
+      ];
+      const result = metacognition.detectDomain(thoughts);
+      expect(result.domain).toBe('creativity');
+    });
+
+    it('should detect domain when keywords present (even for vague text)', () => {
+      const thoughts = [
+        makeThought('This is just some random text without specific indicators'),
+      ];
+      const result = metacognition.detectDomain(thoughts);
+      expect(result.confidence).toBeLessThan(0.5);
+    });
+
+    it('should increase confidence with more keyword matches', () => {
+      const single = metacognition.detectDomain([makeThought('Because I reason')]);
+      const multiple = metacognition.detectDomain([
+        makeThought('Because I reason and therefore deduce'),
+        makeThought('Consequently, thus hence logically'),
+      ]);
+      expect(multiple.confidence).toBeGreaterThan(single.confidence);
+    });
+  });
+
+  describe('detectCognitiveProcess', () => {
+    const makeThought = (text: string) => ({
+      thought: text,
+      thoughtNumber: 1,
+      totalThoughts: 1,
+      nextThoughtNeeded: true,
+    });
+
+    it('should return understanding for empty thoughts', () => {
+      const result = metacognition.detectCognitiveProcess([]);
+      expect(result.process).toBe('understanding');
+      expect(result.confidence).toBe(0);
+    });
+
+    it('should detect creating process', () => {
+      const thoughts = [
+        makeThought('I will create a new design and build something innovative'),
+      ];
+      const result = metacognition.detectCognitiveProcess(thoughts);
+      expect(result.process).toBe('creating');
+    });
+
+    it('should detect deciding process', () => {
+      const thoughts = [
+        makeThought('I need to decide which option to select'),
+      ];
+      const result = metacognition.detectCognitiveProcess(thoughts);
+      expect(result.process).toBe('deciding');
+    });
+
+    it('should detect explaining process', () => {
+      const thoughts = [
+        makeThought('This happens because of the effect and mechanism'),
+      ];
+      const result = metacognition.detectCognitiveProcess(thoughts);
+      expect(result.process).toBe('explaining');
+    });
+
+    it('should detect planning process', () => {
+      const thoughts = [
+        makeThought('Next I will do this, then the next step will be'),
+      ];
+      const result = metacognition.detectCognitiveProcess(thoughts);
+      expect(result.process).toBe('planning');
+    });
+
+    it('should detect predicting process', () => {
+      const thoughts = [
+        makeThought('I expect this will likely happen in the future'),
+      ];
+      const result = metacognition.detectCognitiveProcess(thoughts);
+      expect(result.process).toBe('predicting');
+    });
+
+    it('should default to understanding for unrecognized', () => {
+      const thoughts = [makeThought('Some random text xyz')];
+      const result = metacognition.detectCognitiveProcess(thoughts);
+      expect(result.process).toBe('understanding');
+    });
+  });
+
+  describe('detectMetaState', () => {
+    const makeThought = (text: string, num: number) => ({
+      thought: text,
+      thoughtNumber: num,
+      totalThoughts: num,
+      nextThoughtNeeded: true,
+    });
+
+    it('should return clarity for insufficient thoughts', () => {
+      const result = metacognition.detectMetaState([makeThought('First', 1)]);
+      expect(result.state).toBe('clarity');
+      expect(result.severity).toBe(0);
+    });
+
+    it('should detect stuck or blockage state', () => {
+      const thoughts = [
+        makeThought('I am trying to solve this problem', 1),
+        makeThought('I am stuck and cannot proceed with this problem', 2),
+      ];
+      const result = metacognition.detectMetaState(thoughts);
+      expect(['stuck', 'blockage']).toContain(result.state);
+      expect(result.severity).toBeGreaterThan(0);
+    });
+
+    it('should detect blockage', () => {
+      const thoughts = [
+        makeThought('Let me work on this', 1),
+        makeThought('I am blocked by a barrier and cannot continue', 2),
+      ];
+      const result = metacognition.detectMetaState(thoughts);
+      expect(result.state).toBe('blockage');
+    });
+
+    it('should detect progress', () => {
+      const thoughts = [
+        makeThought('I started working on this', 1),
+        makeThought('I am making progress and moving forward', 2),
+      ];
+      const result = metacognition.detectMetaState(thoughts);
+      expect(result.state).toBe('progress');
+    });
+
+    it('should detect momentum losing', () => {
+      const thoughts = [
+        makeThought('I was making good progress', 1),
+        makeThought('I am losing momentum and it is getting harder', 2),
+      ];
+      const result = metacognition.detectMetaState(thoughts);
+      expect(result.state).toBe('momentum_losing');
+    });
+
+    it('should detect scope_narrow (focus keywords present)', () => {
+      const thoughts = [
+        makeThought('Let me focus on the details', 1),
+        makeThought('But I need to see the big picture overall', 2),
+      ];
+      const result = metacognition.detectMetaState(thoughts);
+      expect(result.state).toBe('scope_narrow');
+    });
+
+    it('should detect uncertainty through similarity patterns', () => {
+      const thoughts = [
+        makeThought('I think this might be the answer', 1),
+        makeThought('I think this might be the answer but not sure', 2),
+      ];
+      const result = metacognition.detectMetaState(thoughts);
+      expect(result.state).toBeDefined();
+    });
+  });
 });

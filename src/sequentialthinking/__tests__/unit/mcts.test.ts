@@ -224,4 +224,71 @@ describe('MCTSEngine', () => {
       expect(info.isTerminal).toBe(false);
     });
   });
+
+  describe('Edge Cases', () => {
+    it('should handle empty tree selection', () => {
+      const tree = new ThoughtTree('session-empty', 500);
+      const result = engine.suggestNext(tree, 'balanced');
+      expect(result.suggestion).toBeNull();
+    });
+
+    it('should handle deep tree (10+ levels)', () => {
+      const tree = new ThoughtTree('session-deep', 500);
+      let cursor = tree.addThought(makeThought({ thoughtNumber: 1 }));
+
+      for (let i = 2; i <= 15; i++) {
+        tree.setCursor(cursor.nodeId);
+        cursor = tree.addThought(makeThought({ thoughtNumber: i }));
+      }
+
+      const stats = engine.getTreeStats(tree);
+      expect(stats.totalNodes).toBe(15);
+      expect(stats.maxDepth).toBe(14);
+
+      const path = engine.extractBestPath(tree);
+      expect(path).toHaveLength(15);
+    });
+
+    it('should handle zero value evaluations', () => {
+      const tree = new ThoughtTree('session-zero', 500);
+      const root = tree.addThought(makeThought({ thoughtNumber: 1 }));
+      const child = tree.addThought(makeThought({ thoughtNumber: 2 }));
+
+      engine.backpropagate(tree, child.nodeId, 0);
+
+      const stats = engine.getTreeStats(tree);
+      expect(stats.averageValue).toBe(0);
+    });
+
+    it('should handle many sibling nodes', () => {
+      const tree = new ThoughtTree('session-siblings', 500);
+      const root = tree.addThought(makeThought({ thoughtNumber: 1 }));
+
+      // Add multiple children to root by creating branches
+      for (let i = 2; i <= 5; i++) {
+        tree.setCursor(root.nodeId);
+        tree.addThought(makeThought({ thoughtNumber: i, branchFromThought: 1, branchId: `branch-${i}` }));
+      }
+
+      const stats = engine.getTreeStats(tree);
+      expect(stats.totalNodes).toBe(5);
+
+      // Should have multiple branches
+      const result = engine.suggestNext(tree, 'balanced');
+      expect(result.suggestion).not.toBeNull();
+    });
+
+    it('should handle rapid evaluation cycles', () => {
+      const tree = new ThoughtTree('session-rapid', 500);
+      const root = tree.addThought(makeThought({ thoughtNumber: 1 }));
+
+      // Evaluate same node multiple times rapidly
+      for (let i = 0; i < 100; i++) {
+        engine.backpropagate(tree, root.nodeId, Math.random());
+      }
+
+      expect(root.visitCount).toBe(100);
+      expect(root.totalValue).toBeGreaterThan(0);
+    });
+  });
 });

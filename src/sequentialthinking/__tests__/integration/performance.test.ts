@@ -32,8 +32,8 @@ describe('SequentialThinkingServer - Performance Tests', () => {
 
       const duration = Date.now() - startTime;
 
-      // Should process 100 large thoughts quickly
-      expect(duration).toBeLessThan(5000);
+      // Should process 100 large thoughts quickly (100ms per thought reasonable)
+      expect(duration).toBeLessThan(1000);
 
       const history = server.getThoughtHistory();
       expect(history.length).toBe(100);
@@ -63,8 +63,8 @@ describe('SequentialThinkingServer - Performance Tests', () => {
 
       const duration = Date.now() - startTime;
 
-      // Should still be performant
-      expect(duration).toBeLessThan(5000);
+      // Should still be performant at capacity
+      expect(duration).toBeLessThan(500);
     });
   });
 
@@ -85,7 +85,7 @@ describe('SequentialThinkingServer - Performance Tests', () => {
       const duration = Date.now() - startTime;
 
       expect(results.every(r => !r.isError)).toBe(true);
-      expect(duration).toBeLessThan(5000);
+      expect(duration).toBeLessThan(500);
 
       const history = server.getThoughtHistory();
       expect(history).toHaveLength(concurrentRequests);
