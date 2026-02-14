@@ -11,5 +11,5 @@
   "npm": {
     "publish": false
   },
-  "confirm": false
+  "ci": false
 }
