@@ -29,7 +29,7 @@ export const roots: Map<string | undefined, Root[]> = new Map<
  * @throws {Error} In case of a failure to request the roots from the client, an error log message is sent.
  */
 export const syncRoots = async (server: McpServer, sessionId?: string) => {
-  const clientCapabilities = server.server.getClientCapabilities() || {};
+  const clientCapabilities = server.server?.getClientCapabilities() || {};
   const clientSupportsRoots: boolean = clientCapabilities?.roots !== undefined;
 
   // Fetch the roots list for this client
@@ -64,8 +64,7 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
         }
       } catch (error) {
         console.error(
-          `Failed to request roots from client ${sessionId}: ${
-            error instanceof Error ? error.message : String(error)
+          `Failed to request roots from client ${sessionId}: ${error instanceof Error ? error.message : String(error)
           }`
         );
       }
