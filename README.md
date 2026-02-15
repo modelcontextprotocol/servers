@@ -1225,6 +1225,7 @@ search, and comprehensive file analysis.
 - **[Prometheus](https://github.com/pab1it0/prometheus-mcp-server)** - Query and analyze Prometheus - open-source monitoring system.
 - **[Prometheus (Golang)](https://github.com/tjhop/prometheus-mcp-server/)** - A Prometheus MCP server with full API support for comprehensive management and deep interaction with Prometheus beyond basic query support. Written in go, it is a single binary install that is capable of STDIO, SSE, and HTTP transports for complex deployments. 
 - **[Prometheus (TypeScript)](https://github.com/yanmxa/prometheus-mcp-server)** - Enable AI assistants to query Prometheus using natural language with TypeScript implementation.
+- **[Provara](https://github.com/huntinformationsystems/hunt-protocol-mcp)** - Sovereign AI memory with tamper-evident, Ed25519-signed event chains. MCP server exposes cryptographic vault operations — append observations, query beliefs, verify integrity. Python, Apache 2.0.
 - **[PubChem](https://github.com/sssjiang/pubchem_mcp_server)** - extract drug information from pubchem API.
 - **[PubMed](https://github.com/JackKuo666/PubMed-MCP-Server)** - Enable AI assistants to search, access, and analyze PubMed articles through a simple MCP interface.
 - **[Pulumi](https://github.com/dogukanakkaya/pulumi-mcp-server)** - MCP Server to Interact with Pulumi API, creates and lists Stacks
