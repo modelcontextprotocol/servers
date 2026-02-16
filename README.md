@@ -1309,6 +1309,7 @@ search, and comprehensive file analysis.
 - **[Specbridge](https://github.com/TBosak/specbridge)** - Easily turn your OpenAPI specs into MCP Tools.
 - **[Splunk](https://github.com/jkosik/mcp-server-splunk)** - Golang MCP server for Splunk (lists saved searches, alerts, indexes, macros...). Supports SSE and STDIO.
 - **[Spotify](https://github.com/varunneal/spotify-mcp)** - This MCP allows an LLM to play and use Spotify.
+- **[Spring Boot Swagger MCP](https://github.com/Neo1228/spring-boot-starter-swagger-mcp)** - Automatically turn any Spring Boot application into an MCP server by reusing existing Swagger/OpenAPI documentation.
 - **[Spring Initializr](https://github.com/hpalma/springinitializr-mcp)** - This MCP allows an LLM to create Spring Boot projects with custom configurations. Instead of manually visiting start.spring.io, you can now ask your AI assistant to generate projects with specific dependencies, Java versions, and project structures.
 - **[Squad AI](https://github.com/the-basilisk-ai/squad-mcp)** – Product‑discovery and strategy platform integration. Create, query and update opportunities, solutions, outcomes, requirements and feedback from any MCP‑aware LLM.
 - **[SSH](https://github.com/AiondaDotCom/mcp-ssh)** - Agent for managing and controlling SSH connections.
