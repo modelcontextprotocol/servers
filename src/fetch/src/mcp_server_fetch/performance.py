@@ -1,17 +1,17 @@
 import logging
 import time
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
-from functools import lru_cache
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
+# from functools import lru_cache
+# from concurrent.futures import ThreadPoolExecutor, as_completed
 # import json
 
 @dataclass
 class CacheEntry:
     """Cache entry with TTL support"""
-    value: any
+    value: Any
     timestamp: float
     ttl: float = 300.0  # 5 minutes default
 
@@ -73,7 +73,7 @@ class TTLCache:
         self.ttl = ttl
         self.lock = asyncio.Lock()
     
-    async def get(self, key: str) -> Optional[any]:
+    async def get(self, key: str) -> Optional[Any]:
         async with self.lock:
             entry = self.cache.get(key)
             if entry and time.time() - entry.timestamp < entry.ttl:
@@ -86,7 +86,7 @@ class TTLCache:
             perf_logger.log_cache_miss()
             return None
     
-    async def set(self, key: str, value: any):
+    async def set(self, key: str, value: Any):
         async with self.lock:
             self.cache[key] = CacheEntry(value=value, timestamp=time.time())
             # Remove oldest entries if cache is full
@@ -211,7 +211,7 @@ async def fetch_url_optimized(
     proxy_url: Optional[str] = None,
     timeout: int = 30,
     max_retries: int = 3
-) -> tuple[str, str]:
+) -> Optional[Tuple[str, str]]:
     """Optimized URL fetching with connection pooling and retries"""
     from httpx import AsyncClient, HTTPError
     from mcp.shared.exceptions import McpError
