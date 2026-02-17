@@ -24,8 +24,8 @@ describe('Registration Index Files', () => {
 
       registerTools(mockServer);
 
-      // Should register 13 standard tools (non-conditional)
-      expect(mockServer.registerTool).toHaveBeenCalledTimes(13);
+      // Should register 18 standard tools (non-conditional)
+      expect(mockServer.registerTool).toHaveBeenCalledTimes(18);
 
       // Verify specific tools are registered
       const registeredTools = (mockServer.registerTool as any).mock.calls.map(
@@ -36,14 +36,23 @@ describe('Registration Index Files', () => {
       expect(registeredTools).toContain('get-env');
       expect(registeredTools).toContain('get-tiny-image');
       expect(registeredTools).toContain('get-structured-content');
-      expect(registeredTools).toContain('file-operations');
+      // expect(registeredTools).toContain('file-operations');
       expect(registeredTools).toContain('get-annotated-message');
-      expect(registeredTools).toContain('trigger-long-running-operation');
+      // expect(registeredTools).toContain('trigger-long-running-operation');
       expect(registeredTools).toContain('get-resource-links');
       expect(registeredTools).toContain('get-resource-reference');
       expect(registeredTools).toContain('gzip-file-as-resource');
       expect(registeredTools).toContain('toggle-simulated-logging');
       expect(registeredTools).toContain('toggle-subscriber-updates');
+      expect(registeredTools).toContain('trigger-long-running-operation');
+      // expect(registeredTools).toContain('trigger-sampling-request');
+      expect(registeredTools).toContain('file-operations');
+      expect(registeredTools).toContain('string-operations');
+      expect(registeredTools).toContain('math-operations');
+      expect(registeredTools).toContain('datetime-operations');
+      expect(registeredTools).toContain('data-analysis');
+      expect(registeredTools).toContain('validation');
+
     });
 
     it('should register conditional tools based on capabilities', async () => {

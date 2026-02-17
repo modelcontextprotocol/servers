@@ -18,6 +18,11 @@ import { registerTriggerSamplingRequestAsyncTool } from "./trigger-sampling-requ
 import { registerTriggerElicitationRequestAsyncTool } from "./trigger-elicitation-request-async.js";
 import { registerSimulateResearchQueryTool } from "./simulate-research-query.js";
 import { registerFileOperationsTool } from "./file-operations.js";
+import { registerStringOperationsTool } from "./string-operations.js";
+import { registerMathOperationsTool } from "./math-operations.js";
+import { registerDateTimeOperationsTool } from "./datetime-operations.js";
+import { registerDataAnalysisTool } from "./data-analysis.js";
+import { registerValidationTool } from "./validation.js";
 
 /**
  * Register all tools with MCP server.
@@ -40,6 +45,11 @@ export const registerTools = (server: McpServer) => {
   registerTriggerLongRunningOperationTool(server);
   registerTriggerSamplingRequestTool(server);
   registerFileOperationsTool(server);
+  registerStringOperationsTool(server);
+  registerMathOperationsTool(server);
+  registerDateTimeOperationsTool(server);
+  registerDataAnalysisTool(server);
+  registerValidationTool(server);
 };
 
 /**
