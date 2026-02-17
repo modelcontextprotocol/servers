@@ -89,10 +89,19 @@ export const registerDataAnalysisTool = (server: McpServer) => {
 };
 
 // Helper functions
-function calculateStats(data: any[]): any {
+function calculateStats(data: (number | string)[]): {
+  count: number;
+  sum: number;
+  average: number;
+  median: number;
+  min: number;
+  max: number;
+  totalItems: number;
+  note?: string;
+} {
   const numbers = data.filter(item => typeof item === 'number') as number[];
   if (numbers.length === 0) {
-    return { count: data.length, note: "No numeric data found" };
+    return { count: data.length, note: "No numeric data found" } as any;
   }
 
   return {
@@ -106,7 +115,7 @@ function calculateStats(data: any[]): any {
   };
 }
 
-function sortArray(data: any[], order?: "asc" | "desc"): any[] {
+function sortArray(data: (number | string)[], order?: "asc" | "desc"): (number | string)[] {
   const sorted = [...data].sort((a, b) => {
     if (a < b) return -1;
     if (a > b) return 1;
@@ -115,11 +124,11 @@ function sortArray(data: any[], order?: "asc" | "desc"): any[] {
   return order === "desc" ? sorted.reverse() : sorted;
 }
 
-function filterArray(data: any[], condition: string): any[] {
+function filterArray(data: (number | string)[], condition: string): (number | string)[] {
   // Simple filter implementation - in a real scenario, you'd parse the condition
   try {
     // Try to evaluate condition as a JavaScript expression
-    const filterFn = new Function('item', `return ${condition}`) as (item: any) => boolean;
+    const filterFn = new Function('item', `return ${condition}`) as (item: number | string) => boolean;
     return data.filter(filterFn);
   } catch (error) {
     // Fallback to string matching
@@ -127,7 +136,7 @@ function filterArray(data: any[], condition: string): any[] {
   }
 }
 
-function getUniqueValues(data: any[]): any[] {
+function getUniqueValues(data: (number | string)[]): (number | string)[] {
   return [...new Set(data)];
 }
 

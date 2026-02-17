@@ -33,7 +33,11 @@ const config = {
 export const registerValidationTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {
     const validatedArgs = ValidationSchema.parse(args);
-    let result: { valid: boolean; message?: string; details?: any };
+    let result: {
+      valid: boolean;
+      message?: string;
+      details?: Record<string, unknown>;
+    };
 
     switch (validatedArgs.operation) {
       case "email":
@@ -71,14 +75,23 @@ export const registerValidationTool = (server: McpServer) => {
 function validateEmail(email: string): { valid: boolean; message?: string } {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const isValid = emailRegex.test(email);
-  
+
   return {
     valid: isValid,
     message: isValid ? "Valid email format" : "Invalid email format"
   };
 }
 
-function validateUrl(url: string): { valid: boolean; message?: string; details?: any } {
+function validateUrl(url: string): {
+  valid: boolean;
+  message?: string;
+  details?: {
+    protocol: string;
+    hostname: string;
+    port: string;
+    pathname: string;
+  };
+} {
   try {
     const urlObj = new URL(url);
     return {
@@ -99,19 +112,27 @@ function validateUrl(url: string): { valid: boolean; message?: string; details?:
   }
 }
 
-function validatePhone(phone: string): { valid: boolean; message?: string; details?: any } {
+function validatePhone(phone: string): {
+  valid: boolean;
+  message?: string;
+  details?: {
+    original: string;
+    cleaned: string;
+    length: number;
+  };
+} {
   // Remove common formatting characters
   const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
-  
+
   // Support multiple phone formats
   const phonePatterns = [
     /^\+?1?\d{10}$/, // US format (10 or 11 digits with optional +1)
     /^\+?\d{1,3}?[-.\s]?\(?\d{1,4}?\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}$/, // International format
     /^\d{10,15}$/ // Simple digit-only format (10-15 digits)
   ];
-  
+
   const isValid = phonePatterns.some(pattern => pattern.test(cleanPhone));
-  
+
   return {
     valid: isValid,
     message: isValid ? "Valid phone format" : "Invalid phone format",
@@ -123,7 +144,15 @@ function validatePhone(phone: string): { valid: boolean; message?: string; detai
   };
 }
 
-function validateJson(jsonString: string): { valid: boolean; message?: string; details?: any } {
+function validateJson(jsonString: string): {
+  valid: boolean;
+  message?: string;
+  details?: {
+    type: string;
+    keys: string[] | null;
+    size: number;
+  };
+} {
   try {
     const parsed = JSON.parse(jsonString);
     return {
@@ -143,18 +172,27 @@ function validateJson(jsonString: string): { valid: boolean; message?: string; d
   }
 }
 
-function validateRegex(value: string, pattern: string, flags?: string): { valid: boolean; message?: string; details?: any } {
+function validateRegex(value: string, pattern: string, flags?: string): {
+  valid: boolean;
+  message?: string;
+  details?: {
+    pattern: string;
+    flags: string;
+    matches: RegExpMatchArray | null;
+    matchCount: number;
+  };
+} {
   try {
     const regex = new RegExp(pattern, flags);
     const matches = value.match(regex);
-    
+
     return {
       valid: regex.test(value),
       message: regex.test(value) ? "Value matches pattern" : "Value does not match pattern",
       details: {
         pattern: pattern,
         flags: flags || '',
-        matches: matches || [],
+        matches: matches || null,
         matchCount: matches ? matches.length : 0
       }
     };
