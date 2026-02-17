@@ -139,9 +139,9 @@ async def check_robots_optimized(url: str, user_agent: str, proxy_url: Optional[
     # Skip caching in test environment
     # is_test_env = os.getenv('PYTEST_CURRENT_TEST') or 'pytest' in sys.modules if 'sys' in globals() else False
     is_test_env = 'pytest' in sys.modules
+    cache_key = f"robots:{url}" if not is_test_env else ""
     
     if not is_test_env:
-        cache_key = f"robots:{url}"
         
         # Check cache first
         cached_result = await robots_cache.get(cache_key)
@@ -182,13 +182,15 @@ async def check_robots_optimized(url: str, user_agent: str, proxy_url: Optional[
         elif 400 <= response.status_code < 500:
             if not is_test_env:
                 await robots_cache.set(cache_key, "allowed")
-            return
+            return True
         robot_txt = response.text
         processed_robot_txt = "\n".join(
             line for line in robot_txt.splitlines() if not line.strip().startswith("#")
         )
     robot_parser = Protego.parse(processed_robot_txt)
-    if not robot_parser.can_fetch(str(url), user_agent):
+    # if not robot_parser.can_fetch(str(url), user_agent):
+    can_fetch = robot_parser.can_fetch(str(url), user_agent)
+    if not can_fetch:
         if not is_test_env:
             await robots_cache.set(cache_key, "blocked")
         raise McpError(ErrorData(
@@ -211,7 +213,7 @@ async def fetch_url_optimized(
     proxy_url: Optional[str] = None,
     timeout: int = 30,
     max_retries: int = 3
-) -> Optional[Tuple[str, str]]:
+) -> Tuple[str, str]:
     """Optimized URL fetching with connection pooling and retries"""
     from httpx import AsyncClient, HTTPError
     from mcp.shared.exceptions import McpError
@@ -287,4 +289,4 @@ def get_performance_stats() -> Dict:
     return perf_logger.get_stats()
 
 # initialize cache
-extract_content_optimized._cache = {}
+# extract_content_optimized._cache = {}
