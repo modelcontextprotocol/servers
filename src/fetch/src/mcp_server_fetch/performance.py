@@ -182,7 +182,7 @@ async def check_robots_optimized(url: str, user_agent: str, proxy_url: Optional[
         elif 400 <= response.status_code < 500:
             if not is_test_env:
                 await robots_cache.set(cache_key, "allowed")
-            return True
+            return
         robot_txt = response.text
         processed_robot_txt = "\n".join(
             line for line in robot_txt.splitlines() if not line.strip().startswith("#")
@@ -282,6 +282,12 @@ async def fetch_url_optimized(
             
             # Exponential backoff: wait 2^attempt seconds
             await asyncio.sleep(2 ** attempt)
+
+    # Fallback for empty retries or unexpected loop exit
+    raise McpError(ErrorData(
+        code=INTERNAL_ERROR,
+        message=f"Failed to fetch {url} after {max_retries} attempts"
+    ))
 
 def get_performance_stats() -> Dict:
     """Get current performance statistics"""
