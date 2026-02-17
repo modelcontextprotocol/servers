@@ -187,24 +187,23 @@ async def check_robots_optimized(url: str, user_agent: str, proxy_url: Optional[
         processed_robot_txt = "\n".join(
             line for line in robot_txt.splitlines() if not line.strip().startswith("#")
         )
-    robot_parser = Protego.parse(processed_robot_txt)
+        robot_parser = Protego.parse(processed_robot_txt)
     # if not robot_parser.can_fetch(str(url), user_agent):
-    can_fetch = robot_parser.can_fetch(str(url), user_agent)
-    if not can_fetch:
+        can_fetch = robot_parser.can_fetch(str(url), user_agent)
+        if not can_fetch:
+            if not is_test_env:
+                await robots_cache.set(cache_key, "blocked")
+            raise McpError(ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"The sites robots.txt ({robots_txt_url}), specifies that autonomous fetching of this page is not allowed, "
+                f"<useragent>{user_agent}</useragent>\n"
+                f"<url>{url}</url>"
+                f"<robots>\n{robot_txt}\n</robots>\n"
+                f"The assistant must let the user know that it failed to view the page. The assistant may provide further guidance based on the above information.\n"
+                f"The assistant can tell the user that they can try manually fetching the page by using the fetch prompt within their UI.",
+            ))
         if not is_test_env:
-            await robots_cache.set(cache_key, "blocked")
-        raise McpError(ErrorData(
-            code=INTERNAL_ERROR,
-            message=f"The sites robots.txt ({robots_txt_url}), specifies that autonomous fetching of this page is not allowed, "
-            f"<useragent>{user_agent}</useragent>\n"
-            f"<url>{url}</url>"
-            f"<robots>\n{robot_txt}\n</robots>\n"
-            f"The assistant must let the user know that it failed to view the page. The assistant may provide further guidance based on the above information.\n"
-            f"The assistant can tell the user that they can try manually fetching the page by using the fetch prompt within their UI.",
-        ))
-    
-    if not is_test_env:
-        await robots_cache.set(cache_key, "allowed")
+            await robots_cache.set(cache_key, "allowed")
 
 async def fetch_url_optimized(
     url: str, 
