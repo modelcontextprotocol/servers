@@ -59,8 +59,11 @@ let allowedDirectories = (await Promise.all(
       }
       return [normalizedResolved];
     } catch (error) {
-      // If we can't resolve (doesn't exist), use the normalized absolute path
-      // This allows configuring allowed dirs that will be created later
+      // Directory doesn't exist yet - store only the unresolved path.
+      // This allows configuring allowed dirs that will be created later.
+      // Note: if this path later appears as a symlink, only the unresolved
+      // form will be in allowedDirectories. Full symlink support requires
+      // the directory to exist at startup so both forms can be resolved.
       return [normalizedOriginal];
     }
   })
