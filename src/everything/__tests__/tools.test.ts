@@ -13,8 +13,7 @@ import { registerToggleSimulatedLoggingTool } from '../tools/toggle-simulated-lo
 import { registerToggleSubscriberUpdatesTool } from '../tools/toggle-subscriber-updates.js';
 import { registerTriggerSamplingRequestTool } from '../tools/trigger-sampling-request.js';
 import { registerTriggerElicitationRequestTool } from '../tools/trigger-elicitation-request.js';
-import { registerTriggerUrlElicitationRequestTool } from '../tools/trigger-url-elicitation-request.js';
-import { registerTriggerUrlElicitationRequiredErrorTool } from '../tools/trigger-url-elicitation-required-error.js';
+import { registerTriggerUrlElicitationTool } from '../tools/trigger-url-elicitation.js';
 import { registerGetRootsListTool } from '../tools/get-roots-list.js';
 import { registerGZipFileAsResourceTool } from '../tools/gzip-file-as-resource.js';
 
@@ -708,7 +707,7 @@ describe('Tools', () => {
     });
   });
 
-  describe('trigger-url-elicitation-request', () => {
+  describe('trigger-url-elicitation', () => {
     it('should not register when client does not support URL elicitation', () => {
       const handlers: Map<string, Function> = new Map();
       const mockServer = {
@@ -720,7 +719,7 @@ describe('Tools', () => {
         },
       } as unknown as McpServer;
 
-      registerTriggerUrlElicitationRequestTool(mockServer);
+      registerTriggerUrlElicitationTool(mockServer);
 
       expect(mockServer.registerTool).not.toHaveBeenCalled();
     });
@@ -733,28 +732,26 @@ describe('Tools', () => {
         }),
         server: {
           getClientCapabilities: vi.fn(() => ({ elicitation: { url: {} } })),
-          createElicitationCompletionNotifier: vi.fn(() => vi.fn()),
         },
       } as unknown as McpServer;
 
-      registerTriggerUrlElicitationRequestTool(mockServer);
+      registerTriggerUrlElicitationTool(mockServer);
 
       expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'trigger-url-elicitation-request',
+        'trigger-url-elicitation',
         expect.objectContaining({
-          title: 'Trigger URL Elicitation Request Tool',
+          title: 'Trigger URL Elicitation Tool',
           description: expect.stringContaining('URL elicitation'),
         }),
         expect.any(Function)
       );
     });
 
-    it('should send URL-mode elicitation request and notify completion when requested', async () => {
+    it('should send URL-mode elicitation request when errorPath is false', async () => {
       const handlers: Map<string, Function> = new Map();
       const mockSendRequest = vi.fn().mockResolvedValue({
         action: 'accept',
       });
-      const mockNotifyComplete = vi.fn().mockResolvedValue(undefined);
 
       const mockServer = {
         registerTool: vi.fn((name: string, config: any, handler: Function) => {
@@ -762,21 +759,18 @@ describe('Tools', () => {
         }),
         server: {
           getClientCapabilities: vi.fn(() => ({ elicitation: { url: {} } })),
-          createElicitationCompletionNotifier: vi
-            .fn()
-            .mockReturnValue(mockNotifyComplete),
         },
       } as unknown as McpServer;
 
-      registerTriggerUrlElicitationRequestTool(mockServer);
+      registerTriggerUrlElicitationTool(mockServer);
 
-      const handler = handlers.get('trigger-url-elicitation-request')!;
+      const handler = handlers.get('trigger-url-elicitation')!;
       const result = await handler(
         {
           url: 'https://example.com/verify',
           message: 'Open this page to verify your identity',
           elicitationId: 'elicitation-123',
-          sendCompletionNotification: true,
+          errorPath: false,
         },
         { sendRequest: mockSendRequest }
       );
@@ -795,32 +789,10 @@ describe('Tools', () => {
         expect.anything()
       );
 
-      expect(mockServer.server.createElicitationCompletionNotifier).toHaveBeenCalledWith(
-        'elicitation-123'
-      );
-      expect(mockNotifyComplete).toHaveBeenCalledTimes(1);
       expect(result.content[0].text).toContain('URL elicitation action: accept');
     });
-  });
 
-  describe('trigger-url-elicitation-required-error', () => {
-    it('should not register when client does not support URL elicitation', () => {
-      const handlers: Map<string, Function> = new Map();
-      const mockServer = {
-        registerTool: vi.fn((name: string, config: any, handler: Function) => {
-          handlers.set(name, handler);
-        }),
-        server: {
-          getClientCapabilities: vi.fn(() => ({ elicitation: { form: {} } })),
-        },
-      } as unknown as McpServer;
-
-      registerTriggerUrlElicitationRequiredErrorTool(mockServer);
-
-      expect(mockServer.registerTool).not.toHaveBeenCalled();
-    });
-
-    it('should register when client supports URL elicitation', () => {
+    it('should throw MCP error -32042 with required URL elicitation data when errorPath is true', async () => {
       const handlers: Map<string, Function> = new Map();
       const mockServer = {
         registerTool: vi.fn((name: string, config: any, handler: Function) => {
@@ -831,40 +803,22 @@ describe('Tools', () => {
         },
       } as unknown as McpServer;
 
-      registerTriggerUrlElicitationRequiredErrorTool(mockServer);
+      registerTriggerUrlElicitationTool(mockServer);
 
-      expect(mockServer.registerTool).toHaveBeenCalledWith(
-        'trigger-url-elicitation-required-error',
-        expect.objectContaining({
-          title: 'Trigger URL Elicitation Required Error Tool',
-        }),
-        expect.any(Function)
-      );
-    });
-
-    it('should throw MCP error -32042 with required URL elicitation data', async () => {
-      const handlers: Map<string, Function> = new Map();
-      const mockServer = {
-        registerTool: vi.fn((name: string, config: any, handler: Function) => {
-          handlers.set(name, handler);
-        }),
-        server: {
-          getClientCapabilities: vi.fn(() => ({ elicitation: { url: {} } })),
-        },
-      } as unknown as McpServer;
-
-      registerTriggerUrlElicitationRequiredErrorTool(mockServer);
-
-      const handler = handlers.get('trigger-url-elicitation-required-error')!;
+      const handler = handlers.get('trigger-url-elicitation')!;
 
       expect.assertions(2);
 
       try {
-        await handler({
-          url: 'https://example.com/connect',
-          message: 'Authorization is required to continue.',
-          elicitationId: 'elicitation-xyz',
-        });
+        await handler(
+          {
+            url: 'https://example.com/connect',
+            message: 'Authorization is required to continue.',
+            elicitationId: 'elicitation-xyz',
+            errorPath: true,
+          },
+          {}
+        );
       } catch (error: any) {
         expect(error.code).toBe(-32042);
         expect(error.data.elicitations[0]).toEqual({

@@ -48,13 +48,15 @@ src/everything
      │   ├── get-sum.ts
      │   ├── get-tiny-image.ts
      │   ├── gzip-file-as-resource.ts
+     │   ├── simulate-research-query.ts
      │   ├── toggle-simulated-logging.ts
      │   ├── toggle-subscriber-updates.ts
      │   ├── trigger-elicitation-request.ts
+     │   ├── trigger-elicitation-request-async.ts
      │   ├── trigger-long-running-operation.ts
-     │   ├── trigger-url-elicitation-required-error.ts
-     │   ├── trigger-url-elicitation-request.ts
-     │   └── trigger-sampling-request.ts
+     │   ├── trigger-sampling-request.ts
+     │   ├── trigger-sampling-request-async.ts
+     │   └── trigger-url-elicitation.ts
      └── transports
          ├── sse.ts
          ├── stdio.ts
@@ -84,8 +86,8 @@ src/everything
 
 - `architecture.md`
   - This document.
-- `server-instructions.md`
-  - Human‑readable instructions intended to be passed to the client/LLM as for guidance on server use. Loaded by the server at startup and returned in the "initialize" exchange.
+- `instructions.md`
+  - Human‑readable instructions intended to be passed to the client/LLM as guidance on server use. Loaded by the server at startup and returned in the initialize exchange.
 
 ### `prompts/`
 
@@ -151,12 +153,16 @@ src/everything
     - `GZIP_ALLOWED_DOMAINS` (comma-separated allowlist; empty means all domains allowed)
 - `trigger-elicitation-request.ts`
   - Registers a `trigger-elicitation-request` tool that sends an `elicitation/create` request to the client/LLM and returns the elicitation result.
-- `trigger-url-elicitation-request.ts`
-  - Registers a `trigger-url-elicitation-request` tool that sends an out-of-band URL-mode `elicitation/create` request (`mode: "url"`) including an `elicitationId`, and can optionally emit `notifications/elicitation/complete` after acceptance.
-- `trigger-url-elicitation-required-error.ts`
-  - Registers a `trigger-url-elicitation-required-error` tool that throws MCP error `-32042` (`UrlElicitationRequiredError`) with required URL-mode elicitation params in `error.data.elicitations`.
+- `trigger-url-elicitation.ts`
+  - Registers a `trigger-url-elicitation` tool that either sends an out-of-band URL-mode `elicitation/create` request (`mode: "url"`) including an `elicitationId` (request path) or throws `UrlElicitationRequiredError` (`-32042`) for client-handled URL elicitation (error path).
 - `trigger-sampling-request.ts`
   - Registers a `trigger-sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
+- `trigger-sampling-request-async.ts`
+  - Registers a `trigger-sampling-request-async` tool that demonstrates bidirectional tasks where the server sends a sampling request that the client executes asynchronously, then polls task status and fetches the result.
+- `trigger-elicitation-request-async.ts`
+  - Registers a `trigger-elicitation-request-async` tool that demonstrates bidirectional tasks where the server sends an elicitation request that the client executes asynchronously, then polls task status and fetches the result.
+- `simulate-research-query.ts`
+  - Registers a `simulate-research-query` tool that demonstrates server-side MCP Tasks with staged progress updates and optional elicitation for ambiguous queries.
 - `get-structured-content.ts`
   - Registers a `get-structured-content` tool that demonstrates structuredContent block responses.
 - `get-sum.ts`
@@ -164,7 +170,7 @@ src/everything
 - `get-tiny-image.ts`
   - Registers a `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
 - `trigger-long-running-operation.ts`
-  - Registers a `long-running-operation` tool that simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
+  - Registers a `trigger-long-running-operation` tool that simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
 - `toggle-simulated-logging.ts`
   - Registers a `toggle-simulated-logging` tool, which starts or stops simulated logging for the invoking session.
 - `toggle-subscriber-updates.ts`

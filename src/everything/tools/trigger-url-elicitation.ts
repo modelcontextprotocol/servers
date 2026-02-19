@@ -4,11 +4,12 @@ import {
   CallToolResult,
   ElicitRequestURLParams,
   ElicitResultSchema,
+  UrlElicitationRequiredError,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 // Tool input schema
-const TriggerUrlElicitationRequestSchema = z.object({
+const TriggerUrlElicitationSchema = z.object({
   url: z.string().url().describe("The URL the user should open"),
   message: z
     .string()
@@ -18,32 +19,43 @@ const TriggerUrlElicitationRequestSchema = z.object({
     .string()
     .optional()
     .describe("Optional explicit elicitation ID. Defaults to a random UUID."),
-  sendCompletionNotification: z
+  errorPath: z
     .boolean()
     .default(false)
     .describe(
-      "If true, sends notifications/elicitation/complete after an accepted URL elicitation."
+      "Controls which elicitation mechanism is used. " +
+        "When false (default), sends an elicitation/create request (request path). " +
+        "When true, throws a UrlElicitationRequiredError (MCP error code -32042) so the client handles " +
+        "the URL elicitation via the error path rather than waiting for a response."
     ),
 });
 
 // Tool configuration
-const name = "trigger-url-elicitation-request";
+const name = "trigger-url-elicitation";
 const config = {
-  title: "Trigger URL Elicitation Request Tool",
+  title: "Trigger URL Elicitation Tool",
   description:
-    "Trigger an out-of-band URL elicitation request so the client can direct the user to a browser flow.",
-  inputSchema: TriggerUrlElicitationRequestSchema,
+    "Trigger a URL elicitation so the client can direct the user to a browser flow. " +
+    "Supports two mechanisms: the request path (elicitation/create, default) which awaits the user's " +
+    "response, and the error path (UrlElicitationRequiredError, -32042) which signals the client " +
+    "to handle URL elicitation via the error response. Set errorPath=true to use the error path.",
+  inputSchema: TriggerUrlElicitationSchema,
 };
 
 /**
- * Registers the 'trigger-url-elicitation-request' tool.
+ * Registers the 'trigger-url-elicitation' tool.
  *
  * This tool only registers when the client advertises URL-mode elicitation
  * capability (clientCapabilities.elicitation.url).
  *
+ * Depending on the `errorPath` argument it either:
+ *  - Sends an `elicitation/create` request and awaits the result (request path), or
+ *  - Throws a `UrlElicitationRequiredError` (MCP error -32042) for the client to
+ *    handle via the error path.
+ *
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
-export const registerTriggerUrlElicitationRequestTool = (server: McpServer) => {
+export const registerTriggerUrlElicitationTool = (server: McpServer) => {
   const clientCapabilities = server.server.getClientCapabilities() || {};
   const clientElicitationCapabilities = clientCapabilities.elicitation as
     | {
@@ -59,27 +71,36 @@ export const registerTriggerUrlElicitationRequestTool = (server: McpServer) => {
       name,
       config,
       async (args, extra): Promise<CallToolResult> => {
-        const validatedArgs = TriggerUrlElicitationRequestSchema.parse(args);
+        const validatedArgs = TriggerUrlElicitationSchema.parse(args);
         const {
           url,
           message,
           elicitationId: requestedElicitationId,
-          sendCompletionNotification,
+          errorPath,
         } = validatedArgs;
 
         const elicitationId = requestedElicitationId ?? randomUUID();
 
-        const params: ElicitRequestURLParams = {
+        const elicitationParams: ElicitRequestURLParams = {
           mode: "url",
-          message,
           url,
+          message,
           elicitationId,
         };
 
+        // Error path: throw UrlElicitationRequiredError (-32042) for the client to handle
+        if (errorPath) {
+          throw new UrlElicitationRequiredError(
+            [elicitationParams],
+            "This request requires browser-based authorization."
+          );
+        }
+
+        // Request path: send elicitation/create and await the user's response
         const elicitationResult = await extra.sendRequest(
           {
             method: "elicitation/create",
-            params,
+            params: elicitationParams,
           },
           ElicitResultSchema,
           { timeout: 10 * 60 * 1000 /* 10 minutes */ }
@@ -95,19 +116,6 @@ export const registerTriggerUrlElicitationRequestTool = (server: McpServer) => {
           },
         ];
 
-        if (
-          sendCompletionNotification &&
-          elicitationResult.action === "accept"
-        ) {
-          const notifyElicitationComplete =
-            server.server.createElicitationCompletionNotifier(elicitationId);
-          await notifyElicitationComplete();
-          content.push({
-            type: "text",
-            text: `Sent notifications/elicitation/complete for ${elicitationId}.`,
-          });
-        }
-
         content.push({
           type: "text",
           text: `Raw result: ${JSON.stringify(elicitationResult, null, 2)}`,
@@ -118,4 +126,3 @@ export const registerTriggerUrlElicitationRequestTool = (server: McpServer) => {
     );
   }
 };
-
