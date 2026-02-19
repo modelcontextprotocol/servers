@@ -17,9 +17,15 @@ import { registerTriggerSamplingRequestTool } from "./trigger-sampling-request.j
 import { registerTriggerSamplingRequestAsyncTool } from "./trigger-sampling-request-async.js";
 import { registerTriggerElicitationRequestAsyncTool } from "./trigger-elicitation-request-async.js";
 import { registerSimulateResearchQueryTool } from "./simulate-research-query.js";
+import { registerFileOperationsTool } from "./file-operations.js";
+import { registerStringOperationsTool } from "./string-operations.js";
+import { registerMathOperationsTool } from "./math-operations.js";
+import { registerDateTimeOperationsTool } from "./datetime-operations.js";
+import { registerDataAnalysisTool } from "./data-analysis.js";
+import { registerValidationTool } from "./validation.js";
 
 /**
- * Register the tools with the MCP server.
+ * Register all tools with MCP server.
  * @param server
  */
 export const registerTools = (server: McpServer) => {
@@ -28,13 +34,22 @@ export const registerTools = (server: McpServer) => {
   registerGetEnvTool(server);
   registerGetResourceLinksTool(server);
   registerGetResourceReferenceTool(server);
+  registerGetRootsListTool(server);
   registerGetStructuredContentTool(server);
   registerGetSumTool(server);
   registerGetTinyImageTool(server);
   registerGZipFileAsResourceTool(server);
   registerToggleSimulatedLoggingTool(server);
   registerToggleSubscriberUpdatesTool(server);
+  registerTriggerElicitationRequestTool(server);
   registerTriggerLongRunningOperationTool(server);
+  registerTriggerSamplingRequestTool(server);
+  registerFileOperationsTool(server);
+  registerStringOperationsTool(server);
+  registerMathOperationsTool(server);
+  registerDateTimeOperationsTool(server);
+  registerDataAnalysisTool(server);
+  registerValidationTool(server);
 };
 
 /**
