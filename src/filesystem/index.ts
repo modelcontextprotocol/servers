@@ -14,6 +14,7 @@ import { z } from "zod";
 import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from './path-utils.js';
 import { getValidRootDirectories } from './roots-utils.js';
+import { fileURLToPath } from "url";
 import {
   // Function imports
   formatSize,
@@ -719,6 +720,11 @@ server.server.setNotificationHandler(RootsListChangedNotificationSchema, async (
   try {
     // Request the updated roots list from the client
     const response = await server.server.listRoots();
+    for (const root of response.roots) {
+        // console.error("root", fileURLToPath(root.uri));
+        // fix windows url encode  file:///d%3A/work/
+        root.uri = fileURLToPath(root.uri); 
+    }
     if (response && 'roots' in response) {
       await updateAllowedDirectoriesFromRoots(response.roots);
     }
