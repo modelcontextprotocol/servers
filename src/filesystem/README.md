@@ -6,7 +6,7 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 
 - Read/write files
 - Create/list/delete directories
-- Move files/directories
+- Move/copy files/directories
 - Search files
 - Get file metadata
 - Dynamic directory access control via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots)
@@ -135,6 +135,14 @@ The server's directory access control follows this flow:
     - `destination` (string)
   - Fails if destination exists
 
+- **copy_file**
+  - Copy a file or directory to a new location
+  - Inputs:
+    - `source` (string): Source path of the file or directory to copy
+    - `destination` (string): Destination path for the copy
+  - Fails if destination exists
+  - For directories, copies recursively while preserving structure and timestamps
+
 - **search_files**
   - Recursively search for files/directories that match or do not match patterns
   - Inputs:
@@ -201,6 +209,7 @@ The mapping for filesystem tools is:
 | `write_file`                | `false`      | `true`         | `true`          | Overwrites existing files                       |
 | `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply      |
 | `move_file`                 | `false`      | `false`        | `false`         | Move/rename only; repeat usually errors         |
+| `copy_file`                 | `false`      | `false`        | `false`         | Copy operation; repeat fails if dest exists     |
 
 > Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec.
 
