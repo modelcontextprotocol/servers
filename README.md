@@ -640,6 +640,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Azure MCP Hub](https://github.com/Azure-Samples/mcp)** - A curated list of all MCP servers and related resources for Azure developers by **[Arun Sekhar](https://github.com/achandmsft)**
 - **[Azure OpenAI DALL-E 3 MCP Server](https://github.com/jacwu/mcp-server-aoai-dalle3)** - An MCP server for Azure OpenAI DALL-E 3 service to generate image from text.
 - **[Azure Wiki Search](https://github.com/coder-linping/azure-wiki-search-server)** - An MCP that enables AI to query the wiki hosted on Azure Devops Wiki.
+- **[ASO MCP](https://github.com/KenanAtmaca/aso-mcp)** - App Store Optimization server with keyword research, competitor analysis, review sentiment, and App Store Connect metadata management.
 - **[Baidu AI Search](https://github.com/baidubce/app-builder/tree/master/python/mcp_server/ai_search)** - Web search with Baidu Cloud's AI Search
 - **[BambooHR MCP](https://github.com/encoreshao/bamboohr-mcp)** - An MCP server that interfaces with the BambooHR APIs, providing access to employee data, time tracking, and HR management features.
 - **[Base Free USDC Transfer](https://github.com/magnetai/mcp-free-usdc-transfer)** - Send USDC on [Base](https://base.org) for free using Claude AI! Built with [Coinbase CDP](https://docs.cdp.coinbase.com/mpc-wallet/docs/welcome).
