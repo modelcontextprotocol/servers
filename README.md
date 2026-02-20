@@ -844,6 +844,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[FPE Demo MCP](https://github.com/Horizon-Digital-Engineering/fpe-demo-mcp)** - FF3 Format Preserving Encryption with authentication patterns for secure data protection in LLM workflows.
 - **[FrankfurterMCP](https://github.com/anirbanbasu/frankfurtermcp)** - MCP server acting as an interface to the [Frankfurter API](https://frankfurter.dev/) for currency exchange data.
 - **[freqtrade-mcp](https://github.com/kukapay/freqtrade-mcp)** - An MCP server that integrates with the Freqtrade cryptocurrency trading bot.
+- **[Frost Job Tools](https://github.com/thatgamer253-cpu/frost-mcp-server)** - AI-powered job scanning and cover letter generation for job seekers. Scan Upwork and LinkedIn for opportunities, generate professional cover letters.
 - **[GDAL](https://github.com/Wayfinder-Foundry/gdal-mcp)** - GDAL-style geospatial workflows with built-in reasoning guidance and reference resources to give AI agents catalogue discovery, metadata intelligence, and raster/vector processing.
 - **[GDB](https://github.com/pansila/mcp_server_gdb)** - A GDB/MI protocol server based on the MCP protocol, providing remote application debugging capabilities with AI assistants.
 - **[Gemini Bridge](https://github.com/eLyiN/gemini-bridge)** - Lightweight MCP server that enables Claude to interact with Google's Gemini AI through the official CLI, offering zero API costs and stateless architecture.
