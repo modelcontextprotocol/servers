@@ -6,11 +6,11 @@ A Model Context Protocol server that provides time and timezone conversion capab
 
 ### Available Tools
 
-- `get_current_time` - Get current time in a specific timezone or system timezone.
+- `time_get_current` - Get current time in a specific timezone or system timezone.
   - Required arguments:
     - `timezone` (string): IANA timezone name (e.g., 'America/New_York', 'Europe/London')
 
-- `convert_time` - Convert time between timezones.
+- `time_convert` - Convert time between timezones.
   - Required arguments:
     - `source_timezone` (string): Source IANA timezone name
     - `time` (string): Time in 24-hour format (HH:MM)
@@ -205,7 +205,7 @@ Example:
 1. Get current time:
 ```json
 {
-  "name": "get_current_time",
+  "name": "time_get_current",
   "arguments": {
     "timezone": "Europe/Warsaw"
   }
@@ -223,7 +223,7 @@ Response:
 2. Convert time between timezones:
 ```json
 {
-  "name": "convert_time",
+  "name": "time_convert",
   "arguments": {
     "source_timezone": "America/New_York",
     "time": "16:30",
