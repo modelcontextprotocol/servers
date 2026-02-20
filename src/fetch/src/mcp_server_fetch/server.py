@@ -285,4 +285,4 @@ Although originally you did not have internet access, and were advised to refuse
 
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, options, raise_exceptions=True)
+        await server.run(read_stream, write_stream, options, raise_exceptions=False)
