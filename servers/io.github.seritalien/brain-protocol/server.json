@@ -1,0 +1,44 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.seritalien/brain-protocol",
+  "description": "Verifiable Memory for AI Agents — 25 tools: knowledge graph, FTS, Starknet proofs, Giza zkML, decisions, curation. Local SQLite or cloud mode.",
+  "repository": {
+    "url": "https://github.com/seritalien/brain-protocol",
+    "source": "github",
+    "subfolder": "packages/brain-mcp"
+  },
+  "version": "0.5.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@brain-protocol/mcp",
+      "version": "0.5.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "BRAIN_API_URL",
+          "description": "Cloud mode API URL (e.g., https://brain.api.vauban.tech). When unset, uses local SQLite.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "BRAIN_API_KEY",
+          "description": "API key for cloud mode authentication (sent as X-API-Key header)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "BRAIN_DB_PATH",
+          "description": "Override path for the local SQLite database file",
+          "isRequired": false,
+          "format": "filepath",
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
