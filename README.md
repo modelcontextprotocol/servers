@@ -565,6 +565,7 @@ Official integrations are maintained by companies building production ready MCP 
 - **[ZettelkastenSpace](https://github.com/joshylchen/zettelkasten_space)** - Built on the proven [Zettelkasten](https://www.zettelkasten.space/) method, enhanced with Claude Desktop integration via Model Context Protocol 
 - <img height="12" width="12" src="https://www.zine.ai/images/zine-logo.png" alt="Zine Logo" /> **[Zine](https://www.zine.ai)** - Your memory, everywhere AI goes. Think iPhoto for your knowledge - upload and curate. Like ChatGPT but portable - context that travels with you.
 - <img height="12" width="12" src="https://zizai.work/images/logo.jpg" alt="ZIZAI Logo" /> **[ZIZAI Recruitment](https://github.com/zaiwork/mcp)** - Interact with the next-generation intelligent recruitment platform for employees and employers, powered by [ZIZAI Recruitment](https://zizai.work).
+- <img height="12" width="12" src=""https://testdino.com/wp-content/uploads/2025/10/Testdino.svg" alt="TestDino Logo" /> **[TestDino MCP](https://github.com/testdino-hq/testdino-mcp))** - [TestDino](https://testdino.com/)).
 
 ### 🌎 Community Servers
 
