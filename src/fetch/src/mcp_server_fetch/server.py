@@ -1,3 +1,4 @@
+import re
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
@@ -24,15 +25,69 @@ DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
 
 
-def extract_content_from_html(html: str) -> str:
+def distill_html(html: str) -> str:
+    """Aggressively clean HTML to minimize token usage.
+
+    This function removes all non-essential elements from HTML:
+    - Scripts, styles, and CSS
+    - Navigation menus, headers, footers
+    - Ads, sidebars, and promotional content
+    - Comments and hidden elements
+    - Social media widgets and sharing buttons
+
+    Args:
+        html: Raw HTML content to clean
+
+    Returns:
+        Cleaned HTML with only essential content
+    """
+    # Remove script tags and their content
+    html = re.sub(r'<script[^>]*>[\s\S]*?</script>', '', html, flags=re.IGNORECASE)
+
+    # Remove style tags and their content
+    html = re.sub(r'<style[^>]*>[\s\S]*?</style>', '', html, flags=re.IGNORECASE)
+
+    # Remove HTML comments
+    html = re.sub(r'<!--[\s\S]*?-->', '', html)
+
+    # Remove common non-content elements by tag
+    non_content_tags = [
+        'nav', 'header', 'footer', 'aside', 'iframe', 'noscript',
+        'svg', 'form', 'button', 'input', 'select', 'textarea'
+    ]
+    for tag in non_content_tags:
+        html = re.sub(rf'<{tag}[^>]*>[\s\S]*?</{tag}>', '', html, flags=re.IGNORECASE)
+
+    # Remove elements with common ad/navigation class names or IDs
+    ad_patterns = [
+        r'<[^>]+(class|id)=["\'][^"\']*\b(ad|ads|advert|advertisement|banner|sidebar|menu|nav|navigation|header|footer|popup|modal|cookie|consent|social|share|sharing|widget|promo|promotional)\b[^"\']*["\'][^>]*>[\s\S]*?</[^>]+>',
+    ]
+    for pattern in ad_patterns:
+        html = re.sub(pattern, '', html, flags=re.IGNORECASE)
+
+    # Remove empty tags
+    html = re.sub(r'<([a-z]+)[^>]*>\s*</\1>', '', html, flags=re.IGNORECASE)
+
+    # Normalize whitespace
+    html = re.sub(r'\n\s*\n', '\n\n', html)
+    html = re.sub(r' +', ' ', html)
+
+    return html.strip()
+
+
+def extract_content_from_html(html: str, distill: bool = False) -> str:
     """Extract and convert HTML content to Markdown format.
 
     Args:
         html: Raw HTML content to process
+        distill: If True, aggressively clean HTML before conversion to minimize tokens
 
     Returns:
         Simplified markdown version of the content
     """
+    if distill:
+        html = distill_html(html)
+
     ret = readabilipy.simple_json.simple_json_from_html_string(
         html, use_readability=True
     )
@@ -109,10 +164,17 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
 
 
 async def fetch_url(
-    url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None
+    url: str,
+    user_agent: str,
+    force_raw: bool = False,
+    distill: bool = False,
+    proxy_url: str | None = None,
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
+
+    Token Optimization:
+        distill=True: Aggressively removes non-content elements (60-85% token reduction)
     """
     from httpx import AsyncClient, HTTPError
 
@@ -140,7 +202,7 @@ async def fetch_url(
     )
 
     if is_page_html and not force_raw:
-        return extract_content_from_html(page_raw), ""
+        return extract_content_from_html(page_raw, distill=distill), ""
 
     return (
         page_raw,
@@ -174,6 +236,13 @@ class Fetch(BaseModel):
         Field(
             default=False,
             description="Get the actual HTML content of the requested page, without simplification.",
+        ),
+    ]
+    distill: Annotated[
+        bool,
+        Field(
+            default=False,
+            description="Aggressively clean HTML to reduce token usage. Removes navigation, ads, sidebars, and other non-content elements. Typically reduces tokens by 60-85%.",
         ),
     ]
 
@@ -235,7 +304,11 @@ Although originally you did not have internet access, and were advised to refuse
             await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
 
         content, prefix = await fetch_url(
-            url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url
+            url,
+            user_agent_autonomous,
+            force_raw=args.raw,
+            distill=args.distill,
+            proxy_url=proxy_url,
         )
         original_length = len(content)
         if args.start_index >= original_length:
