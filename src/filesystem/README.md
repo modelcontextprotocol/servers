@@ -241,7 +241,7 @@ Note: all directories must be mounted to `/projects` by default.
       "command": "npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-filesystem",
+        "@modelcontextprotocol/server-filesystem@0.6.3",
         "/Users/username/Desktop",
         "/path/to/other/allowed/dir"
       ]
@@ -300,7 +300,7 @@ Note: all directories must be mounted to `/projects` by default.
       "command": "npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-filesystem",
+        "@modelcontextprotocol/server-filesystem@0.6.3",
         "${workspaceFolder}"
       ]
     }

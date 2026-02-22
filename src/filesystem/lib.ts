@@ -107,7 +107,7 @@ export async function validatePath(requestedPath: string): Promise<string> {
   // Security: Check if path is within allowed directories before any file operations
   const isAllowed = isPathWithinAllowedDirectories(normalizedRequested, allowedDirectories);
   if (!isAllowed) {
-    throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
+    throw new Error(`Access denied - path outside allowed directories`);
   }
 
   // Security: Handle symlinks by checking their real path to prevent symlink attacks
@@ -116,7 +116,7 @@ export async function validatePath(requestedPath: string): Promise<string> {
     const realPath = await fs.realpath(absolute);
     const normalizedReal = normalizePath(realPath);
     if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
-      throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
+      throw new Error(`Access denied - symlink target outside allowed directories`);
     }
     return realPath;
   } catch (error) {
@@ -128,11 +128,11 @@ export async function validatePath(requestedPath: string): Promise<string> {
         const realParentPath = await fs.realpath(parentDir);
         const normalizedParent = normalizePath(realParentPath);
         if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+          throw new Error(`Access denied - parent directory outside allowed directories`);
         }
         return absolute;
       } catch {
-        throw new Error(`Parent directory does not exist: ${parentDir}`);
+        throw new Error(`Parent directory does not exist`);
       }
     }
     throw error;
