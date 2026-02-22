@@ -205,6 +205,66 @@ describe('Lib Functions', () => {
           .rejects.toThrow('Parent directory does not exist');
       });
 
+      it('does not leak filesystem paths in access denied errors', async () => {
+        const testPath = process.platform === 'win32' ? 'C:\\Windows\\System32\\file.txt' : '/etc/passwd';
+        try {
+          await validatePath(testPath);
+          // Should not reach here
+          expect(true).toBe(false);
+        } catch (error: any) {
+          // Error message should NOT contain the requested path or allowed directories
+          expect(error.message).not.toContain(testPath);
+          for (const dir of (process.platform === 'win32' ? ['C:\\Users\\test', 'C:\\temp'] : ['/home/user', '/tmp'])) {
+            expect(error.message).not.toContain(dir);
+          }
+          // Should still convey the denial reason
+          expect(error.message).toBe('Access denied - path outside allowed directories');
+        }
+      });
+
+      it('does not leak filesystem paths in parent directory errors', async () => {
+        const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\nonexistent\\newfile.txt' : '/home/user/nonexistent/newfile.txt';
+
+        const enoentError1 = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError1.code = 'ENOENT';
+        const enoentError2 = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError2.code = 'ENOENT';
+
+        mockFs.realpath
+          .mockRejectedValueOnce(enoentError1)
+          .mockRejectedValueOnce(enoentError2);
+
+        try {
+          await validatePath(newFilePath);
+          expect(true).toBe(false);
+        } catch (error: any) {
+          // Error message should NOT contain the parent directory path
+          const parentDir = process.platform === 'win32' ? 'C:\\Users\\test\\nonexistent' : '/home/user/nonexistent';
+          expect(error.message).not.toContain(parentDir);
+          expect(error.message).toBe('Parent directory does not exist');
+        }
+      });
+
+      it('does not leak filesystem paths in symlink denied errors', async () => {
+        const testPath = process.platform === 'win32' ? 'C:\\Users\\test\\file.txt' : '/home/user/file.txt';
+        const outsidePath = process.platform === 'win32' ? 'C:\\Windows\\System32\\secret' : '/etc/shadow';
+
+        // Simulate symlink resolving to outside allowed directories
+        mockFs.realpath.mockResolvedValueOnce(outsidePath);
+
+        try {
+          await validatePath(testPath);
+          expect(true).toBe(false);
+        } catch (error: any) {
+          // Error message should NOT contain the real symlink target path
+          expect(error.message).not.toContain(outsidePath);
+          for (const dir of (process.platform === 'win32' ? ['C:\\Users\\test', 'C:\\temp'] : ['/home/user', '/tmp'])) {
+            expect(error.message).not.toContain(dir);
+          }
+          expect(error.message).toBe('Access denied - symlink target outside allowed directories');
+        }
+      });
+
       it('resolves relative paths against allowed directories instead of process.cwd()', async () => {
         const relativePath = 'test-file.txt';
         const originalCwd = process.cwd;
