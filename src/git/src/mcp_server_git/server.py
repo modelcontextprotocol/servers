@@ -1,19 +1,22 @@
+from enum import Enum
+import json
 import logging
+import os
 from pathlib import Path
-from typing import Sequence, Optional
+from typing import Optional, Sequence
+
+import git
+from git.exc import BadName
 from mcp.server import Server
 from mcp.server.session import ServerSession
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     ClientCapabilities,
-    TextContent,
-    Tool,
     ListRootsResult,
     RootsCapability,
+    TextContent,
+    Tool,
 )
-from enum import Enum
-import git
-from git.exc import BadName
 from pydantic import BaseModel, Field
 
 # Default number of context lines to show in diff output
@@ -106,6 +109,61 @@ class GitTools(str, Enum):
     SHOW = "git_show"
 
     BRANCH = "git_branch"
+
+
+def validate_declaration_manifest(
+    manifest_raw: str | None,
+    *,
+    known_tools: set[str],
+    known_resources: set[str],
+    known_prompts: set[str],
+) -> None:
+    """Validate declaration manifest and fail closed on unknown entries."""
+    if not manifest_raw:
+        return
+
+    try:
+        manifest = json.loads(manifest_raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid declaration manifest JSON: {exc}") from exc
+
+    if not isinstance(manifest, dict):
+        raise ValueError("Declaration manifest must be a JSON object.")
+
+    sections = {
+        "tools": known_tools,
+        "resources": known_resources,
+        "prompts": known_prompts,
+    }
+    errors: list[str] = []
+
+    for key in manifest:
+        if key not in sections:
+            errors.append(f"manifest.{key}: unknown declaration section")
+
+    for section, known in sections.items():
+        if section not in manifest:
+            continue
+        values = manifest[section]
+        if not isinstance(values, list):
+            errors.append(f"manifest.{section}: expected an array of strings")
+            continue
+
+        for index, entry in enumerate(values):
+            if not isinstance(entry, str):
+                errors.append(
+                    f"manifest.{section}[{index}]: expected string declaration name"
+                )
+                continue
+            if entry not in known:
+                errors.append(
+                    f"manifest.{section}[{index}]: unknown declaration '{entry}'"
+                )
+
+    if errors:
+        raise ValueError(
+            "Declaration manifest validation failed:\n" + "\n".join(errors)
+        )
 
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
@@ -271,6 +329,13 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
 
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
+
+    validate_declaration_manifest(
+        os.getenv("MCP_DECLARATION_MANIFEST"),
+        known_tools={tool.value for tool in GitTools},
+        known_resources=set(),
+        known_prompts=set(),
+    )
 
     if repository is not None:
         try:

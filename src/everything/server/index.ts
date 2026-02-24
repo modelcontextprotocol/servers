@@ -12,6 +12,37 @@ import { registerResources, readInstructions } from "../resources/index.js";
 import { registerPrompts } from "../prompts/index.js";
 import { stopSimulatedLogging } from "./logging.js";
 import { syncRoots } from "./roots.js";
+import { validateDeclarationManifest } from "./declaration-manifest.js";
+
+const KNOWN_EVERYTHING_DECLARATIONS = {
+  tools: new Set<string>([
+    "echo",
+    "get-annotated-message",
+    "get-env",
+    "get-resource-links",
+    "get-resource-reference",
+    "get-roots-list",
+    "get-structured-content",
+    "get-sum",
+    "get-tiny-image",
+    "gzip-file-as-resource",
+    "simulate-research-query",
+    "toggle-simulated-logging",
+    "toggle-subscriber-updates",
+    "trigger-elicitation-request",
+    "trigger-elicitation-request-async",
+    "trigger-long-running-operation",
+    "trigger-sampling-request",
+    "trigger-sampling-request-async",
+  ]),
+  resources: new Set<string>(["resource-templates", "file-resources"]),
+  prompts: new Set<string>([
+    "simple-prompt",
+    "args-prompt",
+    "completable-prompt",
+    "resource-prompt",
+  ]),
+};
 
 // Server Factory response
 export type ServerFactoryResponse = {
@@ -33,6 +64,11 @@ export type ServerFactoryResponse = {
  * - `cleanup` {Function}: Function to perform cleanup operations for a closing session.
  */
 export const createServer: () => ServerFactoryResponse = () => {
+  validateDeclarationManifest(
+    process.env.MCP_DECLARATION_MANIFEST,
+    KNOWN_EVERYTHING_DECLARATIONS
+  );
+
   // Read the server instructions
   const instructions = readInstructions();
 

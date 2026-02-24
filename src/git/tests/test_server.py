@@ -16,6 +16,7 @@ from mcp_server_git.server import (
     git_create_branch,
     git_show,
     validate_repo_path,
+    validate_declaration_manifest,
 )
 import shutil
 
@@ -337,6 +338,35 @@ def test_git_checkout_rejects_flag_injection(test_repository):
 
     with pytest.raises(BadName):
         git_checkout(test_repository, "-f")
+
+
+def test_validate_declaration_manifest_accepts_valid_entries():
+    validate_declaration_manifest(
+        '{"tools":["git_status","git_diff"]}',
+        known_tools={"git_status", "git_diff"},
+        known_resources=set(),
+        known_prompts=set(),
+    )
+
+
+def test_validate_declaration_manifest_rejects_unknown_section():
+    with pytest.raises(ValueError, match="manifest.extra: unknown declaration section"):
+        validate_declaration_manifest(
+            '{"extra":["x"]}',
+            known_tools={"git_status"},
+            known_resources=set(),
+            known_prompts=set(),
+        )
+
+
+def test_validate_declaration_manifest_rejects_unknown_tool():
+    with pytest.raises(ValueError, match="manifest.tools\\[0\\]: unknown declaration 'git_bad'"):
+        validate_declaration_manifest(
+            '{"tools":["git_bad"]}',
+            known_tools={"git_status"},
+            known_resources=set(),
+            known_prompts=set(),
+        )
 
 
 def test_git_diff_allows_valid_refs(test_repository):

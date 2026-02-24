@@ -1,3 +1,5 @@
+import json
+import os
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
@@ -22,6 +24,61 @@ from pydantic import BaseModel, Field, AnyUrl
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
+
+
+def validate_declaration_manifest(
+    manifest_raw: str | None,
+    *,
+    known_tools: set[str],
+    known_resources: set[str],
+    known_prompts: set[str],
+) -> None:
+    """Validate declaration manifest and fail closed on unknown entries."""
+    if not manifest_raw:
+        return
+
+    try:
+        manifest = json.loads(manifest_raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid declaration manifest JSON: {exc}") from exc
+
+    if not isinstance(manifest, dict):
+        raise ValueError("Declaration manifest must be a JSON object.")
+
+    sections = {
+        "tools": known_tools,
+        "resources": known_resources,
+        "prompts": known_prompts,
+    }
+    errors: list[str] = []
+
+    for key in manifest:
+        if key not in sections:
+            errors.append(f"manifest.{key}: unknown declaration section")
+
+    for section, known in sections.items():
+        if section not in manifest:
+            continue
+        values = manifest[section]
+        if not isinstance(values, list):
+            errors.append(f"manifest.{section}: expected an array of strings")
+            continue
+
+        for index, entry in enumerate(values):
+            if not isinstance(entry, str):
+                errors.append(
+                    f"manifest.{section}[{index}]: expected string declaration name"
+                )
+                continue
+            if entry not in known:
+                errors.append(
+                    f"manifest.{section}[{index}]: unknown declaration '{entry}'"
+                )
+
+    if errors:
+        raise ValueError(
+            "Declaration manifest validation failed:\n" + "\n".join(errors)
+        )
 
 
 def extract_content_from_html(html: str) -> str:
@@ -190,6 +247,13 @@ async def serve(
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
     """
+    validate_declaration_manifest(
+        os.getenv("MCP_DECLARATION_MANIFEST"),
+        known_tools={"fetch"},
+        known_resources=set(),
+        known_prompts={"fetch"},
+    )
+
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
     user_agent_manual = custom_user_agent or DEFAULT_USER_AGENT_MANUAL
