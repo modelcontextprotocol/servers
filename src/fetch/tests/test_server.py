@@ -10,6 +10,7 @@ from mcp_server_fetch.server import (
     check_may_autonomously_fetch_url,
     fetch_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
+    validate_declaration_manifest,
 )
 
 
@@ -218,6 +219,34 @@ class TestFetchUrl:
             # HTML is processed, so we check it returns something
             assert isinstance(content, str)
             assert prefix == ""
+
+
+class TestDeclarationManifestValidation:
+    def test_accepts_valid_manifest(self):
+        validate_declaration_manifest(
+            '{"tools":["fetch"],"prompts":["fetch"],"resources":[]}',
+            known_tools={"fetch"},
+            known_resources=set(),
+            known_prompts={"fetch"},
+        )
+
+    def test_rejects_unknown_declaration_name(self):
+        with pytest.raises(ValueError, match="manifest.tools\\[0\\]: unknown declaration 'invalid'"):
+            validate_declaration_manifest(
+                '{"tools":["invalid"]}',
+                known_tools={"fetch"},
+                known_resources=set(),
+                known_prompts={"fetch"},
+            )
+
+    def test_rejects_unknown_declaration_section(self):
+        with pytest.raises(ValueError, match="manifest.bad: unknown declaration section"):
+            validate_declaration_manifest(
+                '{"bad":["fetch"]}',
+                known_tools={"fetch"},
+                known_resources=set(),
+                known_prompts={"fetch"},
+            )
 
     @pytest.mark.asyncio
     async def test_fetch_html_page_raw(self):
