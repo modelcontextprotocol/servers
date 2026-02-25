@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -42,6 +43,8 @@ export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
       const { duration, steps } = validatedArgs;
       const stepDuration = duration / steps;
       const progressToken = extra._meta?.progressToken;
+      const requestId = extra.requestId ?? randomUUID();
+      const operationId = randomUUID();
 
       for (let i = 1; i < steps + 1; i++) {
         await new Promise((resolve) =>
@@ -58,7 +61,7 @@ export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
                 progressToken,
               },
             },
-            { relatedRequestId: extra.requestId }
+            { relatedRequestId: requestId }
           );
         }
       }
@@ -67,7 +70,7 @@ export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
         content: [
           {
             type: "text",
-            text: `Long running operation completed. Duration: ${duration} seconds, Steps: ${steps}.`,
+            text: `Long running operation completed. Operation ID: ${operationId}. Duration: ${duration} seconds, Steps: ${steps}.`,
           },
         ],
       };
