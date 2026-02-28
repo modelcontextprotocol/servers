@@ -608,7 +608,7 @@ server.registerTool(
       destination: z.string()
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false }
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
   },
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
     const validSourcePath = await validatePath(args.source);

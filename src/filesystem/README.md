@@ -200,7 +200,7 @@ The mapping for filesystem tools is:
 | `create_directory`          | `false`      | `true`         | `false`         | Re‑creating the same dir is a no‑op             |
 | `write_file`                | `false`      | `true`         | `true`          | Overwrites existing files                       |
 | `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply      |
-| `move_file`                 | `false`      | `false`        | `false`         | Move/rename only; repeat usually errors         |
+| `move_file`                 | `false`      | `false`        | `true`          | Deletes source file                             |
 
 > Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec.
 
