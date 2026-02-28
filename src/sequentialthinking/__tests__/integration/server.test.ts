@@ -1,0 +1,1307 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { SequentialThinkingServer, ProcessThoughtRequest } from '../../lib.js';
+
+describe('SequentialThinkingServer', () => {
+  let server: SequentialThinkingServer;
+
+  beforeEach(() => {
+    process.env.DISABLE_THOUGHT_LOGGING = 'true';
+    server = new SequentialThinkingServer();
+  });
+
+  afterEach(() => {
+    if (server && typeof server.destroy === 'function') {
+      server.destroy();
+    }
+  });
+
+  describe('Basic Functionality', () => {
+    it('should process a valid thought successfully', async () => {
+      const input: ProcessThoughtRequest = {
+        thought: 'This is my first thought',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      };
+
+      const result = await server.processThought(input);
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toHaveLength(1);
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.thoughtNumber).toBe(1);
+      expect(data.totalThoughts).toBe(3);
+      expect(data.nextThoughtNeeded).toBe(true);
+      expect(data.thoughtHistoryLength).toBe(1);
+      expect(typeof data.sessionId).toBe('string');
+      expect(data.sessionId.length).toBeGreaterThan(0);
+      expect(typeof data.timestamp).toBe('number');
+      expect(data.timestamp).toBeGreaterThan(0);
+    });
+
+    it('should accept thought with optional fields', async () => {
+      const input: ProcessThoughtRequest = {
+        thought: 'Revising my earlier idea',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        isRevision: true,
+        revisesThought: 1,
+      };
+
+      const result = await server.processThought(input);
+      expect(result.isError).toBeUndefined();
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.thoughtNumber).toBe(2);
+      expect(data.thoughtHistoryLength).toBe(1);
+    });
+
+    it('should track multiple thoughts in history', async () => {
+      await server.processThought({
+        thought: 'First thought',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      });
+      await server.processThought({
+        thought: 'Second thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      });
+      const result = await server.processThought({
+        thought: 'Final thought',
+        thoughtNumber: 3,
+        totalThoughts: 3,
+        nextThoughtNeeded: false,
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.thoughtHistoryLength).toBe(3);
+      expect(data.nextThoughtNeeded).toBe(false);
+    });
+
+    it('should auto-adjust totalThoughts if thoughtNumber exceeds it', async () => {
+      const result = await server.processThought({
+        thought: 'Thought 5',
+        thoughtNumber: 5,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      });
+      const data = JSON.parse(result.content[0].text);
+      expect(data.totalThoughts).toBe(5);
+    });
+  });
+
+  describe('Input Validation', () => {
+    it('should reject empty thought', async () => {
+      const result = await server.processThought({
+        thought: '',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      } as ProcessThoughtRequest);
+
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+      expect(data.message).toContain('Thought is required');
+    });
+
+    it('should reject invalid thoughtNumber', async () => {
+      const result = await server.processThought({
+        thought: 'Valid thought',
+        thoughtNumber: 0,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      } as ProcessThoughtRequest);
+
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+      expect(data.message).toContain('thoughtNumber must be a positive integer');
+    });
+
+    it('should reject invalid totalThoughts', async () => {
+      const result = await server.processThought({
+        thought: 'Valid thought',
+        thoughtNumber: 1,
+        totalThoughts: -1,
+        nextThoughtNeeded: true,
+      } as ProcessThoughtRequest);
+
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+      expect(data.message).toContain('totalThoughts must be a positive integer');
+    });
+
+    it('should reject invalid nextThoughtNeeded', async () => {
+      const result = await server.processThought({
+        thought: 'Valid thought',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: 'true' as any,
+      } as ProcessThoughtRequest);
+
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+      expect(data.message).toContain('nextThoughtNeeded');
+    });
+
+    it('should handle malformed input gracefully', async () => {
+      const result = await server.processThought({
+        thought: null,
+        thoughtNumber: 'invalid',
+        totalThoughts: 'invalid',
+        nextThoughtNeeded: 'invalid',
+      } as any);
+
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBeDefined();
+      expect(data.timestamp).toBeDefined();
+    });
+  });
+
+  describe('Business Logic', () => {
+    it('should reject revision without revisesThought', async () => {
+      const result = await server.processThought({
+        thought: 'This is a revision',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        isRevision: true,
+      });
+
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('BUSINESS_LOGIC_ERROR');
+      expect(data.message).toContain('isRevision requires revisesThought');
+    });
+
+    it('should reject branch without branchId', async () => {
+      const result = await server.processThought({
+        thought: 'This is a branch',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        branchFromThought: 1,
+      });
+
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('BUSINESS_LOGIC_ERROR');
+      expect(data.message).toContain('branchFromThought requires branchId');
+    });
+
+    it('should accept valid revision', async () => {
+      const result = await server.processThought({
+        thought: 'This is a valid revision',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        isRevision: true,
+        revisesThought: 1,
+      });
+
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should accept valid branch', async () => {
+      const result = await server.processThought({
+        thought: 'This is a valid branch',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        branchFromThought: 1,
+        branchId: 'branch-1',
+      });
+
+      expect(result.isError).toBeUndefined();
+    });
+  });
+
+  describe('Security', () => {
+    it('should reject overly long thoughts', async () => {
+      const result = await server.processThought({
+        thought: 'a'.repeat(6000),
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      });
+
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+      expect(data.message).toContain('exceeds maximum length');
+    });
+
+    it('should reject blocked patterns before sanitization', async () => {
+      // javascript: is a blocked pattern and should be rejected on raw input
+      const result = await server.processThought({
+        thought: 'Visit javascript: void(0) for info',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      });
+
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('SECURITY_ERROR');
+    });
+
+    it('should sanitize and accept normal content', async () => {
+      const result = await server.processThought({
+        thought: 'Normal text with some test content',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      });
+
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should sanitize content that passes validation before storage', async () => {
+      const sessionId = 'sanitize-storage-test';
+      // onclick=handler is not in blocked patterns but is stripped by sanitizeContent
+      const result = await server.processThought({
+        thought: 'Click handler onclick=doSomething for the button',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+        sessionId,
+      });
+
+      expect(result.isError).toBeUndefined();
+      // Verify the stored thought was sanitized (onclick= removed)
+      const history = server.getFilteredHistory({ sessionId });
+      expect(history).toHaveLength(1);
+      expect(history[0].thought).not.toContain('onclick=');
+    });
+  });
+
+  describe('Session Management', () => {
+    it('should generate and track session IDs', async () => {
+      const result1 = await server.processThought({
+        thought: 'First thought',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      });
+      const result2 = await server.processThought({
+        thought: 'Second thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: false,
+      });
+
+      const parsed1 = JSON.parse(result1.content[0].text);
+      const parsed2 = JSON.parse(result2.content[0].text);
+
+      expect(typeof parsed1.sessionId).toBe('string');
+      expect(parsed1.sessionId.length).toBeGreaterThan(0);
+      expect(typeof parsed2.sessionId).toBe('string');
+      expect(parsed2.sessionId.length).toBeGreaterThan(0);
+      // Auto-generated session IDs differ between calls (no session persistence)
+      expect(parsed1.sessionId).not.toBe(parsed2.sessionId);
+    });
+
+    it('should accept provided session ID', async () => {
+      const sessionId = 'test-session-123';
+      const result = await server.processThought({
+        thought: 'Thought with session',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId,
+      });
+      const data = JSON.parse(result.content[0].text);
+      expect(data.sessionId).toBe(sessionId);
+    });
+
+    it('should reject invalid session ID', async () => {
+      const result = await server.processThought({
+        thought: 'Thought with invalid session',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: '',
+      });
+
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.message).toContain('Invalid session ID');
+    });
+  });
+
+  describe('Branching', () => {
+    it('should track multiple branches correctly', async () => {
+      await server.processThought({
+        thought: 'Main thought',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      });
+      await server.processThought({
+        thought: 'Branch A thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        branchFromThought: 1,
+        branchId: 'branch-a',
+      });
+      const result = await server.processThought({
+        thought: 'Branch B thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: false,
+        branchFromThought: 1,
+        branchId: 'branch-b',
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.branches).toContain('branch-a');
+      expect(data.branches).toContain('branch-b');
+      expect(data.branches.length).toBe(2);
+      expect(data.thoughtHistoryLength).toBe(3);
+    });
+
+    it('should allow multiple thoughts in same branch', async () => {
+      await server.processThought({
+        thought: 'Branch thought 1',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+        branchFromThought: 1,
+        branchId: 'branch-a',
+      });
+      const result = await server.processThought({
+        thought: 'Branch thought 2',
+        thoughtNumber: 2,
+        totalThoughts: 2,
+        nextThoughtNeeded: false,
+        branchFromThought: 1,
+        branchId: 'branch-a',
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.branches).toContain('branch-a');
+      expect(data.branches.length).toBe(1);
+    });
+  });
+
+  describe('Response Format', () => {
+    it('should return correct response structure on success', async () => {
+      const result = await server.processThought({
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+
+      expect(result).toHaveProperty('content');
+      expect(Array.isArray(result.content)).toBe(true);
+      expect(result.content.length).toBe(1);
+      expect(result.content[0]).toHaveProperty('type', 'text');
+      expect(result.content[0]).toHaveProperty('text');
+    });
+
+    it('should return valid JSON in response', async () => {
+      const result = await server.processThought({
+        thought: 'Test thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+
+      expect(() => JSON.parse(result.content[0].text)).not.toThrow();
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle thought strings within limits', async () => {
+      const result = await server.processThought({
+        thought: 'a'.repeat(4000),
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should handle thoughtNumber = 1, totalThoughts = 1', async () => {
+      const result = await server.processThought({
+        thought: 'Only thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBeUndefined();
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.thoughtNumber).toBe(1);
+      expect(data.totalThoughts).toBe(1);
+      expect(data.nextThoughtNeeded).toBe(false);
+    });
+
+    it('should handle nextThoughtNeeded = false', async () => {
+      const result = await server.processThought({
+        thought: 'Final thought',
+        thoughtNumber: 3,
+        totalThoughts: 3,
+        nextThoughtNeeded: false,
+      });
+      const data = JSON.parse(result.content[0].text);
+      expect(data.nextThoughtNeeded).toBe(false);
+    });
+  });
+
+  describe('Logging', () => {
+    let serverWithLogging: SequentialThinkingServer;
+
+    beforeEach(() => {
+      delete process.env.DISABLE_THOUGHT_LOGGING;
+      serverWithLogging = new SequentialThinkingServer();
+    });
+
+    afterEach(() => {
+      process.env.DISABLE_THOUGHT_LOGGING = 'true';
+      if (serverWithLogging && typeof serverWithLogging.destroy === 'function') {
+        serverWithLogging.destroy();
+      }
+    });
+
+    it('should format and log regular thoughts', async () => {
+      const result = await serverWithLogging.processThought({
+        thought: 'Test thought with logging',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should format and log revision thoughts', async () => {
+      const result = await serverWithLogging.processThought({
+        thought: 'Revised thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        isRevision: true,
+        revisesThought: 1,
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should format and log branch thoughts', async () => {
+      const result = await serverWithLogging.processThought({
+        thought: 'Branch thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: false,
+        branchFromThought: 1,
+        branchId: 'branch-a',
+      });
+      expect(result.isError).toBeUndefined();
+    });
+  });
+
+  describe('Health & Metrics', () => {
+    it('should return health status with all checks', async () => {
+      await server.processThought({
+        thought: 'Health check test thought',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: false,
+      });
+
+      const health = await server.getHealthStatus();
+
+      expect(health).toHaveProperty('status');
+      expect(health).toHaveProperty('checks');
+      expect(health).toHaveProperty('summary');
+      expect(health).toHaveProperty('uptime');
+      expect(health).toHaveProperty('timestamp');
+      expect(['healthy', 'unhealthy', 'degraded']).toContain(health.status);
+
+      const checks = health.checks as Record<string, unknown>;
+      expect(checks).toHaveProperty('memory');
+      expect(checks).toHaveProperty('responseTime');
+      expect(checks).toHaveProperty('errorRate');
+      expect(checks).toHaveProperty('storage');
+      expect(checks).toHaveProperty('security');
+    });
+
+    it('should return metrics structure', () => {
+      const metrics = server.getMetrics() as Record<string, any>;
+
+      expect(metrics).toHaveProperty('requests');
+      expect(metrics).toHaveProperty('thoughts');
+      expect(metrics).toHaveProperty('system');
+      expect(metrics.requests).toHaveProperty('totalRequests');
+      expect(metrics.requests).toHaveProperty('successfulRequests');
+      expect(metrics.requests).toHaveProperty('failedRequests');
+    });
+
+    it('should track metrics across operations', async () => {
+      await server.processThought({
+        thought: 'Valid thought 1',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      });
+      await server.processThought({
+        thought: 'Valid thought 2',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      });
+      // Send one invalid request
+      await server.processThought({
+        thought: '',
+        thoughtNumber: 3,
+        totalThoughts: 3,
+        nextThoughtNeeded: false,
+      } as any);
+
+      const metrics = server.getMetrics() as Record<string, any>;
+
+      // Validation errors happen before processWithServices, so only 2 successful recorded
+      expect(metrics.requests.totalRequests).toBe(2);
+      expect(metrics.requests.successfulRequests).toBe(2);
+      expect(metrics.thoughts.totalThoughts).toBe(2);
+    });
+  });
+
+  describe('End-to-End Workflows', () => {
+    it('should handle complete thinking session', async () => {
+      const sessionId = 'integration-test-session';
+
+      const thought1 = await server.processThought({
+        thought: 'I need to solve a complex problem step by step',
+        thoughtNumber: 1,
+        totalThoughts: 4,
+        nextThoughtNeeded: true,
+        sessionId,
+      });
+      expect(thought1.isError).toBeUndefined();
+      const parsed1 = JSON.parse(thought1.content[0].text);
+      expect(parsed1.thoughtNumber).toBe(1);
+      expect(parsed1.thoughtHistoryLength).toBe(1);
+
+      const thought2 = await server.processThought({
+        thought: 'First, I should understand the problem requirements',
+        thoughtNumber: 2,
+        totalThoughts: 4,
+        nextThoughtNeeded: true,
+        sessionId,
+      });
+      expect(thought2.isError).toBeUndefined();
+
+      const thought3 = await server.processThought({
+        thought: 'Alternative approach: Consider using a different algorithm',
+        thoughtNumber: 3,
+        totalThoughts: 4,
+        nextThoughtNeeded: true,
+        branchFromThought: 2,
+        branchId: 'alternative-approach',
+        sessionId,
+      });
+      const parsed3 = JSON.parse(thought3.content[0].text);
+      expect(parsed3.branches).toContain('alternative-approach');
+
+      const thought4 = await server.processThought({
+        thought: 'Revising approach 1: The original method is actually better',
+        thoughtNumber: 4,
+        totalThoughts: 4,
+        nextThoughtNeeded: false,
+        isRevision: true,
+        revisesThought: 2,
+        sessionId,
+      });
+      const parsed4 = JSON.parse(thought4.content[0].text);
+      expect(parsed4.nextThoughtNeeded).toBe(false);
+
+      const history = server.getThoughtHistory();
+      expect(history).toHaveLength(4);
+
+      const branches = server.getBranches();
+      expect(branches).toContain('alternative-approach');
+    });
+
+    it('should handle and recover from invalid input', async () => {
+      const invalidResult = await server.processThought({
+        thought: '',
+        thoughtNumber: -1,
+        totalThoughts: -1,
+        nextThoughtNeeded: 'invalid' as any,
+      } as any);
+      expect(invalidResult.isError).toBe(true);
+
+      const validResult = await server.processThought({
+        thought: 'Now this is valid',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+        sessionId: 'error-recovery-test',
+      });
+      expect(validResult.isError).toBeUndefined();
+
+      const parsed = JSON.parse(validResult.content[0].text);
+      expect(parsed.thoughtNumber).toBe(1);
+      expect(parsed.sessionId).toBe('error-recovery-test');
+    });
+
+    it('should handle large number of thoughts without memory issues', async () => {
+      const sessionId = 'memory-test';
+      const initialMemory = process.memoryUsage().heapUsed;
+
+      for (let i = 0; i < 200; i++) {
+        await server.processThought({
+          thought: `Memory test thought ${i} with some content to make it realistic`,
+          thoughtNumber: i + 1,
+          totalThoughts: 250,
+          nextThoughtNeeded: i < 199,
+          sessionId,
+        });
+      }
+
+      const finalMemory = process.memoryUsage().heapUsed;
+      const memoryIncrease = finalMemory - initialMemory;
+
+      expect(memoryIncrease).toBeLessThan(50 * 1024 * 1024);
+
+      const history = server.getThoughtHistory();
+      expect(history.length).toBeLessThanOrEqual(1000);
+    });
+  });
+
+  describe('Configuration', () => {
+    it('should respect environment configuration', async () => {
+      const original = process.env.MAX_THOUGHT_LENGTH;
+      process.env.MAX_THOUGHT_LENGTH = '500';
+
+      try {
+        const configuredServer = new SequentialThinkingServer();
+
+        const result = await configuredServer.processThought({
+          thought: 'a'.repeat(501),
+          thoughtNumber: 1,
+          totalThoughts: 2,
+          nextThoughtNeeded: false,
+        });
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('exceeds maximum length');
+
+        configuredServer.destroy();
+      } finally {
+        if (original === undefined) {
+          delete process.env.MAX_THOUGHT_LENGTH;
+        } else {
+          process.env.MAX_THOUGHT_LENGTH = original;
+        }
+      }
+    });
+  });
+
+  describe('Lifecycle', () => {
+    it('should clean up resources properly on shutdown', async () => {
+      await server.processThought({
+        thought: 'Shutdown test',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+
+      expect(() => {
+        server.destroy();
+      }).not.toThrow();
+    });
+
+    it('should provide legacy compatibility methods', () => {
+      const history = server.getThoughtHistory();
+      expect(Array.isArray(history)).toBe(true);
+
+      const branches = server.getBranches();
+      expect(Array.isArray(branches)).toBe(true);
+    });
+  });
+
+  describe('Boundary Tests', () => {
+    it('should accept thought at exactly 5000 chars', async () => {
+      const result = await server.processThought({
+        thought: 'a'.repeat(5000),
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should reject thought at 5001 chars', async () => {
+      const result = await server.processThought({
+        thought: 'a'.repeat(5001),
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('should accept session ID at 100 chars', async () => {
+      const result = await server.processThought({
+        thought: 'Boundary test',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+        sessionId: 'a'.repeat(100),
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should reject session ID at 101 chars', async () => {
+      const result = await server.processThought({
+        thought: 'Boundary test',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+        sessionId: 'a'.repeat(101),
+      });
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.message).toContain('Invalid session ID');
+    });
+  });
+
+  describe('Health Status Error Fallback', () => {
+    it('should return unhealthy fallback after destroy', async () => {
+      server.destroy();
+      const health = await server.getHealthStatus();
+      expect(health.status).toBe('unhealthy');
+      expect(health.checks.memory.status).toBe('unhealthy');
+      expect(health.checks.responseTime.status).toBe('unhealthy');
+      expect(health.checks.errorRate.status).toBe('unhealthy');
+      expect(health.checks.storage.status).toBe('unhealthy');
+      expect(health.checks.security.status).toBe('unhealthy');
+    });
+  });
+
+  describe('Legacy Methods After Destroy', () => {
+    it('should return empty array from getThoughtHistory after destroy and log a warning', () => {
+      server.destroy();
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const result = server.getThoughtHistory();
+      expect(result).toEqual([]);
+      expect(errorSpy).toHaveBeenCalled();
+      const loggedMessage = errorSpy.mock.calls.find(
+        call => typeof call[0] === 'string' && call[0].includes('Warning'),
+      );
+      expect(loggedMessage).toBeDefined();
+    });
+
+    it('should return empty array from getBranches after destroy and log a warning', () => {
+      server.destroy();
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const result = server.getBranches();
+      expect(result).toEqual([]);
+      expect(errorSpy).toHaveBeenCalled();
+      const loggedMessage = errorSpy.mock.calls.find(
+        call => typeof call[0] === 'string' && call[0].includes('Warning'),
+      );
+      expect(loggedMessage).toBeDefined();
+    });
+  });
+
+  describe('processThought after destroy', () => {
+    it('should return well-formed error response after destroy', async () => {
+      server.destroy();
+      const result = await server.processThought({
+        thought: 'After destroy',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content).toHaveLength(1);
+      // Should be parseable JSON
+      expect(() => JSON.parse(result.content[0].text)).not.toThrow();
+    });
+  });
+
+  describe('Enriched Response Context', () => {
+    it('should include revisionContext when revising an existing thought', async () => {
+      const sessionId = 'revision-context-test';
+      await server.processThought({
+        thought: 'Original idea about sorting',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId,
+      });
+
+      const result = await server.processThought({
+        thought: 'Actually, merge sort is better',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        isRevision: true,
+        revisesThought: 1,
+        sessionId,
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.revisionContext).toBeDefined();
+      expect(data.revisionContext.originalThoughtNumber).toBe(1);
+      expect(data.revisionContext.originalThought).toContain('sorting');
+    });
+
+    it('should not include revisionContext for non-revision thoughts', async () => {
+      const result = await server.processThought({
+        thought: 'Regular thought',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.revisionContext).toBeUndefined();
+    });
+
+    it('should include branchContext when branch has prior thoughts', async () => {
+      const sessionId = 'branch-context-test';
+      await server.processThought({
+        thought: 'First branch thought',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        branchFromThought: 1,
+        branchId: 'ctx-branch',
+        sessionId,
+      });
+
+      const result = await server.processThought({
+        thought: 'Second branch thought',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        branchFromThought: 1,
+        branchId: 'ctx-branch',
+        sessionId,
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.branchContext).toBeDefined();
+      expect(data.branchContext.branchId).toBe('ctx-branch');
+      expect(data.branchContext.existingThoughts.length).toBeGreaterThanOrEqual(1);
+      expect(data.branchContext.existingThoughts[0].thought).toContain('First branch');
+    });
+
+    it('should not include branchContext for first thought in a branch', async () => {
+      const result = await server.processThought({
+        thought: 'First and only branch thought',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+        branchFromThought: 1,
+        branchId: 'solo-branch',
+      });
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.branchContext).toBeUndefined();
+    });
+  });
+
+  describe('getFilteredHistory', () => {
+    it('should return thoughts for a specific session', async () => {
+      const sessionId = 'filter-test';
+      await server.processThought({
+        thought: 'Thought A',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+        sessionId,
+      });
+      await server.processThought({
+        thought: 'Thought B',
+        thoughtNumber: 2,
+        totalThoughts: 2,
+        nextThoughtNeeded: false,
+        sessionId,
+      });
+      // Different session
+      await server.processThought({
+        thought: 'Other session',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+        sessionId: 'other-session',
+      });
+
+      const history = server.getFilteredHistory({ sessionId });
+      expect(history).toHaveLength(2);
+      expect(history.every((t) => t.sessionId === sessionId)).toBe(true);
+    });
+
+    it('should filter by branchId', async () => {
+      const sessionId = 'branch-filter-test';
+      await server.processThought({
+        thought: 'Branch thought',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+        branchFromThought: 1,
+        branchId: 'filter-branch',
+        sessionId,
+      });
+      await server.processThought({
+        thought: 'Main thought',
+        thoughtNumber: 2,
+        totalThoughts: 2,
+        nextThoughtNeeded: false,
+        sessionId,
+      });
+
+      const branchHistory = server.getFilteredHistory({ sessionId, branchId: 'filter-branch' });
+      expect(branchHistory).toHaveLength(1);
+      expect(branchHistory[0].thought).toContain('Branch thought');
+    });
+
+    it('should respect limit parameter', async () => {
+      const sessionId = 'limit-test';
+      for (let i = 1; i <= 5; i++) {
+        await server.processThought({
+          thought: `Thought ${i}`,
+          thoughtNumber: i,
+          totalThoughts: 5,
+          nextThoughtNeeded: i < 5,
+          sessionId,
+        });
+      }
+
+      const limited = server.getFilteredHistory({ sessionId, limit: 2 });
+      expect(limited).toHaveLength(2);
+      // Should return the most recent
+      expect(limited[0].thoughtNumber).toBe(4);
+      expect(limited[1].thoughtNumber).toBe(5);
+    });
+
+    it('should return empty array for unknown session', () => {
+      const history = server.getFilteredHistory({ sessionId: 'nonexistent' });
+      expect(history).toEqual([]);
+    });
+  });
+
+  describe('Whitespace-only thought rejection', () => {
+    it('should reject whitespace-only thought', async () => {
+      const result = await server.processThought({
+        thought: '   \t\n  ',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  describe('Boundary and Limit Tests', () => {
+    it('should handle thought at max length boundary', async () => {
+      const maxLengthThought = 'a'.repeat(5000);
+      const result = await server.processThought({
+        thought: maxLengthThought,
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should reject thought exceeding max length', async () => {
+      const overMaxLengthThought = 'a'.repeat(5001);
+      const result = await server.processThought({
+        thought: overMaxLengthThought,
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('should handle sessionId at max length', async () => {
+      const maxSessionId = 'a'.repeat(100);
+      const result = await server.processThought({
+        thought: 'Test',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+        sessionId: maxSessionId,
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should reject sessionId exceeding max length', async () => {
+      const overMaxSessionId = 'a'.repeat(101);
+      const result = await server.processThought({
+        thought: 'Test',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+        sessionId: overMaxSessionId,
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it('should handle thoughtNumber at minimum valid value', async () => {
+      const result = await server.processThought({
+        thought: 'Test',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should reject thoughtNumber below minimum', async () => {
+      const result = await server.processThought({
+        thought: 'Test',
+        thoughtNumber: 0,
+        totalThoughts: 1,
+        nextThoughtNeeded: true,
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it('should handle totalThoughts matching thoughtNumber', async () => {
+      const result = await server.processThought({
+        thought: 'Test',
+        thoughtNumber: 5,
+        totalThoughts: 5,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBeUndefined();
+    });
+
+    it('should auto-adjust totalThoughts when less than thoughtNumber', async () => {
+      const result = await server.processThought({
+        thought: 'Test',
+        thoughtNumber: 10,
+        totalThoughts: 5,
+        nextThoughtNeeded: true,
+      });
+      // System auto-adjusts totalThoughts to match thoughtNumber
+      expect(result.isError).toBeUndefined();
+    });
+  });
+
+  describe('Non-integer validation', () => {
+    it('should reject non-integer thoughtNumber', async () => {
+      const result = await server.processThought({
+        thought: 'Valid thought',
+        thoughtNumber: 1.5,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+      });
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+      expect(data.message).toContain('positive integer');
+    });
+
+    it('should reject non-integer totalThoughts', async () => {
+      const result = await server.processThought({
+        thought: 'Valid thought',
+        thoughtNumber: 1,
+        totalThoughts: 2.5,
+        nextThoughtNeeded: true,
+      });
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('VALIDATION_ERROR');
+      expect(data.message).toContain('positive integer');
+    });
+  });
+
+  describe('Regex-Based Blocked Pattern Matching', () => {
+    it('should reject blocked input before sanitization', async () => {
+      // eval( is a blocked pattern and should be rejected on raw input
+      const result = await server.processThought({
+        thought: 'use eval(code) here',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('SECURITY_ERROR');
+    });
+
+    it('should block document.cookie via regex', async () => {
+      const result = await server.processThought({
+        thought: 'steal document.cookie from user',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('SECURITY_ERROR');
+    });
+
+    it('should block file.exe via regex', async () => {
+      const result = await server.processThought({
+        thought: 'download malware.exe from site',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+      });
+      expect(result.isError).toBe(true);
+      const data = JSON.parse(result.content[0].text);
+      expect(data.error).toBe('SECURITY_ERROR');
+    });
+  });
+
+  describe('Session Isolation', () => {
+    it('should keep sessions completely separate', async () => {
+      const sessionA = 'isolation-session-a';
+      const sessionB = 'isolation-session-b';
+
+      await server.processThought({
+        thought: 'Thought from session A - unique identifier A123',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+        sessionId: sessionA,
+      });
+
+      await server.processThought({
+        thought: 'Thought from session B - unique identifier B456',
+        thoughtNumber: 1,
+        totalThoughts: 2,
+        nextThoughtNeeded: true,
+        sessionId: sessionB,
+      });
+
+      const historyA = server.getFilteredHistory({ sessionId: sessionA });
+      const historyB = server.getFilteredHistory({ sessionId: sessionB });
+
+      expect(historyA).toHaveLength(1);
+      expect(historyB).toHaveLength(1);
+      expect(historyA[0].thought).toContain('A123');
+      expect(historyB[0].thought).toContain('B456');
+      expect(historyA[0].thought).not.toContain('B456');
+      expect(historyB[0].thought).not.toContain('A123');
+    });
+
+    it('should maintain separate branch state per session', async () => {
+      const sessionA = 'branch-isolation-a';
+      const sessionB = 'branch-isolation-b';
+
+      await server.processThought({
+        thought: 'Root thought A',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: sessionA,
+      });
+
+      await server.processThought({
+        thought: 'Root thought B',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: sessionB,
+      });
+
+      await server.processThought({
+        thought: 'Branch thought from A',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: sessionA,
+        branchFromThought: 1,
+        branchId: 'branch-a',
+      });
+
+      const historyA = server.getFilteredHistory({ sessionId: sessionA });
+      const historyB = server.getFilteredHistory({ sessionId: sessionB });
+
+      expect(historyA.filter(t => t.branchId)).toHaveLength(1);
+      expect(historyB.filter(t => t.branchId)).toHaveLength(0);
+    });
+
+    it('should handle rapid concurrent sessions independently', async () => {
+      const sessions = ['concurrent-1', 'concurrent-2', 'concurrent-3'];
+
+      const promises = sessions.map(async (sessionId, idx) => {
+        for (let i = 1; i <= 5; i++) {
+          await server.processThought({
+            thought: `Session ${idx} thought ${i}`,
+            thoughtNumber: i,
+            totalThoughts: 5,
+            nextThoughtNeeded: i < 5,
+            sessionId,
+          });
+        }
+      });
+
+      await Promise.all(promises);
+
+      for (const sessionId of sessions) {
+        const history = server.getFilteredHistory({ sessionId });
+        expect(history).toHaveLength(5);
+        history.forEach((thought) => {
+          expect(thought.sessionId).toBe(sessionId);
+        });
+      }
+    });
+
+    it('should isolate MCTS tree state between sessions', async () => {
+      const sessionA = 'mcts-isolation-a';
+      const sessionB = 'mcts-isolation-b';
+
+      await server.processThought({
+        thought: 'Initial thought A',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: sessionA,
+      });
+
+      await server.evaluateThought(sessionA, 'node_1_1', 0.9);
+
+      await server.processThought({
+        thought: 'Another thought A',
+        thoughtNumber: 2,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: sessionA,
+      });
+
+      await server.processThought({
+        thought: 'Initial thought B',
+        thoughtNumber: 1,
+        totalThoughts: 3,
+        nextThoughtNeeded: true,
+        sessionId: sessionB,
+      });
+
+      const summaryA = await server.getThinkingSummary(sessionA);
+      const summaryB = await server.getThinkingSummary(sessionB);
+
+      const dataA = JSON.parse(summaryA.content[0].text);
+      const dataB = JSON.parse(summaryB.content[0].text);
+
+      expect(dataA.treeStats.totalNodes).toBeGreaterThan(dataB.treeStats.totalNodes);
+    });
+  });
+});
