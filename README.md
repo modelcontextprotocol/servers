@@ -985,6 +985,8 @@ search, and comprehensive file analysis.
 - **[librenms-mcp](https://github.com/mhajder/librenms-mcp)** - MCP server for [LibreNMS](https://www.librenms.org/) management
 - **[libvirt-mcp](https://github.com/MatiasVara/libvirt-mcp)** - Allows LLM to interact with libvirt thus enabling to create, destroy or list the Virtual Machines in a system.
 - **[Lightdash](https://github.com/syucream/lightdash-mcp-server)** - Interact with [Lightdash](https://www.lightdash.com/), a BI tool.
+- - **[lintbase-mcp](https://github.com/lintbase/lintbase/tree/main/packages/lintbase-mcp)** - MCP server that gives AI coding agents real-time Firestore schema context, preventing hallucinated field names and database drift.
+
 - **[LINE](https://github.com/amornpan/py-mcp-line)** (by amornpan) - Implementation for LINE Bot integration that enables Language Models to read and analyze LINE conversations through a standardized interface. Features asynchronous operation, comprehensive logging, webhook event handling, and support for various message types.
 - **[Linear](https://github.com/tacticlaunch/mcp-linear)** - Interact with Linear project management system.
 - **[Linear](https://github.com/jerhadf/linear-mcp-server)** - Allows LLM to interact with Linear's API for project management, including searching, creating, and updating issues.
