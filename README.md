@@ -707,6 +707,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[cognee-mcp](https://github.com/topoteretes/cognee/tree/main/cognee-mcp)** - GraphRAG memory server with customizable ingestion, data processing and search
 - **[coin_api_mcp](https://github.com/longmans/coin_api_mcp)** - Provides access to [coinmarketcap](https://coinmarketcap.com/) cryptocurrency data.
 - **[CoinMarketCap](https://github.com/shinzo-labs/coinmarketcap-mcp)** - Implements the complete [CoinMarketCap](https://coinmarketcap.com/) API for accessing cryptocurrency market data, exchange information, and other blockchain-related metrics.
+- **[Color Palette MCP](https://color-palette-mcp.yagami8095.workers.dev/mcp)** - Generate, analyze, and convert color palettes with support for HEX, RGB, HSL formats and color harmony rules for designers and developers.
 - **[commands](https://github.com/g0t4/mcp-server-commands)** - Run commands and scripts. Just like in a terminal.
 - **[Companies House MCP](https://github.com/stefanoamorelli/companies-house-mcp)** (by Stefano Amorelli) - MCP server to connect with the UK Companies House API.
 - **[computer-control-mcp](https://github.com/AB498/computer-control-mcp)** - MCP server that provides computer control capabilities, like mouse, keyboard, OCR, etc. using PyAutoGUI, RapidOCR, ONNXRuntime Without External Dependencies.
@@ -944,6 +945,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[JSON](https://github.com/GongRzhe/JSON-MCP-Server)** - JSON handling and processing server with advanced query capabilities using JSONPath syntax and support for array, string, numeric, and date operations.
 - **[JSON](https://github.com/kehvinbehvin/json-mcp-filter)** - JSON schema generation and filtering server with TypeScript type creation optimised for retrieving relevant context JSON data using quicktype-core and support for shape-based data extraction, nested object filtering, and array processing operations.
 - **[JSON to Excel by WTSolutions](https://github.com/he-yang/json-to-excel-mcp)** - Converting JSON into CSV format string from (1) JSON data, (2) URLs pointing to publiclly available .json files.
+- **[JSON Toolkit MCP](https://json-toolkit-mcp.yagami8095.workers.dev/mcp)** - Validate, format, diff, query (JSONPath), and transform JSON data with tools for minification, schema validation, and structural comparison.
 - **[JSON2Video MCP](https://github.com/omergocmen/json2video-mcp-server)** - A Model Context Protocol (MCP) server implementation for programmatically generating videos using the json2video API. This server exposes powerful video generation and status-checking tools for use with LLMs, agents, or any MCP-compatible client.
 - **[jupiter-mcp](https://github.com/kukapay/jupiter-mcp)** - An MCP server for executing token swaps on the Solana blockchain using Jupiter's new Ultra API.
 - **[Jupyter MCP Server](https://github.com/datalayer/jupyter-mcp-server)** – Real-time interaction with Jupyter Notebooks, allowing AI to edit, document and execute code for data analysis, visualization etc. Compatible with any Jupyter deployment (local, JupyterHub, ...).
@@ -1226,6 +1228,7 @@ search, and comprehensive file analysis.
 - **[Prometheus](https://github.com/pab1it0/prometheus-mcp-server)** - Query and analyze Prometheus - open-source monitoring system.
 - **[Prometheus (Golang)](https://github.com/tjhop/prometheus-mcp-server/)** - A Prometheus MCP server with full API support for comprehensive management and deep interaction with Prometheus beyond basic query support. Written in go, it is a single binary install that is capable of STDIO, SSE, and HTTP transports for complex deployments. 
 - **[Prometheus (TypeScript)](https://github.com/yanmxa/prometheus-mcp-server)** - Enable AI assistants to query Prometheus using natural language with TypeScript implementation.
+- **[Prompt Enhancer MCP](https://prompt-enhancer-mcp.yagami8095.workers.dev/mcp)** - Improve and optimize LLM prompts with rewriting, scoring, and structural analysis tools for better AI interactions.
 - **[PubChem](https://github.com/sssjiang/pubchem_mcp_server)** - extract drug information from pubchem API.
 - **[PubMed](https://github.com/JackKuo666/PubMed-MCP-Server)** - Enable AI assistants to search, access, and analyze PubMed articles through a simple MCP interface.
 - **[Pulumi](https://github.com/dogukanakkaya/pulumi-mcp-server)** - MCP Server to Interact with Pulumi API, creates and lists Stacks
@@ -1255,6 +1258,7 @@ search, and comprehensive file analysis.
 - **[Redis](https://github.com/prajwalnayak7/mcp-server-redis)** MCP server to interact with Redis Server, AWS Memory DB, etc for caching or other use-cases where in-memory and key-value based storage is appropriate
 - **[RedNote MCP](https://github.com/ifuryst/rednote-mcp)** - MCP server for accessing RedNote(XiaoHongShu, xhs) content
 - **[Reed Jobs](https://github.com/kld3v/reed_jobs_mcp)** - Search and retrieve job listings from Reed.co.uk.
+- **[Regex Engine MCP](https://regex-engine-mcp.yagami8095.workers.dev/mcp)** - Test, debug, and explain regular expressions with match highlighting, capture group extraction, and pattern generation from examples.
 - **[Rememberizer AI](https://github.com/skydeckai/mcp-server-rememberizer)** - An MCP server designed for interacting with the Rememberizer data source, facilitating enhanced knowledge retrieval.
 - **[Replicate](https://github.com/deepfates/mcp-replicate)** - Search, run and manage machine learning models on Replicate through a simple tool-based interface. Browse models, create predictions, track their status, and handle generated images.
 - **[Resend](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/resend)** - Send email using Resend services
@@ -1366,6 +1370,7 @@ search, and comprehensive file analysis.
 - **[TikTok Ads](https://github.com/AdsMCP/tiktok-ads-mcp-server)** - An MCP server for interacting with TikTok advertising platforms for campaign management, performance analytics, audience targeting, creative management, and custom reporting.
 - **[time-mcp-nuget](https://github.com/domdomegg/time-mcp-nuget)** - Get current UTC time in RFC 3339 format (.NET/NuGet implementation).
 - **[time-mcp-pypi](https://github.com/domdomegg/time-mcp-pypi)** - Get current UTC time in RFC 3339 format (Python/PyPI implementation).
+- **[Timestamp Converter MCP](https://timestamp-converter-mcp.yagami8095.workers.dev/mcp)** - Convert between Unix timestamps, ISO 8601, and human-readable date formats across timezones with duration calculation and date arithmetic tools.
 - **[tip.md](https://github.com/tipdotmd#-mcp-server-for-ai-assistants)** - An MCP server that enables AI assistants to interact with tip.md's crypto tipping functionality, allowing agents or supporters to tip registered developers directly from AI chat interfaces.
 - **[TMD Earthquake](https://github.com/amornpan/tmd-earthquake-server-1.0)** - 🌍 Real-time earthquake monitoring from Thai Meteorological Department. Features magnitude filtering, location-based search (Thai/English), today's events tracking, dangerous earthquake alerts, and comprehensive statistics. Covers regional and global seismic activities.
 - **[TMDB](https://github.com/Laksh-star/mcp-server-tmdb)** - This MCP server integrates with The Movie Database (TMDB) API to provide movie information, search capabilities, and recommendations.
