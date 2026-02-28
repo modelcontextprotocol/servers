@@ -75,131 +75,287 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "create_or_update_file",
         description: "Create or update a single file in a GitHub repository",
         inputSchema: zodToJsonSchema(files.CreateOrUpdateFileSchema),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "search_repositories",
         description: "Search for GitHub repositories",
         inputSchema: zodToJsonSchema(repository.SearchRepositoriesSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "create_repository",
         description: "Create a new GitHub repository in your account",
         inputSchema: zodToJsonSchema(repository.CreateRepositoryOptionsSchema),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
       {
         name: "get_file_contents",
         description: "Get the contents of a file or directory from a GitHub repository",
         inputSchema: zodToJsonSchema(files.GetFileContentsSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "push_files",
         description: "Push multiple files to a GitHub repository in a single commit",
         inputSchema: zodToJsonSchema(files.PushFilesSchema),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
       {
         name: "create_issue",
         description: "Create a new issue in a GitHub repository",
         inputSchema: zodToJsonSchema(issues.CreateIssueSchema),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
       {
         name: "create_pull_request",
         description: "Create a new pull request in a GitHub repository",
         inputSchema: zodToJsonSchema(pulls.CreatePullRequestSchema),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
       {
         name: "fork_repository",
         description: "Fork a GitHub repository to your account or specified organization",
         inputSchema: zodToJsonSchema(repository.ForkRepositorySchema),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "create_branch",
         description: "Create a new branch in a GitHub repository",
         inputSchema: zodToJsonSchema(branches.CreateBranchSchema),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "list_commits",
         description: "Get list of commits of a branch in a GitHub repository",
-        inputSchema: zodToJsonSchema(commits.ListCommitsSchema)
+        inputSchema: zodToJsonSchema(commits.ListCommitsSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "list_issues",
         description: "List issues in a GitHub repository with filtering options",
-        inputSchema: zodToJsonSchema(issues.ListIssuesOptionsSchema)
+        inputSchema: zodToJsonSchema(issues.ListIssuesOptionsSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "update_issue",
         description: "Update an existing issue in a GitHub repository",
-        inputSchema: zodToJsonSchema(issues.UpdateIssueOptionsSchema)
+        inputSchema: zodToJsonSchema(issues.UpdateIssueOptionsSchema),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "add_issue_comment",
         description: "Add a comment to an existing issue",
-        inputSchema: zodToJsonSchema(issues.IssueCommentSchema)
+        inputSchema: zodToJsonSchema(issues.IssueCommentSchema),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
       {
         name: "search_code",
         description: "Search for code across GitHub repositories",
         inputSchema: zodToJsonSchema(search.SearchCodeSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "search_issues",
         description: "Search for issues and pull requests across GitHub repositories",
         inputSchema: zodToJsonSchema(search.SearchIssuesSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "search_users",
         description: "Search for users on GitHub",
         inputSchema: zodToJsonSchema(search.SearchUsersSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "get_issue",
         description: "Get details of a specific issue in a GitHub repository.",
-        inputSchema: zodToJsonSchema(issues.GetIssueSchema)
+        inputSchema: zodToJsonSchema(issues.GetIssueSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "get_pull_request",
         description: "Get details of a specific pull request",
-        inputSchema: zodToJsonSchema(pulls.GetPullRequestSchema)
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "list_pull_requests",
         description: "List and filter repository pull requests",
-        inputSchema: zodToJsonSchema(pulls.ListPullRequestsSchema)
+        inputSchema: zodToJsonSchema(pulls.ListPullRequestsSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "create_pull_request_review",
         description: "Create a review on a pull request",
-        inputSchema: zodToJsonSchema(pulls.CreatePullRequestReviewSchema)
+        inputSchema: zodToJsonSchema(pulls.CreatePullRequestReviewSchema),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
       {
         name: "merge_pull_request",
         description: "Merge a pull request",
-        inputSchema: zodToJsonSchema(pulls.MergePullRequestSchema)
+        inputSchema: zodToJsonSchema(pulls.MergePullRequestSchema),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
       {
         name: "get_pull_request_files",
         description: "Get the list of files changed in a pull request",
-        inputSchema: zodToJsonSchema(pulls.GetPullRequestFilesSchema)
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestFilesSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "get_pull_request_status",
         description: "Get the combined status of all status checks for a pull request",
-        inputSchema: zodToJsonSchema(pulls.GetPullRequestStatusSchema)
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestStatusSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "update_pull_request_branch",
         description: "Update a pull request branch with the latest changes from the base branch",
-        inputSchema: zodToJsonSchema(pulls.UpdatePullRequestBranchSchema)
+        inputSchema: zodToJsonSchema(pulls.UpdatePullRequestBranchSchema),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "get_pull_request_comments",
         description: "Get the review comments on a pull request",
-        inputSchema: zodToJsonSchema(pulls.GetPullRequestCommentsSchema)
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestCommentsSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       },
       {
         name: "get_pull_request_reviews",
         description: "Get the reviews on a pull request",
-        inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema)
+        inputSchema: zodToJsonSchema(pulls.GetPullRequestReviewsSchema),
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
       }
     ],
   };
