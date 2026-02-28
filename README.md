@@ -1169,6 +1169,10 @@ search, and comprehensive file analysis.
 - **[OpenAPI Schema](https://github.com/hannesj/mcp-openapi-schema)** - Allow LLMs to explore large [OpenAPI](https://www.openapis.org/) schemas without bloating the context.
 - **[OpenAPI Schema Explorer](https://github.com/kadykov/mcp-openapi-schema-explorer)** - Token-efficient access to local or remote OpenAPI/Swagger specs via MCP Resources.
 - **[OpenCTI](https://github.com/Spathodea-Network/opencti-mcp)** - Interact with OpenCTI platform to retrieve threat intelligence data including reports, indicators, malware and threat actors.
+- **[OpenClaw AgentForge Compare](https://agentforge-compare-mcp.yagami8095.workers.dev)** - AI coding tool comparison engine. Side-by-side analysis of Claude Code, Cursor, Devin, OpenHands, Windsurf, GitHub Copilot, Aider, and Cline with real-time data.
+- **[OpenClaw Intel](https://openclaw-intel-mcp.yagami8095.workers.dev)** - AI agent market intelligence. Real-time competitive analysis, GitHub stars tracking, and growth trends for the AI coding tools ecosystem.
+- **[OpenClaw Fortune](https://openclaw-fortune-mcp.yagami8095.workers.dev)** - Daily fortune and horoscope API for AI agents. 12-zodiac tarot readings with consistency-seeded random generation.
+- **[OpenClaw MoltBook Publisher](https://moltbook-publisher-mcp.yagami8095.workers.dev)** - Japanese content publishing toolkit. Markdown to HTML, SEO optimization, EN-JP translation, trending topics for note.com, Zenn, and Qiita.
 - **[OpenCV](https://github.com/GongRzhe/opencv-mcp-server)** - An MCP server providing OpenCV computer vision capabilities. This allows AI assistants and language models to access powerful computer vision tools.
 - **[OpenDigger MCP Server](https://github.com/X-lab2017/open-digger-mcp-server)** - Model Context Protocol (MCP) server for [OpenDigger](https://open-digger.cn/en/), enabling advanced repository analytics and insights through tools and prompts.
 - **[OpenDota](https://github.com/asusevski/opendota-mcp-server)** - Interact with OpenDota API to retrieve Dota 2 match data, player statistics, and more.
