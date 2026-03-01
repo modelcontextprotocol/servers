@@ -1074,6 +1074,7 @@ search, and comprehensive file analysis.
 - **[MCPIgnore Filesytem](https://github.com/CyberhavenInc/filesystem-mcpignore)** - A Data Security First filesystem MCP server that implements .mcpignore to prevent MCP clients from accessing sensitive data.
 - **[MCPJungle](https://github.com/mcpjungle/MCPJungle)** - Self-hosted MCP Registry and Gateway for enterprise AI Agents
 - **[MCPShell](https://github.com/inercia/mcpshell)** - Tool that allows LLMs to safely execute command-line tools, providing a secure bridge between LLMs and operating system commands.
+- **[md2confluence-mcp](https://github.com/Gyeom/md2confluence-mcp)** - Upload Markdown files to Atlassian Confluence with auto-converted Mermaid diagrams, code blocks, and images
 - **[Md2doc](https://github.com/Yorick-Ryu/md2doc-mcp)** - Convert Markdown text to DOCX format using an external conversion service
 - **[MeasureSpace MCP](https://github.com/MeasureSpace/measure-space-mcp-server)** - A free [Model Context Protocol (MCP) Server](https://smithery.ai/server/@MeasureSpace/measure-space-mcp-server) that provides global weather, climate, air quality forecast and geocoding services by [measurespace.io](https://measurespace.io).
 - **[MediaWiki](https://github.com/ProfessionalWiki/MediaWiki-MCP-Server)** - A Model Context Protocol (MCP) Server that interacts with any MediaWiki wiki
