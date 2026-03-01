@@ -336,16 +336,22 @@ describe('KnowledgeGraphManager', () => {
       expect(result.entities.map(e => e.name)).toContain('Bob');
     });
 
-    it('should include relations between opened nodes', async () => {
+    it('should include all relations connected to opened nodes', async () => {
       const result = await manager.openNodes(['Alice', 'Bob']);
-      expect(result.relations).toHaveLength(1);
-      expect(result.relations[0].from).toBe('Alice');
-      expect(result.relations[0].to).toBe('Bob');
+      expect(result.relations).toHaveLength(2);
+      // Alice -> Bob (Alice and Bob both opened)
+      expect(result.relations).toContainEqual({ from: 'Alice', to: 'Bob', relationType: 'knows' });
+      // Bob -> Charlie (Bob is opened, so its outgoing relations are included)
+      expect(result.relations).toContainEqual({ from: 'Bob', to: 'Charlie', relationType: 'knows' });
     });
 
-    it('should exclude relations to unopened nodes', async () => {
+    it('should include both incoming and outgoing relations', async () => {
       const result = await manager.openNodes(['Bob']);
-      expect(result.relations).toHaveLength(0);
+      expect(result.relations).toHaveLength(2);
+      // Alice -> Bob (incoming)
+      expect(result.relations).toContainEqual({ from: 'Alice', to: 'Bob', relationType: 'knows' });
+      // Bob -> Charlie (outgoing)
+      expect(result.relations).toContainEqual({ from: 'Bob', to: 'Charlie', relationType: 'knows' });
     });
 
     it('should handle opening non-existent nodes', async () => {

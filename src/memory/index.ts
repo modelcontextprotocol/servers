@@ -212,23 +212,24 @@ export class KnowledgeGraphManager {
 
   async openNodes(names: string[]): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
-    
+
     // Filter entities
     const filteredEntities = graph.entities.filter(e => names.includes(e.name));
-  
+
     // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
-  
-    // Filter relations to only include those between filtered entities
-    const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
+
+    // Filter relations to include those connected to any of the filtered entities
+    // This includes both outgoing relations (where from matches) and incoming relations (where to matches)
+    const filteredRelations = graph.relations.filter(r =>
+      filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
     );
-  
+
     const filteredGraph: KnowledgeGraph = {
       entities: filteredEntities,
       relations: filteredRelations,
     };
-  
+
     return filteredGraph;
   }
 }
