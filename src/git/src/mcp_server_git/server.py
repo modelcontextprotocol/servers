@@ -19,58 +19,72 @@ from pydantic import BaseModel, Field
 # Default number of context lines to show in diff output
 DEFAULT_CONTEXT_LINES = 3
 
+
+class ACLConfigError(ValueError):
+    """Raised when strict ACL startup requirements are not met."""
+
+
 class GitStatus(BaseModel):
     repo_path: str
+
 
 class GitDiffUnstaged(BaseModel):
     repo_path: str
     context_lines: int = DEFAULT_CONTEXT_LINES
 
+
 class GitDiffStaged(BaseModel):
     repo_path: str
     context_lines: int = DEFAULT_CONTEXT_LINES
+
 
 class GitDiff(BaseModel):
     repo_path: str
     target: str
     context_lines: int = DEFAULT_CONTEXT_LINES
 
+
 class GitCommit(BaseModel):
     repo_path: str
     message: str
+
 
 class GitAdd(BaseModel):
     repo_path: str
     files: list[str]
 
+
 class GitReset(BaseModel):
     repo_path: str
+
 
 class GitLog(BaseModel):
     repo_path: str
     max_count: int = 10
     start_timestamp: Optional[str] = Field(
         None,
-        description="Start timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')"
+        description="Start timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')",
     )
     end_timestamp: Optional[str] = Field(
         None,
-        description="End timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')"
+        description="End timestamp for filtering commits. Accepts: ISO 8601 format (e.g., '2024-01-15T14:30:25'), relative dates (e.g., '2 weeks ago', 'yesterday'), or absolute dates (e.g., '2024-01-15', 'Jan 15 2024')",
     )
+
 
 class GitCreateBranch(BaseModel):
     repo_path: str
     branch_name: str
     base_branch: str | None = None
 
+
 class GitCheckout(BaseModel):
     repo_path: str
     branch_name: str
 
+
 class GitShow(BaseModel):
     repo_path: str
     revision: str
-
 
 
 class GitBranch(BaseModel):
@@ -107,16 +121,24 @@ class GitTools(str, Enum):
 
     BRANCH = "git_branch"
 
+
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
 
-def git_diff_unstaged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+
+def git_diff_unstaged(
+    repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES
+) -> str:
     return repo.git.diff(f"--unified={context_lines}")
+
 
 def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
     return repo.git.diff(f"--unified={context_lines}", "--cached")
 
-def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
+
+def git_diff(
+    repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES
+) -> str:
     # Defense in depth: reject targets starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if target.startswith("-"):
@@ -124,9 +146,11 @@ def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_L
     repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
     return repo.git.diff(f"--unified={context_lines}", target)
 
+
 def git_commit(repo: git.Repo, message: str) -> str:
     commit = repo.index.commit(message)
     return f"Changes committed successfully with hash {commit.hexsha}"
+
 
 def git_add(repo: git.Repo, files: list[str]) -> str:
     if files == ["."]:
@@ -136,21 +160,28 @@ def git_add(repo: git.Repo, files: list[str]) -> str:
         repo.git.add("--", *files)
     return "Files staged successfully"
 
+
 def git_reset(repo: git.Repo) -> str:
     repo.index.reset()
     return "All staged changes reset"
 
-def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] = None, end_timestamp: Optional[str] = None) -> list[str]:
+
+def git_log(
+    repo: git.Repo,
+    max_count: int = 10,
+    start_timestamp: Optional[str] = None,
+    end_timestamp: Optional[str] = None,
+) -> list[str]:
     if start_timestamp or end_timestamp:
         # Use git log command with date filtering
         args = []
         if start_timestamp:
-            args.extend(['--since', start_timestamp])
+            args.extend(["--since", start_timestamp])
         if end_timestamp:
-            args.extend(['--until', end_timestamp])
-        args.extend(['--format=%H%n%an%n%ad%n%s%n'])
+            args.extend(["--until", end_timestamp])
+        args.extend(["--format=%H%n%an%n%ad%n%s%n"])
 
-        log_output = repo.git.log(*args).split('\n')
+        log_output = repo.git.log(*args).split("\n")
 
         log = []
         # Process commits in groups of 4 (hash, author, date, message)
@@ -176,7 +207,10 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
             )
         return log
 
-def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None = None) -> str:
+
+def git_create_branch(
+    repo: git.Repo, branch_name: str, base_branch: str | None = None
+) -> str:
     if base_branch:
         base = repo.references[base_branch]
     else:
@@ -185,15 +219,17 @@ def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None 
     repo.create_head(branch_name, base)
     return f"Created branch '{branch_name}' from '{base.name}'"
 
+
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
     # Defense in depth: reject branch names starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if branch_name.startswith("-"):
         raise BadName(f"Invalid branch name: '{branch_name}' - cannot start with '-'")
-    repo.rev_parse(branch_name)  # Validates branch_name is a real git ref, throws BadName if not
+    repo.rev_parse(
+        branch_name
+    )  # Validates branch_name is a real git ref, throws BadName if not
     repo.git.checkout(branch_name)
     return f"Switched to branch '{branch_name}'"
-
 
 
 def git_show(repo: git.Repo, revision: str) -> str:
@@ -214,10 +250,11 @@ def git_show(repo: git.Repo, revision: str) -> str:
         if d.diff is None:
             continue
         if isinstance(d.diff, bytes):
-            output.append(d.diff.decode('utf-8'))
+            output.append(d.diff.decode("utf-8"))
         else:
             output.append(d.diff)
     return "".join(output)
+
 
 def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None:
     """Validate that repo_path is within the allowed repository path."""
@@ -240,7 +277,29 @@ def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None
         )
 
 
-def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, not_contains: str | None = None) -> str:
+def validate_startup_acl(repository: Path | None, strict_acl: bool) -> None:
+    """Validate startup ACL requirements for strict mode."""
+    if strict_acl and repository is None:
+        raise ACLConfigError(
+            "ACL_CONFIG_MISSING: strict ACL mode requires --repository."
+        )
+
+    if repository is not None:
+        try:
+            git.Repo(repository)
+        except git.InvalidGitRepositoryError as exc:
+            if strict_acl:
+                raise ACLConfigError(
+                    f"ACL_CONFIG_INVALID: {repository} is not a valid Git repository."
+                ) from exc
+
+
+def git_branch(
+    repo: git.Repo,
+    branch_type: str,
+    contains: str | None = None,
+    not_contains: str | None = None,
+) -> str:
     match contains:
         case None:
             contains_sha = (None,)
@@ -254,11 +313,11 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
             not_contains_sha = ("--no-contains", not_contains)
 
     match branch_type:
-        case 'local':
+        case "local":
             b_type = None
-        case 'remote':
+        case "remote":
             b_type = "-r"
-        case 'all':
+        case "all":
             b_type = "-a"
         case _:
             return f"Invalid branch type: {branch_type}"
@@ -269,9 +328,9 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
     return branch_info
 
 
-async def serve(repository: Path | None) -> None:
+async def serve(repository: Path | None, strict_acl: bool = False) -> None:
     logger = logging.getLogger(__name__)
-
+    validate_startup_acl(repository, strict_acl)
     if repository is not None:
         try:
             git.Repo(repository)
@@ -340,26 +399,28 @@ async def serve(repository: Path | None) -> None:
                 description="Shows the contents of a commit",
                 inputSchema=GitShow.model_json_schema(),
             ),
-
             Tool(
                 name=GitTools.BRANCH,
                 description="List Git branches",
                 inputSchema=GitBranch.model_json_schema(),
-
-            )
+            ),
         ]
 
     async def list_repos() -> Sequence[str]:
         async def by_roots() -> Sequence[str]:
             if not isinstance(server.request_context.session, ServerSession):
-                raise TypeError("server.request_context.session must be a ServerSession")
+                raise TypeError(
+                    "server.request_context.session must be a ServerSession"
+                )
 
             if not server.request_context.session.check_client_capability(
                 ClientCapabilities(roots=RootsCapability())
             ):
                 return []
 
-            roots_result: ListRootsResult = await server.request_context.session.list_roots()
+            roots_result: ListRootsResult = (
+                await server.request_context.session.list_roots()
+            )
             logger.debug(f"Roots result: {roots_result}")
             repo_paths = []
             for root in roots_result.roots:
@@ -391,52 +452,43 @@ async def serve(repository: Path | None) -> None:
         match name:
             case GitTools.STATUS:
                 status = git_status(repo)
-                return [TextContent(
-                    type="text",
-                    text=f"Repository status:\n{status}"
-                )]
+                return [TextContent(type="text", text=f"Repository status:\n{status}")]
 
             case GitTools.DIFF_UNSTAGED:
-                diff = git_diff_unstaged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
-                return [TextContent(
-                    type="text",
-                    text=f"Unstaged changes:\n{diff}"
-                )]
+                diff = git_diff_unstaged(
+                    repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES)
+                )
+                return [TextContent(type="text", text=f"Unstaged changes:\n{diff}")]
 
             case GitTools.DIFF_STAGED:
-                diff = git_diff_staged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
-                return [TextContent(
-                    type="text",
-                    text=f"Staged changes:\n{diff}"
-                )]
+                diff = git_diff_staged(
+                    repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES)
+                )
+                return [TextContent(type="text", text=f"Staged changes:\n{diff}")]
 
             case GitTools.DIFF:
-                diff = git_diff(repo, arguments["target"], arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
-                return [TextContent(
-                    type="text",
-                    text=f"Diff with {arguments['target']}:\n{diff}"
-                )]
+                diff = git_diff(
+                    repo,
+                    arguments["target"],
+                    arguments.get("context_lines", DEFAULT_CONTEXT_LINES),
+                )
+                return [
+                    TextContent(
+                        type="text", text=f"Diff with {arguments['target']}:\n{diff}"
+                    )
+                ]
 
             case GitTools.COMMIT:
                 result = git_commit(repo, arguments["message"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             case GitTools.ADD:
                 result = git_add(repo, arguments["files"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             case GitTools.RESET:
                 result = git_reset(repo)
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             # Update the LOG case:
             case GitTools.LOG:
@@ -444,49 +496,34 @@ async def serve(repository: Path | None) -> None:
                     repo,
                     arguments.get("max_count", 10),
                     arguments.get("start_timestamp"),
-                    arguments.get("end_timestamp")
+                    arguments.get("end_timestamp"),
                 )
-                return [TextContent(
-                    type="text",
-                    text="Commit history:\n" + "\n".join(log)
-                )]
+                return [
+                    TextContent(type="text", text="Commit history:\n" + "\n".join(log))
+                ]
 
             case GitTools.CREATE_BRANCH:
                 result = git_create_branch(
-                    repo,
-                    arguments["branch_name"],
-                    arguments.get("base_branch")
+                    repo, arguments["branch_name"], arguments.get("base_branch")
                 )
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             case GitTools.CHECKOUT:
                 result = git_checkout(repo, arguments["branch_name"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             case GitTools.SHOW:
                 result = git_show(repo, arguments["revision"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             case GitTools.BRANCH:
                 result = git_branch(
                     repo,
-                    arguments.get("branch_type", 'local'),
+                    arguments.get("branch_type", "local"),
                     arguments.get("contains", None),
                     arguments.get("not_contains", None),
                 )
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                return [TextContent(type="text", text=result)]
 
             case _:
                 raise ValueError(f"Unknown tool: {name}")
