@@ -29,13 +29,29 @@ import {
 } from './lib.js';
 
 // Command line argument parsing
-const args = process.argv.slice(2);
+const strictAclEnv = (process.env.MCP_SERVER_STRICT_ACL ?? "").toLowerCase();
+const strictAclEnvEnabled = ["1", "true", "yes", "on"].includes(strictAclEnv);
+const rawArgs = process.argv.slice(2);
+const args: string[] = [];
+let strictAcl = strictAclEnvEnabled;
+for (const arg of rawArgs) {
+  if (arg === "--strict-acl") {
+    strictAcl = true;
+    continue;
+  }
+  args.push(arg);
+}
+
 if (args.length === 0) {
   console.error("Usage: mcp-server-filesystem [allowed-directory] [additional-directories...]");
   console.error("Note: Allowed directories can be provided via:");
   console.error("  1. Command-line arguments (shown above)");
   console.error("  2. MCP roots protocol (if client supports it)");
   console.error("At least one directory must be provided by EITHER method for the server to operate.");
+}
+if (strictAcl && args.length === 0) {
+  console.error("ACL_CONFIG_MISSING: strict ACL mode requires at least one allowed directory argument.");
+  process.exit(2);
 }
 
 // Store allowed directories in normalized and resolved form
@@ -68,6 +84,7 @@ let allowedDirectories = (await Promise.all(
 
 // Filter to only accessible directories, warn about inaccessible ones
 const accessibleDirectories: string[] = [];
+const invalidAclMessages: string[] = [];
 for (const dir of allowedDirectories) {
   try {
     const stats = await fs.stat(dir);
@@ -75,14 +92,28 @@ for (const dir of allowedDirectories) {
       accessibleDirectories.push(dir);
     } else {
       console.error(`Warning: ${dir} is not a directory, skipping`);
+      invalidAclMessages.push(`${dir} is not a directory`);
     }
   } catch (error) {
     console.error(`Warning: Cannot access directory ${dir}, skipping`);
+    invalidAclMessages.push(`Cannot access directory ${dir}`);
   }
+}
+
+if (strictAcl && invalidAclMessages.length > 0) {
+  console.error("ACL_CONFIG_INVALID: strict ACL mode requires all configured directories to be valid and accessible.");
+  for (const message of invalidAclMessages) {
+    console.error(`  - ${message}`);
+  }
+  process.exit(2);
 }
 
 // Exit only if ALL paths are inaccessible (and some were specified)
 if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
+  if (strictAcl) {
+    console.error("ACL_CONFIG_INVALID: strict ACL mode found no accessible directories.");
+    process.exit(2);
+  }
   console.error("Error: None of the specified directories are accessible");
   process.exit(1);
 }

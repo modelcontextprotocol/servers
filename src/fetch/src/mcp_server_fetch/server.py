@@ -24,6 +24,65 @@ DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
 
 
+class ACLConfigError(ValueError):
+    """Raised when strict ACL startup requirements are not met."""
+
+
+def normalize_allowed_hosts(
+    allowed_hosts: tuple[str, ...] | list[str] | None,
+) -> tuple[str, ...]:
+    """Normalize and deduplicate host allowlist entries."""
+    if not allowed_hosts:
+        return ()
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for host in allowed_hosts:
+        cleaned = host.strip().lower()
+        if not cleaned:
+            continue
+        if cleaned.startswith("*."):
+            cleaned = cleaned[2:]
+        if cleaned not in seen:
+            seen.add(cleaned)
+            normalized.append(cleaned)
+    return tuple(normalized)
+
+
+def validate_startup_acl(strict_acl: bool, allowed_hosts: tuple[str, ...]) -> None:
+    """Fail closed when strict ACL mode is enabled without explicit host ACL config."""
+    if strict_acl and len(allowed_hosts) == 0:
+        raise ACLConfigError(
+            "ACL_CONFIG_MISSING: strict ACL mode requires at least one --allow-host value."
+        )
+
+
+def is_url_allowed(url: str, allowed_hosts: tuple[str, ...]) -> bool:
+    """Return true if URL host matches explicit allowlist entries."""
+    if len(allowed_hosts) == 0:
+        return True
+    hostname = (urlparse(url).hostname or "").lower()
+    if hostname == "":
+        return False
+    return any(
+        hostname == allowed or hostname.endswith(f".{allowed}")
+        for allowed in allowed_hosts
+    )
+
+
+def enforce_url_acl(url: str, allowed_hosts: tuple[str, ...]) -> None:
+    """Raise MCP error when URL host is outside allowlist."""
+    if is_url_allowed(url, allowed_hosts):
+        return
+    hostname = (urlparse(url).hostname or "").lower() or "<unknown>"
+    raise McpError(
+        ErrorData(
+            code=INTERNAL_ERROR,
+            message=f"ACL_CONFIG_DENY: host '{hostname}' is not in allowed hosts.",
+        )
+    )
+
+
 def extract_content_from_html(html: str) -> str:
     """Extract and convert HTML content to Markdown format.
 
@@ -63,7 +122,9 @@ def get_robots_txt_url(url: str) -> str:
     return robots_url
 
 
-async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url: str | None = None) -> None:
+async def check_may_autonomously_fetch_url(
+    url: str, user_agent: str, proxy_url: str | None = None
+) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
@@ -80,15 +141,19 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
                 headers={"User-Agent": user_agent},
             )
         except HTTPError:
-            raise McpError(ErrorData(
-                code=INTERNAL_ERROR,
-                message=f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue",
-            ))
+            raise McpError(
+                ErrorData(
+                    code=INTERNAL_ERROR,
+                    message=f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue",
+                )
+            )
         if response.status_code in (401, 403):
-            raise McpError(ErrorData(
-                code=INTERNAL_ERROR,
-                message=f"When fetching robots.txt ({robot_txt_url}), received status {response.status_code} so assuming that autonomous fetching is not allowed, the user can try manually fetching by using the fetch prompt",
-            ))
+            raise McpError(
+                ErrorData(
+                    code=INTERNAL_ERROR,
+                    message=f"When fetching robots.txt ({robot_txt_url}), received status {response.status_code} so assuming that autonomous fetching is not allowed, the user can try manually fetching by using the fetch prompt",
+                )
+            )
         elif 400 <= response.status_code < 500:
             return
         robot_txt = response.text
@@ -97,15 +162,17 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
     )
     robot_parser = Protego.parse(processed_robot_txt)
     if not robot_parser.can_fetch(str(url), user_agent):
-        raise McpError(ErrorData(
-            code=INTERNAL_ERROR,
-            message=f"The sites robots.txt ({robot_txt_url}), specifies that autonomous fetching of this page is not allowed, "
-            f"<useragent>{user_agent}</useragent>\n"
-            f"<url>{url}</url>"
-            f"<robots>\n{robot_txt}\n</robots>\n"
-            f"The assistant must let the user know that it failed to view the page. The assistant may provide further guidance based on the above information.\n"
-            f"The assistant can tell the user that they can try manually fetching the page by using the fetch prompt within their UI.",
-        ))
+        raise McpError(
+            ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"The sites robots.txt ({robot_txt_url}), specifies that autonomous fetching of this page is not allowed, "
+                f"<useragent>{user_agent}</useragent>\n"
+                f"<url>{url}</url>"
+                f"<robots>\n{robot_txt}\n</robots>\n"
+                f"The assistant must let the user know that it failed to view the page. The assistant may provide further guidance based on the above information.\n"
+                f"The assistant can tell the user that they can try manually fetching the page by using the fetch prompt within their UI.",
+            )
+        )
 
 
 async def fetch_url(
@@ -125,12 +192,16 @@ async def fetch_url(
                 timeout=30,
             )
         except HTTPError as e:
-            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}"))
+            raise McpError(
+                ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}")
+            )
         if response.status_code >= 400:
-            raise McpError(ErrorData(
-                code=INTERNAL_ERROR,
-                message=f"Failed to fetch {url} - status code {response.status_code}",
-            ))
+            raise McpError(
+                ErrorData(
+                    code=INTERNAL_ERROR,
+                    message=f"Failed to fetch {url} - status code {response.status_code}",
+                )
+            )
 
         page_raw = response.text
 
@@ -182,6 +253,8 @@ async def serve(
     custom_user_agent: str | None = None,
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
+    strict_acl: bool = False,
+    allowed_hosts: tuple[str, ...] = (),
 ) -> None:
     """Run the fetch MCP server.
 
@@ -189,7 +262,12 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        strict_acl: Whether startup should fail without explicit ACL config
+        allowed_hosts: Explicit host allowlist for outbound fetches
     """
+    normalized_allowed_hosts = normalize_allowed_hosts(allowed_hosts)
+    validate_startup_acl(strict_acl, normalized_allowed_hosts)
+
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
     user_agent_manual = custom_user_agent or DEFAULT_USER_AGENT_MANUAL
@@ -230,9 +308,12 @@ Although originally you did not have internet access, and were advised to refuse
         url = str(args.url)
         if not url:
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
+        enforce_url_acl(url, normalized_allowed_hosts)
 
         if not ignore_robots_txt:
-            await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
+            await check_may_autonomously_fetch_url(
+                url, user_agent_autonomous, proxy_url
+            )
 
         content, prefix = await fetch_url(
             url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url
@@ -241,13 +322,17 @@ Although originally you did not have internet access, and were advised to refuse
         if args.start_index >= original_length:
             content = "<error>No more content available.</error>"
         else:
-            truncated_content = content[args.start_index : args.start_index + args.max_length]
+            truncated_content = content[
+                args.start_index : args.start_index + args.max_length
+            ]
             if not truncated_content:
                 content = "<error>No more content available.</error>"
             else:
                 content = truncated_content
                 actual_content_length = len(truncated_content)
-                remaining_content = original_length - (args.start_index + actual_content_length)
+                remaining_content = original_length - (
+                    args.start_index + actual_content_length
+                )
                 # Only add the prompt to continue fetching if there is still remaining content
                 if actual_content_length == args.max_length and remaining_content > 0:
                     next_start = args.start_index + actual_content_length
@@ -260,9 +345,12 @@ Although originally you did not have internet access, and were advised to refuse
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
         url = arguments["url"]
+        enforce_url_acl(str(url), normalized_allowed_hosts)
 
         try:
-            content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url)
+            content, prefix = await fetch_url(
+                url, user_agent_manual, proxy_url=proxy_url
+            )
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:
             return GetPromptResult(

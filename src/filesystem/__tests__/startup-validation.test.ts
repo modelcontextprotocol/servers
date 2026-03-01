@@ -97,4 +97,26 @@ describe('Startup Directory Validation', () => {
     // Should still start with the valid directory
     expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
   });
+
+  it('should fail in strict ACL mode when no directory is configured', async () => {
+    const result = await spawnServer(['--strict-acl']);
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain('ACL_CONFIG_MISSING');
+  });
+
+  it('should fail in strict ACL mode when any configured directory is invalid', async () => {
+    const nonExistentDir = path.join(testDir, 'missing-dir');
+    const result = await spawnServer(['--strict-acl', nonExistentDir, accessibleDir]);
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain('ACL_CONFIG_INVALID');
+  });
+
+  it('should start in strict ACL mode when all configured directories are valid', async () => {
+    const result = await spawnServer(['--strict-acl', accessibleDir, accessibleDir2]);
+
+    expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+    expect(result.stderr).not.toContain('ACL_CONFIG_');
+  });
 });
