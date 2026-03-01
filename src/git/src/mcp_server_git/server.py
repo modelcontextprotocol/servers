@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 from typing import Sequence, Optional
 from mcp.server import Server
@@ -92,6 +93,19 @@ class GitBranch(BaseModel):
     )
 
 
+class GitCurrentBranch(BaseModel):
+    repo_path: str
+
+class GitDefaultBranch(BaseModel):
+    repo_path: str
+    remote: str = Field(
+        "origin",
+        description="The remote to get the default branch for (defaults to 'origin')"
+    )
+
+class GitRemote(BaseModel):
+    repo_path: str
+
 class GitTools(str, Enum):
     STATUS = "git_status"
     DIFF_UNSTAGED = "git_diff_unstaged"
@@ -106,6 +120,9 @@ class GitTools(str, Enum):
     SHOW = "git_show"
 
     BRANCH = "git_branch"
+    CURRENT_BRANCH = "git_current_branch"
+    DEFAULT_BRANCH = "git_default_branch"
+    REMOTE = "git_remote"
 
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
@@ -268,6 +285,42 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
 
     return branch_info
 
+def git_current_branch(repo: git.Repo) -> str:
+    if repo.head.is_detached:
+        return f"HEAD detached at {repo.head.commit.hexsha[:7]}"
+    return repo.active_branch.name
+
+def git_default_branch(repo: git.Repo, remote: str = "origin") -> str:
+    # Try git ls-remote --symref to detect remote HEAD
+    try:
+        output = repo.git.ls_remote("--symref", remote, "HEAD")
+        # Output format: "ref: refs/heads/main\tHEAD\n<sha>\tHEAD"
+        match = re.search(r"^ref: refs/heads/(\S+)\t", output, re.MULTILINE)
+        if match:
+            return f"{remote}/{match.group(1)}"
+    except git.GitCommandError:
+        pass
+
+    # Try local ref resolution via rev-parse (returns "origin/main" directly)
+    try:
+        return repo.git.rev_parse("--abbrev-ref", f"{remote}/HEAD")
+    except git.GitCommandError:
+        pass
+
+    # Fallback: check for common local branch names
+    local_branches = [ref.name for ref in repo.branches]
+    if "main" in local_branches:
+        return f"{remote}/main"
+    if "master" in local_branches:
+        return f"{remote}/master"
+
+    raise ValueError(
+        f"Could not determine the default branch for remote '{remote}'"
+    )
+
+def git_remote(repo: git.Repo) -> str:
+    return repo.git.remote("-v")
+
 
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
@@ -345,8 +398,22 @@ async def serve(repository: Path | None) -> None:
                 name=GitTools.BRANCH,
                 description="List Git branches",
                 inputSchema=GitBranch.model_json_schema(),
-
-            )
+            ),
+            Tool(
+                name=GitTools.CURRENT_BRANCH,
+                description="Returns the name of the currently checked out branch, or the commit SHA if HEAD is detached",
+                inputSchema=GitCurrentBranch.model_json_schema(),
+            ),
+            Tool(
+                name=GitTools.DEFAULT_BRANCH,
+                description="Returns the default branch for a remote in '<remote>/<branch>' format (e.g., 'origin/main'). Queries the remote directly, with fallback to local ref resolution and branch detection.",
+                inputSchema=GitDefaultBranch.model_json_schema(),
+            ),
+            Tool(
+                name=GitTools.REMOTE,
+                description="Lists all configured remotes with their fetch and push URLs",
+                inputSchema=GitRemote.model_json_schema(),
+            ),
         ]
 
     async def list_repos() -> Sequence[str]:
@@ -483,6 +550,30 @@ async def serve(repository: Path | None) -> None:
                     arguments.get("contains", None),
                     arguments.get("not_contains", None),
                 )
+                return [TextContent(
+                    type="text",
+                    text=result
+                )]
+
+            case GitTools.CURRENT_BRANCH:
+                result = git_current_branch(repo)
+                return [TextContent(
+                    type="text",
+                    text=result
+                )]
+
+            case GitTools.DEFAULT_BRANCH:
+                result = git_default_branch(
+                    repo,
+                    arguments.get("remote", "origin")
+                )
+                return [TextContent(
+                    type="text",
+                    text=result
+                )]
+
+            case GitTools.REMOTE:
+                result = git_remote(repo)
                 return [TextContent(
                     type="text",
                     text=result
