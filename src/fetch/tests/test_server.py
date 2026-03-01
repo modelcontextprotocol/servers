@@ -252,7 +252,8 @@ class TestFetchUrl:
         mock_response.text = json_content
         mock_response.headers = {"content-type": "application/json"}
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class, \
+             patch("mcp_server_fetch.server.validate_url_for_ssrf"):
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
             mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -304,13 +305,16 @@ class TestFetchUrl:
 
     @pytest.mark.asyncio
     async def test_fetch_with_proxy(self):
-        """Test that proxy URL is passed to client."""
+        """Test that proxy URL is passed to SSRFSafeTransport."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.text = '{"data": "test"}'
         mock_response.headers = {"content-type": "application/json"}
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class, \
+             patch("httpx.AsyncHTTPTransport") as mock_transport_class, \
+             patch("mcp_server_fetch.server.validate_url_for_ssrf"), \
+             patch("mcp_server_fetch.server.SSL_VERIFY", True):
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
             mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -322,5 +326,7 @@ class TestFetchUrl:
                 proxy_url="http://proxy.example.com:8080"
             )
 
-            # Verify AsyncClient was called with proxy
-            mock_client_class.assert_called_once_with(proxies="http://proxy.example.com:8080")
+            # Verify AsyncHTTPTransport was created with proxy and verify
+            mock_transport_class.assert_called_once_with(
+                verify=True, proxy="http://proxy.example.com:8080"
+            )
