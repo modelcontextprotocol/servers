@@ -336,16 +336,39 @@ describe('KnowledgeGraphManager', () => {
       expect(result.entities.map(e => e.name)).toContain('Bob');
     });
 
-    it('should include relations between opened nodes', async () => {
+    it('should include relations connected to opened nodes', async () => {
       const result = await manager.openNodes(['Alice', 'Bob']);
-      expect(result.relations).toHaveLength(1);
-      expect(result.relations[0].from).toBe('Alice');
-      expect(result.relations[0].to).toBe('Bob');
+      // Returns both Alice->Bob (between opened nodes) and Bob->Charlie (Bob is opened)
+      expect(result.relations).toHaveLength(2);
+      expect(result.relations.some(r => r.from === 'Alice' && r.to === 'Bob')).toBe(true);
+      expect(result.relations.some(r => r.from === 'Bob' && r.to === 'Charlie')).toBe(true);
     });
 
-    it('should exclude relations to unopened nodes', async () => {
+    it('should include both incoming and outgoing relations for single node', async () => {
+      // When opening Bob, should return both incoming (Alice->Bob) and outgoing (Bob->Charlie) relations
       const result = await manager.openNodes(['Bob']);
-      expect(result.relations).toHaveLength(0);
+      expect(result.relations).toHaveLength(2);
+      expect(result.relations.some(r => r.from === 'Alice' && r.to === 'Bob')).toBe(true);
+      expect(result.relations.some(r => r.from === 'Bob' && r.to === 'Charlie')).toBe(true);
+    });
+
+    it('should return outgoing relations from requested node (issue #3137)', async () => {
+      // Reproduces issue #3137: open_nodes should return relations where the node is either source or target
+      await manager.createEntities([
+        { name: '2025-12-17', entityType: 'work-day', observations: [] },
+        { name: 'incident/example', entityType: 'incident', observations: ['Test incident'] },
+      ]);
+
+      await manager.createRelations([
+        { from: '2025-12-17', to: 'incident/example', relationType: 'worked-on' },
+      ]);
+
+      const result = await manager.openNodes(['2025-12-17']);
+      expect(result.entities).toHaveLength(1);
+      expect(result.relations).toHaveLength(1);
+      expect(result.relations[0].from).toBe('2025-12-17');
+      expect(result.relations[0].to).toBe('incident/example');
+      expect(result.relations[0].relationType).toBe('worked-on');
     });
 
     it('should handle opening non-existent nodes', async () => {
