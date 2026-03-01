@@ -339,6 +339,15 @@ cd src/git
 docker build -t mcp/git .
 ```
 
+## Contributing
+
+We encourage contributions to help expand and improve mcp-server-git. Whether you want to add new tools, enhance existing functionality, or improve documentation, your input is valuable.
+
+For examples of other MCP servers and implementation patterns, see:
+https://github.com/modelcontextprotocol/servers
+
+Pull requests are welcome! Feel free to contribute new ideas, bug fixes, or enhancements to make mcp-server-git even more powerful and useful.
+
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
