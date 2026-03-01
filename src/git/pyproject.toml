@@ -22,6 +22,11 @@ dependencies = [
     "pydantic>=2.0.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/modelcontextprotocol/servers"
+Repository = "https://github.com/modelcontextprotocol/servers/tree/main/src/git"
+"Bug Tracker" = "https://github.com/modelcontextprotocol/servers/issues"
+
 [project.scripts]
 mcp-server-git = "mcp_server_git:main"
 
