@@ -2,18 +2,19 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
 import { createServer } from "../server/index.js";
 import cors from "cors";
+import { createCorsOptions } from "./cors.js";
 
 console.error("Starting SSE server...");
 
-// Express app with permissive CORS for testing with Inspector direct connect mode
+// Express app with loopback-only CORS by default for Inspector direct connect mode.
+// Override via MCP_CORS_ORIGIN_REGEX if you intentionally need a wider allowlist.
 const app = express();
 app.use(
-  cors({
-    origin: "*", // use "*" with caution in production
-    methods: "GET,POST",
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
-  })
+  cors(
+    createCorsOptions({
+      methods: "GET,POST",
+    })
+  )
 );
 
 // Map sessionId to transport for each client
@@ -71,7 +72,11 @@ app.post("/message", async (req, res) => {
 });
 
 // Start the express server
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.error(`Server is running on port ${PORT}`);
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
+if (!Number.isFinite(PORT)) {
+  throw new Error(`Invalid PORT=${JSON.stringify(process.env.PORT)}`);
+}
+const HOST = process.env.HOST || "127.0.0.1";
+app.listen(PORT, HOST, () => {
+  console.error(`Server is running on http://${HOST}:${PORT}`);
 });
