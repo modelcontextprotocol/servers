@@ -9,6 +9,12 @@ const config = {
   description:
     "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files.",
   inputSchema: {},
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
 };
 
 /**
