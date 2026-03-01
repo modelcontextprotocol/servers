@@ -1096,6 +1096,7 @@ search, and comprehensive file analysis.
 - **[Mikrotik](https://github.com/jeff-nasseri/mikrotik-mcp)** - Mikrotik MCP server which cover networking operations (IP, DHCP, Firewall, etc)
 - **[Mindmap](https://github.com/YuChenSSR/mindmap-mcp-server)** (by YuChenSSR) - A server that generates mindmaps from input containing markdown code.
 - **[Minima](https://github.com/dmayboroda/minima)** - MCP server for RAG on local files
+- **[Mixpeek](https://github.com/mixpeek/mcp-server)** - Multimodal search and understanding platform with 48 tools for managing namespaces, uploading files, building search pipelines, and querying results across video, image, audio, and text content. [Website](https://mcp.mixpeek.com/)
 - **[MLflow](https://github.com/kkruglik/mlflow-mcp)** - MLflow MCP server for ML experiment tracking with advanced querying, run comparison, artifact access, and model registry.
 - **[Mobile MCP](https://github.com/mobile-next/mobile-mcp)** (by Mobile Next) - MCP server for Mobile(iOS/Android) automation, app scraping and development using physical devices or simulators/emulators.
 - **[Modao Proto MCP](https://github.com/modao-dev/modao-proto-mcp)** - AI-powered HTML prototype generation server that converts natural language descriptions into complete HTML code with modern design and responsive layouts. Supports design description expansion and seamless integration with Modao workspace.
