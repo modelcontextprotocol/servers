@@ -125,7 +125,11 @@ Example:
     - Relations between requested entities
   - Silently skips non-existent nodes
 
-# Usage with Claude Desktop
+## Installation
+
+> For detailed installation instructions across all clients and methods, see the [Installation Guide](../INSTALLATION.md).
+
+## Usage with Claude Desktop
 
 ### Setup
 
