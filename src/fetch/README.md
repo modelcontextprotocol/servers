@@ -212,6 +212,12 @@ If you're experiencing timeout issues on Windows, you may need to set the `PYTHO
 
 This addresses character encoding issues that can cause the server to timeout on Windows systems.
 
+### Usage with Codex CLI
+
+```bash
+codex mcp add fetch -- uvx mcp-server-fetch
+```
+
 ## Debugging
 
 You can use the MCP inspector to debug the server. For uvx installations:
