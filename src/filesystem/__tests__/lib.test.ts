@@ -14,6 +14,8 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
+  appendFileContent,
+  writeOrUpdateFileContent,
   // Search & filtering functions
   searchFilesWithValidation,
   // File editing functions
@@ -303,10 +305,112 @@ describe('Lib Functions', () => {
     describe('writeFileContent', () => {
       it('writes file content', async () => {
         mockFs.writeFile.mockResolvedValueOnce(undefined);
-        
+
         await writeFileContent('/test/file.txt', 'new content');
-        
+
         expect(mockFs.writeFile).toHaveBeenCalledWith('/test/file.txt', 'new content', { encoding: "utf-8", flag: 'wx' });
+      });
+    });
+
+    describe('appendFileContent', () => {
+      it('throws error if file does not exist', async () => {
+        const error = new Error('ENOENT');
+        (error as any).code = 'ENOENT';
+        mockFs.access.mockRejectedValue(error);
+
+        await expect(appendFileContent('/test/nonexistent.txt', 'new content'))
+          .rejects.toThrow('File does not exist');
+      });
+
+      it('appends content to existing file', async () => {
+        mockFs.access.mockResolvedValue(undefined);
+        mockFs.readFile.mockResolvedValue('existing content' as any);
+        mockFs.writeFile.mockResolvedValue(undefined);
+        mockFs.rename.mockResolvedValue(undefined);
+
+        await appendFileContent('/test/file.txt', '\nnew content');
+
+        expect(mockFs.readFile).toHaveBeenCalledWith('/test/file.txt', 'utf-8');
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringContaining('.tmp'),
+          'existing content\nnew content',
+          'utf-8'
+        );
+        expect(mockFs.rename).toHaveBeenCalled();
+      });
+
+      it('handles write errors and cleans up temp file', async () => {
+        mockFs.access.mockResolvedValue(undefined);
+        mockFs.readFile.mockResolvedValue('existing content' as any);
+        mockFs.writeFile.mockResolvedValue(undefined);
+        mockFs.rename.mockRejectedValue(new Error('Rename failed'));
+        mockFs.unlink.mockResolvedValue(undefined);
+
+        await expect(appendFileContent('/test/file.txt', 'new content'))
+          .rejects.toThrow('Rename failed');
+
+        expect(mockFs.unlink).toHaveBeenCalled();
+      });
+    });
+
+    describe('writeOrUpdateFileContent', () => {
+      it('creates new file if it does not exist', async () => {
+        const error = new Error('ENOENT');
+        (error as any).code = 'ENOENT';
+        mockFs.access.mockRejectedValue(error);
+        mockFs.writeFile.mockResolvedValue(undefined);
+
+        await writeOrUpdateFileContent('/test/newfile.txt', 'initial content');
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          '/test/newfile.txt',
+          'initial content',
+          { encoding: 'utf-8', flag: 'wx' }
+        );
+      });
+
+      it('appends to existing file', async () => {
+        mockFs.access.mockResolvedValue(undefined);
+        mockFs.readFile.mockResolvedValue('existing content' as any);
+        mockFs.writeFile.mockResolvedValue(undefined);
+        mockFs.rename.mockResolvedValue(undefined);
+
+        await writeOrUpdateFileContent('/test/file.txt', '\nappended content');
+
+        expect(mockFs.readFile).toHaveBeenCalledWith('/test/file.txt', 'utf-8');
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringContaining('.tmp'),
+          'existing content\nappended content',
+          'utf-8'
+        );
+        expect(mockFs.rename).toHaveBeenCalled();
+      });
+
+      it('handles file exists error during creation by using atomic write', async () => {
+        const notFoundError = new Error('ENOENT');
+        (notFoundError as any).code = 'ENOENT';
+        const existsError = new Error('EEXIST');
+        (existsError as any).code = 'EEXIST';
+
+        mockFs.access.mockRejectedValue(notFoundError);
+        mockFs.writeFile
+          .mockRejectedValueOnce(existsError)
+          .mockResolvedValueOnce(undefined);
+        mockFs.rename.mockResolvedValue(undefined);
+
+        await writeOrUpdateFileContent('/test/file.txt', 'content');
+
+        expect(mockFs.writeFile).toHaveBeenCalledTimes(2);
+        expect(mockFs.rename).toHaveBeenCalled();
+      });
+
+      it('propagates non-ENOENT access errors', async () => {
+        const error = new Error('Permission denied');
+        (error as any).code = 'EACCES';
+        mockFs.access.mockRejectedValue(error);
+
+        await expect(writeOrUpdateFileContent('/test/file.txt', 'content'))
+          .rejects.toThrow('Permission denied');
       });
     });
 
