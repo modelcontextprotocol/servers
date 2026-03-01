@@ -1,4 +1,4 @@
-import path from "path";
+﻿import path from "path";
 import os from 'os';
 
 /**
@@ -77,6 +77,12 @@ export function normalizePath(p: string): string {
     p = p.replace(/\\\\/g, '\\');
   }
 
+  // On Windows, if we have a bare drive letter (e.g. "C:"), append a separator
+  // so path.normalize doesn't return "C:." which can break path validation.
+  if (process.platform === 'win32' && /^[a-zA-Z]:$/.test(p)) {
+    p = p + path.sep;
+  }
+
   // Use Node's path normalization, which handles . and .. segments
   let normalized = path.normalize(p);
 
@@ -116,3 +122,4 @@ export function expandHome(filepath: string): string {
   }
   return filepath;
 }
+
