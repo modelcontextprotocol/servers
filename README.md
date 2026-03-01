@@ -1403,6 +1403,7 @@ search, and comprehensive file analysis.
 - **[Useless Toolkit](https://uselesstoolkit.com/apis/mcp-servers)** - MCP-ready server endpoints for utility APIs, including Password Generator, IP2Geo etc., are provided by UselessToolkit.com, allowing seamless integration with AI agents via secure RapidAPI connections.
 - **[USPTO](https://github.com/riemannzeta/patent_mcp_server)** - MCP server for accessing United States Patent & Trademark Office data through its Open Data Protocol (ODP) API.
 - **[Vectara](https://github.com/vectara/vectara-mcp)** - Query Vectara's trusted RAG-as-a-service platform.
+- **[Vault MCP](https://github.com/Chill-AI-Space/vault-mcp)** - Credential isolation for AI agents — bots operate passwords and API keys without seeing them. AES-256-GCM encryption, Chrome CDP login, API proxy with sanitization, audit trail.
 - **[Vega-Lite](https://github.com/isaacwasserman/mcp-vegalite-server)** - Generate visualizations from fetched data using the VegaLite format and renderer.
 - **[Vertica](https://github.com/nolleh/mcp-vertica)** - Vertica database integration in Python with configurable access controls and schema inspection
 - **[Vibe Check](https://github.com/PV-Bhat/vibe-check-mcp-server)** - An MCP server leveraging an external oversight layer to "vibe check" agents, and also self-improve accuracy & user alignment over time. Prevents scope creep, code bloat, misalignment, misinterpretation, tunnel vision, and overcomplication.
