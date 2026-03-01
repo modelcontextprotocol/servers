@@ -54,7 +54,7 @@ describe('Registration Index Files', () => {
         server: {
           getClientCapabilities: vi.fn(() => ({
             roots: {},
-            elicitation: {},
+            elicitation: { url: {} },
             sampling: {},
           })),
         },
@@ -67,14 +67,15 @@ describe('Registration Index Files', () => {
 
       registerConditionalTools(mockServerWithCapabilities);
 
-      // Should register 3 conditional tools + 3 task-based tools when all capabilities present
-      expect(mockServerWithCapabilities.registerTool).toHaveBeenCalledTimes(3);
+      // Should register 4 conditional tools + 3 task-based tools when all capabilities present
+      expect(mockServerWithCapabilities.registerTool).toHaveBeenCalledTimes(4);
 
       const registeredTools = (
         mockServerWithCapabilities.registerTool as any
       ).mock.calls.map((call: any[]) => call[0]);
       expect(registeredTools).toContain('get-roots-list');
       expect(registeredTools).toContain('trigger-elicitation-request');
+      expect(registeredTools).toContain('trigger-url-elicitation');
       expect(registeredTools).toContain('trigger-sampling-request');
 
       // Task-based tools are registered via experimental.tasks.registerToolTask
