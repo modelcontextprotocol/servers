@@ -1454,6 +1454,7 @@ search, and comprehensive file analysis.
 - **[yfinance](https://github.com/Adity-star/mcp-yfinance-server)** -💹The MCP YFinance Stock Server provides real-time and historical stock data in a standard format, powering dashboards, AI agents,and research tools with seamless financial insights.
 - **[YNAB](https://github.com/ChuckBryan/ynabmcpserver)** - A Model Context Protocol (MCP) server for integrating with YNAB (You Need A Budget), allowing AI assistants to securely access and analyze your financial data.
 - **[YouTrack](https://github.com/tonyzorin/youtrack-mcp)** - A Model Context Protocol (MCP) server implementation for JetBrains YouTrack, allowing AI assistants to interact with YouTrack issue tracking system.
+- **[YourMemory](https://github.com/sachitrafa/yourmemory)** - Ebbinghaus-based persistent memory for Claude. Memories decay with time, strengthen on recall, and are ranked by relevance × freshness. Local-first, PostgreSQL + pgvector, no cloud required.
 - **[YouTube](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/youtube)** - Extract Youtube video information (with proxies support).
 - **[YouTube](https://github.com/ZubeidHendricks/youtube-mcp-server)** - Comprehensive YouTube API integration for video management, Shorts creation, and analytics.
 - **[YouTube DLP](https://github.com/AgentX-ai/youtube-dlp-server)** - Retrieve video information, subtitles, and top comments with proxies.
