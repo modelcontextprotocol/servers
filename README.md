@@ -730,6 +730,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[crypto-sentiment-mcp](https://github.com/kukapay/crypto-sentiment-mcp)**  -  An MCP server that delivers cryptocurrency sentiment analysis to AI agents.
 - **[cryptopanic-mcp-server](https://github.com/kukapay/cryptopanic-mcp-server)** - Providing latest cryptocurrency news to AI agents, powered by CryptoPanic.
 - **[CSV Editor](https://github.com/santoshray02/csv-editor)** - Comprehensive CSV processing with 40+ operations for data manipulation, analysis, and validation. Features auto-save, undo/redo, and handles GB+ files. Built with FastMCP & Pandas.
+- **[csvglow](https://github.com/Ratnaditya-J/csvglow)** - Generate beautiful, self-contained HTML dashboards from CSV/Excel files with auto-detected charts, correlation heatmaps, scatter plots, smart insights, and a sortable data table.
 - **[Current Time UTC MCP Server](https://github.com/jairampatel/currenttimeutc-mcp)** - A lightweight MCP server that provides accurate UTC time and timezone conversions in real-time.
 - **[Cursor MCP Installer](https://github.com/matthewdcage/cursor-mcp-installer)** - A tool to easily install and configure other MCP servers within Cursor IDE, with support for npm packages, local directories, and Git repositories.
 - **[CV Forge](https://github.com/thechandanbhagat/cv-forge)** - An intelligent MCP (Model Context Protocol) server that analyzes job postings and crafts perfectly-matched CVs (by [Chandan Bhagat](https://me.chandanbhagat.com.np)).
