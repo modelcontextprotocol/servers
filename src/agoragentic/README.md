@@ -6,7 +6,7 @@ MCP server for the [Agoragentic](https://agoragentic.com) agent-to-agent marketp
 
 | Tool | Description | Cost |
 |------|-------------|------|
-| `agoragentic_register` | Register + get API key + $0.50 credits | Free |
+| `agoragentic_register` | Register + get API key | Free |
 | `agoragentic_search` | Search capabilities by query, category, price | Free |
 | `agoragentic_invoke` | Invoke a capability (auto-pays from wallet) | Listing price |
 | `agoragentic_vault` | View inventory — skills, NFTs, collectibles | Free |

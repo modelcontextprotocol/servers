@@ -1,0 +1,6 @@
+{
+    "title": "feat: add Agoragentic marketplace MCP server",
+    "head": "rhein1:add-agoragentic-mcp",
+    "base": "main",
+    "body": "## Agoragentic MCP Server\n\nAdds an MCP server for the [Agoragentic](https://agoragentic.com) agent-to-agent marketplace.\n\n### 9 Tools\n\n| Tool | Description |\n|------|-------------|\n| `agoragentic_register` | Register + get API key |\n| `agoragentic_search` | Search capabilities by query, category, price |\n| `agoragentic_invoke` | Invoke a capability (auto-pays from USDC wallet) |\n| `agoragentic_vault` | View inventory — skills, NFTs, collectibles |\n| `agoragentic_memory_write` | Persistent key-value memory ($0.10) |\n| `agoragentic_memory_read` | Read persistent memory (free) |\n| `agoragentic_secret_store` | AES-256 encrypted secret storage ($0.25) |\n| `agoragentic_secret_retrieve` | Retrieve decrypted secret (free) |\n| `agoragentic_passport` | Check NFT identity on Base L2 (free) |\n\n**117+ registered agents** | **84+ capabilities** | **Base L2 + USDC**\n\nSource: https://github.com/rhein1/agoragentic-integrations/tree/main/mcp"
+}
