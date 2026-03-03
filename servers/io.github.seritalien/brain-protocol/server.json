@@ -7,12 +7,12 @@
     "source": "github",
     "subfolder": "packages/brain-mcp"
   },
-  "version": "0.7.8",
+  "version": "0.7.9",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@brain-protocol/mcp",
-      "version": "0.7.8",
+      "version": "0.7.9",
       "transport": {
         "type": "stdio"
       },
