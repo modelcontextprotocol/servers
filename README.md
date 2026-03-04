@@ -849,6 +849,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[GDB](https://github.com/pansila/mcp_server_gdb)** - A GDB/MI protocol server based on the MCP protocol, providing remote application debugging capabilities with AI assistants.
 - **[Gemini Bridge](https://github.com/eLyiN/gemini-bridge)** - Lightweight MCP server that enables Claude to interact with Google's Gemini AI through the official CLI, offering zero API costs and stateless architecture.
 - **[Geolocation](https://github.com/jackyang25/geolocation-mcp-server)** - WalkScore API integration for walkability, transit, and bike scores.
+- **[GEOScore](https://github.com/henu-wang/geoscore-mcp)** - AI search optimization (GEO). Scan websites for AI search readiness, generate llms.txt, Schema.org fixes, meta tag optimizations, and track AI visibility.
 - **[ggRMCP](https://github.com/aalobaidi/ggRMCP)** - A Go gateway that converts gRPC services into MCP-compatible tools, allowing AI models like Claude to directly call your gRPC services.
 - **[Ghost](https://github.com/MFYDev/ghost-mcp)** - A Model Context Protocol (MCP) server for interacting with Ghost CMS through LLM interfaces like Claude.
 - **[Git](https://github.com/geropl/git-mcp-go)** - Allows LLM to interact with a local git repository, incl. optional push support.
