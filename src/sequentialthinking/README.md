@@ -59,6 +59,23 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 
+> **Windows users:** On Windows, `npx` is a `.cmd` batch file shim that cannot be executed directly by `child_process.spawn()`. Use `cmd /c` as the command instead:
+>
+> ```json
+> {
+>   "mcpServers": {
+>     "sequential-thinking": {
+>       "command": "cmd",
+>       "args": [
+>         "/c", "npx",
+>         "-y",
+>         "@modelcontextprotocol/server-sequential-thinking"
+>       ]
+>     }
+>   }
+> }
+> ```
+
 #### docker
 
 ```json
@@ -113,6 +130,23 @@ For NPX installation:
   }
 }
 ```
+
+> **Windows users:** On Windows, `npx` is a `.cmd` batch file shim that cannot be executed directly by `child_process.spawn()`. Use `cmd /c` as the command instead:
+>
+> ```json
+> {
+>   "servers": {
+>     "sequential-thinking": {
+>       "command": "cmd",
+>       "args": [
+>         "/c", "npx",
+>         "-y",
+>         "@modelcontextprotocol/server-sequential-thinking"
+>       ]
+>     }
+>   }
+> }
+> ```
 
 For Docker installation:
 

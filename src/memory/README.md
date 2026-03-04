@@ -159,6 +159,23 @@ Add this to your claude_desktop_config.json:
 }
 ```
 
+> **Windows users:** On Windows, `npx` is a `.cmd` batch file shim that cannot be executed directly by `child_process.spawn()`. Use `cmd /c` as the command instead:
+>
+> ```json
+> {
+>   "mcpServers": {
+>     "memory": {
+>       "command": "cmd",
+>       "args": [
+>         "/c", "npx",
+>         "-y",
+>         "@modelcontextprotocol/server-memory"
+>       ]
+>     }
+>   }
+> }
+> ```
+
 #### NPX with custom setting
 
 The server can be configured using the following environment variables:
@@ -179,6 +196,26 @@ The server can be configured using the following environment variables:
   }
 }
 ```
+
+> **Windows users:** On Windows, `npx` is a `.cmd` batch file shim that cannot be executed directly by `child_process.spawn()`. Use `cmd /c` as the command instead:
+>
+> ```json
+> {
+>   "mcpServers": {
+>     "memory": {
+>       "command": "cmd",
+>       "args": [
+>         "/c", "npx",
+>         "-y",
+>         "@modelcontextprotocol/server-memory"
+>       ],
+>       "env": {
+>         "MEMORY_FILE_PATH": "C:\\path\\to\\custom\\memory.jsonl"
+>       }
+>     }
+>   }
+> }
+> ```
 
 - `MEMORY_FILE_PATH`: Path to the memory storage JSONL file (default: `memory.jsonl` in the server directory)
 
@@ -215,6 +252,23 @@ Alternatively, you can add the configuration to a file called `.vscode/mcp.json`
   }
 }
 ```
+
+> **Windows users:** On Windows, `npx` is a `.cmd` batch file shim that cannot be executed directly by `child_process.spawn()`. Use `cmd /c` as the command instead:
+>
+> ```json
+> {
+>   "servers": {
+>     "memory": {
+>       "command": "cmd",
+>       "args": [
+>         "/c", "npx",
+>         "-y",
+>         "@modelcontextprotocol/server-memory"
+>       ]
+>     }
+>   }
+> }
+> ```
 
 #### Docker
 

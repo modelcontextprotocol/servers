@@ -250,6 +250,25 @@ Note: all directories must be mounted to `/projects` by default.
 }
 ```
 
+> **Windows users:** On Windows, `npx` is a `.cmd` batch file shim that cannot be executed directly by `child_process.spawn()`. Use `cmd /c` as the command instead:
+>
+> ```json
+> {
+>   "mcpServers": {
+>     "filesystem": {
+>       "command": "cmd",
+>       "args": [
+>         "/c", "npx",
+>         "-y",
+>         "@modelcontextprotocol/server-filesystem",
+>         "C:\\Users\\username\\Desktop",
+>         "C:\\path\\to\\other\\allowed\\dir"
+>       ]
+>     }
+>   }
+> }
+> ```
+
 ## Usage with VS Code
 
 For quick installation, click the installation buttons below...
@@ -307,6 +326,24 @@ Note: all directories must be mounted to `/projects` by default.
   }
 }
 ```
+
+> **Windows users:** On Windows, `npx` is a `.cmd` batch file shim that cannot be executed directly by `child_process.spawn()`. Use `cmd /c` as the command instead:
+>
+> ```json
+> {
+>   "servers": {
+>     "filesystem": {
+>       "command": "cmd",
+>       "args": [
+>         "/c", "npx",
+>         "-y",
+>         "@modelcontextprotocol/server-filesystem",
+>         "${workspaceFolder}"
+>       ]
+>     }
+>   }
+> }
+> ```
 
 ## Build
 

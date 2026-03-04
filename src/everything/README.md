@@ -31,6 +31,23 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
+> **Windows users:** On Windows, `npx` is a `.cmd` batch file shim that cannot be executed directly by `child_process.spawn()`. Use `cmd /c` as the command instead:
+>
+> ```json
+> {
+>   "mcpServers": {
+>     "everything": {
+>       "command": "cmd",
+>       "args": [
+>         "/c", "npx",
+>         "-y",
+>         "@modelcontextprotocol/server-everything"
+>       ]
+>     }
+>   }
+> }
+> ```
+
 ## Usage with VS Code
 
 For quick installation, use of of the one-click install buttons below...
@@ -61,6 +78,23 @@ Alternatively, you can add the configuration to a file called `.vscode/mcp.json`
   }
 }
 ```
+
+> **Windows users:** On Windows, `npx` is a `.cmd` batch file shim that cannot be executed directly by `child_process.spawn()`. Use `cmd /c` as the command instead:
+>
+> ```json
+> {
+>   "servers": {
+>     "everything": {
+>       "command": "cmd",
+>       "args": [
+>         "/c", "npx",
+>         "-y",
+>         "@modelcontextprotocol/server-everything"
+>       ]
+>     }
+>   }
+> }
+> ```
 
 ## Running from source with [HTTP+SSE Transport](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#http-with-sse) (deprecated as of [2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports))
 
