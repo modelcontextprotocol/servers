@@ -250,6 +250,18 @@ Note: all directories must be mounted to `/projects` by default.
 }
 ```
 
+> **Windows users:** On Windows, npx is installed as `npx.cmd`. Use the `cmd /c` wrapper:
+> ```json
+> {
+>   "mcpServers": {
+>     "filesystem": {
+>       "command": "cmd",
+>       "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", "C:\\Users\\username\\Desktop"]
+>     }
+>   }
+> }
+> ```
+
 ## Usage with VS Code
 
 For quick installation, click the installation buttons below...
@@ -307,6 +319,18 @@ Note: all directories must be mounted to `/projects` by default.
   }
 }
 ```
+
+> **Windows users:** On Windows, npx is installed as `npx.cmd`. Use the `cmd /c` wrapper:
+> ```json
+> {
+>   "servers": {
+>     "filesystem": {
+>       "command": "cmd",
+>       "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", "${workspaceFolder}"]
+>     }
+>   }
+> }
+> ```
 
 ## Build
 
