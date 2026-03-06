@@ -1,0 +1,20 @@
+{
+  "name": "lead411",
+  "display_name": "Lead411",
+  "description": "Use Lead411 features directly inside Claude.",
+  "version": "1.0.0",
+  "icon": "lead411-icon.png",
+  "server": {
+    "url": "https://mcp.lead411.com",
+    "headers": {
+      "X-API-KEY": "${api_key}"
+    }
+  },
+  "inputs": {
+    "api_key": {
+      "type": "string",
+      "description": "Enter your Lead411 API key",
+      "required": true
+    }
+  }
+}
