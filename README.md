@@ -903,6 +903,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Holaspirit](https://github.com/syucream/holaspirit-mcp-server)** - Interact with [Holaspirit](https://www.holaspirit.com/).
 - **[Home Assistant](https://github.com/tevonsb/homeassistant-mcp)** - Interact with [Home Assistant](https://www.home-assistant.io/) including viewing and controlling lights, switches, sensors, and all other Home Assistant entities.
 - **[Home Assistant](https://github.com/voska/hass-mcp)** - Docker-ready MCP server for Home Assistant with entity management, domain summaries, automation support, and guided conversations. Includes pre-built container images for easy installation.
+- **[Hop](https://github.com/danmartuszewski/hop)** - Fast SSH connection manager with TUI dashboard and MCP server for discovering, searching, and executing commands on remote hosts.
 - **[HTML to Markdown](https://github.com/levz0r/html-to-markdown-mcp)** - Fetch web pages and convert HTML to clean, formatted Markdown. Handles large pages with automatic file saving to bypass token limits.
 - **[html2md-mcp](https://github.com/sunshad0w/html2md-mcp)** - MCP server for converting HTML to Markdown with browser support and authentication. Reduces HTML size by 90-95% using trafilatura and BeautifulSoup4, with Playwright integration for JavaScript-rendered content.
 - **[HubSpot](https://github.com/buryhuang/mcp-hubspot)** - HubSpot CRM integration for managing contacts and companies. Create and retrieve CRM data directly through Claude chat.
