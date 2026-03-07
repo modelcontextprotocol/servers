@@ -1386,6 +1386,7 @@ search, and comprehensive file analysis.
 - **[TuriX Computer Automation MCP](https://github.com/TurixAI/TuriX-CUA/tree/mac_mcp)** - MCP server for helping automation control your computer complete your pre-setting task.
 - **[Tyk API Management](https://github.com/TykTechnologies/tyk-dashboard-mcp)** - Chat with all of your organization's managed APIs and perform other API lifecycle operations, managing tokens, users, analytics, and more.
 - **[Typesense](https://github.com/suhail-ak-s/mcp-typesense-server)** - A Model Context Protocol (MCP) server implementation that provides AI models with access to Typesense search capabilities. This server enables LLMs to discover, search, and analyze data stored in Typesense collections.
+- **[UgarAPI](https://ugarapi.com)** - Automated services for AI agents with Bitcoin Lightning payments. npm: `ugarapi-mcp-server`. Web scraping, document timestamping, API aggregation. Real Bitcoin Lightning micropayments.
 - **[UniFi Dream Machine](https://github.com/sabler/mcp-unifi)** An MCP server that gets your network telemetry from the UniFi Site Manager and your local UniFi router.
 - **[UniProt](https://github.com/QuentinCody/uniprot-mcp-server)** - Unofficial MCP server for UniProt, providing access to protein sequence data, functional annotations, taxonomic information, and cross-references for proteomics and bioinformatics research.
 - **[uniswap-poolspy-mcp](https://github.com/kukapay/uniswap-poolspy-mcp)** - An MCP server that tracks newly created liquidity pools on Uniswap across nine blockchain networks.
