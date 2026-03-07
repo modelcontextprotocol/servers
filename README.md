@@ -664,6 +664,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Bluetooth MCP Server](https://github.com/Hypijump31/bluetooth-mcp-server)** - Control Bluetooth devices and manage connections through natural language commands, including device discovery, pairing, and audio controls.
 - **[BNBChain MCP](https://github.com/bnb-chain/bnbchain-mcp)** - An MCP server for interacting with BSC, opBNB, and the Greenfield blockchain.
 - **[Braintree](https://github.com/QuentinCody/braintree-mcp-server)** - Unofficial PayPal Braintree payment gateway MCP Server for AI agents to process payments, manage customers, and handle transactions securely.
+- **[Brain](https://github.com/timmeck/brain)** - Adaptive error memory & code intelligence with Hebbian synapse network. Auto-detects errors, remembers solutions across projects, and suggests proven fixes with confidence scores.
 - **[Brazilian Law](https://github.com/pdmtt/brlaw_mcp_server/)** (by pdmtt) - Agent-driven research on Brazilian law using official sources.
 - **[BreakoutRoom](https://github.com/agree-able/room-mcp)** - Agents accomplishing goals together in p2p rooms
 - **[Browser MCP](https://github.com/bytedance/UI-TARS-desktop/tree/main/packages/agent-infra/mcp-servers/browser)** (by UI-TARS) - A fast, lightweight MCP server that empowers LLMs with browser automation via Puppeteer’s structured accessibility data, featuring optional vision mode for complex visual understanding and flexible, cross-platform configuration.
