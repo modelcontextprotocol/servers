@@ -4,11 +4,13 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['**/__tests__/**/*.test.ts'],
+    include: ['**/__tests__/**/**/*.test.ts'],
+    setupFiles: ['./__tests__/helpers/mocks.ts'],
+    clearMocks: true,
     coverage: {
       provider: 'v8',
       include: ['**/*.ts'],
-      exclude: ['**/__tests__/**', '**/dist/**'],
+      exclude: ['**/__tests__/**', '**/dist/**', '**/index.ts'],
     },
   },
 });

@@ -3,6 +3,19 @@
     "mcp-docs": {
       "type": "http",
       "url": "https://modelcontextprotocol.io/mcp"
+    },
+    "sequential-thinking": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e", "MAX_THOUGHT_LENGTH=5000",
+        "-e", "MAX_HISTORY_SIZE=100",
+        "-e", "ENABLE_METRICS=true",
+        "-e", "ENABLE_HEALTH_CHECKS=true",
+        "mcp/sequential-thinking"
+      ]
     }
   }
 }

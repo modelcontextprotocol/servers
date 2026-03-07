@@ -1,21 +1,64 @@
 #!/usr/bin/env node
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
+import type { ProcessThoughtRequest } from './lib.js';
 import { SequentialThinkingServer } from './lib.js';
+import type { AppConfig } from './interfaces.js';
+import { VALID_THINKING_MODES } from './interfaces.js';
+import { ConfigManager } from './config.js';
+
+// Load configuration
+let config: AppConfig;
+try {
+  config = ConfigManager.load();
+} catch (error) {
+  console.error('Failed to load configuration:', error);
+  process.exit(1);
+}
 
 const server = new McpServer({
-  name: "sequential-thinking-server",
-  version: "0.2.0",
+  name: config.server.name,
+  version: config.server.version,
 });
 
 const thinkingServer = new SequentialThinkingServer();
 
+// Shared schema fragments
+const sessionIdSchema = z.string().describe('Session identifier');
+const thinkingModeSchema = z.enum(VALID_THINKING_MODES);
+
+// Shared result wrapper
+interface ToolInput {
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: boolean;
+}
+
+interface ToolResult {
+  [key: string]: unknown;
+  content: Array<{ type: 'text'; text: string }>;
+  isError?: true;
+}
+
+function wrapToolResult(
+  result: ToolInput,
+  treatEmptyAsError = false,
+): ToolResult {
+  if (
+    result.isError === true
+    || (treatEmptyAsError && result.content.length === 0)
+  ) {
+    return { content: result.content, isError: true as const };
+  }
+  return { content: result.content };
+}
+
+// Register the main sequential thinking tool
 server.registerTool(
-  "sequentialthinking",
+  'sequentialthinking',
   {
-    title: "Sequential Thinking",
+    title: 'Sequential Thinking',
     description: `A detailed tool for dynamic and reflective problem-solving through thoughts.
 This tool helps analyze problems through a flexible thinking process that can adapt and evolve.
 Each thought can build on, question, or revise previous insights as understanding deepens.
@@ -39,6 +82,7 @@ Key features:
 - Verifies the hypothesis based on the Chain of Thought steps
 - Repeats the process until satisfied
 - Provides a correct answer
+- Enhanced with security controls, rate limiting, and bounded memory management
 
 Parameters explained:
 - thought: Your current thinking step, which can include:
@@ -56,8 +100,6 @@ Parameters explained:
 - revisesThought: If is_revision is true, which thought number is being reconsidered
 - branchFromThought: If branching, which thought number is the branching point
 - branchId: Identifier for the current branch (if any)
-- needsMoreThoughts: If reaching end but realizing more thoughts needed
-
 You should:
 1. Start with an initial estimate of needed thoughts, but be ready to adjust
 2. Feel free to question or revise previous thoughts
@@ -69,50 +111,295 @@ You should:
 8. Verify the hypothesis based on the Chain of Thought steps
 9. Repeat the process until satisfied with the solution
 10. Provide a single, ideally correct answer as the final output
-11. Only set nextThoughtNeeded to false when truly done and a satisfactory answer is reached`,
+11. Only set nextThoughtNeeded to false when truly done and a satisfactory answer is reached
+
+Security Notes:
+- All thoughts are validated and sanitized
+- Rate limiting is enforced per session
+- Maximum thought length and history size are enforced
+- Malicious content is automatically filtered`,
     inputSchema: {
-      thought: z.string().describe("Your current thinking step"),
-      nextThoughtNeeded: z.boolean().describe("Whether another thought step is needed"),
-      thoughtNumber: z.number().int().min(1).describe("Current thought number (numeric value, e.g., 1, 2, 3)"),
-      totalThoughts: z.number().int().min(1).describe("Estimated total thoughts needed (numeric value, e.g., 5, 10)"),
-      isRevision: z.boolean().optional().describe("Whether this revises previous thinking"),
-      revisesThought: z.number().int().min(1).optional().describe("Which thought is being reconsidered"),
-      branchFromThought: z.number().int().min(1).optional().describe("Branching point thought number"),
-      branchId: z.string().optional().describe("Branch identifier"),
-      needsMoreThoughts: z.boolean().optional().describe("If more thoughts are needed")
-    },
-    outputSchema: {
-      thoughtNumber: z.number(),
-      totalThoughts: z.number(),
-      nextThoughtNeeded: z.boolean(),
-      branches: z.array(z.string()),
-      thoughtHistoryLength: z.number()
-    },
+      thought: z.string().describe('Your current thinking step'),
+      nextThoughtNeeded: z.boolean().describe('Whether another thought step is needed'),
+      thoughtNumber: z.number().int().min(1).describe('Current thought number (numeric value, e.g., 1, 2, 3)'),
+      totalThoughts: z.number().int().min(1).describe('Estimated total thoughts needed (numeric value, e.g., 5, 10)'),
+      isRevision: z.boolean().optional().describe('Whether this revises previous thinking'),
+      revisesThought: z.number().int().min(1).optional().describe('Which thought is being reconsidered'),
+      branchFromThought: z.number().int().min(1).optional().describe('Branching point thought number'),
+      branchId: z.string().optional().describe('Branch identifier'),
+      sessionId: sessionIdSchema.optional().describe('Session identifier for tracking'),
+      thinkingMode: thinkingModeSchema.optional().describe('Set thinking mode on first thought: fast (3-5 linear steps), expert (balanced branching), deep (exhaustive exploration)'),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
   },
-  async (args) => {
-    const result = thinkingServer.processThought(args);
-
-    if (result.isError) {
-      return result;
-    }
-
-    // Parse the JSON response to get structured content
-    const parsedContent = JSON.parse(result.content[0].text);
-
-    return {
-      content: result.content,
-      structuredContent: parsedContent
-    };
-  }
+  async (args: any) => wrapToolResult( // eslint-disable-line @typescript-eslint/no-explicit-any
+    await thinkingServer.processThought(
+      args as ProcessThoughtRequest,
+    ),
+    true,
+  ),
 );
 
-async function runServer() {
+// Register the thought history retrieval tool
+server.registerTool(
+  'get_thought_history',
+  {
+    title: 'Get Thought History',
+    description: 'Retrieve past thoughts from a session. Use this to review thinking history, examine branch contents, or recall earlier reasoning steps.',
+    inputSchema: {
+      sessionId: sessionIdSchema.describe('Session identifier to retrieve thoughts for'),
+      branchId: z.string().optional().describe('Optional branch identifier to filter thoughts by branch'),
+      limit: z.number().int().min(1).optional().describe('Maximum number of thoughts to return (most recent first)'),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  },
+  async (args: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const thoughts = thinkingServer.getFilteredHistory({
+      sessionId: args.sessionId,
+      branchId: args.branchId,
+      limit: args.limit,
+    });
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          sessionId: args.sessionId,
+          branchId: args.branchId ?? null,
+          count: thoughts.length,
+          thoughts: thoughts.map((t) => ({
+            thoughtNumber: t.thoughtNumber,
+            totalThoughts: t.totalThoughts,
+            thought: t.thought,
+            nextThoughtNeeded: t.nextThoughtNeeded,
+            isRevision: t.isRevision ?? false,
+            revisesThought: t.revisesThought ?? null,
+            branchId: t.branchId ?? null,
+            branchFromThought: t.branchFromThought ?? null,
+            timestamp: t.timestamp,
+          })),
+        }, null, 2),
+      }],
+    };
+  },
+);
+
+// Add health check tool for monitoring
+server.registerTool(
+  'health_check',
+  {
+    title: 'Health Check',
+    description: 'Check the health and status of the Sequential Thinking server',
+    inputSchema: {
+      _dummy: z.string().optional(),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  },
+  async () => {
+    try {
+      const healthStatus = await thinkingServer.getHealthStatus();
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(healthStatus, null, 2),
+        }],
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            status: 'unhealthy',
+            summary: 'Health check failed',
+            error: error instanceof Error ? error.message : String(error),
+            timestamp: new Date(),
+          }, null, 2),
+        }],
+        isError: true,
+      };
+    }
+  },
+);
+
+// Add metrics tool
+server.registerTool(
+  'metrics',
+  {
+    title: 'Get Metrics',
+    description: 'Get detailed metrics and statistics about the server',
+    inputSchema: {
+      _dummy: z.string().optional(),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  },
+  async () => {
+    try {
+      const metrics = await thinkingServer.getMetrics();
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(metrics, null, 2),
+        }],
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            error: 'Failed to retrieve metrics',
+            message: error instanceof Error ? error.message : String(error),
+          }, null, 2),
+        }],
+        isError: true,
+      };
+    }
+  },
+);
+
+// Set thinking mode tool
+server.registerTool(
+  'set_thinking_mode',
+  {
+    title: 'Set Thinking Mode',
+    description: `Set a thinking mode for a session to shape exploration behavior. Modes:
+- fast: Linear, exploit-focused. 3-5 steps, no branching, auto-evaluation.
+- expert: Balanced exploration with targeted branching, backtracking on low scores, convergence at 0.7.
+- deep: Exhaustive exploration. Wide branching (up to 5), aggressive backtracking, convergence at 0.85.
+
+Once set, each processThought response includes modeGuidance with recommended actions.`,
+    inputSchema: {
+      sessionId: sessionIdSchema,
+      mode: thinkingModeSchema.describe('Thinking mode to activate'),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  },
+  async (args: any) => wrapToolResult( // eslint-disable-line @typescript-eslint/no-explicit-any
+    await thinkingServer.setThinkingMode(args.sessionId, args.mode),
+  ),
+);
+
+// Register MCTS tree exploration tools
+server.registerTool(
+  'backtrack',
+  {
+    title: 'Backtrack',
+    description: 'Move the thought tree cursor back to a previous node, allowing exploration of alternative paths from that point. Returns the node info, its children, and tree statistics.',
+    inputSchema: {
+      sessionId: sessionIdSchema,
+      nodeId: z.string().describe('The node ID to backtrack to'),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  },
+  async (args: any) => wrapToolResult( // eslint-disable-line @typescript-eslint/no-explicit-any
+    await thinkingServer.backtrack(args.sessionId, args.nodeId),
+  ),
+);
+
+server.registerTool(
+  'evaluate_thought',
+  {
+    title: 'Evaluate Thought',
+    description: 'Score a thought node with a value between 0 and 1. The value is backpropagated up the tree to all ancestors, updating their visit counts and total values. This drives the MCTS selection process.',
+    inputSchema: {
+      sessionId: sessionIdSchema,
+      nodeId: z.string().describe('The node ID to evaluate'),
+      value: z.number().min(0).max(1).describe('Evaluation score between 0 (poor) and 1 (excellent)'),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  },
+  async (args: any) => wrapToolResult( // eslint-disable-line @typescript-eslint/no-explicit-any
+    await thinkingServer.evaluateThought(
+      args.sessionId, args.nodeId, args.value,
+    ),
+  ),
+);
+
+server.registerTool(
+  'suggest_next_thought',
+  {
+    title: 'Suggest Next Thought',
+    description: 'Use UCB1-based selection to suggest the most promising node to explore next. Strategies: "explore" favors unvisited nodes, "exploit" favors high-value nodes, "balanced" (default) balances both.',
+    inputSchema: {
+      sessionId: sessionIdSchema,
+      strategy: z.enum(['explore', 'exploit', 'balanced']).optional().describe('Selection strategy (default: balanced)'),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  },
+  async (args: any) => wrapToolResult( // eslint-disable-line @typescript-eslint/no-explicit-any
+    await thinkingServer.suggestNextThought(
+      args.sessionId, args.strategy,
+    ),
+  ),
+);
+
+server.registerTool(
+  'get_thinking_summary',
+  {
+    title: 'Get Thinking Summary',
+    description: 'Get a comprehensive summary of the thought tree including the best reasoning path (highest average value), full tree structure, and statistics.',
+    inputSchema: {
+      sessionId: sessionIdSchema,
+      maxDepth: z.number().int().min(0).optional().describe('Maximum depth to include in tree structure (omit for full tree)'),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  },
+  async (args: any) => wrapToolResult( // eslint-disable-line @typescript-eslint/no-explicit-any
+    await thinkingServer.getThinkingSummary(
+      args.sessionId, args.maxDepth,
+    ),
+  ),
+);
+
+// Version tool
+server.registerTool(
+  'get_version',
+  {
+    title: 'Get Server Version',
+    description: 'Get the version of the Sequential Thinking MCP server along with system information.',
+    inputSchema: {
+      _dummy: z.string().optional(),
+    } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  },
+  async () => {
+    const envInfo = ConfigManager.getEnvironmentInfo();
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          serverVersion: config.server.version,
+          nodeVersion: envInfo.nodeVersion,
+          platform: envInfo.platform,
+          arch: envInfo.arch,
+          pid: envInfo.pid,
+        }, null, 2),
+      }],
+    };
+  },
+);
+
+// Setup graceful shutdown
+process.on('SIGINT', () => {
+  console.error('Received SIGINT, shutting down gracefully...');
+  thinkingServer.destroy();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.error('Received SIGTERM, shutting down gracefully...');
+  thinkingServer.destroy();
+  process.exit(0);
+});
+
+async function runServer(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Sequential Thinking MCP Server running on stdio");
+  
+  const envInfo = ConfigManager.getEnvironmentInfo();
+  console.error(`Sequential Thinking MCP Server ${config.server.version} running on stdio`);
+  console.error(`Node.js ${envInfo.nodeVersion} on ${envInfo.platform}-${envInfo.arch} (PID: ${envInfo.pid})`);
+  console.error(`Configuration: Max thoughts=${config.state.maxHistorySize}, Rate limit=${config.security.maxThoughtsPerMinute}/min`);
+  
+  if (config.monitoring.enableMetrics) {
+    console.error('Metrics collection enabled');
+  }
+  if (config.monitoring.enableHealthChecks) {
+    console.error('Health checks enabled');
+  }
 }
 
 runServer().catch((error) => {
-  console.error("Fatal error running server:", error);
+  console.error('Fatal error running server:', error);
+  thinkingServer.destroy();
   process.exit(1);
 });

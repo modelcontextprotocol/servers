@@ -1,0 +1,16 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["./index.ts"],
+  "entryPointStrategy": "expand",
+  "out": "docs",
+  "name": "Sequential Thinking MCP Server",
+  "includeVersion": true,
+  "readme": "README.md",
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "plugin": [],
+  "theme": "default",
+  "navigationLinks": {
+    "GitHub": "https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking"
+  }
+}
