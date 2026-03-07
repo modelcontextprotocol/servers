@@ -963,6 +963,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Kindred Offers & Discounts MCP](https://github.com/kindred-app/mcp-server-kindred-offers)** (by kindred.co) - This MCP server allows you to get live deals and offers/coupons from e-commerce merchant sites all over the world.
 - **[kintone](https://github.com/macrat/mcp-server-kintone)** - Manage records and apps in [kintone](https://kintone.com) through LLM tools.
 - **[KnowAir Weather MCP](https://github.com/shuowang-ai/Weather-MCP)** - A comprehensive Model Context Protocol (MCP) server providing real-time weather data, air quality monitoring, forecasts, and astronomical information powered by Caiyun Weather API.
+- **[KnowFun MCP](hhttps://github.com/MindStarAI/KnowFun-MCP)** - Generate educational courses, visual posters, interactive games, and short films using AI through [Knowfun.io](https://knowfun.io) OpenAPI. Install via NPM: `npm install -g knowfun-mcp`
 - **[Kokoro TTS](https://github.com/mberg/kokoro-tts-mcp)** - Use Kokoro text to speech to convert text to MP3s with optional autoupload to S3.
 - **[Kong Konnect](https://github.com/Kong/mcp-konnect)** - A Model Context Protocol (MCP) server for interacting with Kong Konnect APIs, allowing AI assistants to query and analyze Kong Gateway configurations, traffic, and analytics.
 - **[Korea Stock Analyzer](https://github.com/Mrbaeksang/korea-stock-analyzer-mcp)** - Analyze Korean stocks (KOSPI/KOSDAQ) with 6 legendary investment strategies including Buffett, Lynch, Graham, Greenblatt, Fisher, and Templeton.
