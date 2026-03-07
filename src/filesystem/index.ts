@@ -499,8 +499,7 @@ server.registerTool(
 
     // Format the output
     const formattedEntries = sortedEntries.map(entry =>
-      `${entry.isDirectory ? "[DIR]" : "[FILE]"} ${entry.name.padEnd(30)} ${
-        entry.isDirectory ? "" : formatSize(entry.size).padStart(10)
+      `${entry.isDirectory ? "[DIR]" : "[FILE]"} ${entry.name.padEnd(30)} ${entry.isDirectory ? "" : formatSize(entry.size).padStart(10)
       }`
     );
 
@@ -710,7 +709,8 @@ async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
     setAllowedDirectories(allowedDirectories); // Update the global state in lib.ts
     console.error(`Updated allowed directories from MCP roots: ${validatedRootDirs.length} valid directories`);
   } else {
-    console.error("No valid root directories provided by client");
+    console.error("Error: No valid root directories provided by client. Received roots:",
+      JSON.stringify(requestedRoots.map(r => r.uri)));
   }
 }
 
@@ -745,7 +745,7 @@ server.server.oninitialized = async () => {
   } else {
     if (allowedDirectories.length > 0) {
       console.error("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
-    }else{
+    } else {
       throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
     }
   }

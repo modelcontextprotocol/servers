@@ -106,7 +106,9 @@ export function normalizePath(p: string): string {
 }
 
 /**
- * Expands home directory tildes in paths
+ * Expands home directory tildes in paths.
+ * Only expands `~` (bare) or `~/...` (home-prefixed) paths.
+ * Literal folder names like `~MyFolder` are intentionally left unchanged.
  * @param filepath The path to expand
  * @returns Expanded path
  */
