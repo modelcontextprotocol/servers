@@ -5,6 +5,9 @@ from git.exc import BadName
 from mcp_server_git.server import (
     git_checkout,
     git_branch,
+    git_current_branch,
+    git_default_branch,
+    git_remote,
     git_add,
     git_status,
     git_diff_unstaged,
@@ -423,3 +426,145 @@ def test_git_checkout_rejects_malicious_refs(test_repository):
 
     # Cleanup
     malicious_ref_path.unlink()
+
+
+# Tests for git_current_branch
+
+def test_git_current_branch(test_repository):
+    result = git_current_branch(test_repository)
+    assert result == test_repository.active_branch.name
+
+def test_git_current_branch_detached_head(test_repository):
+    commit_sha = test_repository.head.commit.hexsha
+    test_repository.git.checkout(commit_sha)
+    result = git_current_branch(test_repository)
+    assert "detached" in result.lower()
+    assert commit_sha[:7] in result
+
+
+# Tests for git_default_branch
+
+def test_git_default_branch_fallback_local(test_repository):
+    """Repo with no remote; falls back to detecting the local default branch name."""
+    default_branch = test_repository.active_branch.name
+    result = git_default_branch(test_repository)
+    assert result == f"origin/{default_branch}"
+
+def test_git_default_branch_with_remote(tmp_path):
+    """Create a bare remote repo, add it as origin, verify ls-remote detection works."""
+    # Create a bare repo to act as the remote
+    bare_path = tmp_path / "bare_remote.git"
+    bare_repo = git.Repo.init(bare_path, bare=True)
+
+    # Create a local repo and push to the bare remote
+    local_path = tmp_path / "local_repo"
+    local_repo = git.Repo.init(local_path)
+
+    Path(local_path / "test.txt").write_text("test")
+    local_repo.index.add(["test.txt"])
+    local_repo.index.commit("initial commit")
+
+    local_repo.create_remote("origin", str(bare_path))
+    local_repo.git.push("--set-upstream", "origin", local_repo.active_branch.name)
+
+    result = git_default_branch(local_repo)
+    assert result == f"origin/{local_repo.active_branch.name}"
+
+    shutil.rmtree(local_path)
+    shutil.rmtree(bare_path)
+
+def test_git_default_branch_custom_remote(tmp_path):
+    """Add a remote with a non-'origin' name, verify the remote parameter selects it."""
+    bare_path = tmp_path / "custom_remote.git"
+    bare_repo = git.Repo.init(bare_path, bare=True)
+
+    local_path = tmp_path / "local_repo"
+    local_repo = git.Repo.init(local_path)
+
+    Path(local_path / "test.txt").write_text("test")
+    local_repo.index.add(["test.txt"])
+    local_repo.index.commit("initial commit")
+
+    local_repo.create_remote("upstream", str(bare_path))
+    local_repo.git.push("--set-upstream", "upstream", local_repo.active_branch.name)
+
+    result = git_default_branch(local_repo, remote="upstream")
+    assert result == f"upstream/{local_repo.active_branch.name}"
+
+    shutil.rmtree(local_path)
+    shutil.rmtree(bare_path)
+
+def test_git_default_branch_undetectable(tmp_path):
+    """Repo with no remotes and no main/master branch; should raise ValueError."""
+    repo_path = tmp_path / "no_default_repo"
+    repo = git.Repo.init(repo_path)
+
+    # Create a commit on a non-standard branch name
+    repo.git.checkout("-b", "develop")
+    Path(repo_path / "test.txt").write_text("test")
+    repo.index.add(["test.txt"])
+    repo.index.commit("initial commit")
+
+    with pytest.raises(ValueError, match="Could not determine the default branch"):
+        git_default_branch(repo)
+
+    shutil.rmtree(repo_path)
+
+def test_git_default_branch_revparse_fallback(tmp_path):
+    """When ls-remote fails but local ref cache exists, rev-parse fallback should work."""
+    # Create a bare repo to act as the remote
+    bare_path = tmp_path / "bare_remote.git"
+    git.Repo.init(bare_path, bare=True)
+
+    # Create a local repo and push to the bare remote
+    local_path = tmp_path / "local_repo"
+    local_repo = git.Repo.init(local_path)
+
+    Path(local_path / "test.txt").write_text("test")
+    local_repo.index.add(["test.txt"])
+    local_repo.index.commit("initial commit")
+
+    active_branch = local_repo.active_branch.name
+    local_repo.create_remote("origin", str(bare_path))
+    local_repo.git.push("--set-upstream", "origin", active_branch)
+
+    # Populate local ref cache for origin/HEAD
+    local_repo.git.remote("set-head", "origin", "--auto")
+
+    # Replace remote URL with an invalid path so ls-remote will fail
+    local_repo.git.remote("set-url", "origin", "/nonexistent/path")
+
+    result = git_default_branch(local_repo)
+    assert result == f"origin/{active_branch}"
+
+    shutil.rmtree(local_path)
+    shutil.rmtree(bare_path)
+
+
+# Tests for git_remote
+
+def test_git_remote_no_remotes(test_repository):
+    """Repo with no remotes; verify empty output."""
+    result = git_remote(test_repository)
+    assert result == ""
+
+def test_git_remote_with_remote(tmp_path):
+    """Repo with a remote configured; verify remote name and URL appear in output."""
+    bare_path = tmp_path / "bare_remote.git"
+    git.Repo.init(bare_path, bare=True)
+
+    local_path = tmp_path / "local_repo"
+    local_repo = git.Repo.init(local_path)
+
+    Path(local_path / "test.txt").write_text("test")
+    local_repo.index.add(["test.txt"])
+    local_repo.index.commit("initial commit")
+
+    local_repo.create_remote("origin", str(bare_path))
+
+    result = git_remote(local_repo)
+    assert "origin" in result
+    assert str(bare_path) in result
+
+    shutil.rmtree(local_path)
+    shutil.rmtree(bare_path)
