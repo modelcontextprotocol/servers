@@ -38,6 +38,13 @@ class InMemoryEventStore implements EventStore {
 
 console.log("Starting Streamable HTTP server...");
 
+// Check if SSE resumability should be disabled (workaround for clients that don't handle empty SSE events)
+const DISABLE_SSE_RESUMABILITY = process.env.DISABLE_SSE_RESUMABILITY === 'true';
+if (DISABLE_SSE_RESUMABILITY) {
+  console.log("SSE resumability is DISABLED - eventStore will not be used");
+  console.log("This is a workaround for clients that don't properly handle empty SSE data events");
+}
+
 // Express app with permissive CORS for testing with Inspector direct connect mode
 const app = express();
 app.use(
@@ -72,10 +79,13 @@ app.post("/mcp", async (req: Request, res: Response) => {
       const { server, cleanup } = createServer();
 
       // New initialization request
-      const eventStore = new InMemoryEventStore();
+      // Only enable eventStore if resumability is not disabled
+      // Note: Disabling resumability is a workaround for clients that don't properly
+      // handle empty SSE data events (required by SEP-1699 for protocol >= 2025-11-25)
+      const eventStore = DISABLE_SSE_RESUMABILITY ? undefined : new InMemoryEventStore();
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
-        eventStore, // Enable resumability
+        eventStore, // Enable resumability (unless disabled)
         onsessioninitialized: (sessionId: string) => {
           // Store the transport by session ID when a session is initialized
           // This avoids race conditions where requests might come in before the session is stored

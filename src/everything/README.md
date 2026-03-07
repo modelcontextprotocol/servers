@@ -104,3 +104,32 @@ npx @modelcontextprotocol/server-everything sse
 npx @modelcontextprotocol/server-everything streamableHttp
 ```
 
+## Environment Variables
+
+### DISABLE_SSE_RESUMABILITY
+
+Set to `true` to disable SSE resumability (eventStore). This prevents the server from sending the priming event (empty SSE event with an ID) that is required by [SEP-1699](https://modelcontextprotocol.io/community/seps/1699-support-sse-polling-via-server-side-disconnect) for protocol version 2025-11-25+.
+
+**Note**: This is a workaround for clients that don't properly handle empty SSE data events as specified by the [SSE standard](https://html.spec.whatwg.org/multipage/server-sent-events.html). The proper fix is to update the client to handle empty SSE events correctly.
+
+When resumability is disabled:
+- SSE streams cannot be resumed after network failures
+- Server cannot use polling mode (must keep connections open)
+- Event replay is not available
+
+```shell
+# Disable SSE resumability
+DISABLE_SSE_RESUMABILITY=true npx @modelcontextprotocol/server-everything streamableHttp
+
+# Or with Docker
+docker run -e DISABLE_SSE_RESUMABILITY=true -p 3001:3001 mcp/everything streamableHttp
+```
+
+### PORT
+
+Set the port for the HTTP servers (SSE and Streamable HTTP). Default: `3001`
+
+```shell
+PORT=8080 npx @modelcontextprotocol/server-everything streamableHttp
+```
+
