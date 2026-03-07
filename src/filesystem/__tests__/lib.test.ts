@@ -303,10 +303,65 @@ describe('Lib Functions', () => {
     describe('writeFileContent', () => {
       it('writes file content', async () => {
         mockFs.writeFile.mockResolvedValueOnce(undefined);
-        
+
         await writeFileContent('/test/file.txt', 'new content');
-        
+
         expect(mockFs.writeFile).toHaveBeenCalledWith('/test/file.txt', 'new content', { encoding: "utf-8", flag: 'wx' });
+      });
+
+      it('falls back to fs.cp when fs.rename fails with EPERM (Windows locked file)', async () => {
+        // First write fails because file exists
+        const eexistError = new Error('EEXIST') as NodeJS.ErrnoException;
+        eexistError.code = 'EEXIST';
+
+        // Rename fails with EPERM (Windows file lock)
+        const epermError = new Error('EPERM') as NodeJS.ErrnoException;
+        epermError.code = 'EPERM';
+
+        mockFs.writeFile
+          .mockRejectedValueOnce(eexistError)  // First write fails (file exists)
+          .mockResolvedValueOnce(undefined);    // Temp file write succeeds
+        mockFs.rename.mockRejectedValueOnce(epermError);
+        mockFs.cp.mockResolvedValueOnce(undefined);
+        mockFs.unlink.mockResolvedValueOnce(undefined);
+
+        await writeFileContent('/test/file.txt', 'new content');
+
+        // Should have tried rename first, then fallen back to cp + unlink
+        expect(mockFs.rename).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          '/test/file.txt'
+        );
+        expect(mockFs.cp).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          '/test/file.txt',
+          { force: true }
+        );
+        expect(mockFs.unlink).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/)
+        );
+      });
+
+      it('propagates non-EPERM errors from fs.rename', async () => {
+        // First write fails because file exists
+        const eexistError = new Error('EEXIST') as NodeJS.ErrnoException;
+        eexistError.code = 'EEXIST';
+
+        // Rename fails with EACCES (not EPERM)
+        const eaccesError = new Error('EACCES') as NodeJS.ErrnoException;
+        eaccesError.code = 'EACCES';
+
+        mockFs.writeFile
+          .mockRejectedValueOnce(eexistError)
+          .mockResolvedValueOnce(undefined);
+        mockFs.rename.mockRejectedValueOnce(eaccesError);
+        mockFs.unlink.mockResolvedValueOnce(undefined); // Cleanup of temp file
+
+        await expect(writeFileContent('/test/file.txt', 'content'))
+          .rejects.toThrow('EACCES');
+
+        // Should not have tried cp fallback
+        expect(mockFs.cp).not.toHaveBeenCalled();
       });
     });
 
