@@ -23,6 +23,11 @@ dependencies = [
     "tzlocal>=5.3.1",
 ]
 
+[project.urls]
+Homepage = "https://github.com/modelcontextprotocol/servers"
+Repository = "https://github.com/modelcontextprotocol/servers/tree/main/src/time"
+"Bug Tracker" = "https://github.com/modelcontextprotocol/servers/issues"
+
 [project.scripts]
 mcp-server-time = "mcp_server_time:main"
 
