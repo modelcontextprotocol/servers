@@ -12,13 +12,20 @@ export interface ThoughtData {
   nextThoughtNeeded: boolean;
 }
 
+// Default maximum number of thoughts to retain in history.
+// Can be overridden via the SEQUENTIAL_THINKING_MAX_HISTORY environment variable.
+const DEFAULT_MAX_HISTORY = 1000;
+
 export class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
   private disableThoughtLogging: boolean;
+  private maxHistory: number;
 
   constructor() {
     this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
+    const envMax = parseInt(process.env.SEQUENTIAL_THINKING_MAX_HISTORY || "", 10);
+    this.maxHistory = Number.isFinite(envMax) && envMax > 0 ? envMax : DEFAULT_MAX_HISTORY;
   }
 
   private formatThought(thoughtData: ThoughtData): string {
@@ -49,6 +56,27 @@ export class SequentialThinkingServer {
 └${border}┘`;
   }
 
+  /**
+   * Clears all stored thought history and branch data.
+   * Useful for freeing memory in long-running sessions.
+   */
+  public clearHistory(): { content: Array<{ type: "text"; text: string }> } {
+    const previousLength = this.thoughtHistory.length;
+    const previousBranches = Object.keys(this.branches).length;
+    this.thoughtHistory = [];
+    this.branches = {};
+    return {
+      content: [{
+        type: "text" as const,
+        text: JSON.stringify({
+          cleared: true,
+          previousThoughtCount: previousLength,
+          previousBranchCount: previousBranches
+        }, null, 2)
+      }]
+    };
+  }
+
   public processThought(input: ThoughtData): { content: Array<{ type: "text"; text: string }>; isError?: boolean } {
     try {
       // Validation happens at the tool registration layer via Zod
@@ -58,6 +86,13 @@ export class SequentialThinkingServer {
       }
 
       this.thoughtHistory.push(input);
+
+      // Trim history when it exceeds the configured maximum to prevent
+      // unbounded memory growth during long-running sessions (see #2912).
+      if (this.thoughtHistory.length > this.maxHistory) {
+        const excess = this.thoughtHistory.length - this.maxHistory;
+        this.thoughtHistory.splice(0, excess);
+      }
 
       if (input.branchFromThought && input.branchId) {
         if (!this.branches[input.branchId]) {

@@ -106,6 +106,21 @@ You should:
   }
 );
 
+server.registerTool(
+  "sequentialthinking_clear",
+  {
+    title: "Clear Thinking History",
+    description:
+      "Clears all stored thought history and branch data to free memory. " +
+      "Use this after completing a thinking session to prevent memory buildup " +
+      "in long-running server instances.",
+    inputSchema: {},
+  },
+  async () => {
+    return thinkingServer.clearHistory();
+  }
+);
+
 async function runServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);

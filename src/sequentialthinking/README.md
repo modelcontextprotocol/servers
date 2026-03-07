@@ -77,7 +77,12 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 
-To disable logging of thought information set env var: `DISABLE_THOUGHT_LOGGING` to `true`.
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DISABLE_THOUGHT_LOGGING` | Set to `true` to disable logging thought output to stderr | `false` |
+| `SEQUENTIAL_THINKING_MAX_HISTORY` | Maximum number of thoughts retained in memory. Oldest thoughts are trimmed when exceeded. | `1000` |
 Comment
 
 ### Usage with VS Code
