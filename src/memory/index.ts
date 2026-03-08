@@ -263,7 +263,7 @@ server.registerTool(
   "create_entities",
   {
     title: "Create Entities",
-    description: "Create multiple new entities in the knowledge graph",
+    description: "Create multiple new entities in the knowledge graph. Use when the user wants to add new concepts, people, or objects. Each entity needs a name, type, and optional observations.",
     inputSchema: {
       entities: z.array(EntitySchema)
     },
@@ -285,7 +285,7 @@ server.registerTool(
   "create_relations",
   {
     title: "Create Relations",
-    description: "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
+    description: "Create multiple new relations between entities in the knowledge graph. Relations must use active voice (e.g., 'works_at' not 'is_employed_by'). Use when the user wants to connect existing entities.",
     inputSchema: {
       relations: z.array(RelationSchema)
     },
@@ -307,7 +307,7 @@ server.registerTool(
   "add_observations",
   {
     title: "Add Observations",
-    description: "Add new observations to existing entities in the knowledge graph",
+    description: "Add new observations to existing entities in the knowledge graph. Use when the user wants to record new facts about an entity without creating duplicates. Unlike create_entities, this updates existing entries.",
     inputSchema: {
       observations: z.array(z.object({
         entityName: z.string().describe("The name of the entity to add the observations to"),
@@ -335,7 +335,7 @@ server.registerTool(
   "delete_entities",
   {
     title: "Delete Entities",
-    description: "Delete multiple entities and their associated relations from the knowledge graph",
+    description: "Delete multiple entities and all their associated relations from the knowledge graph. Use when the user wants to permanently remove concepts. This also removes all relations involving the deleted entities.",
     inputSchema: {
       entityNames: z.array(z.string()).describe("An array of entity names to delete")
     },
@@ -358,7 +358,7 @@ server.registerTool(
   "delete_observations",
   {
     title: "Delete Observations",
-    description: "Delete specific observations from entities in the knowledge graph",
+    description: "Delete specific observations from entities in the knowledge graph. Use when the user wants to remove outdated or incorrect facts from an entity without deleting the entity itself.",
     inputSchema: {
       deletions: z.array(z.object({
         entityName: z.string().describe("The name of the entity containing the observations"),
@@ -384,7 +384,7 @@ server.registerTool(
   "delete_relations",
   {
     title: "Delete Relations",
-    description: "Delete multiple relations from the knowledge graph",
+    description: "Delete multiple relations from the knowledge graph. Use when the user wants to remove connections between entities without deleting the entities themselves.",
     inputSchema: {
       relations: z.array(RelationSchema).describe("An array of relations to delete")
     },
@@ -407,7 +407,7 @@ server.registerTool(
   "read_graph",
   {
     title: "Read Graph",
-    description: "Read the entire knowledge graph",
+    description: "Read the entire knowledge graph including all entities and relations. Use when the user wants a complete overview. For large graphs, prefer search_nodes to find specific items.",
     inputSchema: {},
     outputSchema: {
       entities: z.array(EntitySchema),
@@ -428,7 +428,7 @@ server.registerTool(
   "search_nodes",
   {
     title: "Search Nodes",
-    description: "Search for nodes in the knowledge graph based on a query",
+    description: "Search for nodes in the knowledge graph by matching against entity names, types, and observations. Use when the user wants to find specific entities without loading the entire graph.",
     inputSchema: {
       query: z.string().describe("The search query to match against entity names, types, and observation content")
     },
@@ -451,7 +451,7 @@ server.registerTool(
   "open_nodes",
   {
     title: "Open Nodes",
-    description: "Open specific nodes in the knowledge graph by their names",
+    description: "Retrieve specific nodes from the knowledge graph by their exact names. Use when the user wants to look up known entities directly. Unlike search_nodes, this requires exact name matches.",
     inputSchema: {
       names: z.array(z.string()).describe("An array of entity names to retrieve")
     },
