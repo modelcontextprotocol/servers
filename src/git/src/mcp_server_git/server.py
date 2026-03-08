@@ -287,65 +287,63 @@ async def serve(repository: Path | None) -> None:
         return [
             Tool(
                 name=GitTools.STATUS,
-                description="Shows the working tree status",
+                description="Show the working tree status including modified, staged, and untracked files. Use when the user wants to see the current state of the repository before committing or staging changes.",
                 inputSchema=GitStatus.model_json_schema(),
             ),
             Tool(
                 name=GitTools.DIFF_UNSTAGED,
-                description="Shows changes in the working directory that are not yet staged",
+                description="Show changes in working directory files that are not yet staged. Use when the user wants to review modifications before running git_add. Unlike git_diff_staged, this shows only unstaged changes.",
                 inputSchema=GitDiffUnstaged.model_json_schema(),
             ),
             Tool(
                 name=GitTools.DIFF_STAGED,
-                description="Shows changes that are staged for commit",
+                description="Show changes that are staged for the next commit. Use when the user wants to review exactly what will be committed. Unlike git_diff_unstaged, this shows only staged changes.",
                 inputSchema=GitDiffStaged.model_json_schema(),
             ),
             Tool(
                 name=GitTools.DIFF,
-                description="Shows differences between branches or commits",
+                description="Show differences between two branches, commits, or tags. Use when the user wants to compare code across branches or review changes between specific commits.",
                 inputSchema=GitDiff.model_json_schema(),
             ),
             Tool(
                 name=GitTools.COMMIT,
-                description="Records changes to the repository",
+                description="Record staged changes to the repository with a message. Use when the user wants to save their staged changes as a new commit. Requires files to be staged first with git_add.",
                 inputSchema=GitCommit.model_json_schema(),
             ),
             Tool(
                 name=GitTools.ADD,
-                description="Adds file contents to the staging area",
+                description="Stage file changes for the next commit. Use when the user wants to prepare specific files for committing. Use git_status first to see which files have changes.",
                 inputSchema=GitAdd.model_json_schema(),
             ),
             Tool(
                 name=GitTools.RESET,
-                description="Unstages all staged changes",
+                description="Unstage all staged changes, moving them back to the working directory. Use when the user wants to undo git_add without losing the actual file changes.",
                 inputSchema=GitReset.model_json_schema(),
             ),
             Tool(
                 name=GitTools.LOG,
-                description="Shows the commit logs",
+                description="Show the commit history log. Use when the user wants to review past commits, find a specific change, or see who changed what and when.",
                 inputSchema=GitLog.model_json_schema(),
             ),
             Tool(
                 name=GitTools.CREATE_BRANCH,
-                description="Creates a new branch from an optional base branch",
+                description="Create a new branch from an optional base branch. Use when the user wants to start working on a new feature or fix without affecting the current branch.",
                 inputSchema=GitCreateBranch.model_json_schema(),
             ),
             Tool(
                 name=GitTools.CHECKOUT,
-                description="Switches branches",
+                description="Switch to a different branch. Use when the user wants to change their working context to an existing branch. Use git_create_branch first if the branch does not exist.",
                 inputSchema=GitCheckout.model_json_schema(),
             ),
             Tool(
                 name=GitTools.SHOW,
-                description="Shows the contents of a commit",
+                description="Show the contents and metadata of a specific commit. Use when the user wants to inspect what changed in a particular commit, including the diff and commit message.",
                 inputSchema=GitShow.model_json_schema(),
             ),
-
             Tool(
                 name=GitTools.BRANCH,
-                description="List Git branches",
+                description="List all local and remote branches. Use when the user wants to see available branches before switching or to check if a branch exists.",
                 inputSchema=GitBranch.model_json_schema(),
-
             )
         ]
 
