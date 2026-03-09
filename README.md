@@ -1293,6 +1293,7 @@ search, and comprehensive file analysis.
 - **[Sigil Notary](https://github.com/sly-the-fox/sigil)** - Tamper-evident, hash-chained audit trails for AI agents with Ed25519 signatures. Provides MCP tools for attesting actions, verifying receipts, and querying cryptographic audit chains.
 - **[Simple Loki MCP](https://github.com/ghrud92/simple-loki-mcp)** - A simple MCP server to query Loki logs using logcli.
 - **[Siri Shortcuts](https://github.com/dvcrn/mcp-server-siri-shortcuts)** - MCP to interact with Siri Shortcuts on macOS. Exposes all Shortcuts as MCP tools.
+- **[Sigil Notary](https://github.com/sly-the-fox/sigil)** - Tamper-evident, hash-chained audit trails for AI agents with Ed25519 signatures.
 - **[Skyvern](https://github.com/Skyvern-AI/skyvern/tree/main/integrations/mcp)** - MCP to let Claude / Windsurf / Cursor / your LLM control the browser
 - **[Slack](https://github.com/korotovsky/slack-mcp-server)** - The most powerful MCP server for Slack Workspaces. This integration supports both Stdio and SSE transports, proxy settings and does not require any permissions or bots being created or approved by Workspace admins 😏.
 - **[Slack](https://github.com/zencoderai/slack-mcp-server)** - Slack MCP server which supports both stdio and Streamable HTTP transports. Extended from the original Anthropic's implementation which is now [archived](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/slack)
