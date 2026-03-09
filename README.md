@@ -1290,6 +1290,7 @@ search, and comprehensive file analysis.
 - **[Shodan MCP](https://github.com/Hexix23/shodan-mcp)** - MCP server to interact with [Shodan](https://www.shodan.io/)
 - **[Shopify](https://github.com/GeLi2001/shopify-mcp)** - MCP to interact with Shopify API including order, product, customers and so on.
 - **[Shopify Storefront](https://github.com/QuentinCody/shopify-storefront-mcp-server)** - Unofficial MCP server that allows AI agents to discover Shopify storefronts and interact with them to fetch products, collections, and other store data through the Storefront API.
+- **[Sigil Notary](https://github.com/sly-the-fox/sigil)** - Tamper-evident, hash-chained audit trails for AI agents with Ed25519 signatures. Provides MCP tools for attesting actions, verifying receipts, and querying cryptographic audit chains.
 - **[Simple Loki MCP](https://github.com/ghrud92/simple-loki-mcp)** - A simple MCP server to query Loki logs using logcli.
 - **[Siri Shortcuts](https://github.com/dvcrn/mcp-server-siri-shortcuts)** - MCP to interact with Siri Shortcuts on macOS. Exposes all Shortcuts as MCP tools.
 - **[Skyvern](https://github.com/Skyvern-AI/skyvern/tree/main/integrations/mcp)** - MCP to let Claude / Windsurf / Cursor / your LLM control the browser
