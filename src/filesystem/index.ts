@@ -14,6 +14,7 @@ import { z } from "zod";
 import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from './path-utils.js';
 import { getValidRootDirectories } from './roots-utils.js';
+import { resolveReadOnlyMode, renderUsage } from './mode-utils.js';
 import {
   // Function imports
   formatSize,
@@ -30,12 +31,35 @@ import {
 
 // Command line argument parsing
 const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error("Usage: mcp-server-filesystem [allowed-directory] [additional-directories...]");
-  console.error("Note: Allowed directories can be provided via:");
-  console.error("  1. Command-line arguments (shown above)");
-  console.error("  2. MCP roots protocol (if client supports it)");
-  console.error("At least one directory must be provided by EITHER method for the server to operate.");
+const resolution = resolveReadOnlyMode(args, process.env);
+
+if (resolution.warnings.length > 0) {
+  for (const warning of resolution.warnings) {
+    console.error(`Warning: ${warning}`);
+  }
+}
+
+if (resolution.error) {
+  console.error(`Error: ${resolution.error}`);
+  console.error(renderUsage());
+  process.exit(1);
+}
+
+if (resolution.helpRequested) {
+  console.error(renderUsage());
+  process.exit(0);
+}
+
+const isReadOnly = resolution.isReadOnly;
+const directoryArgs = resolution.directories;
+
+if (directoryArgs.length === 0) {
+  console.error(renderUsage());
+  console.error("At least one directory must be provided by command-line args or via MCP roots.");
+}
+
+if (isReadOnly) {
+  console.error("Read-only mode enabled. Write operations will be disabled.");
 }
 
 // Store allowed directories in normalized and resolved form
@@ -43,7 +67,7 @@ if (args.length === 0) {
 // This fixes the macOS /tmp -> /private/tmp symlink issue where users specify /tmp
 // but the resolved path is /private/tmp
 let allowedDirectories = (await Promise.all(
-  args.map(async (dir) => {
+  directoryArgs.map(async (dir) => {
     const expanded = expandHome(dir);
     const absolute = path.resolve(expanded);
     const normalizedOriginal = normalizePath(absolute);
@@ -336,86 +360,88 @@ server.registerTool(
   }
 );
 
-server.registerTool(
-  "write_file",
-  {
-    title: "Write File",
-    description:
-      "Create a new file or completely overwrite an existing file with new content. " +
-      "Use with caution as it will overwrite existing files without warning. " +
-      "Handles text content with proper encoding. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      content: z.string()
+if (!isReadOnly) {
+  server.registerTool(
+    "write_file",
+    {
+      title: "Write File",
+      description:
+        "Create a new file or completely overwrite an existing file with new content. " +
+        "Use with caution as it will overwrite existing files without warning. " +
+        "Handles text content with proper encoding. Only works within allowed directories.",
+      inputSchema: {
+        path: z.string(),
+        content: z.string()
+      },
+      outputSchema: { content: z.string() },
+      annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
     },
-    outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
-  },
-  async (args: z.infer<typeof WriteFileArgsSchema>) => {
-    const validPath = await validatePath(args.path);
-    await writeFileContent(validPath, args.content);
-    const text = `Successfully wrote to ${args.path}`;
-    return {
-      content: [{ type: "text" as const, text }],
-      structuredContent: { content: text }
-    };
-  }
-);
+    async (args: z.infer<typeof WriteFileArgsSchema>) => {
+      const validPath = await validatePath(args.path);
+      await writeFileContent(validPath, args.content);
+      const text = `Successfully wrote to ${args.path}`;
+      return {
+        content: [{ type: "text" as const, text }],
+        structuredContent: { content: text }
+      };
+    }
+  );
 
-server.registerTool(
-  "edit_file",
-  {
-    title: "Edit File",
-    description:
-      "Make line-based edits to a text file. Each edit replaces exact line sequences " +
-      "with new content. Returns a git-style diff showing the changes made. " +
-      "Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      edits: z.array(z.object({
-        oldText: z.string().describe("Text to search for - must match exactly"),
-        newText: z.string().describe("Text to replace with")
-      })),
-      dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
+  server.registerTool(
+    "edit_file",
+    {
+      title: "Edit File",
+      description:
+        "Make line-based edits to a text file. Each edit replaces exact line sequences " +
+        "with new content. Returns a git-style diff showing the changes made. " +
+        "Only works within allowed directories.",
+      inputSchema: {
+        path: z.string(),
+        edits: z.array(z.object({
+          oldText: z.string().describe("Text to search for - must match exactly"),
+          newText: z.string().describe("Text to replace with")
+        })),
+        dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
+      },
+      outputSchema: { content: z.string() },
+      annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
     },
-    outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
-  },
-  async (args: z.infer<typeof EditFileArgsSchema>) => {
-    const validPath = await validatePath(args.path);
-    const result = await applyFileEdits(validPath, args.edits, args.dryRun);
-    return {
-      content: [{ type: "text" as const, text: result }],
-      structuredContent: { content: result }
-    };
-  }
-);
+    async (args: z.infer<typeof EditFileArgsSchema>) => {
+      const validPath = await validatePath(args.path);
+      const result = await applyFileEdits(validPath, args.edits, args.dryRun);
+      return {
+        content: [{ type: "text" as const, text: result }],
+        structuredContent: { content: result }
+      };
+    }
+  );
 
-server.registerTool(
-  "create_directory",
-  {
-    title: "Create Directory",
-    description:
-      "Create a new directory or ensure a directory exists. Can create multiple " +
-      "nested directories in one operation. If the directory already exists, " +
-      "this operation will succeed silently. Perfect for setting up directory " +
-      "structures for projects or ensuring required paths exist. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string()
+  server.registerTool(
+    "create_directory",
+    {
+      title: "Create Directory",
+      description:
+        "Create a new directory or ensure a directory exists. Can create multiple " +
+        "nested directories in one operation. If the directory already exists, " +
+        "this operation will succeed silently. Perfect for setting up directory " +
+        "structures for projects or ensuring required paths exist. Only works within allowed directories.",
+      inputSchema: {
+        path: z.string()
+      },
+      outputSchema: { content: z.string() },
+      annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false }
     },
-    outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false }
-  },
-  async (args: z.infer<typeof CreateDirectoryArgsSchema>) => {
-    const validPath = await validatePath(args.path);
-    await fs.mkdir(validPath, { recursive: true });
-    const text = `Successfully created directory ${args.path}`;
-    return {
-      content: [{ type: "text" as const, text }],
-      structuredContent: { content: text }
-    };
-  }
-);
+    async (args: z.infer<typeof CreateDirectoryArgsSchema>) => {
+      const validPath = await validatePath(args.path);
+      await fs.mkdir(validPath, { recursive: true });
+      const text = `Successfully created directory ${args.path}`;
+      return {
+        content: [{ type: "text" as const, text }],
+        structuredContent: { content: text }
+      };
+    }
+  );
+}
 
 server.registerTool(
   "list_directory",
@@ -499,8 +525,7 @@ server.registerTool(
 
     // Format the output
     const formattedEntries = sortedEntries.map(entry =>
-      `${entry.isDirectory ? "[DIR]" : "[FILE]"} ${entry.name.padEnd(30)} ${
-        entry.isDirectory ? "" : formatSize(entry.size).padStart(10)
+      `${entry.isDirectory ? "[DIR]" : "[FILE]"} ${entry.name.padEnd(30)} ${entry.isDirectory ? "" : formatSize(entry.size).padStart(10)
       }`
     );
 
@@ -594,34 +619,36 @@ server.registerTool(
   }
 );
 
-server.registerTool(
-  "move_file",
-  {
-    title: "Move File",
-    description:
-      "Move or rename files and directories. Can move files between directories " +
-      "and rename them in a single operation. If the destination exists, the " +
-      "operation will fail. Works across different directories and can be used " +
-      "for simple renaming within the same directory. Both source and destination must be within allowed directories.",
-    inputSchema: {
-      source: z.string(),
-      destination: z.string()
+if (!isReadOnly) {
+  server.registerTool(
+    "move_file",
+    {
+      title: "Move File",
+      description:
+        "Move or rename files and directories. Can move files between directories " +
+        "and rename them in a single operation. If the destination exists, the " +
+        "operation will fail. Works across different directories and can be used " +
+        "for simple renaming within the same directory. Both source and destination must be within allowed directories.",
+      inputSchema: {
+        source: z.string(),
+        destination: z.string()
+      },
+      outputSchema: { content: z.string() },
+      annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
     },
-    outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
-  },
-  async (args: z.infer<typeof MoveFileArgsSchema>) => {
-    const validSourcePath = await validatePath(args.source);
-    const validDestPath = await validatePath(args.destination);
-    await fs.rename(validSourcePath, validDestPath);
-    const text = `Successfully moved ${args.source} to ${args.destination}`;
-    const contentBlock = { type: "text" as const, text };
-    return {
-      content: [contentBlock],
-      structuredContent: { content: text }
-    };
-  }
-);
+    async (args: z.infer<typeof MoveFileArgsSchema>) => {
+      const validSourcePath = await validatePath(args.source);
+      const validDestPath = await validatePath(args.destination);
+      await fs.rename(validSourcePath, validDestPath);
+      const text = `Successfully moved ${args.source} to ${args.destination}`;
+      const contentBlock = { type: "text" as const, text };
+      return {
+        content: [contentBlock],
+        structuredContent: { content: text }
+      };
+    }
+  );
+}
 
 server.registerTool(
   "search_files",
@@ -745,7 +772,7 @@ server.server.oninitialized = async () => {
   } else {
     if (allowedDirectories.length > 0) {
       console.error("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
-    }else{
+    } else {
       throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
     }
   }
