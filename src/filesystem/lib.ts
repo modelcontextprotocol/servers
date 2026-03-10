@@ -72,12 +72,35 @@ export function createUnifiedDiff(originalContent: string, newContent: string, f
   );
 }
 
+// Helper function to resolve relative paths against allowed directories
+function resolveRelativePathAgainstAllowedDirectories(relativePath: string): string {
+  if (allowedDirectories.length === 0) {
+    // Fallback to process.cwd() if no allowed directories are set
+    return path.resolve(process.cwd(), relativePath);
+  }
+
+  // Try to resolve relative path against each allowed directory
+  for (const allowedDir of allowedDirectories) {
+    const candidate = path.resolve(allowedDir, relativePath);
+    const normalizedCandidate = normalizePath(candidate);
+    
+    // Check if the resulting path lies within any allowed directory
+    if (isPathWithinAllowedDirectories(normalizedCandidate, allowedDirectories)) {
+      return candidate;
+    }
+  }
+  
+  // If no valid resolution found, use the first allowed directory as base
+  // This provides a consistent fallback behavior
+  return path.resolve(allowedDirectories[0], relativePath);
+}
+
 // Security & Validation Functions
 export async function validatePath(requestedPath: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
-    : path.resolve(process.cwd(), expandedPath);
+    : resolveRelativePathAgainstAllowedDirectories(expandedPath);
 
   const normalizedRequested = normalizePath(absolute);
 

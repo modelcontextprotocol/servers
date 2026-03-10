@@ -5,6 +5,9 @@ This repository is a collection of *reference implementations* for the [Model Co
 > [!IMPORTANT]
 > If you are looking for a list of MCP servers, you can browse published servers on [the MCP Registry](https://registry.modelcontextprotocol.io/). The repository served by this README is dedicated to housing just the small number of reference servers maintained by the MCP steering group.
 
+> [!WARNING]
+> The servers in this repository are intended as **reference implementations** to demonstrate MCP features and SDK usage. They are meant to serve as educational examples for developers building their own MCP servers, not as production-ready solutions. Developers should evaluate their own security requirements and implement appropriate safeguards based on their specific threat model and use case.
+
 The servers in this repository showcase the versatility and extensibility of MCP, demonstrating how it can be used to give Large Language Models (LLMs) secure, controlled access to tools and data sources.
 Typically, each MCP server is implemented with an MCP SDK:
 
@@ -222,6 +225,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://fetchserp.com/icon.png" alt="fetchSERP Logo" /> **[fetchSERP](https://github.com/fetchSERP/fetchserp-mcp-server-node)** - All-in-One SEO & Web Intelligence Toolkit API [fetchSERP](https://www.fetchserp.com/)
 - <img height="12" width="12" src="https://fewsats.com/favicon.svg" alt="Fewsats Logo" /> **[Fewsats](https://github.com/Fewsats/fewsats-mcp)** - Enable AI Agents to purchase anything in a secure way using [Fewsats](https://fewsats.com)
 - <img height="12" width="12" src="https://fibery.io/favicon.svg" alt="Fibery Logo" /> **[Fibery](https://github.com/Fibery-inc/fibery-mcp-server)** - Perform queries and entity operations in your [Fibery](https://fibery.io) workspace.
+- <img height="12" width="12" src="https://static.figma.com/app/icon/2/favicon.ico" alt="Figma Logo" /> **[Figma](https://github.com/figma/mcp-server-guide)** - Bring Figma directly into your workflow by providing important design information and context to AI agents generating code from design files with the official [Figma](https://www.figma.com) MCP server.
 - <img height="12" width="12" src="https://financialdatasets.ai/favicon.ico" alt="Financial Datasets Logo" /> **[Financial Datasets](https://github.com/financial-datasets/mcp-server)** - Stock market API made for AI agents
 - <img height="12" width="12" src="https://www.gstatic.com/devrel-devsite/prod/v7aeef7f1393bb1d75a4489145c511cdd5aeaa8e13ad0a83ec1b5b03612e66330/firebase/images/favicon.png" alt="Firebase Logo" /> **[Firebase](https://github.com/firebase/firebase-tools/blob/master/src/mcp)** - Firebase's experimental [MCP Server](https://firebase.google.com/docs/cli/mcp-server) to power your AI Tools
 - <img height="12" width="12" src="https://firecrawl.dev/favicon.ico" alt="Firecrawl Logo" /> **[Firecrawl](https://github.com/firecrawl/firecrawl-mcp-server)** - Extract web data with [Firecrawl](https://firecrawl.dev)
@@ -352,7 +356,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://console.gomomento.com/favicon.ico" /> **[Momento](https://github.com/momentohq/mcp-momento)** - Momento Cache lets you quickly improve your performance, reduce costs, and handle load at any scale.
 - <img height="12" width="12" src="https://www.monday.com/favicon.ico" alt="Monday.com Logo" /> **[Monday.com](https://github.com/mondaycom/mcp)** - Interact with Monday.com boards, items, accounts and work forms.
 - <img height="12" width="12" src="https://www.mongodb.com/favicon.ico" /> **[MongoDB](https://github.com/mongodb-js/mongodb-mcp-server)** - Both MongoDB Community Server and MongoDB Atlas are supported.
-- <img height="12" width="12" src="https://moorcheh.ai/Moorcheh-mcp.ico" alt="Moorcheh Logo" /> **[Moorcheh](https://github.com/moorcheh-ai/moorcheh-mcp)** - Embed, store, and search your documents, and build secure chatbots and RAG systems with Moorcheh's information-theoretic semantic search engine
+- <img height="12" width="12" src="https://moorcheh.ai/Moorcheh-mcp.ico" alt="Moorcheh Logo" /> **[Moorcheh](https://github.com/moorcheh-ai/moorcheh-mcp)** - Provides seamless integration with Moorcheh's Embedding, Vector Store, Search, and Gen AI Answer services.
 - <img height="12" width="12" src="https://www.motherduck.com/favicon.ico" alt="MotherDuck Logo" /> **[MotherDuck](https://github.com/motherduckdb/mcp-server-motherduck)** - Query and analyze data with MotherDuck and local DuckDB
 - <img height="12" width="12" src="https://docs.mulesoft.com/_/img/favicon.ico" alt="Mulesoft Logo" /> **[Mulesoft](https://www.npmjs.com/package/@mulesoft/mcp-server)** - Build, deploy, and manage MuleSoft applications with natural language, directly inside any compatible IDE.
 - <img height="12" width="12" src="https://www.multiplayer.app/favicon-32x32.png" alt="Multiplayer Logo" /> **[Multiplayer](https://www.multiplayer.app/docs/ai/mcp-server)** - Analyze your full stack session recordings easily. Record a bug with Multiplayer, analyze and fix it with LLM
@@ -518,7 +522,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://www.todoist.com/static/favicon-32x32.png" alt="Todoist Logo" /> **[Todoist](https://github.com/doist/todoist-ai)** - Search, add, and update [Todoist](https://todoist.com) tasks, projects, sections, comments, and more.
 - <img height="12" width="12" src="https://cdn.tokenmetrics.com/logo.svg" alt="Token Metrics Logo" /> **[Token Metrics](https://github.com/token-metrics/mcp)** - [Token Metrics](https://www.tokenmetrics.com/) integration for fetching real-time crypto market data, trading signals, price predictions, and advanced analytics.
 - <img height="12" width="12" src="https://di8m9w6rqrh5d.cloudfront.net/2G3TRwfv1w3GTLfmT7Dmco1VddoFTI5P/1920_6b7e7ec2-d897-4cd7-94f3-46a8301212c3.png" alt="TomTom Logo" /> **[TomTom-MCP](https://github.com/tomtom-international/tomtom-mcp)** - The [TomTom](https://www.tomtom.com/) MCP Server simplifies geospatial development by providing seamless access to TomTom's location services, including search, routing, traffic and static maps data.
-- <img height="12" width="12" src="https://images.thetradeagent.ai/trade_agent/logo.svg" alt="Trade Agent Logo" /> **[Trade Agent](https://github.com/Trade-Agent/trade-agent-mcp)** - Execute stock and crypto trades on your brokerage via [Trade Agent](https://thetradeagent.ai)
+- <img height="12" width="12" src="https://images.tradeit.app/trade_agent/logo.svg" alt="Trade It Logo" /> **[Trade It](https://github.com/trade-it-inc/trade-it-mcp)** - Execute stock, crypto, and options trades on your brokerage via [Trade It](https://tradeit.app). Supports Robinhood, ETrade, Charles Schwab, Webull, Coinbase, and Kraken.
 - <img height="18" width="18" src="https://github.com/twelvedata/mcp/raw/develop/favicon.ico" alt="Twelvedata Logo" /> **[Twelve Data](https://github.com/twelvedata/mcp)** — Integrate your AI agents with real-time and historical financial market data through our official [Twelve Data](https://twelvedata.com) MCP server.
 - <img height="12" width="12" src="https://www.twilio.com/content/dam/twilio-com/core-assets/social/favicon-16x16.png" alt="Twilio Logo" /> **[Twilio](https://github.com/twilio-labs/mcp)** - Interact with [Twilio](https://www.twilio.com/en-us) APIs to send SMS messages, manage phone numbers, configure your account, and more.
 - <img height="12" width="12" src="https://miniprogram.tcsas-superapp.com/icon_512.png" alt="TCSAS Logo" /> **[TCSAS](https://github.com/TCMPP-Team/tcsas-devtools-mcp-server)** - Built on the Tencent Mini Program technical framework and fully following the development, powered by [Tencent Cloud Super App as a Service](https://www.tencentcloud.com/products/tcsas?lang=en&pg=).
@@ -1518,7 +1522,6 @@ Additional resources on MCP.
 - **[Awesome MCP Servers by wong2](https://github.com/wong2/awesome-mcp-servers)** (**[website](https://mcpservers.org)**) - A curated list of MCP servers by **[wong2](https://github.com/wong2)**
 - **[Awesome Remote MCP Servers by JAW9C](https://github.com/jaw9c/awesome-remote-mcp-servers)** - A curated list of **remote** MCP servers, including their authentication support by **[JAW9C](https://github.com/jaw9c)**
 - **[Discord Server](https://glama.ai/mcp/discord)** – A community discord server dedicated to MCP by **[Frank Fiegel](https://github.com/punkpeye)**
-- **[Discord Server (ModelContextProtocol)](https://discord.gg/jHEGxQu2a5)** – Connect with developers, share insights, and collaborate on projects in an active Discord community dedicated to the Model Context Protocol by **[Alex Andru](https://github.com/QuantGeekDev)**
 - **[Install This MCP](https://installthismcp.com)** - Reduce Installation Friction with beautiful installation guides
 - <img height="12" width="12" src="https://raw.githubusercontent.com/klavis-ai/klavis/main/static/klavis-ai.png" alt="Klavis Logo" /> **[Klavis AI](https://www.klavis.ai)** - Open Source MCP Infra. Hosted MCP servers and MCP clients on Slack and Discord.
 - **[MCP Badges](https://github.com/mcpx-dev/mcp-badges)** – Quickly highlight your MCP project with clear, eye-catching badges, by **[Ironben](https://github.com/nanbingxyz)**
@@ -1553,7 +1556,6 @@ Additional resources on MCP.
 - **[Programmatic MCP Prototype](https://github.com/domdomegg/programmatic-mcp-prototype)** - Experimental agent prototype demonstrating programmatic MCP tool composition, progressive tool discovery, state persistence, and skill building through TypeScript code execution by **[Adam Jones](https://github.com/domdomegg)**
 - **[PulseMCP](https://www.pulsemcp.com)** ([API](https://www.pulsemcp.com/api)) - Community hub & weekly newsletter for discovering MCP servers, clients, articles, and news by **[Tadas Antanavicius](https://github.com/tadasant)**, **[Mike Coughlin](https://github.com/macoughl)**, and **[Ravina Patel](https://github.com/ravinahp)**
 - **[r/mcp](https://www.reddit.com/r/mcp)** – A Reddit community dedicated to MCP by **[Frank Fiegel](https://github.com/punkpeye)**
-- **[r/modelcontextprotocol](https://www.reddit.com/r/modelcontextprotocol)** – A Model Context Protocol community Reddit page - discuss ideas, get answers to your questions, network with like-minded people, and showcase your projects! by **[Alex Andru](https://github.com/QuantGeekDev)**
 - **[MCP.ing](https://mcp.ing/)** - A list of MCP services for discovering MCP servers in the community and providing a convenient search function for MCP services by **[iiiusky](https://github.com/iiiusky)**
 - **[MCP Hunt](https://mcp-hunt.com)** - Realtime platform for discovering trending MCP servers with momentum tracking, upvoting, and community discussions - like Product Hunt meets Reddit for MCP
 - **[Smithery](https://smithery.ai/)** - A registry of MCP servers to find the right tools for your LLM agents by **[Henry Mao](https://github.com/calclavia)**
@@ -1644,7 +1646,7 @@ See [SECURITY.md](SECURITY.md) for reporting security vulnerabilities.
 
 ## 📜 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License, Version 2.0 for new contributions, with existing code under MIT - see the [LICENSE](LICENSE) file for details.
 
 ## 💬 Community
 
