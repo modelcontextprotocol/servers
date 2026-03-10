@@ -547,7 +547,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "httpx", specifier = "<0.28" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "markdownify", specifier = ">=0.13.1" },
     { name = "mcp", specifier = ">=1.1.3" },
     { name = "protego", specifier = ">=0.3.1" },
