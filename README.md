@@ -921,6 +921,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[IMAP MCP](https://github.com/dominik1001/imap-mcp)** - 📧 An IMAP Model Context Protocol (MCP) server to expose IMAP operations as tools for AI assistants.
 - **[iMCP](https://github.com/loopwork-ai/iMCP)** - A macOS app that provides an MCP server for your iMessage, Reminders, and other Apple services.
 - **[InfluxDB](https://github.com/idoru/influxdb-mcp-server)** - Run queries against InfluxDB OSS API v2.
+- **[Intercept](https://github.com/PolicyLayer/Intercept)** - Open-source enforcement proxy that wraps any MCP server and evaluates every `tools/call` against YAML-defined policies. Block tools, rate limit, validate arguments, cap spending, and hide tools from agent context — all at the transport layer. Works with any stdio or SSE server.
 - **[Inner Monologue MCP](https://github.com/abhinav-mangla/inner-monologue-mcp)** - A cognitive reasoning tool that enables LLMs to engage in private, structured self-reflection and multi-step reasoning before generating responses, improving response quality and problem-solving capabilities.
 - **[Inoyu](https://github.com/sergehuber/inoyu-mcp-unomi-server)** - Interact with an Apache Unomi CDP customer data platform to retrieve and update customer profiles
 - **[Instagram DM](https://github.com/trypeggy/instagram_dm_mcp)** - Send DMs on Instagram via your LLM
