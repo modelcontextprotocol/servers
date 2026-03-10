@@ -1,6 +1,7 @@
 """Tests for the fetch MCP server."""
 
 import pytest
+import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 from mcp.shared.exceptions import McpError
 
@@ -9,6 +10,7 @@ from mcp_server_fetch.server import (
     get_robots_txt_url,
     check_may_autonomously_fetch_url,
     fetch_url,
+    serve,
     DEFAULT_USER_AGENT_AUTONOMOUS,
 )
 
@@ -324,3 +326,60 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+class TestServeRaiseExceptions:
+    """Tests that the server handles malformed input gracefully."""
+
+    @pytest.mark.asyncio
+    async def test_serve_does_not_crash_on_malformed_input(self):
+        """Test that serve() uses raise_exceptions=False so malformed input
+        does not crash the server process.
+
+        Regression test for https://github.com/modelcontextprotocol/servers/issues/3359
+        """
+        from anyio import create_memory_object_stream
+
+        # Create a stream pair to pass as stdio replacements
+        send_stream, recv_stream = create_memory_object_stream[bytes](0)
+        _, write_stream = create_memory_object_stream[bytes](0)
+
+        mock_server_run = AsyncMock()
+
+        with patch("mcp_server_fetch.server.stdio_server") as mock_stdio:
+            with patch("mcp_server_fetch.server.Server") as MockServer:
+                mock_server_instance = MagicMock()
+                mock_server_instance.create_initialization_options = MagicMock(
+                    return_value={}
+                )
+                mock_server_instance.run = mock_server_run
+
+                # The decorator methods (list_tools, list_prompts, etc.) return
+                # a decorator that registers the handler. We just need them to
+                # accept and return the decorated function unchanged.
+                def make_decorator(*args, **kwargs):
+                    def decorator(fn):
+                        return fn
+                    return decorator
+
+                mock_server_instance.list_tools = make_decorator
+                mock_server_instance.list_prompts = make_decorator
+                mock_server_instance.call_tool = make_decorator
+                mock_server_instance.get_prompt = make_decorator
+
+                MockServer.return_value = mock_server_instance
+
+                mock_stdio.return_value.__aenter__ = AsyncMock(
+                    return_value=(recv_stream, write_stream)
+                )
+                mock_stdio.return_value.__aexit__ = AsyncMock(return_value=None)
+
+                await serve()
+
+                # Verify that server.run was called with raise_exceptions=False
+                mock_server_run.assert_called_once()
+                _, kwargs = mock_server_run.call_args
+                assert kwargs.get("raise_exceptions") is False, (
+                    "server.run must be called with raise_exceptions=False "
+                    "to prevent crashes on malformed input"
+                )
