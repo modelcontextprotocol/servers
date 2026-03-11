@@ -1,7 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/http.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { createClient } from "@supabase/supabase-js";
 
 const server = new McpServer({
     name: "High Story",
@@ -59,4 +58,7 @@ server.tool(
     }
 );
 
-export default server;
+// --- Entry Point ---
+
+const transport = new StdioServerTransport();
+await server.connect(transport);
