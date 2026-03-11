@@ -2,20 +2,22 @@
   "name": "@modelcontextprotocol/server-highstory",
   "version": "1.0.0",
   "description": "High Story MCP server for AI-driven social media automation",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "mcp-server-highstory": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc && chmod +x dist/index.js",
+    "build": "tsc && shx chmod +x dist/index.js",
     "prepare": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "@supabase/supabase-js": "^2.39.3",
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
+    "shx": "^0.3.4",
     "typescript": "^5.6.2"
   }
 }
