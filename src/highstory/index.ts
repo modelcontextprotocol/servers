@@ -8,50 +8,54 @@ const server = new McpServer({
     version: "1.0.0"
 });
 
-async function authenticate(authHeader: string | null) {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !supabaseServiceKey) {
-        throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.");
-    }
-    
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-    const token = authHeader?.replace(/^Bearer\s+/i, '').trim();
-    
-    if (!token) throw new Error("Missing Authorization token");
+const API_BASE_URL = "https://jeprtikkylotvcddrqvm.supabase.co/functions/v1";
 
-    if (token.startsWith('hs_live_')) {
-        const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
-        const hash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-
-        const { data: keyRecord, error } = await supabaseAdmin
-            .from('user_api_keys')
-            .select('user_id')
-            .eq('key_hash', hash)
-            .is('revoked_at', null)
-            .single();
-
-        if (error || !keyRecord) throw new Error("Invalid or revoked API key");
-        
-        return { userId: keyRecord.user_id, authHeader };
+/**
+ * Helper to call High Story Edge Functions
+ */
+async function callHighStoryAPI(endpoint: string, payload: any) {
+    const apiKey = process.env.HIGHSTORY_API_KEY;
+    if (!apiKey) {
+        throw new Error("Missing HIGHSTORY_API_KEY environment variable. Please generate one in your High Story settings.");
     }
 
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !user) throw new Error("Invalid session token");
-    
-    return { userId: user.id, authHeader };
+    const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || `API Error: ${response.statusText}`);
+    }
+
+    return await response.json();
 }
+
+// --- Tools Implementation ---
 
 server.tool(
     "execute_campaign",
-    "Create and execute an AI content campaign for a brand.",
+    "Create and execute an AI content campaign for a brand. Generates social media posts based on brand analysis.",
     {
-        brand_url: z.string().optional(),
-        campaign_objective: z.string(),
-        workspace_id: z.string().optional()
+        brand_url: z.string().optional().describe("The brand website URL (optional)"),
+        campaign_objective: z.string().describe("The campaign goal"),
+        workspace_id: z.string().optional().describe("High Story workspace ID (optional)"),
     },
     async (args) => {
-        return { content: [{ type: "text", text: "Campaign execution logic triggered via High Story Cloud." }] };
+        try {
+            const data = await callHighStoryAPI('execute-campaign', {
+                ...args,
+                is_onboarding: false
+            });
+            return { content: [{ type: "text", text: `Campaign started successfully! View it in your dashboard.` }] };
+        } catch (e: any) {
+            return { isError: true, content: [{ type: "text", text: `Error: ${e.message}` }] };
+        }
     }
 );
 
