@@ -18,6 +18,8 @@ A Model Context Protocol server that provides time and timezone conversion capab
 
 ## Installation
 
+> For standardized installation patterns across all MCP servers, see the [Installation Guide](../INSTALLATION.md).
+
 ### Using uv (recommended)
 
 When using [`uv`](https://docs.astral.sh/uv/) no specific installation is needed. We will
