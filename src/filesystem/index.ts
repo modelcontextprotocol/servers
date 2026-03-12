@@ -548,12 +548,17 @@ server.registerTool(
     }
     const rootPath = args.path;
 
+    function compareEntryNames(left: { name: string }, right: { name: string }): number {
+      return left.name.localeCompare(right.name, 'en');
+    }
+
     async function buildTree(currentPath: string, excludePatterns: string[] = []): Promise<TreeEntry[]> {
       const validPath = await validatePath(currentPath);
       const entries = await fs.readdir(validPath, { withFileTypes: true });
+      const sortedEntries = [...entries].sort(compareEntryNames);
       const result: TreeEntry[] = [];
 
-      for (const entry of entries) {
+      for (const entry of sortedEntries) {
         const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
         const shouldExclude = excludePatterns.some(pattern => {
           if (pattern.includes('*')) {
