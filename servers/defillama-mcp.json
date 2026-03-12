@@ -1,17 +1,15 @@
 {
   "id": "defillama-mcp",
   "name": "Defillama MCP",
-  "description": "List all protocols with TVL data",
+  "description": "Base: `https://pro-api.llama.fi` Purpose: List all protocols with current TVL Parameters: None Response: [{ \"id\": \"2269\", \"name\": \"Aave\", \"symbol\": \"AAVE\", \"cat",
   "repository": "https://github.com/srimisra/defillama-mcp",
   "endpoint": "https://defillama.mcp.junct.dev/mcp",
   "transport": [
     "streamable-http"
   ],
-  "tags": [
-    "read"
-  ],
+  "tags": [],
   "version": "1.0.0",
   "author": "Junct",
   "llms_txt": "https://defillama.mcp.junct.dev/llms.txt",
-  "created_at": "2026-03-12T03:55:31.760Z"
+  "created_at": "2026-03-12T05:32:40.980Z"
 }
