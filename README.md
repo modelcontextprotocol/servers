@@ -1099,6 +1099,7 @@ search, and comprehensive file analysis.
 - **[MLflow](https://github.com/kkruglik/mlflow-mcp)** - MLflow MCP server for ML experiment tracking with advanced querying, run comparison, artifact access, and model registry.
 - **[Mobile MCP](https://github.com/mobile-next/mobile-mcp)** (by Mobile Next) - MCP server for Mobile(iOS/Android) automation, app scraping and development using physical devices or simulators/emulators.
 - **[Modao Proto MCP](https://github.com/modao-dev/modao-proto-mcp)** - AI-powered HTML prototype generation server that converts natural language descriptions into complete HTML code with modern design and responsive layouts. Supports design description expansion and seamless integration with Modao workspace.
+- **[MoldSim MCP](https://github.com/kobzevvv/moldsim-mcp)** - Injection molding simulation knowledge for AI — material properties (Cross-WLF, PVT, thermal, mechanical for 21 materials), process validation, DFM checklist, troubleshooting (230+ knowledge chunks), and simulation spec generation.
 - **[Monday.com (unofficial)](https://github.com/sakce/mcp-server-monday)** - MCP Server to interact with Monday.com boards and items.
 - **[MongoDB](https://github.com/kiliczsh/mcp-mongo-server)** - A Model Context Protocol Server for MongoDB.
 - **[MongoDB & Mongoose](https://github.com/nabid-pf/mongo-mongoose-mcp)** - MongoDB MCP Server with Mongoose Schema and Validation.
