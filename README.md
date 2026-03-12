@@ -935,6 +935,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[iTerm MCP Server](https://github.com/rishabkoul/iTerm-MCP-Server)** - A Model Context Protocol (MCP) server implementation for iTerm2 terminal integration. Able to manage multiple iTerm Sessions.
 - **[Java Decompiler](https://github.com/idachev/mcp-javadc)** - Decompile Java bytecode into readable source code from .class files, package names, or JAR archives using CFR decompiler
 - **[JavaFX](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jfx)** - Make drawings using a JavaFX canvas
+- **[javaperf](https://github.com/theSharque/mcp-jperf)** - MCP server for Java application profiling via JDK utilities (jcmd, jfr, jps). Enables AI assistants to diagnose performance, analyze threads, and inspect JFR recordings.
 - **[JDBC](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jdbc)** - Connect to any JDBC-compatible database and query, insert, update, delete, and more. Supports MySQL, PostgreSQL, Oracle, SQL Server, SQLite and [more](https://github.com/quarkiverse/quarkus-mcp-servers/tree/main/jdbc#supported-jdbc-variants).
 - **[Jenkins](https://github.com/jasonkylelol/jenkins-mcp-server)** - This MCP server allow you to create Jenkins tasks.
 - **[JMeter](https://github.com/QAInsights/jmeter-mcp-server)** - Run load testing using Apache JMeter via MCP-compliant tools.
