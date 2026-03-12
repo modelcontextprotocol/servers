@@ -29,6 +29,41 @@ Facilitates a detailed, step-by-step thinking process for problem-solving and an
 
 ## Usage
 
+### How It Works
+
+The Sequential Thinking server provides a `sequentialthinking` tool that AI assistants (like Claude) automatically invoke when solving complex problems. **You don't need to call this tool directly** - the AI will use it behind the scenes to structure its reasoning process.
+
+When you ask the AI a complex question or problem:
+1. The AI recognizes that structured thinking would help
+2. It calls the `sequentialthinking` tool with its current thought
+3. The tool tracks the thought chain and returns context
+4. The AI continues until it reaches a satisfactory solution
+
+### Example Interaction
+
+Simply ask your AI assistant a complex question. For example:
+
+```
+User: "Design a caching strategy for a high-traffic e-commerce API that needs
+      to handle flash sales while maintaining data consistency."
+```
+
+The AI will internally use the Sequential Thinking tool to:
+- Break down the problem (cache invalidation, TTL strategies, etc.)
+- Generate hypotheses about different approaches
+- Verify and refine its reasoning
+- Provide a well-structured final answer
+
+### Testing the Server
+
+To verify the server is working:
+
+1. **Check the server is registered**: In Claude Desktop, look for "sequential-thinking" in your MCP server list
+2. **Enable logging**: Set `DISABLE_THOUGHT_LOGGING` to `false` (or don't set it) to see thought logs in the console
+3. **Ask a multi-step problem**: Try asking something like "Walk me through how to implement a rate limiter" - the AI should produce a structured, step-by-step response
+
+### When It's Used
+
 The Sequential Thinking tool is designed for:
 - Breaking down complex problems into steps
 - Planning and design with room for revision
