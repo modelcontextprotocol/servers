@@ -1,17 +1,19 @@
 {
   "id": "pyth-mcp",
   "name": "Pyth MCP",
-  "description": "List all protocols with TVL data",
+  "description": "[Deprecated] **Deprecated: use /v2/updates/price/{publish_time} instead** — **Deprecated: use /v2/updates/price/{publish_time} instead**\n\nGet a price update for",
   "repository": "https://github.com/srimisra/pyth-mcp",
   "endpoint": "https://pyth.mcp.junct.dev/mcp",
   "transport": [
     "streamable-http"
   ],
   "tags": [
-    "read"
+    "read",
+    "rest",
+    "oracle"
   ],
   "version": "1.0.0",
   "author": "Junct",
   "llms_txt": "https://pyth.mcp.junct.dev/llms.txt",
-  "created_at": "2026-03-12T04:10:29.435Z"
+  "created_at": "2026-03-12T05:14:34.042Z"
 }
