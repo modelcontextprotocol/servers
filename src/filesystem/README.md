@@ -81,6 +81,16 @@ The server's directory access control follows this flow:
     - `path` (string)
   - Streams the file and returns base64 data with the corresponding MIME type
 
+- **read_binary_file**
+  - Read any binary file (Excel, PDF, images, etc.) as base64-encoded data
+  - Inputs:
+    - `path` (string)
+  - Returns file as an embedded resource with:
+    - Base64-encoded content in `blob` property
+    - Automatic MIME type detection
+    - Support for Excel (.xlsx, .xls), PDF, images, and other binary formats
+  - Use this for files that need to be processed as binary data
+
 - **read_multiple_files**
   - Read multiple files simultaneously
   - Input: `paths` (string[])
@@ -190,6 +200,7 @@ The mapping for filesystem tools is:
 |-----------------------------|--------------|----------------|-----------------|--------------------------------------------------|
 | `read_text_file`            | `true`       | –              | –               | Pure read                                       |
 | `read_media_file`           | `true`       | –              | –               | Pure read                                       |
+| `read_binary_file`          | `true`       | –              | –               | Pure read                                       |
 | `read_multiple_files`       | `true`       | –              | –               | Pure read                                       |
 | `list_directory`            | `true`       | –              | –               | Pure read                                       |
 | `list_directory_with_sizes` | `true`       | –              | –               | Pure read                                       |
