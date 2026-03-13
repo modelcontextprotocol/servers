@@ -142,6 +142,11 @@ def git_reset(repo: git.Repo) -> str:
 
 def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] = None, end_timestamp: Optional[str] = None) -> list[str]:
     if start_timestamp or end_timestamp:
+        # Defense in depth: reject timestamps starting with '-' to prevent flag injection
+        if start_timestamp and start_timestamp.startswith("-"):
+            raise ValueError(f"Invalid start_timestamp: '{start_timestamp}' - cannot start with '-'")
+        if end_timestamp and end_timestamp.startswith("-"):
+            raise ValueError(f"Invalid end_timestamp: '{end_timestamp}' - cannot start with '-'")
         # Use git log command with date filtering
         args = []
         if start_timestamp:
@@ -177,6 +182,11 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
         return log
 
 def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None = None) -> str:
+    # Defense in depth: reject names starting with '-' to prevent flag injection
+    if branch_name.startswith("-"):
+        raise BadName(f"Invalid branch name: '{branch_name}' - cannot start with '-'")
+    if base_branch and base_branch.startswith("-"):
+        raise BadName(f"Invalid base branch: '{base_branch}' - cannot start with '-'")
     if base_branch:
         base = repo.references[base_branch]
     else:
@@ -197,6 +207,10 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
 
 
 def git_show(repo: git.Repo, revision: str) -> str:
+    # Defense in depth: reject revisions starting with '-' to prevent flag injection,
+    # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
+    if revision.startswith("-"):
+        raise BadName(f"Invalid revision: '{revision}' - cannot start with '-'")
     commit = repo.commit(revision)
     output = [
         f"Commit: {commit.hexsha!r}\n"
@@ -241,6 +255,12 @@ def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None
 
 
 def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, not_contains: str | None = None) -> str:
+    # Defense in depth: reject values starting with '-' to prevent flag injection
+    if contains and contains.startswith("-"):
+        raise BadName(f"Invalid contains value: '{contains}' - cannot start with '-'")
+    if not_contains and not_contains.startswith("-"):
+        raise BadName(f"Invalid not_contains value: '{not_contains}' - cannot start with '-'")
+
     match contains:
         case None:
             contains_sha = (None,)
