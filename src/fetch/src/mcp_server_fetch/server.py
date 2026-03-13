@@ -89,6 +89,17 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
                 code=INTERNAL_ERROR,
                 message=f"When fetching robots.txt ({robot_txt_url}), received status {response.status_code} so assuming that autonomous fetching is not allowed, the user can try manually fetching by using the fetch prompt",
             ))
+        elif response.status_code >= 500:
+            # Per RFC 9309 Section 2.3.1.3, server errors mean the robots.txt
+            # status is undefined and crawlers should assume full restriction.
+            # Treating 5xx as "allowed" would let a temporarily-down robots.txt
+            # become a free pass to crawl any URL on the site.
+            raise McpError(ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"When fetching robots.txt ({robot_txt_url}), received server error status {response.status_code}. "
+                f"Per RFC 9309, server errors mean autonomous fetching should not proceed. "
+                f"The user can try manually fetching by using the fetch prompt.",
+            ))
         elif 400 <= response.status_code < 500:
             return
         robot_txt = response.text
