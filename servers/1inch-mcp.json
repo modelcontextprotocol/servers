@@ -1,0 +1,21 @@
+{
+  "id": "1inch-mcp",
+  "name": "1inch MCP",
+  "description": "Find the best quote to swap with 1inch Router Returns: { srcToken: { address: string, symbol: string, name: string, decimals: number, logoURI: string, domainVer",
+  "repository": "https://github.com/junct-bot/1inch-mcp",
+  "endpoint": "https://1inch.mcp.junct.dev/mcp",
+  "transport": [
+    "streamable-http"
+  ],
+  "tags": [
+    "read",
+    "swap",
+    "dex",
+    "approve",
+    "info"
+  ],
+  "version": "1.0.0",
+  "author": "Junct",
+  "llms_txt": "https://1inch.mcp.junct.dev/llms.txt",
+  "created_at": "2026-03-14T17:20:45.910Z"
+}
