@@ -1,0 +1,22 @@
+{
+  "id": "synthetix-mcp",
+  "name": "Synthetix MCP",
+  "description": "Calls name(). Read-only — does not modify contract state. Unrestricted — any address can call this read function. Returns string.",
+  "repository": "https://github.com/junct-bot/synthetix-mcp",
+  "endpoint": "https://synthetix.mcp.junct.dev/mcp",
+  "transport": [
+    "streamable-http"
+  ],
+  "tags": [
+    "read",
+    "write",
+    "erc20",
+    "admin",
+    "lending",
+    "event"
+  ],
+  "version": "1.0.0",
+  "author": "Junct",
+  "llms_txt": "https://synthetix.mcp.junct.dev/llms.txt",
+  "created_at": "2026-03-14T06:33:19.668Z"
+}
