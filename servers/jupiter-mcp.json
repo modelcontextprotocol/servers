@@ -1,0 +1,20 @@
+{
+  "id": "jupiter-mcp",
+  "name": "Jupiter MCP",
+  "description": "quote — Request for a quote to be used in `POST /swap`\n Returns: { inputMint: string, inAmount: string, outputMint: string, ... }.",
+  "repository": "https://github.com/junct-bot/jupiter-mcp",
+  "endpoint": "https://jupiter.mcp.junct.dev/mcp",
+  "transport": [
+    "streamable-http"
+  ],
+  "tags": [
+    "read",
+    "swap",
+    "write",
+    "dex"
+  ],
+  "version": "1.0.0",
+  "author": "Junct",
+  "llms_txt": "https://jupiter.mcp.junct.dev/llms.txt",
+  "created_at": "2026-03-14T06:06:46.223Z"
+}
