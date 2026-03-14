@@ -1,0 +1,24 @@
+{
+  "id": "hyperliquid-mcp",
+  "name": "Hyperliquid MCP",
+  "description": "Query information endpoint — Unified endpoint for querying various types of information. The request body `type` field determines what data is returned.\n\nSuppor",
+  "repository": "https://github.com/junct-bot/hyperliquid-mcp",
+  "endpoint": "https://hyperliquid.mcp.junct.dev/mcp",
+  "transport": [
+    "streamable-http"
+  ],
+  "tags": [
+    "write",
+    "info",
+    "market data",
+    "orders",
+    "account",
+    "staking",
+    "exchange",
+    "vault"
+  ],
+  "version": "1.0.0",
+  "author": "Junct",
+  "llms_txt": "https://hyperliquid.mcp.junct.dev/llms.txt",
+  "created_at": "2026-03-14T17:21:18.227Z"
+}
