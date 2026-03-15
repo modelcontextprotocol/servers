@@ -81,6 +81,12 @@ You should:
       branchId: z.string().optional().describe("Branch identifier"),
       needsMoreThoughts: z.coerce.boolean().optional().describe("If more thoughts are needed")
     },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     outputSchema: {
       thoughtNumber: z.number(),
       totalThoughts: z.number(),
