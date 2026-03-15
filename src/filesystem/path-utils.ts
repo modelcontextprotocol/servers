@@ -106,12 +106,19 @@ export function normalizePath(p: string): string {
 }
 
 /**
- * Expands home directory tildes in paths
+ * Expands home directory tildes in paths.
+ *
+ * Handles:
+ *   - `~` or `~/path` → current user's home directory
+ *   - Paths with literal `~` in non-leading position (e.g. `/path/~folder`) → unchanged
+ *   - Paths starting with `~` but not followed by `/` (e.g. `~MyFolder`) → unchanged
+ *     (treated as literal directory name, not home directory expansion)
+ *
  * @param filepath The path to expand
  * @returns Expanded path
  */
 export function expandHome(filepath: string): string {
-  if (filepath.startsWith('~/') || filepath === '~') {
+  if (filepath === '~' || filepath.startsWith('~/')) {
     return path.join(os.homedir(), filepath.slice(1));
   }
   return filepath;
