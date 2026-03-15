@@ -736,6 +736,14 @@ server.server.oninitialized = async () => {
       const response = await server.server.listRoots();
       if (response && 'roots' in response) {
         await updateAllowedDirectoriesFromRoots(response.roots);
+        if (allowedDirectories.length === 0 && response.roots.length > 0) {
+          console.error(
+            `Warning: Client provided ${response.roots.length} root(s), but none could be validated. ` +
+            `Root URIs: ${response.roots.map(r => r.uri).join(', ')}. ` +
+            `This may happen if the directories do not exist or contain special characters that were not resolved correctly. ` +
+            `Check that the configured paths are accessible and properly formatted.`
+          );
+        }
       } else {
         console.error("Client returned no roots set, keeping current settings");
       }
@@ -745,8 +753,10 @@ server.server.oninitialized = async () => {
   } else {
     if (allowedDirectories.length > 0) {
       console.error("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
-    }else{
-      throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
+    } else {
+      const errorMsg = `Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`;
+      console.error(errorMsg);
+      process.exit(1);
     }
   }
 };
