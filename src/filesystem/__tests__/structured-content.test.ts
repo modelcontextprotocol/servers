@@ -62,6 +62,7 @@ describe('structuredContent schema compliance', () => {
 
       // structuredContent.content should be a string (matching outputSchema: { content: z.string() })
       const structuredContent = result.structuredContent as { content: unknown };
+      expect(Object.keys(structuredContent)).toEqual(['content']);
       expect(typeof structuredContent.content).toBe('string');
 
       // It should NOT be an array
@@ -85,6 +86,7 @@ describe('structuredContent schema compliance', () => {
 
       // structuredContent.content should be a string (matching outputSchema: { content: z.string() })
       const structuredContent = result.structuredContent as { content: unknown };
+      expect(Object.keys(structuredContent)).toEqual(['content']);
       expect(typeof structuredContent.content).toBe('string');
 
       // It should NOT be an array
@@ -113,6 +115,7 @@ describe('structuredContent schema compliance', () => {
 
       // structuredContent.content should be a string (matching outputSchema: { content: z.string() })
       const structuredContent = result.structuredContent as { content: unknown };
+      expect(Object.keys(structuredContent)).toEqual(['content']);
       expect(typeof structuredContent.content).toBe('string');
 
       // It should NOT be an array
@@ -133,6 +136,7 @@ describe('structuredContent schema compliance', () => {
       expect(result.structuredContent).toBeDefined();
 
       const structuredContent = result.structuredContent as { content: unknown };
+      expect(Object.keys(structuredContent)).toEqual(['content']);
       expect(typeof structuredContent.content).toBe('string');
       expect(Array.isArray(structuredContent.content)).toBe(false);
     });
@@ -151,6 +155,7 @@ describe('structuredContent schema compliance', () => {
       expect(result.structuredContent).toBeDefined();
 
       const structuredContent = result.structuredContent as { content: unknown };
+      expect(Object.keys(structuredContent)).toEqual(['content']);
       expect(typeof structuredContent.content).toBe('string');
       expect(Array.isArray(structuredContent.content)).toBe(false);
     });
