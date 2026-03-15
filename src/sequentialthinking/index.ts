@@ -72,14 +72,20 @@ You should:
 11. Only set nextThoughtNeeded to false when truly done and a satisfactory answer is reached`,
     inputSchema: {
       thought: z.string().describe("Your current thinking step"),
-      nextThoughtNeeded: z.boolean().describe("Whether another thought step is needed"),
-      thoughtNumber: z.number().int().min(1).describe("Current thought number (numeric value, e.g., 1, 2, 3)"),
-      totalThoughts: z.number().int().min(1).describe("Estimated total thoughts needed (numeric value, e.g., 5, 10)"),
-      isRevision: z.boolean().optional().describe("Whether this revises previous thinking"),
-      revisesThought: z.number().int().min(1).optional().describe("Which thought is being reconsidered"),
-      branchFromThought: z.number().int().min(1).optional().describe("Branching point thought number"),
+      nextThoughtNeeded: z.coerce.boolean().describe("Whether another thought step is needed"),
+      thoughtNumber: z.coerce.number().int().min(1).describe("Current thought number (numeric value, e.g., 1, 2, 3)"),
+      totalThoughts: z.coerce.number().int().min(1).describe("Estimated total thoughts needed (numeric value, e.g., 5, 10)"),
+      isRevision: z.coerce.boolean().optional().describe("Whether this revises previous thinking"),
+      revisesThought: z.coerce.number().int().min(1).optional().describe("Which thought is being reconsidered"),
+      branchFromThought: z.coerce.number().int().min(1).optional().describe("Branching point thought number"),
       branchId: z.string().optional().describe("Branch identifier"),
-      needsMoreThoughts: z.boolean().optional().describe("If more thoughts are needed")
+      needsMoreThoughts: z.coerce.boolean().optional().describe("If more thoughts are needed")
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     },
     annotations: {
       readOnlyHint: true,
