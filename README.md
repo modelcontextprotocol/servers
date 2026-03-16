@@ -880,6 +880,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Google Maps](https://github.com/Mastan1301/google_maps_mcp)** - Provides location results using Google Places API.
 - **[Google Sheets](https://github.com/xing5/mcp-google-sheets)** - Access and editing data to your Google Sheets.
 - **[Google Sheets](https://github.com/rohans2/mcp-google-sheets)** - An MCP Server written in TypeScript to access and edit data in your Google Sheets.
+- **[Google Sheets MCP](https://github.com/geosta-engineer/mcp-google-sheets)** - Python MCP server with 32 tools for creating, reading, writing and formatting Google Sheets. Supports OAuth2, Service Account and ADC. Compatible with Claude Desktop & Claude Code.
 - **[Google Tasks](https://github.com/zcaceres/gtasks-mcp)** - Google Tasks API Model Context Protocol Server.
 - **[Google Vertex AI Search](https://github.com/ubie-oss/mcp-vertexai-search)** - Provides Google Vertex AI Search results by grounding a Gemini model with your own private data
 - **[Google Workspace](https://github.com/taylorwilsdon/google_workspace_mcp)** - Comprehensive Google Workspace MCP with full support for Calendar, Drive, Gmail, and Docs using Streamable HTTP or SSE transport.
