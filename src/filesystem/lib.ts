@@ -10,6 +10,10 @@ import { isPathWithinAllowedDirectories } from './path-validation.js';
 // Global allowed directories - set by the main module
 let allowedDirectories: string[] = [];
 
+function formatFilesystemValidationError(code: string, detail: string): Error {
+  return new Error(`[${code}] ${detail}`);
+}
+
 // Function to set allowed directories from the main module
 export function setAllowedDirectories(directories: string[]): void {
   allowedDirectories = [...directories];
@@ -98,16 +102,24 @@ function resolveRelativePathAgainstAllowedDirectories(relativePath: string): str
 // Security & Validation Functions
 export async function validatePath(requestedPath: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
-  const absolute = path.isAbsolute(expandedPath)
-    ? path.resolve(expandedPath)
-    : resolveRelativePathAgainstAllowedDirectories(expandedPath);
+  let absolute: string;
+  try {
+    absolute = path.isAbsolute(expandedPath)
+      ? path.resolve(expandedPath)
+      : resolveRelativePathAgainstAllowedDirectories(expandedPath);
+  } catch {
+    throw formatFilesystemValidationError('path_invalid', `Invalid path: ${requestedPath}`);
+  }
 
   const normalizedRequested = normalizePath(absolute);
 
   // Security: Check if path is within allowed directories before any file operations
   const isAllowed = isPathWithinAllowedDirectories(normalizedRequested, allowedDirectories);
   if (!isAllowed) {
-    throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
+    throw formatFilesystemValidationError(
+      'path_outside_allowed_roots',
+      `Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`
+    );
   }
 
   // Security: Handle symlinks by checking their real path to prevent symlink attacks
@@ -116,7 +128,10 @@ export async function validatePath(requestedPath: string): Promise<string> {
     const realPath = await fs.realpath(absolute);
     const normalizedReal = normalizePath(realPath);
     if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
-      throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
+      throw formatFilesystemValidationError(
+        'path_outside_allowed_roots',
+        `Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`
+      );
     }
     return realPath;
   } catch (error) {
@@ -128,12 +143,18 @@ export async function validatePath(requestedPath: string): Promise<string> {
         const realParentPath = await fs.realpath(parentDir);
         const normalizedParent = normalizePath(realParentPath);
         if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+          throw formatFilesystemValidationError(
+            'path_outside_allowed_roots',
+            `Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`
+          );
         }
         return absolute;
       } catch {
-        throw new Error(`Parent directory does not exist: ${parentDir}`);
+        throw formatFilesystemValidationError('path_parent_missing', `Parent directory does not exist: ${parentDir}`);
       }
+    }
+    if ((error as NodeJS.ErrnoException).code === 'EACCES' || (error as NodeJS.ErrnoException).code === 'EPERM') {
+      throw formatFilesystemValidationError('path_permission_denied', `Permission denied: ${absolute}`);
     }
     throw error;
   }
