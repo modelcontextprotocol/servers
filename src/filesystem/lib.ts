@@ -140,6 +140,47 @@ export async function validatePath(requestedPath: string): Promise<string> {
 }
 
 
+/**
+ * Replace a target file with the contents of a temporary file.
+ *
+ * Uses `fs.rename` for an atomic swap when possible. On Windows, rename can
+ * fail with `EPERM` when the target is held open by another process (e.g.
+ * VS Code) *provided* that process opened the file with `FILE_SHARE_DELETE`.
+ * In that case the function falls back to `fs.cp` + best-effort `fs.unlink`.
+ *
+ * **Limitations:**
+ * - The `fs.cp` fallback is *not* atomic — there is a brief window between
+ *   the internal `unlink(dest)` and `copyFile(src, dest)` performed by
+ *   `fs.cp({ force: true })`.
+ * - The fallback only succeeds when the locking process uses
+ *   `FILE_SHARE_DELETE`. Editors that lock without this flag will still
+ *   produce an `EPERM` error.
+ *
+ * @param tempPath  Path to the temporary file that contains the new content.
+ * @param targetPath  Path to the destination file to be replaced.
+ */
+async function replaceFileFromTemp(tempPath: string, targetPath: string): Promise<void> {
+  try {
+    await fs.rename(tempPath, targetPath);
+  } catch (renameError) {
+    if ((renameError as NodeJS.ErrnoException).code === 'EPERM') {
+      // Fallback: copy then best-effort cleanup
+      await fs.cp(tempPath, targetPath, { force: true });
+      try {
+        await fs.unlink(tempPath);
+      } catch {
+        // Best-effort cleanup; target was already written successfully
+      }
+    } else {
+      // For non-EPERM errors, clean up the temp file and re-throw
+      try {
+        await fs.unlink(tempPath);
+      } catch {}
+      throw renameError;
+    }
+  }
+}
+
 // File Operations
 export async function getFileStats(filePath: string): Promise<FileInfo> {
   const stats = await fs.stat(filePath);
@@ -169,15 +210,8 @@ export async function writeFileContent(filePath: string, content: string): Promi
       // could be created between validation and write. Rename operations
       // replace the target file atomically and don't follow symlinks.
       const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-      try {
-        await fs.writeFile(tempPath, content, 'utf-8');
-        await fs.rename(tempPath, filePath);
-      } catch (renameError) {
-        try {
-          await fs.unlink(tempPath);
-        } catch {}
-        throw renameError;
-      }
+      await fs.writeFile(tempPath, content, 'utf-8');
+      await replaceFileFromTemp(tempPath, filePath);
     } else {
       throw error;
     }
@@ -267,15 +301,8 @@ export async function applyFileEdits(
     // could be created between validation and write. Rename operations
     // replace the target file atomically and don't follow symlinks.
     const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-    try {
-      await fs.writeFile(tempPath, modifiedContent, 'utf-8');
-      await fs.rename(tempPath, filePath);
-    } catch (error) {
-      try {
-        await fs.unlink(tempPath);
-      } catch {}
-      throw error;
-    }
+    await fs.writeFile(tempPath, modifiedContent, 'utf-8');
+    await replaceFileFromTemp(tempPath, filePath);
   }
 
   return formattedDiff;
