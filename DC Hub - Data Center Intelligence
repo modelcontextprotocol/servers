@@ -1,0 +1,4 @@
+Server name: DC Hub - Data Center Intelligence
+Description: Access 20,000+ data center facilities, M&A transactions, capacity pipeline, and energy infrastructure data
+MCP endpoint: https://dchub.cloud/mcp
+Config: https://dchub.cloud/.well-known/mcp.json
