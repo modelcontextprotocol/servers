@@ -706,7 +706,9 @@ server.registerTool(
 async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
   const validatedRootDirs = await getValidRootDirectories(requestedRoots);
   if (validatedRootDirs.length > 0) {
-    allowedDirectories = [...validatedRootDirs];
+    // Merge with existing CLI-provided directories instead of replacing
+    const merged = new Set([...allowedDirectories, ...validatedRootDirs]);
+    allowedDirectories = [...merged];
     setAllowedDirectories(allowedDirectories); // Update the global state in lib.ts
     console.error(`Updated allowed directories from MCP roots: ${validatedRootDirs.length} valid directories`);
   } else {
