@@ -13,7 +13,7 @@ import path from "path";
 import { z } from "zod";
 import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from './path-utils.js';
-import { getValidRootDirectories } from './roots-utils.js';
+import { getValidRootDirectories, mergeAllowedDirectories } from './roots-utils.js';
 import {
   // Function imports
   formatSize,
@@ -88,6 +88,11 @@ if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
 }
 
 allowedDirectories = accessibleDirectories;
+
+// Preserve CLI-provided directories for merging with MCP roots later.
+// CLI directories are explicitly set by the administrator and must not be
+// discarded when the client provides roots via the MCP roots protocol.
+const cliAllowedDirectories = [...allowedDirectories];
 
 // Initialize the global allowedDirectories in lib.ts
 setAllowedDirectories(allowedDirectories);
@@ -702,15 +707,17 @@ server.registerTool(
   }
 );
 
-// Updates allowed directories based on MCP client roots
+// Updates allowed directories by merging CLI-provided directories with MCP client roots.
+// CLI directories are always preserved; client roots are added on top of them.
 async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
   const validatedRootDirs = await getValidRootDirectories(requestedRoots);
+  allowedDirectories = mergeAllowedDirectories(cliAllowedDirectories, validatedRootDirs);
+  setAllowedDirectories(allowedDirectories);
+
   if (validatedRootDirs.length > 0) {
-    allowedDirectories = [...validatedRootDirs];
-    setAllowedDirectories(allowedDirectories); // Update the global state in lib.ts
-    console.error(`Updated allowed directories from MCP roots: ${validatedRootDirs.length} valid directories`);
+    console.error(`Allowed directories: ${cliAllowedDirectories.length} from CLI + ${validatedRootDirs.length} from MCP roots (${allowedDirectories.length} total after dedup)`);
   } else {
-    console.error("No valid root directories provided by client");
+    console.error(`No valid root directories provided by client, using ${cliAllowedDirectories.length} CLI directory${cliAllowedDirectories.length === 1 ? '' : 'ies'}`);
   }
 }
 
