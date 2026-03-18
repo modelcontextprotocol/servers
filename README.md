@@ -844,6 +844,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Foursquare](https://github.com/foursquare/foursquare-places-mcp)** - Enable your agent to recommend places around the world with the [Foursquare Places API](https://location.foursquare.com/products/places-api/)
 - **[FPE Demo MCP](https://github.com/Horizon-Digital-Engineering/fpe-demo-mcp)** - FF3 Format Preserving Encryption with authentication patterns for secure data protection in LLM workflows.
 - **[FrankfurterMCP](https://github.com/anirbanbasu/frankfurtermcp)** - MCP server acting as an interface to the [Frankfurter API](https://frankfurter.dev/) for currency exchange data.
+- **[free-web-search-ultimate](https://github.com/wd041216-bit/free-web-search-ultimate)** - Zero-cost, API-key-free MCP server for real-time web search across DuckDuckGo, Bing, Google, Brave, and Yahoo. Supports news, images, and videos. Install via [PyPI](https://pypi.org/project/free-web-search-ultimate/).
 - **[freqtrade-mcp](https://github.com/kukapay/freqtrade-mcp)** - An MCP server that integrates with the Freqtrade cryptocurrency trading bot.
 - **[GDAL](https://github.com/Wayfinder-Foundry/gdal-mcp)** - GDAL-style geospatial workflows with built-in reasoning guidance and reference resources to give AI agents catalogue discovery, metadata intelligence, and raster/vector processing.
 - **[GDB](https://github.com/pansila/mcp_server_gdb)** - A GDB/MI protocol server based on the MCP protocol, providing remote application debugging capabilities with AI assistants.
