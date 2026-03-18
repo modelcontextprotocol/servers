@@ -184,6 +184,47 @@ class TestCheckMayAutonomouslyFetchUrl:
                 )
 
 
+    @pytest.mark.asyncio
+    async def test_blocks_when_robots_txt_500(self):
+        """Test that fetching is blocked when robots.txt returns 500.
+
+        Per RFC 9309 Section 2.3.1.3, server errors mean the robots.txt
+        status is undefined and crawlers should assume full restriction.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with pytest.raises(McpError):
+                await check_may_autonomously_fetch_url(
+                    "https://example.com/page",
+                    DEFAULT_USER_AGENT_AUTONOMOUS
+                )
+
+    @pytest.mark.asyncio
+    async def test_blocks_when_robots_txt_503(self):
+        """Test that fetching is blocked when robots.txt returns 503."""
+        mock_response = MagicMock()
+        mock_response.status_code = 503
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with pytest.raises(McpError):
+                await check_may_autonomously_fetch_url(
+                    "https://example.com/page",
+                    DEFAULT_USER_AGENT_AUTONOMOUS
+                )
+
+
 class TestFetchUrl:
     """Tests for fetch_url function."""
 
