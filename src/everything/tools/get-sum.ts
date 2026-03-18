@@ -14,6 +14,7 @@ const config = {
   title: "Get Sum Tool",
   description: "Returns the sum of two numbers",
   inputSchema: GetSumSchema,
+  annotations: { readOnlyHint: true },
 };
 
 /**

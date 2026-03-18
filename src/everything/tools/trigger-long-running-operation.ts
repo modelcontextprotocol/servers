@@ -17,6 +17,7 @@ const config = {
   title: "Trigger Long Running Operation Tool",
   description: "Demonstrates a long running operation with progress updates.",
   inputSchema: TriggerLongRunningOperationSchema,
+  annotations: { readOnlyHint: true },
 };
 
 /**
