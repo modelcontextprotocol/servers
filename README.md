@@ -1145,6 +1145,7 @@ search, and comprehensive file analysis.
 - **[ntfy-mcp](https://github.com/teddyzxcv/ntfy-mcp)** (by teddyzxcv) - The MCP server that keeps you informed by sending the notification on phone using ntfy
 - **[ntfy-me-mcp](https://github.com/gitmotion/ntfy-me-mcp)** (by gitmotion) - An ntfy MCP server for sending/fetching ntfy notifications to your self-hosted ntfy server from AI Agents 📤 (supports secure token auth & more - use with npx or docker!)
 - **[oatpp-mcp](https://github.com/oatpp/oatpp-mcp)** - C++ MCP integration for Oat++. Use [Oat++](https://oatpp.io) to build MCP servers.
+- **[Observe Instrument MCP](https://github.com/alanzha2/observe-instrument-mcp)** - Automatically instruments Python AI agents with OpenTelemetry-based tracing using the [ioa-observe-sdk](https://github.com/agntcy/observe). Supports LlamaIndex, LangGraph, CrewAI, and OpenAI SDK. Works with any LLM provider via LiteLLM.
 - **[Obsidian Markdown Notes](https://github.com/calclavia/mcp-obsidian)** - Read and search through your Obsidian vault or any directory containing Markdown notes
 - **[Obsidian Notes](https://github.com/Piotr1215/mcp-obsidian)** - Direct file system access to Obsidian vaults with security-first design, advanced search capabilities including MOC (Maps of Content) discovery, and support for obsidian.nvim - no Obsidian app required.
 - **[obsidian-mcp](https://github.com/StevenStavrakis/obsidian-mcp)** - (by Steven Stavrakis) An MCP server for Obsidian.md with tools for searching, reading, writing, and organizing notes.
