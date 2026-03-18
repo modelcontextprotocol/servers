@@ -7,6 +7,24 @@ import { minimatch } from 'minimatch';
 import { normalizePath, expandHome } from './path-utils.js';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
 
+/**
+ * Atomically replace a file using rename, with a Windows fallback.
+ * On Windows, fs.rename() throws EPERM when the target file is locked
+ * (e.g., open in an editor). Fall back to copyFile + unlink in that case.
+ */
+async function atomicReplace(tempPath: string, targetPath: string): Promise<void> {
+  try {
+    await fs.rename(tempPath, targetPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EPERM' && process.platform === 'win32') {
+      await fs.copyFile(tempPath, targetPath);
+      await fs.unlink(tempPath);
+    } else {
+      throw error;
+    }
+  }
+}
+
 // Global allowed directories - set by the main module
 let allowedDirectories: string[] = [];
 
@@ -171,7 +189,7 @@ export async function writeFileContent(filePath: string, content: string): Promi
       const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
       try {
         await fs.writeFile(tempPath, content, 'utf-8');
-        await fs.rename(tempPath, filePath);
+        await atomicReplace(tempPath, filePath);
       } catch (renameError) {
         try {
           await fs.unlink(tempPath);
@@ -269,7 +287,7 @@ export async function applyFileEdits(
     const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
     try {
       await fs.writeFile(tempPath, modifiedContent, 'utf-8');
-      await fs.rename(tempPath, filePath);
+      await atomicReplace(tempPath, filePath);
     } catch (error) {
       try {
         await fs.unlink(tempPath);
