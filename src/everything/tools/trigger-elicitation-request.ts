@@ -189,7 +189,8 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
           if (userData.name) lines.push(`- Name: ${userData.name}`);
           if (userData.check !== undefined)
             lines.push(`- Agreed to terms: ${userData.check}`);
-          if (userData.color) lines.push(`- Favorite Color: ${userData.color}`);
+          if (userData.firstLine)
+            lines.push(`- Favorite First Line: ${userData.firstLine}`);
           if (userData.email) lines.push(`- Email: ${userData.email}`);
           if (userData.homepage) lines.push(`- Homepage: ${userData.homepage}`);
           if (userData.birthdate)
@@ -198,7 +199,16 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
             lines.push(`- Favorite Integer: ${userData.integer}`);
           if (userData.number !== undefined)
             lines.push(`- Favorite Number: ${userData.number}`);
-          if (userData.petType) lines.push(`- Pet Type: ${userData.petType}`);
+          if (userData.untitledSingleSelectEnum)
+            lines.push(`- Favorite Friend: ${userData.untitledSingleSelectEnum}`);
+          if (userData.untitledMultipleSelectEnum)
+            lines.push(`- Favorite Instruments: ${userData.untitledMultipleSelectEnum}`);
+          if (userData.titledSingleSelectEnum)
+            lines.push(`- Favorite Hero: ${userData.titledSingleSelectEnum}`);
+          if (userData.titledMultipleSelectEnum)
+            lines.push(`- Favorite Fish: ${userData.titledMultipleSelectEnum}`);
+          if (userData.legacyTitledEnum)
+            lines.push(`- Favorite Pet: ${userData.legacyTitledEnum}`);
 
           content.push({
             type: "text",
