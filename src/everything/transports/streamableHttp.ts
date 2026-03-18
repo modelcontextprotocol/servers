@@ -225,10 +225,10 @@ process.on("SIGINT", async () => {
   console.log("Shutting down server...");
 
   // Close all active transports to properly clean up resources
-  for (const sessionId in transports) {
+  for (const [sessionId, transport] of transports) {
     try {
       console.log(`Closing transport for session ${sessionId}`);
-      await transports.get(sessionId)!.close();
+      await transport.close();
       transports.delete(sessionId);
     } catch (error) {
       console.log(`Error closing transport for session ${sessionId}:`, error);
