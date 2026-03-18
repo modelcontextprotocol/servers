@@ -1,0 +1,24 @@
+{
+  "id": "pendle-api-mcp-mcp",
+  "name": "Pendle Api Mcp MCP",
+  "description": "Get all limit orders for analytics — This endpoint is for analytics purpose, if you want to analyze the limit orders data, this endpoint return all the orders t",
+  "repository": "https://github.com/junct-bot/pendle-api-mcp-mcp",
+  "endpoint": "https://pendle-api.mcp.junct.dev/mcp",
+  "transport": [
+    "streamable-http"
+  ],
+  "tags": [
+    "read",
+    "limit orders",
+    "write",
+    "oracle",
+    "assets",
+    "analytics",
+    "markets",
+    "ve pendle"
+  ],
+  "version": "1.0.0",
+  "author": "Junct",
+  "llms_txt": "https://pendle-api.mcp.junct.dev/llms.txt",
+  "created_at": "2026-03-18T18:23:50.606Z"
+}
