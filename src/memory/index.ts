@@ -416,9 +416,19 @@ server.registerTool(
   },
   async () => {
     const graph = await knowledgeGraphManager.readGraph();
+    // Strip extra properties from entities and relations to match output schema.
+    // The JSONL file may contain entities with additional properties that were
+    // stored by older versions or external tools.
+    const cleanEntities = graph.entities.map(({ name, entityType, observations }) => ({
+      name, entityType, observations
+    }));
+    const cleanRelations = graph.relations.map(({ from, to, relationType }) => ({
+      from, to, relationType
+    }));
+    const cleanGraph = { entities: cleanEntities, relations: cleanRelations };
     return {
-      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
-      structuredContent: { ...graph }
+      content: [{ type: "text" as const, text: JSON.stringify(cleanGraph, null, 2) }],
+      structuredContent: cleanGraph
     };
   }
 );
@@ -439,9 +449,16 @@ server.registerTool(
   },
   async ({ query }) => {
     const graph = await knowledgeGraphManager.searchNodes(query);
+    const cleanEntities = graph.entities.map(({ name, entityType, observations }) => ({
+      name, entityType, observations
+    }));
+    const cleanRelations = graph.relations.map(({ from, to, relationType }) => ({
+      from, to, relationType
+    }));
+    const cleanGraph = { entities: cleanEntities, relations: cleanRelations };
     return {
-      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
-      structuredContent: { ...graph }
+      content: [{ type: "text" as const, text: JSON.stringify(cleanGraph, null, 2) }],
+      structuredContent: cleanGraph
     };
   }
 );
@@ -462,9 +479,16 @@ server.registerTool(
   },
   async ({ names }) => {
     const graph = await knowledgeGraphManager.openNodes(names);
+    const cleanEntities = graph.entities.map(({ name, entityType, observations }) => ({
+      name, entityType, observations
+    }));
+    const cleanRelations = graph.relations.map(({ from, to, relationType }) => ({
+      from, to, relationType
+    }));
+    const cleanGraph = { entities: cleanEntities, relations: cleanRelations };
     return {
-      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
-      structuredContent: { ...graph }
+      content: [{ type: "text" as const, text: JSON.stringify(cleanGraph, null, 2) }],
+      structuredContent: cleanGraph
     };
   }
 );
