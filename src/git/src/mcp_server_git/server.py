@@ -473,8 +473,21 @@ async def serve(repository: Path | None) -> None:
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         repo_path = Path(arguments["repo_path"])
 
-        # Validate repo_path is within allowed repository
-        validate_repo_path(repo_path, repository)
+        # Validate repo_path against both CLI repository AND current roots.
+        # This ensures root changes at runtime revoke access to removed repos.
+        allowed_repos = await list_repos()
+        if allowed_repos:
+            resolved_repo = str(repo_path.resolve())
+            if not any(
+                resolved_repo == r or resolved_repo.startswith(r + "/")
+                for r in (str(Path(r).resolve()) for r in allowed_repos)
+            ):
+                raise ValueError(
+                    f"Repository path '{repo_path}' is not within any allowed repository"
+                )
+        elif repository is not None:
+            # Fallback to CLI-only validation if list_repos fails
+            validate_repo_path(repo_path, repository)
 
         # For all commands, we need an existing repo
         repo = git.Repo(repo_path)
