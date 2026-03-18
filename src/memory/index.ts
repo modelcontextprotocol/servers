@@ -267,9 +267,9 @@ server.registerTool(
     inputSchema: {
       entities: z.array(EntitySchema)
     },
-    outputSchema: {
+    outputSchema: z.object({
       entities: z.array(EntitySchema)
-    }
+    })
   },
   async ({ entities }) => {
     const result = await knowledgeGraphManager.createEntities(entities);
@@ -289,9 +289,9 @@ server.registerTool(
     inputSchema: {
       relations: z.array(RelationSchema)
     },
-    outputSchema: {
+    outputSchema: z.object({
       relations: z.array(RelationSchema)
-    }
+    })
   },
   async ({ relations }) => {
     const result = await knowledgeGraphManager.createRelations(relations);
@@ -314,12 +314,12 @@ server.registerTool(
         contents: z.array(z.string()).describe("An array of observation contents to add")
       }))
     },
-    outputSchema: {
+    outputSchema: z.object({
       results: z.array(z.object({
         entityName: z.string(),
         addedObservations: z.array(z.string())
       }))
-    }
+    })
   },
   async ({ observations }) => {
     const result = await knowledgeGraphManager.addObservations(observations);
@@ -339,10 +339,10 @@ server.registerTool(
     inputSchema: {
       entityNames: z.array(z.string()).describe("An array of entity names to delete")
     },
-    outputSchema: {
+    outputSchema: z.object({
       success: z.boolean(),
       message: z.string()
-    }
+    })
   },
   async ({ entityNames }) => {
     await knowledgeGraphManager.deleteEntities(entityNames);
@@ -365,10 +365,10 @@ server.registerTool(
         observations: z.array(z.string()).describe("An array of observations to delete")
       }))
     },
-    outputSchema: {
+    outputSchema: z.object({
       success: z.boolean(),
       message: z.string()
-    }
+    })
   },
   async ({ deletions }) => {
     await knowledgeGraphManager.deleteObservations(deletions);
@@ -388,10 +388,10 @@ server.registerTool(
     inputSchema: {
       relations: z.array(RelationSchema).describe("An array of relations to delete")
     },
-    outputSchema: {
+    outputSchema: z.object({
       success: z.boolean(),
       message: z.string()
-    }
+    })
   },
   async ({ relations }) => {
     await knowledgeGraphManager.deleteRelations(relations);
@@ -409,10 +409,10 @@ server.registerTool(
     title: "Read Graph",
     description: "Read the entire knowledge graph",
     inputSchema: {},
-    outputSchema: {
+    outputSchema: z.object({
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
-    }
+    })
   },
   async () => {
     const graph = await knowledgeGraphManager.readGraph();
@@ -432,10 +432,10 @@ server.registerTool(
     inputSchema: {
       query: z.string().describe("The search query to match against entity names, types, and observation content")
     },
-    outputSchema: {
+    outputSchema: z.object({
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
-    }
+    })
   },
   async ({ query }) => {
     const graph = await knowledgeGraphManager.searchNodes(query);
@@ -455,10 +455,10 @@ server.registerTool(
     inputSchema: {
       names: z.array(z.string()).describe("An array of entity names to retrieve")
     },
-    outputSchema: {
+    outputSchema: z.object({
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
-    }
+    })
   },
   async ({ names }) => {
     const graph = await knowledgeGraphManager.openNodes(names);
