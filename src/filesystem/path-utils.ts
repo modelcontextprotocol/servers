@@ -23,7 +23,9 @@ export function convertToWindowsPath(p: string): string {
   }
 
   // Handle standard Windows paths, ensuring backslashes
-  if (p.match(/^[a-zA-Z]:/)) {
+  // Only convert on Windows to prevent false matches on Linux
+  // (e.g., paths that happen to start with a letter followed by colon)
+  if (p.match(/^[a-zA-Z]:/) && process.platform === 'win32') {
     return p.replace(/\//g, '\\');
   }
 
@@ -92,7 +94,10 @@ export function normalizePath(p: string): string {
   }
 
   // Handle Windows paths: convert slashes and ensure drive letter is capitalized
-  if (normalized.match(/^[a-zA-Z]:/)) {
+  // Only apply Windows-specific formatting on Windows platform to prevent
+  // Linux paths from being incorrectly treated as Windows drive paths
+  // (fixes issue #3628: /h/username/data being converted to H:\username\data)
+  if (normalized.match(/^[a-zA-Z]:/) && process.platform === 'win32') {
     let result = normalized.replace(/\//g, '\\');
     // Capitalize drive letter if present
     if (/^[a-z]:/.test(result)) {
