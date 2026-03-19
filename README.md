@@ -596,6 +596,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Airflow](https://github.com/yangkyeongmo/mcp-server-apache-airflow)** - An MCP Server that connects to [Apache Airflow](https://airflow.apache.org/) using official python client.
 - **[Airtable](https://github.com/domdomegg/airtable-mcp-server)** - Read and write access to [Airtable](https://airtable.com/) databases, with schema inspection.
 - **[Airtable](https://github.com/felores/airtable-mcp)** - Airtable Model Context Protocol Server.
+- **[API Design Reviewer](https://github.com/sharmasundip/claudeskills/tree/master/api-design-reviewer)** - High-performance audit logic for REST, GraphQL, and gRPC APIs.
 - **[Algorand](https://github.com/GoPlausible/algorand-mcp)** - A comprehensive MCP server for tooling interactions (40+) and resource accessibility (60+) plus many useful prompts for interacting with the Algorand blockchain.
 - **[Amadeus](https://github.com/donghyun-chae/mcp-amadeus)** (by donghyun-chae) - An MCP server to access, explore, and interact with Amadeus Flight Offers Search API for retrieving detailed flight options, including airline, times, duration, and pricing data.
 - **[Amazon Ads](https://github.com/MarketplaceAdPros/amazon-ads-mcp-server)** - MCP Server that provides interaction capabilities with Amazon Advertising through [MarketplaceAdPros](https://marketplaceadpros.com)/
