@@ -31,18 +31,44 @@ describe('Path Utilities', () => {
       }
     });
 
-    it('leaves Windows paths unchanged but ensures backslashes', () => {
-      expect(convertToWindowsPath('C:\\NS\\MyKindleContent'))
-        .toBe('C:\\NS\\MyKindleContent');
-      expect(convertToWindowsPath('C:/NS/MyKindleContent'))
-        .toBe('C:\\NS\\MyKindleContent');
+    it('only converts standard Windows drive paths on Windows platform', () => {
+      if (process.platform === 'win32') {
+        expect(convertToWindowsPath('C:/NS/MyKindleContent'))
+          .toBe('C:\\NS\\MyKindleContent');
+      } else {
+        // On Linux, C:/path should not have slashes converted
+        expect(convertToWindowsPath('C:/NS/MyKindleContent'))
+          .toBe('C:/NS/MyKindleContent');
+      }
+    });
+
+    it('leaves Windows paths unchanged but ensures backslashes on Windows', () => {
+      if (process.platform === 'win32') {
+        expect(convertToWindowsPath('C:\\NS\\MyKindleContent'))
+          .toBe('C:\\NS\\MyKindleContent');
+        expect(convertToWindowsPath('C:/NS/MyKindleContent'))
+          .toBe('C:\\NS\\MyKindleContent');
+      } else {
+        // On Linux, paths with drive letters are left as-is
+        expect(convertToWindowsPath('C:\\NS\\MyKindleContent'))
+          .toBe('C:\\NS\\MyKindleContent');
+        expect(convertToWindowsPath('C:/NS/MyKindleContent'))
+          .toBe('C:/NS/MyKindleContent');
+      }
     });
 
     it('handles Windows paths with spaces', () => {
-      expect(convertToWindowsPath('C:\\Program Files\\Some App'))
-        .toBe('C:\\Program Files\\Some App');
-      expect(convertToWindowsPath('C:/Program Files/Some App'))
-        .toBe('C:\\Program Files\\Some App');
+      if (process.platform === 'win32') {
+        expect(convertToWindowsPath('C:\\Program Files\\Some App'))
+          .toBe('C:\\Program Files\\Some App');
+        expect(convertToWindowsPath('C:/Program Files/Some App'))
+          .toBe('C:\\Program Files\\Some App');
+      } else {
+        expect(convertToWindowsPath('C:\\Program Files\\Some App'))
+          .toBe('C:\\Program Files\\Some App');
+        expect(convertToWindowsPath('C:/Program Files/Some App'))
+          .toBe('C:/Program Files/Some App');
+      }
     });
 
     it('handles drive letter paths based on platform', () => {
@@ -79,18 +105,28 @@ describe('Path Utilities', () => {
     });
 
     it('removes surrounding quotes', () => {
-      expect(normalizePath('"C:\\NS\\My Kindle Content"'))
-        .toBe('C:\\NS\\My Kindle Content');
+      if (process.platform === 'win32') {
+        expect(normalizePath('"C:\\NS\\My Kindle Content"'))
+          .toBe('C:\\NS\\My Kindle Content');
+      } else {
+        // On Linux, drive-letter paths are not specially handled
+        const result = normalizePath('"C:\\NS\\My Kindle Content"');
+        expect(result).not.toContain('"');
+      }
     });
 
     it('normalizes backslashes', () => {
-      expect(normalizePath('C:\\\\NS\\\\MyKindleContent'))
-        .toBe('C:\\NS\\MyKindleContent');
+      if (process.platform === 'win32') {
+        expect(normalizePath('C:\\\\NS\\\\MyKindleContent'))
+          .toBe('C:\\NS\\MyKindleContent');
+      }
     });
 
     it('converts forward slashes to backslashes on Windows', () => {
-      expect(normalizePath('C:/NS/MyKindleContent'))
-        .toBe('C:\\NS\\MyKindleContent');
+      if (process.platform === 'win32') {
+        expect(normalizePath('C:/NS/MyKindleContent'))
+          .toBe('C:\\NS\\MyKindleContent');
+      }
     });
 
     it('always preserves WSL paths (they work correctly in WSL)', () => {
@@ -115,17 +151,19 @@ describe('Path Utilities', () => {
     });
 
     it('handles paths with spaces and mixed slashes', () => {
-      expect(normalizePath('C:/NS/My Kindle Content'))
-        .toBe('C:\\NS\\My Kindle Content');
+      if (process.platform === 'win32') {
+        expect(normalizePath('C:/NS/My Kindle Content'))
+          .toBe('C:\\NS\\My Kindle Content');
+        expect(normalizePath('C:\\Program Files (x86)\\App Name'))
+          .toBe('C:\\Program Files (x86)\\App Name');
+        expect(normalizePath('"C:\\Program Files\\App Name"'))
+          .toBe('C:\\Program Files\\App Name');
+        expect(normalizePath('  C:\\Program Files\\App Name  '))
+          .toBe('C:\\Program Files\\App Name');
+      }
       // WSL paths should always be preserved
       expect(normalizePath('/mnt/c/NS/My Kindle Content'))
         .toBe('/mnt/c/NS/My Kindle Content');
-      expect(normalizePath('C:\\Program Files (x86)\\App Name'))
-        .toBe('C:\\Program Files (x86)\\App Name');
-      expect(normalizePath('"C:\\Program Files\\App Name"'))
-        .toBe('C:\\Program Files\\App Name');
-      expect(normalizePath('  C:\\Program Files\\App Name  '))
-        .toBe('C:\\Program Files\\App Name');
     });
 
     it('preserves spaces in all path formats', () => {
@@ -137,54 +175,59 @@ describe('Path Utilities', () => {
         // On Windows, Unix-style paths like /c/ should be converted
         expect(normalizePath('/c/Program Files/App Name'))
           .toBe('C:\\Program Files\\App Name');
+        expect(normalizePath('C:/Program Files/App Name'))
+          .toBe('C:\\Program Files\\App Name');
       } else {
         // On Linux, /c/ is just a regular Unix path
         expect(normalizePath('/c/Program Files/App Name'))
           .toBe('/c/Program Files/App Name');
       }
-      expect(normalizePath('C:/Program Files/App Name'))
-        .toBe('C:\\Program Files\\App Name');
     });
 
     it('handles special characters in paths', () => {
-      // Test ampersand in path
-      expect(normalizePath('C:\\NS\\Sub&Folder'))
-        .toBe('C:\\NS\\Sub&Folder');
-      expect(normalizePath('C:/NS/Sub&Folder'))
-        .toBe('C:\\NS\\Sub&Folder');
+      if (process.platform === 'win32') {
+        // Test ampersand in path
+        expect(normalizePath('C:\\NS\\Sub&Folder'))
+          .toBe('C:\\NS\\Sub&Folder');
+        expect(normalizePath('C:/NS/Sub&Folder'))
+          .toBe('C:\\NS\\Sub&Folder');
+
+        // Test tilde in path (short names in Windows)
+        expect(normalizePath('C:\\NS\\MYKIND~1'))
+          .toBe('C:\\NS\\MYKIND~1');
+
+        // Test other special characters
+        expect(normalizePath('C:\\Path with #hash'))
+          .toBe('C:\\Path with #hash');
+        expect(normalizePath('C:\\Path with (parentheses)'))
+          .toBe('C:\\Path with (parentheses)');
+        expect(normalizePath('C:\\Path with [brackets]'))
+          .toBe('C:\\Path with [brackets]');
+        expect(normalizePath('C:\\Path with @at+plus$dollar%percent'))
+          .toBe('C:\\Path with @at+plus$dollar%percent');
+      }
       // WSL paths should always be preserved
       expect(normalizePath('/mnt/c/NS/Sub&Folder'))
         .toBe('/mnt/c/NS/Sub&Folder');
 
-      // Test tilde in path (short names in Windows)
-      expect(normalizePath('C:\\NS\\MYKIND~1'))
-        .toBe('C:\\NS\\MYKIND~1');
+      // Unix paths with tildes should be preserved
       expect(normalizePath('/Users/NEMANS~1/FOLDER~2/SUBFO~1/Public/P12PST~1'))
         .toBe('/Users/NEMANS~1/FOLDER~2/SUBFO~1/Public/P12PST~1');
-
-      // Test other special characters
-      expect(normalizePath('C:\\Path with #hash'))
-        .toBe('C:\\Path with #hash');
-      expect(normalizePath('C:\\Path with (parentheses)'))
-        .toBe('C:\\Path with (parentheses)');
-      expect(normalizePath('C:\\Path with [brackets]'))
-        .toBe('C:\\Path with [brackets]');
-      expect(normalizePath('C:\\Path with @at+plus$dollar%percent'))
-        .toBe('C:\\Path with @at+plus$dollar%percent');
     });
 
     it('capitalizes lowercase drive letters for Windows paths', () => {
-      expect(normalizePath('c:/windows/system32'))
-        .toBe('C:\\windows\\system32');
+      if (process.platform === 'win32') {
+        expect(normalizePath('c:/windows/system32'))
+          .toBe('C:\\windows\\system32');
+        // On Windows, Unix-style paths should be converted and capitalized
+        expect(normalizePath('/e/another/folder'))
+          .toBe('E:\\another\\folder');
+      }
       // WSL paths should always be preserved
       expect(normalizePath('/mnt/d/my/folder'))
         .toBe('/mnt/d/my/folder');
 
-      if (process.platform === 'win32') {
-        // On Windows, Unix-style paths should be converted and capitalized
-        expect(normalizePath('/e/another/folder'))
-          .toBe('E:\\another\\folder');
-      } else {
+      if (process.platform !== 'win32') {
         // On Linux, /e/ is just a regular Unix path
         expect(normalizePath('/e/another/folder'))
           .toBe('/e/another/folder');
@@ -363,6 +406,47 @@ describe('Path Utilities', () => {
 
       expect(normalizePath('C:')).toBe('C:\\');
       expect(normalizePath('d:')).toBe('D:\\');
+    });
+
+    it('should NOT convert Linux paths starting with a single letter directory (issue #3628)', () => {
+      // Mock Linux platform (Docker container)
+      Object.defineProperty(process, 'platform', {
+        value: 'linux',
+        writable: true,
+        configurable: true
+      });
+
+      // /h/username/data should NOT become H:\username\data
+      expect(normalizePath('/h/username/data'))
+        .toBe('/h/username/data');
+
+      // Other single-letter directories should also be preserved
+      expect(normalizePath('/a/some/path'))
+        .toBe('/a/some/path');
+      expect(normalizePath('/z/foo/bar'))
+        .toBe('/z/foo/bar');
+
+      // Also test convertToWindowsPath directly
+      expect(convertToWindowsPath('/h/username/data'))
+        .toBe('/h/username/data');
+    });
+
+    it('reproduces exact scenario from issue #3628 (Docker on Linux)', () => {
+      // Simulate running inside a Linux Docker container
+      Object.defineProperty(process, 'platform', {
+        value: 'linux',
+        writable: true,
+        configurable: true
+      });
+
+      // This is the exact path pattern from the issue
+      const inputPath = '/h/username/MCP_Development/data';
+      const result = normalizePath(inputPath);
+
+      // Should NOT convert to H:\username\MCP_Development\data
+      expect(result).toBe('/h/username/MCP_Development/data');
+      expect(result).not.toContain('H:');
+      expect(result).not.toContain('\\');
     });
 
     it('should handle relative path slash conversion based on platform', () => {
