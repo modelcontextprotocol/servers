@@ -550,7 +550,7 @@ server.registerTool(
 
     async function buildTree(currentPath: string, excludePatterns: string[] = []): Promise<TreeEntry[]> {
       const validPath = await validatePath(currentPath);
-      const entries = await fs.readdir(validPath, { withFileTypes: true });
+      const entries = (await fs.readdir(validPath, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name));
       const result: TreeEntry[] = [];
 
       for (const entry of entries) {
