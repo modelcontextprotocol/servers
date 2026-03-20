@@ -263,6 +263,12 @@ server.registerTool(
   "create_entities",
   {
     title: "Create Entities",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     description: "Create multiple new entities in the knowledge graph",
     inputSchema: {
       entities: z.array(EntitySchema)
@@ -285,6 +291,12 @@ server.registerTool(
   "create_relations",
   {
     title: "Create Relations",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     description: "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
     inputSchema: {
       relations: z.array(RelationSchema)
@@ -307,6 +319,12 @@ server.registerTool(
   "add_observations",
   {
     title: "Add Observations",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     description: "Add new observations to existing entities in the knowledge graph",
     inputSchema: {
       observations: z.array(z.object({
@@ -335,6 +353,12 @@ server.registerTool(
   "delete_entities",
   {
     title: "Delete Entities",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     description: "Delete multiple entities and their associated relations from the knowledge graph",
     inputSchema: {
       entityNames: z.array(z.string()).describe("An array of entity names to delete")
@@ -358,6 +382,12 @@ server.registerTool(
   "delete_observations",
   {
     title: "Delete Observations",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     description: "Delete specific observations from entities in the knowledge graph",
     inputSchema: {
       deletions: z.array(z.object({
@@ -384,6 +414,12 @@ server.registerTool(
   "delete_relations",
   {
     title: "Delete Relations",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description: "Delete multiple relations from the knowledge graph",
     inputSchema: {
       relations: z.array(RelationSchema).describe("An array of relations to delete")
@@ -407,6 +443,12 @@ server.registerTool(
   "read_graph",
   {
     title: "Read Graph",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description: "Read the entire knowledge graph",
     inputSchema: {},
     outputSchema: {
@@ -428,6 +470,12 @@ server.registerTool(
   "search_nodes",
   {
     title: "Search Nodes",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description: "Search for nodes in the knowledge graph based on a query",
     inputSchema: {
       query: z.string().describe("The search query to match against entity names, types, and observation content")
@@ -451,6 +499,12 @@ server.registerTool(
   "open_nodes",
   {
     title: "Open Nodes",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description: "Open specific nodes in the knowledge graph by their names",
     inputSchema: {
       names: z.array(z.string()).describe("An array of entity names to retrieve")
