@@ -426,6 +426,76 @@ describe('KnowledgeGraphManager', () => {
       expect(JSON.parse(lines[1])).toHaveProperty('type', 'relation');
     });
 
+    it('should write a trailing newline to produce valid JSONL', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: ['test'] },
+      ]);
+
+      const fileContent = await fs.readFile(testFilePath, 'utf-8');
+      expect(fileContent.endsWith('\n')).toBe(true);
+    });
+
+    it('should produce a file where every line is individually valid JSON', async () => {
+      // This test catches the bug where saveGraph wrote lines.join("\n")
+      // without a trailing newline. When the file was later appended to
+      // (e.g. by a concurrent process or external tool), the last JSON
+      // object and the new first JSON object ended up on the same line,
+      // producing invalid JSONL like:
+      //   {"type":"entity","name":"Alice"}{"type":"relation","from":"Alice",...}
+      // which fails with: "Unexpected non-whitespace character after JSON
+      // at position N"
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: ['test'] },
+        { name: 'Bob', entityType: 'person', observations: [] },
+      ]);
+      await manager.createRelations([
+        { from: 'Alice', to: 'Bob', relationType: 'knows' },
+      ]);
+
+      const fileContent = await fs.readFile(testFilePath, 'utf-8');
+      const allLines = fileContent.split('\n');
+
+      // Every non-empty line must be valid JSON on its own
+      for (const line of allLines) {
+        if (line.trim() === '') continue;
+        expect(() => JSON.parse(line)).not.toThrow();
+      }
+    });
+
+    it('should not corrupt JSONL when content is appended to the file externally', async () => {
+      // Simulate the real-world corruption scenario:
+      // 1. saveGraph writes entities to the file
+      // 2. An external process appends a new JSON line to the file
+      // 3. loadGraph must still parse the file without errors
+      //
+      // Without a trailing newline on step 1, the appended content in
+      // step 2 lands on the same line as the last entity, producing
+      // invalid JSONL that breaks loadGraph.
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: ['original'] },
+      ]);
+
+      // Simulate an external append (e.g. another process, a script, or
+      // a crash-recovery replay). This is what triggers the bug: without
+      // a trailing newline, this JSON object concatenates onto line 1.
+      const externalLine = JSON.stringify({
+        type: 'entity',
+        name: 'External',
+        entityType: 'person',
+        observations: ['appended externally'],
+      });
+      await fs.appendFile(testFilePath, externalLine + '\n');
+
+      // A new manager instance forces a fresh loadGraph from disk
+      const manager2 = new KnowledgeGraphManager(testFilePath);
+      const graph = await manager2.readGraph();
+
+      // Both entities must load without a JSON parse error
+      expect(graph.entities).toHaveLength(2);
+      expect(graph.entities.map(e => e.name)).toContain('Alice');
+      expect(graph.entities.map(e => e.name)).toContain('External');
+    });
+
     it('should strip type field from entities when loading from file', async () => {
       // Create entities and relations (these get saved with type field)
       await manager.createEntities([
