@@ -9,8 +9,24 @@ from mcp_server_fetch.server import (
     get_robots_txt_url,
     check_may_autonomously_fetch_url,
     fetch_url,
+    _make_fetch_tool,
     DEFAULT_USER_AGENT_AUTONOMOUS,
 )
+
+
+class TestListTools:
+    """Tests for list_tools handler."""
+
+    def test_fetch_tool_annotations(self):
+        """Test that the fetch tool has correct MCP tool annotations."""
+        tool = _make_fetch_tool()
+
+        assert tool.name == "fetch"
+        assert tool.annotations is not None
+        assert tool.annotations.readOnlyHint is True
+        assert tool.annotations.destructiveHint is False
+        assert tool.annotations.idempotentHint is True
+        assert tool.annotations.openWorldHint is True
 
 
 class TestGetRobotsTxtUrl:
