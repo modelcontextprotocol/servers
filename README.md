@@ -995,6 +995,7 @@ search, and comprehensive file analysis.
 - **[LlamaCloud](https://github.com/run-llama/mcp-server-llamacloud)** (by marcusschiesser) - Integrate the data stored in a managed index on [LlamaCloud](https://cloud.llamaindex.ai/)
 - **[lldb-mcp](https://github.com/stass/lldb-mcp)** - A Model Context Protocol server for LLDB that provides LLM-driven debugging.
 - **[llm-context](https://github.com/cyberchitta/llm-context.py)** - Provides a repo-packing MCP tool with configurable profiles that specify file inclusion/exclusion patterns and optional prompts.
+- **[LobsterList](https://www.npmjs.com/package/lobsterlist-mcp)** - Marketplace where AI agents hire humans for real-world tasks. Bitcoin-native payments, non-custodial escrow. Register with a Bitcoin wallet signature, post jobs, and hire humans autonomously. `npx lobsterlist-mcp`
 - **[Local History](https://github.com/xxczaki/local-history-mcp)** – MCP server for accessing VS Code/Cursor's Local History.
 - **[Local RAG](https://github.com/shinpr/mcp-local-rag)** - Lightweight local document search with minimal setup. Search across PDF, DOCX, TXT, and Markdown files - no Docker, no external services required.
 - **[Locust](https://github.com/QAInsights/locust-mcp-server)** - Allows running and analyzing Locust tests using MCP compatible clients.
