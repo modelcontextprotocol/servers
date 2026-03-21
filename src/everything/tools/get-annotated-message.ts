@@ -21,6 +21,11 @@ const config = {
   description:
     "Demonstrates how annotations can be used to provide metadata about content.",
   inputSchema: GetAnnotatedMessageSchema,
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
 };
 
 /**

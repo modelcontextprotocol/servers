@@ -26,6 +26,11 @@ const config = {
   description:
     "Returns structured content along with an output schema for client data validation",
   inputSchema: GetStructuredContentInputSchema,
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
   outputSchema: GetStructuredContentOutputSchema,
 };
 
