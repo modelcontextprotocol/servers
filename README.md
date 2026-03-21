@@ -1237,6 +1237,7 @@ search, and comprehensive file analysis.
 - **[qa-use](https://github.com/desplega-ai/qa-use)** - Browser automation and QA testing capabilities. This server integrates with [desplega.ai](https://desplega.ai) to offer automated testing, session monitoring, batch test execution, and intelligent test guidance using the AAA framework.
 - **[QGIS](https://github.com/jjsantos01/qgis_mcp)** - connects QGIS to Claude AI through the MCP. This integration enables prompt-assisted project creation, layer loading, code execution, and more.
 - **[Qiniu MCP Server](https://github.com/qiniu/qiniu-mcp-server)** - The Model Context Protocol (MCP) Server built on Qiniu Cloud products supports users in accessing Qiniu Cloud Storage, intelligent multimedia services, and more through this MCP Server within the context of AI large model clients.
+- **[q-ring](https://github.com/I4cTime/quantum_ring)** - The first quantum-inspired keyring built specifically for AI coding agents. Secure secrets with superposition, entanglement, tunneling, and teleportation.
 - **[QuantConnect](https://github.com/taylorwilsdon/quantconnect-mcp)** - QuantConnect Algorithmic Trading Platform Orchestration MCP - Agentic LLM Driven Trading Strategy Design, Research & Implementation.
 - **[Quarkus](https://github.com/quarkiverse/quarkus-mcp-servers)** - MCP servers for the Quarkus Java framework.
 - **[QuickChart](https://github.com/GongRzhe/Quickchart-MCP-Server)** - A Model Context Protocol server for generating charts using QuickChart.io
