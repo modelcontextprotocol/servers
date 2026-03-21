@@ -11,6 +11,11 @@ const config = {
   title: "Toggle Simulated Logging",
   description: "Toggles simulated, random-leveled logging on or off.",
   inputSchema: {},
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+  },
 };
 
 // Track enabled clients by session id

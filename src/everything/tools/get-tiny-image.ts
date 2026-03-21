@@ -11,6 +11,11 @@ const config = {
   title: "Get Tiny Image Tool",
   description: "Returns a tiny MCP logo image.",
   inputSchema: {},
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
 };
 
 /**

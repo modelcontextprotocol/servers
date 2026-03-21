@@ -13,6 +13,11 @@ const config = {
   title: "Echo Tool",
   description: "Echoes back the input string",
   inputSchema: EchoSchema,
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
 };
 
 /**
