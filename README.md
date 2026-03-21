@@ -643,6 +643,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Azure Wiki Search](https://github.com/coder-linping/azure-wiki-search-server)** - An MCP that enables AI to query the wiki hosted on Azure Devops Wiki.
 - **[Baidu AI Search](https://github.com/baidubce/app-builder/tree/master/python/mcp_server/ai_search)** - Web search with Baidu Cloud's AI Search
 - **[BambooHR MCP](https://github.com/encoreshao/bamboohr-mcp)** - An MCP server that interfaces with the BambooHR APIs, providing access to employee data, time tracking, and HR management features.
+- **[BankRegPulse](https://github.com/RRGU26/bankregpulse-mcp-server)** - Real-time banking regulatory intelligence from 100+ sources (OCC, FDIC, CFPB, Federal Reserve, all 50 states). Get daily briefings, podcast summaries, and LinkedIn content. `npx bankregpulse-mcp-server`
 - **[Base Free USDC Transfer](https://github.com/magnetai/mcp-free-usdc-transfer)** - Send USDC on [Base](https://base.org) for free using Claude AI! Built with [Coinbase CDP](https://docs.cdp.coinbase.com/mpc-wallet/docs/welcome).
 - **[Basic Memory](https://github.com/basicmachines-co/basic-memory)** - Local-first knowledge management system that builds a semantic graph from Markdown files, enabling persistent memory across conversations with LLMs.
 - **[BGG MCP](https://github.com/kkjdaniel/bgg-mcp)** (by kkjdaniel) - MCP to enable interaction with the BoardGameGeek API via AI tooling.
