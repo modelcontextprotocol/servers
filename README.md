@@ -579,6 +579,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[A2A](https://github.com/GongRzhe/A2A-MCP-Server)** - An MCP server that bridges the Model Context Protocol (MCP) with the Agent-to-Agent (A2A) protocol, enabling MCP-compatible AI assistants (like Claude) to seamlessly interact with A2A agents.
 - **[Ableton Live](https://github.com/Simon-Kansara/ableton-live-mcp-server)** - an MCP server to control Ableton Live.
 - **[Ableton Live](https://github.com/ahujasid/ableton-mcp)** (by ahujasid) - Ableton integration allowing prompt enabled music creation.
+- **[Acheron](https://github.com/timmx7/acheron-mcp-server)** - Cross-surface persistent memory for Claude. Bridges context between Claude Chat, Code, and Cowork via local SQLite with full-text search.
 - **[ActivityPub MCP](https://github.com/cameronrye/activitypub-mcp)** - A comprehensive MCP server that enables LLMs to explore and interact with the Fediverse through ActivityPub protocol, supporting actor discovery, timeline fetching, instance exploration, and WebFinger resolution across decentralized social networks.
 - **[Actor Critic Thinking](https://github.com/aquarius-wing/actor-critic-thinking-mcp)** - Actor-critic thinking for performance evaluation
 - **[Adobe Commerce](https://github.com/rafaelstz/adobe-commerce-dev-mcp)** — MCP to interact with Adobe Commerce GraphQL API, including orders, products, customers, etc.
