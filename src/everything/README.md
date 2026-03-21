@@ -31,6 +31,24 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
+On Windows, use `cmd /c` to launch `npx`:
+
+```json
+{
+  "mcpServers": {
+    "everything": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-everything"
+      ]
+    }
+  }
+}
+```
+
 ## Usage with VS Code
 
 For quick installation, use of of the one-click install buttons below...
@@ -57,6 +75,19 @@ Alternatively, you can add the configuration to a file called `.vscode/mcp.json`
     "everything": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-everything"]
+    }
+  }
+}
+```
+
+On Windows, use:
+
+```json
+{
+  "servers": {
+    "everything": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-everything"]
     }
   }
 }
@@ -103,4 +134,3 @@ npx @modelcontextprotocol/server-everything sse
 ```shell
 npx @modelcontextprotocol/server-everything streamableHttp
 ```
-

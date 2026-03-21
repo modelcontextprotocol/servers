@@ -1600,6 +1600,19 @@ However, running a server on its own isn't very useful, and should instead be co
 }
 ```
 
+On Windows, wrap `npx` with `cmd /c`:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-memory"]
+    }
+  }
+}
+```
+
 Additional examples of using the Claude Desktop as an MCP client might look like:
 
 ```json
@@ -1627,6 +1640,8 @@ Additional examples of using the Claude Desktop as an MCP client might look like
   }
 }
 ```
+
+On Windows, apply the same wrapper to each `npx`-based entry above by changing `"command"` to `"cmd"` and prepending `"/c", "npx"` to the existing `args`. Leave `uvx` entries unchanged.
 
 ## 🛠️ Creating Your Own Server
 
