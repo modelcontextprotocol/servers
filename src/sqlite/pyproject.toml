@@ -1,0 +1,19 @@
+[project]
+name = "mcp-server-sqlite"
+version = "0.6.2"
+description = "A simple SQLite MCP server"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = ["pyright>=1.1.389"]
+
+[project.scripts]
+mcp-server-sqlite = "mcp_server_sqlite:main"
