@@ -574,6 +574,7 @@ A growing set of community-developed and maintained servers demonstrates various
 > [!NOTE]
 > Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
 
+- **[WeatherAPI MCP](https://github.com/weatherapicom/weatherapi-mcp) - Real-time weather, forecasts, astronomy, marine data for 200+ countries
 - **[1mcpserver](https://github.com/particlefuture/1mcpserver)** - MCP of MCPs. Automatically discover, configure, and add MCP servers on your local machine.
 - **[1Panel](https://github.com/1Panel-dev/mcp-1panel)** - MCP server implementation that provides 1Panel interaction.
 - **[A2A](https://github.com/GongRzhe/A2A-MCP-Server)** - An MCP server that bridges the Model Context Protocol (MCP) with the Agent-to-Agent (A2A) protocol, enabling MCP-compatible AI assistants (like Claude) to seamlessly interact with A2A agents.
