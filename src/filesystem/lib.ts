@@ -189,16 +189,20 @@ export async function validatePath(requestedPath: string): Promise<string> {
 
   try {
     // Get file stats to check if it's a symlink
+    // Use optional chaining to handle test mocks where stats might be undefined
     const stats = await fs.lstat(absolute);
     
-    if (!stats.isSymbolicLink()) {
+    if (!stats?.isSymbolicLink()) {
       // Not a symlink - perform existing realpath validation for safety
       // First, get the resolved path considering potential symlinks in the allowed dirs themselves
       // This handles macOS /var -> /private/var and similar cases
       let realPath: string;
       try {
         realPath = await fs.realpath(absolute);
-      } catch {
+      } catch (realpathErr) {
+        if ((realpathErr as NodeJS.ErrnoException).code === 'ENOENT') {
+          throw realpathErr; // Let outer ENOENT handler deal with parent dir check
+        }
         realPath = absolute;
       }
       const normalizedReal = normalizePath(realPath);
@@ -207,8 +211,11 @@ export async function validatePath(requestedPath: string): Promise<string> {
       let resolvedAbsolute = absolute;
       try {
         resolvedAbsolute = await fs.realpath(absolute);
-      } catch {
-        // If realpath fails, use the original path
+      } catch (realpathErr2) {
+        if ((realpathErr2 as NodeJS.ErrnoException).code === 'ENOENT') {
+          throw realpathErr2; // Let outer ENOENT handler deal with parent dir check
+        }
+        // If realpath fails for other reasons, use the original path
       }
       const normalizedResolved = normalizePath(resolvedAbsolute);
       
@@ -239,6 +246,10 @@ export async function validatePath(requestedPath: string): Promise<string> {
     
     return resolvedPath;
   } catch (error) {
+    // Re-throw already-formatted access denied / custom errors directly
+    if (error instanceof Error && !(error as NodeJS.ErrnoException).code) {
+      throw error;
+    }
     // Security: For new files that don't exist yet, verify parent directory
     // This ensures we can't create files in unauthorized locations
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -248,8 +259,11 @@ export async function validatePath(requestedPath: string): Promise<string> {
         let realParentPath: string;
         try {
           realParentPath = await fs.realpath(parentDir);
-        } catch {
-          realParentPath = parentDir;
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+            throw new Error(`Parent directory does not exist: ${parentDir}`);
+          }
+          throw err;
         }
         
         // Check both resolved and original parent paths
@@ -262,7 +276,11 @@ export async function validatePath(requestedPath: string): Promise<string> {
             if (!isPathWithinAllowedDirectories(normalizePath(parentDir), allowedDirectories)) {
               throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
             }
-          } catch {
+          } catch (lstatErr) {
+            // Re-throw formatted errors directly
+            if (lstatErr instanceof Error && !(lstatErr as NodeJS.ErrnoException).code) {
+              throw lstatErr;
+            }
             throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
           }
         }
