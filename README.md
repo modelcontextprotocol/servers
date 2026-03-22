@@ -865,6 +865,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Gmail](https://github.com/Ayush-k-Shukla/gmail-mcp-server)** - A Simple MCP server for Gmail with support for all basic operations with oauth2.0.
 - **[Gmail Headless](https://github.com/baryhuang/mcp-headless-gmail)** - Remote hostable MCP server that can get and send Gmail messages without local credential or file system setup.
 - **[Gmail MCP](https://github.com/gangradeamitesh/mcp-google-email)** - A Gmail service implementation using MCP (Model Context Protocol) that provides functionality for sending, receiving, and managing emails through Gmail's API.
+- **[GNOME Desktop MCP](https://github.com/sbuysse/gnome-desktop-mcp)** - GNOME Shell extension + Python MCP server giving AI assistants 30 tools to automate the Linux desktop: screenshots, window management, mouse/keyboard injection, clipboard, and workspaces. Supports GNOME 45–49.
 - **[Gnuradio](https://github.com/yoelbassin/gnuradioMCP)** - An MCP server for GNU Radio that enables LLMs to autonomously create and modify RF .grc flowcharts.
 - **[Goal Story](https://github.com/hichana/goalstory-mcp)** - a Goal Tracker and Visualization Tool for personal and professional development.
 - **[GOAT](https://github.com/goat-sdk/goat/tree/main/typescript/examples/by-framework/model-context-protocol)** - Run more than +200 onchain actions on any blockchain including Ethereum, Solana and Base.
