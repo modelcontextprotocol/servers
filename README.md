@@ -1378,6 +1378,7 @@ search, and comprehensive file analysis.
 - **[TouchDesigner](https://github.com/8beeeaaat/touchdesigner-mcp)** - An MCP server for TouchDesigner, enabling interaction with TouchDesigner projects, nodes, and parameters.
 - **[Transcribe](https://github.com/transcribe-app/mcp-transcribe)** - An MCP server provides fast and reliable transcriptions for audio/video files and voice memos. It allows LLMs to interact with the text content of audio/video file.
 - **[Travel Planner](https://github.com/GongRzhe/TRAVEL-PLANNER-MCP-Server)** - Travel planning and itinerary management server integrating with Google Maps API for location search, place details, and route calculations.
+- **[Trello](https://github.com/Open-Tech-Cl-Spa/trello-mcp)** - Complete Trello integration with 20 tools for managing boards, cards, lists, labels, members, checklists, and search. Includes skills for board setup, bulk card creation, and sprint management.
 - **[Trello MCP Server](https://github.com/lioarce01/trello-mcp-server)** - An MCP server that interact with user Trello boards, modifying them with prompting.
 - **[Trino](https://github.com/tuannvm/mcp-trino)** - A high-performance Model Context Protocol (MCP) server for Trino implemented in Go.
 - **[Tripadvisor](https://github.com/pab1it0/tripadvisor-mcp)** - An MCP server that enables LLMs to interact with Tripadvisor API, supporting location data, reviews, and photos through standardized MCP interfaces
