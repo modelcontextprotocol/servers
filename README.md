@@ -1133,7 +1133,7 @@ search, and comprehensive file analysis.
 - **[Netbird](https://github.com/aantti/mcp-netbird)** - List and analyze Netbird network peers, groups, policies, and more.
 - **[NetMind ParsePro](https://github.com/protagolabs/Netmind-Parse-PDF-MCP)** - The PDF Parser AI service, built and customized by the [NetMind](https://www.netmind.ai/) team.
 - **[NetSuite](https://github.com/dsvantien/netsuite-mcp-server)** - MCP server for NetSuite ERP integration with OAuth 2.0 authentication, enabling natural language access to NetSuite data through SuiteQL queries, reports, saved searches, and REST API operations.
-- **[NeuroVerse](https://github.com/joshua400/neuroverse)** - Multilingual intelligence + memory + safety + voice layer. Features Whisper STT, Coqui TTS, Redis caching, semantic search, and RLHF feedback.
+- **[NeuroVerse](https://github.com/joshua400/neuroverse)** (by joshua400) - Multilingual intelligence + memory + safety + voice layer. Features Whisper STT, Coqui TTS, Redis caching, semantic search, and RLHF feedback.
 - **[Nikto MCP](https://github.com/weldpua2008/nikto-mcp)** (by weldpua2008) - A secure MCP server that enables AI agents to interact with Nikto web server scanner](- use with npx or docker).
 - **[NocoDB](https://github.com/edwinbernadus/nocodb-mcp-server)** - Read and write access to NocoDB database.
 - **[Node Code Sandbox](https://github.com/alfonsograziano/node-code-sandbox-mcp)** – A Node.js MCP server that spins up isolated Docker - based sandboxes for executing JavaScript snippets with on-the-fly npm dependency installation
