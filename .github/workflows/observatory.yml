@@ -1,0 +1,61 @@
+# MCP Observatory Health Check
+# Runs automated health scoring against reference MCP servers to catch
+# protocol conformance regressions, schema quality issues, and reliability problems.
+# See: https://github.com/KryptosAI/mcp-observatory
+
+name: MCP Observatory Health Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        server:
+          - name: server-everything
+            package: "@modelcontextprotocol/server-everything"
+            args: ""
+          - name: server-filesystem
+            package: "@modelcontextprotocol/server-filesystem"
+            args: "/tmp"
+          - name: server-memory
+            package: "@modelcontextprotocol/server-memory"
+            args: ""
+          - name: server-sequential-thinking
+            package: "@modelcontextprotocol/server-sequential-thinking"
+            args: ""
+
+    name: Score ${{ matrix.server.name }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Score ${{ matrix.server.name }}
+        run: |
+          npx -y @kryptosai/mcp-observatory score \
+            --format junit \
+            --output results.xml \
+            npx -y ${{ matrix.server.package }} ${{ matrix.server.args }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: observatory-results-${{ matrix.server.name }}
+          path: results.xml
+
+      - name: Publish test report
+        if: always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: results.xml
+          check_name: Observatory - ${{ matrix.server.name }}
+          fail_on_failure: false
