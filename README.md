@@ -911,6 +911,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Human-use](https://github.com/RapidataAI/human-use)** - Instant human feedback through an MCP, have your AI interact with humans around the world. Powered by [Rapidata](https://www.rapidata.ai/)
 - **[Hyperledger Fabric Agent Suite](https://github.com/padmarajkore/hlf-fabric-agent)** - Modular toolkit for managing Fabric test networks and chaincode lifecycle via MCP tools.
 - **[Hyperliquid](https://github.com/mektigboy/server-hyperliquid)** - An MCP server implementation that integrates the Hyperliquid SDK for exchange data.
+- **[Hyperliquid Trading](https://github.com/samklein952-hub/hyperliquid-mcp)** - Trade Hyperliquid perpetual futures via natural language — portfolio tracking, positions, orderbook, funding rates, order placement, stop-losses, and liquidation monitoring with paper trading mode.
 - **[Hypertool](https://github.com/toolprint/hypertool-mcp)** – MCP that let's you create hot - swappable, "persona toolsets" from multiple MCP servers to reduce tool overload and improve tool execution.
 - **[hyprmcp](https://github.com/stefanoamorelli/hyprmcp)** (by Stefano Amorelli) - Lightweight MCP server for `hyprland`.
 - **[iFlytek SparkAgent Platform](https://github.com/iflytek/ifly-spark-agent-mcp)** - This is a simple example of using MCP Server to invoke the task chain of the  iFlytek SparkAgent Platform.
