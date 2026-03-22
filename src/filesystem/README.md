@@ -21,6 +21,21 @@ Specify Allowed directories when starting the server:
 mcp-server-filesystem /path/to/dir1 /path/to/dir2
 ```
 
+#### Optional Flags
+
+- `--follow-symlinks` - Allow symlinks to point to targets outside allowed directories (default: false)
+- `--symlink-depth=N` - Maximum number of symlink hops outside allowed directories before blocking (default: 1)
+
+Example with symlink following enabled:
+```bash
+mcp-server-filesystem /home/user/docs --follow-symlinks --symlink-depth=2
+```
+
+With these flags:
+- Symlinks pointing to files outside allowed directories are allowed up to the specified depth
+- Symlink chains that exceed the max depth will be blocked with a clear error message
+- This is useful when you need to access symlinks that point to external storage or shared directories
+
 ### Method 2: MCP Roots (Recommended)
 MCP clients that support [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories. 
 
