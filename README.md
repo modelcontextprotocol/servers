@@ -1512,7 +1512,7 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 Additional resources on MCP.
 
 - **[A2A-MCP Java Bridge](https://github.com/vishalmysore/a2ajava)** - A2AJava brings powerful A2A-MCP integration directly into your Java applications. It enables developers to annotate standard Java methods and instantly expose them as MCP Server, A2A-discoverable actions — with no boilerplate or service registration overhead.
-- **[A2ASearch MCP](https://github.com/tadas-github/a2asearch-mcp)** - MCP server that searches 4,800+ MCP servers, AI agents, CLI tools and agent skills from the [A2ASearch](https://a2asearch.ai) directory. Ask Claude or Cursor: "Find MCP servers for database access". Install: `npx -y @a2asearch/mcp-server`. Built by **[Tadas](https://github.com/tadas-github)**
+- **[A2ASearch MCP](https://github.com/tadas-github/a2asearch-mcp)** - MCP server that searches 4,800+ MCP servers, AI agents, CLI tools and agent skills from the [A2ASearch](https://a2asearch.ai) directory. Install: `npx -y a2asearch-mcp`. Ask Claude: "Find MCP servers for database access". Built by **[Tadas](https://github.com/tadas-github)**
 - **[AiMCP](https://www.aimcp.info)** - A collection of MCP clients&servers to find the right mcp tools by **[Hekmon](https://github.com/hekmon8)**
 - **[Awesome Crypto MCP Servers by badkk](https://github.com/badkk/awesome-crypto-mcp-servers)** - A curated list of MCP servers by **[Luke Fan](https://github.com/badkk)**
 - **[Awesome MCP Servers by appcypher](https://github.com/appcypher/awesome-mcp-servers)** - A curated list of MCP servers by **[Stephen Akinyemi](https://github.com/appcypher)**
