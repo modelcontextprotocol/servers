@@ -576,6 +576,7 @@ A growing set of community-developed and maintained servers demonstrates various
 
 - **[1mcpserver](https://github.com/particlefuture/1mcpserver)** - MCP of MCPs. Automatically discover, configure, and add MCP servers on your local machine.
 - **[1Panel](https://github.com/1Panel-dev/mcp-1panel)** - MCP server implementation that provides 1Panel interaction.
+- <img height="12" width="12" src="https://0nmcp.com/brand/icon-green.png" alt="0nMCP Logo" /> **[0nMCP](https://github.com/0nork/0nMCP)** - Universal AI API Orchestrator with 945 tools across 54 services. Connect any AI to Stripe, Slack, GitHub, CRM, OpenAI, Google, Microsoft, and 47 more services through one MCP server. Includes encrypted vault, workflow runtime, and multi-AI council. `npm install -g 0nmcp`
 - **[A2A](https://github.com/GongRzhe/A2A-MCP-Server)** - An MCP server that bridges the Model Context Protocol (MCP) with the Agent-to-Agent (A2A) protocol, enabling MCP-compatible AI assistants (like Claude) to seamlessly interact with A2A agents.
 - **[Ableton Live](https://github.com/Simon-Kansara/ableton-live-mcp-server)** - an MCP server to control Ableton Live.
 - **[Ableton Live](https://github.com/ahujasid/ableton-mcp)** (by ahujasid) - Ableton integration allowing prompt enabled music creation.
