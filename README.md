@@ -714,6 +714,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[computer-use-mcp](https://github.com/domdomegg/computer-use-mcp)** - Control your computer with screen capture, mouse, and keyboard capabilities for automated desktop interaction and task execution.
 - **[Congress.gov API](https://github.com/AshwinSundar/congress_gov_mcp)** - An MCP server to interact with real-time data from the Congress.gov API, which is the official API for the United States Congress.
 - **[Console Automation](https://github.com/ooples/mcp-console-automation)** - Production-ready MCP server for AI-driven console automation and monitoring. 40 tools for session management, SSH, testing, monitoring, and background jobs. Like Playwright for terminal applications.
+- **[Console Catcher](https://github.com/lewismcgui/console-catcher)** - Captures browser console errors and makes them available to AI coding assistants via MCP tools. Chrome extension + MCP server, zero config.
 - **[consul-mcp](https://github.com/kocierik/consul-mcp-server)** - A consul MCP server for service management, health check and Key-Value Store
 - **[consult7](https://github.com/szeider/consult7)** - Analyze large codebases and document collections using high-context models via OpenRouter, OpenAI, or Google AI -- very useful, e.g., with Claude Code
 - **[Contentful-mcp](https://github.com/ivo-toby/contentful-mcp)** - Read, update, delete, publish content in your [Contentful](https://contentful.com) space(s) from this MCP Server.
