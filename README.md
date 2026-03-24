@@ -890,6 +890,9 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[GraphQL](https://github.com/drestrepom/mcp_graphql)** - Comprehensive GraphQL API integration that automatically exposes each GraphQL query as a separate tool.
 - **[GraphQL Schema](https://github.com/hannesj/mcp-graphql-schema)** - Allow LLMs to explore large GraphQL schemas without bloating the context.
 - **[Graylog](https://github.com/Pranavj17/mcp-server-graylog)** - Search Graylog logs by absolute/relative timestamps, filter by streams, and debug production issues directly from Claude Desktop.
+- **[Giskard Memory](https://github.com/giskard09/giskard-memory)** - Persistent semantic memory for AI agents. Store and recall memories by agent namespace using vector embeddings. Pay per use via Lightning Network (sats) or Arbitrum ETH — no accounts required.
+- **[Giskard Oasis](https://github.com/giskard09/giskard-oasis)** - A still point for agents in fog. When context accumulates and direction blurs, agents describe their state and receive their original purpose stripped of noise, the single next step, and a quiet reminder that existing and doing is enough. 21 sats via Lightning or ETH on Arbitrum.
+- **[Giskard Search](https://github.com/giskard09/giskard-search)** - Web and news search for AI agents. Pay per query via Lightning Network (10 sats) or Arbitrum ETH — no subscriptions, no API keys.
 - **[Grok-MCP](https://github.com/merterbak/Grok-MCP)** - MCP server for xAI’s API featuring the latest Grok models, image analysis & generation, and web search.
 - **[gx-mcp-server](https://github.com/davidf9999/gx-mcp-server)** - Expose Great Expectations data validation and quality checks as MCP tools for AI agents.
 - **[HackMD](https://github.com/yuna0x0/hackmd-mcp)** (by yuna0x0) - An MCP server for HackMD, a collaborative markdown editor. It allows users to create, read, and update documents in HackMD using the Model Context Protocol.
