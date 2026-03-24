@@ -961,6 +961,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[KiCad MCP](https://github.com/lamaalrajih/kicad-mcp)** - MCP server for KiCad on Mac, Windows, and Linux.
 - **[kill-process-mcp](https://github.com/misiektoja/kill-process-mcp)** - List and terminate OS processes via natural language queries
 - **[Kindred Offers & Discounts MCP](https://github.com/kindred-app/mcp-server-kindred-offers)** (by kindred.co) - This MCP server allows you to get live deals and offers/coupons from e-commerce merchant sites all over the world.
+- **[Kite MCP](https://github.com/aranjan/kite-mcp)** - Trade Indian stocks on Zerodha Kite via natural conversation. 14 tools for holdings, orders, quotes, GTT triggers, and more with automated TOTP login.
 - **[kintone](https://github.com/macrat/mcp-server-kintone)** - Manage records and apps in [kintone](https://kintone.com) through LLM tools.
 - **[KnowAir Weather MCP](https://github.com/shuowang-ai/Weather-MCP)** - A comprehensive Model Context Protocol (MCP) server providing real-time weather data, air quality monitoring, forecasts, and astronomical information powered by Caiyun Weather API.
 - **[Kokoro TTS](https://github.com/mberg/kokoro-tts-mcp)** - Use Kokoro text to speech to convert text to MP3s with optional autoupload to S3.
