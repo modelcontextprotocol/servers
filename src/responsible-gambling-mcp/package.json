@@ -1,0 +1,31 @@
+{
+  "name": "responsible-gambling-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for responsible gambling budget calculator - helps users make informed financial decisions about gambling",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "watch": "tsc --watch"
+  },
+  "keywords": [
+    "mcp",
+    "responsible-gambling",
+    "budget-calculator",
+    "financial-planning"
+  ],
+  "author": "Wolfbet",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
