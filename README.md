@@ -1214,6 +1214,7 @@ search, and comprehensive file analysis.
 - **[Plane](https://github.com/kelvin6365/plane-mcp-server)** - This MCP Server will help you to manage projects and issues through Plane's API
 - **[Playwright](https://github.com/executeautomation/mcp-playwright)** - This MCP Server will help you run browser automation and webscraping using Playwright
 - **[Playwright Wizard](https://github.com/oguzc/playwright-wizard-mcp)** - Step-by-step wizard for generating Playwright E2E tests with best practices.
+- **[Playwright Report MCP](https://github.com/hubertgajewski/playwright-report-mcp)** - Run Playwright tests and read structured results, designed for AI agents doing test failure analysis.
 - **[Podbean](https://github.com/amurshak/podbeanMCP)** - MCP server for managing your podcasts, episodes, and analytics through the Podbean API. Allows for updating, adding, deleting podcasts, querying show description, notes, analytics, and more.
 - **[Polarsteps](https://github.com/remuzel/polarsteps-mcp)** - An MCP server to help you review your previous Trips and plan new ones!
 - **[PostgreSQL](https://github.com/ahmedmustahid/postgres-mcp-server)** - A PostgreSQL MCP server offering dual HTTP/Stdio transports for database schema inspection and read-only query execution with session management and Podman(or Docker) support.
