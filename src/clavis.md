@@ -63,4 +63,4 @@ OpenAI, Anthropic, Stripe, GitHub, Brave Search, Kalshi, Coinbase, plus generic 
 
 - 🌐 [Website](https://clavisagent.com) – Product overview and pricing
 - 📦 [NPM Package](https://www.npmjs.com/package/@clavisagent/mcp-server) – Installation and changelog
-- 📚 [Documentation](https://clavisagent.com/docs/mcp) – Setup guides and API reference
+- 📚 [Documentation](https://clavisagent.com/docs/mcp.html) – Setup guides and API reference
