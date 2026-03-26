@@ -824,6 +824,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Federal Reserve Economic Data (FRED)](https://github.com/stefanoamorelli/fred-mcp-server)** (by Stefano Amorelli) - Community developed MCP server to interact with the Federal Reserve Economic Data.
 - **[Fetch](https://github.com/zcaceres/fetch-mcp)** - A server that flexibly fetches HTML, JSON, Markdown, or plaintext.
 - **[Feyod](https://github.com/jeroenvdmeer/feyod-mcp)** - A server that answers questions about football matches, and specialised in the football club Feyenoord.
+- **[FutureSense](https://github.com/futuresenseai/centralized-payment-system/tree/main/mcp-server)** - 556 AI-agent tools for invoicing, payroll, booking, accounting, CRM, tax filing, and more. 10 app domains, one API key. Available on [npm](https://www.npmjs.com/package/futuresense-mcp).
 - **[FHIR](https://github.com/wso2/fhir-mcp-server)** - A Model Context Protocol server that provides seamless, standardized access to Fast Healthcare Interoperability Resources (FHIR) data from any compatible FHIR server. Designed for easy integration with AI tools, developer workflows, and healthcare applications, it enables natural language and programmatic search, retrieval, and analysis of clinical data.
 - **[Fibaro HC3](https://github.com/coding-sailor/mcp-server-hc3)** - MCP server for Fibaro Home Center 3 smart home systems.
 - **[Figma](https://github.com/GLips/Figma-Context-MCP)** - Give your coding agent direct access to Figma file data, helping it one-shot design implementation.
