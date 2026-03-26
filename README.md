@@ -686,6 +686,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Chess.com](https://github.com/pab1it0/chess-mcp)** - Access Chess.com player data, game records, and other public information through standardized MCP interfaces, allowing AI assistants to search and analyze chess information.
 - **[Chessagine-mcp](https://github.com/jalpp/chessagine-mcp)** - A chess MCP server that integrates Stockfish engine evaluation, positional theme analysis, Lichess opening databases, and chess knowledgebase.
 - **[ChessPal Chess Engine (stockfish)](https://github.com/wilson-urdaneta/chesspal-mcp-engine)** - A Stockfish-powered chess engine exposed as an MCP server. Calculates best moves and supports both HTTP/SSE and stdio transports.
+- **[Clarvia](https://github.com/clarvia-project/scanner)** - AI agent tool discovery and AEO (Agent Experience Optimization) scoring. Search and score 15,400+ indexed MCP servers, APIs, CLIs, and AI tools. Free REST API + 24 MCP tools. [npm](https://www.npmjs.com/package/clarvia-mcp-server)
 - **[Chroma](https://github.com/privetin/chroma)** - Vector database server for semantic document search and metadata filtering, built on Chroma
 - **[Chrome history](https://github.com/vincent-pli/chrome-history-mcp)** - Talk with AI about your browser history, get fun ^_^
 - **[cicada](https://github.com/wende/cicada)** - AST-powered code intelligence for Elixir projects. Provides 9 tools including function search, call site tracking, PR attribution, git history, and semantic search - reducing AI query tokens by 82%.
