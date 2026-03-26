@@ -1,28 +1,31 @@
-# Clavis
+# 🔐 Clavis — Credential Manager for MCP
 
-Secure credential management for MCP servers and Claude Desktop.
+Let Claude Desktop access your API credentials securely—no keys in config files, automatic token refresh, and audit logging.
 
-### Features
+## Features
 
-- 🔐 **Encrypted Storage** - Credentials encrypted at rest with AES-256
-- 🔄 **Auto Token Refresh** - OAuth tokens refreshed automatically before expiry
-- ⚡ **Rate Limiting** - Distributed rate limiting across multiple agent instances
-- 📊 **Audit Logs** - Complete audit trail of all credential access
-- 🔌 **Multi-Service** - Supports OpenAI, Anthropic, Stripe, GitHub, Brave Search, and custom OAuth2
+- 🔒 **Encrypted Storage** – Credentials encrypted at rest with AES-256
+- 🔄 **Auto Token Refresh** – OAuth tokens refresh before expiry
+- ⚖️ **Rate Limiting** – Distributed rate limiting across multiple agent instances
+- 📊 **Audit Logging** – Complete trail of all credential access
+- 🌐 **Service Support** – OpenAI, Anthropic, Stripe, GitHub, Brave Search, Kalshi, plus generic OAuth2
 
-### Install
-```bash
-npm install -g @clavisagent/mcp-server
-```
+## Install
 
-Or use without installing:
+1. Sign up and get your API key at [clavisagent.com/register](https://clavisagent.com/register)
+2. Add to your Claude Desktop config:
+
+**bash:**
 ```bash
 npx @clavisagent/mcp-server
 ```
 
-### Configuration
+**Or use without installing:**
+```bash
+npx -y @clavisagent/mcp-server
+```
 
-Add to Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.json`):
+3. Add to Claude Desktop config file:
 ```json
 {
   "mcpServers": {
@@ -30,29 +33,34 @@ Add to Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.json`):
       "command": "npx",
       "args": ["-y", "@clavisagent/mcp-server"],
       "env": {
-        "CLAVIS_API_KEY": "your-jwt-token"
+        "CLAVIS_API_KEY": "cla_xxxxxxxxxxxxx"
       }
     }
   }
 }
 ```
 
-Get your API key by signing up at [clavisagent.com](https://clavisagent.com/register.html)
+4. Restart Claude Desktop
 
-### Available Tools
+Get your API key by signing up at [clavisagent.com/register](https://clavisagent.com/register)
+
+## Available Tools
 
 | Tool | Description |
 |------|-------------|
-| `list_services` | List all configured services in your Clavis account |
-| `get_credentials` | Retrieve valid credentials with automatic token refresh |
-| `check_credential_status` | Check credential validity and rate limit status |
+| `list_services` | **See what credentials are available** – Lists all configured services in your Clavis account |
+| `get_credentials` | **Get working API keys** – Retrieves valid credentials with automatic token refresh if expired |
+| `check_credentials` | **Check before calling APIs** – Validates credentials and checks rate limit status without consuming quota |
 
-### Supported Services
+## Supported Services
 
-OpenAI, Anthropic, Stripe, GitHub, Brave Search, Kalshi, Coinbase, plus generic API key and OAuth2 support for any service.
+**Pre-configured integrations:**  
+OpenAI, Anthropic, Stripe, GitHub, Brave Search, Kalshi, Coinbase, plus generic OAuth2 for any service
 
-### Links
+**Custom services:** Add any OAuth2 provider or API key-based service through the Clavis dashboard
 
-- Website: https://clavisagent.com
-- Documentation: https://clavisagent.com/docs/mcp
-- NPM: https://www.npmjs.com/package/@clavisagent/mcp-server
+## Links
+
+- 🌐 [Website](https://clavisagent.com) – Product overview and pricing
+- 📦 [NPM Package](https://www.npmjs.com/package/@clavisagent/mcp-server) – Installation and changelog
+- 📚 [Documentation](https://clavisagent.com/docs/mcp) – Setup guides and API reference
