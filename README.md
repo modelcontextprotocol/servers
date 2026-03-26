@@ -1311,6 +1311,7 @@ search, and comprehensive file analysis.
 - **[Splunk](https://github.com/jkosik/mcp-server-splunk)** - Golang MCP server for Splunk (lists saved searches, alerts, indexes, macros...). Supports SSE and STDIO.
 - **[Spotify](https://github.com/varunneal/spotify-mcp)** - This MCP allows an LLM to play and use Spotify.
 - **[Spring Initializr](https://github.com/hpalma/springinitializr-mcp)** - This MCP allows an LLM to create Spring Boot projects with custom configurations. Instead of manually visiting start.spring.io, you can now ask your AI assistant to generate projects with specific dependencies, Java versions, and project structures.
+- **[Sprintra](https://github.com/Sprintra-io/sprintra-mcp)** - AI-native project management with persistent memory for coding agents. 17 MCP tools for features, stories, sprints, architecture decisions, knowledge base, and session tracking. Your AI agent reads and writes project context automatically. Free tier available. [Website](https://sprintra.io)
 - **[Squad AI](https://github.com/the-basilisk-ai/squad-mcp)** – Product‑discovery and strategy platform integration. Create, query and update opportunities, solutions, outcomes, requirements and feedback from any MCP‑aware LLM.
 - **[SSH](https://github.com/AiondaDotCom/mcp-ssh)** - Agent for managing and controlling SSH connections.
 - **[SSH](https://github.com/classfang/ssh-mcp-server)** - An MCP server that can execute SSH commands remotely, upload files, download files, and so on.
