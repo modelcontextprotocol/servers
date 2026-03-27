@@ -14,7 +14,6 @@ const GetResourceLinksSchema = z.object({
     .number()
     .min(1)
     .max(10)
-    .default(3)
     .describe("Number of resource links to return (1-10)"),
 });
 
