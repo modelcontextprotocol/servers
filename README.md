@@ -653,6 +653,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Binance](https://github.com/ethancod1ng/binance-mcp-server)** - Cryptocurrency trading and market data access through Binance API integration.
 - **[Binance](https://github.com/AnalyticAce/binance-mcp-server)** (by dosseh shalom) - Unofficial tools and server implementation for Binance's Model Context Protocol (MCP). Designed to support developers building crypto trading AI Agents.
 - **[Bing Web Search API](https://github.com/leehanchung/bing-search-mcp)** (by hanchunglee) - Server implementation for Microsoft Bing Web Search API.
+- **[BioMCP](https://github.com/SachinGawande2003/biomcp) | 🧬 Bioinformatics server — connects Claude to 27 tools across 16 biological databases (PubMed, UniProt, AlphaFold, ChEMBL, ClinicalTrials.gov) + NVIDIA AI models (Boltz-2, Evo2-40B) |
 - **[BioMCP](https://github.com/genomoncology/biomcp)** (by imaurer) - Biomedical research assistant server providing access to PubMed, ClinicalTrials.gov, and MyVariant.info.
 - **[bioRxiv](https://github.com/JackKuo666/bioRxiv-MCP-Server)** - 🔍 Enable AI assistants to search and access bioRxiv papers through a simple MCP interface.
 - **[Bitable MCP](https://github.com/lloydzhou/bitable-mcp)** (by lloydzhou) - MCP server provides access to Lark Bitable through the Model Context Protocol. It allows users to interact with Bitable tables using predefined tools.
