@@ -1465,6 +1465,7 @@ search, and comprehensive file analysis.
 - **[Zettelkasten](https://github.com/joshylchen/zettelkasten)**- Comprehensive AI-powered knowledge management system implementing the Zettelkasten method. Features atomic note creation, full-text search, AI-powered CEQRC workflows (Capture→Explain→Question→Refine→Connect), intelligent link discovery, and multi-interface access (CLI, API, Web UI, MCP). Perfect for researchers, students, and knowledge workers.
 - **[ZincBind](https://github.com/QuentinCody/zincbind-mcp-server)** - Unofficial MCP server for ZincBind, providing access to a comprehensive database of zinc binding sites in proteins, structural coordination data, and metalloproteomics research information.
 - **[Zoom](https://github.com/Prathamesh0901/zoom-mcp-server/tree/main)** - Create, update, read and delete your zoom meetings.
+- **[TanStack MCP](https://github.com/gihanrangana/tanstack-mcp)** - Official-grade MCP server for the TanStack ecosystem. Real-time docs, search, and scaffolding.
 ## 📚 Frameworks
 
 These are high-level frameworks that make it easier to build MCP servers or clients.
