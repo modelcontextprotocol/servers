@@ -494,13 +494,13 @@ describe('Lib Functions', () => {
         );
       });
 
-      it('throws error for non-matching edits', async () => {
+      it('throws error for non-matching edits with diagnostic info', async () => {
         const edits = [
           { oldText: 'nonexistent line', newText: 'replacement' }
         ];
-        
+
         await expect(applyFileEdits('/test/file.txt', edits, false))
-          .rejects.toThrow('Could not find exact match for edit');
+          .rejects.toThrow('Could not find match for edit');
       });
 
       it('handles complex multi-line edits with indentation', async () => {

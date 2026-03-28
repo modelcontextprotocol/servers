@@ -248,7 +248,43 @@ export async function applyFileEdits(
     }
 
     if (!matchFound) {
-      throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
+      // Find the closest near-match to help diagnose the mismatch
+      const oldLines = normalizedOld.split('\n');
+      const contentLines = modifiedContent.split('\n');
+      let bestScore = 0;
+      let bestLineStart = 0;
+
+      for (let i = 0; i <= contentLines.length - oldLines.length; i++) {
+        const potentialMatch = contentLines.slice(i, i + oldLines.length);
+        let score = 0;
+        for (let j = 0; j < oldLines.length; j++) {
+          if (oldLines[j].trim() === potentialMatch[j].trim()) {
+            score++;
+          }
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestLineStart = i;
+        }
+      }
+
+      let diagnostic = `Could not find match for edit in ${filePath}`;
+      if (bestScore > 0) {
+        const matchPct = Math.round((bestScore / oldLines.length) * 100);
+        diagnostic += `\nClosest match (${matchPct}% of lines) at lines ${bestLineStart + 1}-${bestLineStart + oldLines.length}:`;
+        const nearMatchLines = contentLines.slice(bestLineStart, bestLineStart + oldLines.length);
+        for (let j = 0; j < oldLines.length; j++) {
+          const marker = oldLines[j].trim() === nearMatchLines[j].trim() ? ' ' : '!';
+          diagnostic += `\n ${marker} line ${bestLineStart + 1 + j}: ${JSON.stringify(nearMatchLines[j])}`;
+          if (marker === '!') {
+            diagnostic += `\n     expected: ${JSON.stringify(oldLines[j])}`;
+          }
+        }
+      } else {
+        diagnostic += `\nNo similar content found in the file (${contentLines.length} lines).`;
+      }
+      diagnostic += `\n\nEdit oldText:\n${edit.oldText}`;
+      throw new Error(diagnostic);
     }
   }
 
