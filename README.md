@@ -988,6 +988,7 @@ search, and comprehensive file analysis.
 - **[LINE](https://github.com/amornpan/py-mcp-line)** (by amornpan) - Implementation for LINE Bot integration that enables Language Models to read and analyze LINE conversations through a standardized interface. Features asynchronous operation, comprehensive logging, webhook event handling, and support for various message types.
 - **[Linear](https://github.com/tacticlaunch/mcp-linear)** - Interact with Linear project management system.
 - **[Linear](https://github.com/jerhadf/linear-mcp-server)** - Allows LLM to interact with Linear's API for project management, including searching, creating, and updating issues.
+- **[Local MCP](https://local-mcp.com)** - Native macOS MCP server that connects AI agents to Mail.app, Calendar, Contacts, Microsoft Teams and OneDrive. All data stays on your Mac — no cloud, no tokens. Supports Gmail, Outlook, Exchange and iCloud. `npm install -g local-mcp`
 - **[Linear (Go)](https://github.com/geropl/linear-mcp-go)** - Allows LLM to interact with Linear's API via a single static binary.
 - **[Linear MCP](https://github.com/anoncam/linear-mcp)** - Full blown implementation of the Linear SDK to support comprehensive Linear management of projects, initiatives, issues, users, teams and states.
 - **[Linked API MCP](https://github.com/Linked-API/linkedapi-mcp)** - MCP server that lets AI assistants control LinkedIn accounts and retrieve real-time data.
