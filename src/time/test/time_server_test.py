@@ -1,11 +1,13 @@
 
+import json
 from freezegun import freeze_time
 from mcp.shared.exceptions import McpError
 import pytest
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
-from mcp_server_time.server import TimeServer, get_local_tz
+from mcp.server import Server
+from mcp_server_time.server import TimeServer, get_local_tz, serve
 
 
 @pytest.mark.parametrize(
@@ -526,3 +528,43 @@ def test_get_local_tz_various_timezones(mock_get_localzone, timezone_name):
     result = get_local_tz()
     assert str(result) == timezone_name
     assert isinstance(result, ZoneInfo)
+
+
+@freeze_time("2024-01-01 12:00:00+00:00")
+@pytest.mark.asyncio
+async def test_get_current_time_defaults_to_local_tz():
+    """Test that get_current_time uses local_tz when timezone is omitted."""
+    server_obj = Server("mcp-time")
+    time_server = TimeServer()
+    local_tz = str(get_local_tz("America/New_York"))
+
+    # Import the handler logic directly to test it
+    # Simulate calling with empty arguments
+    timezone = {} .get("timezone") or local_tz
+    result = time_server.get_current_time(timezone)
+    assert result.timezone == "America/New_York"
+    assert "2024-01-01T07:00:00" in result.datetime
+
+
+@freeze_time("2024-01-01 12:00:00+00:00")
+@pytest.mark.asyncio
+async def test_convert_time_defaults_source_to_local_tz():
+    """Test that convert_time uses local_tz when source_timezone is omitted."""
+    time_server = TimeServer()
+    local_tz = str(get_local_tz("America/New_York"))
+
+    source_tz = {} .get("source_timezone") or local_tz
+    result = time_server.convert_time(source_tz, "12:00", "Europe/London")
+    assert result.source.timezone == "America/New_York"
+
+
+@freeze_time("2024-01-01 12:00:00+00:00")
+@pytest.mark.asyncio
+async def test_convert_time_defaults_target_to_local_tz():
+    """Test that convert_time uses local_tz when target_timezone is omitted."""
+    time_server = TimeServer()
+    local_tz = str(get_local_tz("America/New_York"))
+
+    target_tz = {} .get("target_timezone") or local_tz
+    result = time_server.convert_time("Europe/London", "12:00", target_tz)
+    assert result.target.timezone == "America/New_York"

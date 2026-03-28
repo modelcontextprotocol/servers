@@ -137,10 +137,10 @@ async def serve(local_timezone: str | None = None) -> None:
                     "properties": {
                         "timezone": {
                             "type": "string",
-                            "description": f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no timezone provided by the user.",
+                            "description": f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Defaults to '{local_tz}' if not provided.",
                         }
                     },
-                    "required": ["timezone"],
+                    "required": [],
                 },
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -157,7 +157,7 @@ async def serve(local_timezone: str | None = None) -> None:
                     "properties": {
                         "source_timezone": {
                             "type": "string",
-                            "description": f"Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no source timezone provided by the user.",
+                            "description": f"Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Defaults to '{local_tz}' if not provided.",
                         },
                         "time": {
                             "type": "string",
@@ -165,10 +165,10 @@ async def serve(local_timezone: str | None = None) -> None:
                         },
                         "target_timezone": {
                             "type": "string",
-                            "description": f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use '{local_tz}' as local timezone if no target timezone provided by the user.",
+                            "description": f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Defaults to '{local_tz}' if not provided.",
                         },
                     },
-                    "required": ["source_timezone", "time", "target_timezone"],
+                    "required": ["time"],
                 },
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -187,23 +187,17 @@ async def serve(local_timezone: str | None = None) -> None:
         try:
             match name:
                 case TimeTools.GET_CURRENT_TIME.value:
-                    timezone = arguments.get("timezone")
-                    if not timezone:
-                        raise ValueError("Missing required argument: timezone")
-
+                    timezone = arguments.get("timezone") or local_tz
                     result = time_server.get_current_time(timezone)
 
                 case TimeTools.CONVERT_TIME.value:
-                    if not all(
-                        k in arguments
-                        for k in ["source_timezone", "time", "target_timezone"]
-                    ):
-                        raise ValueError("Missing required arguments")
+                    if "time" not in arguments:
+                        raise ValueError("Missing required argument: time")
 
                     result = time_server.convert_time(
-                        arguments["source_timezone"],
+                        arguments.get("source_timezone") or local_tz,
                         arguments["time"],
-                        arguments["target_timezone"],
+                        arguments.get("target_timezone") or local_tz,
                     )
                 case _:
                     raise ValueError(f"Unknown tool: {name}")
