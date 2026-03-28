@@ -42,6 +42,9 @@ def extract_content_from_html(html: str) -> str:
         ret["content"],
         heading_style=markdownify.ATX,
     )
+    title = (ret.get("title") or "").strip()
+    if title:
+        content = f"# {title}\n\n{content}"
     return content
 
 

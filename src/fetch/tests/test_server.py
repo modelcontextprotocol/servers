@@ -67,6 +67,39 @@ class TestExtractContentFromHtml:
         # readabilipy may extract different parts depending on the content
         assert "test paragraph" in result
 
+    @patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string")
+    def test_includes_page_title(self, mock_readability):
+        """Test that page title is included in the output."""
+        mock_readability.return_value = {
+            "title": "My Page Title",
+            "content": "<p>Some content here.</p>",
+        }
+        result = extract_content_from_html("<html></html>")
+        assert result.startswith("# My Page Title")
+        assert "Some content here" in result
+
+    @patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string")
+    def test_no_title_still_works(self, mock_readability):
+        """Test that pages without a title still return content."""
+        mock_readability.return_value = {
+            "title": None,
+            "content": "<p>Content without a title tag.</p>",
+        }
+        result = extract_content_from_html("<html></html>")
+        assert "Content without a title" in result
+        assert not result.startswith("# ")
+
+    @patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string")
+    def test_empty_title_not_prepended(self, mock_readability):
+        """Test that empty/whitespace-only titles are not prepended."""
+        mock_readability.return_value = {
+            "title": "   ",
+            "content": "<p>Body text.</p>",
+        }
+        result = extract_content_from_html("<html></html>")
+        assert not result.startswith("# ")
+        assert "Body text" in result
+
     def test_html_with_links(self):
         """Test that links are converted to markdown."""
         html = """
