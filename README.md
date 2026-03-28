@@ -592,6 +592,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[AI Endurance](https://github.com/ai-endurance/mcp)** - AI-powered training platform for runners, cyclists, and triathletes with over 20 tools for workout management, activity analysis, performance predictions, and recovery tracking.
 - **[AI Tasks](https://github.com/jbrinkman/valkey-ai-tasks)** - Let the AI manage complex plans with integrated task management and tracking tools. Supports STDIO, SSE and Streamable HTTP transports.
 - **[ai-Bible](https://github.com/AdbC99/ai-bible)** - Search the bible reliably and repeatably [ai-Bible Labs](https://ai-bible.com)
+- **[Air Blackbox MCP](https://github.com/airblackbox/air-blackbox-mcp)** - EU AI Act compliance scanning MCP server for Python AI agents. 10 tools across 4 tiers: scanning, analysis, remediation, and documentation. PyPI: [air-blackbox-mcp](https://pypi.org/project/air-blackbox-mcp/) Website: [airblackbox.ai](https://airblackbox.ai)
 - **[Airbnb](https://github.com/openbnb-org/mcp-server-airbnb)** - Provides tools to search Airbnb and get listing details.
 - **[Airflow](https://github.com/yangkyeongmo/mcp-server-apache-airflow)** - An MCP Server that connects to [Apache Airflow](https://airflow.apache.org/) using official python client.
 - **[Airtable](https://github.com/domdomegg/airtable-mcp-server)** - Read and write access to [Airtable](https://airtable.com/) databases, with schema inspection.
