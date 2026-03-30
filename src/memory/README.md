@@ -1,4 +1,5 @@
 # Knowledge Graph Memory Server
+[![Fidensa Certified](https://fidensa.com/badges/mcp-server-memory.svg)](https://fidensa.com/certifications/mcp-server-memory)
 
 A basic implementation of persistent memory using a local knowledge graph. This lets Claude remember information about the user across chats.
 

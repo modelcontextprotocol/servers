@@ -1,4 +1,5 @@
 # Fetch MCP Server
+[![Fidensa Certified](https://fidensa.com/badges/mcp-server-fetch.svg)](https://fidensa.com/certifications/mcp-server-fetch)
 
 <!-- mcp-name: io.github.modelcontextprotocol/server-fetch -->
 

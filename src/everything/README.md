@@ -1,4 +1,6 @@
 # Everything MCP Server
+[![Fidensa Certified](https://fidensa.com/badges/mcp-server-everything.svg)](https://fidensa.com/certifications/mcp-server-everything)
+
 **[Architecture](docs/architecture.md)
 | [Project Structure](docs/structure.md)
 | [Startup Process](docs/startup.md)

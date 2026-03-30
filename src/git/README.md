@@ -1,4 +1,5 @@
 # mcp-server-git: A git MCP server
+[![Fidensa Verified](https://fidensa.com/badges/mcp-server-git.svg)](https://fidensa.com/certifications/mcp-server-git)
 
 <!-- mcp-name: io.github.modelcontextprotocol/server-git -->
 

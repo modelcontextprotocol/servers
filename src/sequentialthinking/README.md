@@ -1,4 +1,5 @@
 # Sequential Thinking MCP Server
+[![Fidensa Certified](https://fidensa.com/badges/mcp-server-sequential-thinking.svg)](https://fidensa.com/certifications/mcp-server-sequential-thinking)
 
 An MCP server implementation that provides a tool for dynamic and reflective problem-solving through a structured thinking process.
 

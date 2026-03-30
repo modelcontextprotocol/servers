@@ -1,4 +1,5 @@
 # Filesystem MCP Server
+[![Fidensa Verified](https://fidensa.com/badges/mcp-server-filesystem.svg)](https://fidensa.com/certifications/mcp-server-filesystem)
 
 Node.js server implementing Model Context Protocol (MCP) for filesystem operations.
 
