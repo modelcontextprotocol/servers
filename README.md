@@ -1291,6 +1291,7 @@ search, and comprehensive file analysis.
 - **[Shopify](https://github.com/GeLi2001/shopify-mcp)** - MCP to interact with Shopify API including order, product, customers and so on.
 - **[Shopify Storefront](https://github.com/QuentinCody/shopify-storefront-mcp-server)** - Unofficial MCP server that allows AI agents to discover Shopify storefronts and interact with them to fetch products, collections, and other store data through the Storefront API.
 - **[Simple Loki MCP](https://github.com/ghrud92/simple-loki-mcp)** - A simple MCP server to query Loki logs using logcli.
+- **[Signet](https://github.com/Prismer-AI/signet)** - Cryptographic action receipts for AI agents. Signs every MCP tool call with Ed25519, maintains a hash-chained audit log. Client-side SigningTransport middleware — 3 lines of code to integrate, MCP servers don't need to change.
 - **[Siri Shortcuts](https://github.com/dvcrn/mcp-server-siri-shortcuts)** - MCP to interact with Siri Shortcuts on macOS. Exposes all Shortcuts as MCP tools.
 - **[Skyvern](https://github.com/Skyvern-AI/skyvern/tree/main/integrations/mcp)** - MCP to let Claude / Windsurf / Cursor / your LLM control the browser
 - **[Slack](https://github.com/korotovsky/slack-mcp-server)** - The most powerful MCP server for Slack Workspaces. This integration supports both Stdio and SSE transports, proxy settings and does not require any permissions or bots being created or approved by Workspace admins 😏.
