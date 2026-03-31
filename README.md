@@ -602,6 +602,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[AniList](https://github.com/yuna0x0/anilist-mcp)** (by yuna0x0) - An MCP server to interact with AniList API, allowing you to search for anime and manga, retrieve user data, and manage your watchlist.
 - **[Anki](https://github.com/scorzeth/anki-mcp-server)** - An MCP server for interacting with your [Anki](https://apps.ankiweb.net) decks and cards.
 - **[Anki](https://github.com/nietus/anki-mcp)** - MCP server to run locally with Anki and Ankiconnect. Supports creating, updating, searching and filtering cards and decks. Include mass update and other advanced tools.
+- **[Antigravity Link](https://github.com/cafeTechne/antigravity-link-extension)** - MCP server + OpenAPI API to control Antigravity IDE instances (snapshot, send messages, stop generation, switch instances, and read task/walkthrough/plan docs) with a mobile companion UI.
 - **[AntV Chart](https://github.com/antvis/mcp-server-chart)** - A Model Context Protocol server for generating 15+ visual charts using [AntV](https://github.com/antvis).
 - **[Any Chat Completions](https://github.com/pyroprompts/any-chat-completions-mcp)** - Interact with any OpenAI SDK Compatible Chat Completions API like OpenAI, Perplexity, Groq, xAI and many more.
 - **[Apache Gravitino(incubating)](https://github.com/datastrato/mcp-server-gravitino)** - Allow LLMs to explore metadata of structured data and unstructured data with Gravitino, and perform data governance tasks including tagging/classification.
