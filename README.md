@@ -1373,6 +1373,7 @@ search, and comprehensive file analysis.
 - **[Todos](https://github.com/tomelliot/todos-mcp)** - A practical todo list manager to use with your favourite chatbot.
 - **[token-minter-mcp](https://github.com/kukapay/token-minter-mcp)** - An MCP server providing tools for AI agents to mint ERC-20 tokens across multiple blockchains.
 - **[token-revoke-mcp](https://github.com/kukapay/token-revoke-mcp)** - An MCP server for checking and revoking ERC-20 token allowances across multiple blockchains.
+- **[ToolPipe](https://github.com/COSAI-Labs/make-money-30day-challenge/tree/master/products/mcp-server)** - 34 developer utility tools via MCP: JSON formatting, QR code generation, UUID generation, text hashing, Base64 encoding, DNS lookup, Markdown to HTML, text analysis, CSS/JS minification, and more. Install: `npx @cosai-labs/toolpipe-mcp-server`
 - **[Ton Blockchain MCP](https://github.com/devonmojito/ton-blockchain-mcp)** - An MCP server for interacting with Ton Blockchain.
 - **[Topolograph MCP](https://github.com/Vadims06/topolograph-mcp-server)** – A MCP server that enables LLMs to interact with OSPF and IS - IS protocols and analyze network topologies, query network events, and perform path calculations for OSPF and IS-IS protocols.
 - **[TouchDesigner](https://github.com/8beeeaaat/touchdesigner-mcp)** - An MCP server for TouchDesigner, enabling interaction with TouchDesigner projects, nodes, and parameters.
