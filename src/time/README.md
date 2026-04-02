@@ -1,5 +1,7 @@
 # Time MCP Server
 
+<!-- mcp-name: io.github.modelcontextprotocol/server-time -->
+
 A Model Context Protocol server that provides time and timezone conversion capabilities. This server enables LLMs to get current time information and perform timezone conversions using IANA timezone names, with automatic system timezone detection.
 
 ### Available Tools
@@ -20,6 +22,10 @@ A Model Context Protocol server that provides time and timezone conversion capab
 
 When using [`uv`](https://docs.astral.sh/uv/) no specific installation is needed. We will
 use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run *mcp-server-time*.
+
+```bash
+uvx mcp-server-time
+```
 
 ### Using PIP
 
@@ -45,10 +51,12 @@ Add to your Claude settings:
 <summary>Using uvx</summary>
 
 ```json
-"mcpServers": {
-  "time": {
-    "command": "uvx",
-    "args": ["mcp-server-time"]
+{
+  "mcpServers": {
+    "time": {
+      "command": "uvx",
+      "args": ["mcp-server-time"]
+    }
   }
 }
 ```
@@ -58,10 +66,12 @@ Add to your Claude settings:
 <summary>Using docker</summary>
 
 ```json
-"mcpServers": {
-  "time": {
-    "command": "docker",
-    "args": ["run", "-i", "--rm", "mcp/time"]
+{
+  "mcpServers": {
+    "time": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "LOCAL_TIMEZONE", "mcp/time"]
+    }
   }
 }
 ```
@@ -71,10 +81,12 @@ Add to your Claude settings:
 <summary>Using pip installation</summary>
 
 ```json
-"mcpServers": {
-  "time": {
-    "command": "python",
-    "args": ["-m", "mcp_server_time"]
+{
+  "mcpServers": {
+    "time": {
+      "command": "python",
+      "args": ["-m", "mcp_server_time"]
+    }
   }
 }
 ```
@@ -107,6 +119,72 @@ Add to your Zed settings.json:
     "args": ["-m", "mcp_server_time"]
   }
 },
+```
+</details>
+
+### Configure for VS Code
+
+For quick installation, use one of the one-click install buttons below...
+
+[![Install with UV in VS Code](https://img.shields.io/badge/VS_Code-UV-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=time&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22mcp-server-time%22%5D%7D) [![Install with UV in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-UV-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=time&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22mcp-server-time%22%5D%7D&quality=insiders)
+
+[![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=time&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22mcp%2Ftime%22%5D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=time&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22mcp%2Ftime%22%5D%7D&quality=insiders)
+
+For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open User Settings (JSON)`.
+
+Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+
+> Note that the `mcp` key is needed when using the `mcp.json` file.
+
+<details>
+<summary>Using uvx</summary>
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "time": {
+        "command": "uvx",
+        "args": ["mcp-server-time"]
+      }
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary>Using Docker</summary>
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "time": {
+        "command": "docker",
+        "args": ["run", "-i", "--rm", "mcp/time"]
+      }
+    }
+  }
+}
+```
+</details>
+
+### Configure for Zencoder
+
+1. Go to the Zencoder menu (...)
+2. From the dropdown menu, select `Agent Tools`
+3. Click on the `Add Custom MCP`
+4. Add the name and server configuration from below, and make sure to hit the `Install` button
+
+<details>
+<summary>Using uvx</summary>
+
+```json
+{
+    "command": "uvx",
+    "args": ["mcp-server-time"]
+  }
 ```
 </details>
 
