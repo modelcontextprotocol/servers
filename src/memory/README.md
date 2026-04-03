@@ -236,6 +236,59 @@ Alternatively, you can add the configuration to a file called `.vscode/mcp.json`
 }
 ```
 
+### Troubleshooting: WSL2 JSON parse errors
+
+When running the server via `npx -y @modelcontextprotocol/server-memory` inside WSL2, you may encounter errors like:
+
+```
+Unexpected non-whitespace character after JSON at position 127
+```
+
+This is caused by `npx` writing package resolution output to stdout before handing off to the server. Since MCP's stdio transport uses stdout exclusively for JSON-RPC messages, those extra bytes corrupt the stream. The server code itself is not at fault.
+
+**Fix — Option A: Global install (recommended)**
+
+```sh
+npm install -g @modelcontextprotocol/server-memory
+```
+
+Then update your `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "memory": {
+      "command": "mcp-server-memory",
+      "args": []
+    }
+  }
+}
+```
+
+**Fix — Option B: Run `node` directly**
+
+```sh
+# Install once to get the package into the npx cache
+npx -y @modelcontextprotocol/server-memory
+# Find the installed path
+npm root -g
+```
+
+Then reference the entry point directly in `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "memory": {
+      "command": "node",
+      "args": ["/path/to/global/node_modules/@modelcontextprotocol/server-memory/dist/index.js"]
+    }
+  }
+}
+```
+
+Both options bypass `npx` at server startup, eliminating the stdout pollution.
+
 ### System Prompt
 
 The prompt for utilizing memory depends on the use case. Changing the prompt will help the model determine the frequency and types of memories created.
