@@ -1405,6 +1405,7 @@ search, and comprehensive file analysis.
 - **[Vectara](https://github.com/vectara/vectara-mcp)** - Query Vectara's trusted RAG-as-a-service platform.
 - **[Vega-Lite](https://github.com/isaacwasserman/mcp-vegalite-server)** - Generate visualizations from fetched data using the VegaLite format and renderer.
 - **[Vertica](https://github.com/nolleh/mcp-vertica)** - Vertica database integration in Python with configurable access controls and schema inspection
+- **[VerifiedState](https://github.com/verifiedstate/verified-memory)** - Decision trace infrastructure for AI agents. Cryptographic receipts, bitemporal queries, conflict detection. Tools: memory_ingest, memory_query, memory_verify, memory_health.
 - **[Vibe Check](https://github.com/PV-Bhat/vibe-check-mcp-server)** - An MCP server leveraging an external oversight layer to "vibe check" agents, and also self-improve accuracy & user alignment over time. Prevents scope creep, code bloat, misalignment, misinterpretation, tunnel vision, and overcomplication.
 - **[Video Editor](https://github.com/burningion/video-editing-mcp)** - A Model Context Protocol Server to add, edit, and search videos with [Video Jungle](https://www.video-jungle.com/).
 - **[Video Still Capture](https://github.com/13rac1/videocapture-mcp)** - 📷 Capture video stills from an OpenCV-compatible webcam or other video source.
