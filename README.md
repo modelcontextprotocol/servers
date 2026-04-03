@@ -783,6 +783,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Domain Tools](https://github.com/deshabhishek007/domain-tools-mcp-server)** - A Model Context Protocol (MCP) server for comprehensive domain analysis: WHOIS, DNS records, and DNS health checks.
 - **[Downdetector](https://github.com/domdomegg/downdetector-mcp)** - Check service status and outage information from Downdetector for real-time monitoring of service availability across various platforms and regions.
 - **[DPLP](https://github.com/szeider/mcp-dblp)**  - Searches the [DBLP](https://dblp.org) computer science bibliography database.
+- **[Drop Beacon](https://github.com/direct-web/drop-beacon-mcp)** - Search 100K+ EDC (everyday carry) products across 1,000+ brands. Track new drops, compare prices across retailers, check availability, and get market trends for knives, fidgets, flashlights, pens, and wallets via [edc4me.com](https://edc4me.com).
 - **[Druid MCP Server](https://github.com/iunera/druid-mcp-server)** - STDIO/SEE MCP Server for Apache Druid by [iunera](https://www.iunera.com) that provides extensive tools, resources, and prompts for managing and analyzing Druid clusters.
 - **[Drupal](https://github.com/Omedia/mcp-server-drupal)** - Server for interacting with [Drupal](https://www.drupal.org/project/mcp) using STDIO transport layer.
 - **[dune-analytics-mcp](https://github.com/kukapay/dune-analytics-mcp)** -  A mcp server that bridges Dune Analytics data to AI agents.
