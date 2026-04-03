@@ -14,6 +14,7 @@ import { z } from "zod";
 import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from './path-utils.js';
 import { getValidRootDirectories } from './roots-utils.js';
+import { createRootsGate } from './roots-gate.js';
 import {
   // Function imports
   formatSize,
@@ -94,12 +95,9 @@ setAllowedDirectories(allowedDirectories);
 
 // Gate to block tool handlers until roots/directories are initialized.
 // Without this, tool calls can race ahead of oninitialized and see empty allowedDirectories.
-let resolveRootsReady: () => void;
-const rootsReady = new Promise<void>((resolve) => {
-  resolveRootsReady = resolve;
-});
+const rootsGate = createRootsGate();
 if (allowedDirectories.length > 0) {
-  resolveRootsReady!();
+  rootsGate.resolve();
 }
 
 // Schema definitions
@@ -199,7 +197,7 @@ async function readFileAsBase64Stream(filePath: string): Promise<string> {
 
 // read_file (deprecated) and read_text_file
 const readTextFileHandler = async (args: z.infer<typeof ReadTextFileArgsSchema>) => {
-  await rootsReady;
+  await rootsGate.waitForReady();
   const validPath = await validatePath(args.path);
 
   if (args.head && args.tail) {
@@ -276,7 +274,7 @@ server.registerTool(
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ReadMediaFileArgsSchema>) => {
-    await rootsReady;
+    await rootsGate.waitForReady();
     const validPath = await validatePath(args.path);
     const extension = path.extname(validPath).toLowerCase();
     const mimeTypes: Record<string, string> = {
@@ -328,7 +326,7 @@ server.registerTool(
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ReadMultipleFilesArgsSchema>) => {
-    await rootsReady;
+    await rootsGate.waitForReady();
     const results = await Promise.all(
       args.paths.map(async (filePath: string) => {
         try {
@@ -365,7 +363,7 @@ server.registerTool(
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
   },
   async (args: z.infer<typeof WriteFileArgsSchema>) => {
-    await rootsReady;
+    await rootsGate.waitForReady();
     const validPath = await validatePath(args.path);
     await writeFileContent(validPath, args.content);
     const text = `Successfully wrote to ${args.path}`;
@@ -396,7 +394,7 @@ server.registerTool(
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
   },
   async (args: z.infer<typeof EditFileArgsSchema>) => {
-    await rootsReady;
+    await rootsGate.waitForReady();
     const validPath = await validatePath(args.path);
     const result = await applyFileEdits(validPath, args.edits, args.dryRun);
     return {
@@ -422,7 +420,7 @@ server.registerTool(
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false }
   },
   async (args: z.infer<typeof CreateDirectoryArgsSchema>) => {
-    await rootsReady;
+    await rootsGate.waitForReady();
     const validPath = await validatePath(args.path);
     await fs.mkdir(validPath, { recursive: true });
     const text = `Successfully created directory ${args.path}`;
@@ -449,7 +447,7 @@ server.registerTool(
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ListDirectoryArgsSchema>) => {
-    await rootsReady;
+    await rootsGate.waitForReady();
     const validPath = await validatePath(args.path);
     const entries = await fs.readdir(validPath, { withFileTypes: true });
     const formatted = entries
@@ -479,7 +477,7 @@ server.registerTool(
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ListDirectoryWithSizesArgsSchema>) => {
-    await rootsReady;
+    await rootsGate.waitForReady();
     const validPath = await validatePath(args.path);
     const entries = await fs.readdir(validPath, { withFileTypes: true });
 
@@ -559,7 +557,7 @@ server.registerTool(
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof DirectoryTreeArgsSchema>) => {
-    await rootsReady;
+    await rootsGate.waitForReady();
     interface TreeEntry {
       name: string;
       type: 'file' | 'directory';
@@ -630,7 +628,7 @@ server.registerTool(
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
   },
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
-    await rootsReady;
+    await rootsGate.waitForReady();
     const validSourcePath = await validatePath(args.source);
     const validDestPath = await validatePath(args.destination);
     await fs.rename(validSourcePath, validDestPath);
@@ -662,7 +660,7 @@ server.registerTool(
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof SearchFilesArgsSchema>) => {
-    await rootsReady;
+    await rootsGate.waitForReady();
     const validPath = await validatePath(args.path);
     const results = await searchFilesWithValidation(validPath, args.pattern, allowedDirectories, { excludePatterns: args.excludePatterns });
     const text = results.length > 0 ? results.join("\n") : "No matches found";
@@ -689,7 +687,7 @@ server.registerTool(
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof GetFileInfoArgsSchema>) => {
-    await rootsReady;
+    await rootsGate.waitForReady();
     const validPath = await validatePath(args.path);
     const info = await getFileStats(validPath);
     const text = Object.entries(info)
@@ -716,7 +714,7 @@ server.registerTool(
     annotations: { readOnlyHint: true }
   },
   async () => {
-    await rootsReady;
+    await rootsGate.waitForReady();
     const text = `Allowed directories:\n${allowedDirectories.join('\n')}`;
     return {
       content: [{ type: "text" as const, text }],
@@ -769,12 +767,12 @@ server.server.oninitialized = async () => {
     } else {
       if (allowedDirectories.length > 0) {
         console.error("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
-      }else{
+      } else {
         throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
       }
     }
   } finally {
-    resolveRootsReady!();
+    rootsGate.resolve();
   }
 };
 
