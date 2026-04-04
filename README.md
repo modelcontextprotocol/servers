@@ -8,7 +8,7 @@ This repository is a collection of *reference implementations* for the [Model Co
 > [!WARNING]
 > The servers in this repository are intended as **reference implementations** to demonstrate MCP features and SDK usage. They are meant to serve as educational examples for developers building their own MCP servers, not as production-ready solutions. Developers should evaluate their own security requirements and implement appropriate safeguards based on their specific threat model and use case.
 
-The servers in this repository showcase the versatility and extensibility of MCP, demonstrating how it can be used to give Large Language Models (LLMs) secure, controlled access to tools and data sources
+The servers in this repository showcase the versatility and extensibility of MCP, demonstrating how it can be used to give Large Language Models (LLMs) secure, controlled access to tools and data sources.
 Typically, each MCP server is implemented with an MCP SDK:
 
 - [C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk)
