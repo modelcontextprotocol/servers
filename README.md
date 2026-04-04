@@ -925,6 +925,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Inoyu](https://github.com/sergehuber/inoyu-mcp-unomi-server)** - Interact with an Apache Unomi CDP customer data platform to retrieve and update customer profiles
 - **[Instagram DM](https://github.com/trypeggy/instagram_dm_mcp)** - Send DMs on Instagram via your LLM
 - **[Intelligent Image Generator](https://github.com/shinpr/mcp-image)** - Turn casual prompts into professional-quality images with AI enhancement
+- **[Intelligence MCP](https://github.com/goodmeta/intelligence-mcp)** - Agent payments ecosystem intelligence. Scans GitHub, Hacker News, and npm for activity across AP2, ACP, x402, MPP, and UCP protocols. Returns scored opportunities with recommended actions. Free protocol comparison, paid scan via x402 USDC.
 - **[interactive-mcp](https://github.com/ttommyth/interactive-mcp)** - Enables interactive LLM workflows by adding local user prompts and chat capabilities directly into the MCP loop.
 - **[Intercom](https://github.com/raoulbia-ai/mcp-server-for-intercom)** - An MCP-compliant server for retrieving customer support tickets from Intercom. This tool enables AI assistants like Claude Desktop and Cline to access and analyze your Intercom support tickets.
 - **[iOS Simulator](https://github.com/InditexTech/mcp-server-simulator-ios-idb)** - A Model Context Protocol (MCP) server that enables LLMs to interact with iOS simulators (iPhone, iPad, etc.) through natural language commands.
