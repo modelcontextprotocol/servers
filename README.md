@@ -1019,6 +1019,7 @@ search, and comprehensive file analysis.
 - **[Markdownify](https://github.com/zcaceres/mcp-markdownify-server)** - MCP to convert almost anything to Markdown (PPTX, HTML, PDF, Youtube Transcripts and more)
 - **[market-fiyati](https://github.com/mtcnbzks/market-fiyati-mcp-server)** - The MCP server for marketfiyati.org.tr, offering grocery price search and comparison across Turkish markets.)
 - **[Markitdown](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/markitdown)** - Convert files to Markdown
+- **[MarkView](https://github.com/paulhkang94/markview)** 🍎 - Native macOS markdown previewer with MCP server. Renders GFM, Mermaid diagrams, and syntax highlighting in a native Swift window. Tools: `open_file`, `preview_markdown`. (`npx -y mcp-server-markview`)
 - **[Masquerade](https://github.com/postralai/masquerade)** - Redact sensitive information from your PDF documents before sending them to Claude. Masquerade serves as a privacy firewall for LLMs.
 - **[MasterGo](https://github.com/mastergo-design/mastergo-magic-mcp)** - The server designed to connect MasterGo design tools with AI models. It enables AI models to directly retrieve DSL data from MasterGo design files.
 - **[Matlab-MCP-Tools](https://github.com/neuromechanist/matlab-mcp-tools)** - An MCP to write and execute MATLAB scripts, maintain workspace context between MCP calls, visualize plots, and perform section-by-section analysis of MATLAB code with full access to MATLAB's computational capabilities.
