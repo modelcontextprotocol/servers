@@ -15,6 +15,7 @@ import { registerTriggerSamplingRequestTool } from '../tools/trigger-sampling-re
 import { registerTriggerElicitationRequestTool } from '../tools/trigger-elicitation-request.js';
 import { registerGetRootsListTool } from '../tools/get-roots-list.js';
 import { registerGZipFileAsResourceTool } from '../tools/gzip-file-as-resource.js';
+import { registerSimulateResearchQueryTool } from '../tools/simulate-research-query.js';
 
 // Helper to capture registered tool handlers
 function createMockServer() {
@@ -734,6 +735,90 @@ describe('Tools', () => {
           description: expect.stringContaining('roots'),
         }),
         expect.any(Function)
+      );
+    });
+  });
+
+  describe('simulate-research-query', () => {
+    function createMockServerWithTasks() {
+      const taskHandlers: Record<string, any> = {};
+      const mockServer = {
+        experimental: {
+          tasks: {
+            registerToolTask: vi.fn((_name: string, _config: any, handler: any) => {
+              Object.assign(taskHandlers, handler);
+            }),
+          },
+        },
+        server: { getClientCapabilities: vi.fn(() => ({ elicitation: {} })) },
+      } as unknown as McpServer;
+      return { mockServer, taskHandlers };
+    }
+
+    function createMockTaskStore(taskId: string) {
+      return {
+        createTask: vi.fn().mockResolvedValue({
+          taskId,
+          status: 'working',
+          createdAt: new Date().toISOString(),
+          lastUpdatedAt: new Date().toISOString(),
+          ttl: 300000,
+          pollInterval: 1000,
+        }),
+        updateTaskStatus: vi.fn().mockResolvedValue(undefined),
+        storeTaskResult: vi.fn().mockResolvedValue(undefined),
+        getTask: vi.fn(),
+        getTaskResult: vi.fn(),
+      };
+    }
+
+    it('should pass relatedTask to sendRequest when elicitation is triggered', async () => {
+      vi.useFakeTimers();
+
+      const { mockServer, taskHandlers } = createMockServerWithTasks();
+      registerSimulateResearchQueryTool(mockServer);
+
+      const mockTaskStore = createMockTaskStore('task-abc');
+      const mockSendRequest = vi.fn().mockResolvedValue({
+        action: 'accept',
+        content: { interpretation: 'technical' },
+      });
+
+      await taskHandlers.createTask(
+        { topic: 'python', ambiguous: true },
+        { taskStore: mockTaskStore, sendRequest: mockSendRequest }
+      );
+
+      await vi.runAllTimersAsync();
+      vi.useRealTimers();
+
+      expect(mockSendRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'elicitation/create' }),
+        expect.anything(),
+        expect.objectContaining({ relatedTask: { taskId: 'task-abc' } })
+      );
+    });
+
+    it('should complete without elicitation for non-ambiguous query', async () => {
+      vi.useFakeTimers();
+
+      const { mockServer, taskHandlers } = createMockServerWithTasks();
+      registerSimulateResearchQueryTool(mockServer);
+
+      const mockTaskStore = createMockTaskStore('task-def');
+      const mockSendRequest = vi.fn();
+
+      await taskHandlers.createTask(
+        { topic: 'python', ambiguous: false },
+        { taskStore: mockTaskStore, sendRequest: mockSendRequest }
+      );
+
+      await vi.runAllTimersAsync();
+      vi.useRealTimers();
+
+      expect(mockSendRequest).not.toHaveBeenCalled();
+      expect(mockTaskStore.storeTaskResult).toHaveBeenCalledWith(
+        'task-def', 'completed', expect.anything()
       );
     });
   });
