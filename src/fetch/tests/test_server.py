@@ -5,12 +5,45 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from mcp.shared.exceptions import McpError
 
 from mcp_server_fetch.server import (
+    Fetch,
     extract_content_from_html,
     get_robots_txt_url,
     check_may_autonomously_fetch_url,
     fetch_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
 )
+
+
+class TestFetchToolSchema:
+    """Tests for the Fetch model JSON schema compatibility."""
+
+    def test_schema_uses_inclusive_bounds(self):
+        """Ensure the schema uses minimum/maximum instead of exclusiveMinimum/exclusiveMaximum.
+
+        Some LLM providers (e.g. Google Gemini) only support OpenAPI 3.0
+        schema keywords and reject exclusiveMinimum/exclusiveMaximum.
+        """
+        schema = Fetch.model_json_schema()
+        max_length_schema = schema["properties"]["max_length"]
+
+        assert "exclusiveMinimum" not in max_length_schema
+        assert "exclusiveMaximum" not in max_length_schema
+        assert max_length_schema["minimum"] == 1
+        assert max_length_schema["maximum"] == 999999
+
+    def test_url_schema_omits_unsupported_keywords(self):
+        """Ensure the url field schema avoids format/minLength keywords.
+
+        Some LLM providers (e.g. Google Gemini) only support a limited set
+        of keywords for string types and reject unsupported ones like
+        format: "uri" or minLength.
+        """
+        schema = Fetch.model_json_schema()
+        url_schema = schema["properties"]["url"]
+
+        assert "format" not in url_schema
+        assert "minLength" not in url_schema
+        assert url_schema["type"] == "string"
 
 
 class TestGetRobotsTxtUrl:
