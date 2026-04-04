@@ -281,3 +281,39 @@ For Awareness: a prior mcp/memory volume contains an index.js file that could be
 ## License
 
 This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.
+
+## 🤖 Extending with Cognitive Memory Systems
+
+The basic memory server provides entity storage, but production AI agents often need more sophisticated memory architectures. A **4-Tier Cognitive Memory System** extends this model:
+
+| Tier | Storage | Purpose | Speed |
+|------|---------|---------|-------|
+| **Working** | Redis / RAM | Ultra-fast ephemeral cache | ⚡⚡⚡ |
+| **Medium** | SQLite | Recent episodes & context | ⚡⚡ |
+| **Long-Term** | Vector DB | Persistent knowledge with embeddings | ⚡ |
+| **Deep** | Knowledge Graph (MCP Memory) | Complex semantic relationships | Slow |
+
+This layered approach allows AI agents to:
+- Maintain instant context (Working)
+- Remember recent conversations (Medium)  
+- Store persistent knowledge (Long-Term)
+- Build complex relationship understanding (Deep)
+
+Example integration pattern:
+```python
+# Cognitive Memory Bridge
+class CognitiveMemoryBridge:
+    async def store_interaction(self, user_id: str, content: str):
+        # 1. Working memory - instant cache
+        await redis.setex(f"session:{user_id}", content)
+        
+        # 2. Medium memory - recent context
+        await sqlite.execute("INSERT INTO medium_memory VALUES (?)", content)
+        # 3. Long-term - embed and vectorize
+        embedding = await embed(content)
+        await vector_db.insert(embedding)
+        # 4. Deep - create graph relations
+        await mcp_memory.create_entities([{"name": user_id, ...}])
+```
+
+See [silhouette-brain](https://github.com/haroldfabla2-hue/silhouette-brain) for a reference implementation of a complete cognitive memory system.
