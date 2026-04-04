@@ -18,7 +18,7 @@ from mcp.types import (
     INTERNAL_ERROR,
 )
 from protego import Protego
-from pydantic import BaseModel, Field, AnyUrl
+from pydantic import AnyUrl, BaseModel, Field, WithJsonSchema
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
@@ -151,14 +151,18 @@ async def fetch_url(
 class Fetch(BaseModel):
     """Parameters for fetching a URL."""
 
-    url: Annotated[AnyUrl, Field(description="URL to fetch")]
+    url: Annotated[
+        AnyUrl,
+        Field(description="URL to fetch"),
+        WithJsonSchema({"type": "string", "description": "URL to fetch"}),
+    ]
     max_length: Annotated[
         int,
         Field(
             default=5000,
             description="Maximum number of characters to return.",
-            gt=0,
-            lt=1000000,
+            ge=1,
+            le=999999,
         ),
     ]
     start_index: Annotated[
