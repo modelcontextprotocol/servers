@@ -8,7 +8,7 @@ This repository is a collection of *reference implementations* for the [Model Co
 > [!WARNING]
 > The servers in this repository are intended as **reference implementations** to demonstrate MCP features and SDK usage. They are meant to serve as educational examples for developers building their own MCP servers, not as production-ready solutions. Developers should evaluate their own security requirements and implement appropriate safeguards based on their specific threat model and use case.
 
-The servers in this repository showcase the versatility and extensibility of MCP, demonstrating how it can be used to give Large Language Models (LLMs) secure, controlled access to tools and data sources.
+The servers in this repository showcase the versatility and extensibility of MCP, demonstrating how it can be used to give Large Language Models (LLMs) secure, controlled access to tools and data sources
 Typically, each MCP server is implemented with an MCP SDK:
 
 - [C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk)
@@ -1295,6 +1295,7 @@ search, and comprehensive file analysis.
 - **[Skyvern](https://github.com/Skyvern-AI/skyvern/tree/main/integrations/mcp)** - MCP to let Claude / Windsurf / Cursor / your LLM control the browser
 - **[Slack](https://github.com/korotovsky/slack-mcp-server)** - The most powerful MCP server for Slack Workspaces. This integration supports both Stdio and SSE transports, proxy settings and does not require any permissions or bots being created or approved by Workspace admins 😏.
 - **[Slack](https://github.com/zencoderai/slack-mcp-server)** - Slack MCP server which supports both stdio and Streamable HTTP transports. Extended from the original Anthropic's implementation which is now [archived](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/slack)
+- **[Slashr](https://slashr.dev/developers)** - Live validator incident data for AI agents. Query delinquency, slashing, and scan results across Solana, Ethereum, Sui, and Cosmos. Remote MCP server at `mcp.slashr.dev`.
 - **[Slidespeak](https://github.com/SlideSpeak/slidespeak-mcp)** - Create PowerPoint presentations using the [Slidespeak](https://slidespeak.com/) API.
 - **[Smartlead](https://github.com/jean-technologies/smartlead-mcp-server-local)** - MCP to connect to Smartlead. Additional, tooling, functionality, and connection to workflow automation platforms also available.
 - **[Snowflake](https://github.com/Snowflake-Labs/mcp)** - Open-source MCP server for Snowflake from official Snowflake-Labs supports prompting Cortex Agents, querying structured & unstructured data, object management, SQL execution, semantic view querying, and more. RBAC, fine-grained CRUD controls, and all authentication methods supported.
