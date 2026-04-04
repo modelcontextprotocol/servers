@@ -1640,6 +1640,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for information about contributing to thi
 
 See [SECURITY.md](SECURITY.md) for reporting security vulnerabilities.
 
+### Security Middleware for Production Deployments
+
+The WARNING above is intentional: MCP reference servers are educational examples without built-in authorization, audit trails, or human-in-the-loop controls for irreversible operations.
+
+For production deployments, we recommend evaluating a security middleware layer. The [SINT Protocol](https://github.com/sint-ai/sint-protocol) is one open-source option — it adds capability tokens, tier-based approval (auto → audit → human review → explicit sign-off), and a hash-chained audit ledger between MCP clients and servers, with coverage for all 10 OWASP Agentic AI Top-10 threats.
+
+See [`docs/security-middleware.md`](docs/security-middleware.md) for a 5-minute integration guide and performance benchmarks.
+
 ## 📜 License
 
 This project is licensed under the Apache License, Version 2.0 for new contributions, with existing code under MIT - see the [LICENSE](LICENSE) file for details.
