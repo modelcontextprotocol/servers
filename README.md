@@ -1256,6 +1256,7 @@ search, and comprehensive file analysis.
 - **[RedNote MCP](https://github.com/ifuryst/rednote-mcp)** - MCP server for accessing RedNote(XiaoHongShu, xhs) content
 - **[Reed Jobs](https://github.com/kld3v/reed_jobs_mcp)** - Search and retrieve job listings from Reed.co.uk.
 - **[Rememberizer AI](https://github.com/skydeckai/mcp-server-rememberizer)** - An MCP server designed for interacting with the Rememberizer data source, facilitating enhanced knowledge retrieval.
+- **[rendoc](https://github.com/yoryocoruxo-ai/rendoc-mcp-server)** - Generate professional PDF documents (invoices, contracts, reports, certificates) from templates or inline HTML/Handlebars markup via the [rendoc](https://rendoc.dev) API.
 - **[Replicate](https://github.com/deepfates/mcp-replicate)** - Search, run and manage machine learning models on Replicate through a simple tool-based interface. Browse models, create predictions, track their status, and handle generated images.
 - **[Resend](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/resend)** - Send email using Resend services
 - **[Restream](https://github.com/shaktech786/restream-mcp-server)** - Model Context Protocol server for Restream API integration - manage multi-platform live streams, control channels, and access streaming analytics.
