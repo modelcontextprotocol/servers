@@ -1384,6 +1384,7 @@ search, and comprehensive file analysis.
 - **[Triplyfy MCP](https://github.com/helpful-AIs/triplyfy-mcp)** - An MCP server that lets LLMs plan and manage itineraries with interactive maps in Triplyfy; manage itineraries, places and notes, and search/save flights.
 - **[TrueNAS Core MCP](https://github.com/vespo92/TrueNasCoreMCP)** - An MCP server for interacting with TrueNAS Core.
 - **[TuriX Computer Automation MCP](https://github.com/TurixAI/TuriX-CUA/tree/mac_mcp)** - MCP server for helping automation control your computer complete your pre-setting task.
+- **[TwelveLabs MCP Server](https://github.com/micro-JAY/twelvelabs-mcp-server)** - Enhanced MCP server for the ElevenLabs Conversational AI API — manage agents, knowledge base, conversations, and voices with full config access including system prompts, LLM settings, and webhooks.
 - **[Tyk API Management](https://github.com/TykTechnologies/tyk-dashboard-mcp)** - Chat with all of your organization's managed APIs and perform other API lifecycle operations, managing tokens, users, analytics, and more.
 - **[Typesense](https://github.com/suhail-ak-s/mcp-typesense-server)** - A Model Context Protocol (MCP) server implementation that provides AI models with access to Typesense search capabilities. This server enables LLMs to discover, search, and analyze data stored in Typesense collections.
 - **[UniFi Dream Machine](https://github.com/sabler/mcp-unifi)** An MCP server that gets your network telemetry from the UniFi Site Manager and your local UniFi router.
