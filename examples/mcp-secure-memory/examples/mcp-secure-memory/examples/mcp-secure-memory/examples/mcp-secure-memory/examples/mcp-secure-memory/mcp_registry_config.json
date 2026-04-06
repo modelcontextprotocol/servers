@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "synapse-secure-memory": {
+      "command": "python",
+      "args": [
+        "path/to/examples/mcp-secure-memory/server.py"
+      ],
+      "env": {
+        "SYNAPSE_AGENT_ID": "claude-desktop",
+        "SYNAPSE_PRIVACY_EPSILON": "0.5"
+      }
+    }
+  }
+}
