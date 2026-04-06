@@ -110,6 +110,10 @@ global:
 #     image:
 #       repository: mcp/git
 #       tag: "latest"
+#     hpa:
+#       enabled: true
+#       minReplicas: 2
+#       maxReplicas: 5
 #
 #   - name: memory
 #     enabled: true
