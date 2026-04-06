@@ -1,0 +1,22 @@
+{{- $root := . -}}
+{{- range $i, $server := $root.Values.mcpServers }}
+{{- if (default true $server.enabled) }}
+{{- $svc := default (dict) $server.service -}}
+{{- $svcEnabled := default true $svc.enabled -}}
+{{- if $svcEnabled }}
+{{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}
+  labels:
+{{ include "mcp-servers.commonLabels" (dict "root" $root "server" $server) | nindent 4 }}
+spec:
+  type: {{ default $root.Values.global.service.type $svc.type }}
+  selector:
+{{ include "mcp-servers.selectorLabels" (dict "root" $root "server" $server) | nindent 4 }}
+{{ include "mcp-servers.servicePorts" (dict "server" $server) | nindent 2 }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

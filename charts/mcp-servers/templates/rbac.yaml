@@ -1,0 +1,41 @@
+{{- $root := . -}}
+{{- range $i, $server := $root.Values.mcpServers }}
+{{- if (default true $server.enabled) }}
+{{- $rbac := default (dict) $server.rbac -}}
+{{- $rbacCreate := default $root.Values.global.rbac.create $rbac.create -}}
+{{- $defaultRules := $root.Values.global.rbac.defaultRules -}}
+{{- if $rbacCreate }}
+{{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $fullname }}
+  labels:
+{{ include "mcp-servers.commonLabels" (dict "root" $root "server" $server) | nindent 4 }}
+rules:
+{{- if $rbac.rules }}
+{{ toYaml $rbac.rules | nindent 2 }}
+{{- else if $defaultRules }}
+{{ toYaml $defaultRules | nindent 2 }}
+{{- else }}
+  []
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $fullname }}
+  labels:
+{{ include "mcp-servers.commonLabels" (dict "root" $root "server" $server) | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $fullname }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "mcp-servers.serviceAccountName" (dict "root" $root "server" $server) }}
+    namespace: {{ $root.Release.Namespace }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

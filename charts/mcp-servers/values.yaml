@@ -1,0 +1,136 @@
+mcpServers: []
+
+imagePullSecrets: []
+
+global:
+  labels: {}
+  annotations: {}
+  imagePullSecrets: []
+
+  podLabels: {}
+  podAnnotations: {}
+
+  podSecurityContext: {}
+  securityContext: {}
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  resources: {}
+
+  serviceAccount:
+    create: true
+    annotations: {}
+
+  rbac:
+    create: false
+    # If you enable RBAC, you can specify rules per-server, or defaults here.
+    # defaultRules:
+    #   - apiGroups: [""]
+    #     resources: ["configmaps"]
+    #     verbs: ["get","list","watch"]
+
+  service:
+    type: ClusterIP
+
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts: []
+    tls: []
+
+  httpRoute:
+    enabled: false
+    annotations: {}
+    parentRefs: []
+    hostnames: []
+    port: 80
+    rules: []
+
+  networkPolicy:
+    enabled: false
+    annotations: {}
+    policyTypes: ["Ingress", "Egress"]
+    ingress: []
+    egress: []
+
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    metrics: []
+
+  pdb:
+    enabled: false
+    minAvailable: 1
+    # maxUnavailable: 1
+
+  persistence:
+    enabled: false
+    annotations: {}
+    storageClassName: ""
+    accessModes: ["ReadWriteOnce"]
+    size: 1Gi
+
+# Example (servers in this repo under `servers/src/`).
+# Note: the per-server READMEs show **local** Docker tags like `mcp/<name>` (e.g. `mcp/git`).
+# If you want to use a remote registry, replace `image.repository` accordingly (e.g. `ghcr.io/<org>/<image>`).
+# mcpServers:
+#   - name: filesystem
+#     enabled: true
+#     image:
+#       repository: mcp/filesystem
+#       tag: "latest"
+#     # These can be set globally (under `global.*`) or per-server.
+#     nodeSelector:
+#       nodepool: tools
+#     tolerations:
+#       - key: "dedicated"
+#         operator: "Equal"
+#         value: "tools"
+#         effect: "NoSchedule"
+#     affinity: {}
+#     resources:
+#       requests:
+#         cpu: 100m
+#         memory: 128Mi
+#       limits:
+#         cpu: 500m
+#         memory: 512Mi
+#
+#   - name: fetch
+#     enabled: true
+#     image:
+#       repository: mcp/fetch
+#       tag: "latest"
+#
+#   - name: git
+#     enabled: true
+#     image:
+#       repository: mcp/git
+#       tag: "latest"
+#
+#   - name: memory
+#     enabled: true
+#     image:
+#       repository: mcp/memory
+#       tag: "latest"
+#
+#   - name: sequentialthinking
+#     enabled: true
+#     image:
+#       repository: mcp/sequentialthinking
+#       tag: "latest"
+#
+#   - name: time
+#     enabled: true
+#     image:
+#       repository: mcp/time
+#       tag: "latest"
+#
+#   - name: everything
+#     enabled: false
+#     image:
+#       repository: mcp/everything
+#       tag: "latest"

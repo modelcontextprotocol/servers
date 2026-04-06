@@ -1,0 +1,121 @@
+{{- $root := . -}}
+{{- range $i, $server := $root.Values.mcpServers }}
+{{- if (default true $server.enabled) }}
+{{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}
+  labels:
+{{ include "mcp-servers.commonLabels" (dict "root" $root "server" $server) | nindent 4 }}
+  {{- $ann := include "mcp-servers.commonAnnotations" (dict "root" $root "server" $server) }}
+  {{- if $ann }}
+  annotations:
+{{ $ann | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ default 1 $server.replicas }}
+  selector:
+    matchLabels:
+{{ include "mcp-servers.selectorLabels" (dict "root" $root "server" $server) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+{{ include "mcp-servers.selectorLabels" (dict "root" $root "server" $server) | nindent 8 }}
+{{- with $root.Values.global.podLabels }}
+{{ toYaml . | nindent 8 }}
+{{- end }}
+{{- with $server.podLabels }}
+{{ toYaml . | nindent 8 }}
+{{- end }}
+      {{- if or $root.Values.global.podAnnotations $server.podAnnotations }}
+      annotations:
+{{- with $root.Values.global.podAnnotations }}
+{{ toYaml . | nindent 8 }}
+{{- end }}
+{{- with $server.podAnnotations }}
+{{ toYaml . | nindent 8 }}
+{{- end }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "mcp-servers.serviceAccountName" (dict "root" $root "server" $server) }}
+{{ include "mcp-servers.imagePullSecrets" (dict "root" $root "server" $server) | nindent 6 }}
+{{- with $root.Values.global.podSecurityContext }}
+      securityContext:
+{{ toYaml . | nindent 8 }}
+{{- end }}
+      containers:
+        - name: {{ include "mcp-servers.serverName" (dict "server" $server) }}
+          image: "{{ required "mcpServers[].image.repository is required" $server.image.repository }}:{{ default "latest" $server.image.tag }}"
+          imagePullPolicy: {{ default "IfNotPresent" $server.image.pullPolicy }}
+{{- if $server.command }}
+          command:
+{{ toYaml $server.command | nindent 12 }}
+{{- end }}
+{{- if $server.args }}
+          args:
+{{ toYaml $server.args | nindent 12 }}
+{{- end }}
+{{ include "mcp-servers.containerPorts" (dict "server" $server) | nindent 10 }}
+{{- with (default $root.Values.global.securityContext $server.securityContext) }}
+          securityContext:
+{{ toYaml . | nindent 12 }}
+{{- end }}
+{{- with $server.env }}
+          env:
+{{ toYaml . | nindent 12 }}
+{{- end }}
+{{- with $server.envFrom }}
+          envFrom:
+{{ toYaml . | nindent 12 }}
+{{- end }}
+{{- $resources := default $root.Values.global.resources $server.resources -}}
+{{- with $resources }}
+          resources:
+{{ toYaml . | nindent 12 }}
+{{- end }}
+{{- $persistence := merge (default (dict) $server.persistence) $root.Values.global.persistence -}}
+{{- if and $persistence.enabled $persistence.mountPath }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ $persistence.mountPath }}
+{{- with $server.volumeMounts }}
+{{ toYaml . | nindent 12 }}
+{{- end }}
+{{- else if $server.volumeMounts }}
+          volumeMounts:
+{{ toYaml $server.volumeMounts | nindent 12 }}
+{{- end }}
+{{- if or $server.volumes (and $persistence.enabled $persistence.mountPath) }}
+      volumes:
+{{- if and $persistence.enabled $persistence.mountPath }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-data" $fullname) $persistence.existingClaim }}
+{{- end }}
+{{- with $server.volumes }}
+{{ toYaml . | nindent 8 }}
+{{- end }}
+{{- end }}
+{{- $nodeSelector := default $root.Values.global.nodeSelector $server.nodeSelector -}}
+{{- with $nodeSelector }}
+      nodeSelector:
+{{ toYaml . | nindent 8 }}
+{{- end }}
+{{- $tolerations := default $root.Values.global.tolerations $server.tolerations -}}
+{{- with $tolerations }}
+      tolerations:
+{{ toYaml . | nindent 8 }}
+{{- end }}
+{{- $affinity := default $root.Values.global.affinity $server.affinity -}}
+{{- with $affinity }}
+      affinity:
+{{ toYaml . | nindent 8 }}
+{{- end }}
+{{- with $server.topologySpreadConstraints }}
+      topologySpreadConstraints:
+{{ toYaml . | nindent 8 }}
+{{- end }}
+---
+{{- end }}
+{{- end }}

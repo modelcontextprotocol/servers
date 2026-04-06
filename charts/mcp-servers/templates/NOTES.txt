@@ -1,0 +1,14 @@
+{{- if not .Values.mcpServers }}
+mcp-servers chart installed.
+
+No MCP servers were configured. Set `mcpServers` in values to deploy workloads.
+{{- else }}
+mcp-servers chart installed.
+
+Deployed MCP servers:
+{{- range $i, $s := .Values.mcpServers }}
+{{- if (default true $s.enabled) }}
+- {{ $s.name }}
+{{- end }}
+{{- end }}
+{{- end }}
