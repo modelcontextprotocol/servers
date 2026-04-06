@@ -1,0 +1,2 @@
+synapse-layer>=1.0.6
+mcp[cli]>=1.0.0
