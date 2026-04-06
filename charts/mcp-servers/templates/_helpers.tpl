@@ -64,8 +64,9 @@ app.kubernetes.io/instance: {{ $root.Release.Name }}
 {{- define "mcp-servers.serviceAccountName" -}}
 {{- $root := .root -}}
 {{- $server := .server -}}
-{{- $saCreate := default $root.Values.global.serviceAccount.create $server.serviceAccount.create -}}
-{{- $saName := default $root.Values.global.serviceAccount.name $server.serviceAccount.name -}}
+{{- $sa := default (dict) $server.serviceAccount -}}
+{{- $saCreate := default $root.Values.global.serviceAccount.create $sa.create -}}
+{{- $saName := default $root.Values.global.serviceAccount.name $sa.name -}}
 {{- if $saCreate -}}
 {{- if $saName -}}
 {{- $saName -}}
@@ -80,7 +81,8 @@ app.kubernetes.io/instance: {{ $root.Release.Name }}
 {{- define "mcp-servers.imagePullSecrets" -}}
 {{- $root := .root -}}
 {{- $server := .server -}}
-{{- $ips := default $root.Values.imagePullSecrets $server.imagePullSecrets -}}
+{{- $globalIps := default $root.Values.imagePullSecrets $root.Values.global.imagePullSecrets -}}
+{{- $ips := default $globalIps $server.imagePullSecrets -}}
 {{- if $ips }}
 imagePullSecrets:
 {{- toYaml $ips | nindent 2 }}

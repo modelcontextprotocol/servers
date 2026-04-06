@@ -1,7 +1,7 @@
 {{- $root := . -}}
 {{- range $i, $server := $root.Values.mcpServers }}
 {{- if (default true $server.enabled) }}
-{{- $pdb := default $root.Values.global.pdb $server.pdb -}}
+{{- $pdb := merge (default (dict) $server.pdb) $root.Values.global.pdb -}}
 {{- if $pdb.enabled }}
 {{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
 apiVersion: policy/v1
@@ -17,7 +17,7 @@ spec:
 {{- if hasKey $pdb "maxUnavailable" }}
   maxUnavailable: {{ $pdb.maxUnavailable }}
 {{- else }}
-  minAvailable: {{ $pdb.minAvailable }}
+  minAvailable: {{ default 1 $pdb.minAvailable }}
 {{- end }}
 ---
 {{- end }}

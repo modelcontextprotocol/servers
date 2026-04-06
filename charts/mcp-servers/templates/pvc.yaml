@@ -1,7 +1,7 @@
 {{- $root := . -}}
 {{- range $i, $server := $root.Values.mcpServers }}
 {{- if (default true $server.enabled) }}
-{{- $persistence := default $root.Values.global.persistence $server.persistence -}}
+{{- $persistence := merge (default (dict) $server.persistence) $root.Values.global.persistence -}}
 {{- if and $persistence.enabled (not $persistence.existingClaim) $persistence.mountPath }}
 {{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
 apiVersion: v1

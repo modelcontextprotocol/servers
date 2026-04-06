@@ -1,9 +1,9 @@
 .DS_Store
 .idea/
 .vscode/
-**/*.swp
-**/*.tmp
-**/*.bak
+*.swp
+*.tmp
+*.bak
 charts/
 tmp/
 dist/

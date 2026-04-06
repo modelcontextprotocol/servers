@@ -1,7 +1,7 @@
 {{- $root := . -}}
 {{- range $i, $server := $root.Values.mcpServers }}
 {{- if (default true $server.enabled) }}
-{{- $np := default $root.Values.global.networkPolicy $server.networkPolicy -}}
+{{- $np := merge (default (dict) $server.networkPolicy) $root.Values.global.networkPolicy -}}
 {{- if $np.enabled }}
 {{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
 apiVersion: networking.k8s.io/v1

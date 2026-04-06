@@ -1,7 +1,8 @@
 {{- $root := . -}}
 {{- range $i, $server := $root.Values.mcpServers }}
 {{- if (default true $server.enabled) }}
-{{- $ingEnabled := default $root.Values.global.ingress.enabled $server.ingress.enabled -}}
+{{- $serverIngress := default (dict) $server.ingress -}}
+{{- $ingEnabled := default $root.Values.global.ingress.enabled $serverIngress.enabled -}}
 {{- if $ingEnabled }}
 {{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
 apiVersion: networking.k8s.io/v1
@@ -10,23 +11,23 @@ metadata:
   name: {{ $fullname }}
   labels:
 {{ include "mcp-servers.commonLabels" (dict "root" $root "server" $server) | nindent 4 }}
-{{- $ingAnnotations := default $root.Values.global.ingress.annotations $server.ingress.annotations -}}
+{{- $ingAnnotations := default $root.Values.global.ingress.annotations $serverIngress.annotations -}}
 {{- with $ingAnnotations }}
   annotations:
 {{ toYaml . | nindent 4 }}
 {{- end }}
 spec:
-{{- $ingClassName := default $root.Values.global.ingress.className $server.ingress.className -}}
+{{- $ingClassName := default $root.Values.global.ingress.className $serverIngress.className -}}
 {{- if $ingClassName }}
   ingressClassName: {{ $ingClassName }}
 {{- end }}
-{{- $ingTLS := default $root.Values.global.ingress.tls $server.ingress.tls -}}
+{{- $ingTLS := default $root.Values.global.ingress.tls $serverIngress.tls -}}
 {{- if $ingTLS }}
   tls:
 {{ toYaml $ingTLS | nindent 4 }}
 {{- end }}
   rules:
-{{- $ingHosts := default $root.Values.global.ingress.hosts $server.ingress.hosts -}}
+{{- $ingHosts := default $root.Values.global.ingress.hosts $serverIngress.hosts -}}
 {{- range $host := $ingHosts }}
     - host: {{ required "ingress.hosts[].host is required" $host.host }}
       http:

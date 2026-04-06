@@ -5,6 +5,7 @@ imagePullSecrets: []
 global:
   labels: {}
   annotations: {}
+  imagePullSecrets: []
 
   podLabels: {}
   podAnnotations: {}

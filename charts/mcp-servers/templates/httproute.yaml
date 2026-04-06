@@ -1,7 +1,8 @@
 {{- $root := . -}}
 {{- range $i, $server := $root.Values.mcpServers }}
 {{- if (default true $server.enabled) }}
-{{- $hrEnabled := default $root.Values.global.httpRoute.enabled $server.httpRoute.enabled -}}
+{{- $serverHttpRoute := default (dict) $server.httpRoute -}}
+{{- $hrEnabled := default $root.Values.global.httpRoute.enabled $serverHttpRoute.enabled -}}
 {{- if $hrEnabled }}
 {{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
 apiVersion: gateway.networking.k8s.io/v1
@@ -10,28 +11,28 @@ metadata:
   name: {{ $fullname }}
   labels:
 {{ include "mcp-servers.commonLabels" (dict "root" $root "server" $server) | nindent 4 }}
-{{- $hrAnnotations := default $root.Values.global.httpRoute.annotations $server.httpRoute.annotations -}}
+{{- $hrAnnotations := default $root.Values.global.httpRoute.annotations $serverHttpRoute.annotations -}}
 {{- with $hrAnnotations }}
   annotations:
 {{ toYaml . | nindent 4 }}
 {{- end }}
 spec:
-{{- $hrParentRefs := default $root.Values.global.httpRoute.parentRefs $server.httpRoute.parentRefs -}}
+{{- $hrParentRefs := default $root.Values.global.httpRoute.parentRefs $serverHttpRoute.parentRefs -}}
 {{- with $hrParentRefs }}
   parentRefs:
 {{ toYaml . | nindent 4 }}
 {{- end }}
-{{- $hrHostnames := default $root.Values.global.httpRoute.hostnames $server.httpRoute.hostnames -}}
+{{- $hrHostnames := default $root.Values.global.httpRoute.hostnames $serverHttpRoute.hostnames -}}
 {{- with $hrHostnames }}
   hostnames:
 {{ toYaml . | nindent 4 }}
 {{- end }}
-{{- $hrRules := default $root.Values.global.httpRoute.rules $server.httpRoute.rules -}}
+{{- $hrRules := default $root.Values.global.httpRoute.rules $serverHttpRoute.rules -}}
 {{- if $hrRules }}
   rules:
 {{ toYaml $hrRules | nindent 4 }}
 {{- else }}
-{{- $hrPort := default $root.Values.global.httpRoute.port $server.httpRoute.port -}}
+{{- $hrPort := default $root.Values.global.httpRoute.port $serverHttpRoute.port -}}
   rules:
     - backendRefs:
         - name: {{ $fullname }}

@@ -15,8 +15,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: {{ $fullname }}
-  minReplicas: {{ $hpa.minReplicas }}
-  maxReplicas: {{ $hpa.maxReplicas }}
+  minReplicas: {{ default 1 $hpa.minReplicas }}
+  maxReplicas: {{ default 3 $hpa.maxReplicas }}
 {{- with $hpa.metrics }}
   metrics:
 {{ toYaml . | nindent 4 }}

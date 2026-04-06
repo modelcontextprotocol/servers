@@ -28,10 +28,7 @@ spec:
 {{- with $server.podLabels }}
 {{ toYaml . | nindent 8 }}
 {{- end }}
-      {{- $podAnn := dict }}
-      {{- if $root.Values.global.podAnnotations }}{{- $_ := set $podAnn "global" $root.Values.global.podAnnotations }}{{- end }}
-      {{- if $server.podAnnotations }}{{- $_ := set $podAnn "server" $server.podAnnotations }}{{- end }}
-      {{- if $podAnn }}
+      {{- if or $root.Values.global.podAnnotations $server.podAnnotations }}
       annotations:
 {{- with $root.Values.global.podAnnotations }}
 {{ toYaml . | nindent 8 }}
@@ -77,7 +74,7 @@ spec:
           resources:
 {{ toYaml . | nindent 12 }}
 {{- end }}
-{{- $persistence := default $root.Values.global.persistence $server.persistence -}}
+{{- $persistence := merge (default (dict) $server.persistence) $root.Values.global.persistence -}}
 {{- if and $persistence.enabled $persistence.mountPath }}
           volumeMounts:
             - name: data

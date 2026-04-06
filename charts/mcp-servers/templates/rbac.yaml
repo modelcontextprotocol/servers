@@ -33,6 +33,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ include "mcp-servers.serviceAccountName" (dict "root" $root "server" $server) }}
+    namespace: {{ $root.Release.Namespace }}
 ---
 {{- end }}
 {{- end }}
