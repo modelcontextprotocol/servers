@@ -1,7 +1,8 @@
 {{- $root := . -}}
 {{- range $i, $server := $root.Values.mcpServers }}
 {{- if (default true $server.enabled) }}
-{{- $rbacCreate := default $root.Values.global.rbac.create $server.rbac.create -}}
+{{- $rbac := default (dict) $server.rbac -}}
+{{- $rbacCreate := default $root.Values.global.rbac.create $rbac.create -}}
 {{- $defaultRules := $root.Values.global.rbac.defaultRules -}}
 {{- if $rbacCreate }}
 {{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
@@ -12,8 +13,8 @@ metadata:
   labels:
 {{ include "mcp-servers.commonLabels" (dict "root" $root "server" $server) | nindent 4 }}
 rules:
-{{- if $server.rbac.rules }}
-{{ toYaml $server.rbac.rules | nindent 2 }}
+{{- if $rbac.rules }}
+{{ toYaml $rbac.rules | nindent 2 }}
 {{- else if $defaultRules }}
 {{ toYaml $defaultRules | nindent 2 }}
 {{- else }}

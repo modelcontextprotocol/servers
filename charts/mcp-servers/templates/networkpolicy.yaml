@@ -18,8 +18,10 @@ spec:
   podSelector:
     matchLabels:
 {{ include "mcp-servers.selectorLabels" (dict "root" $root "server" $server) | nindent 6 }}
+{{- with $np.policyTypes }}
   policyTypes:
-{{ toYaml $np.policyTypes | nindent 4 }}
+{{ toYaml . | nindent 4 }}
+{{- end }}
 {{- with $np.ingress }}
   ingress:
 {{ toYaml . | nindent 4 }}

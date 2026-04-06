@@ -16,10 +16,10 @@ metadata:
 {{- end }}
 spec:
   accessModes:
-{{ toYaml $persistence.accessModes | nindent 4 }}
+{{ toYaml (default (list "ReadWriteOnce") $persistence.accessModes) | nindent 4 }}
   resources:
     requests:
-      storage: {{ $persistence.size }}
+      storage: {{ default "1Gi" $persistence.size }}
 {{- if $persistence.storageClassName }}
   storageClassName: {{ $persistence.storageClassName }}
 {{- end }}
