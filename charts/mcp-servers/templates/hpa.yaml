@@ -1,7 +1,7 @@
 {{- $root := . -}}
 {{- range $i, $server := $root.Values.mcpServers }}
 {{- if (default true $server.enabled) }}
-{{- $hpa := default $root.Values.global.hpa $server.hpa -}}
+{{- $hpa := merge (default (dict) $server.hpa) $root.Values.global.hpa -}}
 {{- if $hpa.enabled }}
 {{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
 apiVersion: autoscaling/v2
