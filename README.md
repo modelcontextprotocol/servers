@@ -1221,6 +1221,7 @@ search, and comprehensive file analysis.
 - **[Powerdrill](https://github.com/powerdrillai/powerdrill-mcp)** - Interact with Powerdrill datasets, authenticated with [Powerdrill](https://powerdrill.ai) User ID and Project API Key.
 - **[predictive-maintenance-mcp](https://github.com/LGDiMaggio/predictive-maintenance-mcp)** - AI-powered predictive maintenance and fault diagnosis. Features vibration analysis, bearing diagnostics, ISO 20816-3. compliance, and ML anomaly detection for industrial machinery.
 - **[Prefect](https://github.com/allen-munsch/mcp-prefect)** - MCP Server for workflow orchestration and ELT/ETL with Prefect Server, and Prefect Cloud [https://www.prefect.io/] using the `prefect` python client.
+- **[Pressonify](https://pressonify.ai)** - Generate and publish AI-optimized press releases, then track citations across 10 AI platforms (ChatGPT, Perplexity, Claude, Gemini, SearchGPT, and more). Includes AI visibility scoring, citability analysis, and Shopify store AI-readiness audits. Remote SSE server with OAuth 2.0 + PKCE at `https://pressonify.ai/api/v1/mcp/sse`.
 - **[Producer Pal](https://github.com/adamjmurray/producer-pal)** - MCP server for controlling Ableton Live, embedded in a Max for Live device for easy drag and drop installation.
 - **[Productboard](https://github.com/kenjihikmatullah/productboard-mcp)** - Integrate the Productboard API into agentic workflows via MCP.
 - **[Prometheus](https://github.com/pab1it0/prometheus-mcp-server)** - Query and analyze Prometheus - open-source monitoring system.
