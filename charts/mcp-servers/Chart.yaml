@@ -1,0 +1,6 @@
+apiVersion: v2
+name: mcp-servers
+description: Deploy one or more Model Context Protocol (MCP) servers.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

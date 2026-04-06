@@ -1,0 +1,29 @@
+{{- $root := . -}}
+{{- range $i, $server := $root.Values.mcpServers }}
+{{- if (default true $server.enabled) }}
+{{- $persistence := default $root.Values.global.persistence $server.persistence -}}
+{{- if and $persistence.enabled (not $persistence.existingClaim) $persistence.mountPath }}
+{{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullname }}-data
+  labels:
+{{ include "mcp-servers.commonLabels" (dict "root" $root "server" $server) | nindent 4 }}
+{{- with $persistence.annotations }}
+  annotations:
+{{ toYaml . | nindent 4 }}
+{{- end }}
+spec:
+  accessModes:
+{{ toYaml $persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ $persistence.size }}
+{{- if $persistence.storageClassName }}
+  storageClassName: {{ $persistence.storageClassName }}
+{{- end }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

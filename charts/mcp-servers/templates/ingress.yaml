@@ -1,0 +1,47 @@
+{{- $root := . -}}
+{{- range $i, $server := $root.Values.mcpServers }}
+{{- if (default true $server.enabled) }}
+{{- $ingEnabled := default $root.Values.global.ingress.enabled $server.ingress.enabled -}}
+{{- if $ingEnabled }}
+{{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullname }}
+  labels:
+{{ include "mcp-servers.commonLabels" (dict "root" $root "server" $server) | nindent 4 }}
+{{- $ingAnnotations := default $root.Values.global.ingress.annotations $server.ingress.annotations -}}
+{{- with $ingAnnotations }}
+  annotations:
+{{ toYaml . | nindent 4 }}
+{{- end }}
+spec:
+{{- $ingClassName := default $root.Values.global.ingress.className $server.ingress.className -}}
+{{- if $ingClassName }}
+  ingressClassName: {{ $ingClassName }}
+{{- end }}
+{{- $ingTLS := default $root.Values.global.ingress.tls $server.ingress.tls -}}
+{{- if $ingTLS }}
+  tls:
+{{ toYaml $ingTLS | nindent 4 }}
+{{- end }}
+  rules:
+{{- $ingHosts := default $root.Values.global.ingress.hosts $server.ingress.hosts -}}
+{{- range $host := $ingHosts }}
+    - host: {{ required "ingress.hosts[].host is required" $host.host }}
+      http:
+        paths:
+{{- range $p := $host.paths }}
+          - path: {{ default "/" $p.path }}
+            pathType: {{ default "Prefix" $p.pathType }}
+            backend:
+              service:
+                name: {{ $fullname }}
+                port:
+                  name: {{ default "http" $p.servicePortName }}
+{{- end }}
+{{- end }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

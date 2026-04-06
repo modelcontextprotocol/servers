@@ -1,0 +1,25 @@
+{{- $root := . -}}
+{{- range $i, $server := $root.Values.mcpServers }}
+{{- if (default true $server.enabled) }}
+{{- $pdb := default $root.Values.global.pdb $server.pdb -}}
+{{- if $pdb.enabled }}
+{{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $fullname }}
+  labels:
+{{ include "mcp-servers.commonLabels" (dict "root" $root "server" $server) | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+{{ include "mcp-servers.selectorLabels" (dict "root" $root "server" $server) | nindent 6 }}
+{{- if hasKey $pdb "maxUnavailable" }}
+  maxUnavailable: {{ $pdb.maxUnavailable }}
+{{- else }}
+  minAvailable: {{ $pdb.minAvailable }}
+{{- end }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

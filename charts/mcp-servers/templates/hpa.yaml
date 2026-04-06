@@ -1,0 +1,27 @@
+{{- $root := . -}}
+{{- range $i, $server := $root.Values.mcpServers }}
+{{- if (default true $server.enabled) }}
+{{- $hpa := default $root.Values.global.hpa $server.hpa -}}
+{{- if $hpa.enabled }}
+{{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $fullname }}
+  labels:
+{{ include "mcp-servers.commonLabels" (dict "root" $root "server" $server) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $fullname }}
+  minReplicas: {{ $hpa.minReplicas }}
+  maxReplicas: {{ $hpa.maxReplicas }}
+{{- with $hpa.metrics }}
+  metrics:
+{{ toYaml . | nindent 4 }}
+{{- end }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

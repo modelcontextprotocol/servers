@@ -1,0 +1,34 @@
+{{- $root := . -}}
+{{- range $i, $server := $root.Values.mcpServers }}
+{{- if (default true $server.enabled) }}
+{{- $np := default $root.Values.global.networkPolicy $server.networkPolicy -}}
+{{- if $np.enabled }}
+{{- $fullname := include "mcp-servers.serverFullname" (dict "root" $root "server" $server) -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}
+  labels:
+{{ include "mcp-servers.commonLabels" (dict "root" $root "server" $server) | nindent 4 }}
+{{- with $np.annotations }}
+  annotations:
+{{ toYaml . | nindent 4 }}
+{{- end }}
+spec:
+  podSelector:
+    matchLabels:
+{{ include "mcp-servers.selectorLabels" (dict "root" $root "server" $server) | nindent 6 }}
+  policyTypes:
+{{ toYaml $np.policyTypes | nindent 4 }}
+{{- with $np.ingress }}
+  ingress:
+{{ toYaml . | nindent 4 }}
+{{- end }}
+{{- with $np.egress }}
+  egress:
+{{ toYaml . | nindent 4 }}
+{{- end }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

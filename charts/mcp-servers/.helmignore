@@ -1,0 +1,10 @@
+.DS_Store
+.idea/
+.vscode/
+**/*.swp
+**/*.tmp
+**/*.bak
+charts/
+tmp/
+dist/
+node_modules/
