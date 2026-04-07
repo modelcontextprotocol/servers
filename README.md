@@ -577,6 +577,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[1mcpserver](https://github.com/particlefuture/1mcpserver)** - MCP of MCPs. Automatically discover, configure, and add MCP servers on your local machine.
 - **[1Panel](https://github.com/1Panel-dev/mcp-1panel)** - MCP server implementation that provides 1Panel interaction.
 - **[A2A](https://github.com/GongRzhe/A2A-MCP-Server)** - An MCP server that bridges the Model Context Protocol (MCP) with the Agent-to-Agent (A2A) protocol, enabling MCP-compatible AI assistants (like Claude) to seamlessly interact with A2A agents.
+- **[AAI Gateway](https://github.com/gybob/aai-gateway)** - A unified MCP gateway that manages multiple MCP servers and skills as Agent Apps. Import once, share across all AI agents (Claude Code, Codex, OpenCode), with progressive disclosure for 99% context token savings and natural language tool discovery.
 - **[Ableton Live](https://github.com/Simon-Kansara/ableton-live-mcp-server)** - an MCP server to control Ableton Live.
 - **[Ableton Live](https://github.com/ahujasid/ableton-mcp)** (by ahujasid) - Ableton integration allowing prompt enabled music creation.
 - **[ActivityPub MCP](https://github.com/cameronrye/activitypub-mcp)** - A comprehensive MCP server that enables LLMs to explore and interact with the Fediverse through ActivityPub protocol, supporting actor discovery, timeline fetching, instance exploration, and WebFinger resolution across decentralized social networks.
