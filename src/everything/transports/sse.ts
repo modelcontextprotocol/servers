@@ -16,6 +16,33 @@ app.use(
   })
 );
 
+// Authentication middleware: enforces Bearer token when MCP_AUTH_TOKEN is set
+const authMiddleware = (
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+): void => {
+  const authToken = process.env.MCP_AUTH_TOKEN;
+  if (!authToken) {
+    // No auth token configured — skip enforcement (development mode)
+    next();
+    return;
+  }
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    res
+      .status(401)
+      .json({ error: "Unauthorized: Missing or invalid Authorization header" });
+    return;
+  }
+  const token = authHeader.slice(7);
+  if (token !== authToken) {
+    res.status(401).json({ error: "Unauthorized: Invalid token" });
+    return;
+  }
+  next();
+};
+
 // Map sessionId to transport for each client
 const transports: Map<string, SSEServerTransport> = new Map<
   string,
@@ -23,7 +50,7 @@ const transports: Map<string, SSEServerTransport> = new Map<
 >();
 
 // Handle GET requests for new SSE streams
-app.get("/sse", async (req, res) => {
+app.get("/sse", authMiddleware, async (req, res) => {
   let transport: SSEServerTransport;
   const { server, cleanup } = createServer();
 
@@ -56,7 +83,7 @@ app.get("/sse", async (req, res) => {
 });
 
 // Handle POST requests for client messages
-app.post("/message", async (req, res) => {
+app.post("/message", authMiddleware, async (req, res) => {
   // Session Id should exist for POST /message requests
   const sessionId = req?.query?.sessionId as string;
 
