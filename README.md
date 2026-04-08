@@ -54,8 +54,31 @@ The following reference servers are now archived and can be found at [servers-ar
 
 ## 🤝 Third-Party Servers
 
+### 🌎 Community Servers
+
+We've reorganized community servers by category for easier discovery:
+
+📂 **Browse Community Servers by Category:**
+- [AI & Agents](community-servers/ai-agents/) - AI agent frameworks and agent orchestration
+- [Analytics & Data](community-servers/analytics-data/) - Data analysis and business intelligence
+- [Blockchain & Web3](community-servers/blockchain-web3/) - Cryptocurrency and blockchain
+- [Business & Productivity](community-servers/business-productivity/) - CRM, project management, and productivity
+- [Code & Development](community-servers/code-development/) - IDEs, testing, and development tools
+- [Communication & Messaging](community-servers/communication-messaging/) - Email, chat, and notifications
+- [Databases](community-servers/databases/) - Database connectors and query tools
+- [Design & Media](community-servers/design-media/) - Image generation, video, and design tools
+- [DevOps & Infrastructure](community-servers/devops-infrastructure/) - Cloud, containers, and deployment
+- [Finance & Payments](community-servers/finance-payments/) - Stock data, trading, and payments
+- [Integration & APIs](community-servers/integration-apis/) - API aggregators and integrations
+- [Search & Retrieval](community-servers/search-retrieval/) - Web search and information retrieval
+- [Security & Compliance](community-servers/security-compliance/) - Security scanning and compliance
+- [Social & Content](community-servers/social-content/) - Social media and content management
+- [Tools & Utilities](community-servers/tools-utilities/) - General utilities and misc tools
+
+👉 **[View All Community Servers](community-servers/)** organized by category
+
 > [!NOTE]
-The server lists in this README are no longer maintained and will eventually be removed.
+> Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
 
 ### 🎖️ Official Integrations
 
@@ -567,14 +590,7 @@ Official integrations are maintained by companies building production ready MCP 
 - <img height="12" width="12" src="https://www.zine.ai/images/zine-logo.png" alt="Zine Logo" /> **[Zine](https://www.zine.ai)** - Your memory, everywhere AI goes. Think iPhoto for your knowledge - upload and curate. Like ChatGPT but portable - context that travels with you.
 - <img height="12" width="12" src="https://zizai.work/images/logo.jpg" alt="ZIZAI Logo" /> **[ZIZAI Recruitment](https://github.com/zaiwork/mcp)** - Interact with the next-generation intelligent recruitment platform for employees and employers, powered by [ZIZAI Recruitment](https://zizai.work).
 
-### 🌎 Community Servers
-
-A growing set of community-developed and maintained servers demonstrates various applications of MCP across different domains.
-
-> [!NOTE]
-> Community servers are **untested** and should be used at **your own risk**. They are not affiliated with or endorsed by Anthropic.
-
-- **[1mcpserver](https://github.com/particlefuture/1mcpserver)** - MCP of MCPs. Automatically discover, configure, and add MCP servers on your local machine.
+## 📚 Frameworks
 - **[1Panel](https://github.com/1Panel-dev/mcp-1panel)** - MCP server implementation that provides 1Panel interaction.
 - **[A2A](https://github.com/GongRzhe/A2A-MCP-Server)** - An MCP server that bridges the Model Context Protocol (MCP) with the Agent-to-Agent (A2A) protocol, enabling MCP-compatible AI assistants (like Claude) to seamlessly interact with A2A agents.
 - **[Ableton Live](https://github.com/Simon-Kansara/ableton-live-mcp-server)** - an MCP server to control Ableton Live.

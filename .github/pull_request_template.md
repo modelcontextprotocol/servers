@@ -8,6 +8,30 @@
 
 To publish your server, follow the [quickstart guide](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/quickstart.mdx). You can browse published servers at [https://registry.modelcontextprotocol.io/](https://registry.modelcontextprotocol.io/).
 
+---
+
+## Adding to Community Servers (if applicable)
+
+If you're contributing to the [community-servers](../community-servers/) directory, please select the most appropriate category:
+
+- [ ] **AI & Agents** - AI agent frameworks, autonomous systems, and agent orchestration
+- [ ] **Analytics & Data** - Data analysis, business intelligence, data transformation, and reporting
+- [ ] **Blockchain & Web3** - Cryptocurrency, smart contracts, wallet interactions, and blockchain data
+- [ ] **Business & Productivity** - CRM, project management, task tracking, notes, and productivity tools
+- [ ] **Code & Development** - IDEs, code editors, testing tools, build systems, and language servers
+- [ ] **Communication & Messaging** - Email, SMS, chat, messaging platforms, and notifications
+- [ ] **Databases** - Database connectors (SQL, NoSQL), query builders, and database management
+- [ ] **Design & Media** - Image generation, video editing, design tools, and media file processing
+- [ ] **DevOps & Infrastructure** - Cloud platforms, containers, deployment, orchestration, and infrastructure
+- [ ] **Finance & Payments** - Stock data, trading, banking, payments, and financial analytics
+- [ ] **Integration & APIs** - API aggregators, API clients, and cross-platform integrations
+- [ ] **Search & Retrieval** - Web search, document search, RAG, and information retrieval
+- [ ] **Security & Compliance** - Security scanning, vulnerability detection, and compliance management
+- [ ] **Social & Content** - Social media APIs, blogging platforms, and content management systems
+- [ ] **Tools & Utilities** - General utilities, helpers, and miscellaneous tools
+
+---
+
 ## Server Details
 <!-- If modifying an existing server, provide details -->
 - Server: <!-- e.g., filesystem, github -->
