@@ -81,11 +81,11 @@ class TestExtractContentFromHtml:
         result = extract_content_from_html(html)
         assert "Example" in result
 
-    def test_empty_content_returns_error(self):
-        """Test that empty/invalid HTML returns error message."""
-        html = ""
-        result = extract_content_from_html(html)
-        assert "<error>" in result
+    def test_empty_content(self):
+        """Test that empty HTML is handled gracefully via fallback."""
+        result = extract_content_from_html("")
+        # Empty input produces empty output after fallback
+        assert "<error>" not in result
 
 
 class TestCheckMayAutonomouslyFetchUrl:
@@ -324,3 +324,88 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+class TestExtractContentFromHtmlFallback:
+    """Tests for extract_content_from_html readability fallback."""
+
+    def test_normal_html_no_fallback(self):
+        """Test that normal HTML with visible content works without fallback."""
+        html = """
+        <html>
+        <head><title>Normal Page</title></head>
+        <body>
+            <article>
+                <h1>Welcome</h1>
+                <p>This is a normal page with plenty of visible content that
+                readability should have no trouble extracting properly.</p>
+                <p>Here is another paragraph with more content to ensure
+                we have enough text for the extraction to work well.</p>
+            </article>
+        </body>
+        </html>
+        """
+        result = extract_content_from_html(html)
+        assert "normal page" in result.lower()
+        assert "<error>" not in result
+
+    def test_hidden_ssr_content_triggers_fallback(self):
+        """Test that hidden SSR content triggers fallback extraction."""
+        visible_shell = "<p>Loading...</p>"
+        hidden_content = "<p>{}</p>".format(" ".join(["word"] * 500))
+        html = """
+        <html>
+        <body>
+            <div id="shell">{}</div>
+            <div style="visibility:hidden" id="ssr-data">{}</div>
+        </body>
+        </html>
+        """.format(visible_shell, hidden_content)
+        result = extract_content_from_html(html)
+        # Fallback should recover the hidden content
+        assert len(result.strip()) > len(html) // 100
+
+    def test_readability_empty_content_triggers_fallback(self):
+        """Test that readability returning empty content triggers fallback."""
+        content_text = " ".join(["meaningful"] * 200)
+        html = """
+        <html>
+        <body>
+            <div><p>{}</p></div>
+        </body>
+        </html>
+        """.format(content_text)
+        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
+            # First call (use_readability=True) returns empty content
+            # Second call (use_readability=False) returns empty content too
+            mock_readability.return_value = {"content": None}
+            result = extract_content_from_html(html)
+        # Fallback to raw markdownify should recover content
+        assert "meaningful" in result
+        assert "<error>" not in result
+
+    def test_small_visible_shell_large_hidden_ssr(self):
+        """Test realistic SSR pattern: small visible loading shell + large hidden content."""
+        ssr_paragraphs = "\n".join(
+            "<p>Article paragraph {} with enough text to be meaningful content.</p>".format(i)
+            for i in range(50)
+        )
+        html = """
+        <html>
+        <head><title>SSR App</title></head>
+        <body>
+            <div id="app">
+                <div class="spinner">Loading application...</div>
+            </div>
+            <div style="position:absolute;top:-9999px" id="__ssr_data__">
+                <article>
+                    <h1>Full Article Title</h1>
+                    {}
+                </article>
+            </div>
+        </body>
+        </html>
+        """.format(ssr_paragraphs)
+        result = extract_content_from_html(html)
+        # Should not return just "Loading application..." — fallback should recover content
+        assert len(result.strip()) > len(html) // 100

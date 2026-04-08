@@ -27,6 +27,10 @@ DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://
 def extract_content_from_html(html: str) -> str:
     """Extract and convert HTML content to Markdown format.
 
+    Uses readability for content extraction with fallback mechanisms for cases
+    where readability strips too much content (e.g. sites using hidden divs
+    for SSR hydration).
+
     Args:
         html: Raw HTML content to process
 
@@ -36,12 +40,38 @@ def extract_content_from_html(html: str) -> str:
     ret = readabilipy.simple_json.simple_json_from_html_string(
         html, use_readability=True
     )
-    if not ret["content"]:
-        return "<error>Page failed to be simplified from HTML</error>"
-    content = markdownify.markdownify(
-        ret["content"],
-        heading_style=markdownify.ATX,
-    )
+    content_html = ret.get("content", "")
+    if content_html:
+        content = markdownify.markdownify(
+            content_html,
+            heading_style=markdownify.ATX,
+        )
+    else:
+        content = ""
+
+    # If readability extracted very little text compared to the original HTML,
+    # it likely stripped meaningful content (e.g. hidden SSR hydration divs).
+    # Fall back to extraction without readability, then raw markdownify.
+    min_length = max(1, len(html) // 100)
+    content_text = content.strip()
+    if len(content_text) < min_length:
+        ret = readabilipy.simple_json.simple_json_from_html_string(
+            html, use_readability=False
+        )
+        if ret["content"]:
+            content = markdownify.markdownify(
+                ret["content"],
+                heading_style=markdownify.ATX,
+            )
+            if len(content.strip()) >= min_length:
+                return content
+
+        # Last resort: convert the raw HTML directly
+        content = markdownify.markdownify(
+            html,
+            heading_style=markdownify.ATX,
+        )
+
     return content
 
 
