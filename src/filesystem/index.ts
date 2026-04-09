@@ -132,6 +132,7 @@ const CreateDirectoryArgsSchema = z.object({
 
 const ListDirectoryArgsSchema = z.object({
   path: z.string(),
+  depth: z.number().optional().describe("Recursive depth for directory listing (1 = one level deep)"),
 });
 
 const ListDirectoryWithSizesArgsSchema = z.object({
@@ -433,8 +434,26 @@ server.registerTool(
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ListDirectoryArgsSchema>) => {
+
+
+    async function listDirRecursive(dirPath, currentDepth, maxDepth) {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      const results = [];
+      
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        const prefix = currentDepth > 0 ? "  ".repeat(currentDepth) : "";
+        results.push(`${prefix}${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`);
+        
+        if (entry.isDirectory() && (maxDepth === undefined || currentDepth < maxDepth)) {
+          const subEntries = await listDirRecursive(fullPath, currentDepth + 1, maxDepth);
+          results.push(...subEntries);
+        }
+      }
+      return results;
+    }
     const validPath = await validatePath(args.path);
-    const entries = await fs.readdir(validPath, { withFileTypes: true });
+    const entries = await listDirRecursive(validPath, 0, args.depth);
     const formatted = entries
       .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
       .join("\n");
