@@ -1,0 +1,7 @@
+{
+  "name": "db-metadata-extractor-mcp",
+  "description": "Extracts database metadata such as tables, columns, and schema details",
+  "package": "db-metadata-extractor-mcp",
+  "author": "Karpagavalli",
+  "version": "1.0.0"
+}
