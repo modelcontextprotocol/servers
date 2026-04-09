@@ -1330,6 +1330,7 @@ search, and comprehensive file analysis.
 - **[Strava API](https://github.com/tomekkorbak/strava-mcp-server)** - MCP server for Strava API to retrieve one's activities
 - **[Stripe](https://github.com/atharvagupta2003/mcp-stripe)** - This MCP allows integration with Stripe for handling payments, customers, and refunds.
 - **[Substack/Medium](https://github.com/jonathan-politzki/mcp-writer-substack)** - Connect Claude to your Substack/Medium writing, enabling semantic search and analysis of your published content.
+- **[SUMA Memory](https://github.com/sumanaddanki/suma-mcp-proxy)** ([npm](https://www.npmjs.com/package/suma-mcp-proxy)) - Persistent semantic knowledge graph for AI assistants. K-WIL Gravity Well Algorithm retrieves the exact context tokens Claude needs from unlimited history — no hallucination, no context window overflow. Supports Claude Code, Cursor, Windsurf. One command install: `npx suma-mcp-proxy --key=YOUR_KEY`
 - **[System Health](https://github.com/thanhtung0201/mcp-remote-system-health)** - The MCP (Multi-Channel Protocol) System Health Monitoring is a robust, real-time monitoring solution designed to provide comprehensive health metrics and alerts for remote Linux servers.
 - **[SystemSage](https://github.com/Tarusharma1/SystemSage)** - A powerful, cross-platform system management and monitoring tool for Windows, Linux, and macOS.
 - **[Talk To Figma](https://github.com/sonnylazuardi/cursor-talk-to-figma-mcp)** - This MCP server enables LLMs to interact with Figma, allowing them to read and modify designs programmatically.
