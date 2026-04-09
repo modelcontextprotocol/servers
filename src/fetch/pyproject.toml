@@ -16,6 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
+    "charset-normalizer>=3.0.0",
     "httpx>=0.27",
     "markdownify>=0.13.1",
     "mcp>=1.1.3",
