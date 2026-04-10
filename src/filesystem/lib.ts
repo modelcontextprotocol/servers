@@ -432,8 +432,8 @@ export async function compareDirectories(
   dir2: string,
   compareContent: boolean = false
 ): Promise<DirectoryComparisonResult> {
-  const dir1Files = await searchFilesWithValidation(dir1, "**/*");
-  const dir2Files = await searchFilesWithValidation(dir2, "**/*");
+  const dir1Files = await searchFilesWithValidation(dir1, "**/*", [dir1]);
+  const dir2Files = await searchFilesWithValidation(dir2, "**/*", [dir2]);
   
   const dir1Set = new Set(dir1Files.map((f: string) => path.relative(dir1, f)));
   const dir2Set = new Set(dir2Files.map((f: string) => path.relative(dir2, f)));
