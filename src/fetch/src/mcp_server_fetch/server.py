@@ -1,3 +1,4 @@
+import re
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
@@ -23,9 +24,44 @@ from pydantic import BaseModel, Field, AnyUrl
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
 
+# Minimum character threshold for Readability output to be considered useful.
+# Pages rendered by SSR frameworks (Next.js, Remix) often produce very short or
+# empty Readability output because their content lives in <script> hydration
+# payloads or elements marked display:none.  When the extracted text falls below
+# this threshold we fall back to a direct HTML→Markdown conversion of the raw
+# page so that callers still receive meaningful content.
+_READABILITY_MIN_CONTENT_LENGTH = 200
+
+# Tags whose content adds no value when doing the raw-HTML fallback conversion.
+_STRIP_TAGS_RE = re.compile(
+    r"<(script|style|nav|footer|header|noscript)[\s>].*?</\1>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _html_to_markdown_fallback(html: str) -> str:
+    """Convert raw HTML to Markdown after stripping noise tags.
+
+    Used as a fallback when Readability fails to extract meaningful content.
+
+    Args:
+        html: Raw HTML content.
+
+    Returns:
+        Plain Markdown text derived directly from the HTML structure.
+    """
+    cleaned = _STRIP_TAGS_RE.sub("", html)
+    return markdownify.markdownify(cleaned, heading_style=markdownify.ATX)
+
 
 def extract_content_from_html(html: str) -> str:
     """Extract and convert HTML content to Markdown format.
+
+    First attempts extraction via Mozilla Readability (via readabilipy).  If
+    Readability returns empty or very short content — which happens on SSR
+    pages built with Next.js or Remix that rely on client-side hydration — the
+    function falls back to a direct HTML→Markdown conversion of the raw page
+    so that meaningful content is always returned.
 
     Args:
         html: Raw HTML content to process
@@ -36,13 +72,25 @@ def extract_content_from_html(html: str) -> str:
     ret = readabilipy.simple_json.simple_json_from_html_string(
         html, use_readability=True
     )
-    if not ret["content"]:
-        return "<error>Page failed to be simplified from HTML</error>"
-    content = markdownify.markdownify(
-        ret["content"],
+
+    readability_content = ret.get("content") or ""
+    readability_text = markdownify.markdownify(
+        readability_content,
         heading_style=markdownify.ATX,
-    )
-    return content
+    ).strip() if readability_content else ""
+
+    # If Readability produced meaningful content, use it.
+    if len(readability_text) >= _READABILITY_MIN_CONTENT_LENGTH:
+        return readability_text
+
+    # Readability returned empty or minimal content (common for SSR pages that
+    # rely on JavaScript hydration).  Fall back to converting the raw HTML
+    # directly so the caller still receives usable content.
+    fallback = _html_to_markdown_fallback(html).strip()
+    if fallback:
+        return fallback
+
+    return "<error>Page failed to be simplified from HTML</error>"
 
 
 def get_robots_txt_url(url: str) -> str:

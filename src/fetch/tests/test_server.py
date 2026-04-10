@@ -10,6 +10,7 @@ from mcp_server_fetch.server import (
     check_may_autonomously_fetch_url,
     fetch_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
+    _READABILITY_MIN_CONTENT_LENGTH,
 )
 
 
@@ -86,6 +87,78 @@ class TestExtractContentFromHtml:
         html = ""
         result = extract_content_from_html(html)
         assert "<error>" in result
+
+    def test_ssr_page_falls_back_to_raw_html_conversion(self):
+        """Test that SSR pages with thin Readability output fall back to raw HTML.
+
+        SSR frameworks (Next.js, Remix) often render their primary content
+        inside <script> hydration payloads or hidden elements.  Readability
+        strips those out and returns minimal text.  The fallback must recover
+        content that is visible in the raw HTML tags (e.g. <main>, <p>).
+        """
+        # Simulate an SSR page: the only "real" content is inside a <main> tag
+        # but Readability won't find enough to exceed the threshold because there
+        # is no proper article structure.  The raw-HTML fallback should still
+        # surface the visible text.
+        main_text = "A" * (_READABILITY_MIN_CONTENT_LENGTH + 50)
+        html = f"""
+        <html>
+        <head><title>SSR App</title></head>
+        <body>
+            <main id="__next">
+                <p>{main_text}</p>
+            </main>
+            <script>window.__NEXT_DATA__ = {{"props": {{}}}}</script>
+        </body>
+        </html>
+        """
+
+        with patch("readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
+            # Readability returns near-empty content (typical for SSR pages)
+            mock_readability.return_value = {"content": "<p>A</p>", "title": "SSR App"}
+
+            result = extract_content_from_html(html)
+
+        # The fallback conversion must include the text from the <main> block
+        assert main_text in result
+        assert "<error>" not in result
+
+    def test_readability_content_used_when_sufficient(self):
+        """Test that Readability output is used when it exceeds the threshold."""
+        rich_content = "<p>" + "Word " * 60 + "</p>"  # well above 200 chars
+
+        with patch("readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
+            mock_readability.return_value = {"content": rich_content, "title": "Good Page"}
+
+            result = extract_content_from_html("<html><body></body></html>")
+
+        # Readability result should be used as-is (converted to markdown)
+        assert "Word" in result
+        assert "<error>" not in result
+
+    def test_script_and_style_tags_stripped_in_fallback(self):
+        """Test that <script> and <style> content is removed during fallback."""
+        visible_text = "B" * (_READABILITY_MIN_CONTENT_LENGTH + 50)
+        html = f"""
+        <html>
+        <head>
+            <style>body {{ color: red; }}</style>
+        </head>
+        <body>
+            <p>{visible_text}</p>
+            <script>var x = 1;</script>
+        </body>
+        </html>
+        """
+
+        with patch("readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
+            mock_readability.return_value = {"content": None, "title": ""}
+
+            result = extract_content_from_html(html)
+
+        assert "color: red" not in result
+        assert "var x" not in result
+        assert visible_text in result
 
 
 class TestCheckMayAutonomouslyFetchUrl:
