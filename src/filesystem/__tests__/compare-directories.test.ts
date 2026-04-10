@@ -22,6 +22,7 @@ describe("compareDirectories", () => {
 
   it("identifies files only in first directory", async () => {
     await fs.writeFile(path.join(testDir1, "only1.txt"), "content1");
+    await fs.writeFile(path.join(testDir1, "common.txt"), "common");
     await fs.writeFile(path.join(testDir2, "common.txt"), "common");
 
     const result = await compareDirectories(testDir1, testDir2);
@@ -79,6 +80,6 @@ describe("compareDirectories", () => {
 
     const result = await compareDirectories(testDir1, testDir2);
 
-    expect(result.identical).toContain(path.join("subdir", "nested.txt"));
+    expect(result.identical).toContain("subdir/nested.txt");
   });
 });
