@@ -1017,6 +1017,7 @@ search, and comprehensive file analysis.
 - **[MariaDB](https://github.com/abel9851/mcp-server-mariadb)** - MariaDB database integration with configurable access controls in Python.
 - **[Markdown2doc](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/pandoc)** - Convert between various file formats using Pandoc
 - **[Markdownify](https://github.com/zcaceres/mcp-markdownify-server)** - MCP to convert almost anything to Markdown (PPTX, HTML, PDF, Youtube Transcripts and more)
+- **[Meta-Stamp Pockets](https://github.com/Christebob/Meta_Stamp_V3)** - Licensed AI content access layer. AI agents pull pre-indexed creator content in <30ms for $0.0025/pull — creator is compensated automatically. 1,800+ Dhar Mann Studios videos available. MCP manifest: `https://meta-stamp-v3.onrender.com/mcp/manifest`.
 - **[market-fiyati](https://github.com/mtcnbzks/market-fiyati-mcp-server)** - The MCP server for marketfiyati.org.tr, offering grocery price search and comparison across Turkish markets.)
 - **[Markitdown](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/markitdown)** - Convert files to Markdown
 - **[Masquerade](https://github.com/postralai/masquerade)** - Redact sensitive information from your PDF documents before sending them to Claude. Masquerade serves as a privacy firewall for LLMs.
