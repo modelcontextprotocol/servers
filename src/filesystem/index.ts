@@ -26,6 +26,7 @@ import {
   tailFile,
   headFile,
   setAllowedDirectories,
+  compareDirectories,
 } from './lib.js';
 
 // Command line argument parsing
