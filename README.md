@@ -1136,6 +1136,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[RedNote MCP](https://github.com/ifuryst/rednote-mcp)** - MCP server for accessing RedNote(XiaoHongShu, xhs) content
 - **[Reed Jobs](https://github.com/kld3v/reed_jobs_mcp)** - Search and retrieve job listings from Reed.co.uk.
 - **[Rememberizer AI](https://github.com/skydeckai/mcp-server-rememberizer)** - An MCP server designed for interacting with the Rememberizer data source, facilitating enhanced knowledge retrieval.
+- **[RemembrallMCP](https://github.com/cdnsteve/remembrallmcp)** - Persistent knowledge memory layer for AI agents. Hybrid semantic + full-text search backed by Postgres/pgvector, code dependency graph with blast-radius impact analysis, incremental indexing for Python, TypeScript, Rust, Go, Java, Ruby, and Kotlin. In-process ONNX embeddings - no external API required.
 - **[Replicate](https://github.com/deepfates/mcp-replicate)** - Search, run and manage machine learning models on Replicate through a simple tool-based interface. Browse models, create predictions, track their status, and handle generated images.
 - **[Resend](https://github.com/Klavis-AI/klavis/tree/main/mcp_servers/resend)** - Send email using Resend services
 - **[Revit MCP](https://github.com/revit-mcp)** - A service implementing the MCP protocol for Autodesk Revit.
