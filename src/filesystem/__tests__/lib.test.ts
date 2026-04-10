@@ -19,7 +19,9 @@ import {
   // File editing functions
   applyFileEdits,
   tailFile,
-  headFile
+  headFile,
+  // Directory comparison
+  compareDirectories
 } from '../lib.js';
 
 // Mock fs module
@@ -725,6 +727,9 @@ describe('Lib Functions', () => {
 });
 
 describe("compareDirectories", () => {
+  // Unmock fs for integration tests
+  vi.unmock('fs/promises');
+  
   const testDir1 = path.join(os.tmpdir(), "test-compare-1-" + Date.now());
   const testDir2 = path.join(os.tmpdir(), "test-compare-2-" + Date.now());
 
