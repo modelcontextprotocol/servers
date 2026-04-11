@@ -112,9 +112,7 @@ def has_changes(path: Path, git_hash: GitHash) -> bool:
             text=True,
         )
 
-        changed_files = [Path(f) for f in output.stdout.splitlines()]
-        relevant_files = [f for f in changed_files if f.suffix in [".py", ".ts"]]
-        return len(relevant_files) >= 1
+        return any(line.strip() for line in output.stdout.splitlines())
     except subprocess.CalledProcessError:
         return False
 
