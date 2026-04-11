@@ -981,6 +981,8 @@ A growing set of community-developed and maintained servers demonstrates various
 search, and comprehensive file analysis.
 - **[Lark(Feishu)](https://github.com/kone-net/mcp_server_lark)** - A Model Context Protocol(MCP) server for Lark(Feishu) sheet, message, doc and etc.
 - **[Lazy Toggl MCP](https://github.com/movstox/lazy-toggl-mcp)** - Simple unofficial MCP server to track time via Toggl API
+- **[lazymac/mcp](https://github.com/lazymac2x/lazymac-mcp)** - Unified MCP server exposing 42+ developer tools (qr, ip-geo, ai-cost, llm-router, k-privacy, korean-nlp) backed by Cloudflare Workers. Install via `npx -y @lazymac/mcp`.
+- **[lazymac/k-mcp](https://github.com/lazymac2x/lazymac-k-mcp)** - Korean wedge MCP. PIPA compliance scan, KRW + BOK rates, 사업자등록번호 lookup, Korean address geocoding, Korean NLP. All responses in English JSON. Install via `npx -y @lazymac/k-mcp`.
 - **[lean-lsp-mcp](https://github.com/oOo0oOo/lean-lsp-mcp)** - Interact with the [Lean theorem prover](https://lean-lang.org/) via the Language Server Protocol.
 - **[librenms-mcp](https://github.com/mhajder/librenms-mcp)** - MCP server for [LibreNMS](https://www.librenms.org/) management
 - **[libvirt-mcp](https://github.com/MatiasVara/libvirt-mcp)** - Allows LLM to interact with libvirt thus enabling to create, destroy or list the Virtual Machines in a system.
@@ -1465,6 +1467,8 @@ search, and comprehensive file analysis.
 - **[Zettelkasten](https://github.com/joshylchen/zettelkasten)**- Comprehensive AI-powered knowledge management system implementing the Zettelkasten method. Features atomic note creation, full-text search, AI-powered CEQRC workflows (Capture→Explain→Question→Refine→Connect), intelligent link discovery, and multi-interface access (CLI, API, Web UI, MCP). Perfect for researchers, students, and knowledge workers.
 - **[ZincBind](https://github.com/QuentinCody/zincbind-mcp-server)** - Unofficial MCP server for ZincBind, providing access to a comprehensive database of zinc binding sites in proteins, structural coordination data, and metalloproteomics research information.
 - **[Zoom](https://github.com/Prathamesh0901/zoom-mcp-server/tree/main)** - Create, update, read and delete your zoom meetings.
+- **[lazymac/mcp](https://github.com/lazymac2x/lazymac-mcp)** - Unified MCP server exposing 42+ developer tools (qr, ip-geo, ai-cost, llm-router, k-privacy, korean-nlp) backed by Cloudflare Workers. Install via `npx -y @lazymac/mcp`.
+- **[lazymac/k-mcp](https://github.com/lazymac2x/lazymac-k-mcp)** - Korean wedge MCP. PIPA compliance scan, KRW + BOK rates, 사업자등록번호 lookup, Korean address geocoding, Korean NLP. All responses in English JSON. Install via `npx -y @lazymac/k-mcp`.
 ## 📚 Frameworks
 
 These are high-level frameworks that make it easier to build MCP servers or clients.
