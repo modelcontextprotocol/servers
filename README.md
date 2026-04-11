@@ -1075,6 +1075,7 @@ search, and comprehensive file analysis.
 - **[MCPJungle](https://github.com/mcpjungle/MCPJungle)** - Self-hosted MCP Registry and Gateway for enterprise AI Agents
 - **[MCPShell](https://github.com/inercia/mcpshell)** - Tool that allows LLMs to safely execute command-line tools, providing a secure bridge between LLMs and operating system commands.
 - **[Md2doc](https://github.com/Yorick-Ryu/md2doc-mcp)** - Convert Markdown text to DOCX format using an external conversion service
+- **[mdshare](https://github.com/urbanmorph/mdshare)** - Free markdown collaboration for AI workflows. Share markdown via public links with four permission levels (admin, edit, comment, view), inline comments anchored to text, real-time WebSocket sync, and version history. `npx mdshare-mcp` lets AI agents read docs, review comments, incorporate feedback, and resolve threads — the full review loop without copy-pasting between tools.
 - **[MeasureSpace MCP](https://github.com/MeasureSpace/measure-space-mcp-server)** - A free [Model Context Protocol (MCP) Server](https://smithery.ai/server/@MeasureSpace/measure-space-mcp-server) that provides global weather, climate, air quality forecast and geocoding services by [measurespace.io](https://measurespace.io).
 - **[MediaWiki](https://github.com/ProfessionalWiki/MediaWiki-MCP-Server)** - A Model Context Protocol (MCP) Server that interacts with any MediaWiki wiki
 - **[MediaWiki MCP adapter](https://github.com/lucamauri/MediaWiki-MCP-adapter)** - A custom Model Context Protocol adapter for MediaWiki and WikiBase APIs
