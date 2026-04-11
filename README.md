@@ -1640,6 +1640,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for information about contributing to thi
 
 See [SECURITY.md](SECURITY.md) for reporting security vulnerabilities.
 
+### Independent Trust Assessment
+
+Before connecting an MCP server to your AI agent in production, consider evaluating its trust and safety posture. MCP servers can have write access to critical systems (databases, payments, cloud infrastructure) and should be assessed for input validation, permission scope, data sensitivity, and rollback capability.
+
+An independent trust assessment of MCP servers listed in this repository is available at [trustmodel.ai/mcp-servers](https://trustmodel.ai/mcp-servers) — covering tool safety, authentication, rate limiting, and 7 additional security dimensions.
+
 ## 📜 License
 
 This project is licensed under the Apache License, Version 2.0 for new contributions, with existing code under MIT - see the [LICENSE](LICENSE) file for details.
