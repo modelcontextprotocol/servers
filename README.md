@@ -1437,6 +1437,7 @@ search, and comprehensive file analysis.
 - **[Wordle MCP](https://github.com/cr2007/mcp-wordle-python)** - MCP Server that gets the Wordle Solution for a particular date.
 - **[WordPress MCP](https://github.com/Automattic/wordpress-mcp)** - Make your WordPress site into a simple MCP server, exposing functionality to LLMs and AI agents.
 - **[WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter)** - An MCP adapter that bridges the Abilities API to the Model Context Protocol, enabling MCP clients to discover and invoke WordPress plugin, theme, and core abilities programmatically.
+- **[wisdomGraph](https://github.com/cklam12345/wisdomGraph)** - Accumulative Neo4j-native DIKW memory for Claude Code. Stores knowledge across sessions using MERGE semantics; promotes Facts → Experience → Insight → Wisdom via a feedback loop. One command to install: `pip install 'wisdomgraph[mcp]' && wisdom mcp-install`.
 - **[Workflowy](https://github.com/danield137/mcp-workflowy)** - A server that interacts with [workflowy](https://workflowy.com/).
 - **[World Bank data API](https://github.com/anshumax/world_bank_mcp_server)** - A server that fetches data indicators available with the World Bank as part of their data API
 - **[Wren Engine](https://github.com/Canner/wren-engine)** - The Semantic Engine for Model Context Protocol(MCP) Clients and AI Agents
