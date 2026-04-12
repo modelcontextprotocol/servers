@@ -324,3 +324,91 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+
+class TestExtractContentFallback:
+    """Tests for the fallback extraction in extract_content_from_html."""
+
+    def test_readability_sufficient_content_no_fallback(self):
+        """When Readability returns enough content, no fallback is triggered."""
+        html = "<html><body>" + "<p>word </p>" * 200 + "</body></html>"
+        readability_content = "<div>" + "<p>word </p>" * 200 + "</div>"
+
+        with patch("readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
+            mock_readability.return_value = {"content": readability_content}
+            result = extract_content_from_html(html)
+            # Should only be called once (Readability path succeeds)
+            assert mock_readability.call_count == 1
+            assert "word" in result
+
+    def test_readability_strips_content_falls_back_to_no_readability(self):
+        """When Readability returns too little, falls back to non-Readability extraction."""
+        # Simulate a large HTML page where Readability strips hidden SSR content
+        html = "<html><body>" + "<p>content </p>" * 500 + "</body></html>"
+
+        def mock_simple_json(h, use_readability=True):
+            if use_readability:
+                # Readability stripped everything, returns almost nothing
+                return {"content": "<div>Loading...</div>"}
+            else:
+                # Without Readability, returns full content
+                return {"content": "<div>" + "<p>content </p>" * 500 + "</div>"}
+
+        with patch("readabilipy.simple_json.simple_json_from_html_string", side_effect=mock_simple_json):
+            result = extract_content_from_html(html)
+            assert "content" in result
+            assert len(result.strip()) > 100
+
+    def test_both_readability_modes_fail_falls_back_to_markdownify(self):
+        """When both readabilipy modes return too little, falls back to raw markdownify."""
+        html = "<html><body>" + "<p>important data </p>" * 300 + "</body></html>"
+
+        with patch("readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
+            # Both modes return empty/minimal content
+            mock_readability.return_value = {"content": ""}
+            result = extract_content_from_html(html)
+            # Should fall through to markdownify on raw HTML
+            assert "important data" in result
+            assert mock_readability.call_count == 2  # called for both modes
+
+    def test_completely_empty_html_returns_error(self):
+        """Completely empty HTML returns error message."""
+        with patch("readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
+            mock_readability.return_value = {"content": ""}
+            result = extract_content_from_html("")
+            assert "<error>" in result
+
+    def test_readability_none_content_triggers_fallback(self):
+        """When Readability returns None content, fallback is triggered."""
+        html = "<html><body>" + "<p>real content </p>" * 200 + "</body></html>"
+
+        call_count = [0]
+        def mock_simple_json(h, use_readability=True):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return {"content": None}  # Readability returns None
+            else:
+                return {"content": "<div>" + "<p>real content </p>" * 200 + "</div>"}
+
+        with patch("readabilipy.simple_json.simple_json_from_html_string", side_effect=mock_simple_json):
+            result = extract_content_from_html(html)
+            assert "real content" in result
+
+    def test_threshold_is_one_percent_of_html(self):
+        """The fallback threshold is 1% of the input HTML length."""
+        # 10000 chars of HTML -> threshold is 100 chars
+        padding = "x" * 9000
+        html = f"<html><body><div style=\"visibility:hidden\">{padding}</div><p>tiny</p></body></html>"
+
+        def mock_simple_json(h, use_readability=True):
+            if use_readability:
+                # Returns less than 1% of input
+                return {"content": "<p>tiny</p>"}
+            else:
+                return {"content": f"<div>{padding}</div><p>tiny</p>"}
+
+        with patch("readabilipy.simple_json.simple_json_from_html_string", side_effect=mock_simple_json):
+            result = extract_content_from_html(html)
+            # Should have triggered fallback since "tiny" (4 chars) < 100 (1% threshold)
+            assert len(result.strip()) > 50
