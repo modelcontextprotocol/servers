@@ -1330,6 +1330,7 @@ search, and comprehensive file analysis.
 - **[Strava API](https://github.com/tomekkorbak/strava-mcp-server)** - MCP server for Strava API to retrieve one's activities
 - **[Stripe](https://github.com/atharvagupta2003/mcp-stripe)** - This MCP allows integration with Stripe for handling payments, customers, and refunds.
 - **[Substack/Medium](https://github.com/jonathan-politzki/mcp-writer-substack)** - Connect Claude to your Substack/Medium writing, enabling semantic search and analysis of your published content.
+- **[Swiss Truth MCP](https://github.com/swisstruthorg/swiss-truth-mcp)** - Verified knowledge base for AI agents. Stop hallucinations with certified, source-backed facts. 8 MCP tools: search, verify, batch-verify, hallucination risk scoring. Covers Swiss law, health, finance, climate, AI/ML and more. Public, no auth required.
 - **[System Health](https://github.com/thanhtung0201/mcp-remote-system-health)** - The MCP (Multi-Channel Protocol) System Health Monitoring is a robust, real-time monitoring solution designed to provide comprehensive health metrics and alerts for remote Linux servers.
 - **[SystemSage](https://github.com/Tarusharma1/SystemSage)** - A powerful, cross-platform system management and monitoring tool for Windows, Linux, and macOS.
 - **[Talk To Figma](https://github.com/sonnylazuardi/cursor-talk-to-figma-mcp)** - This MCP server enables LLMs to interact with Figma, allowing them to read and modify designs programmatically.
