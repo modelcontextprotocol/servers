@@ -997,4 +997,24 @@ describe('Path Validation', () => {
       expect(forbiddenContent).toBe('ORIGINAL CONTENT'); // Unchanged
     });
   });
+
+  describe('UNC paths (Windows network shares)', () => {
+    // UNC path tests use string-only checks (no filesystem access needed)
+    it('should accept files within a UNC allowed directory', () => {
+      const allowed = ['\\\\server\\share'];
+      expect(isPathWithinAllowedDirectories('\\\\server\\share\\file.txt', allowed)).toBe(true);
+      expect(isPathWithinAllowedDirectories('\\\\server\\share\\sub\\deep.txt', allowed)).toBe(true);
+    });
+
+    it('should reject files outside a UNC allowed directory', () => {
+      const allowed = ['\\\\server\\share'];
+      expect(isPathWithinAllowedDirectories('\\\\server\\other\\file.txt', allowed)).toBe(false);
+      expect(isPathWithinAllowedDirectories('\\\\other-server\\share\\file.txt', allowed)).toBe(false);
+    });
+
+    it('should accept the UNC directory itself', () => {
+      const allowed = ['\\\\server\\share'];
+      expect(isPathWithinAllowedDirectories('\\\\server\\share', allowed)).toBe(true);
+    });
+  });
 });
