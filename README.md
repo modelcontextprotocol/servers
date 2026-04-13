@@ -876,6 +876,7 @@ A growing set of community-developed and maintained servers demonstrates various
 - **[Google Analytics 4](https://github.com/gomakers-ai/mcp-google-analytics)** - MCP server for Google Analytics Data API and Measurement Protocol to read reports and send events.
 - **[Google Calendar](https://github.com/v-3/google-calendar)** - Integration with Google Calendar to check schedules, find time, and add/delete events
 - **[Google Calendar](https://github.com/nspady/google-calendar-mcp)** - Google Calendar MCP Server for managing Google calendar events. Also supports searching for events by attributes like title and location.
+- **[Google Flights](https://github.com/andreacappelletti97/google-flights-mcp)** - The most feature-rich Google Flights MCP server. 12 tools: flight search, price tracking, cabin comparison, carbon emissions, calendar heatmap, layover analysis, nearby airports, and more. No API key required.
 - **[Google Custom Search](https://github.com/adenot/mcp-google-search)** - Provides Google Search results via the Google Custom Search API
 - **[Google Maps](https://github.com/Mastan1301/google_maps_mcp)** - Provides location results using Google Places API.
 - **[Google Sheets](https://github.com/xing5/mcp-google-sheets)** - Access and editing data to your Google Sheets.
