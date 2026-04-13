@@ -1212,6 +1212,7 @@ search, and comprehensive file analysis.
 - **[Pixelle MCP](https://github.com/AIDC-AI/Pixelle-MCP)** - An omnimodal AIGC framework that seamlessly converts ComfyUI workflows into MCP tools with zero code, enabling full-modal support for Text, Image, Sound, and Video generation with Chainlit-based web interface.
 - **[Placid.app](https://github.com/felores/placid-mcp-server)** - Generate image and video creatives using Placid.app templates
 - **[Plane](https://github.com/kelvin6365/plane-mcp-server)** - This MCP Server will help you to manage projects and issues through Plane's API
+- **[Platfone](https://github.com/platfone-com/mcp)** - Virtual phone number platform for AI agents — rent numbers across 200+ countries, receive SMS, and manage the full activation lifecycle
 - **[Playwright](https://github.com/executeautomation/mcp-playwright)** - This MCP Server will help you run browser automation and webscraping using Playwright
 - **[Playwright Wizard](https://github.com/oguzc/playwright-wizard-mcp)** - Step-by-step wizard for generating Playwright E2E tests with best practices.
 - **[Podbean](https://github.com/amurshak/podbeanMCP)** - MCP server for managing your podcasts, episodes, and analytics through the Podbean API. Allows for updating, adding, deleting podcasts, querying show description, notes, analytics, and more.
