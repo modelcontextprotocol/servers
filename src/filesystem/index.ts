@@ -30,6 +30,7 @@ import {
 
 // Command line argument parsing
 const args = process.argv.slice(2);
+const cliDirectoriesProvided = args.length > 0;
 if (args.length === 0) {
   console.error("Usage: mcp-server-filesystem [allowed-directory] [additional-directories...]");
   console.error("Note: Allowed directories can be provided via:");
@@ -716,8 +717,10 @@ async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
 
 // Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
 server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+  if (cliDirectoriesProvided) {
+    return;
+  }
   try {
-    // Request the updated roots list from the client
     const response = await server.server.listRoots();
     if (response && 'roots' in response) {
       await updateAllowedDirectoriesFromRoots(response.roots);
@@ -731,7 +734,7 @@ server.server.setNotificationHandler(RootsListChangedNotificationSchema, async (
 server.server.oninitialized = async () => {
   const clientCapabilities = server.server.getClientCapabilities();
 
-  if (clientCapabilities?.roots) {
+  if (clientCapabilities?.roots && !cliDirectoriesProvided) {
     try {
       const response = await server.server.listRoots();
       if (response && 'roots' in response) {
