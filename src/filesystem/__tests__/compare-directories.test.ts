@@ -101,9 +101,9 @@ describe("compareDirectories", () => {
       await fs.writeFile(path.join(testDir1, "same-content.txt"), "same data");
       await fs.writeFile(path.join(testDir2, "same-content.txt"), "same data");
       
-      // Wait and modify one file to change mtime
+      // Wait and touch one file to change its mtime (re-write same content)
       await new Promise(resolve => setTimeout(resolve, 100));
-      await fs.writeFile(path.join(testDir1, "marker.txt"), "marker");
+      await fs.writeFile(path.join(testDir1, "same-content.txt"), "same data");
 
       const result = await compareDirectories(testDir1, testDir2, true);
 
@@ -141,9 +141,9 @@ describe("compareDirectories", () => {
       await fs.writeFile(path.join(testDir1, "diff-mtime.txt"), "same");
       await fs.writeFile(path.join(testDir2, "diff-mtime.txt"), "same");
       
-      // Wait and modify one file to change mtime
+      // Wait and touch the file in dir1 to change its mtime (re-write same content)
       await new Promise(resolve => setTimeout(resolve, 100));
-      await fs.writeFile(path.join(testDir1, "marker.txt"), "marker");
+      await fs.writeFile(path.join(testDir1, "diff-mtime.txt"), "same");
 
       const result = await compareDirectories(testDir1, testDir2, false);
 
