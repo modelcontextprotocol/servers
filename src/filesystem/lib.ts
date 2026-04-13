@@ -414,6 +414,24 @@ export async function searchFilesWithValidation(
   return results;
 }
 
+// Helper function to compare file contents byte-by-byte
+async function compareFileContents(file1: string, file2: string): Promise<boolean> {
+  try {
+    const [content1, content2] = await Promise.all([
+      fs.readFile(file1),
+      fs.readFile(file2)
+    ]);
+    
+    if (content1.length !== content2.length) {
+      return false;
+    }
+    
+    return content1.equals(content2);
+  } catch {
+    return false;
+  }
+}
+
 export interface DirectoryComparisonResult {
   onlyInDir1: string[];
   onlyInDir2: string[];
@@ -470,7 +488,8 @@ export async function compareDirectories(
         fs.stat(file2)
       ]);
       
-      if (stat1.size !== stat2.size || stat1.mtimeMs !== stat2.mtimeMs) {
+      // If sizes differ, files are definitely different
+      if (stat1.size !== stat2.size) {
         differentContent.push({
           path: relPath,
           dir1Size: stat1.size,
@@ -478,8 +497,33 @@ export async function compareDirectories(
           dir1Mtime: stat1.mtimeMs,
           dir2Mtime: stat2.mtimeMs
         });
+      } else if (compareContent) {
+        // Sizes are equal, compare actual content
+        const contentsEqual = await compareFileContents(file1, file2);
+        if (contentsEqual) {
+          identical.push(relPath);
+        } else {
+          differentContent.push({
+            path: relPath,
+            dir1Size: stat1.size,
+            dir2Size: stat2.size,
+            dir1Mtime: stat1.mtimeMs,
+            dir2Mtime: stat2.mtimeMs
+          });
+        }
       } else {
-        identical.push(relPath);
+        // compareContent is false, use mtime as indicator
+        if (stat1.mtimeMs !== stat2.mtimeMs) {
+          differentContent.push({
+            path: relPath,
+            dir1Size: stat1.size,
+            dir2Size: stat2.size,
+            dir1Mtime: stat1.mtimeMs,
+            dir2Mtime: stat2.mtimeMs
+          });
+        } else {
+          identical.push(relPath);
+        }
       }
     }
   }
