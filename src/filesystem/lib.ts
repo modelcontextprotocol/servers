@@ -450,59 +450,51 @@ export async function compareDirectories(
   dir2: string,
   compareContent: boolean = false
 ): Promise<DirectoryComparisonResult> {
-  const dir1Files = await searchFilesWithValidation(dir1, "**/*", [dir1]);
-  const dir2Files = await searchFilesWithValidation(dir2, "**/*", [dir2]);
+  // Temporarily set allowed directories for validation during comparison
+  const previousAllowed = getAllowedDirectories();
+  setAllowedDirectories([dir1, dir2]);
   
-  const dir1Set = new Set(dir1Files.map((f: string) => path.relative(dir1, f)));
-  const dir2Set = new Set(dir2Files.map((f: string) => path.relative(dir2, f)));
-  
-  const onlyInDir1: string[] = [];
-  const onlyInDir2: string[] = [];
-  const differentContent: DirectoryComparisonResult["differentContent"] = [];
-  const identical: string[] = [];
-  
-  // Files only in dir1
-  for (const file of dir1Files) {
-    const relPath = path.relative(dir1, file);
-    if (!dir2Set.has(relPath)) {
-      onlyInDir1.push(relPath);
+  try {
+    const dir1Files = await searchFilesWithValidation(dir1, "**/*", [dir1]);
+    const dir2Files = await searchFilesWithValidation(dir2, "**/*", [dir2]);
+    
+    const dir1Set = new Set(dir1Files.map((f: string) => path.relative(dir1, f)));
+    const dir2Set = new Set(dir2Files.map((f: string) => path.relative(dir2, f)));
+    
+    const onlyInDir1: string[] = [];
+    const onlyInDir2: string[] = [];
+    const differentContent: DirectoryComparisonResult["differentContent"] = [];
+    const identical: string[] = [];
+    
+    // Files only in dir1
+    for (const file of dir1Files) {
+      const relPath = path.relative(dir1, file);
+      if (!dir2Set.has(relPath)) {
+        onlyInDir1.push(relPath);
+      }
     }
-  }
-  
-  // Files only in dir2
-  for (const file of dir2Files) {
-    const relPath = path.relative(dir2, file);
-    if (!dir1Set.has(relPath)) {
-      onlyInDir2.push(relPath);
+    
+    // Files only in dir2
+    for (const file of dir2Files) {
+      const relPath = path.relative(dir2, file);
+      if (!dir1Set.has(relPath)) {
+        onlyInDir2.push(relPath);
+      }
     }
-  }
-  
-  // Compare common files
-  for (const relPath of dir1Set) {
-    if (dir2Set.has(relPath)) {
-      const file1 = path.join(dir1, relPath);
-      const file2 = path.join(dir2, relPath);
-      
-      const [stat1, stat2] = await Promise.all([
-        fs.stat(file1),
-        fs.stat(file2)
-      ]);
-      
-      // If sizes differ, files are definitely different
-      if (stat1.size !== stat2.size) {
-        differentContent.push({
-          path: relPath,
-          dir1Size: stat1.size,
-          dir2Size: stat2.size,
-          dir1Mtime: stat1.mtimeMs,
-          dir2Mtime: stat2.mtimeMs
-        });
-      } else if (compareContent) {
-        // Sizes are equal, compare actual content
-        const contentsEqual = await compareFileContents(file1, file2);
-        if (contentsEqual) {
-          identical.push(relPath);
-        } else {
+    
+    // Compare common files
+    for (const relPath of dir1Set) {
+      if (dir2Set.has(relPath)) {
+        const file1 = path.join(dir1, relPath);
+        const file2 = path.join(dir2, relPath);
+        
+        const [stat1, stat2] = await Promise.all([
+          fs.stat(file1),
+          fs.stat(file2)
+        ]);
+        
+        // If sizes differ, files are definitely different
+        if (stat1.size !== stat2.size) {
           differentContent.push({
             path: relPath,
             dir1Size: stat1.size,
@@ -510,28 +502,45 @@ export async function compareDirectories(
             dir1Mtime: stat1.mtimeMs,
             dir2Mtime: stat2.mtimeMs
           });
-        }
-      } else {
-        // compareContent is false, use mtime as indicator
-        if (stat1.mtimeMs !== stat2.mtimeMs) {
-          differentContent.push({
-            path: relPath,
-            dir1Size: stat1.size,
-            dir2Size: stat2.size,
-            dir1Mtime: stat1.mtimeMs,
-            dir2Mtime: stat2.mtimeMs
-          });
+        } else if (compareContent) {
+          // Sizes are equal, compare actual content
+          const contentsEqual = await compareFileContents(file1, file2);
+          if (contentsEqual) {
+            identical.push(relPath);
+          } else {
+            differentContent.push({
+              path: relPath,
+              dir1Size: stat1.size,
+              dir2Size: stat2.size,
+              dir1Mtime: stat1.mtimeMs,
+              dir2Mtime: stat2.mtimeMs
+            });
+          }
         } else {
-          identical.push(relPath);
+          // compareContent is false, use mtime as indicator
+          if (stat1.mtimeMs !== stat2.mtimeMs) {
+            differentContent.push({
+              path: relPath,
+              dir1Size: stat1.size,
+              dir2Size: stat2.size,
+              dir1Mtime: stat1.mtimeMs,
+              dir2Mtime: stat2.mtimeMs
+            });
+          } else {
+            identical.push(relPath);
+          }
         }
       }
     }
+    
+    return {
+      onlyInDir1,
+      onlyInDir2,
+      differentContent,
+      identical
+    };
+  } finally {
+    // Restore previous allowed directories
+    setAllowedDirectories(previousAllowed);
   }
-  
-  return {
-    onlyInDir1,
-    onlyInDir2,
-    differentContent,
-    identical
-  };
 }
