@@ -200,6 +200,11 @@ describe('Lib Functions', () => {
         mockFs.realpath
           .mockRejectedValueOnce(enoentError1)
           .mockRejectedValueOnce(enoentError2);
+        // With the Windows `realpath()` fallback logic, we also check `stat()` to
+        // distinguish "realpath broken" from "path truly doesn't exist".
+        mockFs.stat
+          .mockRejectedValueOnce(enoentError1) // stat(absolute)
+          .mockRejectedValueOnce(enoentError2); // stat(parentDir)
         
         await expect(validatePath(newFilePath))
           .rejects.toThrow('Parent directory does not exist');
