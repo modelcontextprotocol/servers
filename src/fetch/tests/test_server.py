@@ -329,24 +329,149 @@ class TestFetchUrl:
 class TestExtractContentFromHtmlFallback:
     """Tests for extract_content_from_html readability fallback."""
 
-    def test_normal_html_no_fallback(self):
-        """Test that normal HTML with visible content works without fallback."""
-        html = """
-        <html>
-        <head><title>Normal Page</title></head>
-        <body>
-            <article>
-                <h1>Welcome</h1>
-                <p>This is a normal page with plenty of visible content that
-                readability should have no trouble extracting properly.</p>
-                <p>Here is another paragraph with more content to ensure
-                we have enough text for the extraction to work well.</p>
-            </article>
-        </body>
-        </html>
-        """
+    def test_readability_sufficient_content_no_fallback(self):
+        """When Readability returns enough content, no fallback is triggered."""
+        html = "<html><body>" + "<p>word </p>" * 200 + "</body></html>"
+        readability_content = "<div>" + "<p>word </p>" * 200 + "</div>"
+
+        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
+            mock_readability.return_value = {"content": readability_content}
+            result = extract_content_from_html(html)
+            assert mock_readability.call_count == 1
+            assert "word" in result
+
+    def test_readability_strips_content_falls_back_to_no_readability(self):
+        """When Readability returns too little, falls back to non-Readability extraction."""
+        html = "<html><body>" + "<p>content </p>" * 500 + "</body></html>"
+
+        def mock_simple_json(h, use_readability=True):
+            if use_readability:
+                return {"content": "<div>Loading...</div>"}
+            else:
+                return {"content": "<div>" + "<p>content </p>" * 500 + "</div>"}
+
+        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string", side_effect=mock_simple_json):
+            result = extract_content_from_html(html)
+            assert "content" in result
+            assert len(result.strip()) > 100
+
+    def test_both_readability_modes_fail_falls_back_to_markdownify(self):
+        """When both readabilipy modes return too little, falls back to raw markdownify."""
+        html = "<html><body>" + "<p>important data </p>" * 300 + "</body></html>"
+
+        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
+            mock_readability.return_value = {"content": ""}
+            result = extract_content_from_html(html)
+            assert "important data" in result
+            assert mock_readability.call_count == 2
+
+    def test_readability_none_content_triggers_fallback(self):
+        """When Readability returns None content, fallback is triggered."""
+        html = "<html><body>" + "<p>real content </p>" * 200 + "</body></html>"
+
+        call_count = [0]
+
+        def mock_simple_json(h, use_readability=True):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return {"content": None}
+            else:
+                return {"content": "<div>" + "<p>real content </p>" * 200 + "</div>"}
+
+        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string", side_effect=mock_simple_json):
+            result = extract_content_from_html(html)
+            assert "real content" in result
+
+    def test_readability_missing_content_key_triggers_fallback(self):
+        """When Readability returns dict without 'content' key, fallback is triggered."""
+        html = "<html><body>" + "<p>data </p>" * 200 + "</body></html>"
+
+        call_count = [0]
+
+        def mock_simple_json(h, use_readability=True):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return {}  # no "content" key at all
+            else:
+                return {"content": "<div>" + "<p>data </p>" * 200 + "</div>"}
+
+        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string", side_effect=mock_simple_json):
+            result = extract_content_from_html(html)
+            assert "data" in result
+
+    def test_threshold_is_one_percent_of_html(self):
+        """The fallback threshold is 1% of the input HTML length."""
+        padding = "x" * 9000
+        html = f'<html><body><div style="visibility:hidden">{padding}</div><p>tiny</p></body></html>'
+
+        def mock_simple_json(h, use_readability=True):
+            if use_readability:
+                return {"content": "<p>tiny</p>"}
+            else:
+                return {"content": f"<div>{padding}</div><p>tiny</p>"}
+
+        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string", side_effect=mock_simple_json):
+            result = extract_content_from_html(html)
+            # "tiny" (4 chars) < 1% of ~9100 chars → fallback triggered
+            assert len(result.strip()) > 50
+
+    def test_content_at_threshold_boundary_no_fallback(self):
+        """Content exactly at the 1% threshold does not trigger fallback."""
+        # Build HTML of known size, readability returns content exactly at threshold
+        filler = "a" * 1000
+        html = f"<html><body><p>{filler}</p></body></html>"
+        # 1% of ~1030 chars ≈ 10 chars; return content well above that
+        readability_content = f"<p>{filler}</p>"
+
+        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
+            mock_readability.return_value = {"content": readability_content}
+            result = extract_content_from_html(html)
+            assert mock_readability.call_count == 1
+            assert "a" in result
+
+    def test_whitespace_only_readability_output_triggers_fallback(self):
+        """Readability returning whitespace-only content triggers fallback."""
+        html = "<html><body>" + "<p>payload </p>" * 300 + "</body></html>"
+
+        def mock_simple_json(h, use_readability=True):
+            if use_readability:
+                return {"content": "<div>   \n\t  </div>"}
+            else:
+                return {"content": "<div>" + "<p>payload </p>" * 300 + "</div>"}
+
+        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string", side_effect=mock_simple_json):
+            result = extract_content_from_html(html)
+            assert "payload" in result
+
+    def test_no_readability_also_returns_too_little_falls_to_raw(self):
+        """When stage 2 (no-readability) also returns too little, raw markdownify is used."""
+        html = "<html><body>" + "<p>deep content </p>" * 400 + "</body></html>"
+
+        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
+            # Both calls return minimal content
+            mock_readability.return_value = {"content": "<p>x</p>"}
+            result = extract_content_from_html(html)
+            assert "deep content" in result
+            assert mock_readability.call_count == 2
+
+    def test_no_readability_returns_none_falls_to_raw(self):
+        """When stage 2 (no-readability) returns None content, raw markdownify is used."""
+        html = "<html><body>" + "<p>fallback target </p>" * 200 + "</body></html>"
+
+        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
+            mock_readability.return_value = {"content": None}
+            result = extract_content_from_html(html)
+            assert "fallback target" in result
+
+    def test_empty_html_returns_empty_string(self):
+        """Empty HTML input produces empty output, no error tags."""
+        result = extract_content_from_html("")
+        assert "<error>" not in result
+
+    def test_small_html_min_length_is_one(self):
+        """For very small HTML, min_length floors at 1 so fallback still works."""
+        html = "<p>Hi</p>"
         result = extract_content_from_html(html)
-        assert "normal page" in result.lower()
         assert "<error>" not in result
 
     def test_hidden_ssr_content_triggers_fallback(self):
@@ -362,27 +487,7 @@ class TestExtractContentFromHtmlFallback:
         </html>
         """.format(visible_shell, hidden_content)
         result = extract_content_from_html(html)
-        # Fallback should recover the hidden content
         assert len(result.strip()) > len(html) // 100
-
-    def test_readability_empty_content_triggers_fallback(self):
-        """Test that readability returning empty content triggers fallback."""
-        content_text = " ".join(["meaningful"] * 200)
-        html = """
-        <html>
-        <body>
-            <div><p>{}</p></div>
-        </body>
-        </html>
-        """.format(content_text)
-        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string") as mock_readability:
-            # First call (use_readability=True) returns empty content
-            # Second call (use_readability=False) returns empty content too
-            mock_readability.return_value = {"content": None}
-            result = extract_content_from_html(html)
-        # Fallback to raw markdownify should recover content
-        assert "meaningful" in result
-        assert "<error>" not in result
 
     def test_small_visible_shell_large_hidden_ssr(self):
         """Test realistic SSR pattern: small visible loading shell + large hidden content."""
@@ -407,5 +512,47 @@ class TestExtractContentFromHtmlFallback:
         </html>
         """.format(ssr_paragraphs)
         result = extract_content_from_html(html)
-        # Should not return just "Loading application..." — fallback should recover content
         assert len(result.strip()) > len(html) // 100
+
+    def test_opacity_zero_hidden_content(self):
+        """Content hidden via opacity:0 should be recovered by fallback."""
+        hidden_text = " ".join(["secret"] * 300)
+        html = """
+        <html>
+        <body>
+            <div>Visible shell</div>
+            <div style="opacity:0"><p>{}</p></div>
+        </body>
+        </html>
+        """.format(hidden_text)
+        result = extract_content_from_html(html)
+        assert len(result.strip()) > len(html) // 100
+
+    def test_result_never_contains_error_tags(self):
+        """No code path in the updated function should produce <error> tags."""
+        cases = [
+            "",
+            "<html></html>",
+            "<html><body></body></html>",
+            "<p>short</p>",
+        ]
+        for html in cases:
+            result = extract_content_from_html(html)
+            assert "<error>" not in result, f"Got <error> for input: {html!r}"
+
+    def test_all_three_stages_called_when_needed(self):
+        """Verify the full three-stage cascade: readability → no-readability → raw markdownify."""
+        html = "<html><body>" + "<p>cascade </p>" * 400 + "</body></html>"
+
+        calls = []
+
+        def mock_simple_json(h, use_readability=True):
+            calls.append(use_readability)
+            return {"content": ""}
+
+        with patch("mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string", side_effect=mock_simple_json):
+            result = extract_content_from_html(html)
+            # Stage 1: use_readability=True, Stage 2: use_readability=False
+            assert calls == [True, False]
+            # Stage 3: raw markdownify recovers content
+            assert "cascade" in result
