@@ -13,6 +13,10 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
 
 A complete list of the registered MCP primitives and other protocol features demonstrated can be found in the [Server Features](docs/features.md) document.
 
+## Installation
+
+> For detailed installation instructions across all clients and methods, see the [Installation Guide](../INSTALLATION.md).
+
 ## Usage with Claude Desktop (uses [stdio Transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#stdio))
 
 Add to your `claude_desktop_config.json`:

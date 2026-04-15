@@ -204,6 +204,10 @@ The mapping for filesystem tools is:
 
 > Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec.
 
+## Installation
+
+> For detailed installation instructions across all clients and methods, see the [Installation Guide](../INSTALLATION.md).
+
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
 
