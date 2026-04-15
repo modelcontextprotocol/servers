@@ -4,7 +4,7 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 
 ## Features
 
-- Read/write files
+- Read/write files (or run in **strict read-only** mode)
 - Create/list/delete directories
 - Move files/directories
 - Search files
@@ -30,6 +30,29 @@ Roots notified by Client to Server, completely replace any server-side Allowed d
 
 This is the recommended method, as this enables runtime directory updates via `roots/list_changed` notifications without server restart, providing a more flexible and modern integration experience.
 
+## Strict Read-Only Mode
+
+Strict read-only mode enforces a server-side capability boundary.
+
+When enabled, all write-capable tools are not registered, so only read and metadata tools are exposed. This goes beyond `readOnlyHint` annotations, which are advisory metadata for clients/models and not authorization controls.
+
+If a client attempts to call a write tool in this mode, the request fails at the protocol layer with `METHOD_NOT_FOUND`.
+
+Enable with either:
+
+- CLI flag: `mcp-server-filesystem --read-only /path/to/dir`
+- Environment variable (case-insensitive): `READ_ONLY=true` (`1`, `true`, `yes`)
+
+Safe defaults:
+
+- `DEFAULT_READ_ONLY=1` starts the server in read-only mode unless explicitly overridden with `--write-enabled` or `READ_ONLY=false`.
+- Use `DEFAULT_READ_ONLY` to set a baseline in images/configuration; use `--write-enabled` for intentional maintenance runs without changing that baseline.
+- If a directory path begins with `--`, include a `--` separator (e.g., `mcp-server-filesystem -- /path/--looks-like-a-flag`).
+
+When strict read-only is on, these tools are **not** available: `write_file`, `edit_file`, `create_directory`, `move_file`.
+
+The server logs `Read-only mode enabled. Write operations will be disabled.` at startup for visibility.
+
 ### How It Works
 
 The server's directory access control follows this flow:
@@ -43,20 +66,20 @@ The server's directory access control follows this flow:
    - Server checks if client supports roots protocol (`capabilities.roots`)
    
 3. **Roots Protocol Handling** (if client supports roots)
-   - **On initialization**: Server requests roots from client via `roots/list`
-   - Client responds with its configured roots
-   - Server replaces ALL allowed directories with client's roots
-   - **On runtime updates**: Client can send `notifications/roots/list_changed`
-   - Server requests updated roots and replaces allowed directories again
+ - **On initialization**: Server requests roots from client via `roots/list`
+  - Client responds with its configured roots
+  - Server replaces all allowed directories with the client's roots
+  - **On runtime updates**: Client can send `notifications/roots/list_changed`
+  - Server requests updated roots and replaces allowed directories again
 
 4. **Fallback Behavior** (if client doesn't support roots)
    - Server continues using command-line directories only
    - No dynamic updates possible
 
 5. **Access Control**
-   - All filesystem operations are restricted to allowed directories
-   - Use `list_allowed_directories` tool to see current directories
-   - Server requires at least ONE allowed directory to operate
+  - All filesystem operations are restricted to allowed directories
+  - Use `list_allowed_directories` tool to see current directories
+  - Server requires at least one allowed directory to operate
 
 **Note**: The server will only allow operations within directories specified either via `args` or via Roots.
 
@@ -184,6 +207,8 @@ on each tool so clients can:
 - Understand which write operations are **idempotent** (safe to retry with the same arguments).
 - Highlight operations that may be **destructive** (overwriting or heavily mutating data).
 
+These hints are client/model-facing metadata for planning and UX; they do not enforce permissions on the server. For server-side enforcement, use **Strict Read-Only Mode**.
+
 The mapping for filesystem tools is:
 
 | Tool                        | readOnlyHint | idempotentHint | destructiveHint | Notes                                            |
@@ -210,7 +235,7 @@ Add this to your `claude_desktop_config.json`:
 Note: you can provide sandboxed directories to the server by mounting them to `/projects`. Adding the `ro` flag will make the directory readonly by the server.
 
 ### Docker
-Note: all directories must be mounted to `/projects` by default.
+Note: all directories must be mounted to `/projects` by default. The example below starts in read-only mode by default.
 
 ```json
 {
@@ -221,10 +246,12 @@ Note: all directories must be mounted to `/projects` by default.
         "run",
         "-i",
         "--rm",
+        "-e", "DEFAULT_READ_ONLY=1",
         "--mount", "type=bind,src=/Users/username/Desktop,dst=/projects/Desktop",
         "--mount", "type=bind,src=/path/to/other/allowed/dir,dst=/projects/other/allowed/dir,ro",
         "--mount", "type=bind,src=/path/to/file.txt,dst=/projects/path/to/file.txt",
         "mcp/filesystem",
+        "--read-only",
         "/projects"
       ]
     }
@@ -242,6 +269,7 @@ Note: all directories must be mounted to `/projects` by default.
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
+        "--read-only",
         "/Users/username/Desktop",
         "/path/to/other/allowed/dir"
       ]
@@ -284,6 +312,7 @@ Note: all directories must be mounted to `/projects` by default.
         "--rm",
         "--mount", "type=bind,src=${workspaceFolder},dst=/projects/workspace",
         "mcp/filesystem",
+        "--read-only",
         "/projects"
       ]
     }
@@ -301,12 +330,17 @@ Note: all directories must be mounted to `/projects` by default.
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
+        "--read-only",
         "${workspaceFolder}"
       ]
     }
   }
 }
 ```
+
+## Release Notes
+
+- **0.6.4** – Added strict read-only mode (`--read-only` flag or `READ_ONLY` env var) that omits all write-capable tools at registration time.
 
 ## Build
 
