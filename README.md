@@ -146,7 +146,7 @@ Additional resources on MCP.
 - **[ToolHive](https://github.com/StacklokLabs/toolhive)** - A lightweight utility designed to simplify the deployment and management of MCP servers, ensuring ease of use, consistency, and security through containerization by **[StacklokLabs](https://github.com/StacklokLabs)**
 - **[NetMind](https://www.netmind.ai/AIServices)** - Access powerful AI services via simple APIs or MCP servers to supercharge your productivity.
 - **[Webrix MCP Gateway](https://github.com/webrix-ai/secure-mcp-gateway)** - Enterprise MCP gateway with SSO, RBAC, audit trails, and token vaults for secure, centralized AI agent access control. Deploy via Helm charts on-premise or in your cloud. [webrix.ai](https://webrix.ai)
-
+- **[ChainMemory](https://github.com/chaelynet/chainmemory-mcp)** - Permanent blockchain memory for AI agents. Store decisions, learning, and interactions immutably on-chain. ([npm](https://www.npmjs.com/package/chainmemory-mcp))
 
 
 ## 🚀 Getting Started
