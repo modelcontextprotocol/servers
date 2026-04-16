@@ -554,7 +554,8 @@ server.registerTool(
       const result: TreeEntry[] = [];
 
       for (const entry of entries) {
-        const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
+        // Normalize to forward slashes for consistent cross-platform glob matching
+        const relativePath = path.relative(rootPath, path.join(currentPath, entry.name)).split(path.sep).join('/');
         const shouldExclude = excludePatterns.some(pattern => {
           if (pattern.includes('*')) {
             return minimatch(relativePath, pattern, { dot: true });
