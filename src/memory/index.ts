@@ -98,6 +98,12 @@ export class KnowledgeGraphManager {
     }
   }
 
+  private static sliceObservations(obs: string[], options?: { limit?: number; offset?: number }): string[] {
+    if (!options || (options.offset === undefined && options.limit === undefined)) return obs;
+    const offset = options.offset ?? 0;
+    return options.limit !== undefined ? obs.slice(offset, offset + options.limit) : obs.slice(offset);
+  }
+
   private async saveGraph(graph: KnowledgeGraph): Promise<void> {
     const lines = [
       ...graph.entities.map(e => JSON.stringify({
@@ -179,61 +185,74 @@ export class KnowledgeGraphManager {
     await this.saveGraph(graph);
   }
 
-  async readGraph(): Promise<KnowledgeGraph> {
-    return this.loadGraph();
+  async readGraph(options?: {
+    includeObservations?: boolean;
+    observationLimit?: number;
+    entityTypes?: string[];
+    metadataOnly?: boolean;
+  }): Promise<KnowledgeGraph> {
+    const graph = await this.loadGraph();
+    let entities = graph.entities;
+    if (options?.entityTypes?.length) {
+      entities = entities.filter(e => options.entityTypes!.includes(e.entityType));
+    }
+    const withObservations = options?.metadataOnly || options?.includeObservations === false ? [] : undefined;
+    const processedEntities = entities.map(e => ({
+      name: e.name,
+      entityType: e.entityType,
+      observations: withObservations ?? KnowledgeGraphManager.sliceObservations(e.observations, { limit: options?.observationLimit })
+    }));
+    const names = new Set(processedEntities.map(e => e.name));
+    return {
+      entities: processedEntities,
+      relations: graph.relations.filter(r => names.has(r.from) && names.has(r.to))
+    };
   }
 
   // Very basic search function
-  async searchNodes(query: string): Promise<KnowledgeGraph> {
+  async searchNodes(query: string, options?: {
+    includeObservations?: boolean;
+    limit?: number;
+    observationLimit?: number;
+  }): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
-    
-    // Filter entities
-    const filteredEntities = graph.entities.filter(e => 
+    let entities = graph.entities.filter(e =>
       e.name.toLowerCase().includes(query.toLowerCase()) ||
       e.entityType.toLowerCase().includes(query.toLowerCase()) ||
       e.observations.some(o => o.toLowerCase().includes(query.toLowerCase()))
     );
-  
-    // Create a Set of filtered entity names for quick lookup
-    const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
-  
-    // Include relations where at least one endpoint matches the search results.
-    // This lets callers discover connections to nodes outside the result set.
-    const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
-    );
-  
-    const filteredGraph: KnowledgeGraph = {
-      entities: filteredEntities,
-      relations: filteredRelations,
+    if (options?.limit !== undefined) entities = entities.slice(0, options.limit);
+    const withObservations = options?.includeObservations === false ? [] : undefined;
+    const processedEntities = entities.map(e => ({
+      name: e.name,
+      entityType: e.entityType,
+      observations: withObservations ?? KnowledgeGraphManager.sliceObservations(e.observations, { limit: options?.observationLimit })
+    }));
+    const names = new Set(processedEntities.map(e => e.name));
+    return {
+      entities: processedEntities,
+      relations: graph.relations.filter(r => names.has(r.from) || names.has(r.to))
     };
-  
-    return filteredGraph;
   }
 
-  async openNodes(names: string[]): Promise<KnowledgeGraph> {
+  async openNodes(names: string[], options?: {
+    includeObservations?: boolean;
+    observationLimit?: number;
+    observationOffset?: number;
+  }): Promise<KnowledgeGraph> {
     const graph = await this.loadGraph();
-    
-    // Filter entities
     const filteredEntities = graph.entities.filter(e => names.includes(e.name));
-  
-    // Create a Set of filtered entity names for quick lookup
-    const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
-  
-    // Include relations where at least one endpoint is in the requested set.
-    // Previously this required BOTH endpoints, which meant relations from a
-    // requested node to an unrequested node were silently dropped — making it
-    // impossible to discover a node's connections without reading the full graph.
-    const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
-    );
-  
-    const filteredGraph: KnowledgeGraph = {
-      entities: filteredEntities,
-      relations: filteredRelations,
+    const withObservations = options?.includeObservations === false ? [] : undefined;
+    const processedEntities = filteredEntities.map(e => ({
+      name: e.name,
+      entityType: e.entityType,
+      observations: withObservations ?? KnowledgeGraphManager.sliceObservations(e.observations, { offset: options?.observationOffset, limit: options?.observationLimit })
+    }));
+    const entityNames = new Set(processedEntities.map(e => e.name));
+    return {
+      entities: processedEntities,
+      relations: graph.relations.filter(r => entityNames.has(r.from) || entityNames.has(r.to))
     };
-  
-    return filteredGraph;
   }
 }
 
@@ -407,19 +426,21 @@ server.registerTool(
   "read_graph",
   {
     title: "Read Graph",
-    description: "Read the entire knowledge graph",
-    inputSchema: {},
+    description: "Read the entire knowledge graph. Optional params: metadataOnly (names/types only), includeObservations (default true), observationLimit (max per entity), entityTypes (filter by types).",
+    inputSchema: {
+      includeObservations: z.boolean().optional().describe("Whether to include observation content (default: true)"),
+      observationLimit: z.number().int().positive().optional().describe("Max observations per entity"),
+      entityTypes: z.array(z.string()).optional().describe("Filter entities by types"),
+      metadataOnly: z.boolean().optional().describe("Return only entity names and types, no observations")
+    },
     outputSchema: {
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
     }
   },
-  async () => {
-    const graph = await knowledgeGraphManager.readGraph();
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
-      structuredContent: { ...graph }
-    };
+  async (args) => {
+    const graph = await knowledgeGraphManager.readGraph(args);
+    return { content: [{ type: "text", text: JSON.stringify(graph, null, 2) }], structuredContent: { ...graph } };
   }
 );
 
@@ -428,21 +449,21 @@ server.registerTool(
   "search_nodes",
   {
     title: "Search Nodes",
-    description: "Search for nodes in the knowledge graph based on a query",
+    description: "Search for nodes by query. Optional: includeObservations (default true), limit (max entities), observationLimit (max per entity).",
     inputSchema: {
-      query: z.string().describe("The search query to match against entity names, types, and observation content")
+      query: z.string().describe("Search query"),
+      includeObservations: z.boolean().optional().describe("Include observations (default: true)"),
+      limit: z.number().int().positive().optional().describe("Max entities to return"),
+      observationLimit: z.number().int().positive().optional().describe("Max observations per entity")
     },
     outputSchema: {
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
     }
   },
-  async ({ query }) => {
-    const graph = await knowledgeGraphManager.searchNodes(query);
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
-      structuredContent: { ...graph }
-    };
+  async ({ query, ...options }) => {
+    const graph = await knowledgeGraphManager.searchNodes(query, options);
+    return { content: [{ type: "text", text: JSON.stringify(graph, null, 2) }], structuredContent: { ...graph } };
   }
 );
 
@@ -451,21 +472,21 @@ server.registerTool(
   "open_nodes",
   {
     title: "Open Nodes",
-    description: "Open specific nodes in the knowledge graph by their names",
+    description: "Open specific nodes by name. Optional: includeObservations (default true), observationLimit, observationOffset (for pagination).",
     inputSchema: {
-      names: z.array(z.string()).describe("An array of entity names to retrieve")
+      names: z.array(z.string()).describe("Entity names to retrieve"),
+      includeObservations: z.boolean().optional().describe("Include observations (default: true)"),
+      observationLimit: z.number().int().positive().optional().describe("Max observations per entity"),
+      observationOffset: z.number().int().nonnegative().optional().describe("Observations to skip (for pagination)")
     },
     outputSchema: {
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
     }
   },
-  async ({ names }) => {
-    const graph = await knowledgeGraphManager.openNodes(names);
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
-      structuredContent: { ...graph }
-    };
+  async ({ names, ...options }) => {
+    const graph = await knowledgeGraphManager.openNodes(names, options);
+    return { content: [{ type: "text", text: JSON.stringify(graph, null, 2) }], structuredContent: { ...graph } };
   }
 );
 
