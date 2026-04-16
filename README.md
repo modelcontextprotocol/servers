@@ -144,6 +144,7 @@ Additional resources on MCP.
 - **[Smithery](https://smithery.ai/)** - A registry of MCP servers to find the right tools for your LLM agents by **[Henry Mao](https://github.com/calclavia)**
 - **[Toolbase](https://gettoolbase.ai)** - Desktop application that manages tools and MCP servers with just a few clicks - no coding required by **[gching](https://github.com/gching)**
 - **[ToolHive](https://github.com/StacklokLabs/toolhive)** - A lightweight utility designed to simplify the deployment and management of MCP servers, ensuring ease of use, consistency, and security through containerization by **[StacklokLabs](https://github.com/StacklokLabs)**
+- **[ToolRoute](https://toolroute.ai)** ([GitHub](https://github.com/Instabidsai/toolroute)) - MCP gateway and curated registry of 87 tools behind one API key. Ranks tools on an 8-dimension belief score, auto-routes requests, supports BYOK, and speaks 5 protocols (REST, MCP Streamable HTTP, A2A, OpenAI Functions, SDK). Free tier available. Built by **[Instabidsai](https://github.com/Instabidsai)**
 - **[NetMind](https://www.netmind.ai/AIServices)** - Access powerful AI services via simple APIs or MCP servers to supercharge your productivity.
 - **[Webrix MCP Gateway](https://github.com/webrix-ai/secure-mcp-gateway)** - Enterprise MCP gateway with SSO, RBAC, audit trails, and token vaults for secure, centralized AI agent access control. Deploy via Helm charts on-premise or in your cloud. [webrix.ai](https://webrix.ai)
 
