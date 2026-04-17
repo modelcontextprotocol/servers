@@ -80,6 +80,7 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 * **[Spring AI MCP Server](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-server-boot-starter-docs.html)** - Provides auto-configuration for setting up an MCP server in Spring Boot applications.
 * **[Template MCP Server](https://github.com/mcpdotdirect/template-mcp-server)** - A CLI tool to create a new Model Context Protocol server project with TypeScript support, dual transport options, and an extensible structure
 * **[AgentR Universal MCP SDK](https://github.com/universal-mcp/universal-mcp)** - A python SDK to build MCP Servers with inbuilt credential management by **[Agentr](https://agentr.dev/home)**
+* **[AAAA-Nexus MCP](https://github.com/AAAA-Nexus/aaaa-nexus-mcp)** (Python) - 135 MCP tools for AI agent infrastructure: trust scoring, RatchetGate session security, escrow, compliance (EU AI Act/NIST), DeFi proofs, VRF gaming, and verifiable randomness. [PyPI](https://pypi.org/project/aaaa-nexus-mcp/) · [API docs](https://atomadic.tech)
 * **[Vercel MCP Adapter](https://github.com/vercel/mcp-adapter)** (TypeScript) - A simple package to start serving an MCP server on most major JS meta-frameworks including Next, Nuxt, Svelte, and more.
 * **[PHP MCP Server](https://github.com/php-mcp/server)** (PHP) - Core PHP implementation for the Model Context Protocol (MCP) server
 
