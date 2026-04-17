@@ -89,6 +89,11 @@ if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
 
 allowedDirectories = accessibleDirectories;
 
+// Track whether directories were explicitly provided via CLI arguments.
+// When CLI directories are provided, they take precedence over MCP roots
+// to prevent clients from overriding the user's explicit configuration.
+const cliDirectoriesProvided = args.length > 0 && allowedDirectories.length > 0;
+
 // Initialize the global allowedDirectories in lib.ts
 setAllowedDirectories(allowedDirectories);
 
@@ -715,7 +720,12 @@ async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
 }
 
 // Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
+// When CLI directories were provided, roots updates are ignored to preserve the explicit configuration.
 server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+  if (cliDirectoriesProvided) {
+    console.error("Ignoring roots update: CLI directories take precedence");
+    return;
+  }
   try {
     // Request the updated roots list from the client
     const response = await server.server.listRoots();
@@ -728,10 +738,14 @@ server.server.setNotificationHandler(RootsListChangedNotificationSchema, async (
 });
 
 // Handles post-initialization setup, specifically checking for and fetching MCP roots.
+// CLI-provided directories take precedence over MCP roots to ensure explicit
+// user configuration is not overridden by the client's project roots.
 server.server.oninitialized = async () => {
   const clientCapabilities = server.server.getClientCapabilities();
 
-  if (clientCapabilities?.roots) {
+  if (cliDirectoriesProvided) {
+    console.error("CLI directories provided, ignoring MCP roots. Allowed directories:", allowedDirectories);
+  } else if (clientCapabilities?.roots) {
     try {
       const response = await server.server.listRoots();
       if (response && 'roots' in response) {
