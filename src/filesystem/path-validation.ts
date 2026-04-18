@@ -1,8 +1,35 @@
 import path from 'path';
 
 /**
+ * Checks if a path is a UNC path (e.g. \\server\share).
+ */
+function isUNCPath(p: string): boolean {
+  return p.startsWith('\\\\');
+}
+
+/**
+ * Normalizes a path that may be a UNC path on Windows.
+ *
+ * On Windows, path.normalize can strip one leading backslash from UNC paths
+ * (e.g. \\server\share becomes \server\share), and then path.resolve
+ * interprets it as a drive-relative path (e.g. C:\server\share). This
+ * function preserves the UNC prefix through normalization.
+ */
+function normalizePossiblyUNCPath(p: string): string {
+  if (isUNCPath(p)) {
+    let normalized = path.normalize(p);
+    // path.normalize may strip a leading backslash from UNC paths
+    if (!normalized.startsWith('\\\\')) {
+      normalized = '\\' + normalized;
+    }
+    return normalized;
+  }
+  return path.resolve(path.normalize(p));
+}
+
+/**
  * Checks if an absolute path is within any of the allowed directories.
- * 
+ *
  * @param absolutePath - The absolute path to check (will be normalized)
  * @param allowedDirectories - Array of absolute allowed directory paths (will be normalized)
  * @returns true if the path is within an allowed directory, false otherwise
@@ -27,7 +54,7 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
   // Normalize the input path
   let normalizedPath: string;
   try {
-    normalizedPath = path.resolve(path.normalize(absolutePath));
+    normalizedPath = normalizePossiblyUNCPath(absolutePath);
   } catch {
     return false;
   }
@@ -51,7 +78,7 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
     // Normalize the allowed directory
     let normalizedDir: string;
     try {
-      normalizedDir = path.resolve(path.normalize(dir));
+      normalizedDir = normalizePossiblyUNCPath(dir);
     } catch {
       return false;
     }
