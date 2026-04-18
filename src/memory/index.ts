@@ -265,7 +265,7 @@ server.registerTool(
     title: "Create Entities",
     description: "Create multiple new entities in the knowledge graph",
     inputSchema: {
-      entities: z.array(EntitySchema)
+      entities: z.array(EntitySchema).describe("Array of entities to create, each with a name, type, and initial observations.")
     },
     outputSchema: {
       entities: z.array(EntitySchema)
@@ -287,7 +287,7 @@ server.registerTool(
     title: "Create Relations",
     description: "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
     inputSchema: {
-      relations: z.array(RelationSchema)
+      relations: z.array(RelationSchema).describe("Array of relations to create between existing entities, each specifying source, target, and relation type.")
     },
     outputSchema: {
       relations: z.array(RelationSchema)
@@ -312,7 +312,7 @@ server.registerTool(
       observations: z.array(z.object({
         entityName: z.string().describe("The name of the entity to add the observations to"),
         contents: z.array(z.string()).describe("An array of observation contents to add")
-      }))
+      })).describe("Array of observation sets to add, each targeting a specific entity by name.")
     },
     outputSchema: {
       results: z.array(z.object({
@@ -363,7 +363,7 @@ server.registerTool(
       deletions: z.array(z.object({
         entityName: z.string().describe("The name of the entity containing the observations"),
         observations: z.array(z.string()).describe("An array of observations to delete")
-      }))
+      })).describe("Array of deletion targets, each specifying an entity and the exact observations to remove from it.")
     },
     outputSchema: {
       success: z.boolean(),

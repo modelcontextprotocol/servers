@@ -29,10 +29,7 @@ const GZipFileAsResourceSchema = z.object({
   data: z
     .string()
     .url()
-    .describe("URL or data URI of the file content to compress")
-    .default(
-      "https://raw.githubusercontent.com/modelcontextprotocol/servers/refs/heads/main/README.md"
-    ),
+    .describe("URL or data URI of the file content to compress"),
   outputType: z
     .enum(["resourceLink", "resource"])
     .default("resourceLink")
@@ -90,7 +87,7 @@ export const registerGZipFileAsResourceTool = (server: McpServer) => {
     const uri = getSessionResourceURI(name);
     const blob = compressedBuffer.toString("base64");
     const mimeType = "application/gzip";
-    const resource = <Resource>{ uri, name, mimeType };
+    const resource = <Resource>{ uri, name, mimeType, description: `Gzip-compressed version of '${name}', available for reading during the current session.` };
 
     // Register resource, get resource link in return
     const resourceLink = registerSessionResource(
