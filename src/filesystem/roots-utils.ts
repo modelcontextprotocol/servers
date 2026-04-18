@@ -17,7 +17,15 @@ async function parseRootUri(rootUri: string): Promise<string | null> {
       ? path.join(os.homedir(), rawPath.slice(1)) 
       : rawPath;
     const absolutePath = path.resolve(expandedPath);
-    const resolvedPath = await fs.realpath(absolutePath);
+    // `fs.realpath()` can fail on some Windows setups (e.g. SUBST/mapped drives)
+    // even when the path exists and is accessible. Fall back to the absolute
+    // path so roots still work.
+    let resolvedPath = absolutePath;
+    try {
+      resolvedPath = await fs.realpath(absolutePath);
+    } catch {
+      // keep `absolutePath`
+    }
     return normalizePath(resolvedPath);
   } catch {
     return null; // Path doesn't exist or other error
