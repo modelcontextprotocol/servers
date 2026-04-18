@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 4
 requires-python = ">=3.10"
 
 [[package]]
@@ -528,6 +528,7 @@ name = "mcp-server-fetch"
 version = "0.6.3"
 source = { editable = "." }
 dependencies = [
+    { name = "charset-normalizer" },
     { name = "httpx" },
     { name = "markdownify" },
     { name = "mcp" },
@@ -547,6 +548,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "charset-normalizer", specifier = ">=3.0.0" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "markdownify", specifier = ">=0.13.1" },
     { name = "mcp", specifier = ">=1.1.3" },

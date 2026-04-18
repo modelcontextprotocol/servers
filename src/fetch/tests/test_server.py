@@ -1,11 +1,13 @@
 """Tests for the fetch MCP server."""
 
+import httpx
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from mcp.shared.exceptions import McpError
 
 from mcp_server_fetch.server import (
     extract_content_from_html,
+    get_response_text,
     get_robots_txt_url,
     check_may_autonomously_fetch_url,
     fetch_url,
@@ -324,3 +326,53 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+def _build_response(raw_body: bytes, content_type: str = "text/html") -> httpx.Response:
+    """Build a real httpx.Response without charset in the HTTP header."""
+    return httpx.Response(
+        status_code=200,
+        headers={"content-type": content_type},
+        content=raw_body,
+    )
+
+
+class TestGetResponseText:
+    """Tests for get_response_text with various non-UTF-8 encodings."""
+
+    def test_utf8_passthrough(self):
+        """UTF-8 pages with charset declared in HTTP header use the standard path."""
+        text = "Hello World"
+        resp = httpx.Response(
+            200,
+            headers={"content-type": "text/html; charset=utf-8"},
+            content=text.encode("utf-8"),
+        )
+        assert get_response_text(resp) == text
+
+    def test_ukrainian_windows_1251(self):
+        text = "Київ це найбільше місто України із населенням понад три мільйони людей та є столицею нашої держави і культурним центром країни."
+        body = (
+            b"<html><body><p>" + text.encode("windows-1251") + b"</p></body></html>"
+        )
+        assert text in get_response_text(_build_response(body))
+
+    def test_hebrew_windows_1255(self):
+        text = "ירושלים היא הבירה של ישראל ועיר קדושה לשלוש הדתות המונותאיסטיות הגדולות העיר שוכנת בהרי יהודה ומהווה מרכז דתי ותרבותי חשוב."
+        body = (
+            b"<html><body><p>" + text.encode("windows-1255") + b"</p></body></html>"
+        )
+        assert text in get_response_text(_build_response(body))
+
+    def test_arabic_windows_1256(self):
+        text = "القاهرة هي عاصمة جمهورية مصر العربية وأكبر مدنها تقع على ضفاف نهر النيل وتعتبر من أكبر المدن في الشرق الأوسط وأفريقيا."
+        body = (
+            b"<html><body><p>" + text.encode("windows-1256") + b"</p></body></html>"
+        )
+        assert text in get_response_text(_build_response(body))
+
+    def test_korean_euc_kr(self):
+        text = "서울특별시는 대한민국의 수도이자 최대 도시이다"
+        body = text.encode("utf-8")
+        resp = httpx.Response(200, headers={"content-type": "text/html"}, content=body)
+        assert text in get_response_text(resp)
