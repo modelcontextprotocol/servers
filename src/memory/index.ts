@@ -24,21 +24,22 @@ export async function ensureMemoryFilePath(): Promise<string> {
   const newMemoryPath = defaultMemoryPath;
   
   try {
-    // Check if old file exists and new file doesn't
     await fs.access(oldMemoryPath);
-    try {
-      await fs.access(newMemoryPath);
-      // Both files exist, use new one (no migration needed)
-      return newMemoryPath;
-    } catch {
-      // Old file exists, new file doesn't - migrate
-      console.error('DETECTED: Found legacy memory.json file, migrating to memory.jsonl for JSONL format compatibility');
-      await fs.rename(oldMemoryPath, newMemoryPath);
-      console.error('COMPLETED: Successfully migrated memory.json to memory.jsonl');
-      return newMemoryPath;
-    }
   } catch {
     // Old file doesn't exist, use new path
+    return newMemoryPath;
+  }
+
+  try {
+    await fs.access(newMemoryPath);
+    // Both files exist, use new one (no migration needed)
+    return newMemoryPath;
+  } catch {
+    // Old file exists, new file doesn't - migrate
+    // Let rename errors propagate so migration failures are not silently ignored
+    console.error('DETECTED: Found legacy memory.json file, migrating to memory.jsonl for JSONL format compatibility');
+    await fs.rename(oldMemoryPath, newMemoryPath);
+    console.error('COMPLETED: Successfully migrated memory.json to memory.jsonl');
     return newMemoryPath;
   }
 }

@@ -131,7 +131,10 @@ export async function validatePath(requestedPath: string): Promise<string> {
           throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
         }
         return absolute;
-      } catch {
+      } catch (innerError) {
+        if (innerError instanceof Error && innerError.message.startsWith('Access denied')) {
+          throw innerError;
+        }
         throw new Error(`Parent directory does not exist: ${parentDir}`);
       }
     }
