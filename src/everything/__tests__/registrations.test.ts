@@ -31,6 +31,20 @@ describe('Registration Index Files', () => {
       const registeredTools = (mockServer.registerTool as any).mock.calls.map(
         (call: any[]) => call[0]
       );
+      expect(registeredTools).toEqual([
+        'echo',
+        'get-annotated-message',
+        'get-env',
+        'get-resource-links',
+        'get-resource-reference',
+        'get-structured-content',
+        'get-sum',
+        'get-tiny-image',
+        'gzip-file-as-resource',
+        'toggle-simulated-logging',
+        'toggle-subscriber-updates',
+        'trigger-long-running-operation',
+      ]);
       expect(registeredTools).toContain('echo');
       expect(registeredTools).toContain('get-sum');
       expect(registeredTools).toContain('get-env');
@@ -73,6 +87,11 @@ describe('Registration Index Files', () => {
       const registeredTools = (
         mockServerWithCapabilities.registerTool as any
       ).mock.calls.map((call: any[]) => call[0]);
+      expect(registeredTools).toEqual([
+        'get-roots-list',
+        'trigger-elicitation-request',
+        'trigger-sampling-request',
+      ]);
       expect(registeredTools).toContain('get-roots-list');
       expect(registeredTools).toContain('trigger-elicitation-request');
       expect(registeredTools).toContain('trigger-sampling-request');
