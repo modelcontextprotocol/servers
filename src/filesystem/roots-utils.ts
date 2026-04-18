@@ -1,26 +1,70 @@
 import { promises as fs, type Stats } from 'fs';
 import path from 'path';
-import os from 'os';
-import { normalizePath } from './path-utils.js';
+import { normalizePath, expandHome } from './path-utils.js';
 import type { Root } from '@modelcontextprotocol/sdk/types.js';
 import { fileURLToPath } from "url";
 
 /**
+ * Safely converts a file:// URI to a filesystem path.
+ * Handles edge cases where tilde (~) or other characters in the URI
+ * are misinterpreted as the URI authority/host component.
+ *
+ * @param uri - The file:// URI to convert
+ * @returns The filesystem path, or null if the URI is invalid
+ */
+function safeFileURLToPath(uri: string): string | null {
+  try {
+    return fileURLToPath(uri);
+  } catch {
+    // fileURLToPath can throw when the URI has an unexpected host component.
+    // This happens when a path like "~/folder" is naively concatenated as
+    // "file://~/folder" — the URL parser treats "~" as the hostname.
+    // Try to recover by extracting the path after "file://" and normalizing it.
+    try {
+      const withoutScheme = uri.slice('file://'.length);
+      // If the path starts with / it's absolute (file:///path or file:///~/path)
+      if (withoutScheme.startsWith('/')) {
+        return decodeURIComponent(withoutScheme);
+      }
+      // Otherwise treat the whole part after file:// as a path
+      // (e.g., file://~/folder -> ~/folder)
+      return decodeURIComponent(withoutScheme);
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
  * Converts a root URI to a normalized directory path with basic security validation.
+ * Handles file:// URIs, plain paths, and paths containing tilde (~) characters
+ * both as home directory shorthand and as literal characters in directory names.
+ *
  * @param rootUri - File URI (file://...) or plain directory path
  * @returns Promise resolving to validated path or null if invalid
  */
 async function parseRootUri(rootUri: string): Promise<string | null> {
   try {
-    const rawPath = rootUri.startsWith('file://') ? fileURLToPath(rootUri) : rootUri;
-    const expandedPath = rawPath.startsWith('~/') || rawPath === '~' 
-      ? path.join(os.homedir(), rawPath.slice(1)) 
-      : rawPath;
+    let rawPath: string;
+    if (rootUri.startsWith('file://')) {
+      const parsed = safeFileURLToPath(rootUri);
+      if (parsed === null) {
+        console.error(`Warning: Could not parse file URI: ${rootUri}`);
+        return null;
+      }
+      rawPath = parsed;
+    } else {
+      rawPath = rootUri;
+    }
+
+    const expandedPath = expandHome(rawPath);
     const absolutePath = path.resolve(expandedPath);
     const resolvedPath = await fs.realpath(absolutePath);
     return normalizePath(resolvedPath);
-  } catch {
-    return null; // Path doesn't exist or other error
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Warning: Could not resolve root path "${rootUri}": ${message}`);
+    return null;
   }
 }
 

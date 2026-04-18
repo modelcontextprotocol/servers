@@ -205,6 +205,36 @@ describe('Lib Functions', () => {
           .rejects.toThrow('Parent directory does not exist');
       });
 
+      it('validates paths with literal tilde in directory names', async () => {
+        // Paths containing ~ as a literal character in directory names should work
+        // This is the scenario from issue #3412
+        if (process.platform === 'win32') {
+          setAllowedDirectories(['C:\\Users\\test']);
+          const testPath = 'C:\\Users\\test\\~MyFolder\\file.txt';
+          mockFs.realpath.mockImplementation(async (path: any) => path.toString());
+          const result = await validatePath(testPath);
+          expect(result).toBe(testPath);
+        } else {
+          setAllowedDirectories(['/home/user']);
+          const testPath = '/home/user/~MyFolder/file.txt';
+          mockFs.realpath.mockImplementation(async (path: any) => path.toString());
+          const result = await validatePath(testPath);
+          expect(result).toBe(testPath);
+        }
+      });
+
+      it('validates paths with tilde used for home expansion combined with tilde in dir name', async () => {
+        // ~/path/~folder should expand ~ to home, preserve ~folder as literal
+        const homedir = os.homedir();
+        if (process.platform !== 'win32') {
+          setAllowedDirectories([homedir]);
+          const expectedPath = path.join(homedir, '~MyFolder', 'file.txt');
+          mockFs.realpath.mockImplementation(async (path: any) => path.toString());
+          const result = await validatePath('~/~MyFolder/file.txt');
+          expect(result).toBe(expectedPath);
+        }
+      });
+
       it('resolves relative paths against allowed directories instead of process.cwd()', async () => {
         const relativePath = 'test-file.txt';
         const originalCwd = process.cwd;

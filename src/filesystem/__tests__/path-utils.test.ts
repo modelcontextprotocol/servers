@@ -225,6 +225,31 @@ describe('Path Utilities', () => {
     it('leaves other paths unchanged', () => {
       expect(expandHome('C:/test')).toBe('C:/test');
     });
+
+    it('preserves literal tilde in directory names', () => {
+      // Tilde as part of a directory name should NOT be expanded
+      expect(expandHome('/Volumes/Drive/Projects/~MyFolder'))
+        .toBe('/Volumes/Drive/Projects/~MyFolder');
+      expect(expandHome('/home/user/~archive'))
+        .toBe('/home/user/~archive');
+      expect(expandHome('/tmp/~backup/files'))
+        .toBe('/tmp/~backup/files');
+    });
+
+    it('does not expand ~username patterns (treated as literal)', () => {
+      // ~SomeName without a slash could be a literal directory name
+      // We intentionally do NOT try to resolve ~username to avoid
+      // misinterpreting literal directory names starting with ~
+      const result = expandHome('~MyFolder');
+      expect(result).toBe('~MyFolder');
+    });
+
+    it('handles Windows short names with tilde', () => {
+      expect(expandHome('C:\\PROGRA~1\\MyApp'))
+        .toBe('C:\\PROGRA~1\\MyApp');
+      expect(expandHome('/Users/NEMANS~1/FOLDER~2'))
+        .toBe('/Users/NEMANS~1/FOLDER~2');
+    });
   });
 
   describe('WSL path handling (issue #2795 fix)', () => {

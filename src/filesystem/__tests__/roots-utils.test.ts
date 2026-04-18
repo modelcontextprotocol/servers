@@ -60,6 +60,69 @@ describe('getValidRootDirectories', () => {
     });
   });
 
+  describe('tilde path handling', () => {
+    let tildeDirParent: string;
+    let tildeDir: string;
+
+    beforeEach(() => {
+      // Create a directory with a literal tilde in its name
+      tildeDirParent = realpathSync(mkdtempSync(join(tmpdir(), 'mcp-tilde-test-')));
+      tildeDir = join(tildeDirParent, '~MyFolder');
+      mkdirSync(tildeDir);
+    });
+
+    afterEach(() => {
+      rmSync(tildeDirParent, { recursive: true, force: true });
+    });
+
+    it('should handle directories with literal tilde in name via file URI', async () => {
+      const roots: Root[] = [
+        { uri: `file://${tildeDir}`, name: 'Tilde Dir' }
+      ];
+
+      const result = await getValidRootDirectories(roots);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe(tildeDir);
+    });
+
+    it('should handle directories with literal tilde in name via plain path', async () => {
+      const roots: Root[] = [
+        { uri: tildeDir, name: 'Tilde Dir' }
+      ];
+
+      const result = await getValidRootDirectories(roots);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe(tildeDir);
+    });
+
+    it('should handle file URI with tilde in authority position gracefully', async () => {
+      // file://~/path is malformed (~ becomes the host), should not crash
+      const roots: Root[] = [
+        { uri: `file://~/some/path`, name: 'Bad URI' },
+        { uri: `file://${tildeDir}`, name: 'Good URI' }
+      ];
+
+      const result = await getValidRootDirectories(roots);
+      // The malformed URI should be skipped, the valid one should work
+      expect(result).toContain(tildeDir);
+    });
+
+    it('should handle multiple directories with tildes', async () => {
+      const tildeDir2 = join(tildeDirParent, '~AnotherFolder');
+      mkdirSync(tildeDir2);
+
+      const roots: Root[] = [
+        { uri: `file://${tildeDir}`, name: 'Tilde Dir 1' },
+        { uri: `file://${tildeDir2}`, name: 'Tilde Dir 2' }
+      ];
+
+      const result = await getValidRootDirectories(roots);
+      expect(result).toHaveLength(2);
+      expect(result).toContain(tildeDir);
+      expect(result).toContain(tildeDir2);
+    });
+  });
+
   describe('error handling', () => {
 
     it('should handle various error types', async () => {
