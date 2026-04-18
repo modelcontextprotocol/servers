@@ -607,7 +607,7 @@ server.registerTool(
       source: z.string(),
       destination: z.string()
     },
-    outputSchema: { content: z.string() },
+    outputSchema: { content: z.array(z.object({ type: z.string(), text: z.string() })) },
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
   },
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
