@@ -47,11 +47,10 @@ const researchStates = new Map<string, ResearchState>();
 /**
  * Runs the background research process.
  * Updates task status as it progresses through stages.
- * If clarification is needed, attempts elicitation via sendRequest.
- *
- * Note: Elicitation only works on STDIO transport. On HTTP transport,
- * sendRequest will fail and the task will use a default interpretation.
- * Full HTTP support requires SDK PR #1210's elicitInputStream API.
+ * If clarification is needed, sends elicitation via sendRequest with relatedTask,
+ * which queues the request in the task message queue. The SDK delivers it through
+ * the tasks/result stream when the client calls tasks/result (per spec input_required flow).
+ * This works on all transports (STDIO, SSE, Streamable HTTP).
  */
 async function runResearchProcess(
   taskId: string,
@@ -94,7 +93,7 @@ async function runResearchProcess(
       );
 
       try {
-        // Try elicitation via sendRequest (works on STDIO, fails on HTTP)
+        // relatedTask queues elicitation via task message queue → delivered through tasks/result on all transports
         const elicitResult: ElicitResult = await sendRequest(
           {
             method: "elicitation/create",
@@ -115,7 +114,8 @@ async function runResearchProcess(
               },
             },
           },
-          ElicitResultSchema
+          ElicitResultSchema,
+          { relatedTask: { taskId } }
         );
 
         // Process elicitation response
@@ -129,14 +129,12 @@ async function runResearchProcess(
           state.clarification = "User cancelled - using default interpretation";
         }
       } catch (error) {
-        // Elicitation failed (likely HTTP transport without streaming support)
-        // Use default interpretation and continue - task should still complete
+        // Elicitation failed - use default interpretation and continue
         console.warn(
-          `Elicitation failed for task ${taskId} (HTTP transport?):`,
+          `Elicitation failed for task ${taskId}:`,
           error instanceof Error ? error.message : String(error)
         );
-        state.clarification =
-          "technical (default - elicitation unavailable on HTTP)";
+        state.clarification = "technical (default - elicitation unavailable)";
       }
 
       // Resume with working status (spec SHOULD)
@@ -199,12 +197,8 @@ ${
 When the query was ambiguous, the server sent an \`elicitation/create\` request
 to the client. The task status changed to \`input_required\` while awaiting user input.
 ${
-  state.clarification.includes("unavailable on HTTP")
-    ? `
-**Note:** Elicitation was skipped because this server is running over HTTP transport.
-The current SDK's \`sendRequest\` only works over STDIO. Full HTTP elicitation support
-requires SDK PR #1210's streaming \`elicitInputStream\` API.
-`
+  state.clarification.includes("unavailable")
+    ? `**Note:** Elicitation failed and a default interpretation was used.`
     : `After receiving clarification ("${state.clarification}"), the task resumed processing and completed.`
 }
 `
@@ -215,7 +209,7 @@ requires SDK PR #1210's streaming \`elicitInputStream\` API.
 - \`statusMessage\` provides human-readable progress updates
 - Tasks have TTL (time-to-live) for automatic cleanup
 - \`pollInterval\` suggests how often to check status
-- Elicitation requests can be sent directly during task execution
+- Elicitation requests use \`relatedTask\` to queue via tasks/result (works on all transports)
 
 *This is a simulated research report from the Everything MCP Server.*
 `;
@@ -279,7 +273,7 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
         researchStates.set(task.taskId, state);
 
         // Start background research (don't await - runs asynchronously)
-        // Pass sendRequest for elicitation (works on STDIO, gracefully degrades on HTTP)
+        // Pass sendRequest for elicitation (queued via task message queue, works on all transports)
         runResearchProcess(
           task.taskId,
           validatedArgs,
