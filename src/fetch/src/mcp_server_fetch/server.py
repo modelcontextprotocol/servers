@@ -18,7 +18,7 @@ from mcp.types import (
     INTERNAL_ERROR,
 )
 from protego import Protego
-from pydantic import BaseModel, Field, AnyUrl
+from pydantic import BaseModel, Field, AnyUrl, field_validator
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
@@ -176,6 +176,13 @@ class Fetch(BaseModel):
             description="Get the actual HTML content of the requested page, without simplification.",
         ),
     ]
+
+    @field_validator("max_length", "start_index", "raw", mode="before")
+    @classmethod
+    def _null_to_default(cls, value, info):
+        if value is None:
+            return cls.model_fields[info.field_name].default
+        return value
 
 
 async def serve(
