@@ -1,5 +1,12 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, RegisteredResource } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Resource, ResourceLink } from "@modelcontextprotocol/sdk/types.js";
+
+/**
+ * Tracks registered session resources by URI to allow updating/removing on re-registration.
+ * This prevents "Resource already registered" errors when a tool creates a resource
+ * with the same URI multiple times during a session.
+ */
+const registeredResources = new Map<string, RegisteredResource>();
 
 /**
  * Generates a session-scoped resource URI string based on the provided resource name.
@@ -47,17 +54,27 @@ export const registerSessionResource = (
           blob: payload,
         };
 
+  // Check if a resource with this URI is already registered and remove it
+  const existingResource = registeredResources.get(uri);
+  if (existingResource) {
+    existingResource.remove();
+    registeredResources.delete(uri);
+  }
+
   // Register file resource
-  server.registerResource(
+  const registeredResource = server.registerResource(
     name,
     uri,
     { mimeType, description, title, annotations, icons, _meta },
-    async (uri) => {
+    async () => {
       return {
         contents: [resourceContent],
       };
     }
   );
+
+  // Track the registered resource for potential future removal
+  registeredResources.set(uri, registeredResource);
 
   return { type: "resource_link", ...resource };
 };

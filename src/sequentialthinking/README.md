@@ -37,6 +37,36 @@ The Sequential Thinking tool is designed for:
 - Tasks that need to maintain context over multiple steps
 - Situations where irrelevant information needs to be filtered out
 
+In practice, you do not call `sequential_thinking` directly by hand unless your client exposes raw tool calls. Instead, connect the server to an MCP-aware host and ask the model to think through a problem step by step. The host can then decide to call the tool one or more times while it works.
+
+### What it looks like in use
+
+Example prompts that typically benefit from this tool:
+
+- `Plan a database migration from PostgreSQL 14 to 16, list risks, and revise the plan if downtime exceeds 5 minutes.`
+- `Debug why this deployment only fails in production and show your reasoning step by step.`
+- `Compare three architecture options for a file sync engine and branch if one assumption turns out to be wrong.`
+
+### How to tell it is working
+
+If your host or inspector shows tool activity, you should see repeated calls to `sequential_thinking` with fields such as:
+
+- `thought`
+- `thoughtNumber`
+- `totalThoughts`
+- `nextThoughtNeeded`
+
+When the reasoning changes course, you may also see revision or branching fields like `isRevision`, `revisesThought`, `branchFromThought`, or `branchId`.
+
+### Quick manual verification
+
+After installing the server in your MCP host:
+
+1. Restart or reload the host so it reconnects to the server.
+2. Confirm the `sequential_thinking` tool appears in the host's MCP tool list or inspector.
+3. Ask the host to solve a non-trivial problem in a step-by-step way.
+4. Verify that the host invokes the tool multiple times instead of returning a one-shot answer.
+
 ## Configuration
 
 ### Usage with Claude Desktop
@@ -51,6 +81,24 @@ Add this to your `claude_desktop_config.json`:
     "sequential-thinking": {
       "command": "npx",
       "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  }
+}
+```
+
+On Windows, use `cmd /c` to launch `npx`:
+
+```json
+{
+  "mcpServers": {
+    "sequential-thinking": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
         "-y",
         "@modelcontextprotocol/server-sequential-thinking"
       ]
@@ -78,7 +126,6 @@ Add this to your `claude_desktop_config.json`:
 ```
 
 To disable logging of thought information set env var: `DISABLE_THOUGHT_LOGGING` to `true`.
-Comment
 
 ### Usage with VS Code
 
@@ -106,6 +153,24 @@ For NPX installation:
     "sequential-thinking": {
       "command": "npx",
       "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  }
+}
+```
+
+On Windows, use:
+
+```json
+{
+  "servers": {
+    "sequential-thinking": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
         "-y",
         "@modelcontextprotocol/server-sequential-thinking"
       ]
