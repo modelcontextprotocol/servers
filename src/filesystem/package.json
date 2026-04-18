@@ -28,7 +28,7 @@
     "@modelcontextprotocol/sdk": "^1.26.0",
     "diff": "^8.0.3",
     "glob": "^10.5.0",
-    "minimatch": "^10.0.1",
+    "minimatch": "^10.2.1",
     "zod-to-json-schema": "^3.23.5"
   },
   "devDependencies": {
