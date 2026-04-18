@@ -439,6 +439,68 @@ describe('Path Validation', () => {
         expect(isPathWithinAllowedDirectories('\\\\other\\share\\project', allowed)).toBe(false);
       }
     });
+
+    it('allows UNC path within allowed UNC directory', () => {
+      if (path.sep === '\\') {
+        const allowed = ['\\\\server\\share\\project'];
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\project\\subdir\\file.txt', allowed)).toBe(true);
+      }
+    });
+
+    it('blocks UNC path outside allowed UNC directory', () => {
+      if (path.sep === '\\') {
+        const allowed = ['\\\\server\\share\\project'];
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\other', allowed)).toBe(false);
+        expect(isPathWithinAllowedDirectories('\\\\other\\share\\project', allowed)).toBe(false);
+      }
+    });
+
+    it('allows exact UNC path match', () => {
+      if (path.sep === '\\') {
+        const allowed = ['\\\\server\\share\\project'];
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\project', allowed)).toBe(true);
+      }
+    });
+
+    // Tests for UNC trailing-slash regression (bug #2 in the companion PR):
+    // path.normalize preserves trailing separators on UNC paths on Windows,
+    // while path.resolve strips them for drive paths. Without harmonization,
+    // the `normalizedDir + path.sep` comparison produces a double separator
+    // that startsWith() never matches, making every access fail even when
+    // the allowed directory is configured with a trailing backslash.
+    it('allows file inside allowed UNC directory with trailing separator', () => {
+      if (path.sep === '\\') {
+        const allowed = ['\\\\server\\share\\project\\'];
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\project\\file.txt', allowed)).toBe(true);
+      }
+    });
+
+    it('allows subdirectories inside allowed UNC directory with trailing separator', () => {
+      if (path.sep === '\\') {
+        const allowed = ['\\\\server\\share\\project\\'];
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\project\\src\\index.ts', allowed)).toBe(true);
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\project\\deeply\\nested\\file', allowed)).toBe(true);
+      }
+    });
+
+    it('allows exact match against allowed UNC directory with trailing separator', () => {
+      if (path.sep === '\\') {
+        const allowed = ['\\\\server\\share\\project\\'];
+        // Path without trailing separator
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\project', allowed)).toBe(true);
+        // Path with trailing separator
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\project\\', allowed)).toBe(true);
+      }
+    });
+
+    it('blocks sibling UNC paths with common prefix when allowed has trailing separator', () => {
+      if (path.sep === '\\') {
+        const allowed = ['\\\\server\\share\\project\\'];
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\project2', allowed)).toBe(false);
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\project_backup', allowed)).toBe(false);
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\projectile', allowed)).toBe(false);
+      }
+    });
   });
 
   describe('Symlink Tests', () => {
