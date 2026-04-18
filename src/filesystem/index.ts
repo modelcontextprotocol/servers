@@ -26,6 +26,7 @@ import {
   tailFile,
   headFile,
   setAllowedDirectories,
+  compareDirectories,
 } from './lib.js';
 
 // Command line argument parsing
@@ -698,6 +699,62 @@ server.registerTool(
     return {
       content: [{ type: "text" as const, text }],
       structuredContent: { content: text }
+    };
+  }
+);
+
+server.registerTool(
+  "compare_directories",
+  {
+    title: "Compare Directories",
+    description:
+      "Compare two directories and report differences. Returns files only in first dir, " +
+      "only in second dir, files with different content (size/mtime), and identical files. " +
+      "Useful for syncing and finding changes between directory versions.",
+    inputSchema: {
+      dir1: z.string(),
+      dir2: z.string(),
+      compareContent: z.boolean().optional()
+    },
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: true }
+  },
+  async (args: { dir1: string; dir2: string; compareContent?: boolean }) => {
+    const validDir1 = await validatePath(args.dir1);
+    const validDir2 = await validatePath(args.dir2);
+    const result = await compareDirectories(validDir1, validDir2, args.compareContent);
+    
+    const lines: string[] = [];
+    lines.push(`Comparison: ${args.dir1} vs ${args.dir2}`);
+    lines.push("");
+    
+    if (result.onlyInDir1.length > 0) {
+      lines.push(`Only in ${args.dir1} (${result.onlyInDir1.length}):`);
+      result.onlyInDir1.forEach(f => lines.push(`  - ${f}`));
+      lines.push("");
+    }
+    
+    if (result.onlyInDir2.length > 0) {
+      lines.push(`Only in ${args.dir2} (${result.onlyInDir2.length}):`);
+      result.onlyInDir2.forEach(f => lines.push(`  - ${f}`));
+      lines.push("");
+    }
+    
+    if (result.differentContent.length > 0) {
+      lines.push(`Different content (${result.differentContent.length}):`);
+      result.differentContent.forEach(f => {
+        lines.push(`  - ${f.path}`);
+        lines.push(`    Size: ${f.dir1Size} vs ${f.dir2Size}`);
+      });
+      lines.push("");
+    }
+    
+    lines.push(`Identical files: ${result.identical.length}`);
+    
+    const text = lines.join("\n");
+    return {
+      content: [{ type: "text" as const, text }],
+      structuredContent: { result }
     };
   }
 );
