@@ -21,7 +21,9 @@ describe('structuredContent schema compliance', () => {
 
   beforeEach(async () => {
     // Create a temp directory for testing
-    testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcp-fs-test-'));
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcp-fs-test-'));
+    // macOS temp dirs may be symlinked (/var -> /private/var); resolve for server allowlist checks.
+    testDir = await fs.realpath(tmpDir);
 
     // Create test files
     await fs.writeFile(path.join(testDir, 'test.txt'), 'test content');
