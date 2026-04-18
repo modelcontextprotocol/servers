@@ -1,7 +1,7 @@
 name: README PR Check
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened]
     paths:
       - 'README.md'
@@ -10,11 +10,12 @@ on:
 
 jobs:
   check-readme-only:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+      issues: write
     steps:
       - name: Check files and comment if README-only
         uses: actions/github-script@v8
@@ -61,6 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      issues: write
     steps:
       - name: Swap labels and minimize comments
         uses: actions/github-script@v8
