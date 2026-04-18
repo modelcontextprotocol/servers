@@ -11,6 +11,7 @@ const config = {
   title: "Toggle Subscriber Updates",
   description: "Toggles simulated resource subscription updates on or off.",
   inputSchema: {},
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 };
 
 // Track enabled clients by session id

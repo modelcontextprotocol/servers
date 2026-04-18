@@ -23,6 +23,7 @@ const config = {
     "Demonstrates bidirectional MCP tasks where the server sends a request and the client " +
     "executes it asynchronously, allowing the server to poll for progress and results.",
   inputSchema: TriggerSamplingRequestAsyncSchema,
+  annotations: { readOnlyHint: false, destructiveHint: false },
 };
 
 // Poll interval in milliseconds

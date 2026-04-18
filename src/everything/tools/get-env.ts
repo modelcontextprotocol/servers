@@ -8,6 +8,7 @@ const config = {
   description:
     "Returns all environment variables, helpful for debugging MCP server configuration",
   inputSchema: {},
+  annotations: { readOnlyHint: true },
 };
 
 /**
