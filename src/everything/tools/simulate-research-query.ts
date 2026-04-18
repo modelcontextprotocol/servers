@@ -255,6 +255,12 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
         "If 'ambiguous' is true and client supports elicitation, sends an elicitation request for clarification.",
       inputSchema: SimulateResearchQuerySchema,
       execution: { taskSupport: "required" },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     {
       /**
