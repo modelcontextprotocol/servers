@@ -195,7 +195,7 @@ describe('Path Utilities', () => {
       // UNC paths should preserve the leading double backslash
       const uncPath = '\\\\SERVER\\share\\folder';
       expect(normalizePath(uncPath)).toBe('\\\\SERVER\\share\\folder');
-      
+
       // Test UNC path with double backslashes that need normalization
       const uncPathWithDoubles = '\\\\\\\\SERVER\\\\share\\\\folder';
       expect(normalizePath(uncPathWithDoubles)).toBe('\\\\SERVER\\share\\folder');
@@ -220,6 +220,19 @@ describe('Path Utilities', () => {
       const result = expandHome('~');
       expect(result).not.toContain('~');
       expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('leaves literal ~MyFolder unchanged (not home expansion)', () => {
+      expect(expandHome('~MyFolder')).toBe('~MyFolder');
+    });
+
+    it('leaves ~user unchanged (not home expansion)', () => {
+      expect(expandHome('~user')).toBe('~user');
+    });
+
+    it('leaves paths with tilde in the middle unchanged', () => {
+      expect(expandHome('/Volumes/Drive/Projects/~MyFolder')).toBe('/Volumes/Drive/Projects/~MyFolder');
+      expect(expandHome('/home/user/~backup')).toBe('/home/user/~backup');
     });
 
     it('leaves other paths unchanged', () => {
