@@ -28,6 +28,12 @@ const config = {
   title: "Get Resource Reference Tool",
   description: "Returns a resource reference that can be used by MCP clients",
   inputSchema: GetResourceReferenceSchema,
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
 };
 
 /**
