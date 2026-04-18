@@ -1,0 +1,75 @@
+# SAIHM MCP Server
+
+Sovereign AI Horizontal Memory — a privacy-preserving, decentralized memory infrastructure for AI agents. Post-quantum encrypted. Powered by COTI V2.
+
+## Overview
+
+SAIHM enables AI agents to maintain persistent, encrypted, cross-session memory across any platform or blockchain. Memory shards are encrypted with post-quantum cryptography (ML-KEM, ML-DSA, AE>
+
+## Tools
+
+| Tool | Description |
+|---|---|
+| `saihm_remember` | Write an encrypted memory shard to persistent storage |
+| `saihm_recall` | Read and decrypt a memory shard by key |
+| `saihm_forget` | Request cryptographic erasure of a shard (GDPR Art. 17) |
+| `saihm_status` | Get agent dashboard: PRS score, BFSI discount, storage, staking |
+
+## Features
+
+- **Persistent encrypted memory** across sessions and platforms
+- **Post-quantum cryptography** (NIST FIPS 203/204/205)
+- **Cross-agent sharing** via sharing contracts (temporary, permanent, syndicate)
+- **Cross-chain identity** via GC-19 (EVM + non-EVM)
+- **GDPR-compliant erasure** — cryptographic key destruction, proof on Arweave
+- **Behavioral reputation** — PRS/BFSI scoring with fee discounts up to 20%
+- **Decentralized storage** — Filecoin, Storj, Arweave, IPFS
+
+## Installation
+
+```bash
+npm install @coti-io/coti-sdk-typescript
+```
+
+## Configuration
+
+```json
+{
+  "mcpServers": {
+    "saihm": {
+      "command": "npx",
+      "args": ["tsx", "saihm_mcp_server.ts"],
+      "env": {
+        "SAIHM_CHAIN_ID": "2632500",
+        "SAIHM_RPC": "https://mainnet.coti.io/rpc"
+      }
+    }
+  }
+}
+```
+
+## Network
+
+- **Mainnet**: COTI V2 Helium (Chain ID: 2632500)
+- **Testnet**: Chain ID 7082400
+- **RPC**: `https://mainnet.coti.io/rpc`
+- **Protocol**: v2.0.0-helium | Rev 63.13
+
+## Fees
+
+- Write: 100,000 nCOTI (~0.0001 COTI)
+- Read: 10,000 nCOTI (~0.00001 COTI)
+- BFSI behavioral discount: up to 20%
+- No subscriptions, no minimums
+
+## Documentation
+
+- [Website](https://ipfs.io/ipns/k51qzi5uqu5dkkjjdca2dl2sqilz1ahy0xdlhs0ltd691ifidqpk1b7zc4utwm/)
+- [Developer Integration Guide (PDF)](https://ipfs.io/ipns/k51qzi5uqu5dkkjjdca2dl2sqilz1ahy0xdlhs0ltd691ifidqpk1b7zc4utwm/pdf/SAIHM_P2_Developer_Integration.pdf)
+- [AI Agent Interface Spec (PDF)](https://ipfs.io/ipns/k51qzi5uqu5dkkjjdca2dl2sqilz1ahy0xdlhs0ltd691ifidqpk1b7zc4utwm/pdf/SAIHM_P3_AI_Agent_Interface.pdf)
+- [QuickStart for Top 10 Agent Platforms (PDF)](https://ipfs.io/ipns/k51qzi5uqu5dkkjjdca2dl2sqilz1ahy0xdlhs0ltd691ifidqpk1b7zc4utwm/pdf/SAIHM_QuickStart_Top10_Agents.pdf)
+
+## License
+
+Apache 2.0 | Copyright 2026 SAIHM | Powered by COTI
+
