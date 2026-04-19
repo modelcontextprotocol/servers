@@ -93,6 +93,7 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 * **[OpenMCP Client](https://github.com/LSTM-Kirigaya/openmcp-client/)** - An all-in-one vscode/trae/cursor plugin for MCP server debugging. [Document](https://kirigaya.cn/openmcp/) & [OpenMCP SDK](https://kirigaya.cn/openmcp/sdk-tutorial/).
 * **[PHP MCP Client](https://github.com/php-mcp/client)** - Core PHP implementation for the Model Context Protocol (MCP) Client
 * **[Runbear](https://runbear.io/solutions/integrations/slack/mcp)** - No-code MCP client for team chat platforms, such as Slack, Microsoft Teams, and Discord.
+* **[MCPBundle Studio](https://www.mcpbundles.com/studio)** - Browser-based MCP client for inspecting tool schemas, executing tools with form-based or chat input, and rendering interactive Apps from tool responses. Supports OAuth and API-key auth, streamable HTTP transport.
 
 ## 📚 Resources
 
@@ -109,6 +110,7 @@ Additional resources on MCP.
 - **[Install This MCP](https://installthismcp.com)** - Reduce Installation Friction with beautiful installation guides
 - <img height="12" width="12" src="https://raw.githubusercontent.com/klavis-ai/klavis/main/static/klavis-ai.png" alt="Klavis Logo" /> **[Klavis AI](https://www.klavis.ai)** - Open Source MCP Infra. Hosted MCP servers and MCP clients on Slack and Discord.
 - **[MCP Badges](https://github.com/mcpx-dev/mcp-badges)** – Quickly highlight your MCP project with clear, eye-catching badges, by **[Ironben](https://github.com/nanbingxyz)**
+- **[MCP Bundles Hub](https://mcpbundles.com)** - Hosted directory of 650+ custom-built and 800+ third-party hosted MCP servers, with workspace-scoped credential management, OAuth/API-key brokerage, and a unified streamable HTTP endpoint for connecting agents to many providers through one bundle.
 - <img height="12" width="12" src="https://mcpproxy.app/favicon.svg" alt="MCPProxy Logo" /> **[MCPProxy](https://github.com/smart-mcp-proxy/mcpproxy-go)** - Open-source local app that enables access to multiple MCP servers and thousands of tools with intelligent discovery via MCP protocol, runs servers in isolated environments, and features automatic quarantine protection against malicious tools.
 - **[MCPRepository.com](https://mcprepository.com/)** - A repository that indexes and organizes all MCP servers for easy discovery.
 - **[mcp-cli](https://github.com/wong2/mcp-cli)** - A CLI inspector for the Model Context Protocol by **[wong2](https://github.com/wong2)**
