@@ -113,7 +113,8 @@ def has_changes(path: Path, git_hash: GitHash) -> bool:
         )
 
         changed_files = [Path(f) for f in output.stdout.splitlines()]
-        relevant_files = [f for f in changed_files if f.suffix in [".py", ".ts"]]
+        # Include all file types since lockfile changes (e.g., uv.lock) also need version bumps
+        relevant_files = [f for f in changed_files if f.suffix in [".py", ".ts", ".lock"]]
         return len(relevant_files) >= 1
     except subprocess.CalledProcessError:
         return False
