@@ -731,7 +731,10 @@ server.server.setNotificationHandler(RootsListChangedNotificationSchema, async (
 server.server.oninitialized = async () => {
   const clientCapabilities = server.server.getClientCapabilities();
 
-  if (clientCapabilities?.roots) {
+  if (clientCapabilities?.roots && allowedDirectories.length === 0) {
+    // Only fetch and apply MCP roots when no CLI directories were provided.
+    // CLI arguments take precedence over MCP roots since they are explicitly
+    // specified by the server operator.
     try {
       const response = await server.server.listRoots();
       if (response && 'roots' in response) {
@@ -744,7 +747,7 @@ server.server.oninitialized = async () => {
     }
   } else {
     if (allowedDirectories.length > 0) {
-      console.error("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
+      console.error("Client does not support MCP Roots, or CLI directories provided. Using allowed directories from server args:", allowedDirectories);
     }else{
       throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
     }
