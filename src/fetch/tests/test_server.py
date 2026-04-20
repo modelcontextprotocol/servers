@@ -372,7 +372,8 @@ class TestGetResponseText:
         assert text in get_response_text(_build_response(body))
 
     def test_korean_euc_kr(self):
-        text = "서울특별시는 대한민국의 수도이자 최대 도시이다"
-        body = text.encode("utf-8")
-        resp = httpx.Response(200, headers={"content-type": "text/html"}, content=body)
-        assert text in get_response_text(resp)
+        text = "서울특별시는 대한민국의 수도이자 최대 도시이며 정치 경제 문화의 중심지로 오랜 역사와 전통을 자랑하는 동아시아의 주요 도시입니다."
+        body = (
+            b"<html><body><p>" + text.encode("euc-kr") + b"</p></body></html>"
+        )
+        assert text in get_response_text(_build_response(body))
