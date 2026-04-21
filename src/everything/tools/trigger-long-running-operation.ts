@@ -6,8 +6,9 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 const TriggerLongRunningOperationSchema = z.object({
   duration: z
     .number()
+    .default(10)
     .describe("Duration of the operation in seconds"),
-  steps: z.number().describe("Number of steps in the operation"),
+  steps: z.number().default(5).describe("Number of steps in the operation"),
 });
 
 // Tool configuration
