@@ -89,6 +89,9 @@ if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
 
 allowedDirectories = accessibleDirectories;
 
+// Track if directories were explicitly provided via CLI args
+const hasCliDirectories = args.length > 0;
+
 // Initialize the global allowedDirectories in lib.ts
 setAllowedDirectories(allowedDirectories);
 
@@ -703,7 +706,13 @@ server.registerTool(
 );
 
 // Updates allowed directories based on MCP client roots
+// Only overrides if no CLI directories were explicitly provided
 async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
+  // If CLI directories were explicitly provided, MCP roots should not override them
+  if (hasCliDirectories) {
+    console.error("Ignoring MCP roots: CLI-provided directories take precedence");
+    return;
+  }
   const validatedRootDirs = await getValidRootDirectories(requestedRoots);
   if (validatedRootDirs.length > 0) {
     allowedDirectories = [...validatedRootDirs];
