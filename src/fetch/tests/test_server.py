@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from mcp.shared.exceptions import McpError
+from pydantic import ValidationError
 
 from mcp_server_fetch.server import (
     Fetch,
@@ -44,6 +45,20 @@ class TestFetchToolSchema:
         assert "format" not in url_schema
         assert "minLength" not in url_schema
         assert url_schema["type"] == "string"
+
+    def test_url_runtime_validation_still_rejects_invalid_urls(self):
+        """Ensure AnyUrl runtime validation is preserved after the WithJsonSchema override.
+
+        The override only simplifies the emitted JSON schema; invalid URLs
+        must still be rejected at parse time with a ValidationError.
+        """
+        with pytest.raises(ValidationError):
+            Fetch(url="not-a-url")
+
+    def test_url_runtime_validation_accepts_valid_urls(self):
+        """Ensure valid URLs still parse successfully after the WithJsonSchema override."""
+        fetch = Fetch(url="https://example.com/page")
+        assert str(fetch.url) == "https://example.com/page"
 
 
 class TestGetRobotsTxtUrl:
