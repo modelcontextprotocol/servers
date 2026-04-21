@@ -53,11 +53,11 @@ class TestFetchToolSchema:
         must still be rejected at parse time with a ValidationError.
         """
         with pytest.raises(ValidationError):
-            Fetch(url="not-a-url")
+            Fetch.model_validate({"url": "not-a-url"})
 
     def test_url_runtime_validation_accepts_valid_urls(self):
         """Ensure valid URLs still parse successfully after the WithJsonSchema override."""
-        fetch = Fetch(url="https://example.com/page")
+        fetch = Fetch.model_validate({"url": "https://example.com/page"})
         assert str(fetch.url) == "https://example.com/page"
 
 
