@@ -5,32 +5,37 @@
  */
 
 export interface RootsGate {
-  promise: Promise<void>;
   resolve: () => void;
   waitForReady: () => Promise<void>;
 }
 
 export function createRootsGate(timeoutMs: number = 10000): RootsGate {
-  let resolve: () => void;
+  let resolve!: () => void;
   const promise = new Promise<void>((res) => {
     resolve = res;
   });
 
   function waitForReady(): Promise<void> {
-    return Promise.race([
-      promise,
-      new Promise<void>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`Roots initialization timed out after ${timeoutMs}ms`)),
-          timeoutMs
-        )
-      ),
-    ]);
+    return new Promise<void>((resolveWait, rejectWait) => {
+      const timer = setTimeout(() => {
+        rejectWait(new Error(`Roots initialization timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      promise.then(
+        () => {
+          clearTimeout(timer);
+          resolveWait();
+        },
+        (error) => {
+          clearTimeout(timer);
+          rejectWait(error);
+        }
+      );
+    });
   }
 
   return {
-    promise,
-    resolve: resolve!,
+    resolve,
     waitForReady,
   };
 }

@@ -8,6 +8,13 @@ describe('createRootsGate', () => {
     await expect(gate.waitForReady()).resolves.toBeUndefined();
   });
 
+  it('resolves immediately when called after the gate has already resolved', async () => {
+    const gate = createRootsGate();
+    gate.resolve();
+    await expect(gate.waitForReady()).resolves.toBeUndefined();
+    await expect(gate.waitForReady()).resolves.toBeUndefined();
+  });
+
   it('resolves after a delay when resolve is called later', async () => {
     const gate = createRootsGate();
     setTimeout(() => gate.resolve(), 50);
