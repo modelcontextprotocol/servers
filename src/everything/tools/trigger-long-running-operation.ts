@@ -18,7 +18,7 @@ const config = {
   description: "Demonstrates a long running operation with progress updates.",
   inputSchema: TriggerLongRunningOperationSchema,
   annotations: {
-    readOnlyHint: true,
+    readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: false,
     openWorldHint: false,
