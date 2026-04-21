@@ -131,7 +131,7 @@ src/everything
 - `get-annotated-message.ts`
   - Registers an `annotated-message` tool which demonstrates annotated content items by emitting a primary `text` message with `annotations` that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true.
 - `get-env.ts`
-  - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
+  - Registers a `get-env` tool that returns the value of a specific environment variable by name; useful for debugging configuration.
 - `get-resource-links.ts`
   - Registers a `get-resource-links` tool that returns an intro `text` block followed by multiple `resource_link` items.
 - `get-resource-reference.ts`
