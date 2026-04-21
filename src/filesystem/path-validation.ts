@@ -25,9 +25,22 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
   }
 
   // Normalize the input path
+  // Handle UNC paths specially to preserve the \ prefix on Windows
+  const isUncPath = absolutePath.startsWith('\\');
   let normalizedPath: string;
   try {
-    normalizedPath = path.resolve(path.normalize(absolutePath));
+    if (isUncPath) {
+      // For UNC paths, normalize but don't resolve (resolve strips leading backslashes)
+      const normalized = path.normalize(absolutePath);
+      // path.normalize may strip one backslash from \\server\share - restore it
+      if (normalized.startsWith('\') && !normalized.startsWith('\\')) {
+        normalizedPath = '\\' + normalized.slice(2);
+      } else {
+        normalizedPath = normalized;
+      }
+    } else {
+      normalizedPath = path.resolve(path.normalize(absolutePath));
+    }
   } catch {
     return false;
   }
@@ -49,9 +62,20 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
     }
 
     // Normalize the allowed directory
+    // Handle UNC paths specially to preserve the \ prefix on Windows
+    const isUncDir = dir.startsWith('\\');
     let normalizedDir: string;
     try {
-      normalizedDir = path.resolve(path.normalize(dir));
+      if (isUncDir) {
+        const normalized = path.normalize(dir);
+        if (normalized.startsWith('\') && !normalized.startsWith('\\')) {
+          normalizedDir = '\\' + normalized.slice(2);
+        } else {
+          normalizedDir = normalized;
+        }
+      } else {
+        normalizedDir = path.resolve(path.normalize(dir));
+      }
     } catch {
       return false;
     }
