@@ -119,6 +119,32 @@ python -m mcp_server_git
 
 ## Configuration
 
+### Usage with Kiro
+
+For quick installation, click the button below:
+
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=git&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22mcp-server-git%22%5D%7D)
+
+#### Manual Configuration
+
+1. From the Kiro panel, select the **MCP Servers** tab, or open the file `.kiro/settings/mcp.json` in your project.
+2. Add the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "git": {
+      "command": "uvx",
+      "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
+    }
+  }
+}
+```
+
+3. Replace `path/to/git/repo` with the path to your Git repository.
+
+For more details, see the Kiro MCP documentation for [IDE](https://kiro.dev/docs/ide/mcp/configuration/) or [CLI](https://kiro.dev/docs/cli/mcp/configuration/).
+
 ### Usage with Claude Desktop
 
 Add this to your `claude_desktop_config.json`:
