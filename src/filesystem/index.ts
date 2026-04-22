@@ -717,7 +717,10 @@ async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
 // Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
 server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
   try {
-    // Request the updated roots list from the client
+    // Only update from MCP roots if no CLI directories were set
+    if (allowedDirectories.length > 0) {
+      return;
+    }
     const response = await server.server.listRoots();
     if (response && 'roots' in response) {
       await updateAllowedDirectoriesFromRoots(response.roots);
