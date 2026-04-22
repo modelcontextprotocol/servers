@@ -151,31 +151,33 @@ describe('Tools', () => {
   });
 
   describe('get-env', () => {
-    it('should return all environment variables as JSON', async () => {
+    it('should return the value of a specific environment variable', async () => {
       const { mockServer, handlers } = createMockServer();
       registerGetEnvTool(mockServer);
 
       const handler = handlers.get('get-env')!;
       process.env.TEST_VAR_EVERYTHING = 'test_value';
-      const result = await handler({});
+      const result = await handler({ key: 'TEST_VAR_EVERYTHING' });
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-
-      const envJson = JSON.parse(result.content[0].text);
-      expect(envJson.TEST_VAR_EVERYTHING).toBe('test_value');
+      expect(result.content[0].text).toBe('test_value');
 
       delete process.env.TEST_VAR_EVERYTHING;
     });
 
-    it('should return valid JSON', async () => {
+    it('should return a message when the key does not exist', async () => {
       const { mockServer, handlers } = createMockServer();
       registerGetEnvTool(mockServer);
 
       const handler = handlers.get('get-env')!;
-      const result = await handler({});
+      const result = await handler({ key: 'NONEXISTENT_VAR_12345' });
 
-      expect(() => JSON.parse(result.content[0].text)).not.toThrow();
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].type).toBe('text');
+      expect(result.content[0].text).toBe(
+        'Environment variable "NONEXISTENT_VAR_12345" is not set.'
+      );
     });
   });
 
