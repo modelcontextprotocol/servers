@@ -49,6 +49,30 @@ python -m mcp_server_fetch
 
 ## Configuration
 
+### Configure for Kiro
+
+For quick installation, click the button below:
+
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=fetch&config=%7B%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22mcp-server-fetch%22%5D%7D)
+
+#### Manual Configuration
+
+1. From the Kiro panel, select the **MCP Servers** tab, or open the file `.kiro/settings/mcp.json` in your project.
+2. Add the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    }
+  }
+}
+```
+
+For more details, see the Kiro MCP documentation for [IDE](https://kiro.dev/docs/ide/mcp/configuration/) or [CLI](https://kiro.dev/docs/cli/mcp/configuration/).
+
 ### Configure for Claude.app
 
 Add to your Claude settings:
