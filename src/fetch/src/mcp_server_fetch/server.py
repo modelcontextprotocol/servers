@@ -3,6 +3,7 @@ from urllib.parse import urlparse, urlunparse
 
 import markdownify
 import readabilipy.simple_json
+from bs4 import BeautifulSoup
 from mcp.shared.exceptions import McpError
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -71,9 +72,14 @@ def extract_content_from_html(html: str) -> str:
         if len(content.strip()) >= min_expected_length:
             return content
 
-    # Stage 3: Convert full HTML directly with markdownify (last resort)
+    # Stage 3: Convert full HTML directly with markdownify (last resort).
+    # Strip <script> and <style> first — markdownify renders them verbatim as
+    # plain text, which injects large blobs of JS/CSS noise into the output.
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style"]):
+        tag.decompose()
     content = markdownify.markdownify(
-        html,
+        str(soup),
         heading_style=markdownify.ATX,
     )
     if content.strip():
