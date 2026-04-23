@@ -141,7 +141,8 @@ const ListDirectoryWithSizesArgsSchema = z.object({
 
 const DirectoryTreeArgsSchema = z.object({
   path: z.string(),
-  excludePatterns: z.array(z.string()).optional().default([])
+  excludePatterns: z.array(z.string()).optional().default([]),
+  maxDepth: z.number().int().min(0).optional().describe('Maximum depth to traverse. 0 = only the root directory, 1 = root + immediate children, etc. Omit for unlimited depth.')
 });
 
 const MoveFileArgsSchema = z.object({
@@ -532,6 +533,7 @@ server.registerTool(
       "Get a recursive tree view of files and directories as a JSON structure. " +
       "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
       "Files have no children array, while directories always have a children array (which may be empty). " +
+      "Use 'maxDepth' to limit traversal depth (0 = root only, 1 = root + immediate children, etc.). " +
       "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
     inputSchema: {
       path: z.string(),
@@ -548,7 +550,7 @@ server.registerTool(
     }
     const rootPath = args.path;
 
-    async function buildTree(currentPath: string, excludePatterns: string[] = []): Promise<TreeEntry[]> {
+    async function buildTree(currentPath: string, excludePatterns: string[] = [], currentDepth: number = 0): Promise<TreeEntry[]> {
       const validPath = await validatePath(currentPath);
       const entries = await fs.readdir(validPath, { withFileTypes: true });
       const result: TreeEntry[] = [];
@@ -559,8 +561,6 @@ server.registerTool(
           if (pattern.includes('*')) {
             return minimatch(relativePath, pattern, { dot: true });
           }
-          // For files: match exact name or as part of path
-          // For directories: match as directory path
           return minimatch(relativePath, pattern, { dot: true }) ||
             minimatch(relativePath, `**/${pattern}`, { dot: true }) ||
             minimatch(relativePath, `**/${pattern}/**`, { dot: true });
@@ -574,8 +574,12 @@ server.registerTool(
         };
 
         if (entry.isDirectory()) {
-          const subPath = path.join(currentPath, entry.name);
-          entryData.children = await buildTree(subPath, excludePatterns);
+          if (args.maxDepth === undefined || currentDepth < args.maxDepth) {
+            const subPath = path.join(currentPath, entry.name);
+            entryData.children = await buildTree(subPath, excludePatterns, currentDepth + 1);
+          } else {
+            entryData.children = [];
+          }
         }
 
         result.push(entryData);
