@@ -15,7 +15,8 @@ import {
 const GetResourceReferenceSchema = z.object({
   resourceType: z
     .enum([RESOURCE_TYPE_TEXT, RESOURCE_TYPE_BLOB])
-    .default(RESOURCE_TYPE_TEXT),
+    .default(RESOURCE_TYPE_TEXT)
+    .describe("Type of resource — must be 'Text' or 'Blob'."),
   resourceId: z
     .number()
     .default(1)
