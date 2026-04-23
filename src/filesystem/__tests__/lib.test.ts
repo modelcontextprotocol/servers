@@ -363,6 +363,48 @@ describe('Lib Functions', () => {
           { force: true }
         );
       });
+
+      it('cleans up temp file and re-throws when fs.cp fails after EPERM', async () => {
+        const eexistError = new Error('EEXIST') as NodeJS.ErrnoException;
+        eexistError.code = 'EEXIST';
+        const epermError = new Error('EPERM') as NodeJS.ErrnoException;
+        epermError.code = 'EPERM';
+        const enospcError = new Error('ENOSPC') as NodeJS.ErrnoException;
+        enospcError.code = 'ENOSPC';
+
+        mockFs.writeFile
+          .mockRejectedValueOnce(eexistError)
+          .mockResolvedValueOnce(undefined);
+        mockFs.rename.mockRejectedValueOnce(epermError);
+        mockFs.cp.mockRejectedValueOnce(enospcError);
+        mockFs.unlink.mockResolvedValue(undefined);
+
+        await expect(writeFileContent('/test/file.txt', 'new content'))
+          .rejects.toThrow('ENOSPC');
+
+        expect(mockFs.unlink).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/)
+        );
+      });
+
+      it('cleans up temp file and re-throws when temp write fails', async () => {
+        const eexistError = new Error('EEXIST') as NodeJS.ErrnoException;
+        eexistError.code = 'EEXIST';
+        const enospcError = new Error('ENOSPC') as NodeJS.ErrnoException;
+        enospcError.code = 'ENOSPC';
+
+        mockFs.writeFile
+          .mockRejectedValueOnce(eexistError)
+          .mockRejectedValueOnce(enospcError);
+        mockFs.unlink.mockResolvedValue(undefined);
+
+        await expect(writeFileContent('/test/file.txt', 'new content'))
+          .rejects.toThrow('ENOSPC');
+
+        expect(mockFs.unlink).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/)
+        );
+      });
     });
 
   });
@@ -660,6 +702,24 @@ describe('Lib Functions', () => {
           expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
           '/test/file.txt',
           { force: true }
+        );
+      });
+
+      it('cleans up temp file and re-throws when temp write fails during file edit', async () => {
+        const enospcError = new Error('ENOSPC') as NodeJS.ErrnoException;
+        enospcError.code = 'ENOSPC';
+
+        mockFs.readFile.mockResolvedValue('line1\nline2\nline3\n');
+        mockFs.writeFile.mockRejectedValueOnce(enospcError);
+        mockFs.unlink.mockResolvedValue(undefined);
+
+        const edits = [{ oldText: 'line2', newText: 'modified line2' }];
+
+        await expect(applyFileEdits('/test/file.txt', edits, false))
+          .rejects.toThrow('ENOSPC');
+
+        expect(mockFs.unlink).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/)
         );
       });
 

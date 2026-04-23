@@ -159,23 +159,28 @@ export async function validatePath(requestedPath: string): Promise<string> {
  * @param tempPath  Path to the temporary file that contains the new content.
  * @param targetPath  Path to the destination file to be replaced.
  */
+async function cleanupTempFile(tempPath: string): Promise<void> {
+  try {
+    await fs.unlink(tempPath);
+  } catch {}
+}
+
 async function replaceFileFromTemp(tempPath: string, targetPath: string): Promise<void> {
   try {
     await fs.rename(tempPath, targetPath);
   } catch (renameError) {
     if ((renameError as NodeJS.ErrnoException).code === 'EPERM') {
       // Fallback: copy then best-effort cleanup
-      await fs.cp(tempPath, targetPath, { force: true });
       try {
-        await fs.unlink(tempPath);
-      } catch {
-        // Best-effort cleanup; target was already written successfully
+        await fs.cp(tempPath, targetPath, { force: true });
+      } catch (copyError) {
+        await cleanupTempFile(tempPath);
+        throw copyError;
       }
+      await cleanupTempFile(tempPath);
     } else {
       // For non-EPERM errors, clean up the temp file and re-throw
-      try {
-        await fs.unlink(tempPath);
-      } catch {}
+      await cleanupTempFile(tempPath);
       throw renameError;
     }
   }
@@ -210,8 +215,13 @@ export async function writeFileContent(filePath: string, content: string): Promi
       // could be created between validation and write. Rename operations
       // replace the target file atomically and don't follow symlinks.
       const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-      await fs.writeFile(tempPath, content, 'utf-8');
-      await replaceFileFromTemp(tempPath, filePath);
+      try {
+        await fs.writeFile(tempPath, content, 'utf-8');
+        await replaceFileFromTemp(tempPath, filePath);
+      } catch (tempWriteError) {
+        await cleanupTempFile(tempPath);
+        throw tempWriteError;
+      }
     } else {
       throw error;
     }
@@ -301,8 +311,13 @@ export async function applyFileEdits(
     // could be created between validation and write. Rename operations
     // replace the target file atomically and don't follow symlinks.
     const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-    await fs.writeFile(tempPath, modifiedContent, 'utf-8');
-    await replaceFileFromTemp(tempPath, filePath);
+    try {
+      await fs.writeFile(tempPath, modifiedContent, 'utf-8');
+      await replaceFileFromTemp(tempPath, filePath);
+    } catch (writeError) {
+      await cleanupTempFile(tempPath);
+      throw writeError;
+    }
   }
 
   return formattedDiff;
