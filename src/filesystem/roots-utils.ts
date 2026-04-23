@@ -23,8 +23,12 @@ async function parseRootUri(rootUri: string): Promise<string | null> {
     let resolvedPath = absolutePath;
     try {
       resolvedPath = await fs.realpath(absolutePath);
-    } catch {
-      // keep `absolutePath`
+    } catch (err) {
+      // `realpath()` can throw ENOENT on some Windows setups (SUBST/mapped drives)
+      // even when the path exists. Only suppress that case.
+      if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+        throw err;
+      }
     }
     return normalizePath(resolvedPath);
   } catch {

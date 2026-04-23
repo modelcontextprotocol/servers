@@ -174,15 +174,14 @@ describe('Lib Functions', () => {
 
       it('handles non-existent files by checking parent directory', async () => {
         const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\newfile.txt' : '/home/user/newfile.txt';
-        const parentPath = process.platform === 'win32' ? 'C:\\Users\\test' : '/home/user';
         
         // Create an error with the ENOENT code that the implementation checks for
         const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
         enoentError.code = 'ENOENT';
         
-        mockFs.realpath
-          .mockRejectedValueOnce(enoentError)
-          .mockResolvedValueOnce(parentPath);
+        mockFs.realpath.mockRejectedValueOnce(enoentError);
+        // validatePath() falls back to stat(absolute) when realpath throws ENOENT
+        mockFs.stat.mockResolvedValueOnce({ isDirectory: () => false } as any);
         
         const result = await validatePath(newFilePath);
         expect(result).toBe(path.resolve(newFilePath));
@@ -197,9 +196,7 @@ describe('Lib Functions', () => {
         const enoentError2 = new Error('ENOENT') as NodeJS.ErrnoException;
         enoentError2.code = 'ENOENT';
         
-        mockFs.realpath
-          .mockRejectedValueOnce(enoentError1)
-          .mockRejectedValueOnce(enoentError2);
+        mockFs.realpath.mockRejectedValueOnce(enoentError1);
         // With the Windows `realpath()` fallback logic, we also check `stat()` to
         // distinguish "realpath broken" from "path truly doesn't exist".
         mockFs.stat
