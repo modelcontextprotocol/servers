@@ -132,6 +132,7 @@ const CreateDirectoryArgsSchema = z.object({
 
 const ListDirectoryArgsSchema = z.object({
   path: z.string(),
+  depth: z.number().optional().describe('Maximum directory depth to list (default: 1, max: 10)')
 });
 
 const ListDirectoryWithSizesArgsSchema = z.object({
@@ -427,17 +428,35 @@ server.registerTool(
       "prefixes. This tool is essential for understanding directory structure and " +
       "finding specific files within a directory. Only works within allowed directories.",
     inputSchema: {
-      path: z.string()
+      path: z.string(),
+      depth: z.number().optional().describe('Maximum directory depth to list (default: 1, max: 10)')
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ListDirectoryArgsSchema>) => {
     const validPath = await validatePath(args.path);
-    const entries = await fs.readdir(validPath, { withFileTypes: true });
-    const formatted = entries
-      .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
-      .join("\n");
+    const maxDepth = Math.min(args.depth ?? 1, 10);
+
+    async function listDirRecursive(currentPath: string, currentDepth: number): Promise<string[]> {
+      const entries = await fs.readdir(currentPath, { withFileTypes: true });
+      const lines: string[] = [];
+
+      for (const entry of entries) {
+        const indent = '  '.repeat(currentDepth - 1);
+        lines.push(`${indent}${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`);
+
+        if (entry.isDirectory() && currentDepth < maxDepth) {
+          const subPath = path.join(currentPath, entry.name);
+          const subEntries = await listDirRecursive(subPath, currentDepth + 1);
+          lines.push(...subEntries);
+        }
+      }
+
+      return lines;
+    }
+
+    const formatted = (await listDirRecursive(validPath, 1)).join("\n");
     return {
       content: [{ type: "text" as const, text: formatted }],
       structuredContent: { content: formatted }
