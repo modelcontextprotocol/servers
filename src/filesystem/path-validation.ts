@@ -18,7 +18,6 @@ function isUNCPath(p: string): boolean {
 function normalizePossiblyUNCPath(p: string): string {
   if (isUNCPath(p)) {
     let normalized = path.normalize(p);
-    // path.normalize may strip a leading backslash from UNC paths
     if (!normalized.startsWith('\\\\')) {
       normalized = '\\' + normalized;
     }
