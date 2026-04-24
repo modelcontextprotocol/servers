@@ -199,9 +199,9 @@ describe('Path Validation', () => {
       expect(isPathWithinAllowedDirectories('/home/user/café', allowed)).toBe(true);
       expect(isPathWithinAllowedDirectories('/home/user/café/file', allowed)).toBe(true);
 
-      // Different unicode representation won't match (not normalized)
+      // Different unicode representations now match after NFC normalization
       const decomposed = '/home/user/cafe\u0301'; // e + combining accent
-      expect(isPathWithinAllowedDirectories(decomposed, allowed)).toBe(false);
+      expect(isPathWithinAllowedDirectories(decomposed, allowed)).toBe(true);
     });
 
     it('handles paths with spaces correctly', () => {

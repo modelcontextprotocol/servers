@@ -27,7 +27,7 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
   // Normalize the input path
   let normalizedPath: string;
   try {
-    normalizedPath = path.resolve(path.normalize(absolutePath));
+    normalizedPath = path.resolve(path.normalize(absolutePath)).normalize("NFC");
   } catch {
     return false;
   }
@@ -51,7 +51,7 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
     // Normalize the allowed directory
     let normalizedDir: string;
     try {
-      normalizedDir = path.resolve(path.normalize(dir));
+      normalizedDir = path.resolve(path.normalize(dir)).normalize("NFC");
     } catch {
       return false;
     }
