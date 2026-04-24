@@ -1,5 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+
+// Tool input schema
+export const GetEnvSchema = z.object({
+  key: z.string().describe(
+    "The name of the environment variable to retrieve (e.g., 'PATH', 'HOME', 'USER')",
+  ),
+});
 
 // Tool configuration
 const name = "get-env";
@@ -7,17 +15,7 @@ const config = {
   title: "Print Environment Tool",
   description:
     "Returns the value of a specific environment variable, helpful for debugging MCP server configuration",
-  inputSchema: {
-    type: "object",
-    properties: {
-      key: {
-        type: "string",
-        description:
-          "The name of the environment variable to retrieve (e.g., 'PATH', 'HOME', 'USER')",
-      },
-    },
-    required: ["key"],
-  },
+  inputSchema: GetEnvSchema,
 };
 
 /**
@@ -31,7 +29,7 @@ const config = {
  */
 export const registerGetEnvTool = (server: McpServer) => {
   server.registerTool(name, config, async (args): Promise<CallToolResult> => {
-    const { key } = args as { key: string };
+    const { key } = GetEnvSchema.parse(args);
     const value = process.env[key];
 
     if (value === undefined) {
