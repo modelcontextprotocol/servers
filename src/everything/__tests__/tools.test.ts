@@ -157,7 +157,7 @@ describe('Tools', () => {
 
       const handler = handlers.get('get-env')!;
       process.env.TEST_VAR_EVERYTHING = 'test_value';
-      const result = await handler({});
+      const result = await handler({ key: 'TEST_VAR_EVERYTHING' });
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
@@ -173,7 +173,7 @@ describe('Tools', () => {
       registerGetEnvTool(mockServer);
 
       const handler = handlers.get('get-env')!;
-      const result = await handler({});
+      const result = await handler({ key: 'PATH' });
 
       expect(() => JSON.parse(result.content[0].text)).not.toThrow();
     });
