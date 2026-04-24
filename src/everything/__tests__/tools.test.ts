@@ -162,20 +162,22 @@ describe('Tools', () => {
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
 
-      const envJson = JSON.parse(result.content[0].text);
-      expect(envJson.TEST_VAR_EVERYTHING).toBe('test_value');
+      const text = result.content[0].text;
+      expect(text).toBe('TEST_VAR_EVERYTHING=test_value');
 
       delete process.env.TEST_VAR_EVERYTHING;
     });
 
-    it('should return valid JSON', async () => {
+    it('should return valid output', async () => {
       const { mockServer, handlers } = createMockServer();
       registerGetEnvTool(mockServer);
 
       const handler = handlers.get('get-env')!;
       const result = await handler({ key: 'PATH' });
 
-      expect(() => JSON.parse(result.content[0].text)).not.toThrow();
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].type).toBe('text');
+      expect(result.content[0].text).toMatch(/^PATH=/);
     });
   });
 
