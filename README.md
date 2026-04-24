@@ -257,3 +257,5 @@ If you find MCP servers useful, please consider starring the repository and cont
 ---
 
 Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvements!
+
+| [Customer Service MCP](https://github.com/zhaohongyuziranerran/customer-service-mcp) | AI customer service: intent classification, sentiment analysis, FAQ, knowledge base, multi-turn dialog, escalation, product/order, multi-platform, humanization, analytics | Python | MIT |
