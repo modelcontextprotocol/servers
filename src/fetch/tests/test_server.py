@@ -395,20 +395,18 @@ class TestExtractContentFallback:
             result = extract_content_from_html(html)
             assert "real content" in result
 
-    def test_threshold_is_one_percent_of_html(self):
-        """The fallback threshold is 1% of the input HTML length."""
-        # 10000 chars of HTML -> threshold is 100 chars
+    def test_small_readability_output_accepted(self):
+        """Non-empty Readability output is accepted regardless of size ratio."""
         padding = "x" * 9000
         html = f"<html><body><div style=\"visibility:hidden\">{padding}</div><p>tiny</p></body></html>"
 
         def mock_simple_json(h, use_readability=True):
             if use_readability:
-                # Returns less than 1% of input
                 return {"content": "<p>tiny</p>"}
             else:
                 return {"content": f"<div>{padding}</div><p>tiny</p>"}
 
         with patch("readabilipy.simple_json.simple_json_from_html_string", side_effect=mock_simple_json):
             result = extract_content_from_html(html)
-            # Should have triggered fallback since "tiny" (4 chars) < 100 (1% threshold)
-            assert len(result.strip()) > 50
+            # Readability returned non-empty content, so it should be used directly
+            assert "tiny" in result

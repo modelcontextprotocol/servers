@@ -30,7 +30,7 @@ def extract_content_from_html(html: str) -> str:
 
     Uses Mozilla Readability via readabilipy as the primary extraction method.
     Falls back to readabilipy without Readability (less aggressive filtering)
-    or direct markdownify conversion when Readability strips too much content,
+    or direct markdownify conversion when Readability returns empty content,
     which commonly happens with progressive SSR sites that deliver content in
     hidden containers awaiting client-side hydration.
 
@@ -40,11 +40,6 @@ def extract_content_from_html(html: str) -> str:
     Returns:
         Simplified markdown version of the content
     """
-    # Minimum expected content length as a fraction of input HTML.
-    # If extracted text is shorter than this, Readability likely stripped
-    # meaningful content (e.g. hidden SSR markup).
-    min_expected_length = max(1, len(html) // 100)
-
     # Stage 1: Try Readability (best quality for standard pages)
     ret = readabilipy.simple_json.simple_json_from_html_string(
         html, use_readability=True
@@ -55,7 +50,7 @@ def extract_content_from_html(html: str) -> str:
             content_html,
             heading_style=markdownify.ATX,
         )
-        if len(content.strip()) >= min_expected_length:
+        if content.strip():
             return content
 
     # Stage 2: Try readabilipy without Readability JS (less aggressive,
@@ -69,7 +64,7 @@ def extract_content_from_html(html: str) -> str:
             content_html,
             heading_style=markdownify.ATX,
         )
-        if len(content.strip()) >= min_expected_length:
+        if content.strip():
             return content
 
     # Stage 3: Convert full HTML directly with markdownify (last resort).
