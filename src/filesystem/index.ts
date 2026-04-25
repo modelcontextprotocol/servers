@@ -256,11 +256,21 @@ server.registerTool(
       path: z.string()
     },
     outputSchema: {
-      content: z.array(z.object({
-        type: z.enum(["image", "audio", "blob"]),
-        data: z.string(),
-        mimeType: z.string()
-      }))
+      content: z.array(z.union([
+        z.object({
+          type: z.enum(["image", "audio"]),
+          data: z.string(),
+          mimeType: z.string()
+        }),
+        z.object({
+          type: z.literal("resource"),
+          resource: z.object({
+            uri: z.string(),
+            mimeType: z.string(),
+            blob: z.string()
+          })
+        })
+      ]))
     },
     annotations: { readOnlyHint: true }
   },
@@ -283,13 +293,21 @@ server.registerTool(
     const mimeType = mimeTypes[extension] || "application/octet-stream";
     const data = await readFileAsBase64Stream(validPath);
 
-    const type = mimeType.startsWith("image/")
-      ? "image"
+    // Map MIME type to a valid MCP content type. The spec only allows
+    // text, image, audio, resource_link, and resource. Non-image/audio
+    // binaries are returned as an embedded resource so clients accept them.
+    const contentItem = mimeType.startsWith("image/")
+      ? { type: "image" as const, data, mimeType }
       : mimeType.startsWith("audio/")
-        ? "audio"
-        // Fallback for other binary types, not officially supported by the spec but has been used for some time
-        : "blob";
-    const contentItem = { type: type as 'image' | 'audio' | 'blob', data, mimeType };
+        ? { type: "audio" as const, data, mimeType }
+        : {
+            type: "resource" as const,
+            resource: {
+              uri: `file://${validPath}`,
+              mimeType,
+              blob: data
+            }
+          };
     return {
       content: [contentItem],
       structuredContent: { content: [contentItem] }
