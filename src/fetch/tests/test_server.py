@@ -343,14 +343,14 @@ class TestExtractContentFallback:
             assert "word" in result
 
     def test_readability_strips_content_falls_back_to_no_readability(self):
-        """When Readability returns too little, falls back to non-Readability extraction."""
-        # Simulate a large HTML page where Readability strips hidden SSR content
+        """When Readability returns empty content, falls back to non-Readability extraction."""
+        # Simulate an SSR page where Readability strips all hidden containers, returning empty
         html = "<html><body>" + "<p>content </p>" * 500 + "</body></html>"
 
         def mock_simple_json(h, use_readability=True):
             if use_readability:
-                # Readability stripped everything, returns almost nothing
-                return {"content": "<div>Loading...</div>"}
+                # Readability stripped everything, returns empty string
+                return {"content": ""}
             else:
                 # Without Readability, returns full content
                 return {"content": "<div>" + "<p>content </p>" * 500 + "</div>"}
