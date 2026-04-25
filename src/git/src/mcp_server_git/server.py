@@ -282,7 +282,10 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
         case 'all':
             b_type = "-a"
         case _:
-            return f"Invalid branch type: {branch_type}"
+            # Surface invalid input via exception, consistent with the rest
+            # of this module (git_diff, git_checkout, git_show, git_create_branch,
+            # git_log all raise on invalid input rather than returning a string).
+            raise ValueError(f"Invalid branch type: '{branch_type}' - must be 'local', 'remote', or 'all'")
 
     # None value will be auto deleted by GitPython
     branch_info = repo.git.branch(b_type, *contains_sha, *not_contains_sha)
@@ -308,7 +311,11 @@ async def serve(repository: Path | None) -> None:
         return [
             Tool(
                 name=GitTools.STATUS,
-                description="Shows the working tree status",
+                description=(
+                    "Show the working tree status (modified, staged, and untracked files). "
+                    "Use before staging or committing to see what has changed. "
+                    "Returns the git status output as text."
+                ),
                 inputSchema=GitStatus.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -319,7 +326,11 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.DIFF_UNSTAGED,
-                description="Shows changes in the working directory that are not yet staged",
+                description=(
+                    "Show changes in the working directory that are not yet staged. "
+                    "Use to review modifications before running git_add. "
+                    "Returns a unified diff as text (empty string if there are no unstaged changes)."
+                ),
                 inputSchema=GitDiffUnstaged.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -330,7 +341,11 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.DIFF_STAGED,
-                description="Shows changes that are staged for commit",
+                description=(
+                    "Show changes that are staged for commit. "
+                    "Use to review what git_commit would record before committing. "
+                    "Returns a unified diff as text (empty string if nothing is staged)."
+                ),
                 inputSchema=GitDiffStaged.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -341,7 +356,11 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.DIFF,
-                description="Shows differences between branches or commits",
+                description=(
+                    "Show differences between the working tree and a target ref (branch, tag, or commit hash). "
+                    "Use to compare the current state against another branch or a specific commit. "
+                    "Returns a unified diff as text. Refs starting with '-' are rejected (flag-injection guard)."
+                ),
                 inputSchema=GitDiff.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -352,7 +371,11 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.COMMIT,
-                description="Records changes to the repository",
+                description=(
+                    "Record currently staged changes as a new commit with the given message. "
+                    "Use after git_add to finalise a snapshot. "
+                    "Returns a confirmation string including the new commit hash."
+                ),
                 inputSchema=GitCommit.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=False,
@@ -363,7 +386,11 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.ADD,
-                description="Adds file contents to the staging area",
+                description=(
+                    "Stage file contents from the working directory for the next commit. "
+                    "Pass [\".\"] to stage everything, or specific paths to stage individual files. "
+                    "Use before git_commit. Returns a confirmation that files were staged."
+                ),
                 inputSchema=GitAdd.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=False,
@@ -374,7 +401,11 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.RESET,
-                description="Unstages all staged changes",
+                description=(
+                    "Unstage all currently staged changes (working-tree files are left untouched). "
+                    "Use to undo a git_add before committing. "
+                    "Returns a confirmation that staging was reset."
+                ),
                 inputSchema=GitReset.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=False,
@@ -385,7 +416,11 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.LOG,
-                description="Shows the commit logs",
+                description=(
+                    "List recent commits, optionally filtered by date range. "
+                    "Use to inspect history, find recent activity, or scope commits to a time window. "
+                    "Returns a list of commit entries each containing hash, author, date, and message."
+                ),
                 inputSchema=GitLog.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -396,7 +431,11 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.CREATE_BRANCH,
-                description="Creates a new branch from an optional base branch",
+                description=(
+                    "Create a new branch from an optional base branch (defaults to the currently checked-out branch). "
+                    "Use to start work on a new feature without checking out the new branch immediately. "
+                    "Returns a confirmation including the source branch name."
+                ),
                 inputSchema=GitCreateBranch.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=False,
@@ -407,7 +446,11 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.CHECKOUT,
-                description="Switches branches",
+                description=(
+                    "Switch the working tree to an existing branch by name. "
+                    "Use to move between in-progress work on different branches. "
+                    "Returns a confirmation of the now-active branch. Branch names starting with '-' are rejected."
+                ),
                 inputSchema=GitCheckout.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=False,
@@ -418,7 +461,11 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.SHOW,
-                description="Shows the contents of a commit",
+                description=(
+                    "Show the contents of a specific commit (header metadata plus per-file diffs against the parent). "
+                    "Use to inspect a single commit in depth, e.g. to understand what a hash introduced. "
+                    "Returns the commit header followed by unified diffs as text. Revisions starting with '-' are rejected."
+                ),
                 inputSchema=GitShow.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -429,7 +476,11 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.BRANCH,
-                description="List Git branches",
+                description=(
+                    "List git branches scoped to local, remote, or all, optionally filtered by which commit they "
+                    "(do not) contain. Use to enumerate branches matching a specific commit or to inspect remote "
+                    "branches. Returns the branch list as text."
+                ),
                 inputSchema=GitBranch.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
