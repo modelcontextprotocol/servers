@@ -515,4 +515,40 @@ describe('KnowledgeGraphManager', () => {
       expect(result.relations[0]).not.toHaveProperty('type');
     });
   });
+
+  describe('atomic write', () => {
+    it('should not leave the live file partially written if a write succeeds', async () => {
+      // After every successful saveGraph the live file must parse as valid
+      // JSONL — never observed in a torn / half-written state. Exercises the
+      // temp-write + rename pattern: if rename worked, the file is whole.
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: ['o1'] },
+      ]);
+      await manager.createRelations([
+        { from: 'Alice', to: 'Alice', relationType: 'self' },
+      ]);
+
+      const fileContent = await fs.readFile(testFilePath, 'utf-8');
+      const lines = fileContent.split('\n').filter(l => l.trim());
+      expect(lines).toHaveLength(2);
+      // Every line must be valid JSON (no half-written records).
+      for (const line of lines) {
+        expect(() => JSON.parse(line)).not.toThrow();
+      }
+    });
+
+    it('should not leak temp files alongside the memory file on success', async () => {
+      // saveGraph writes to <path>.tmp.<pid>.<ts> and renames; success path
+      // must leave only the live file in the directory.
+      await manager.createEntities([
+        { name: 'X', entityType: 't', observations: [] },
+      ]);
+
+      const dir = path.dirname(testFilePath);
+      const base = path.basename(testFilePath);
+      const entries = await fs.readdir(dir);
+      const stragglers = entries.filter(e => e.startsWith(base + '.tmp.'));
+      expect(stragglers).toEqual([]);
+    });
+  });
 });

@@ -113,7 +113,21 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    // Write to a temp file then rename, so the live file is never observed
+    // half-written: a crash mid-write leaves either the previous valid file
+    // or the new valid file, never a torn one. Rename is atomic on POSIX
+    // and a same-volume best-effort on Windows; the previous fs.writeFile
+    // truncate-and-write left a window where readers could see an empty
+    // or partial file.
+    const tmpPath = `${this.memoryFilePath}.tmp.${process.pid}.${Date.now()}`;
+    try {
+      await fs.writeFile(tmpPath, lines.join("\n"));
+      await fs.rename(tmpPath, this.memoryFilePath);
+    } catch (err) {
+      // Best-effort cleanup so a failed write doesn't leak temp files.
+      try { await fs.unlink(tmpPath); } catch { /* tmp may not exist */ }
+      throw err;
+    }
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
@@ -263,7 +277,11 @@ server.registerTool(
   "create_entities",
   {
     title: "Create Entities",
-    description: "Create multiple new entities in the knowledge graph",
+    description:
+      "Create one or more new entities in the knowledge graph. " +
+      "Use to add new nodes (people, places, concepts, organisations, etc.) before creating relations to them. " +
+      "Entities with names that already exist are silently skipped. " +
+      "Returns the entities that were actually created (excluding duplicates).",
     inputSchema: {
       entities: z.array(EntitySchema)
     },
@@ -285,7 +303,12 @@ server.registerTool(
   "create_relations",
   {
     title: "Create Relations",
-    description: "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
+    description:
+      "Create one or more directed relations (edges) between existing entities. " +
+      "Use after create_entities to connect nodes; relations should be phrased in active voice " +
+      "(e.g., \"works_at\", \"knows\", \"contains\"). " +
+      "Relations matching an existing (from, to, relationType) triple are silently skipped. " +
+      "Returns the relations that were actually created (excluding duplicates).",
     inputSchema: {
       relations: z.array(RelationSchema)
     },
@@ -307,7 +330,12 @@ server.registerTool(
   "add_observations",
   {
     title: "Add Observations",
-    description: "Add new observations to existing entities in the knowledge graph",
+    description:
+      "Append new observation strings to one or more existing entities. " +
+      "Use to record new facts about an entity without creating a separate relation. " +
+      "Observations that already exist on the entity are silently skipped. " +
+      "Throws if any target entity does not exist (use create_entities first). " +
+      "Returns, per entity, the observations that were actually added.",
     inputSchema: {
       observations: z.array(z.object({
         entityName: z.string().describe("The name of the entity to add the observations to"),
@@ -335,7 +363,11 @@ server.registerTool(
   "delete_entities",
   {
     title: "Delete Entities",
-    description: "Delete multiple entities and their associated relations from the knowledge graph",
+    description:
+      "Delete one or more entities by name. Cascades: any relations whose `from` or `to` " +
+      "endpoint is in the deletion list are also removed (no dangling edges left behind). " +
+      "Use to retract a node entirely. Names that don't match an entity are silently skipped. " +
+      "Returns {success, message}.",
     inputSchema: {
       entityNames: z.array(z.string()).describe("An array of entity names to delete")
     },
@@ -358,7 +390,11 @@ server.registerTool(
   "delete_observations",
   {
     title: "Delete Observations",
-    description: "Delete specific observations from entities in the knowledge graph",
+    description:
+      "Remove specific observation strings from existing entities. The entity itself is kept. " +
+      "Use to retract a fact without deleting the node. " +
+      "Entities that don't exist and observations that don't match are silently skipped. " +
+      "Returns {success, message}.",
     inputSchema: {
       deletions: z.array(z.object({
         entityName: z.string().describe("The name of the entity containing the observations"),
@@ -384,7 +420,11 @@ server.registerTool(
   "delete_relations",
   {
     title: "Delete Relations",
-    description: "Delete multiple relations from the knowledge graph",
+    description:
+      "Delete one or more specific relations by their (from, to, relationType) triple. " +
+      "Use to remove a single edge between two entities while keeping the entities themselves. " +
+      "Triples that don't match an existing relation are silently skipped. " +
+      "Returns {success, message}.",
     inputSchema: {
       relations: z.array(RelationSchema).describe("An array of relations to delete")
     },
@@ -407,7 +447,11 @@ server.registerTool(
   "read_graph",
   {
     title: "Read Graph",
-    description: "Read the entire knowledge graph",
+    description:
+      "Return the complete knowledge graph (all entities and relations). " +
+      "Use when you need full context; for targeted lookups prefer search_nodes (by query) " +
+      "or open_nodes (by name) since payload size grows with the graph. " +
+      "Returns {entities, relations}.",
     inputSchema: {},
     outputSchema: {
       entities: z.array(EntitySchema),
@@ -428,7 +472,12 @@ server.registerTool(
   "search_nodes",
   {
     title: "Search Nodes",
-    description: "Search for nodes in the knowledge graph based on a query",
+    description:
+      "Find entities whose name, entityType, or any observation contains the query (case-insensitive substring match). " +
+      "Use for fuzzy lookup when you don't know the exact entity name. " +
+      "Also returns every relation with at least one endpoint in the matched entity set, so you can " +
+      "discover connections to unmatched neighbours. " +
+      "Returns {entities, relations}.",
     inputSchema: {
       query: z.string().describe("The search query to match against entity names, types, and observation content")
     },
@@ -451,7 +500,13 @@ server.registerTool(
   "open_nodes",
   {
     title: "Open Nodes",
-    description: "Open specific nodes in the knowledge graph by their names",
+    description:
+      "Fetch specific entities by exact name (no substring match — use search_nodes for fuzzy lookup). " +
+      "Use when you already know the entity names you need. " +
+      "Also returns every relation with at least one endpoint in the requested set, so connections to " +
+      "unrequested neighbours are visible. " +
+      "Names with no matching entity are silently dropped. " +
+      "Returns {entities, relations}.",
     inputSchema: {
       names: z.array(z.string()).describe("An array of entity names to retrieve")
     },
