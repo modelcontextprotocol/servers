@@ -324,3 +324,102 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+    @pytest.mark.asyncio
+    async def test_fetch_markdown_returns_early(self):
+        """Test that text/markdown responses skip HTML extraction and return body as-is."""
+        md_content = "# Hello World\n\nThis is markdown."
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = md_content
+        mock_response.headers = {"content-type": "text/markdown"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            content, prefix = await fetch_url(
+                "https://example.com/readme.md",
+                DEFAULT_USER_AGENT_AUTONOMOUS
+            )
+
+            assert content == md_content
+            assert prefix == ""
+
+    @pytest.mark.asyncio
+    async def test_fetch_markdown_with_charset(self):
+        """Test that text/markdown with a charset parameter is recognised as markdown."""
+        md_content = "# Title\n\nBody."
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = md_content
+        mock_response.headers = {"content-type": "text/markdown; charset=utf-8"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            content, prefix = await fetch_url(
+                "https://example.com/page.md",
+                DEFAULT_USER_AGENT_AUTONOMOUS
+            )
+
+            assert content == md_content
+            assert prefix == ""
+
+    @pytest.mark.asyncio
+    async def test_fetch_x_markdown_does_not_match(self):
+        """Test that non-standard text/x-markdown is NOT treated as markdown and falls through."""
+        body = "some non-standard markdown variant"
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = body
+        mock_response.headers = {"content-type": "text/x-markdown"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            content, prefix = await fetch_url(
+                "https://example.com/page",
+                DEFAULT_USER_AGENT_AUTONOMOUS
+            )
+
+            # text/x-markdown is neither text/html nor text/markdown, so it falls
+            # into the raw-fallback branch with the "cannot be simplified" prefix.
+            # This pins the contract: only the standard text/markdown media type
+            # triggers the native-markdown short-circuit.
+            assert content == body
+            assert "cannot be simplified" in prefix
+
+    @pytest.mark.asyncio
+    async def test_fetch_sends_accept_header(self):
+        """Test that fetch_url sends an Accept header advertising markdown preference."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "# md"
+        mock_response.headers = {"content-type": "text/markdown"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://example.com/page",
+                DEFAULT_USER_AGENT_AUTONOMOUS
+            )
+
+            call_kwargs = mock_client.get.call_args.kwargs
+            assert "Accept" in call_kwargs["headers"]
+            accept = call_kwargs["headers"]["Accept"]
+            assert "text/markdown" in accept
+            # Markdown should be preferred over HTML — appear earlier in the q-list.
+            assert accept.index("text/markdown") < accept.index("text/html")
