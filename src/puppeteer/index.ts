@@ -217,7 +217,17 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
 
   switch (name) {
     case "puppeteer_navigate":
-      await page.goto(args.url);
+      try {
+        await page.goto(args.url);
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: `Navigation failed: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+          isError: true,
+        };
+      }
       return {
         content: [{
           type: "text",
