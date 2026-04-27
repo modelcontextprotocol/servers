@@ -16,7 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
-    "httpx<0.28",
+    "httpx>=0.27",
     "markdownify>=0.13.1",
     "mcp>=1.1.3",
     "protego>=0.3.1",
