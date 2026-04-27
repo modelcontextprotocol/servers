@@ -302,10 +302,20 @@ describe('KnowledgeGraphManager', () => {
       expect(result.entities[0].name).toBe('Alice');
     });
 
-    it('should include relations between matched entities', async () => {
+    it('should include relations where at least one endpoint matches', async () => {
       const result = await manager.searchNodes('Acme');
       expect(result.entities).toHaveLength(2); // Alice and Acme Corp
-      expect(result.relations).toHaveLength(1); // Only Alice -> Acme Corp relation
+      // Both relations included: Alice → Acme Corp (Alice matched) and Bob → Acme Corp (Acme Corp matched)
+      expect(result.relations).toHaveLength(2);
+    });
+
+    it('should include outgoing relations to unmatched entities', async () => {
+      const result = await manager.searchNodes('Alice');
+      expect(result.entities).toHaveLength(1);
+      // Alice → Acme Corp relation included because Alice is the source
+      expect(result.relations).toHaveLength(1);
+      expect(result.relations[0].from).toBe('Alice');
+      expect(result.relations[0].to).toBe('Acme Corp');
     });
 
     it('should return empty graph for no matches', async () => {
@@ -336,16 +346,41 @@ describe('KnowledgeGraphManager', () => {
       expect(result.entities.map(e => e.name)).toContain('Bob');
     });
 
-    it('should include relations between opened nodes', async () => {
+    it('should include all relations connected to opened nodes', async () => {
       const result = await manager.openNodes(['Alice', 'Bob']);
+      // Alice → Bob (both endpoints opened) and Bob → Charlie (Bob is opened)
+      expect(result.relations).toHaveLength(2);
+      expect(result.relations.some(r => r.from === 'Alice' && r.to === 'Bob')).toBe(true);
+      expect(result.relations.some(r => r.from === 'Bob' && r.to === 'Charlie')).toBe(true);
+    });
+
+    it('should include relations connected to opened nodes', async () => {
+      const result = await manager.openNodes(['Bob']);
+      // Bob has two relations: Alice → Bob and Bob → Charlie
+      expect(result.relations).toHaveLength(2);
+      expect(result.relations.some(r => r.from === 'Alice' && r.to === 'Bob')).toBe(true);
+      expect(result.relations.some(r => r.from === 'Bob' && r.to === 'Charlie')).toBe(true);
+    });
+
+    it('should include outgoing relations to nodes not in the open set', async () => {
+      // This is the core bug fix for #3137: open_nodes should return
+      // relations FROM the opened node, even if the target is not opened
+      const result = await manager.openNodes(['Alice']);
+      expect(result.entities).toHaveLength(1);
+      expect(result.entities[0].name).toBe('Alice');
+      // Alice → Bob relation is included because Alice is opened
       expect(result.relations).toHaveLength(1);
       expect(result.relations[0].from).toBe('Alice');
       expect(result.relations[0].to).toBe('Bob');
     });
 
-    it('should exclude relations to unopened nodes', async () => {
-      const result = await manager.openNodes(['Bob']);
-      expect(result.relations).toHaveLength(0);
+    it('should include incoming relations from nodes not in the open set', async () => {
+      const result = await manager.openNodes(['Charlie']);
+      expect(result.entities).toHaveLength(1);
+      // Bob → Charlie relation is included because Charlie is opened
+      expect(result.relations).toHaveLength(1);
+      expect(result.relations[0].from).toBe('Bob');
+      expect(result.relations[0].to).toBe('Charlie');
     });
 
     it('should handle opening non-existent nodes', async () => {

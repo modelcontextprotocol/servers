@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import { normalizePath } from './path-utils.js';
 import type { Root } from '@modelcontextprotocol/sdk/types.js';
+import { fileURLToPath } from "url";
 
 /**
  * Converts a root URI to a normalized directory path with basic security validation.
@@ -11,7 +12,7 @@ import type { Root } from '@modelcontextprotocol/sdk/types.js';
  */
 async function parseRootUri(rootUri: string): Promise<string | null> {
   try {
-    const rawPath = rootUri.startsWith('file://') ? rootUri.slice(7) : rootUri;
+    const rawPath = rootUri.startsWith('file://') ? fileURLToPath(rootUri) : rootUri;
     const expandedPath = rawPath.startsWith('~/') || rawPath === '~' 
       ? path.join(os.homedir(), rawPath.slice(1)) 
       : rawPath;

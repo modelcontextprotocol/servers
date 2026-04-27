@@ -46,7 +46,7 @@ jobs:
               body: [
                 'Thanks for your contribution!',
                 '',
-                '**We are no longer accepting PRs to add new servers to the README.** The server lists are deprecated and will eventually be removed entirely, replaced by the registry.',
+                '**We are no longer accepting PRs to add new servers to the README.** The third-party server list has been removed from this README in favor of the [MCP Server Registry](https://registry.modelcontextprotocol.io/).',
                 '',
                 '👉 **To add a new MCP server:** Please publish it to the [MCP Server Registry](https://github.com/modelcontextprotocol/registry) instead. You can browse published servers at [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io/).',
                 '',

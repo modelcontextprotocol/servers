@@ -323,4 +323,4 @@ class TestFetchUrl:
             )
 
             # Verify AsyncClient was called with proxy
-            mock_client_class.assert_called_once_with(proxies="http://proxy.example.com:8080")
+            mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")

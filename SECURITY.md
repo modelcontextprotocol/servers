@@ -1,16 +1,21 @@
 # Security Policy
-Thank you for helping us keep our MCP servers secure.
 
-The **reference servers** in this repo are maintained by [Anthropic](https://www.anthropic.com/) as part of the Model Context Protocol project.
-
-The security of our systems and user data is Anthropic's top priority. We appreciate the work of security researchers acting in good faith in identifying and reporting potential vulnerabilities.
+Thank you for helping keep the Model Context Protocol and its ecosystem secure.
 
 ## Important Notice
 
-The servers in this repository are **reference implementations** intended to demonstrate MCP features and SDK usage. They serve as educational examples for developers building their own MCP servers, not as production-ready solutions.
+The servers in this repository are **reference implementations** intended to demonstrate
+MCP features and SDK usage. They serve as educational examples for developers building
+their own MCP servers, not as production-ready solutions.
 
-**Bug bounties are not awarded for security vulnerabilities found in these reference servers.** Our bug bounty program applies exclusively to the [MCP SDKs](https://github.com/modelcontextprotocol) maintained by Anthropic. If you discover a vulnerability in an MCP SDK that is maintained by Anthropic, please report it through our vulnerability disclosure program below.
+This repository is **not** eligible for security vulnerability reporting. If you discover
+a vulnerability in an MCP SDK, please report it in the appropriate SDK repository.
 
-## Vulnerability Disclosure Program
+## Reporting Security Issues in MCP SDKs
 
-Our Vulnerability Program guidelines are defined on our [HackerOne program page](https://hackerone.com/anthropic-vdp). We ask that any validated vulnerability in this functionality be reported through the [submission form](https://hackerone.com/anthropic-vdp/reports/new?type=team&report_type=vulnerability).
+If you discover a security vulnerability in an MCP SDK, please report it through the
+[GitHub Security Advisory process](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
+in the relevant SDK repository.
+
+Please **do not** report security vulnerabilities through public GitHub issues, discussions,
+or pull requests.

@@ -221,7 +221,7 @@ The mapping for filesystem tools is:
 | `append_file`               | `false`      | `false`        | `false`         | Appends to existing files; not idempotent       |
 | `write_or_update_file`      | `false`      | `false`        | `false`         | Creates or appends; behavior depends on state   |
 | `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply      |
-| `move_file`                 | `false`      | `false`        | `false`         | Move/rename only; repeat usually errors         |
+| `move_file`                 | `false`      | `false`        | `true`          | Deletes source file                             |
 
 > Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec.
 
@@ -261,6 +261,26 @@ Note: all directories must be mounted to `/projects` by default.
     "filesystem": {
       "command": "npx",
       "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/username/Desktop",
+        "/path/to/other/allowed/dir"
+      ]
+    }
+  }
+}
+```
+
+On Windows, use `cmd /c` to launch `npx`:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
         "-y",
         "@modelcontextprotocol/server-filesystem",
         "/Users/username/Desktop",
@@ -320,6 +340,25 @@ Note: all directories must be mounted to `/projects` by default.
     "filesystem": {
       "command": "npx",
       "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "${workspaceFolder}"
+      ]
+    }
+  }
+}
+```
+
+On Windows, use:
+
+```json
+{
+  "servers": {
+    "filesystem": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
         "-y",
         "@modelcontextprotocol/server-filesystem",
         "${workspaceFolder}"
