@@ -22,7 +22,7 @@ import {
   readFileContent,
   writeFileContent,
   appendFileContent,
-  writeOrUpdateFileContent,
+  createOrAppendFileContent,
   searchFilesWithValidation,
   applyFileEdits,
   tailFile,
@@ -118,7 +118,7 @@ const PathContentArgsSchema = z.object({
 });
 const WriteFileArgsSchema = PathContentArgsSchema;
 const AppendFileArgsSchema = PathContentArgsSchema;
-const WriteOrUpdateFileArgsSchema = PathContentArgsSchema;
+const CreateOrAppendFileArgsSchema = PathContentArgsSchema;
 
 const EditOperation = z.object({
   oldText: z.string().describe('Text to search for - must match exactly'),
@@ -374,7 +374,7 @@ server.registerTool(
     description:
       "Append content to the end of an existing file. This operation adds new content " +
       "to the file without modifying existing content. The file must already exist - " +
-      "use write_file to create new files or write_or_update_file to create or append. " +
+      "use write_file to create new files or create_or_append_file to create or append. " +
       "Only works within allowed directories.",
     inputSchema: {
       path: z.string(),
@@ -395,9 +395,9 @@ server.registerTool(
 );
 
 server.registerTool(
-  "write_or_update_file",
+  "create_or_append_file",
   {
-    title: "Write or Update File",
+    title: "Create or Append File",
     description:
       "Create a new file with content, or append to an existing file. If the file " +
       "does not exist, it will be created with the provided content. If the file " +
@@ -411,10 +411,10 @@ server.registerTool(
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false }
   },
-  async (args: z.infer<typeof WriteOrUpdateFileArgsSchema>) => {
+  async (args: z.infer<typeof CreateOrAppendFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
     const existed = await fs.access(validPath).then(() => true).catch(() => false);
-    await writeOrUpdateFileContent(validPath, args.content);
+    await createOrAppendFileContent(validPath, args.content);
 
     const message = existed
       ? `Successfully appended content to ${args.path}`
