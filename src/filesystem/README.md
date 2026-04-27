@@ -102,7 +102,7 @@ The server's directory access control follows this flow:
   - File must already exist - use `write_file` to create new files
   - Preserves existing content, adds new content at the end
 
-- **write_or_update_file**
+- **create_or_append_file**
   - Create new file or append to existing file
   - Inputs:
     - `path` (string): File location
@@ -219,7 +219,7 @@ The mapping for filesystem tools is:
 | `create_directory`          | `false`      | `true`         | `false`         | Re‑creating the same dir is a no‑op             |
 | `write_file`                | `false`      | `true`         | `true`          | Overwrites existing files                       |
 | `append_file`               | `false`      | `false`        | `false`         | Appends to existing files; not idempotent       |
-| `write_or_update_file`      | `false`      | `false`        | `false`         | Creates or appends; behavior depends on state   |
+| `create_or_append_file`     | `false`      | `false`        | `false`         | Creates or appends; behavior depends on state   |
 | `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply      |
 | `move_file`                 | `false`      | `false`        | `true`          | Deletes source file                             |
 

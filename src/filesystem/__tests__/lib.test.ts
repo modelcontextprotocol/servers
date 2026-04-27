@@ -15,7 +15,7 @@ import {
   readFileContent,
   writeFileContent,
   appendFileContent,
-  writeOrUpdateFileContent,
+  createOrAppendFileContent,
   // Search & filtering functions
   searchFilesWithValidation,
   // File editing functions
@@ -344,14 +344,14 @@ describe('Lib Functions', () => {
       });
     });
 
-    describe('writeOrUpdateFileContent', () => {
+    describe('createOrAppendFileContent', () => {
       it('creates new file if it does not exist', async () => {
         const error = new Error('ENOENT');
         (error as any).code = 'ENOENT';
         mockFs.appendFile.mockRejectedValue(error);
         mockFs.writeFile.mockResolvedValue(undefined);
 
-        await writeOrUpdateFileContent('/test/newfile.txt', 'initial content');
+        await createOrAppendFileContent('/test/newfile.txt', 'initial content');
 
         expect(mockFs.writeFile).toHaveBeenCalledWith(
           '/test/newfile.txt',
@@ -363,7 +363,7 @@ describe('Lib Functions', () => {
       it('appends to existing file', async () => {
         mockFs.appendFile.mockResolvedValue(undefined);
 
-        await writeOrUpdateFileContent('/test/file.txt', '\nappended content');
+        await createOrAppendFileContent('/test/file.txt', '\nappended content');
 
         expect(mockFs.appendFile).toHaveBeenCalledWith(
           '/test/file.txt',
@@ -385,7 +385,7 @@ describe('Lib Functions', () => {
           .mockResolvedValueOnce(undefined);
         mockFs.rename.mockResolvedValue(undefined);
 
-        await writeOrUpdateFileContent('/test/file.txt', 'content');
+        await createOrAppendFileContent('/test/file.txt', 'content');
 
         expect(mockFs.writeFile).toHaveBeenCalledTimes(2);
         expect(mockFs.rename).toHaveBeenCalled();
@@ -396,7 +396,7 @@ describe('Lib Functions', () => {
         (error as any).code = 'EACCES';
         mockFs.appendFile.mockRejectedValue(error);
 
-        await expect(writeOrUpdateFileContent('/test/file.txt', 'content'))
+        await expect(createOrAppendFileContent('/test/file.txt', 'content'))
           .rejects.toThrow('Permission denied');
       });
     });

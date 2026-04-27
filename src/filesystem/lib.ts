@@ -195,7 +195,7 @@ export async function appendFileContent(filePath: string, content: string): Prom
   }
 }
 
-export async function writeOrUpdateFileContent(filePath: string, content: string): Promise<void> {
+export async function createOrAppendFileContent(filePath: string, content: string): Promise<void> {
   try {
     await appendFileContent(filePath, content);
   } catch (error) {
