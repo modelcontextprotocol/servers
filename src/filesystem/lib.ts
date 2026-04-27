@@ -185,66 +185,25 @@ export async function writeFileContent(filePath: string, content: string): Promi
 }
 
 export async function appendFileContent(filePath: string, content: string): Promise<void> {
-  // Check if file exists
   try {
-    await fs.access(filePath);
+    await fs.appendFile(filePath, content, { encoding: 'utf-8', flag: 'a' });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       throw new Error(`File does not exist: ${filePath}`);
     }
     throw error;
   }
-
-  // Read existing content
-  const existingContent = await readFileContent(filePath);
-
-  // Combine existing and new content
-  const combinedContent = existingContent + content;
-
-  // Use atomic write to update the file
-  const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-  try {
-    await fs.writeFile(tempPath, combinedContent, 'utf-8');
-    await fs.rename(tempPath, filePath);
-  } catch (error) {
-    try {
-      await fs.unlink(tempPath);
-    } catch {}
-    throw error;
-  }
 }
 
 export async function writeOrUpdateFileContent(filePath: string, content: string): Promise<void> {
-  // Check if file exists
-  let fileExists = false;
   try {
-    await fs.access(filePath);
-    fileExists = true;
+    await appendFileContent(filePath, content);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      throw error;
+    if (error instanceof Error && error.message.startsWith('File does not exist:')) {
+      await writeFileContent(filePath, content);
+      return;
     }
-  }
-
-  if (fileExists) {
-    // File exists, append the content
-    const existingContent = await readFileContent(filePath);
-    const combinedContent = existingContent + content;
-
-    // Use atomic write to update the file
-    const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-    try {
-      await fs.writeFile(tempPath, combinedContent, 'utf-8');
-      await fs.rename(tempPath, filePath);
-    } catch (error) {
-      try {
-        await fs.unlink(tempPath);
-      } catch {}
-      throw error;
-    }
-  } else {
-    // File doesn't exist, create it with the content
-    await writeFileContent(filePath, content);
+    throw error;
   }
 }
 

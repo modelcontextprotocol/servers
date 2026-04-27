@@ -112,20 +112,13 @@ const ReadMultipleFilesArgsSchema = z.object({
     .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories."),
 });
 
-const WriteFileArgsSchema = z.object({
+const PathContentArgsSchema = z.object({
   path: z.string(),
   content: z.string(),
 });
-
-const AppendFileArgsSchema = z.object({
-  path: z.string(),
-  content: z.string(),
-});
-
-const WriteOrUpdateFileArgsSchema = z.object({
-  path: z.string(),
-  content: z.string(),
-});
+const WriteFileArgsSchema = PathContentArgsSchema;
+const AppendFileArgsSchema = PathContentArgsSchema;
+const WriteOrUpdateFileArgsSchema = PathContentArgsSchema;
 
 const EditOperation = z.object({
   oldText: z.string().describe('Text to search for - must match exactly'),
@@ -420,13 +413,12 @@ server.registerTool(
   },
   async (args: z.infer<typeof WriteOrUpdateFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
+    const existed = await fs.access(validPath).then(() => true).catch(() => false);
     await writeOrUpdateFileContent(validPath, args.content);
 
-    // Determine if file was created or updated for better feedback
-    const stats = await fs.stat(validPath);
-    const message = stats.birthtime.getTime() === stats.mtime.getTime()
-      ? `Successfully created ${args.path} with content`
-      : `Successfully appended content to ${args.path}`;
+    const message = existed
+      ? `Successfully appended content to ${args.path}`
+      : `Successfully created ${args.path} with content`;
 
     return {
       content: [{ type: "text" as const, text: message }],
