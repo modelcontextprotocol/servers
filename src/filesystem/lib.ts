@@ -413,3 +413,50 @@ export async function searchFilesWithValidation(
   await search(rootPath);
   return results;
 }
+
+interface DirectoryTreeEntry {
+  name: string;
+  type: 'file' | 'directory';
+  children?: DirectoryTreeEntry[];
+}
+
+export async function buildDirectoryTree(
+  rootPath: string,
+  excludePatterns: string[] = []
+): Promise<DirectoryTreeEntry[]> {
+  async function walk(currentPath: string): Promise<DirectoryTreeEntry[]> {
+    const validPath = await validatePath(currentPath);
+    const entries = await fs.readdir(validPath, { withFileTypes: true });
+    const result: DirectoryTreeEntry[] = [];
+
+    for (const entry of entries) {
+      const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
+      const shouldExclude = excludePatterns.some(pattern => {
+        if (pattern.includes('*')) {
+          return minimatch(relativePath, pattern, { dot: true });
+        }
+        // For files: match exact name or as part of path
+        // For directories: match as directory path
+        return minimatch(relativePath, pattern, { dot: true }) ||
+          minimatch(relativePath, `**/${pattern}`, { dot: true }) ||
+          minimatch(relativePath, `**/${pattern}/**`, { dot: true });
+      });
+      if (shouldExclude) continue;
+
+      const entryData: DirectoryTreeEntry = {
+        name: entry.name,
+        type: entry.isDirectory() ? 'directory' : 'file',
+      };
+
+      if (entry.isDirectory()) {
+        entryData.children = await walk(path.join(currentPath, entry.name));
+      }
+
+      result.push(entryData);
+    }
+
+    return result;
+  }
+
+  return walk(rootPath);
+}
