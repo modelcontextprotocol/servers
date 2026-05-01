@@ -426,7 +426,7 @@ describe('KnowledgeGraphManager', () => {
       expect(JSON.parse(lines[1])).toHaveProperty('type', 'relation');
     });
 
-    it('should strip type field from entities when loading from file', async () => {
+    it('should preserve JSONL type discriminator when loading from file', async () => {
       // Create entities and relations (these get saved with type field)
       await manager.createEntities([
         { name: 'Alice', entityType: 'person', observations: ['test observation'] },
@@ -451,26 +451,25 @@ describe('KnowledgeGraphManager', () => {
       const manager2 = new KnowledgeGraphManager(testFilePath);
       const graph = await manager2.readGraph();
 
-      // Verify loaded entities don't have type field
+      // Loaded graph mirrors JSONL discriminators for structured-output validation (#3074)
       expect(graph.entities).toHaveLength(2);
       graph.entities.forEach(entity => {
-        expect(entity).not.toHaveProperty('type');
+        expect(entity).toHaveProperty('type', 'entity');
         expect(entity).toHaveProperty('name');
         expect(entity).toHaveProperty('entityType');
         expect(entity).toHaveProperty('observations');
       });
 
-      // Verify loaded relations don't have type field
       expect(graph.relations).toHaveLength(1);
       graph.relations.forEach(relation => {
-        expect(relation).not.toHaveProperty('type');
+        expect(relation).toHaveProperty('type', 'relation');
         expect(relation).toHaveProperty('from');
         expect(relation).toHaveProperty('to');
         expect(relation).toHaveProperty('relationType');
       });
     });
 
-    it('should strip type field from searchNodes results', async () => {
+    it('should include type discriminator in searchNodes results after reload', async () => {
       await manager.createEntities([
         { name: 'Alice', entityType: 'person', observations: ['works at Acme'] },
       ]);
@@ -482,17 +481,16 @@ describe('KnowledgeGraphManager', () => {
       const manager2 = new KnowledgeGraphManager(testFilePath);
       const result = await manager2.searchNodes('Alice');
 
-      // Verify search results don't have type field
       expect(result.entities).toHaveLength(1);
-      expect(result.entities[0]).not.toHaveProperty('type');
+      expect(result.entities[0]).toHaveProperty('type', 'entity');
       expect(result.entities[0].name).toBe('Alice');
 
       expect(result.relations).toHaveLength(1);
-      expect(result.relations[0]).not.toHaveProperty('type');
+      expect(result.relations[0]).toHaveProperty('type', 'relation');
       expect(result.relations[0].from).toBe('Alice');
     });
 
-    it('should strip type field from openNodes results', async () => {
+    it('should include type discriminator in openNodes results after reload', async () => {
       await manager.createEntities([
         { name: 'Alice', entityType: 'person', observations: [] },
         { name: 'Bob', entityType: 'person', observations: [] },
@@ -505,14 +503,13 @@ describe('KnowledgeGraphManager', () => {
       const manager2 = new KnowledgeGraphManager(testFilePath);
       const result = await manager2.openNodes(['Alice', 'Bob']);
 
-      // Verify open results don't have type field
       expect(result.entities).toHaveLength(2);
       result.entities.forEach(entity => {
-        expect(entity).not.toHaveProperty('type');
+        expect(entity).toHaveProperty('type', 'entity');
       });
 
       expect(result.relations).toHaveLength(1);
-      expect(result.relations[0]).not.toHaveProperty('type');
+      expect(result.relations[0]).toHaveProperty('type', 'relation');
     });
   });
 });
