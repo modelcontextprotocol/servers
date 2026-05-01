@@ -258,6 +258,8 @@ const server = new McpServer({
   version: "0.6.3",
 });
 
+const RESOURCE_URI = "memory://knowledge-graph";
+
 // Register create_entities tool
 server.registerTool(
   "create_entities",
@@ -273,6 +275,7 @@ server.registerTool(
   },
   async ({ entities }) => {
     const result = await knowledgeGraphManager.createEntities(entities);
+    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: { entities: result }
@@ -295,6 +298,7 @@ server.registerTool(
   },
   async ({ relations }) => {
     const result = await knowledgeGraphManager.createRelations(relations);
+    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: { relations: result }
@@ -323,6 +327,7 @@ server.registerTool(
   },
   async ({ observations }) => {
     const result = await knowledgeGraphManager.addObservations(observations);
+    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: { results: result }
@@ -346,6 +351,7 @@ server.registerTool(
   },
   async ({ entityNames }) => {
     await knowledgeGraphManager.deleteEntities(entityNames);
+    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
     return {
       content: [{ type: "text" as const, text: "Entities deleted successfully" }],
       structuredContent: { success: true, message: "Entities deleted successfully" }
@@ -372,6 +378,7 @@ server.registerTool(
   },
   async ({ deletions }) => {
     await knowledgeGraphManager.deleteObservations(deletions);
+    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
     return {
       content: [{ type: "text" as const, text: "Observations deleted successfully" }],
       structuredContent: { success: true, message: "Observations deleted successfully" }
@@ -395,6 +402,7 @@ server.registerTool(
   },
   async ({ relations }) => {
     await knowledgeGraphManager.deleteRelations(relations);
+    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
     return {
       content: [{ type: "text" as const, text: "Relations deleted successfully" }],
       structuredContent: { success: true, message: "Relations deleted successfully" }
@@ -469,12 +477,37 @@ server.registerTool(
   }
 );
 
-async function main() {
-  // Initialize memory file path with backward compatibility
-  MEMORY_FILE_PATH = await ensureMemoryFilePath();
+export function registerKnowledgeGraphResource(
+  server: McpServer,
+  manager: KnowledgeGraphManager,
+) {
+  server.registerResource(
+    "knowledge-graph",
+    RESOURCE_URI,
+    {
+      title: "Knowledge Graph",
+      description: "The full knowledge graph with all entities and relations",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      const graph = await manager.readGraph();
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify(graph, null, 2),
+          },
+        ],
+      };
+    },
+  );
+}
 
-  // Initialize knowledge graph manager with the memory file path
+async function main() {
+  MEMORY_FILE_PATH = await ensureMemoryFilePath();
   knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_FILE_PATH);
+  registerKnowledgeGraphResource(server, knowledgeGraphManager);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
