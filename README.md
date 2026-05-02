@@ -173,6 +173,27 @@ python -m mcp_server_git
 
 Follow [these](https://docs.astral.sh/uv/getting-started/installation/) instructions to install `uv` / `uvx` and [these](https://pip.pypa.io/en/stable/installation/) to install `pip`.
 
+### Understanding How Servers Are Launched
+
+MCP servers communicate over **stdio** (stdin/stdout) by default. If you run a server like `uvx mcp-server-git` directly in your terminal, it will appear to hang — it is waiting for a client to connect over stdin and send JSON-RPC messages. This is expected behaviour, not a bug.
+
+**You do not run MCP servers yourself.** Your MCP client (Claude Desktop, VS Code, Cursor, etc.) reads its config file and spawns the server process automatically. The client and server communicate over the spawned process's stdin/stdout. When you close the client, the server process stops.
+
+**Two transport modes:**
+
+| Transport | How the server runs | When to use |
+|---|---|---|
+| **stdio** (default) | Client spawns the server as a subprocess; communication is over stdin/stdout | Local servers — all reference servers in this repo |
+| **SSE / HTTP** | Server runs as a standalone HTTP service; client connects over a network URL | Remote or shared servers |
+
+**Testing a server without a full client setup:** use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
+
+```sh
+npx @modelcontextprotocol/inspector uvx mcp-server-git
+```
+
+The Inspector opens a browser UI that lets you browse available tools, invoke them, and inspect responses — no LLM or client configuration required. It is the recommended way to verify a server works before wiring it into a client.
+
 ### Using an MCP Client
 However, running a server on its own isn't very useful, and should instead be configured into an MCP client. For example, here's the Claude Desktop configuration to use the above server:
 
