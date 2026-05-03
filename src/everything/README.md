@@ -113,7 +113,7 @@ npm run start:streamableHttp
 ### Install 
 ```shell
 npm install -g @modelcontextprotocol/server-everything@latest
-````
+```
 
 ### Run the default (stdio) server
 ```shell
