@@ -7,45 +7,14 @@
 // a real client, and call its shutdown handler directly; each app has its own
 // session map. `startStreamableHttpServer()` is what the launcher runs.
 
-import {
-  StreamableHTTPServerTransport,
-  EventStore,
-} from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express, { Express, Request, Response } from "express";
 import type { Server } from "node:http";
 import { createServer } from "../server/index.js";
 import { randomUUID } from "node:crypto";
 import cors from "cors";
 import { listenOrExit } from "./listen.js";
-
-// Simple in-memory event store for SSE resumability
-class InMemoryEventStore implements EventStore {
-  private events: Map<string, { streamId: string; message: unknown }> =
-    new Map();
-
-  async storeEvent(streamId: string, message: unknown): Promise<string> {
-    const eventId = randomUUID();
-    this.events.set(eventId, { streamId, message });
-    return eventId;
-  }
-
-  async replayEventsAfter(
-    lastEventId: string,
-    { send }: { send: (eventId: string, message: unknown) => Promise<void> },
-  ): Promise<string> {
-    const entries = Array.from(this.events.entries());
-    const startIndex = entries.findIndex(([id]) => id === lastEventId);
-    if (startIndex === -1) return lastEventId;
-
-    let lastId: string = lastEventId;
-    for (let i = startIndex + 1; i < entries.length; i++) {
-      const [eventId, { message }] = entries[i];
-      await send(eventId, message);
-      lastId = eventId;
-    }
-    return lastId;
-  }
-}
+import { InMemoryEventStore } from "./inMemoryEventStore.js";
 
 /** The Streamable HTTP app, and the handler the launcher installs for SIGINT. */
 export type StreamableHttpApp = {
