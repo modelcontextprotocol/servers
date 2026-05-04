@@ -257,3 +257,5 @@ If you find MCP servers useful, please consider starring the repository and cont
 ---
 
 Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvements!
+
+- **[EventTrader](https://github.com/eventtrader/event-trader)** — AI-native prediction market platform. 9 CLOB pairs (0% maker fees), 10 clonable trading agents, agent-to-agent messaging, AgentBook social network, AI due diligence scoring. ([npm](https://www.npmjs.com/package/event-trader-mcp))
