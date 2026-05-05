@@ -110,27 +110,33 @@ npm run start:streamableHttp
 ```
 
 ## Running as an installed package
-### Install 
+
+### Install
+
 ```shell
 npm install -g @modelcontextprotocol/server-everything@latest
-````
+```
 
 ### Run the default (stdio) server
+
 ```shell
 npx @modelcontextprotocol/server-everything
 ```
 
 ### Or specify stdio explicitly
+
 ```shell
 npx @modelcontextprotocol/server-everything stdio
 ```
 
 ### Run the SSE server
+
 ```shell
 npx @modelcontextprotocol/server-everything sse
 ```
 
 ### Run the streamable HTTP server
+
 ```shell
 npx @modelcontextprotocol/server-everything streamableHttp
 ```

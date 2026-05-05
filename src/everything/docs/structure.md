@@ -50,8 +50,11 @@ src/everything
      │   ├── gzip-file-as-resource.ts
      │   ├── toggle-simulated-logging.ts
      │   ├── toggle-subscriber-updates.ts
+     │   ├── simulate-research-query.ts
+     │   ├── trigger-elicitation-request-async.ts
      │   ├── trigger-elicitation-request.ts
      │   ├── trigger-long-running-operation.ts
+     │   ├── trigger-sampling-request-async.ts
      │   └── trigger-sampling-request.ts
      └── transports
          ├── sse.ts
@@ -81,9 +84,19 @@ src/everything
 ### `docs/`
 
 - `architecture.md`
-  - This document.
-- `server-instructions.md`
+  - Describes the server architecture.
+- `extension.md`
+  - Describes extension points for adding tools, prompts, resources, transports, and session behavior.
+- `features.md`
+  - Lists the MCP primitives and protocol features demonstrated by the server.
+- `how-it-works.md`
+  - Explains runtime flows for initialization, tools, resources, prompts, logging, and subscriptions.
+- `instructions.md`
   - Human‑readable instructions intended to be passed to the client/LLM as for guidance on server use. Loaded by the server at startup and returned in the "initialize" exchange.
+- `startup.md`
+  - Documents the startup flow from CLI entry point to transport manager and server factory.
+- `structure.md`
+  - This document.
 
 ### `prompts/`
 
