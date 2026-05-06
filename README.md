@@ -257,3 +257,10 @@ If you find MCP servers useful, please consider starring the repository and cont
 ---
 
 Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvements!
+
+### x711-hivecast
+Free MCP server with live DeFi intel, agent-of-the-hour, and radio drop alerts from the x711 AI agent network.
+- **Install**: `npx x711-hivecast`
+- **Tools**: `hive_radio_latest`, `agent_of_the_hour`, `radio_drop_check`, `x711_station_guide`, `conquest_scanner`
+- **Smithery**: https://smithery.ai/server/x711-hivecast
+- **Website**: https://x711.io/hivecast
