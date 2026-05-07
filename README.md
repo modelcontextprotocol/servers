@@ -257,3 +257,5 @@ If you find MCP servers useful, please consider starring the repository and cont
 ---
 
 Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvements!
+
+- **[NEXUS Agent Services](https://github.com/RileyCraig14/nexus-agent)** - Pay-per-call crypto prices, Reddit sentiment, DeFi data, stock prices via x402 on Base. `npx @rileycraig/nexus-mcp`
