@@ -173,6 +173,28 @@ python -m mcp_server_git
 
 Follow [these](https://docs.astral.sh/uv/getting-started/installation/) instructions to install `uv` / `uvx` and [these](https://pip.pypa.io/en/stable/installation/) to install `pip`.
 
+### Why `uvx mcp-server-git` appears idle
+
+If you run a server like `uvx mcp-server-git` directly, it may look like nothing is happening. That is usually expected:
+
+- Most servers in this repository default to the **stdio transport**.
+- stdio servers wait for JSON-RPC messages on stdin/stdout; they do **not** open a TCP port.
+- They are designed to be launched by an MCP client (Claude Desktop, Cursor, VS Code extensions, etc.), not as standalone daemons.
+
+You can sanity-check that the process is alive by sending an initialize request:
+
+```sh
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"manual-test","version":"1.0.0"}}}' | uvx mcp-server-git
+```
+
+For interactive debugging, use MCP Inspector:
+
+```sh
+npx @modelcontextprotocol/inspector uvx mcp-server-git
+```
+
+If you specifically need a network endpoint (for example, HTTP/SSE), use a server and transport mode that supports it, then configure host/port per that server's documentation.
+
 ### Using an MCP Client
 However, running a server on its own isn't very useful, and should instead be configured into an MCP client. For example, here's the Claude Desktop configuration to use the above server:
 
