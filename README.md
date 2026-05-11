@@ -22,6 +22,10 @@ Typically, each MCP server is implemented with an MCP SDK:
 - [Swift MCP SDK](https://github.com/modelcontextprotocol/swift-sdk)
 - [TypeScript MCP SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 
+## Community Servers
+
+- **[@bmbrick/agent-mosaic-skill](https://github.com/Able-rip/agent-mosaic-skill)** - Local LEGO-style mosaic preview generator for Agent and MCP workflows.
+
 ## 🌟 Reference Servers
 
 These servers aim to demonstrate MCP features and the official SDKs.
