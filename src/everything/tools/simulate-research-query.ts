@@ -254,6 +254,7 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
         "Demonstrates MCP task-based operations with progress through multiple stages. " +
         "If 'ambiguous' is true and client supports elicitation, sends an elicitation request for clarification.",
       inputSchema: SimulateResearchQuerySchema,
+      annotations: { readOnlyHint: true },
       execution: { taskSupport: "required" },
     },
     {
