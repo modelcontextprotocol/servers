@@ -159,12 +159,10 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
               method: "tasks/get",
               params: { taskId },
             },
-            z
-              .object({
-                status: z.string(),
-                statusMessage: z.string().optional(),
-              })
-              .passthrough()
+            z.looseObject({
+              status: z.string(),
+              statusMessage: z.string().optional(),
+            })
           );
 
           taskStatus = pollResult.status;
