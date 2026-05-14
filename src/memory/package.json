@@ -19,7 +19,7 @@
     "watch": "tsc --watch"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.25.2"
+    "@modelcontextprotocol/sdk": "1.26.0"
   },
   "devDependencies": {
     "@types/node": "^22",

@@ -20,7 +20,7 @@
     "test": "jest --config=jest.config.cjs --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "diff": "^5.2.2",
     "glob": "^10.5.0",
     "minimatch": "^10.0.1",
