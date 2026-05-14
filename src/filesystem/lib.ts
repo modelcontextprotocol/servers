@@ -207,7 +207,10 @@ export async function applyFileEdits(
 
     // If exact match exists, use it
     if (modifiedContent.includes(normalizedOld)) {
-      modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
+      // Use a function as replacement to prevent special replacement patterns
+      // (e.g. $&, $`, $', $$) in normalizedNew from being interpreted by
+      // String.prototype.replace — the callback return value is always literal.
+      modifiedContent = modifiedContent.replace(normalizedOld, () => normalizedNew);
       continue;
     }
 

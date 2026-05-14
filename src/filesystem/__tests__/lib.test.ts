@@ -555,15 +555,15 @@ describe('Lib Functions', () => {
 
       it('handles CRLF line endings in file content', async () => {
         mockFs.readFile.mockResolvedValue('line1\r\nline2\r\nline3\r\n');
-        
+
         const edits = [
           { oldText: 'line2', newText: 'modified line2' }
         ];
-        
+
         mockFs.rename.mockResolvedValueOnce(undefined);
-        
+
         await applyFileEdits('/test/file.txt', edits, false);
-        
+
         expect(mockFs.writeFile).toHaveBeenCalledWith(
           expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
           'line1\nmodified line2\nline3\n',
@@ -572,6 +572,78 @@ describe('Lib Functions', () => {
         expect(mockFs.rename).toHaveBeenCalledWith(
           expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
           '/test/file.txt'
+        );
+      });
+
+      it('treats $$ in newText as literal $$ not a single $', async () => {
+        mockFs.readFile.mockResolvedValue('price: PLACEHOLDER\n');
+
+        const edits = [
+          { oldText: 'PLACEHOLDER', newText: '$$100 USD' }
+        ];
+
+        mockFs.rename.mockResolvedValueOnce(undefined);
+
+        await applyFileEdits('/test/file.txt', edits, false);
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          'price: $$100 USD\n',
+          'utf-8'
+        );
+      });
+
+      it('treats $& in newText as literal $& not the matched substring', async () => {
+        mockFs.readFile.mockResolvedValue('value: OLD\n');
+
+        const edits = [
+          { oldText: 'OLD', newText: '$&NEW' }
+        ];
+
+        mockFs.rename.mockResolvedValueOnce(undefined);
+
+        await applyFileEdits('/test/file.txt', edits, false);
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          'value: $&NEW\n',
+          'utf-8'
+        );
+      });
+
+      it('treats $` in newText as literal $` not the preceding substring', async () => {
+        mockFs.readFile.mockResolvedValue('hello PLACEHOLDER world\n');
+
+        const edits = [
+          { oldText: 'PLACEHOLDER', newText: '$`literal' }
+        ];
+
+        mockFs.rename.mockResolvedValueOnce(undefined);
+
+        await applyFileEdits('/test/file.txt', edits, false);
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          'hello $`literal world\n',
+          'utf-8'
+        );
+      });
+
+      it("treats $' in newText as literal $' not the following substring", async () => {
+        mockFs.readFile.mockResolvedValue('hello PLACEHOLDER world\n');
+
+        const edits = [
+          { oldText: 'PLACEHOLDER', newText: "$'literal" }
+        ];
+
+        mockFs.rename.mockResolvedValueOnce(undefined);
+
+        await applyFileEdits('/test/file.txt', edits, false);
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          "hello $'literal world\n",
+          'utf-8'
         );
       });
     });
