@@ -97,4 +97,44 @@ describe('Startup Directory Validation', () => {
     // Should still start with the valid directory
     expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
   });
+
+  // Regression coverage for #4152 — warnings about inaccessible startup
+  // directories must include the underlying error reason so hosts can
+  // surface an actionable diagnostic to end users (the original report
+  // saw a silent transport close because nothing identified the bad path
+  // beyond a generic "Cannot access directory" line).
+  it('should include the underlying error reason in the per-directory warning (#4152)', async () => {
+    const nonExistentDir = path.join(testDir, 'non-existent-dir-with-reason');
+
+    const result = await spawnServer([nonExistentDir, accessibleDir]);
+
+    // Should still skip + continue with the valid directory.
+    expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+    // Diagnostic must name the directory AND the OS-level error reason.
+    expect(result.stderr).toContain(nonExistentDir);
+    expect(result.stderr).toMatch(/ENOENT|no such file or directory/i);
+  });
+
+  // Regression coverage for #4152 — when ALL startup directories fail, the
+  // aggregate exit error must enumerate each offending path AFTER the
+  // "Error:" marker (not only as scattered per-directory warnings) so a
+  // host capturing only the final fatal line can show users every entry of
+  // allowed_directories that needs fixing.
+  it('should list every offending directory inside the aggregate startup error (#4152)', async () => {
+    const bad1 = path.join(testDir, 'aggregate-fail-1');
+    const bad2 = path.join(testDir, 'aggregate-fail-2');
+
+    const result = await spawnServer([bad1, bad2]);
+
+    expect(result.exitCode).toBe(1);
+
+    // Slice from the "Error:" marker to end-of-stderr — the aggregate
+    // message itself must contain both paths, not only the per-directory
+    // warnings that precede it.
+    const errIdx = result.stderr.indexOf('Error:');
+    expect(errIdx, 'aggregate Error: line missing').toBeGreaterThanOrEqual(0);
+    const aggregate = result.stderr.slice(errIdx);
+    expect(aggregate).toContain(bad1);
+    expect(aggregate).toContain(bad2);
+  });
 });
