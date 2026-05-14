@@ -115,6 +115,35 @@ describe('Startup Directory Validation', () => {
     expect(result.stderr).toMatch(/ENOENT|no such file or directory/i);
   });
 
+  // Regression coverage for #4152 — permission-denied (EACCES) directories
+  // must surface the OS reason in the warning the same way ENOENT does. The
+  // original report only mentioned non-existent dirs, but the underlying
+  // try/catch handles every fs.stat failure and hosts on Windows / locked
+  // mounts hit EACCES just as often. Skipped on POSIX root (no chmod 0o000
+  // restriction) and on Windows (chmod has no effect on directory access).
+  const skipChmodEacces = process.platform === 'win32' || (typeof process.getuid === 'function' && process.getuid() === 0);
+  (skipChmodEacces ? it.skip : it)('should include EACCES reason for permission-denied directory (#4152)', async () => {
+    const lockedDir = path.join(testDir, 'locked-dir');
+    await fs.mkdir(lockedDir);
+    // Drop *all* perms on the parent so fs.stat on a child path returns EACCES.
+    const parent = path.join(testDir, 'no-traverse');
+    await fs.mkdir(parent);
+    const child = path.join(parent, 'inner');
+    await fs.mkdir(child);
+    await fs.chmod(parent, 0o000);
+
+    try {
+      const result = await spawnServer([child, accessibleDir]);
+      // Should still continue with the accessible one.
+      expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+      expect(result.stderr).toContain(child);
+      expect(result.stderr).toMatch(/EACCES|permission denied/i);
+    } finally {
+      // Restore perms so afterEach() can remove the tree.
+      await fs.chmod(parent, 0o700).catch(() => {});
+    }
+  });
+
   // Regression coverage for #4152 — when ALL startup directories fail, the
   // aggregate exit error must enumerate each offending path AFTER the
   // "Error:" marker (not only as scattered per-directory warnings) so a
