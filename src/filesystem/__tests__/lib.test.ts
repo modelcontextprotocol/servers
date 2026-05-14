@@ -472,6 +472,22 @@ describe('Lib Functions', () => {
         );
       });
 
+      it('treats replacement text as literal content', async () => {
+        const edits = [
+          { oldText: 'line2', newText: 'price=$5; match=$&; group=$1; dollar=$$' }
+        ];
+
+        mockFs.rename.mockResolvedValueOnce(undefined);
+
+        await applyFileEdits('/test/file.txt', edits, false);
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          'line1\nprice=$5; match=$&; group=$1; dollar=$$\nline3\n',
+          'utf-8'
+        );
+      });
+
       it('handles whitespace-flexible matching', async () => {
         mockFs.readFile.mockResolvedValue('  line1\n    line2\n  line3\n');
         
