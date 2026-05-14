@@ -11,7 +11,7 @@
 
 - `echo` (tools/echo.ts): Echoes the provided `message: string`. Uses Zod to validate inputs.
 - `get-annotated-message` (tools/get-annotated-message.ts): Returns a `text` message annotated with `priority` and `audience` based on `messageType` (`error`, `success`, or `debug`); can optionally include an annotated `image`.
-- `get-env` (tools/get-env.ts): Returns all environment variables from the running process as pretty-printed JSON text.
+- `get-env` (tools/get-env.ts): Returns one requested environment variable from the running process as pretty-printed JSON text.
 - `get-resource-links` (tools/get-resource-links.ts): Returns an intro `text` block followed by multiple `resource_link` items. For a requested `count` (1–10), alternates between dynamic Text and Blob resources using URIs from `resources/templates.ts`.
 - `get-resource-reference` (tools/get-resource-reference.ts): Accepts `resourceType` (`text` or `blob`) and `resourceId` (positive integer). Returns a concrete `resource` content block (with its `uri`, `mimeType`, and data) with surrounding explanatory `text`.
 - `get-roots-list` (tools/get-roots-list.ts): Returns the last list of roots sent by the client.
