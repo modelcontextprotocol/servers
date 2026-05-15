@@ -205,9 +205,16 @@ export async function applyFileEdits(
     const normalizedOld = normalizeLineEndings(edit.oldText);
     const normalizedNew = normalizeLineEndings(edit.newText);
 
-    // If exact match exists, use it
+    // If exact match exists, use it.
+    //
+    // Using the function form of replace() is important: with a string
+    // replacement, JavaScript interprets `$$`, `$&`, `` $` ``, `$'`, and
+    // `$<name>` as replacement-pattern syntax, which silently corrupts
+    // content that contains literal `$` characters (e.g. JS/TS code,
+    // currency amounts, shell variables). The arrow function returns
+    // the replacement as a literal string and bypasses the pattern.
     if (modifiedContent.includes(normalizedOld)) {
-      modifiedContent = modifiedContent.replace(normalizedOld, normalizedNew);
+      modifiedContent = modifiedContent.replace(normalizedOld, () => normalizedNew);
       continue;
     }
 

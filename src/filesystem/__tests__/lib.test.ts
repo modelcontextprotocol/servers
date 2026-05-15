@@ -498,9 +498,39 @@ describe('Lib Functions', () => {
         const edits = [
           { oldText: 'nonexistent line', newText: 'replacement' }
         ];
-        
+
         await expect(applyFileEdits('/test/file.txt', edits, false))
           .rejects.toThrow('Could not find exact match for edit');
+      });
+
+      // Regression test for #4157: newText containing String.prototype.replace
+      // replacement-pattern characters ($$, $&, $`, $', $<name>) must be treated
+      // as a literal string, not a pattern. Otherwise content like "$$100 USD"
+      // silently corrupts to "$100 USD" on the exact-match path.
+      it('preserves literal $ in newText (issue #4157)', async () => {
+        mockFs.readFile.mockResolvedValue('price: PLACEHOLDER\n');
+
+        const cases: Array<[string, string]> = [
+          ['$$100 USD',       'price: $$100 USD\n'],
+          ['cost: $&',        'price: cost: $&\n'],
+          ['var: $`x$\'',     'price: var: $`x$\'\n'],
+          ['template: $<x>',  'price: template: $<x>\n'],
+        ];
+
+        for (const [newText, expected] of cases) {
+          mockFs.writeFile.mockClear();
+          mockFs.rename.mockResolvedValueOnce(undefined);
+
+          await applyFileEdits('/test/file.txt', [
+            { oldText: 'PLACEHOLDER', newText }
+          ], false);
+
+          expect(mockFs.writeFile).toHaveBeenCalledWith(
+            expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+            expected,
+            'utf-8'
+          );
+        }
       });
 
       it('handles complex multi-line edits with indentation', async () => {
