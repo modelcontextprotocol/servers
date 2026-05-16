@@ -50,6 +50,7 @@ src/everything
      │   ├── gzip-file-as-resource.ts
      │   ├── toggle-simulated-logging.ts
      │   ├── toggle-subscriber-updates.ts
+     │   ├── trigger-agentic-sampling.ts
      │   ├── trigger-elicitation-request.ts
      │   ├── trigger-long-running-operation.ts
      │   └── trigger-sampling-request.ts
@@ -151,6 +152,8 @@ src/everything
   - Registers a `trigger-elicitation-request` tool that sends an `elicitation/create` request to the client/LLM and returns the elicitation result.
 - `trigger-sampling-request.ts`
   - Registers a `trigger-sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
+- `trigger-agentic-sampling.ts`
+  - Registers a `trigger-agentic-sampling` tool that demonstrates SEP-1577 sampling with tools. Sends a prompt to the LLM with tools available (`echo`, `add`), handles `tool_use` responses by executing tools locally, and loops until a final response or max iterations is reached. Only registered if the client supports the `sampling.tools` capability.
 - `get-structured-content.ts`
   - Registers a `get-structured-content` tool that demonstrates structuredContent block responses.
 - `get-sum.ts`
