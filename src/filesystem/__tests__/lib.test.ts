@@ -553,6 +553,23 @@ describe('Lib Functions', () => {
     });
 
     describe('tailFile', () => {
+      const mockTailReadableFile = (content: string) => {
+        const fileBuffer = Buffer.from(content, 'utf-8');
+        mockFs.stat.mockResolvedValue({ size: fileBuffer.length } as any);
+
+        const mockFileHandle = {
+          read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
+            const chunk = fileBuffer.subarray(position, position + length);
+            chunk.copy(buffer, offset);
+            return { bytesRead: chunk.length, buffer };
+          }),
+          close: vi.fn().mockResolvedValue(undefined)
+        } as any;
+
+        mockFs.open.mockResolvedValue(mockFileHandle);
+        return mockFileHandle;
+      };
+
       it('handles empty files', async () => {
         mockFs.stat.mockResolvedValue({ size: 0 } as any);
         
@@ -583,23 +600,29 @@ describe('Lib Functions', () => {
       });
 
       it('handles files with content and returns last lines', async () => {
-        mockFs.stat.mockResolvedValue({ size: 50 } as any);
-        
-        const mockFileHandle = {
-          read: vi.fn(),
-          close: vi.fn()
-        } as any;
-        
-        // Simulate reading file content in chunks
-        mockFileHandle.read
-          .mockResolvedValueOnce({ bytesRead: 20, buffer: Buffer.from('line3\nline4\nline5\n') })
-          .mockResolvedValueOnce({ bytesRead: 0 });
-        mockFileHandle.close.mockResolvedValue(undefined);
-        
-        mockFs.open.mockResolvedValue(mockFileHandle);
-        
+        const mockFileHandle = mockTailReadableFile('line1\nline2\nline3\nline4\nline5');
+
         const result = await tailFile('/test/file.txt', 2);
-        
+
+        expect(result).toBe('line4\nline5');
+        expect(mockFileHandle.close).toHaveBeenCalled();
+      });
+
+      it('does not treat a final newline as an empty tail line', async () => {
+        const mockFileHandle = mockTailReadableFile('line1\nline2\nline3\n');
+
+        const result = await tailFile('/test/file.txt', 1);
+
+        expect(result).toBe('line3');
+        expect(mockFileHandle.close).toHaveBeenCalled();
+      });
+
+      it('returns the requested lines when content ends in a newline', async () => {
+        const mockFileHandle = mockTailReadableFile('line1\nline2\nline3\n');
+
+        const result = await tailFile('/test/file.txt', 2);
+
+        expect(result).toBe('line2\nline3');
         expect(mockFileHandle.close).toHaveBeenCalled();
       });
 
