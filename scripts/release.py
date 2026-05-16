@@ -51,6 +51,23 @@ class GitHashParamType(click.ParamType):
 GIT_HASH = GitHashParamType()
 
 
+def _update_server_json(path: Path, version: Version) -> None:
+    server_json_path = path / "server.json"
+    if not server_json_path.exists():
+        return
+
+    with open(server_json_path, "r") as f:
+        data = json.load(f)
+
+    data["version"] = version
+    for package in data.get("packages", []):
+        package["version"] = version
+
+    with open(server_json_path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+
+
 class Package(Protocol):
     path: Path
 
@@ -78,23 +95,7 @@ class NpmPackage:
             f.truncate()
 
     def update_server_json(self, version: Version):
-        server_json_path = self.path / "server.json"
-        if not server_json_path.exists():
-            return
-
-        with open(server_json_path, "r") as f:
-            data = json.load(f)
-
-        # Update root version
-        data["version"] = version
-
-        # Update all package versions
-        for package in data.get("packages", []):
-            package["version"] = version
-
-        with open(server_json_path, "w") as f:
-            json.dump(data, f, indent=2)
-            f.write("\n")
+        _update_server_json(self.path, version)
 
 
 @dataclass
@@ -122,23 +123,7 @@ class PyPiPackage:
         subprocess.run(["uv", "lock"], cwd=self.path, check=True)
 
     def update_server_json(self, version: Version):
-        server_json_path = self.path / "server.json"
-        if not server_json_path.exists():
-            return
-
-        with open(server_json_path, "r") as f:
-            data = json.load(f)
-
-        # Update root version
-        data["version"] = version
-
-        # Update all package versions
-        for package in data.get("packages", []):
-            package["version"] = version
-
-        with open(server_json_path, "w") as f:
-            json.dump(data, f, indent=2)
-            f.write("\n")
+        _update_server_json(self.path, version)
 
 
 def has_changes(path: Path, git_hash: GitHash) -> bool:

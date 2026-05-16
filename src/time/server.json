@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.modelcontextprotocol/server-time",
   "description": "MCP server providing tools for time queries and timezone conversions for LLMs",
-  "version": "0.0.0",
+  "version": "0.6.2",
   "repository": {
     "url": "https://github.com/modelcontextprotocol/servers",
     "source": "github",
@@ -12,7 +12,7 @@
     {
       "registryType": "pypi",
       "identifier": "mcp-server-time",
-      "version": "0.0.0",
+      "version": "0.6.2",
       "runtimeHint": "uvx",
       "transport": { "type": "stdio" }
     }
