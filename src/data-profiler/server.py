@@ -62,15 +62,18 @@ def find_outliers_iqr(file_path: str, column_name: str) -> str:
         if column_name not in df.columns:
             return f"Hata: Sütun '{column_name}' veri setinde bulunamadı. Mevcut sütunlar: {list(df.columns)}"
         
-        # Sütunun sayısal olup olmadığını pango/numpy uyumlu string kontrolüyle yapıyoruz (Pyright dostu)
-        if not pjs := pd.api.types.is_numeric_dtype(df[column_name]):
+        # Sayısal sütun kontrolünü normal if yapısına çevirdik
+        is_numeric = pd.api.types.is_numeric_dtype(df[column_name])
+        if not is_numeric:
             return f"Hata: '{column_name}' sütunu sayısal bir veri tipine sahip değil. Aykırı değer analizi yapılamaz."
         
-        # Temiz veri (NaN değerleri temizle) ve kesin olarak Series olduğunu belirt
-        series: pd.Series = df[column_name].dropna()
-        
-        # Eğer veri kalmadıysa çık
-        if series.empty:
+        # Pyright'ı ikna etmek için ham sütun verisini çekiyoruz
+        raw_series = df[column_name]
+        if not isinstance(raw_series, pd.Series):
+            return f"Hata: Sütun verisi okunamadı."
+            
+        series = raw_series.dropna()
+        if not isinstance(series, pd.Series) or series.empty:
             return f"Hata: '{column_name}' sütununda analiz edilecek geçerli (sayısal) veri bulunamadı."
         
         # IQR Hesaplama
@@ -81,8 +84,12 @@ def find_outliers_iqr(file_path: str, column_name: str) -> str:
         lower_bound = q1 - 1.5 * iqr
         upper_bound = q3 + 1.5 * iqr
         
-        # Aykırı değerleri filtrele
-        outliers: pd.Series = series[(series < lower_bound) | (series > upper_bound)]
+        # Filtreleme yapıp dönen verinin kesinlikle Series olduğunu doğruluyoruz
+        filtered_outliers = series[(series < lower_bound) | (series > upper_bound)]
+        if not isinstance(filtered_outliers, pd.Series):
+            return f"Hata: Aykırı değerler hesaplanırken veri yapısı uyuşmazlığı oluştu."
+            
+        outliers = filtered_outliers
         outlier_count = len(outliers)
         outlier_ratio = (outlier_count / len(series)) * 100
         
@@ -99,7 +106,6 @@ def find_outliers_iqr(file_path: str, column_name: str) -> str:
         )
         
         if outlier_count > 0:
-            # .head(5).tolist() kullanarak tipi tamamen standart bir Python listesine zorluyoruz
             sample_list = outliers.head(5).tolist()
             report += f"  - Bazı Örnek Aykırı Değerler: {sample_list}\n"
             
