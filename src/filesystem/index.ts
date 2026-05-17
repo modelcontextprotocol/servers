@@ -66,24 +66,40 @@ let allowedDirectories = (await Promise.all(
   })
 )).flat();
 
-// Filter to only accessible directories, warn about inaccessible ones
+// Filter to only accessible directories, warn about inaccessible ones.
+// Track failed entries with their reason so the aggregate fatal error
+// (when EVERY directory is unusable) can enumerate them — hosts using the
+// stdio transport often surface only the final error line, so per-path
+// warnings are not enough. See issue #4152.
 const accessibleDirectories: string[] = [];
+const failedEntries: { dir: string; reason: string }[] = [];
 for (const dir of allowedDirectories) {
   try {
     const stats = await fs.stat(dir);
     if (stats.isDirectory()) {
       accessibleDirectories.push(dir);
     } else {
+      const reason = "not a directory";
       console.error(`Warning: ${dir} is not a directory, skipping`);
+      failedEntries.push({ dir, reason });
     }
   } catch (error) {
-    console.error(`Warning: Cannot access directory ${dir}, skipping`);
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error(`Warning: Cannot access directory ${dir}, skipping (${reason})`);
+    failedEntries.push({ dir, reason });
   }
 }
 
-// Exit only if ALL paths are inaccessible (and some were specified)
+// Exit only if ALL paths are inaccessible (and some were specified). The
+// aggregate error enumerates every failed entry so the host can show the
+// user which allowed_directories items to fix (#4152).
 if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
-  console.error("Error: None of the specified directories are accessible");
+  const enumerated = failedEntries
+    .map(({ dir, reason }) => `  - ${dir} (${reason})`)
+    .join("\n");
+  console.error(
+    `Error: None of the specified directories are accessible:\n${enumerated}`,
+  );
   process.exit(1);
 }
 
