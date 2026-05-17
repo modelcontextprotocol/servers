@@ -416,6 +416,22 @@ describe('Lib Functions', () => {
         );
       });
 
+      it('treats dollar signs in replacement text literally', async () => {
+        const edits = [
+          { oldText: 'line2', newText: '$$100 $& value' }
+        ];
+
+        mockFs.rename.mockResolvedValueOnce(undefined);
+
+        await applyFileEdits('/test/file.txt', edits, false);
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          'line1\n$$100 $& value\nline3\n',
+          'utf-8'
+        );
+      });
+
       it('handles dry run mode', async () => {
         const edits = [
           { oldText: 'line2', newText: 'modified line2' }
