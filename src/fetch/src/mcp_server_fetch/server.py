@@ -1,6 +1,7 @@
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
+import httpx
 import markdownify
 import readabilipy.simple_json
 from mcp.shared.exceptions import McpError
@@ -23,6 +24,8 @@ from pydantic import BaseModel, Field, AnyUrl
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
 
+# Define a reasonable default safety cap (e.g., 2MB)
+MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
 def extract_content_from_html(html: str) -> str:
     """Extract and convert HTML content to Markdown format.
@@ -32,12 +35,16 @@ def extract_content_from_html(html: str) -> str:
 
     Returns:
         Simplified markdown version of the content
+
+    Raises:
+        ValueError: If the page content cannot be simplified
     """
     ret = readabilipy.simple_json.simple_json_from_html_string(
         html, use_readability=True
     )
     if not ret["content"]:
-        return "<error>Page failed to be simplified from HTML</error>"
+        raise ValueError("Page failed to be simplified from HTML")
+
     content = markdownify.markdownify(
         ret["content"],
         heading_style=markdownify.ATX,
@@ -68,11 +75,9 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
     """
-    from httpx import AsyncClient, HTTPError
-
     robot_txt_url = get_robots_txt_url(url)
 
-    async with AsyncClient(proxy=proxy_url) as client:
+    async with httpx.AsyncClient(proxy=proxy_url) as client:
         try:
             response = await client.get(
                 robot_txt_url,
@@ -107,34 +112,46 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
             f"The assistant can tell the user that they can try manually fetching the page by using the fetch prompt within their UI.",
         ))
 
-
 async def fetch_url(
     url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
     """
-    from httpx import AsyncClient, HTTPError
-
-    async with AsyncClient(proxy=proxy_url) as client:
+    async with httpx.AsyncClient(proxy=proxy_url, follow_redirects=True, timeout=30.0) as client:
         try:
-            response = await client.get(
-                url,
-                follow_redirects=True,
-                headers={"User-Agent": user_agent},
-                timeout=30,
-            )
-        except HTTPError as e:
+            async with client.stream("GET", url, headers={"User-Agent": user_agent}) as response:
+                if response.status_code >= 400:
+                    raise McpError(ErrorData(
+                        code=INTERNAL_ERROR,
+                        message=f"Failed to fetch {url} - status code {response.status_code}",
+                    ))
+
+                content_length = response.headers.get("Content-Length")
+                if content_length and int(content_length) > MAX_RESPONSE_BYTES:
+                    raise McpError(ErrorData(
+                        code=INVALID_PARAMS,
+                        message=f"Response exceeds maximum allowed size of {MAX_RESPONSE_BYTES} bytes.",
+                    ))
+
+                chunks = []
+                bytes_read = 0
+
+                async for chunk in response.aiter_bytes():
+                    bytes_read += len(chunk)
+                    if bytes_read > MAX_RESPONSE_BYTES:
+                        raise McpError(ErrorData(
+                            code=INVALID_PARAMS,
+                            message=f"Response body exceeded maximum limit of {MAX_RESPONSE_BYTES} bytes during download.",
+                        ))
+                    chunks.append(chunk)
+
+                page_raw = b"".join(chunks).decode("utf-8", errors="replace")
+                content_type = response.headers.get("content-type", "")
+
+        except httpx.HTTPError as e:
             raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}"))
-        if response.status_code >= 400:
-            raise McpError(ErrorData(
-                code=INTERNAL_ERROR,
-                message=f"Failed to fetch {url} - status code {response.status_code}",
-            ))
 
-        page_raw = response.text
-
-    content_type = response.headers.get("content-type", "")
     is_page_html = (
         "<html" in page_raw[:100] or "text/html" in content_type or not content_type
     )
