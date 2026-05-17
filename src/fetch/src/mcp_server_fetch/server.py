@@ -1,3 +1,4 @@
+from httpx import HTTPError
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 

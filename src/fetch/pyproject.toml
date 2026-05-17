@@ -38,3 +38,8 @@ dev-dependencies = ["pyright>=1.1.389", "ruff>=0.7.3", "pytest>=8.0.0", "pytest-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+include = ["src", "tests"]
