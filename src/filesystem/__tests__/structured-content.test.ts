@@ -155,4 +155,51 @@ describe('structuredContent schema compliance', () => {
       expect(Array.isArray(structuredContent.content)).toBe(false);
     });
   });
+
+  describe('read_text_file line limits', () => {
+    it('treats zero head and tail values as explicit limits', async () => {
+      const filePath = path.join(testDir, 'lines.txt');
+      await fs.writeFile(filePath, 'line1\nline2\nline3\n');
+
+      const headResult = await client.callTool({
+        name: 'read_text_file',
+        arguments: { path: filePath, head: 0 }
+      });
+      expect(headResult.content).toEqual([{ type: 'text', text: '' }]);
+      expect((headResult.structuredContent as { content: unknown }).content).toBe('');
+
+      const tailResult = await client.callTool({
+        name: 'read_text_file',
+        arguments: { path: filePath, tail: 0 }
+      });
+      expect(tailResult.content).toEqual([{ type: 'text', text: '' }]);
+      expect((tailResult.structuredContent as { content: unknown }).content).toBe('');
+    });
+
+    it('rejects head and tail when both are provided, even when zero', async () => {
+      const filePath = path.join(testDir, 'test.txt');
+
+      const result = await client.callTool({
+        name: 'read_text_file',
+        arguments: { path: filePath, head: 0, tail: 0 }
+      });
+
+      expect(result.isError).toBe(true);
+      expect((result.content[0] as { text: string }).text)
+        .toContain('Cannot specify both head and tail parameters simultaneously');
+    });
+
+    it('rejects fractional line limits', async () => {
+      const filePath = path.join(testDir, 'test.txt');
+
+      const result = await client.callTool({
+        name: 'read_text_file',
+        arguments: { path: filePath, head: 1.5 }
+      });
+
+      expect(result.isError).toBe(true);
+      expect((result.content[0] as { text: string }).text)
+        .toContain('Expected integer');
+    });
+  });
 });
