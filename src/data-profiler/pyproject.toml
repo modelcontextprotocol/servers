@@ -1,5 +1,5 @@
 [project]
-name = "mcp-data-analyzer"
+name = "mcp-data-profiler"
 version = "0.1.0"
 description = "AI ajanları için gelişmiş veri analizi ve kalite kontrol sunucusu"
 readme = "README.md"
