@@ -1,0 +1,15 @@
+[project]
+name = "mcp-data-analyzer"
+version = "0.1.0"
+description = "AI ajanları için gelişmiş veri analizi ve kalite kontrol sunucusu"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.2.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
