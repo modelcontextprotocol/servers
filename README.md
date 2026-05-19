@@ -59,6 +59,7 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 ### For servers
 
 * **[Anubis MCP](https://github.com/zoedsoupe/anubis-mcp)** (Elixir) - A high-performance and high-level Model Context Protocol (MCP) implementation in Elixir. Think like "Live View" for MCP.
+* **[@cyanmycelium/mcp-core](https://github.com/pandaGaume/mcp-core)** (TypeScript) - Modular MCP toolkit with composable subpath exports (`/server`, `/client`, `/llm`, `/node`). Engine-neutral core, bring your own transport or runtime. [npm](https://www.npmjs.com/package/@cyanmycelium/mcp-core)
 * **[ModelFetch](https://github.com/phuctm97/modelfetch/)** (TypeScript) - Runtime-agnostic SDK to create and deploy MCP servers anywhere TypeScript/JavaScript runs
 * **[EasyMCP](https://github.com/zcaceres/easy-mcp/)** (TypeScript)
 * **[FastAPI to MCP auto generator](https://github.com/tadata-org/fastapi_mcp)** – A zero-configuration tool for automatically exposing FastAPI endpoints as MCP tools by **[Tadata](https://tadata.com/)**
