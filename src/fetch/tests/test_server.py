@@ -87,6 +87,54 @@ class TestExtractContentFromHtml:
         result = extract_content_from_html(html)
         assert "<error>" in result
 
+    def test_uses_readability_js_when_node_is_available(self):
+        html = "<html><body><article><p>Hello</p></article></body></html>"
+
+        with (
+            patch("mcp_server_fetch.server.shutil.which", return_value="node"),
+            patch(
+                "mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string"
+            ) as mock_simple_json,
+        ):
+            mock_simple_json.return_value = {"content": "<p>Hello</p>"}
+
+            result = extract_content_from_html(html)
+
+        mock_simple_json.assert_called_once_with(html, use_readability=True)
+        assert "Hello" in result
+
+    def test_falls_back_without_node(self):
+        html = "<html><body><article><p>Hello</p></article></body></html>"
+
+        with (
+            patch("mcp_server_fetch.server.shutil.which", return_value=None),
+            patch(
+                "mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string"
+            ) as mock_simple_json,
+        ):
+            mock_simple_json.return_value = {"content": "<p>Hello</p>"}
+
+            result = extract_content_from_html(html)
+
+        mock_simple_json.assert_called_once_with(html, use_readability=False)
+        assert "Hello" in result
+
+    def test_can_disable_readability_js(self):
+        html = "<html><body><article><p>Hello</p></article></body></html>"
+
+        with (
+            patch("mcp_server_fetch.server.shutil.which", return_value="node"),
+            patch(
+                "mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string"
+            ) as mock_simple_json,
+        ):
+            mock_simple_json.return_value = {"content": "<p>Hello</p>"}
+
+            result = extract_content_from_html(html, use_readability_js=False)
+
+        mock_simple_json.assert_called_once_with(html, use_readability=False)
+        assert "Hello" in result
+
 
 class TestCheckMayAutonomouslyFetchUrl:
     """Tests for check_may_autonomously_fetch_url function."""
@@ -100,13 +148,14 @@ class TestCheckMayAutonomouslyFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             # Should not raise
             await check_may_autonomously_fetch_url(
-                "https://example.com/page",
-                DEFAULT_USER_AGENT_AUTONOMOUS
+                "https://example.com/page", DEFAULT_USER_AGENT_AUTONOMOUS
             )
 
     @pytest.mark.asyncio
@@ -118,13 +167,14 @@ class TestCheckMayAutonomouslyFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             with pytest.raises(McpError):
                 await check_may_autonomously_fetch_url(
-                    "https://example.com/page",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
+                    "https://example.com/page", DEFAULT_USER_AGENT_AUTONOMOUS
                 )
 
     @pytest.mark.asyncio
@@ -136,13 +186,14 @@ class TestCheckMayAutonomouslyFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             with pytest.raises(McpError):
                 await check_may_autonomously_fetch_url(
-                    "https://example.com/page",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
+                    "https://example.com/page", DEFAULT_USER_AGENT_AUTONOMOUS
                 )
 
     @pytest.mark.asyncio
@@ -155,13 +206,14 @@ class TestCheckMayAutonomouslyFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             # Should not raise
             await check_may_autonomously_fetch_url(
-                "https://example.com/page",
-                DEFAULT_USER_AGENT_AUTONOMOUS
+                "https://example.com/page", DEFAULT_USER_AGENT_AUTONOMOUS
             )
 
     @pytest.mark.asyncio
@@ -174,13 +226,14 @@ class TestCheckMayAutonomouslyFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             with pytest.raises(McpError):
                 await check_may_autonomously_fetch_url(
-                    "https://example.com/page",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
+                    "https://example.com/page", DEFAULT_USER_AGENT_AUTONOMOUS
                 )
 
 
@@ -207,17 +260,51 @@ class TestFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             content, prefix = await fetch_url(
-                "https://example.com/page",
-                DEFAULT_USER_AGENT_AUTONOMOUS
+                "https://example.com/page", DEFAULT_USER_AGENT_AUTONOMOUS
             )
 
             # HTML is processed, so we check it returns something
             assert isinstance(content, str)
             assert prefix == ""
+
+    @pytest.mark.asyncio
+    async def test_fetch_html_forwards_readability_js_option(self):
+        """Test that fetch_url forwards the readability JS option."""
+        html_content = "<html><body><h1>Test</h1></body></html>"
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = html_content
+        mock_response.headers = {"content-type": "text/html"}
+
+        with (
+            patch("httpx.AsyncClient") as mock_client_class,
+            patch(
+                "mcp_server_fetch.server.extract_content_from_html",
+                return_value="Test",
+            ) as mock_extract,
+        ):
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            content, prefix = await fetch_url(
+                "https://example.com/page",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                use_readability_js=False,
+            )
+
+        mock_extract.assert_called_once_with(html_content, use_readability_js=False)
+        assert content == "Test"
+        assert prefix == ""
 
     @pytest.mark.asyncio
     async def test_fetch_html_page_raw(self):
@@ -231,13 +318,15 @@ class TestFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             content, prefix = await fetch_url(
                 "https://example.com/page",
                 DEFAULT_USER_AGENT_AUTONOMOUS,
-                force_raw=True
+                force_raw=True,
             )
 
             assert content == html_content
@@ -255,12 +344,13 @@ class TestFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             content, prefix = await fetch_url(
-                "https://api.example.com/data",
-                DEFAULT_USER_AGENT_AUTONOMOUS
+                "https://api.example.com/data", DEFAULT_USER_AGENT_AUTONOMOUS
             )
 
             assert content == json_content
@@ -275,13 +365,14 @@ class TestFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             with pytest.raises(McpError):
                 await fetch_url(
-                    "https://example.com/notfound",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
+                    "https://example.com/notfound", DEFAULT_USER_AGENT_AUTONOMOUS
                 )
 
     @pytest.mark.asyncio
@@ -293,13 +384,14 @@ class TestFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             with pytest.raises(McpError):
                 await fetch_url(
-                    "https://example.com/error",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
+                    "https://example.com/error", DEFAULT_USER_AGENT_AUTONOMOUS
                 )
 
     @pytest.mark.asyncio
@@ -313,14 +405,18 @@ class TestFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             await fetch_url(
                 "https://example.com/data",
                 DEFAULT_USER_AGENT_AUTONOMOUS,
-                proxy_url="http://proxy.example.com:8080"
+                proxy_url="http://proxy.example.com:8080",
             )
 
             # Verify AsyncClient was called with proxy
-            mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+            mock_client_class.assert_called_once_with(
+                proxy="http://proxy.example.com:8080"
+            )
