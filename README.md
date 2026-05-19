@@ -152,6 +152,8 @@ Additional resources on MCP.
 ## 🚀 Getting Started
 
 ### Using MCP Servers in this Repository
+- [Suppr MCP Server](https://github.com/zjg678/suppr-mcp) - MCP server for Suppr document translation and academic literature search workflows.
+
 TypeScript-based servers in this repository can be used directly with `npx`.
 
 For example, this will start the [Memory](src/memory) server:
