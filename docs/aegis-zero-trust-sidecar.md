@@ -12,11 +12,18 @@ Instead of trusting the LLM's internal "safety alignment" to not drop a database
 
 1. **Isolation:** The target MCP Server is bound exclusively to the internal Docker network. It exposes no external ports.
 2. **Cryptographic Authentication:** Agents must pass an `X-Aegis-IBCT` (Invocation-Bound Capability Token) signed via Ed25519 cryptography.
-3. **Mathematical Bounding:** The Sidecar intercepts the JSON-RPC payload. If the LLM hallucinates an unauthorized tool call (e.g., trying to execute a `$50,000` transaction when the limit is `$500`), the proxy mathematically drops the connection before it ever reaches the MCP server.
+3. **Mathematical Bounding:** The Sidecar intercepts the JSON-RPC payload. If the LLM hallucinates an unauthorized tool call, the proxy mathematically drops the connection before it ever reaches the MCP server.
 
-## Quickstart Deployment (Docker Compose)
+## Quickstart Deployment
 
-The Aegis Sidecar is framework-agnostic and sits next to any standard MCP server. 
+### Step 0: Mint Your Agent Identity
+Before you can run the sidecar, your agent needs a cryptographic identity to authenticate with the network layer.
+1. Log in to the **[Aegis Cloud Control Plane](https://aegis-cloud-console-rhi85hlw8-yashs-projects-e8e7ba12.vercel.app/)**.
+2. Register a new Agent Identity and configure its mathematical boundaries (e.g., set maximum financial transaction limits or restricted database operations).
+3. Copy the generated **Agent ID (API Key)**.
+
+### Step 1: The Sidecar Infrastructure
+The Aegis Sidecar is framework-agnostic and sits next to any standard MCP server via `docker-compose.yml`.
 
 ```yaml
 version: '3.8'
@@ -24,7 +31,7 @@ version: '3.8'
 services:
   # 1. The Vulnerable Target (Isolated)
   target-mcp:
-    image: supabase/mcp-server:latest # Replace with any official MCP server
+    image: supabase/mcp-server:latest # Replace with your official MCP server
     networks:
       - aegis_secure_net
 
@@ -35,6 +42,8 @@ services:
       - "8080:8080"
     environment:
       - TARGET_MCP_URL=http://target-mcp:8000
+      - AEGIS_CONTROL_PLANE_URL=[https://aegis-live-node.onrender.com](https://aegis-live-node.onrender.com)
+      - AEGIS_AGENT_ID=paste_your_generated_agent_id_here
     networks:
       - aegis_secure_net
     depends_on:
