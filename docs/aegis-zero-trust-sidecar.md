@@ -4,7 +4,7 @@ Deploying Model Context Protocol (MCP) servers in a local development environmen
 
 To pass enterprise security audits (SOC2, HIPAA), MCP servers should **never** be exposed directly to agentic traffic. Instead, they must be shielded by a mathematically bounded IAM network layer.
 
-This guide outlines the recommended deployment architecture using the open-source **[Aegis MCP Sidecar](https://github.com/Yash-0620/aegis-mcp-sidecar.git)**.
+This guide outlines the recommended deployment architecture using the open-source **[Aegis MCP Sidecar](https://aegis-cloud-console.vercel.app/)**.
 
 ## The Architecture: "The Switzerland Moat"
 
