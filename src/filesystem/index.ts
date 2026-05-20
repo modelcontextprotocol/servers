@@ -26,6 +26,11 @@ import {
   tailFile,
   headFile,
   setAllowedDirectories,
+  // #4162: timeout + cap primitives reused by directory_tree
+  withFsTimeout,
+  FS_SEARCH_MAX_VISITED,
+  FsSearchTruncatedError,
+  assertSearchPathNotExcluded,
 } from './lib.js';
 
 // Command line argument parsing
@@ -548,12 +553,38 @@ server.registerTool(
     }
     const rootPath = args.path;
 
+    // #4162: same defensive shape as searchFilesWithValidation -- honour
+    // FS_SEARCH_EXCLUDE_PREFIXES, bound the recursion, and timeout each
+    // readdir so a lazy provider-backed subtree can't keep the server busy
+    // indefinitely. validatePath already wraps fs.realpath via withFsTimeout
+    // in lib.ts, so only readdir + the entry counter need handling here. We
+    // throw immediately when the cap is hit rather than threading an
+    // `aborted` flag through unwinding recursion -- no caller wants a partial
+    // tree, and the immediate throw makes that contract obvious to future
+    // refactors.
+    assertSearchPathNotExcluded(rootPath, 'directory_tree');
+    let visited = 0;
+
     async function buildTree(currentPath: string, excludePatterns: string[] = []): Promise<TreeEntry[]> {
       const validPath = await validatePath(currentPath);
-      const entries = await fs.readdir(validPath, { withFileTypes: true });
+      const entries = await withFsTimeout(
+        fs.readdir(validPath, { withFileTypes: true }),
+        `readdir ${validPath}`,
+      );
       const result: TreeEntry[] = [];
 
       for (const entry of entries) {
+        if (visited >= FS_SEARCH_MAX_VISITED) {
+          throw new FsSearchTruncatedError(
+            `directory_tree aborted after visiting ${visited} entries ` +
+            `(cap FS_SEARCH_MAX_VISITED=${FS_SEARCH_MAX_VISITED}). ` +
+            `Narrow the search path or use excludePatterns.`,
+            visited,
+            FS_SEARCH_MAX_VISITED,
+          );
+        }
+        visited++;
+
         const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
         const shouldExclude = excludePatterns.some(pattern => {
           if (pattern.includes('*')) {
