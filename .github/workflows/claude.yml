@@ -175,13 +175,15 @@ jobs:
   #   - Mitigations: (a) no Bash glob, no Edit, no WebFetch — Claude can
   #     only post inline comments, read PR metadata via narrow `gh`
   #     commands, and query the MCP docs server at modelcontextprotocol.io
-  #     (the only network egress; fork's `.mcp.json` is removed and
-  #     replaced with a base-repo-controlled config — see the "Prepare
-  #     trusted MCP config" step); (b) no fork code is ever executed (no
-  #     install, build, or test steps); (c) the GITHUB_TOKEN is scoped to
-  #     pull-requests:write only; (d) the ANTHROPIC_API_KEY exists in the
-  #     runner env but isn't reachable through Claude's allowed tool
-  #     surface.
+  #     (the only outbound HTTP Claude can direct; the fork's
+  #     auto-discovered CLI config — `.claude/`, `.mcp.json`, `CLAUDE.md`,
+  #     etc., with `.claude/settings.json` hooks as the highest-impact
+  #     vector — is stripped and replaced with a base-repo-controlled MCP
+  #     config; see the "Strip fork-supplied CLI config" step); (b) no
+  #     fork code is ever executed (no install, build, or test steps);
+  #     (c) the GITHUB_TOKEN is scoped to pull-requests:write only;
+  #     (d) the ANTHROPIC_API_KEY exists in the runner env but isn't
+  #     reachable through Claude's allowed tool surface.
   #
   # NOTE: this repo (modelcontextprotocol/servers) hosts many independent
   # MCP server implementations as subdirectories. The system prompt asks
@@ -193,10 +195,18 @@ jobs:
       github.event_name == 'pull_request_target' &&
       github.event.label.name == 'claude-review'
     runs-on: ubuntu-latest
+    # Prevent label→unlabel→relabel races (or rapid label flips by a
+    # maintainer) from spawning parallel reviews on the same PR. Each
+    # parallel run would consume API budget, post duplicate comments,
+    # and race the label-removal step. `cancel-in-progress: false` so an
+    # in-flight review finishes and removes its own label rather than
+    # being aborted partway through.
+    concurrency:
+      group: claude-fork-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
     permissions:
       contents: read
       pull-requests: write
-      issues: read
     steps:
       # Check out the FORK head explicitly. We use a separate, least-privileged
       # token here and disable credential persistence so nothing fork-side can
@@ -209,31 +219,61 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      # Prepare a trusted, base-repo-controlled MCP config for the review run.
+      # Strip fork-supplied CLI config, then write a trusted MCP config.
       #
-      # Why we delete every `.mcp.json` in the fork checkout:
-      # Claude Code auto-discovers a project-level `.mcp.json` in addition
-      # to anything passed via `--mcp-config`. The fork's checkout above
-      # may ship a `.mcp.json` (at the repo root OR in any subdirectory —
-      # this is a monorepo, so subdirectory configs are plausible) that has
-      # been modified to point at attacker-controlled MCP servers, which
-      # would become an exfiltration channel the moment Claude connected
-      # to it (an injection in the diff could coerce tool calls that leak
-      # review context). The `find ... -delete` sweep guarantees the only
-      # MCP servers in scope for this run are the ones in our trusted,
-      # inline config below — regardless of which directory Claude `cd`s
-      # into during the review.
+      # PRIMARY THREAT: `.claude/settings.json` hooks.
+      # Claude Code reads `.claude/settings.json` from cwd at startup, and
+      # its `SessionStart` / `PreToolUse` hooks run arbitrary shell BEFORE
+      # any `--allowedTools` allowlist applies. That's a direct allowlist
+      # bypass — a fork could ship `.claude/settings.json` with a
+      # `SessionStart` hook that exfiltrates ANTHROPIC_API_KEY (still in
+      # process env at that point) or anything else on the runner. Hooks
+      # are the highest-impact config-discovery vector on this path.
       #
-      # The trusted config is written under $RUNNER_TEMP (outside the fork
-      # checkout, so the fork cannot shadow it) and exposes only the
-      # read-only MCP docs server at https://modelcontextprotocol.io/mcp.
+      # SECONDARY VECTORS: other auto-discovered config files.
+      # `.mcp.json` — points Claude at attacker-controlled MCP servers,
+      # which (if connected) become an exfiltration channel via tool calls.
+      # `CLAUDE.md` / `CLAUDE.local.md` — auto-loaded as project memory,
+      # become trusted-feeling prompt input. `.claude.json`, `.gitmodules`,
+      # `.ripgreprc`, `.husky` are restored by the action's own base-revert
+      # logic; we include them so this strip is the single source of truth.
+      #
+      # WHY WE STRIP RATHER THAN RELY ON THE ACTION:
+      # anthropics/claude-code-action v1.0.99 calls `restoreConfigFromBase`
+      # which reverts this same set of paths from the base branch before
+      # the CLI starts (see src/github/operations/restore-config.ts in the
+      # action source). So the fork-review job is safe today on this axis.
+      # But that's an internal implementation detail of one action version.
+      # If a future bump narrows or removes `restoreConfigFromBase` — the
+      # same regression class we SHA-pin against (#1021) — the hole
+      # silently reopens. Stripping here is defense-in-depth: the security
+      # model holds regardless of what the action does internally.
+      #
+      # We use `find` rather than root-only `rm` because this is a monorepo
+      # — a fork could plant configs under `src/<server>/.claude/` or
+      # similar in case Claude's discovery walks subdirectories. The
+      # `-print` makes any hits visible in run logs so we'd notice if a
+      # fork ever ships one.
+      #
+      # The trusted MCP config is written under $RUNNER_TEMP (outside the
+      # fork checkout, so the fork cannot shadow it) and exposes only the
+      # read-only docs server at https://modelcontextprotocol.io/mcp.
       # Combined with no WebFetch and no unrestricted Bash in --allowedTools,
-      # this means the only outbound HTTP this job can make is to
-      # modelcontextprotocol.io — useful for protocol lookups while
-      # reviewing, with no other network egress.
-      - name: Prepare trusted MCP config
+      # the only outbound HTTP Claude can direct is to modelcontextprotocol.io
+      # — useful for protocol lookups while reviewing. (The runner itself
+      # still talks to api.anthropic.com, api.github.com, the Actions cache,
+      # etc.; the claim is about Claude's tool surface, not the runner.)
+      - name: Strip fork-supplied CLI config + write trusted MCP config
         run: |
-          find . -type f -name '.mcp.json' -print -delete
+          find . -type f \( \
+              -name '.mcp.json' \
+              -o -name '.claude.json' \
+              -o -name '.gitmodules' \
+              -o -name '.ripgreprc' \
+              -o -name 'CLAUDE.md' \
+              -o -name 'CLAUDE.local.md' \
+            \) -print -delete
+          find . -type d \( -name '.claude' -o -name '.husky' \) -print -exec rm -rf {} +
           mkdir -p "$RUNNER_TEMP/claude-fork-review"
           printf '%s\n' '{"mcpServers":{"mcp-docs":{"type":"http","url":"https://modelcontextprotocol.io/mcp"}}}' > "$RUNNER_TEMP/claude-fork-review/mcp.json"
           echo "FORK_REVIEW_MCP_CONFIG=$RUNNER_TEMP/claude-fork-review/mcp.json" >> "$GITHUB_ENV"
@@ -261,8 +301,10 @@ jobs:
           github_token: ${{ github.token }}
           # Hardened tool surface: inline comments, read-only `gh`, and the
           # MCP docs server (only). Notably absent: Bash glob, Edit, Write,
-          # WebFetch, and the fork's `.mcp.json` (which the prior step
-          # deleted and replaced with a base-repo-controlled config).
+          # WebFetch, and any fork-supplied auto-discovered CLI config
+          # (`.claude/`, `.mcp.json`, `CLAUDE.md`, etc. — all stripped by
+          # the prior step and replaced with a base-repo-controlled MCP
+          # config under $RUNNER_TEMP).
           claude_args: |
             --max-turns 8
             --mcp-config ${{ env.FORK_REVIEW_MCP_CONFIG }}
