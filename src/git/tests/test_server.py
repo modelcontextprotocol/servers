@@ -19,6 +19,7 @@ from mcp_server_git.server import (
 )
 import shutil
 
+
 @pytest.fixture
 def test_repository(tmp_path: Path):
     repo_path = tmp_path / "temp_test_repo"
@@ -30,7 +31,17 @@ def test_repository(tmp_path: Path):
 
     yield test_repo
 
-    shutil.rmtree(repo_path)
+    test_repo.close()
+
+    def remove_readonly(func, path, excinfo):
+        import stat
+        import os
+
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+
+    shutil.rmtree(repo_path, onerror=remove_readonly)
+
 
 def test_git_checkout_existing_branch(test_repository):
     test_repository.git.branch("test-branch")
@@ -39,31 +50,37 @@ def test_git_checkout_existing_branch(test_repository):
     assert "Switched to branch 'test-branch'" in result
     assert test_repository.active_branch.name == "test-branch"
 
-def test_git_checkout_nonexistent_branch(test_repository):
 
+def test_git_checkout_nonexistent_branch(test_repository):
     with pytest.raises(BadName):
         git_checkout(test_repository, "nonexistent-branch")
+
 
 def test_git_branch_local(test_repository):
     test_repository.git.branch("new-branch-local")
     result = git_branch(test_repository, "local")
     assert "new-branch-local" in result
 
+
 def test_git_branch_remote(test_repository):
     result = git_branch(test_repository, "remote")
     assert "" == result.strip()  # Should be empty if no remote branches
+
 
 def test_git_branch_all(test_repository):
     test_repository.git.branch("new-branch-all")
     result = git_branch(test_repository, "all")
     assert "new-branch-all" in result
 
+
 def test_git_branch_contains(test_repository):
     # Get the default branch name (could be "main" or "master")
     default_branch = test_repository.active_branch.name
     # Create a new branch and commit to it
     test_repository.git.checkout("-b", "feature-branch")
-    Path(test_repository.working_dir / Path("feature.txt")).write_text("feature content")
+    Path(test_repository.working_dir / Path("feature.txt")).write_text(
+        "feature content"
+    )
     test_repository.index.add(["feature.txt"])
     commit = test_repository.index.commit("feature commit")
     test_repository.git.checkout(default_branch)
@@ -72,12 +89,15 @@ def test_git_branch_contains(test_repository):
     assert "feature-branch" in result
     assert default_branch not in result
 
+
 def test_git_branch_not_contains(test_repository):
     # Get the default branch name (could be "main" or "master")
     default_branch = test_repository.active_branch.name
     # Create a new branch and commit to it
     test_repository.git.checkout("-b", "another-feature-branch")
-    Path(test_repository.working_dir / Path("another_feature.txt")).write_text("another feature content")
+    Path(test_repository.working_dir / Path("another_feature.txt")).write_text(
+        "another feature content"
+    )
     test_repository.index.add(["another_feature.txt"])
     commit = test_repository.index.commit("another feature commit")
     test_repository.git.checkout(default_branch)
@@ -85,6 +105,7 @@ def test_git_branch_not_contains(test_repository):
     result = git_branch(test_repository, "local", not_contains=commit.hexsha)
     assert "another-feature-branch" not in result
     assert default_branch in result
+
 
 def test_git_add_all_files(test_repository):
     file_path = Path(test_repository.working_dir) / "all_file.txt"
@@ -95,6 +116,7 @@ def test_git_add_all_files(test_repository):
     staged_files = [item.a_path for item in test_repository.index.diff("HEAD")]
     assert "all_file.txt" in staged_files
     assert result == "Files staged successfully"
+
 
 def test_git_add_specific_files(test_repository):
     file1 = Path(test_repository.working_dir) / "file1.txt"
@@ -109,11 +131,13 @@ def test_git_add_specific_files(test_repository):
     assert "file2.txt" not in staged_files
     assert result == "Files staged successfully"
 
+
 def test_git_status(test_repository):
     result = git_status(test_repository)
 
     assert result is not None
     assert "On branch" in result or "branch" in result.lower()
+
 
 def test_git_diff_unstaged(test_repository):
     file_path = Path(test_repository.working_dir) / "test.txt"
@@ -124,10 +148,12 @@ def test_git_diff_unstaged(test_repository):
     assert "test.txt" in result
     assert "modified content" in result
 
+
 def test_git_diff_unstaged_empty(test_repository):
     result = git_diff_unstaged(test_repository)
 
     assert result == ""
+
 
 def test_git_diff_staged(test_repository):
     file_path = Path(test_repository.working_dir) / "staged_file.txt"
@@ -139,10 +165,12 @@ def test_git_diff_staged(test_repository):
     assert "staged_file.txt" in result
     assert "staged content" in result
 
+
 def test_git_diff_staged_empty(test_repository):
     result = git_diff_staged(test_repository)
 
     assert result == ""
+
 
 def test_git_diff(test_repository):
     # Get the default branch name (could be "main" or "master")
@@ -158,6 +186,7 @@ def test_git_diff(test_repository):
     assert "test.txt" in result
     assert "feature changes" in result
 
+
 def test_git_commit(test_repository):
     file_path = Path(test_repository.working_dir) / "commit_test.txt"
     file_path.write_text("content to commit")
@@ -169,6 +198,7 @@ def test_git_commit(test_repository):
 
     latest_commit = test_repository.head.commit
     assert latest_commit.message.strip() == "test commit message"
+
 
 def test_git_reset(test_repository):
     file_path = Path(test_repository.working_dir) / "reset_test.txt"
@@ -184,6 +214,7 @@ def test_git_reset(test_repository):
 
     staged_after = [item.a_path for item in test_repository.index.diff("HEAD")]
     assert "reset_test.txt" not in staged_after
+
 
 def test_git_log(test_repository):
     for i in range(3):
@@ -201,12 +232,14 @@ def test_git_log(test_repository):
     assert "Date:" in result[0]
     assert "Message:" in result[0]
 
+
 def test_git_log_default(test_repository):
     result = git_log(test_repository)
 
     assert isinstance(result, list)
     assert len(result) >= 1
     assert "initial commit" in result[0]
+
 
 def test_git_create_branch(test_repository):
     result = git_create_branch(test_repository, "new-feature-branch")
@@ -215,6 +248,7 @@ def test_git_create_branch(test_repository):
 
     branches = [ref.name for ref in test_repository.references]
     assert "new-feature-branch" in branches
+
 
 def test_git_create_branch_from_base(test_repository):
     test_repository.git.checkout("-b", "base-branch")
@@ -226,6 +260,7 @@ def test_git_create_branch_from_base(test_repository):
     result = git_create_branch(test_repository, "derived-branch", "base-branch")
 
     assert "Created branch 'derived-branch' from 'base-branch'" in result
+
 
 def test_git_show(test_repository):
     file_path = Path(test_repository.working_dir) / "show_test.txt"
@@ -242,6 +277,7 @@ def test_git_show(test_repository):
     assert "show test commit" in result
     assert "show_test.txt" in result
 
+
 def test_git_show_initial_commit(test_repository):
     initial_commit = list(test_repository.iter_commits())[-1]
 
@@ -253,6 +289,7 @@ def test_git_show_initial_commit(test_repository):
 
 
 # Tests for validate_repo_path (repository scoping security fix)
+
 
 def test_validate_repo_path_no_restriction():
     """When no repository restriction is configured, any path should be allowed."""
@@ -313,7 +350,10 @@ def test_validate_repo_path_symlink_escape(tmp_path: Path):
     with pytest.raises(ValueError) as exc_info:
         validate_repo_path(symlink, allowed)
     assert "outside the allowed repository" in str(exc_info.value)
+
+
 # Tests for argument injection protection
+
 
 def test_git_diff_rejects_flag_injection(test_repository):
     """git_diff should reject flags that could be used for argument injection."""
@@ -428,6 +468,7 @@ def test_git_checkout_rejects_malicious_refs(test_repository):
 # Tests for argument injection protection in git_show, git_create_branch,
 # git_log, and git_branch — matching the existing guards on git_diff and
 # git_checkout.
+
 
 def test_git_show_rejects_flag_injection(test_repository):
     """git_show should reject revisions starting with '-'."""
