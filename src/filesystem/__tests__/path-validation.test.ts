@@ -437,6 +437,10 @@ describe('Path Validation', () => {
         expect(isPathWithinAllowedDirectories('\\\\server\\share\\project\\file', allowed)).toBe(true);
         expect(isPathWithinAllowedDirectories('\\\\server\\share\\other', allowed)).toBe(false);
         expect(isPathWithinAllowedDirectories('\\\\other\\share\\project', allowed)).toBe(false);
+
+        const shareRoot = ['\\\\server\\share\\'];
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\file.txt', shareRoot)).toBe(true);
+        expect(isPathWithinAllowedDirectories('\\\\server\\share-other\\file.txt', shareRoot)).toBe(false);
       }
     });
   });
