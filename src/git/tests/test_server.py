@@ -482,3 +482,39 @@ def test_git_branch_rejects_contains_flag_injection(test_repository):
 
     with pytest.raises(BadName):
         git_branch(test_repository, "local", not_contains="--exec=evil")
+
+
+def test_server_handles_invalid_json_rpc_gracefully(tmp_path):
+    """The server should handle invalid or deeply nested JSON-RPC messages without crashing."""
+    import json
+    import subprocess
+    import sys
+
+    # Initialize a dummy git repository to satisfy the server start requirements
+    repo_path = tmp_path / "test_repo"
+    repo = git.Repo.init(repo_path)
+    repo.close()
+
+    inner = {"leaf": True}
+    for _ in range(200):
+        inner = {"child": inner}
+
+    msgs = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+         "params": {"protocolVersion": "2025-03-26", "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "0.1"}}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 1001, "method": "tools/call",
+         "params": {"name": "git_add", "arguments": inner}},
+    ]
+    payload = ("\n".join(json.dumps(m) for m in msgs) + "\n").encode()
+
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "mcp_server_git", "-r", str(repo_path)],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    out, err = proc.communicate(payload, timeout=10)
+
+    assert proc.returncode == 0
+    assert b"protocolVersion" in out
+    assert b"ValidationError" in err or b"recursion limit" in err
