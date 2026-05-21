@@ -440,6 +440,40 @@ describe('Lib Functions', () => {
         );
       });
 
+      it("preserves literal $ characters in newText (regression for #4157)", async () => {
+        // String.prototype.replace interprets $$, $&, $`, $' in the
+        // replacement argument when it is a string. The callback form
+        // disables that interpretation. This test pins the callback form
+        // so the bug can't silently regress.
+        mockFs.readFile.mockResolvedValue("price: PLACEHOLDER\n");
+        const edits = [
+          { oldText: "PLACEHOLDER", newText: "$$100 USD" }
+        ];
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        await applyFileEdits("/test/file.txt", edits, false);
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          "price: $$100 USD\n",
+          "utf-8"
+        );
+      });
+
+      it("preserves $&, $` and $' replacement-pattern tokens in newText (#4157)", async () => {
+        mockFs.readFile.mockResolvedValue("TARGET\n");
+        const edits = [
+          { oldText: "TARGET", newText: "a $& b $` c $' d" }
+        ];
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        await applyFileEdits("/test/file.txt", edits, false);
+        // Without the fix: $& would expand to "TARGET", $` to "" (before-match),
+        // and $' to "" (after-match), corrupting the output.
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          "a $& b $` c $' d\n",
+          "utf-8"
+        );
+      });
+
       it('handles dry run mode', async () => {
         const edits = [
           { oldText: 'line2', newText: 'modified line2' }
