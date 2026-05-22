@@ -26,7 +26,9 @@ The fetch tool will truncate the response, but by using the `start_index` argume
 
 ## Installation
 
-Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
+By default, HTML pages are simplified with the Python-only parser from `readabilipy`.
+If Node.js is available and you want to use Readability.js instead, start the
+server with `--use-readability`.
 
 ### Using uv (recommended)
 
@@ -169,6 +171,13 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 ### Customization - Proxy
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
+
+### Customization - HTML extraction
+
+The server uses `readabilipy`'s Python parser by default, so a normal Python
+installation is enough for HTML-to-markdown extraction. To opt into
+Readability.js, install Node.js and add `--use-readability` to the `args` list in
+the configuration.
 
 ## Windows Configuration
 
