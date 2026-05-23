@@ -278,6 +278,26 @@ Note: all directories must be mounted to `/projects` by default. The example bel
 }
 ```
 
+On Windows, use `cmd /c` to launch `npx`:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/username/Desktop",
+        "/path/to/other/allowed/dir"
+      ]
+    }
+  }
+}
+```
+
 ## Usage with VS Code
 
 For quick installation, click the installation buttons below...
@@ -338,9 +358,24 @@ Note: all directories must be mounted to `/projects` by default.
 }
 ```
 
-## Release Notes
+On Windows, use:
 
-- **0.6.4** – Added strict read-only mode (`--read-only` flag or `READ_ONLY` env var) that omits all write-capable tools at registration time.
+```json
+{
+  "servers": {
+    "filesystem": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "${workspaceFolder}"
+      ]
+    }
+  }
+}
+```
 
 ## Build
 
