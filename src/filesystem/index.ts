@@ -39,36 +39,55 @@ if (args.length === 0) {
 }
 
 // Store allowed directories in normalized and resolved form
-let allowedDirectories = await Promise.all(
+// We store BOTH the original path AND the resolved path to handle symlinks correctly
+// This fixes the macOS /tmp -> /private/tmp symlink issue where users specify /tmp
+// but the resolved path is /private/tmp
+let allowedDirectories = (await Promise.all(
   args.map(async (dir) => {
     const expanded = expandHome(dir);
     const absolute = path.resolve(expanded);
+    const normalizedOriginal = normalizePath(absolute);
     try {
       // Security: Resolve symlinks in allowed directories during startup
       // This ensures we know the real paths and can validate against them later
       const resolved = await fs.realpath(absolute);
-      return normalizePath(resolved);
+      const normalizedResolved = normalizePath(resolved);
+      // Return both original and resolved paths if they differ
+      // This allows matching against either /tmp or /private/tmp on macOS
+      if (normalizedOriginal !== normalizedResolved) {
+        return [normalizedOriginal, normalizedResolved];
+      }
+      return [normalizedResolved];
     } catch (error) {
       // If we can't resolve (doesn't exist), use the normalized absolute path
       // This allows configuring allowed dirs that will be created later
-      return normalizePath(absolute);
+      return [normalizedOriginal];
     }
   })
-);
+)).flat();
 
-// Validate that all directories exist and are accessible
-await Promise.all(allowedDirectories.map(async (dir) => {
+// Filter to only accessible directories, warn about inaccessible ones
+const accessibleDirectories: string[] = [];
+for (const dir of allowedDirectories) {
   try {
     const stats = await fs.stat(dir);
-    if (!stats.isDirectory()) {
-      console.error(`Error: ${dir} is not a directory`);
-      process.exit(1);
+    if (stats.isDirectory()) {
+      accessibleDirectories.push(dir);
+    } else {
+      console.error(`Warning: ${dir} is not a directory, skipping`);
     }
   } catch (error) {
-    console.error(`Error accessing directory ${dir}:`, error);
-    process.exit(1);
+    console.error(`Warning: Cannot access directory ${dir}, skipping`);
   }
-}));
+}
+
+// Exit only if ALL paths are inaccessible (and some were specified)
+if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
+  console.error("Error: None of the specified directories are accessible");
+  process.exit(1);
+}
+
+allowedDirectories = accessibleDirectories;
 
 // Initialize the global allowedDirectories in lib.ts
 setAllowedDirectories(allowedDirectories);
@@ -589,7 +608,7 @@ server.registerTool(
       destination: z.string()
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false }
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
   },
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
     const validSourcePath = await validatePath(args.source);

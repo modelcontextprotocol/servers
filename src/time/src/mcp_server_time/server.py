@@ -8,7 +8,7 @@ from tzlocal import get_localzone_name  # ← returns "Europe/Paris", etc.
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
+from mcp.types import Tool, ToolAnnotations, TextContent, ImageContent, EmbeddedResource, ErrorData, INVALID_PARAMS
 from mcp.shared.exceptions import McpError
 
 from pydantic import BaseModel
@@ -54,7 +54,7 @@ def get_zoneinfo(timezone_name: str) -> ZoneInfo:
     try:
         return ZoneInfo(timezone_name)
     except Exception as e:
-        raise McpError(f"Invalid timezone: {str(e)}")
+        raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Invalid timezone: {str(e)}"))
 
 
 class TimeServer:
@@ -142,6 +142,12 @@ async def serve(local_timezone: str | None = None) -> None:
                     },
                     "required": ["timezone"],
                 },
+                annotations=ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
+                ),
             ),
             Tool(
                 name=TimeTools.CONVERT_TIME.value,
@@ -164,6 +170,12 @@ async def serve(local_timezone: str | None = None) -> None:
                     },
                     "required": ["source_timezone", "time", "target_timezone"],
                 },
+                annotations=ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
+                ),
             ),
         ]
 

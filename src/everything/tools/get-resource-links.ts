@@ -25,6 +25,12 @@ const config = {
   description:
     "Returns up to ten resource links that reference different types of resources",
   inputSchema: GetResourceLinksSchema,
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
 };
 
 /**

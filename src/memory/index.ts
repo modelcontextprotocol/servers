@@ -74,8 +74,20 @@ export class KnowledgeGraphManager {
       const lines = data.split("\n").filter(line => line.trim() !== "");
       return lines.reduce((graph: KnowledgeGraph, line) => {
         const item = JSON.parse(line);
-        if (item.type === "entity") graph.entities.push(item as Entity);
-        if (item.type === "relation") graph.relations.push(item as Relation);
+        if (item.type === "entity") {
+          graph.entities.push({
+            name: item.name,
+            entityType: item.entityType,
+            observations: item.observations
+          });
+        }
+        if (item.type === "relation") {
+          graph.relations.push({
+            from: item.from,
+            to: item.to,
+            relationType: item.relationType
+          });
+        }
         return graph;
       }, { entities: [], relations: [] });
     } catch (error) {
@@ -185,9 +197,10 @@ export class KnowledgeGraphManager {
     // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
   
-    // Filter relations to only include those between filtered entities
+    // Include relations where at least one endpoint matches the search results.
+    // This lets callers discover connections to nodes outside the result set.
     const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
+      filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
     );
   
     const filteredGraph: KnowledgeGraph = {
@@ -207,9 +220,12 @@ export class KnowledgeGraphManager {
     // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
   
-    // Filter relations to only include those between filtered entities
+    // Include relations where at least one endpoint is in the requested set.
+    // Previously this required BOTH endpoints, which meant relations from a
+    // requested node to an unrequested node were silently dropped — making it
+    // impossible to discover a node's connections without reading the full graph.
     const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
+      filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
     );
   
     const filteredGraph: KnowledgeGraph = {
