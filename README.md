@@ -257,3 +257,5 @@ If you find MCP servers useful, please consider starring the repository and cont
 ---
 
 Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvements!
+
+- **[Agent Broker](https://github.com/basilalshukaili/agentbroker)** — Horizontal agent-to-business action layer. 14 MCP tools for AI agents to find, verify, message, and book appointments with small businesses worldwide. Agents pay per call in USDC on Base via x402 (no signup; reads free, writes paid). Built-in TCPA / GDPR / CASL compliance gate. Endpoint: https://agent-broker-edge.basil-agent.workers.dev/mcp
