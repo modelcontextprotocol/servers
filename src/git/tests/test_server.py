@@ -423,3 +423,62 @@ def test_git_checkout_rejects_malicious_refs(test_repository):
 
     # Cleanup
     malicious_ref_path.unlink()
+
+
+# Tests for argument injection protection in git_show, git_create_branch,
+# git_log, and git_branch — matching the existing guards on git_diff and
+# git_checkout.
+
+def test_git_show_rejects_flag_injection(test_repository):
+    """git_show should reject revisions starting with '-'."""
+    with pytest.raises(BadName):
+        git_show(test_repository, "--output=/tmp/evil")
+
+    with pytest.raises(BadName):
+        git_show(test_repository, "-p")
+
+
+def test_git_show_rejects_malicious_refs(test_repository):
+    """git_show should reject refs starting with '-' even if they exist."""
+    sha = test_repository.head.commit.hexsha
+    refs_dir = Path(test_repository.git_dir) / "refs" / "heads"
+    malicious_ref_path = refs_dir / "--format=evil"
+    malicious_ref_path.write_text(sha)
+
+    with pytest.raises(BadName):
+        git_show(test_repository, "--format=evil")
+
+    malicious_ref_path.unlink()
+
+
+def test_git_create_branch_rejects_flag_injection(test_repository):
+    """git_create_branch should reject branch names starting with '-'."""
+    with pytest.raises(BadName):
+        git_create_branch(test_repository, "--track=evil")
+
+    with pytest.raises(BadName):
+        git_create_branch(test_repository, "-f")
+
+
+def test_git_create_branch_rejects_base_branch_flag_injection(test_repository):
+    """git_create_branch should reject base branch names starting with '-'."""
+    with pytest.raises(BadName):
+        git_create_branch(test_repository, "new-branch", "--track=evil")
+
+
+def test_git_log_rejects_timestamp_flag_injection(test_repository):
+    """git_log should reject timestamps starting with '-'."""
+    with pytest.raises(ValueError):
+        git_log(test_repository, start_timestamp="--exec=evil")
+
+    with pytest.raises(ValueError):
+        git_log(test_repository, end_timestamp="--exec=evil")
+
+
+def test_git_branch_rejects_contains_flag_injection(test_repository):
+    """git_branch should reject contains/not_contains values starting with '-'."""
+    with pytest.raises(BadName):
+        git_branch(test_repository, "local", contains="--exec=evil")
+
+    with pytest.raises(BadName):
+        git_branch(test_repository, "local", not_contains="--exec=evil")

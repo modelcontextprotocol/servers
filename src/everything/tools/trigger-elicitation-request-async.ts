@@ -11,6 +11,12 @@ const config = {
     "Demonstrates bidirectional MCP tasks where the server sends an elicitation request and " +
     "the client handles user input asynchronously, allowing the server to poll for completion.",
   inputSchema: {},
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
 };
 
 // Poll interval in milliseconds
@@ -31,15 +37,20 @@ const MAX_POLL_ATTEMPTS = 600;
  *
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
-export const registerTriggerElicitationRequestAsyncTool = (server: McpServer) => {
+export const registerTriggerElicitationRequestAsyncTool = (
+  server: McpServer
+) => {
   // Check client capabilities
   const clientCapabilities = server.server.getClientCapabilities() || {};
 
   // Client must support elicitation AND tasks.requests.elicitation
-  const clientSupportsElicitation = clientCapabilities.elicitation !== undefined;
-  const clientTasksCapability = clientCapabilities.tasks as {
-    requests?: { elicitation?: { create?: object } };
-  } | undefined;
+  const clientSupportsElicitation =
+    clientCapabilities.elicitation !== undefined;
+  const clientTasksCapability = clientCapabilities.tasks as
+    | {
+        requests?: { elicitation?: { create?: object } };
+      }
+    | undefined;
   const clientSupportsAsyncElicitation =
     clientTasksCapability?.requests?.elicitation?.create !== undefined;
 
@@ -56,7 +67,8 @@ export const registerTriggerElicitationRequestAsyncTool = (server: McpServer) =>
             task: {
               ttl: 600000, // 10 minutes (user input may take a while)
             },
-            message: "Please provide inputs for the following fields (async task demo):",
+            message:
+              "Please provide inputs for the following fields (async task demo):",
             requestedSchema: {
               type: "object" as const,
               properties: {
@@ -107,14 +119,18 @@ export const registerTriggerElicitationRequestAsyncTool = (server: McpServer) =>
         );
 
         // Check if client returned CreateTaskResult (has task object)
-        const isTaskResult = 'task' in elicitResponse && elicitResponse.task;
+        const isTaskResult = "task" in elicitResponse && elicitResponse.task;
         if (!isTaskResult) {
           // Client executed synchronously - return the direct response
           return {
             content: [
               {
                 type: "text",
-                text: `[SYNC] Client executed synchronously:\n${JSON.stringify(elicitResponse, null, 2)}`,
+                text: `[SYNC] Client executed synchronously:\n${JSON.stringify(
+                  elicitResponse,
+                  null,
+                  2
+                )}`,
               },
             ],
           };
@@ -145,19 +161,25 @@ export const registerTriggerElicitationRequestAsyncTool = (server: McpServer) =>
               method: "tasks/get",
               params: { taskId },
             },
-            z.object({
+            z.looseObject({
               status: z.string(),
               statusMessage: z.string().optional(),
-            }).passthrough()
+            })
           );
 
           taskStatus = pollResult.status;
           taskStatusMessage = pollResult.statusMessage;
 
           // Only log status changes or every 10 polls to avoid spam
-          if (attempts === 1 || attempts % 10 === 0 || taskStatus !== "input_required") {
+          if (
+            attempts === 1 ||
+            attempts % 10 === 0 ||
+            taskStatus !== "input_required"
+          ) {
             statusMessages.push(
-              `Poll ${attempts}: ${taskStatus}${taskStatusMessage ? ` - ${taskStatusMessage}` : ""}`
+              `Poll ${attempts}: ${taskStatus}${
+                taskStatusMessage ? ` - ${taskStatusMessage}` : ""
+              }`
             );
           }
         }
@@ -168,7 +190,9 @@ export const registerTriggerElicitationRequestAsyncTool = (server: McpServer) =>
             content: [
               {
                 type: "text",
-                text: `[TIMEOUT] Task timed out after ${MAX_POLL_ATTEMPTS} poll attempts\n\nProgress:\n${statusMessages.join("\n")}`,
+                text: `[TIMEOUT] Task timed out after ${MAX_POLL_ATTEMPTS} poll attempts\n\nProgress:\n${statusMessages.join(
+                  "\n"
+                )}`,
               },
             ],
           };
@@ -180,7 +204,9 @@ export const registerTriggerElicitationRequestAsyncTool = (server: McpServer) =>
             content: [
               {
                 type: "text",
-                text: `[${taskStatus.toUpperCase()}] ${taskStatusMessage || "No message"}\n\nProgress:\n${statusMessages.join("\n")}`,
+                text: `[${taskStatus.toUpperCase()}] ${
+                  taskStatusMessage || "No message"
+                }\n\nProgress:\n${statusMessages.join("\n")}`,
               },
             ],
           };
@@ -207,8 +233,10 @@ export const registerTriggerElicitationRequestAsyncTool = (server: McpServer) =>
           const userData = result.content as Record<string, unknown>;
           const lines = [];
           if (userData.name) lines.push(`- Name: ${userData.name}`);
-          if (userData.favoriteColor) lines.push(`- Favorite Color: ${userData.favoriteColor}`);
-          if (userData.agreeToTerms !== undefined) lines.push(`- Agreed to terms: ${userData.agreeToTerms}`);
+          if (userData.favoriteColor)
+            lines.push(`- Favorite Color: ${userData.favoriteColor}`);
+          if (userData.agreeToTerms !== undefined)
+            lines.push(`- Agreed to terms: ${userData.agreeToTerms}`);
 
           content.push({
             type: "text",
@@ -229,7 +257,9 @@ export const registerTriggerElicitationRequestAsyncTool = (server: McpServer) =>
         // Include progress and raw result for debugging
         content.push({
           type: "text",
-          text: `\nProgress:\n${statusMessages.join("\n")}\n\nRaw result: ${JSON.stringify(result, null, 2)}`,
+          text: `\nProgress:\n${statusMessages.join(
+            "\n"
+          )}\n\nRaw result: ${JSON.stringify(result, null, 2)}`,
         });
 
         return { content };

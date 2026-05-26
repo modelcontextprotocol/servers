@@ -89,13 +89,14 @@ Use `trigger-sampling-request-async` or `trigger-elicitation-request-async` to d
 
 MCP Tasks are bidirectional - both server and client can be task executors:
 
-| Direction | Request Type | Task Executor | Demo Tool |
-|-----------|--------------|---------------|-----------|
-| Client -> Server | `tools/call` | Server | `simulate-research-query` |
-| Server -> Client | `sampling/createMessage` | Client | `trigger-sampling-request-async` |
-| Server -> Client | `elicitation/create` | Client | `trigger-elicitation-request-async` |
+| Direction        | Request Type             | Task Executor | Demo Tool                           |
+| ---------------- | ------------------------ | ------------- | ----------------------------------- |
+| Client -> Server | `tools/call`             | Server        | `simulate-research-query`           |
+| Server -> Client | `sampling/createMessage` | Client        | `trigger-sampling-request-async`    |
+| Server -> Client | `elicitation/create`     | Client        | `trigger-elicitation-request-async` |
 
 For client-side tasks:
+
 1. Server sends request with task metadata (e.g., `params.task.ttl`)
 2. Client creates task and returns `CreateTaskResult` with `taskId`
 3. Server polls `tasks/get` for status updates

@@ -1,5 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ElicitResultSchema, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import {
+  ElicitResultSchema,
+  CallToolResult,
+} from "@modelcontextprotocol/sdk/types.js";
 
 // Tool configuration
 const name = "trigger-elicitation-request";
@@ -7,6 +10,12 @@ const config = {
   title: "Trigger Elicitation Request Tool",
   description: "Trigger a Request from the Server for User Elicitation",
   inputSchema: {},
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
 };
 
 /**

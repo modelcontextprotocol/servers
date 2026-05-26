@@ -354,6 +354,17 @@ describe('Path Utilities', () => {
       expect(result).not.toContain('\\');
     });
 
+    it('normalizes bare Windows drive letters to the drive root on Windows', () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'win32',
+        writable: true,
+        configurable: true
+      });
+
+      expect(normalizePath('C:')).toBe('C:\\');
+      expect(normalizePath('d:')).toBe('D:\\');
+    });
+
     it('should handle relative path slash conversion based on platform', () => {
       // This test verifies platform-specific behavior naturally without mocking
       // On Windows: forward slashes converted to backslashes
