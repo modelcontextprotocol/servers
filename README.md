@@ -58,6 +58,7 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 
 ### For servers
 
+* **[Ageniti](https://github.com/Ageniti/ageniti)** (TypeScript) - The action primitive for apps that need to be callable by agents. Define an action once — input/output contract, side effects, permissions — and expose it via CLI, HTTP, MCP, OpenAI / AI SDK tools, React hooks, and a typed client, all sharing the same runtime, streaming events, redaction, and error contract.
 * **[Anubis MCP](https://github.com/zoedsoupe/anubis-mcp)** (Elixir) - A high-performance and high-level Model Context Protocol (MCP) implementation in Elixir. Think like "Live View" for MCP.
 * **[ModelFetch](https://github.com/phuctm97/modelfetch/)** (TypeScript) - Runtime-agnostic SDK to create and deploy MCP servers anywhere TypeScript/JavaScript runs
 * **[EasyMCP](https://github.com/zcaceres/easy-mcp/)** (TypeScript)
