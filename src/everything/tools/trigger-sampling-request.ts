@@ -21,6 +21,12 @@ const config = {
   title: "Trigger Sampling Request Tool",
   description: "Trigger a Request from the Server for LLM Sampling",
   inputSchema: TriggerSamplingRequestSchema,
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: true,
+  },
 };
 
 /**
