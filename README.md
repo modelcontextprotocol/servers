@@ -59,6 +59,7 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 ### For servers
 
 * **[Anubis MCP](https://github.com/zoedsoupe/anubis-mcp)** (Elixir) - A high-performance and high-level Model Context Protocol (MCP) implementation in Elixir. Think like "Live View" for MCP.
+* **[claude-mcp-server-template](https://github.com/alexisgarcia-dev/claude-mcp-server-template)** (Python) - Production-survival Python MCP server template with Streamable HTTP transport, OpenTelemetry observability, JSON-RPC tools/list healthcheck, and 10 ADR-light decisions documented with verified sources.
 * **[ModelFetch](https://github.com/phuctm97/modelfetch/)** (TypeScript) - Runtime-agnostic SDK to create and deploy MCP servers anywhere TypeScript/JavaScript runs
 * **[EasyMCP](https://github.com/zcaceres/easy-mcp/)** (TypeScript)
 * **[FastAPI to MCP auto generator](https://github.com/tadata-org/fastapi_mcp)** – A zero-configuration tool for automatically exposing FastAPI endpoints as MCP tools by **[Tadata](https://tadata.com/)**
