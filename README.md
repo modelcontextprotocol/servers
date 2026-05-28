@@ -99,6 +99,7 @@ These are high-level frameworks that make it easier to build MCP servers or clie
 Additional resources on MCP.
 
 - **[A2A-MCP Java Bridge](https://github.com/vishalmysore/a2ajava)** - A2AJava brings powerful A2A-MCP integration directly into your Java applications. It enables developers to annotate standard Java methods and instantly expose them as MCP Server, A2A-discoverable actions — with no boilerplate or service registration overhead.
+- **[AgentCard](https://github.com/kwailapt/AgentCard)** - Open standard for agent-to-agent (A2A) identity: declare capabilities, resolve peers, and validate agent cards using a framework-neutral JSON schema. Analogous to HTTP headers for the agent web. Includes MCP server (`pip install agentcard-mcp`), LangChain/CrewAI/AutoGen adapters, and JSON Schema. Apache 2.0. by **[kwailapt](https://github.com/kwailapt)**
 - **[AiMCP](https://www.aimcp.info)** - A collection of MCP clients&servers to find the right mcp tools by **[Hekmon](https://github.com/hekmon8)**
 - **[Awesome Crypto MCP Servers by badkk](https://github.com/badkk/awesome-crypto-mcp-servers)** - A curated list of MCP servers by **[Luke Fan](https://github.com/badkk)**
 - **[Awesome MCP Servers by appcypher](https://github.com/appcypher/awesome-mcp-servers)** - A curated list of MCP servers by **[Stephen Akinyemi](https://github.com/appcypher)**
