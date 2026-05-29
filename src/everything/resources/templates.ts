@@ -105,7 +105,7 @@ export const blobResource = (uri: URL, resourceId: number) => {
   ).toString("base64");
   return {
     uri: uri.toString(),
-    mimeType: "text/plain",
+    mimeType: "application/octet-stream",
     blob: resourceText,
   };
 };
