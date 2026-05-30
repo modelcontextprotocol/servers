@@ -1,9 +1,30 @@
 #!/usr/bin/env node
 
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { SequentialThinkingServer } from './lib.js';
+import { SequentialThinkingServer, validateThoughtData } from './lib.js';
+
+// Load version from package.json so the server reports a single source of
+// truth to MCP clients (previously hardcoded and silently drifted from npm).
+// The relative path differs between source layout (./package.json) and the
+// published / compiled layout where index.js sits inside dist/ and the
+// package.json is one level up (../package.json). Try both so vitest (which
+// runs the TS source) and the published bin both resolve correctly.
+const require = createRequire(import.meta.url);
+function loadVersion(): string {
+  for (const candidate of ['../package.json', './package.json']) {
+    try {
+      return (require(candidate) as { version: string }).version;
+    } catch {
+      // try next candidate
+    }
+  }
+  return '0.0.0';
+}
+const packageVersion = loadVersion();
 
 /** Safe boolean coercion that correctly handles string "false" */
 const coercedBoolean = z.preprocess((val) => {
@@ -17,7 +38,7 @@ const coercedBoolean = z.preprocess((val) => {
 
 const server = new McpServer({
   name: "sequential-thinking-server",
-  version: "0.2.0",
+  version: packageVersion,
 });
 
 const thinkingServer = new SequentialThinkingServer();
@@ -105,22 +126,43 @@ You should:
       thoughtHistoryLength: z.number()
     },
   },
-  async (args) => {
-    const result = thinkingServer.processThought(args);
+  async (args) => handleSequentialThinkingTool(thinkingServer, args)
+);
 
-    if (result.isError) {
-      return result;
-    }
-
-    // Parse the JSON response to get structured content
-    const parsedContent = JSON.parse(result.content[0].text);
-
+/**
+ * Handle a single `sequentialthinking` tool call. Extracted so tests can
+ * exercise the SDK-facing contract (structuredContent shape, isError
+ * pass-through) without booting the McpServer over stdio.
+ */
+export async function handleSequentialThinkingTool(
+  thinking: SequentialThinkingServer,
+  args: Parameters<SequentialThinkingServer['processThought']>[0],
+) {
+  // Cross-field semantic check that Zod can't express on a field-level
+  // ZodRawShape (e.g. "revisesThought required when isRevision is true").
+  const validation = validateThoughtData(args);
+  if (!validation.ok) {
     return {
-      content: result.content,
-      structuredContent: parsedContent
+      isError: true,
+      content: [{
+        type: "text" as const,
+        text: JSON.stringify({ error: validation.error, status: 'failed' }, null, 2),
+      }],
     };
   }
-);
+
+  const result = thinking.processThought(args);
+  if (result.isError) {
+    return result;
+  }
+  // Re-parse the JSON our processThought serialized so the SDK can deliver
+  // it as `structuredContent` per the outputSchema we registered.
+  const structuredContent = JSON.parse(result.content[0].text);
+  return {
+    content: result.content,
+    structuredContent,
+  };
+}
 
 async function runServer() {
   const transport = new StdioServerTransport();
@@ -128,7 +170,16 @@ async function runServer() {
   console.error("Sequential Thinking MCP Server running on stdio");
 }
 
-runServer().catch((error) => {
-  console.error("Fatal error running server:", error);
-  process.exit(1);
-});
+// Only auto-start when this module is the entrypoint (e.g. invoked via the
+// `mcp-server-sequential-thinking` bin). Importing it from a test or another
+// module must not boot the stdio server as a side effect.
+const isMain = process.argv[1]
+  ? import.meta.url === pathToFileURL(process.argv[1]).href
+  : false;
+
+if (isMain) {
+  runServer().catch((error) => {
+    console.error("Fatal error running server:", error);
+    process.exit(1);
+  });
+}
