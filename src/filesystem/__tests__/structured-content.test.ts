@@ -25,6 +25,13 @@ describe('structuredContent schema compliance', () => {
 
     // Create test files
     await fs.writeFile(path.join(testDir, 'test.txt'), 'test content');
+    await fs.writeFile(
+      path.join(testDir, 'pixel.png'),
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+        'base64'
+      )
+    );
     await fs.mkdir(path.join(testDir, 'subdir'));
     await fs.writeFile(path.join(testDir, 'subdir', 'nested.txt'), 'nested content');
 
@@ -153,6 +160,30 @@ describe('structuredContent schema compliance', () => {
       const structuredContent = result.structuredContent as { content: unknown };
       expect(typeof structuredContent.content).toBe('string');
       expect(Array.isArray(structuredContent.content)).toBe(false);
+    });
+  });
+
+  describe('read_media_file', () => {
+    it('returns a valid MCP image content type for images', async () => {
+      const result = await client.callTool({
+        name: 'read_media_file',
+        arguments: { path: path.join(testDir, 'pixel.png') }
+      });
+
+      const [content] = result.content as Array<{ type: string; mimeType?: string; data?: string }>;
+      expect(content.type).toBe('image');
+      expect(content.mimeType).toBe('image/png');
+      expect(content.data).toBeTruthy();
+    });
+
+    it('rejects non-media files instead of returning an invalid blob content type', async () => {
+      const result = await client.callTool({
+        name: 'read_media_file',
+        arguments: { path: path.join(testDir, 'test.txt') }
+      });
+
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result.content)).toContain('Unsupported media type');
     });
   });
 });
