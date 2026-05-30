@@ -10,6 +10,8 @@ Node.js server implementing Model Context Protocol (MCP) for filesystem operatio
 - Search files
 - Get file metadata
 - Dynamic directory access control via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots)
+- Expose allowed directories and files as MCP Resources
+- Built-in prompt for file review
 
 ## Directory Access Control
 
@@ -203,6 +205,28 @@ The mapping for filesystem tools is:
 | `move_file`                 | `false`      | `false`        | `true`          | Deletes source file                             |
 
 > Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec.
+
+### Resources
+
+- **filesystem://allowed-directories**
+  - Returns the list of directories the server is currently allowed to access
+  - No arguments required
+  - Returns a plain text list with one directory per line
+  - Reflects the live state of allowed directories, whether set via command-line arguments or updated at runtime via MCP Roots
+
+- **file://{path}**
+  - Reads a file within the allowed directories and returns its contents as a resource
+  - URI format: `file:///absolute/path/to/file`
+  - Returns the file contents as plain text
+  - The path is validated against allowed directories before the file is read
+
+### Prompts
+
+- **read-file**
+  - Asks the model to read a file and summarize its contents
+  - Arguments:
+    - `path` (string): Absolute path to the file
+  - Returns a user message that instructs the model to read and summarize the file at the given path
 
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
