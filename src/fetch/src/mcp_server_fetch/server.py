@@ -1,3 +1,5 @@
+import ipaddress
+import socket
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
@@ -108,6 +110,23 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
         ))
 
 
+def _check_url_not_private(url: str) -> None:
+    """Raise McpError if the URL resolves to a private/internal IP address."""
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+    if not hostname:
+        raise McpError(ErrorData(code=INVALID_PARAMS, message="Invalid URL: no hostname"))
+    try:
+        ip = ipaddress.ip_address(socket.gethostbyname(hostname))
+    except socket.gaierror as e:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to resolve hostname: {hostname}: {e}"))
+    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+        raise McpError(ErrorData(
+            code=INVALID_PARAMS,
+            message=f"Access to private/internal network addresses is not allowed: {hostname}",
+        ))
+
+
 async def fetch_url(
     url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None
 ) -> Tuple[str, str]:
@@ -115,6 +134,8 @@ async def fetch_url(
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
     """
     from httpx import AsyncClient, HTTPError
+
+    _check_url_not_private(url)
 
     async with AsyncClient(proxy=proxy_url) as client:
         try:
