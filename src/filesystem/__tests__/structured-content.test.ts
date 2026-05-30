@@ -155,4 +155,21 @@ describe('structuredContent schema compliance', () => {
       expect(Array.isArray(structuredContent.content)).toBe(false);
     });
   });
+
+  describe('tool schemas', () => {
+    it('should describe every top-level input property exposed to clients', async () => {
+      const { tools } = await client.listTools();
+
+      for (const tool of tools) {
+        const properties = tool.inputSchema.properties ?? {};
+        for (const [propertyName, propertySchema] of Object.entries(properties)) {
+          expect(propertySchema, `${tool.name}.${propertyName}`).toEqual(
+            expect.objectContaining({
+              description: expect.any(String),
+            })
+          );
+        }
+      }
+    });
+  });
 });
