@@ -84,8 +84,10 @@ src/everything
 ### `docs/`
 
 - `architecture.md`
+  - Architectural overview.
+- `structure.md`
   - This document.
-- `server-instructions.md`
+- `instructions.md`
   - Human‑readable instructions intended to be passed to the client/LLM as for guidance on server use. Loaded by the server at startup and returned in the "initialize" exchange.
 
 ### `prompts/`
