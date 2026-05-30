@@ -89,6 +89,10 @@ if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
 
 allowedDirectories = accessibleDirectories;
 
+// Save CLI-provided directories separately so dynamic MCP roots updates
+// can replace the previous MCP roots without losing CLI dirs or accumulating stale ones.
+const cliAllowedDirectories = [...allowedDirectories];
+
 // Initialize the global allowedDirectories in lib.ts
 setAllowedDirectories(allowedDirectories);
 
@@ -706,7 +710,10 @@ server.registerTool(
 async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
   const validatedRootDirs = await getValidRootDirectories(requestedRoots);
   if (validatedRootDirs.length > 0) {
-    allowedDirectories = [...validatedRootDirs];
+    // Merge CLI-provided directories with current MCP roots,
+    // replacing any previous MCP roots on each update.
+    const merged = new Set([...cliAllowedDirectories, ...validatedRootDirs]);
+    allowedDirectories = [...merged];
     setAllowedDirectories(allowedDirectories); // Update the global state in lib.ts
     console.error(`Updated allowed directories from MCP roots: ${validatedRootDirs.length} valid directories`);
   } else {
@@ -714,7 +721,7 @@ async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
   }
 }
 
-// Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
+// Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and merges them with CLI-provided directories (replacing any previous MCP roots).
 server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
   try {
     // Request the updated roots list from the client
