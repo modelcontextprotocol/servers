@@ -255,6 +255,26 @@ def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None
         )
 
 
+def validate_repo_path_against_allowed_repositories(
+    repo_path: Path, allowed_repositories: Sequence[Path]
+) -> None:
+    """Validate that repo_path is within at least one allowed repository path."""
+    if not allowed_repositories:
+        raise ValueError("Repository path is not within the current allowed roots")
+
+    for allowed_repository in allowed_repositories:
+        try:
+            validate_repo_path(repo_path, allowed_repository)
+            return
+        except ValueError:
+            continue
+
+    allowed_list = ", ".join(str(path) for path in allowed_repositories)
+    raise ValueError(
+        f"Repository path '{repo_path}' is outside the allowed repositories: {allowed_list}"
+    )
+
+
 def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, not_contains: str | None = None) -> str:
     # Defense in depth: reject values starting with '-' to prevent flag injection
     if contains and contains.startswith("-"):
@@ -472,9 +492,17 @@ async def serve(repository: Path | None) -> None:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         repo_path = Path(arguments["repo_path"])
+        allowed_repositories: list[Path] = []
+        if repository is not None:
+            allowed_repositories.append(repository)
+        allowed_repositories.extend(Path(path) for path in await by_roots())
 
-        # Validate repo_path is within allowed repository
-        validate_repo_path(repo_path, repository)
+        if allowed_repositories:
+            validate_repo_path_against_allowed_repositories(repo_path, allowed_repositories)
+        else:
+            # Preserve the legacy unrestricted behavior when no command-line
+            # repository restriction or root-derived allowlist is available.
+            validate_repo_path(repo_path, repository)
 
         # For all commands, we need an existing repo
         repo = git.Repo(repo_path)

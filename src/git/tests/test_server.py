@@ -16,6 +16,7 @@ from mcp_server_git.server import (
     git_create_branch,
     git_show,
     validate_repo_path,
+    validate_repo_path_against_allowed_repositories,
 )
 import shutil
 
@@ -313,6 +314,38 @@ def test_validate_repo_path_symlink_escape(tmp_path: Path):
     with pytest.raises(ValueError) as exc_info:
         validate_repo_path(symlink, allowed)
     assert "outside the allowed repository" in str(exc_info.value)
+
+
+def test_validate_repo_path_against_allowed_repositories_exact_match(tmp_path: Path):
+    allowed_a = tmp_path / "allowed_a"
+    allowed_b = tmp_path / "allowed_b"
+    allowed_a.mkdir()
+    allowed_b.mkdir()
+
+    validate_repo_path_against_allowed_repositories(allowed_b, [allowed_a, allowed_b])
+
+
+def test_validate_repo_path_against_allowed_repositories_rejects_removed_root(tmp_path: Path):
+    allowed_a = tmp_path / "allowed_a"
+    allowed_b = tmp_path / "allowed_b"
+    stale_repo = allowed_a / "repo"
+    allowed_a.mkdir()
+    allowed_b.mkdir()
+    stale_repo.mkdir()
+
+    with pytest.raises(ValueError) as exc_info:
+        validate_repo_path_against_allowed_repositories(stale_repo, [allowed_b])
+    assert "outside the allowed repositories" in str(exc_info.value)
+
+
+def test_validate_repo_path_against_allowed_repositories_rejects_empty_roots(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    with pytest.raises(ValueError) as exc_info:
+        validate_repo_path_against_allowed_repositories(repo, [])
+    assert "current allowed roots" in str(exc_info.value)
+
 # Tests for argument injection protection
 
 def test_git_diff_rejects_flag_injection(test_repository):
