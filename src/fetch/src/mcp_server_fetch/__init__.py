@@ -16,9 +16,21 @@ def main():
         help="Ignore robots.txt restrictions",
     )
     parser.add_argument("--proxy-url", type=str, help="Proxy URL to use for requests")
+    parser.add_argument(
+        "--use-readability",
+        action="store_true",
+        help="Use Readability.js via Node.js for HTML extraction",
+    )
 
     args = parser.parse_args()
-    asyncio.run(serve(args.user_agent, args.ignore_robots_txt, args.proxy_url))
+    asyncio.run(
+        serve(
+            args.user_agent,
+            args.ignore_robots_txt,
+            args.proxy_url,
+            args.use_readability,
+        )
+    )
 
 
 if __name__ == "__main__":

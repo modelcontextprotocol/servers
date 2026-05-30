@@ -24,7 +24,7 @@ DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
 
 
-def extract_content_from_html(html: str) -> str:
+def extract_content_from_html(html: str, use_readability: bool = False) -> str:
     """Extract and convert HTML content to Markdown format.
 
     Args:
@@ -34,7 +34,7 @@ def extract_content_from_html(html: str) -> str:
         Simplified markdown version of the content
     """
     ret = readabilipy.simple_json.simple_json_from_html_string(
-        html, use_readability=True
+        html, use_readability=use_readability
     )
     if not ret["content"]:
         return "<error>Page failed to be simplified from HTML</error>"
@@ -42,6 +42,8 @@ def extract_content_from_html(html: str) -> str:
         ret["content"],
         heading_style=markdownify.ATX,
     )
+    if not content.strip():
+        return "<error>Page failed to be simplified from HTML</error>"
     return content
 
 
@@ -109,7 +111,11 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
 
 
 async def fetch_url(
-    url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None
+    url: str,
+    user_agent: str,
+    force_raw: bool = False,
+    proxy_url: str | None = None,
+    use_readability: bool = False,
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
@@ -140,7 +146,7 @@ async def fetch_url(
     )
 
     if is_page_html and not force_raw:
-        return extract_content_from_html(page_raw), ""
+        return extract_content_from_html(page_raw, use_readability=use_readability), ""
 
     return (
         page_raw,
@@ -182,6 +188,7 @@ async def serve(
     custom_user_agent: str | None = None,
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
+    use_readability: bool = False,
 ) -> None:
     """Run the fetch MCP server.
 
@@ -189,6 +196,7 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        use_readability: Whether to use Readability.js through Node for HTML extraction
     """
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
@@ -235,7 +243,11 @@ Although originally you did not have internet access, and were advised to refuse
             await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
 
         content, prefix = await fetch_url(
-            url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url
+            url,
+            user_agent_autonomous,
+            force_raw=args.raw,
+            proxy_url=proxy_url,
+            use_readability=use_readability,
         )
         original_length = len(content)
         if args.start_index >= original_length:
@@ -262,7 +274,12 @@ Although originally you did not have internet access, and were advised to refuse
         url = arguments["url"]
 
         try:
-            content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url)
+            content, prefix = await fetch_url(
+                url,
+                user_agent_manual,
+                proxy_url=proxy_url,
+                use_readability=use_readability,
+            )
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:
             return GetPromptResult(
