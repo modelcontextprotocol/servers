@@ -94,7 +94,7 @@ You should:
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     },
     outputSchema: {
