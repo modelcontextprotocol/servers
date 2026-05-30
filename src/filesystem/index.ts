@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SafeStdioServerTransport } from './stdio-transport.js';
 import {
   CallToolResult,
   RootsListChangedNotificationSchema,
@@ -753,7 +753,7 @@ server.server.oninitialized = async () => {
 
 // Start server
 async function runServer() {
-  const transport = new StdioServerTransport();
+  const transport = new SafeStdioServerTransport();
   await server.connect(transport);
   console.error("Secure MCP Filesystem Server running on stdio");
   if (allowedDirectories.length === 0) {
