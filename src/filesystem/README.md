@@ -347,6 +347,12 @@ On Windows, use:
 }
 ```
 
+### Usage with Codex CLI
+
+```bash
+codex mcp add filesystem -- npx -y @modelcontextprotocol/server-filesystem $HOME/Desktop
+```
+
 ## Build
 
 Docker build:

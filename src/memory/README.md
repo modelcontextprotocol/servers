@@ -325,6 +325,12 @@ Follow these steps for each interaction:
      c) Store facts about them as observations
 ```
 
+### Usage with Codex CLI
+
+```bash
+codex mcp add memory -- npx -y @modelcontextprotocol/server-memory
+```
+
 ## Building
 
 Docker:
