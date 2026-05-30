@@ -159,6 +159,12 @@ const GetFileInfoArgsSchema = z.object({
   path: z.string(),
 });
 
+const CompareFilesArgsSchema = z.object({
+  file1: z.string().describe('Path to the first file'),
+  file2: z.string().describe('Path to the second file'),
+  contextLines: z.number().int().min(0).default(3).describe('Number of surrounding lines to show for each change (default: 3)')
+});
+
 // Server setup
 const server = new McpServer(
   {
@@ -695,6 +701,51 @@ server.registerTool(
   },
   async () => {
     const text = `Allowed directories:\n${allowedDirectories.join('\n')}`;
+    return {
+      content: [{ type: "text" as const, text }],
+      structuredContent: { content: text }
+    };
+  }
+);
+
+server.registerTool(
+  "compare_files",
+  {
+    title: "Compare Files",
+    description:
+      "Compare two files and show the differences in a unified diff format. " +
+      "Useful for reviewing changes, verifying edits, or understanding differences " +
+      "between versions. Returns a human-readable diff with configurable context lines. " +
+      "Both files must be within allowed directories.",
+    inputSchema: {
+      file1: z.string().describe("Path to the first file"),
+      file2: z.string().describe("Path to the second file"),
+      contextLines: z.number().int().min(0).default(3).describe("Number of surrounding lines to show for each change (default: 3)")
+    },
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: true }
+  },
+  async (args: z.infer<typeof CompareFilesArgsSchema>) => {
+    const validPath1 = await validatePath(args.file1);
+    const validPath2 = await validatePath(args.file2);
+
+    const [content1, content2] = await Promise.all([
+      readFileContent(validPath1),
+      readFileContent(validPath2)
+    ]);
+
+    const { createUnifiedDiff } = await import('./lib.js');
+    const diff = createUnifiedDiff(content1, content2, `${args.file1} vs ${args.file2}`);
+
+    if (!diff || diff.split('\n').length <= 4) {
+      const text = `Files are identical:\n  ${args.file1}\n  ${args.file2}`;
+      return {
+        content: [{ type: "text" as const, text }],
+        structuredContent: { content: text }
+      };
+    }
+
+    const text = diff;
     return {
       content: [{ type: "text" as const, text }],
       structuredContent: { content: text }
