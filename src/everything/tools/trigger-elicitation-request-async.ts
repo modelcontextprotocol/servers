@@ -137,6 +137,8 @@ export const registerTriggerElicitationRequestAsyncTool = (
         }
 
         const taskId = elicitResponse.task.taskId;
+        const pollInterval =
+          elicitResponse.task.pollInterval ?? POLL_INTERVAL;
         const statusMessages: string[] = [];
         statusMessages.push(`Task created: ${taskId}`);
 
@@ -152,7 +154,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
           attempts < MAX_POLL_ATTEMPTS
         ) {
           // Wait before polling
-          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+          await new Promise((resolve) => setTimeout(resolve, pollInterval));
           attempts++;
 
           // Get task status from client

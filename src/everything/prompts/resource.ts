@@ -11,6 +11,7 @@ import {
   RESOURCE_TYPE_BLOB,
   RESOURCE_TYPE_TEXT,
   RESOURCE_TYPES,
+  validateResourceId,
 } from "../resources/templates.js";
 
 /**
@@ -49,16 +50,7 @@ export const registerEmbeddedResourcePrompt = (server: McpServer) => {
       }
 
       // Validate resourceId argument
-      const resourceId = Number(args?.resourceId);
-      if (
-        !Number.isFinite(resourceId) ||
-        !Number.isInteger(resourceId) ||
-        resourceId < 1
-      ) {
-        throw new Error(
-          `Invalid resourceId: ${args?.resourceId}. Must be a finite positive integer.`
-        );
-      }
+      const resourceId = validateResourceId(args?.resourceId);
 
       // Get resource based on the resource type
       const uri =
