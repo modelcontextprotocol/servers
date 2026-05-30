@@ -16,6 +16,7 @@ import { registerTriggerLongRunningOperationTool } from "./trigger-long-running-
 import { registerTriggerSamplingRequestTool } from "./trigger-sampling-request.js";
 import { registerTriggerSamplingRequestAsyncTool } from "./trigger-sampling-request-async.js";
 import { registerTriggerElicitationRequestAsyncTool } from "./trigger-elicitation-request-async.js";
+import { registerTriggerUrlElicitationRequestTool } from "./trigger-url-elicitation-request.js";
 import { registerSimulateResearchQueryTool } from "./simulate-research-query.js";
 
 /**
@@ -50,4 +51,5 @@ export const registerConditionalTools = (server: McpServer) => {
   // Bidirectional task tools - server sends requests that client executes as tasks
   registerTriggerSamplingRequestAsyncTool(server);
   registerTriggerElicitationRequestAsyncTool(server);
+  registerTriggerUrlElicitationRequestTool(server);
 };
