@@ -8,6 +8,8 @@ import {
   normalizeLineEndings,
   createUnifiedDiff,
   // Security & validation functions
+  PATH_VALIDATION_REASON,
+  PathValidationError,
   validatePath,
   setAllowedDirectories,
   // File operations
@@ -170,6 +172,24 @@ describe('Lib Functions', () => {
         const testPath = process.platform === 'win32' ? 'C:\\Windows\\System32\\file.txt' : '/etc/passwd';
         await expect(validatePath(testPath))
           .rejects.toThrow('Access denied - path outside allowed directories');
+      });
+
+      it('rejects symlink targets outside allowed directories with stable reason code', async () => {
+        const linkPath = process.platform === 'win32' ? 'C:\\Users\\test\\link.txt' : '/home/user/link.txt';
+        const escapedTarget = process.platform === 'win32' ? 'C:\\Windows\\secret.txt' : '/etc/secret.txt';
+        mockFs.realpath.mockResolvedValueOnce(escapedTarget);
+
+        let caughtError: unknown;
+        try {
+          await validatePath(linkPath);
+        } catch (error) {
+          caughtError = error;
+        }
+
+        expect(caughtError).toBeInstanceOf(PathValidationError);
+        expect(caughtError).toMatchObject({
+          reason: PATH_VALIDATION_REASON.SYMLINK_TARGET_OUTSIDE_ALLOWED,
+        });
       });
 
       it('handles non-existent files by checking parent directory', async () => {
