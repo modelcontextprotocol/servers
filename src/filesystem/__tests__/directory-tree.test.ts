@@ -13,11 +13,16 @@ interface TreeEntry {
     children?: TreeEntry[];
 }
 
+function compareEntryNames(left: { name: string }, right: { name: string }): number {
+    return left.name.localeCompare(right.name, 'en');
+}
+
 async function buildTreeForTesting(currentPath: string, rootPath: string, excludePatterns: string[] = []): Promise<TreeEntry[]> {
     const entries = await fs.readdir(currentPath, {withFileTypes: true});
+    const sortedEntries = [...entries].sort(compareEntryNames);
     const result: TreeEntry[] = [];
 
-    for (const entry of entries) {
+    for (const entry of sortedEntries) {
         const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
         const shouldExclude = excludePatterns.some(pattern => {
             if (pattern.includes('*')) {
@@ -137,11 +142,24 @@ describe('buildTree exclude patterns', () => {
     it('should handle empty exclude patterns', async () => {
         const tree = await buildTreeForTesting(testDir, testDir, []);
         const entryNames = tree.map(entry => entry.name);
-        
+
         // All entries should be included
         expect(entryNames).toContain('node_modules');
         expect(entryNames).toContain('.env');
         expect(entryNames).toContain('.git');
         expect(entryNames).toContain('src');
+    });
+
+    it('should return root and nested entries in deterministic name order', async () => {
+        const tree = await buildTreeForTesting(testDir, testDir, []);
+        const rootNames = tree.map(entry => entry.name);
+        const sortedRootNames = [...rootNames].sort((left, right) => left.localeCompare(right, 'en'));
+        expect(rootNames).toEqual(sortedRootNames);
+
+        const nestedDir = tree.find(entry => entry.name === 'nested');
+        expect(nestedDir).toBeDefined();
+        const nestedNames = (nestedDir?.children ?? []).map(entry => entry.name);
+        const sortedNestedNames = [...nestedNames].sort((left, right) => left.localeCompare(right, 'en'));
+        expect(nestedNames).toEqual(sortedNestedNames);
     });
 });
