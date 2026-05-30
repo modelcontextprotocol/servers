@@ -1,5 +1,13 @@
 #!/usr/bin/env node
 
+// UTF-8 Fix for Windows: Ensure proper encoding for STDIO communication
+// This prevents German umlauts and other non-ASCII characters from being corrupted
+if (process.platform === 'win32') {
+  process.stdout.setDefaultEncoding('utf8');
+  process.stderr.setDefaultEncoding('utf8');
+  process.stdin.setEncoding('utf8');
+}
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
