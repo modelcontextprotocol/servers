@@ -10,6 +10,28 @@ import { isPathWithinAllowedDirectories } from './path-validation.js';
 // Global allowed directories - set by the main module
 let allowedDirectories: string[] = [];
 
+// Symlink policy settings
+let followSymlinks = false;
+let symlinkMaxDepth = 1;
+
+// Interface for symlink policy configuration
+export interface SymlinkPolicy {
+  follow: boolean;
+  maxDepth: number;
+}
+
+// Export function to set symlink policy from index.ts
+export function setSymlinkPolicy(policy: SymlinkPolicy): void {
+  followSymlinks = policy.follow;
+  symlinkMaxDepth = policy.maxDepth;
+}
+
+// Export function to get current symlink policy
+export function getSymlinkPolicy(): SymlinkPolicy {
+  return { follow: followSymlinks, maxDepth: symlinkMaxDepth };
+}
+
+
 // Function to set allowed directories from the main module
 export function setAllowedDirectories(directories: string[]): void {
   allowedDirectories = [...directories];
@@ -96,6 +118,61 @@ function resolveRelativePathAgainstAllowedDirectories(relativePath: string): str
 }
 
 // Security & Validation Functions
+
+/**
+ * Resolves a symlink path hop-by-hop, counting how many hops land outside allowed directories.
+ * @param currentPath - The current path to resolve
+ * @returns Tuple of [resolvedPath, hopsOutsideAllowed]
+ */
+async function resolveSymlinkHopByHop(currentPath: string): Promise<[string, number]> {
+  let symlinkPath = currentPath;
+  let hopsOutsideAllowed = 0;
+  const visited = new Set<string>();
+
+  while (true) {
+    // Prevent infinite loops from circular symlinks
+    const normalizedCurrent = normalizePath(symlinkPath);
+    if (visited.has(normalizedCurrent)) {
+      throw new Error(`Access denied - circular symlink detected: ${currentPath}`);
+    }
+    visited.add(normalizedCurrent);
+
+    try {
+      const stats = await fs.lstat(symlinkPath);
+      
+      if (!stats.isSymbolicLink()) {
+        // Not a symlink - we've reached the final target
+        return [symlinkPath, hopsOutsideAllowed];
+      }
+
+      // It's a symlink - read the target
+      const target = await fs.readlink(symlinkPath);
+      
+      // Resolve relative symlinks relative to the directory containing the symlink
+      const resolvedTarget = path.isAbsolute(target)
+        ? path.resolve(target)
+        : path.resolve(path.dirname(symlinkPath), target);
+      
+      const normalizedResolved = normalizePath(resolvedTarget);
+      
+      // Check if this hop lands outside allowed directories
+      const isOutside = !isPathWithinAllowedDirectories(normalizedResolved, allowedDirectories);
+      if (isOutside) {
+        hopsOutsideAllowed++;
+      }
+
+      // Move to next hop
+      symlinkPath = resolvedTarget;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        // Path doesn't exist - could be a new file, return current path
+        return [symlinkPath, hopsOutsideAllowed];
+      }
+      throw error;
+    }
+  }
+}
+
 export async function validatePath(requestedPath: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
@@ -110,29 +187,109 @@ export async function validatePath(requestedPath: string): Promise<string> {
     throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
   }
 
-  // Security: Handle symlinks by checking their real path to prevent symlink attacks
-  // This prevents attackers from creating symlinks that point outside allowed directories
   try {
-    const realPath = await fs.realpath(absolute);
-    const normalizedReal = normalizePath(realPath);
-    if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
-      throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
+    // Get file stats to check if it's a symlink
+    // Use optional chaining to handle test mocks where stats might be undefined
+    const stats = await fs.lstat(absolute);
+    
+    if (!stats?.isSymbolicLink()) {
+      // Not a symlink - perform existing realpath validation for safety
+      // First, get the resolved path considering potential symlinks in the allowed dirs themselves
+      // This handles macOS /var -> /private/var and similar cases
+      let realPath: string;
+      try {
+        realPath = await fs.realpath(absolute);
+      } catch (realpathErr) {
+        if ((realpathErr as NodeJS.ErrnoException).code === 'ENOENT') {
+          throw realpathErr; // Let outer ENOENT handler deal with parent dir check
+        }
+        realPath = absolute;
+      }
+      const normalizedReal = normalizePath(realPath);
+      
+      // Also get resolved path of the absolute itself for comparison
+      let resolvedAbsolute = absolute;
+      try {
+        resolvedAbsolute = await fs.realpath(absolute);
+      } catch (realpathErr2) {
+        if ((realpathErr2 as NodeJS.ErrnoException).code === 'ENOENT') {
+          throw realpathErr2; // Let outer ENOENT handler deal with parent dir check
+        }
+        // If realpath fails for other reasons, use the original path
+      }
+      const normalizedResolved = normalizePath(resolvedAbsolute);
+      
+      if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories) && 
+          !isPathWithinAllowedDirectories(normalizedResolved, allowedDirectories)) {
+        throw new Error(`Access denied - path outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
+      }
+      return realPath || absolute;
     }
-    return realPath;
+
+    // It's a symlink - check if symlink following is enabled
+    if (!followSymlinks) {
+      // Original behavior: resolve fully and check
+      const realPath = await fs.realpath(absolute);
+      const normalizedReal = normalizePath(realPath);
+      if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
+        throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
+      }
+      return realPath;
+    }
+
+    // Symlink following is enabled - resolve hop-by-hop with depth limit
+    const [resolvedPath, hopsOutsideAllowed] = await resolveSymlinkHopByHop(absolute);
+    
+    if (hopsOutsideAllowed > symlinkMaxDepth) {
+      throw new Error(`Access denied - symlink chain exceeded max depth of ${symlinkMaxDepth} outside allowed directories`);
+    }
+    
+    return resolvedPath;
   } catch (error) {
+    // Re-throw already-formatted access denied / custom errors directly
+    if (error instanceof Error && !(error as NodeJS.ErrnoException).code) {
+      throw error;
+    }
     // Security: For new files that don't exist yet, verify parent directory
     // This ensures we can't create files in unauthorized locations
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       const parentDir = path.dirname(absolute);
       try {
-        const realParentPath = await fs.realpath(parentDir);
+        // Also get resolved parent for macOS /var -> /private/var case
+        let realParentPath: string;
+        try {
+          realParentPath = await fs.realpath(parentDir);
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+            throw new Error(`Parent directory does not exist: ${parentDir}`);
+          }
+          throw err;
+        }
+        
+        // Check both resolved and original parent paths
         const normalizedParent = normalizePath(realParentPath);
         if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+          // Also check if the immediate parent exists and is accessible
+          try {
+            const stats = await fs.lstat(parentDir);
+            // Parent exists but resolved path is outside - check if original is allowed
+            if (!isPathWithinAllowedDirectories(normalizePath(parentDir), allowedDirectories)) {
+              throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+            }
+          } catch (lstatErr) {
+            // Re-throw formatted errors directly
+            if (lstatErr instanceof Error && !(lstatErr as NodeJS.ErrnoException).code) {
+              throw lstatErr;
+            }
+            throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+          }
         }
         return absolute;
-      } catch {
-        throw new Error(`Parent directory does not exist: ${parentDir}`);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+          throw new Error(`Parent directory does not exist: ${parentDir}`);
+        }
+        throw err;
       }
     }
     throw error;
