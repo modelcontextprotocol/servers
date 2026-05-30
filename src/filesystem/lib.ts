@@ -168,10 +168,14 @@ export async function writeFileContent(filePath: string, content: string): Promi
       // Security: Use atomic rename to prevent race conditions where symlinks
       // could be created between validation and write. Rename operations
       // replace the target file atomically and don't follow symlinks.
+      const origStats = await fs.stat(filePath);
       const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
       try {
         await fs.writeFile(tempPath, content, 'utf-8');
         await fs.rename(tempPath, filePath);
+        // Restore original file permissions since the atomic rename replaces
+        // the inode and the temp file has default (0644) permissions.
+        await fs.chmod(filePath, origStats.mode);
       } catch (renameError) {
         try {
           await fs.unlink(tempPath);
@@ -266,10 +270,14 @@ export async function applyFileEdits(
     // Security: Use atomic rename to prevent race conditions where symlinks
     // could be created between validation and write. Rename operations
     // replace the target file atomically and don't follow symlinks.
+    const origStats = await fs.stat(filePath);
     const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
     try {
       await fs.writeFile(tempPath, modifiedContent, 'utf-8');
       await fs.rename(tempPath, filePath);
+      // Restore original file permissions since the atomic rename replaces
+      // the inode and the temp file has default (0644) permissions.
+      await fs.chmod(filePath, origStats.mode);
     } catch (error) {
       try {
         await fs.unlink(tempPath);
