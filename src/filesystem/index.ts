@@ -94,7 +94,7 @@ setAllowedDirectories(allowedDirectories);
 
 // Schema definitions
 const ReadTextFileArgsSchema = z.object({
-  path: z.string(),
+  path: z.string().describe('Absolute or relative path to the text file to read. Must be within allowed directories.'),
   tail: z.number().optional().describe('If provided, returns only the last N lines of the file'),
   head: z.number().optional().describe('If provided, returns only the first N lines of the file')
 });
@@ -235,7 +235,7 @@ server.registerTool(
       "the last N lines of a file. Operates on the file as text regardless of extension. " +
       "Only works within allowed directories.",
     inputSchema: {
-      path: z.string(),
+      path: z.string().describe("Absolute or relative path to the text file to read. Must be within allowed directories."),
       tail: z.number().optional().describe("If provided, returns only the last N lines of the file"),
       head: z.number().optional().describe("If provided, returns only the first N lines of the file")
     },
@@ -253,7 +253,7 @@ server.registerTool(
       "Read an image or audio file. Returns the base64 encoded data and MIME type. " +
       "Only works within allowed directories.",
     inputSchema: {
-      path: z.string()
+      path: z.string().describe("Absolute or relative path to the image or audio file to read. Must be within allowed directories.")
     },
     outputSchema: {
       content: z.array(z.object({
@@ -345,8 +345,8 @@ server.registerTool(
       "Use with caution as it will overwrite existing files without warning. " +
       "Handles text content with proper encoding. Only works within allowed directories.",
     inputSchema: {
-      path: z.string(),
-      content: z.string()
+      path: z.string().describe("Absolute or relative path to the file to create or overwrite. Must be within allowed directories."),
+      content: z.string().describe("Full text content to write to the file.")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
@@ -371,7 +371,7 @@ server.registerTool(
       "with new content. Returns a git-style diff showing the changes made. " +
       "Only works within allowed directories.",
     inputSchema: {
-      path: z.string(),
+      path: z.string().describe("Absolute or relative path to the text file to edit. Must be within allowed directories."),
       edits: z.array(z.object({
         oldText: z.string().describe("Text to search for - must match exactly"),
         newText: z.string().describe("Text to replace with")
@@ -401,7 +401,7 @@ server.registerTool(
       "this operation will succeed silently. Perfect for setting up directory " +
       "structures for projects or ensuring required paths exist. Only works within allowed directories.",
     inputSchema: {
-      path: z.string()
+      path: z.string().describe("Absolute or relative path of the directory to create. Supports nested paths. Must be within allowed directories.")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false }
@@ -427,7 +427,7 @@ server.registerTool(
       "prefixes. This tool is essential for understanding directory structure and " +
       "finding specific files within a directory. Only works within allowed directories.",
     inputSchema: {
-      path: z.string()
+      path: z.string().describe("Absolute or relative path to the directory to list. Must be within allowed directories.")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true }
@@ -455,7 +455,7 @@ server.registerTool(
       "prefixes. This tool is useful for understanding directory structure and " +
       "finding specific files within a directory. Only works within allowed directories.",
     inputSchema: {
-      path: z.string(),
+      path: z.string().describe("Absolute or relative path to the directory to list. Must be within allowed directories."),
       sortBy: z.enum(["name", "size"]).optional().default("name").describe("Sort entries by name or size")
     },
     outputSchema: { content: z.string() },
@@ -534,8 +534,8 @@ server.registerTool(
       "Files have no children array, while directories always have a children array (which may be empty). " +
       "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
     inputSchema: {
-      path: z.string(),
-      excludePatterns: z.array(z.string()).optional().default([])
+      path: z.string().describe("Absolute or relative path to the root directory for the tree. Must be within allowed directories."),
+      excludePatterns: z.array(z.string()).optional().default([]).describe("Array of glob patterns to exclude from the tree (e.g. ['node_modules', '**/*.log']).")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true }
@@ -604,8 +604,8 @@ server.registerTool(
       "operation will fail. Works across different directories and can be used " +
       "for simple renaming within the same directory. Both source and destination must be within allowed directories.",
     inputSchema: {
-      source: z.string(),
-      destination: z.string()
+      source: z.string().describe("Absolute or relative path to the source file or directory to move. Must be within allowed directories."),
+      destination: z.string().describe("Absolute or relative path to the move destination. Must be within allowed directories.")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
@@ -634,9 +634,9 @@ server.registerTool(
       "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
       "Only searches within allowed directories.",
     inputSchema: {
-      path: z.string(),
-      pattern: z.string(),
-      excludePatterns: z.array(z.string()).optional().default([])
+      path: z.string().describe("Absolute or relative path to the root directory to search within. Must be within allowed directories."),
+      pattern: z.string().describe("Glob pattern to match file and directory names (e.g. '*.ts' or '**/*.json')."),
+      excludePatterns: z.array(z.string()).optional().default([]).describe("Array of glob patterns to exclude from search results (e.g. ['node_modules', '**/*.log']).")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true }
@@ -662,7 +662,7 @@ server.registerTool(
       "and type. This tool is perfect for understanding file characteristics " +
       "without reading the actual content. Only works within allowed directories.",
     inputSchema: {
-      path: z.string()
+      path: z.string().describe("Absolute or relative path to the file or directory to inspect. Must be within allowed directories.")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true }
