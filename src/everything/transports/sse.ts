@@ -5,11 +5,33 @@ import cors from "cors";
 
 console.error("Starting SSE server...");
 
-// Express app with permissive CORS for testing with Inspector direct connect mode
+// CORS is restricted to local Inspector origins by default. Override with
+// MCP_ALLOWED_ORIGINS="https://example.com,..." for additional origins, or
+// MCP_ALLOWED_ORIGINS="*" to opt back into wildcard (dev only). Kept in sync
+// with streamableHttp.ts in this directory.
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:6274",
+  "http://127.0.0.1:6274",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
+const corsOriginEnv = process.env.MCP_ALLOWED_ORIGINS;
+const corsOrigin: string | string[] =
+  corsOriginEnv === "*"
+    ? "*"
+    : corsOriginEnv && corsOriginEnv.trim().length > 0
+      ? corsOriginEnv.split(",").map((s) => s.trim()).filter(Boolean)
+      : DEFAULT_ALLOWED_ORIGINS;
+if (corsOrigin === "*") {
+  console.warn(
+    "[mcp-everything] WARNING: MCP_ALLOWED_ORIGINS='*' — wildcard CORS enabled. Use only on a developer workstation; never in any deployed setting.",
+  );
+}
+
 const app = express();
 app.use(
   cors({
-    origin: "*", // use "*" with caution in production
+    origin: corsOrigin,
     methods: "GET,POST",
     preflightContinue: false,
     optionsSuccessStatus: 204,
