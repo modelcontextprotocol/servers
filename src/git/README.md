@@ -222,14 +222,14 @@ Add to your Zed settings.json:
 <summary>Using uvx</summary>
 
 ```json
-"context_servers": [
+"context_servers": {
   "mcp-server-git": {
     "command": {
       "path": "uvx",
       "args": ["mcp-server-git"]
     }
   }
-],
+},
 ```
 </details>
 
