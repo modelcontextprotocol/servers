@@ -1,27 +1,26 @@
 {
-  "name": "@modelcontextprotocol/servers",
-  "private": true,
-  "version": "0.6.2",
-  "description": "Model Context Protocol servers",
-  "license": "SEE LICENSE IN LICENSE",
-  "author": "Model Context Protocol a Series of LF Projects, LLC.",
-  "homepage": "https://modelcontextprotocol.io",
-  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "name": "business-hotels-mcp",
+  "version": "2.0.2",
   "type": "module",
-  "workspaces": [
-    "src/*"
-  ],
-  "files": [],
+  "bin": {
+    "business-hotels-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
   "scripts": {
-    "build": "npm run build --workspaces",
-    "watch": "npm run watch --workspaces",
-    "publish-all": "npm publish --workspaces --access public",
-    "link-all": "npm link --workspaces"
+    "build": "tsc",
+    "prepare": "npm run build",
+    "start": "node dist/index.js",
+    "inspect": "mcp-inspect dist/index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/server-everything": "*",
-    "@modelcontextprotocol/server-memory": "*",
-    "@modelcontextprotocol/server-filesystem": "*",
-    "@modelcontextprotocol/server-sequential-thinking": "*"
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "dotenv": "^16.4.5",
+    "zod": "^3.22.4",
+    "axios": "^1.6.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.24",
+    "@modelcontextprotocol/inspector": "^0.1.0"
   }
 }
