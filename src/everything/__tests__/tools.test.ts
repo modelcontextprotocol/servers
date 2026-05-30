@@ -151,21 +151,39 @@ describe('Tools', () => {
   });
 
   describe('get-env', () => {
-    it('should return all environment variables as JSON', async () => {
+    it('should return a single environment variable as JSON', async () => {
       const { mockServer, handlers } = createMockServer();
       registerGetEnvTool(mockServer);
 
       const handler = handlers.get('get-env')!;
       process.env.TEST_VAR_EVERYTHING = 'test_value';
-      const result = await handler({});
+      const result = await handler({ key: 'TEST_VAR_EVERYTHING' });
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
 
       const envJson = JSON.parse(result.content[0].text);
-      expect(envJson.TEST_VAR_EVERYTHING).toBe('test_value');
+      expect(envJson).toEqual({
+        key: 'TEST_VAR_EVERYTHING',
+        value: 'test_value',
+        found: true,
+      });
 
       delete process.env.TEST_VAR_EVERYTHING;
+    });
+
+    it('should return null for missing environment variables', async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerGetEnvTool(mockServer);
+
+      const handler = handlers.get('get-env')!;
+      const result = await handler({ key: 'TEST_VAR_EVERYTHING_MISSING' });
+
+      expect(JSON.parse(result.content[0].text)).toEqual({
+        key: 'TEST_VAR_EVERYTHING_MISSING',
+        value: null,
+        found: false,
+      });
     });
 
     it('should return valid JSON', async () => {
@@ -173,7 +191,7 @@ describe('Tools', () => {
       registerGetEnvTool(mockServer);
 
       const handler = handlers.get('get-env')!;
-      const result = await handler({});
+      const result = await handler({ key: 'PATH' });
 
       expect(() => JSON.parse(result.content[0].text)).not.toThrow();
     });
