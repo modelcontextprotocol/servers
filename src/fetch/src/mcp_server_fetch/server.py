@@ -1,5 +1,7 @@
+import ipaddress
+import socket
 from typing import Annotated, Tuple
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import markdownify
 import readabilipy.simple_json
@@ -22,6 +24,91 @@ from pydantic import BaseModel, Field, AnyUrl
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
+MAX_REDIRECTS = 10
+
+
+def _is_blocked_ip_address(address: str) -> bool:
+    ip = ipaddress.ip_address(address)
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return not ip.is_global
+
+
+def resolve_hostname_addresses(hostname: str, port: int | None) -> set[str]:
+    return {
+        result[4][0]
+        for result in socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    }
+
+
+def validate_public_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise McpError(ErrorData(
+            code=INVALID_PARAMS,
+            message="URL must use the http or https scheme",
+        ))
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise McpError(ErrorData(code=INVALID_PARAMS, message="URL must include a hostname"))
+
+    normalized_hostname = hostname.rstrip(".").lower()
+    if normalized_hostname == "localhost" or normalized_hostname.endswith(".localhost"):
+        raise McpError(ErrorData(
+            code=INVALID_PARAMS,
+            message="Fetching localhost URLs is not allowed",
+        ))
+
+    try:
+        if _is_blocked_ip_address(normalized_hostname):
+            raise McpError(ErrorData(
+                code=INVALID_PARAMS,
+                message="Fetching private or non-public IP addresses is not allowed",
+            ))
+        return
+    except ValueError:
+        pass
+
+    try:
+        addresses = resolve_hostname_addresses(normalized_hostname, parsed.port)
+    except OSError as exc:
+        raise McpError(ErrorData(
+            code=INTERNAL_ERROR,
+            message=f"Failed to resolve hostname {hostname}: {exc}",
+        ))
+
+    if not addresses:
+        raise McpError(ErrorData(
+            code=INTERNAL_ERROR,
+            message=f"Failed to resolve hostname {hostname}",
+        ))
+
+    for address in addresses:
+        if _is_blocked_ip_address(address):
+            raise McpError(ErrorData(
+                code=INVALID_PARAMS,
+                message="Fetching private or non-public IP addresses is not allowed",
+            ))
+
+
+async def get_url_safely(client, url: str, **kwargs):
+    current_url = url
+    for _ in range(MAX_REDIRECTS + 1):
+        validate_public_url(current_url)
+        response = await client.get(current_url, follow_redirects=False, **kwargs)
+        if response.status_code not in {301, 302, 303, 307, 308}:
+            return response
+
+        location = response.headers.get("location")
+        if not location:
+            return response
+        current_url = urljoin(str(getattr(response, "url", current_url)), location)
+
+    raise McpError(ErrorData(
+        code=INTERNAL_ERROR,
+        message=f"Too many redirects while fetching {url}",
+    ))
 
 
 def extract_content_from_html(html: str) -> str:
@@ -74,9 +161,9 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
 
     async with AsyncClient(proxy=proxy_url) as client:
         try:
-            response = await client.get(
+            response = await get_url_safely(
+                client,
                 robot_txt_url,
-                follow_redirects=True,
                 headers={"User-Agent": user_agent},
             )
         except HTTPError:
@@ -118,9 +205,9 @@ async def fetch_url(
 
     async with AsyncClient(proxy=proxy_url) as client:
         try:
-            response = await client.get(
+            response = await get_url_safely(
+                client,
                 url,
-                follow_redirects=True,
                 headers={"User-Agent": user_agent},
                 timeout=30,
             )
