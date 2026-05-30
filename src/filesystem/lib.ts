@@ -184,6 +184,29 @@ export async function writeFileContent(filePath: string, content: string): Promi
   }
 }
 
+export async function appendFileContent(filePath: string, content: string): Promise<void> {
+  try {
+    await fs.appendFile(filePath, content, { encoding: 'utf-8', flag: 'a' });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new Error(`File does not exist: ${filePath}`);
+    }
+    throw error;
+  }
+}
+
+export async function createOrAppendFileContent(filePath: string, content: string): Promise<void> {
+  try {
+    await appendFileContent(filePath, content);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('File does not exist:')) {
+      await writeFileContent(filePath, content);
+      return;
+    }
+    throw error;
+  }
+}
+
 
 // File Editing Functions
 interface FileEdit {
