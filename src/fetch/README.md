@@ -26,7 +26,7 @@ The fetch tool will truncate the response, but by using the `start_index` argume
 
 ## Installation
 
-Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
+Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust. If node.js is not available, the server falls back to readabilipy's Python-only HTML simplifier.
 
 ### Using uv (recommended)
 
@@ -169,6 +169,10 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 ### Customization - Proxy
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
+
+### Customization - HTML simplification
+
+By default, the server uses readabilipy's optional node.js simplifier when node.js is available, and otherwise falls back to the Python-only simplifier. To force the Python-only path even when node.js is installed, add the `--no-readability-js` argument.
 
 ## Windows Configuration
 
