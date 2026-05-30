@@ -3,6 +3,7 @@ import { getValidRootDirectories } from '../roots-utils.js';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, realpathSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { pathToFileURL } from 'url';
 import type { Root } from '@modelcontextprotocol/sdk/types.js';
 
 describe('getValidRootDirectories', () => {
@@ -43,6 +44,21 @@ describe('getValidRootDirectories', () => {
       expect(result).toContain(testDir2);
       expect(result).toContain(testDir3);
       expect(result).toHaveLength(3);
+    });
+
+    it('should handle standard file URIs from pathToFileURL', async () => {
+      // pathToFileURL produces properly-encoded URIs (e.g. file:///C:/... on Windows)
+      // This is the format VS Code and other editors send via MCP roots
+      const roots: Root[] = [
+        { uri: pathToFileURL(testDir1).href, name: 'Standard File URI' },
+        { uri: pathToFileURL(testDir2).href, name: 'Standard File URI 2' },
+      ];
+
+      const result = await getValidRootDirectories(roots);
+
+      expect(result).toContain(testDir1);
+      expect(result).toContain(testDir2);
+      expect(result).toHaveLength(2);
     });
 
     it('should normalize complex paths', async () => {
