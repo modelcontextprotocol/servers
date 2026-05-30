@@ -217,7 +217,8 @@ server.registerTool(
     description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
     inputSchema: ReadTextFileArgsSchema.shape,
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true },
+    _meta: { deprecated: true, replacement: "read_text_file" }
   },
   readTextFileHandler
 );
@@ -250,7 +251,11 @@ server.registerTool(
   {
     title: "Read Media File",
     description:
-      "Read an image or audio file. Returns the base64 encoded data and MIME type. " +
+      "Read a binary file (image or audio) and return its base64-encoded data with detected MIME type. " +
+      "Use this tool for binary content such as PNG/JPEG/GIF/WebP/BMP/SVG images or MP3/WAV/OGG/FLAC audio; " +
+      "for plain-text files use read_text_file instead, since base64 encoding inflates text payloads ~33% with no benefit. " +
+      "MIME type is derived from the file extension; unknown extensions silently fall back to application/octet-stream " +
+      "and are returned with a generic \"blob\" content type. " +
       "Only works within allowed directories.",
     inputSchema: {
       path: z.string()
