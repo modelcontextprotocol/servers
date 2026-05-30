@@ -83,7 +83,7 @@ for (const dir of allowedDirectories) {
 
 // Exit only if ALL paths are inaccessible (and some were specified)
 if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
-  console.error("Error: None of the specified directories are accessible");
+  console.error("Error [missing_roots]: None of the specified directories are accessible");
   process.exit(1);
 }
 
@@ -745,8 +745,8 @@ server.server.oninitialized = async () => {
   } else {
     if (allowedDirectories.length > 0) {
       console.error("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
-    }else{
-      throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
+    } else {
+      throw new Error(`[missing_roots] Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
     }
   }
 };
