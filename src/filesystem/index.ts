@@ -28,6 +28,27 @@ import {
   setAllowedDirectories,
 } from './lib.js';
 
+type StartupValidationFailureReason = "inaccessible" | "not_directory";
+
+interface StartupValidationFailure {
+  input: string;
+  checkedPaths: string[];
+  reason: StartupValidationFailureReason;
+}
+
+interface StartupValidationErrorPayload {
+  type: "startup_validation_error";
+  code: "no_accessible_directories";
+  message: string;
+  rejectedInputs: StartupValidationFailure[];
+}
+
+function emitStartupValidationError(
+  payload: StartupValidationErrorPayload,
+): void {
+  console.error(JSON.stringify(payload));
+}
+
 // Command line argument parsing
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -42,7 +63,7 @@ if (args.length === 0) {
 // We store BOTH the original path AND the resolved path to handle symlinks correctly
 // This fixes the macOS /tmp -> /private/tmp symlink issue where users specify /tmp
 // but the resolved path is /private/tmp
-let allowedDirectories = (await Promise.all(
+const allowedDirectoryInputs = await Promise.all(
   args.map(async (dir) => {
     const expanded = expandHome(dir);
     const absolute = path.resolve(expanded);
@@ -55,35 +76,70 @@ let allowedDirectories = (await Promise.all(
       // Return both original and resolved paths if they differ
       // This allows matching against either /tmp or /private/tmp on macOS
       if (normalizedOriginal !== normalizedResolved) {
-        return [normalizedOriginal, normalizedResolved];
+        return {
+          input: dir,
+          checkedPaths: [normalizedOriginal, normalizedResolved],
+        };
       }
-      return [normalizedResolved];
+      return {
+        input: dir,
+        checkedPaths: [normalizedResolved],
+      };
     } catch (error) {
       // If we can't resolve (doesn't exist), use the normalized absolute path
       // This allows configuring allowed dirs that will be created later
-      return [normalizedOriginal];
+      return {
+        input: dir,
+        checkedPaths: [normalizedOriginal],
+      };
     }
   })
-)).flat();
+);
+
+let allowedDirectories = allowedDirectoryInputs.flatMap(
+  ({ checkedPaths }) => checkedPaths,
+);
 
 // Filter to only accessible directories, warn about inaccessible ones
 const accessibleDirectories: string[] = [];
-for (const dir of allowedDirectories) {
-  try {
-    const stats = await fs.stat(dir);
-    if (stats.isDirectory()) {
-      accessibleDirectories.push(dir);
-    } else {
-      console.error(`Warning: ${dir} is not a directory, skipping`);
+const rejectedInputs: StartupValidationFailure[] = [];
+for (const { input, checkedPaths } of allowedDirectoryInputs) {
+  const validPaths: string[] = [];
+  let rejectionReason: StartupValidationFailureReason = "inaccessible";
+
+  for (const candidatePath of checkedPaths) {
+    try {
+      const stats = await fs.stat(candidatePath);
+      if (stats.isDirectory()) {
+        validPaths.push(candidatePath);
+      } else {
+        rejectionReason = "not_directory";
+        console.error(`Warning: ${candidatePath} is not a directory, skipping`);
+      }
+    } catch (error) {
+      console.error(`Warning: Cannot access directory ${candidatePath}, skipping`);
     }
-  } catch (error) {
-    console.error(`Warning: Cannot access directory ${dir}, skipping`);
+  }
+
+  if (validPaths.length > 0) {
+    accessibleDirectories.push(...validPaths);
+  } else {
+    rejectedInputs.push({
+      input,
+      checkedPaths,
+      reason: rejectionReason,
+    });
   }
 }
 
 // Exit only if ALL paths are inaccessible (and some were specified)
 if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
-  console.error("Error: None of the specified directories are accessible");
+  emitStartupValidationError({
+    type: "startup_validation_error",
+    code: "no_accessible_directories",
+    message: "None of the specified directories are accessible",
+    rejectedInputs,
+  });
   process.exit(1);
 }
 
