@@ -84,6 +84,32 @@ describe('Startup Directory Validation', () => {
     expect(result.stderr).toContain('Error: None of the specified directories are accessible');
   });
 
+  // Test for macOS /tmp -> /private/tmp symlink issue (GitHub issue #3253)
+  // Verifies that the startup code stores both the symlink path and its
+  // resolved target in allowedDirectories, so requests through either form work.
+  it('should start successfully with symlinked allowed directory', async () => {
+    const actualDir = path.join(testDir, 'actual-target');
+    await fs.mkdir(actualDir, { recursive: true });
+
+    const symlinkDir = path.join(testDir, 'symlink-dir');
+    try {
+      await fs.symlink(actualDir, symlinkDir);
+    } catch (error) {
+      // Skip on systems without symlink permissions (e.g., restricted Windows)
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+        return;
+      }
+      throw error;
+    }
+
+    // Start server with the symlink path (not the resolved path)
+    const result = await spawnServer([symlinkDir]);
+
+    // Server should start without errors
+    expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+    expect(result.stderr).not.toContain('Error:');
+  });
+
   it('should warn when path is not a directory', async () => {
     const filePath = path.join(testDir, 'not-a-directory.txt');
     await fs.writeFile(filePath, 'content');
