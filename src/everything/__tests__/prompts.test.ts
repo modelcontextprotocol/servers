@@ -111,6 +111,15 @@ describe('Prompts', () => {
   });
 
   describe('resource-prompt', () => {
+    it('should describe prompt arguments', () => {
+      const { mockServer, configs } = createMockServer();
+      registerEmbeddedResourcePrompt(mockServer);
+
+      const config = configs.get('resource-prompt')!;
+      expect(config.argsSchema.resourceType.description).toContain('"Text" or "Blob"');
+      expect(config.argsSchema.resourceId.description).toContain('Positive integer ID');
+    });
+
     it('should return text resource reference', () => {
       const { mockServer, handlers } = createMockServer();
       registerEmbeddedResourcePrompt(mockServer);
