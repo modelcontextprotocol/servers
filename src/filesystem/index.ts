@@ -607,7 +607,7 @@ server.registerTool(
       source: z.string(),
       destination: z.string()
     },
-    outputSchema: { content: z.string() },
+    outputSchema: { content: z.array(z.object({ type: z.enum(["text"]), text: z.string() })) },
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
   },
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
@@ -618,7 +618,7 @@ server.registerTool(
     const contentBlock = { type: "text" as const, text };
     return {
       content: [contentBlock],
-      structuredContent: { content: text }
+      structuredContent: { content: [contentBlock] }
     };
   }
 );
