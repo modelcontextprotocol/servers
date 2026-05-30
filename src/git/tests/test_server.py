@@ -482,3 +482,13 @@ def test_git_branch_rejects_contains_flag_injection(test_repository):
 
     with pytest.raises(BadName):
         git_branch(test_repository, "local", not_contains="--exec=evil")
+
+
+def test_git_branch_rejects_invalid_branch_type(test_repository):
+    """git_branch should raise ValueError for invalid branch_type values, consistent
+    with how the other helpers in this module surface invalid input (raise rather
+    than return an in-band error string)."""
+    with pytest.raises(ValueError) as exc_info:
+        git_branch(test_repository, "invalid-type")
+    assert "Invalid branch type" in str(exc_info.value)
+    assert "'invalid-type'" in str(exc_info.value)
