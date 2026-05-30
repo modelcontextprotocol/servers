@@ -234,6 +234,14 @@ def git_show(repo: git.Repo, revision: str) -> str:
             output.append(d.diff)
     return "".join(output)
 
+def resolve_repo_root(path: Path) -> Path:
+    """Return the enclosing repo root for ``path``, like ``git rev-parse --show-toplevel``."""
+    repo = git.Repo(path, search_parent_directories=True)
+    if repo.working_dir:
+        return Path(repo.working_dir)
+    return Path(path).resolve()
+
+
 def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None:
     """Validate that repo_path is within the allowed repository path."""
     if allowed_repository is None:
@@ -295,11 +303,14 @@ async def serve(repository: Path | None) -> None:
 
     if repository is not None:
         try:
-            git.Repo(repository)
-            logger.info(f"Using repository at {repository}")
+            resolved = resolve_repo_root(repository)
         except git.InvalidGitRepositoryError:
-            logger.error(f"{repository} is not a valid Git repository")
+            logger.error(f"{repository} is not inside a Git repository")
             return
+        if resolved != repository:
+            logger.info(f"Resolved --repository {repository} to repo root {resolved}")
+        repository = resolved
+        logger.info(f"Using repository at {repository}")
 
     server = Server("mcp-git")
 

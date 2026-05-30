@@ -1,3 +1,5 @@
+import asyncio
+import logging
 import pytest
 from pathlib import Path
 import git
@@ -15,6 +17,8 @@ from mcp_server_git.server import (
     git_log,
     git_create_branch,
     git_show,
+    resolve_repo_root,
+    serve,
     validate_repo_path,
 )
 import shutil
@@ -250,6 +254,77 @@ def test_git_show_initial_commit(test_repository):
     assert "Commit:" in result
     assert "initial commit" in result
     assert "test.txt" in result
+
+
+# Tests for resolve_repo_root (#3029)
+
+def test_resolve_repo_root_at_root(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    git.Repo.init(repo_path)
+    assert resolve_repo_root(repo_path).resolve() == repo_path.resolve()
+
+
+def test_resolve_repo_root_from_subdirectory(tmp_path: Path):
+    repo_path = tmp_path / "repo"
+    git.Repo.init(repo_path)
+    subdir = repo_path / "nested" / "deeper"
+    subdir.mkdir(parents=True)
+    assert resolve_repo_root(subdir).resolve() == repo_path.resolve()
+
+
+def test_resolve_repo_root_outside_any_repository(tmp_path: Path):
+    non_repo = tmp_path / "not_a_repo"
+    non_repo.mkdir()
+    with pytest.raises(git.InvalidGitRepositoryError):
+        resolve_repo_root(non_repo)
+
+
+def test_resolve_repo_root_dot_from_subdirectory(tmp_path: Path, monkeypatch):
+    # `--repository .` from a subdir should walk up to the repo root.
+    repo_path = tmp_path / "repo"
+    git.Repo.init(repo_path)
+    subdir = repo_path / "nested"
+    subdir.mkdir()
+    monkeypatch.chdir(subdir)
+    assert resolve_repo_root(Path(".")).resolve() == repo_path.resolve()
+
+
+class _StopServe(Exception):
+    pass
+
+
+def _fake_stdio_server():
+    raise _StopServe()
+
+
+def test_serve_resolves_subdirectory_at_startup(tmp_path: Path, monkeypatch, caplog):
+    repo_path = tmp_path / "repo"
+    git.Repo.init(repo_path)
+    subdir = repo_path / "nested"
+    subdir.mkdir()
+
+    monkeypatch.setattr("mcp_server_git.server.stdio_server", _fake_stdio_server)
+    caplog.set_level(logging.INFO, logger="mcp_server_git.server")
+
+    with pytest.raises(_StopServe):
+        asyncio.run(serve(subdir))
+
+    messages = [r.message for r in caplog.records]
+    assert any("Resolved --repository" in m and str(subdir) in m for m in messages)
+    assert any(f"Using repository at {repo_path}" in m for m in messages)
+
+
+def test_serve_rejects_path_outside_any_repository(tmp_path: Path, monkeypatch, caplog):
+    non_repo = tmp_path / "not_a_repo"
+    non_repo.mkdir()
+
+    monkeypatch.setattr("mcp_server_git.server.stdio_server", _fake_stdio_server)
+    caplog.set_level(logging.ERROR, logger="mcp_server_git.server")
+
+    asyncio.run(serve(non_repo))
+
+    messages = [r.message for r in caplog.records]
+    assert any("is not inside a Git repository" in m for m in messages)
 
 
 # Tests for validate_repo_path (repository scoping security fix)

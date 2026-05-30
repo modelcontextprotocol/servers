@@ -119,6 +119,12 @@ python -m mcp_server_git
 
 ## Configuration
 
+`--repository` accepts any path inside a Git working tree. On startup the server walks up to the enclosing `.git/`, the same way `git rev-parse --show-toplevel` does. So `--repository .` works when a shared config is run from any subdirectory of the repo.
+
+Note that this also means `--repository /repo/subdir` resolves to `/repo` and allows tool calls anywhere under it. If the resolved path differs from the input, startup logs show the rewrite. If you want to restrict operations to a subtree, this flag alone won't do it; use a separate repo or an external sandbox.
+
+Per-tool `repo_path` arguments are not resolved this way and must point at the repo root.
+
 ### Usage with Claude Desktop
 
 Add this to your `claude_desktop_config.json`:
