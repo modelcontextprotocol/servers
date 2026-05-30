@@ -157,6 +157,17 @@ describe('Path Validation', () => {
         expect(isPathWithinAllowedDirectories('C:\\Users\\project2\\', allowed)).toBe(false);
       }
     });
+
+    it('handles Windows UNC share roots with trailing separators', () => {
+      if (path.sep === '\\') {
+        const allowed = ['\\\\server\\share\\'];
+
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\file.txt', allowed)).toBe(true);
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\nested\\file.txt', allowed)).toBe(true);
+        expect(isPathWithinAllowedDirectories('\\\\server\\share-other\\file.txt', allowed)).toBe(false);
+        expect(isPathWithinAllowedDirectories('\\\\other\\share\\file.txt', allowed)).toBe(false);
+      }
+    });
   });
 
   describe('Error handling', () => {
