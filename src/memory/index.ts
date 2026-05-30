@@ -48,12 +48,14 @@ let MEMORY_FILE_PATH: string;
 
 // We are storing our memory using entities, relations, and observations in a graph structure
 export interface Entity {
+  type?: "entity";
   name: string;
   entityType: string;
   observations: string[];
 }
 
 export interface Relation {
+  type?: "relation";
   from: string;
   to: string;
   relationType: string;
@@ -76,6 +78,7 @@ export class KnowledgeGraphManager {
         const item = JSON.parse(line);
         if (item.type === "entity") {
           graph.entities.push({
+            type: "entity",
             name: item.name,
             entityType: item.entityType,
             observations: item.observations
@@ -83,6 +86,7 @@ export class KnowledgeGraphManager {
         }
         if (item.type === "relation") {
           graph.relations.push({
+            type: "relation",
             from: item.from,
             to: item.to,
             relationType: item.relationType
@@ -241,12 +245,14 @@ let knowledgeGraphManager: KnowledgeGraphManager;
 
 // Zod schemas for entities and relations
 const EntitySchema = z.object({
+  type: z.literal("entity").optional().describe('Discriminator when parsed from JSONL; omit when creating entities'),
   name: z.string().describe("The name of the entity"),
   entityType: z.string().describe("The type of the entity"),
   observations: z.array(z.string()).describe("An array of observation contents associated with the entity")
 });
 
 const RelationSchema = z.object({
+  type: z.literal("relation").optional().describe('Discriminator when parsed from JSONL; omit when creating relations'),
   from: z.string().describe("The name of the entity where the relation starts"),
   to: z.string().describe("The name of the entity where the relation ends"),
   relationType: z.string().describe("The type of the relation")
