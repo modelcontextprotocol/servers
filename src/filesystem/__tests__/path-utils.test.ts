@@ -379,4 +379,62 @@ describe('Path Utilities', () => {
       }
     });
   });
+
+  describe('Linux Docker path handling (issue #3628 fix)', () => {
+    const originalPlatform = process.platform;
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        writable: true,
+        configurable: true
+      });
+    });
+
+    it('reproduces exact scenario from issue #3628', () => {
+      // Docker Alpine Linux container where /h/username/MCP_Development/data
+      // was incorrectly converted to H:\username\MCP_Development\data
+      Object.defineProperty(process, 'platform', {
+        value: 'linux',
+        writable: true,
+        configurable: true
+      });
+
+      const inputPath = '/h/username/MCP_Development/data';
+      const result = normalizePath(inputPath);
+
+      expect(result).toBe('/h/username/MCP_Development/data');
+      expect(result).not.toContain('H:');
+      expect(result).not.toContain('\\');
+    });
+
+    it('preserves single-letter root directories on Linux', () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'linux',
+        writable: true,
+        configurable: true
+      });
+
+      // These look like drive letters but are valid Linux directories
+      expect(normalizePath('/u/local/share')).toBe('/u/local/share');
+      expect(normalizePath('/d/projects/app')).toBe('/d/projects/app');
+      expect(normalizePath('/s/data/files')).toBe('/s/data/files');
+      expect(normalizePath('/e/backups/daily')).toBe('/e/backups/daily');
+    });
+
+    it('convertToWindowsPath leaves single-letter root paths unchanged on Linux', () => {
+      Object.defineProperty(process, 'platform', {
+        value: 'linux',
+        writable: true,
+        configurable: true
+      });
+
+      expect(convertToWindowsPath('/h/username/MCP_Development/data'))
+        .toBe('/h/username/MCP_Development/data');
+      expect(convertToWindowsPath('/c/some/path'))
+        .toBe('/c/some/path');
+      expect(convertToWindowsPath('/d/projects/app'))
+        .toBe('/d/projects/app');
+    });
+  });
 });
