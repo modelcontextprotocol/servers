@@ -1,8 +1,13 @@
+import asyncio
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from pathlib import Path
 import git
 from git.exc import BadName
 from mcp_server_git.server import (
+    serve,
     git_checkout,
     git_branch,
     git_add,
@@ -482,3 +487,31 @@ def test_git_branch_rejects_contains_flag_injection(test_repository):
 
     with pytest.raises(BadName):
         git_branch(test_repository, "local", not_contains="--exec=evil")
+
+
+def test_serve_does_not_enable_raise_exceptions():
+    """serve() must not opt into raise_exceptions (issue #4213)."""
+    mock_options = MagicMock()
+    mock_read = MagicMock()
+    mock_write = MagicMock()
+
+    mock_server = MagicMock()
+    mock_server.create_initialization_options.return_value = mock_options
+    mock_server.run = AsyncMock()
+
+    @asynccontextmanager
+    async def mock_stdio_server():
+        yield mock_read, mock_write
+
+    async def run_serve() -> None:
+        with (
+            patch("mcp_server_git.server.Server", return_value=mock_server),
+            patch("mcp_server_git.server.stdio_server", mock_stdio_server),
+        ):
+            await serve(None)
+
+    asyncio.run(run_serve())
+
+    mock_server.create_initialization_options.assert_called_once()
+    mock_server.run.assert_awaited_once_with(mock_read, mock_write, mock_options)
+    assert mock_server.run.call_args.kwargs.get("raise_exceptions") is not True
