@@ -188,6 +188,38 @@ describe('Lib Functions', () => {
         expect(result).toBe(path.resolve(newFilePath));
       });
 
+      it('allows Windows mapped-drive paths that realpath resolves into the allow-list', async () => {
+        if (process.platform !== 'win32') {
+          return;
+        }
+
+        setAllowedDirectories(['\\\\server\\share\\repo']);
+        mockFs.realpath.mockResolvedValueOnce('\\\\server\\share\\repo\\file.txt');
+
+        const result = await validatePath('Y:\\repo\\file.txt');
+
+        expect(result).toBe('\\\\server\\share\\repo\\file.txt');
+      });
+
+      it('allows new files under Windows mapped-drive parents that resolve into the allow-list', async () => {
+        if (process.platform !== 'win32') {
+          return;
+        }
+
+        const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError.code = 'ENOENT';
+
+        setAllowedDirectories(['\\\\server\\share\\repo']);
+        mockFs.realpath
+          .mockRejectedValueOnce(enoentError)
+          .mockResolvedValueOnce('\\\\server\\share\\repo');
+
+        const newFilePath = 'Y:\\repo\\newfile.txt';
+        const result = await validatePath(newFilePath);
+
+        expect(result).toBe(path.resolve(newFilePath));
+      });
+
       it('rejects when parent directory does not exist', async () => {
         const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\nonexistent\\newfile.txt' : '/home/user/nonexistent/newfile.txt';
         
