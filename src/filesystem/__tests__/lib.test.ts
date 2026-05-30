@@ -228,6 +228,64 @@ describe('Lib Functions', () => {
           process.cwd = originalCwd;
         }
       });
+
+      // Tests for UNC path resolution (bug #3 in the companion PR):
+      // validatePath calls path.resolve() on the absolute path before the
+      // allowed-directory check. On Windows, path.resolve corrupts UNC paths
+      // (\\server\share becomes C:\server\share via path.normalize stripping
+      // a leading backslash). Without the UNC guard, every UNC access throws
+      // "Access denied" even when the UNC directory is explicitly allowed.
+      describe('UNC path handling on Windows', () => {
+        beforeEach(() => {
+          if (process.platform !== 'win32') return;
+          setAllowedDirectories(['\\\\server\\share\\project']);
+          // Simulate fs.realpath returning the UNC path as-is
+          mockFs.realpath.mockImplementation(async (p: any) => p.toString());
+        });
+
+        it('accepts UNC file path within allowed UNC directory', async () => {
+          if (process.platform !== 'win32') return;
+          const testPath = '\\\\server\\share\\project\\file.txt';
+          const result = await validatePath(testPath);
+          expect(result).toBe(testPath);
+        });
+
+        it('accepts UNC directory path matching allowed UNC exactly', async () => {
+          if (process.platform !== 'win32') return;
+          const testPath = '\\\\server\\share\\project';
+          const result = await validatePath(testPath);
+          expect(result).toBe(testPath);
+        });
+
+        it('accepts nested UNC subdirectory within allowed UNC', async () => {
+          if (process.platform !== 'win32') return;
+          const testPath = '\\\\server\\share\\project\\src\\sub\\deep.ts';
+          const result = await validatePath(testPath);
+          expect(result).toBe(testPath);
+        });
+
+        it('rejects UNC path outside allowed UNC directory', async () => {
+          if (process.platform !== 'win32') return;
+          const testPath = '\\\\server\\share\\other\\file.txt';
+          await expect(validatePath(testPath))
+            .rejects.toThrow('Access denied - path outside allowed directories');
+        });
+
+        it('rejects UNC path on a different server', async () => {
+          if (process.platform !== 'win32') return;
+          const testPath = '\\\\other-server\\share\\project\\file.txt';
+          await expect(validatePath(testPath))
+            .rejects.toThrow('Access denied - path outside allowed directories');
+        });
+
+        it('accepts UNC file path when allowed UNC has trailing separator', async () => {
+          if (process.platform !== 'win32') return;
+          setAllowedDirectories(['\\\\server\\share\\project\\']);
+          const testPath = '\\\\server\\share\\project\\file.txt';
+          const result = await validatePath(testPath);
+          expect(result).toBe(testPath);
+        });
+      });
     });
   });
 
