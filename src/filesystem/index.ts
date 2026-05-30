@@ -284,16 +284,36 @@ server.registerTool(
     const data = await readFileAsBase64Stream(validPath);
 
     const type = mimeType.startsWith("image/")
-      ? "image"
+      ? "image" as const
       : mimeType.startsWith("audio/")
-        ? "audio"
-        // Fallback for other binary types, not officially supported by the spec but has been used for some time
-        : "blob";
-    const contentItem = { type: type as 'image' | 'audio' | 'blob', data, mimeType };
+        ? "audio" as const
+        // Fallback for other binary types, not officially supported by the MCP spec
+        // but has been used for some time. Kept for back-compat; isolated below so
+        // the typed image/audio paths do not require an unsafe cast.
+        : "blob" as const;
+
+    if (type === "blob") {
+      // SDK's CallToolResult.content union does not include a BlobContent variant.
+      // The structuredContent.content shape is preserved per outputSchema; the
+      // text-channel content is a human-readable placeholder with the mime/size
+      // so the cast is the only deviation, scoped to this branch.
+      const blobItem = { type, data, mimeType };
+      return {
+        content: [{
+          type: "text" as const,
+          text: `[binary file: mimeType=${mimeType}, size=${data.length} bytes (base64). Full payload available in structuredContent.]`
+        }],
+        structuredContent: { content: [blobItem] }
+      } as unknown as CallToolResult;
+    }
+
+    // Typed image/audio paths — match SDK's ImageContent / AudioContent unions
+    // exactly, no cast required.
+    const contentItem = { type, data, mimeType };
     return {
       content: [contentItem],
       structuredContent: { content: [contentItem] }
-    } as unknown as CallToolResult;
+    };
   }
 );
 
