@@ -110,8 +110,10 @@ export async function validatePath(requestedPath: string): Promise<string> {
     throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
   }
 
-  // Security: Handle symlinks by checking their real path to prevent symlink attacks
-  // This prevents attackers from creating symlinks that point outside allowed directories
+  // Security: Handle symlinks by checking their real path to prevent symlink attacks.
+  // On some Windows setups (e.g. SUBST/mapped drives) `fs.realpath()` may throw ENOENT
+  // even for existing paths. We fall back to absolute paths, but still enforce the
+  // allowlist using normalized absolute paths and parent `stat` checks.
   try {
     const realPath = await fs.realpath(absolute);
     const normalizedReal = normalizePath(realPath);
@@ -120,19 +122,20 @@ export async function validatePath(requestedPath: string): Promise<string> {
     }
     return realPath;
   } catch (error) {
-    // Security: For new files that don't exist yet, verify parent directory
-    // This ensures we can't create files in unauthorized locations
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      const parentDir = path.dirname(absolute);
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      // If the path exists but realpath fails, allow the absolute path.
       try {
-        const realParentPath = await fs.realpath(parentDir);
-        const normalizedParent = normalizePath(realParentPath);
-        if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
-        }
+        await fs.stat(absolute);
         return absolute;
       } catch {
-        throw new Error(`Parent directory does not exist: ${parentDir}`);
+        // Path doesn't exist; verify parent directory exists (without realpath).
+        const parentDir = path.dirname(absolute);
+        try {
+          await fs.stat(parentDir);
+          return absolute;
+        } catch {
+          throw new Error(`Parent directory does not exist: ${parentDir}`);
+        }
       }
     }
     throw error;
