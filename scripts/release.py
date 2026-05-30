@@ -51,12 +51,31 @@ class GitHashParamType(click.ParamType):
 GIT_HASH = GitHashParamType()
 
 
+def _update_server_json(path: Path, version: Version) -> None:
+    server_json_path = path / "server.json"
+    if not server_json_path.exists():
+        return
+
+    with open(server_json_path, "r") as f:
+        data = json.load(f)
+
+    data["version"] = version
+    for package in data.get("packages", []):
+        package["version"] = version
+
+    with open(server_json_path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+
+
 class Package(Protocol):
     path: Path
 
     def package_name(self) -> str: ...
 
     def update_version(self, version: Version) -> None: ...
+
+    def update_server_json(self, version: Version) -> None: ...
 
 
 @dataclass
@@ -74,6 +93,9 @@ class NpmPackage:
             f.seek(0)
             json.dump(data, f, indent=2)
             f.truncate()
+
+    def update_server_json(self, version: Version):
+        _update_server_json(self.path, version)
 
 
 @dataclass
@@ -99,6 +121,9 @@ class PyPiPackage:
 
         # Regenerate uv.lock to match the updated pyproject.toml
         subprocess.run(["uv", "lock"], cwd=self.path, check=True)
+
+    def update_server_json(self, version: Version):
+        _update_server_json(self.path, version)
 
 
 def has_changes(path: Path, git_hash: GitHash) -> bool:
@@ -152,6 +177,7 @@ def update_packages(directory: Path, git_hash: GitHash) -> int:
     for package in find_changed_packages(path, git_hash):
         name = package.package_name()
         package.update_version(version)
+        package.update_server_json(version)
 
         click.echo(f"{name}@{version}")
 
