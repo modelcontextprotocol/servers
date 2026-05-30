@@ -333,6 +333,7 @@ describe('Tools', () => {
       );
 
       expect(result.content[0].text).toContain('Long running operation completed');
+      expect(result.content[0].text).toContain('Operation ID:');
       expect(result.content[0].text).toContain('Duration: 0.1 seconds');
       expect(result.content[0].text).toContain('Steps: 2');
     }, 10000);
@@ -356,6 +357,28 @@ describe('Tools', () => {
           }),
         }),
         expect.any(Object)
+      );
+    }, 10000);
+
+    it('should generate a collision-resistant request id when missing', async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerTriggerLongRunningOperationTool(mockServer);
+
+      const handler = handlers.get('trigger-long-running-operation')!;
+      await handler(
+        { duration: 0.1, steps: 1 },
+        { _meta: { progressToken: 'token-generated' } }
+      );
+
+      expect(mockServer.server.notification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'notifications/progress',
+        }),
+        expect.objectContaining({
+          relatedRequestId: expect.stringMatching(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+          ),
+        })
       );
     }, 10000);
   });
