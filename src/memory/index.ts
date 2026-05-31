@@ -4,43 +4,107 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { promises as fs } from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Define memory file path using environment variable with fallback
-export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
+// resolveUserDataDir returns the platform-appropriate user data directory for
+// persistent memory state. The directory itself is not created here; callers
+// that write to a file inside it are responsible for `mkdir -p`.
+//
+// - Linux: $XDG_DATA_HOME/mcp-server-memory, falling back to ~/.local/share/mcp-server-memory
+// - macOS: ~/Library/Application Support/mcp-server-memory
+// - Windows: %APPDATA%\mcp-server-memory, falling back to ~/AppData/Roaming/mcp-server-memory
+// - Other platforms: ~/.mcp-server-memory
+export function resolveUserDataDir(): string {
+  const appName = 'mcp-server-memory';
+  const platform = process.platform;
 
-// Handle backward compatibility: migrate memory.json to memory.jsonl if needed
+  if (platform === 'win32') {
+    const appData = process.env.APPDATA;
+    if (appData && appData.trim() !== '') {
+      return path.join(appData, appName);
+    }
+    return path.join(os.homedir(), 'AppData', 'Roaming', appName);
+  }
+
+  if (platform === 'darwin') {
+    return path.join(os.homedir(), 'Library', 'Application Support', appName);
+  }
+
+  // Linux / FreeBSD / other POSIX: follow the XDG Base Directory Specification.
+  const xdgDataHome = process.env.XDG_DATA_HOME;
+  if (xdgDataHome && xdgDataHome.trim() !== '' && path.isAbsolute(xdgDataHome)) {
+    return path.join(xdgDataHome, appName);
+  }
+  return path.join(os.homedir(), '.local', 'share', appName);
+}
+
+// defaultMemoryPath resolves to the user data directory rather than the
+// package install directory, so package updates and reinstalls do not affect
+// persistent state. Legacy installs that wrote next to the package are
+// migrated automatically on first run (see ensureMemoryFilePath).
+export const defaultMemoryPath = path.join(resolveUserDataDir(), 'memory.jsonl');
+
+// Legacy paths that earlier versions of this package wrote to, kept for
+// backward-compatible migration.
+const packageDir = path.dirname(fileURLToPath(import.meta.url));
+const legacyJSONLPath = path.join(packageDir, 'memory.jsonl');
+const legacyJSONPath = path.join(packageDir, 'memory.json');
+
+// fileExists reports whether `p` exists and is accessible.
+async function fileExists(p: string): Promise<boolean> {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Handle backward compatibility: migrate legacy package-directory files to the
+// user data directory if needed.
 export async function ensureMemoryFilePath(): Promise<string> {
   if (process.env.MEMORY_FILE_PATH) {
-    // Custom path provided, use it as-is (with absolute path resolution)
+    // Custom path provided, use it as-is (with absolute path resolution).
+    // Relative paths are resolved against the package directory for
+    // backward compatibility with existing configurations.
     return path.isAbsolute(process.env.MEMORY_FILE_PATH)
       ? process.env.MEMORY_FILE_PATH
-      : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH);
+      : path.join(packageDir, process.env.MEMORY_FILE_PATH);
   }
-  
-  // No custom path set, check for backward compatibility migration
-  const oldMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
-  const newMemoryPath = defaultMemoryPath;
-  
-  try {
-    // Check if old file exists and new file doesn't
-    await fs.access(oldMemoryPath);
-    try {
-      await fs.access(newMemoryPath);
-      // Both files exist, use new one (no migration needed)
-      return newMemoryPath;
-    } catch {
-      // Old file exists, new file doesn't - migrate
-      console.error('DETECTED: Found legacy memory.json file, migrating to memory.jsonl for JSONL format compatibility');
-      await fs.rename(oldMemoryPath, newMemoryPath);
-      console.error('COMPLETED: Successfully migrated memory.json to memory.jsonl');
-      return newMemoryPath;
-    }
-  } catch {
-    // Old file doesn't exist, use new path
-    return newMemoryPath;
+
+  const target = defaultMemoryPath;
+
+  // Ensure the user data directory exists so first-write operations against
+  // the returned path do not fail with ENOENT.
+  await fs.mkdir(path.dirname(target), { recursive: true });
+
+  // If the user data file is already populated, nothing to migrate.
+  if (await fileExists(target)) {
+    return target;
   }
+
+  // No file at the target yet. Look for legacy data to migrate. Prefer the
+  // legacy JSONL (newer of the two legacy formats) over the older JSON.
+  let migrationSource: string | null = null;
+  let migrationLabel = '';
+  if (await fileExists(legacyJSONLPath)) {
+    migrationSource = legacyJSONLPath;
+    migrationLabel = 'memory.jsonl from package directory';
+  } else if (await fileExists(legacyJSONPath)) {
+    migrationSource = legacyJSONPath;
+    migrationLabel = 'memory.json from package directory';
+  }
+
+  if (migrationSource === null) {
+    return target;
+  }
+
+  console.error(`DETECTED: Found legacy ${migrationLabel}, migrating to user data directory at ${target}`);
+  await fs.rename(migrationSource, target);
+  console.error('COMPLETED: Successfully migrated legacy memory file to user data directory');
+  return target;
 }
 
 // Initialize memory file path (will be set during startup)
