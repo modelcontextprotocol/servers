@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getValidRootDirectories } from '../roots-utils.js';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, realpathSync } from 'fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, realpathSync, symlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import type { Root } from '@modelcontextprotocol/sdk/types.js';
@@ -57,6 +57,26 @@ describe('getValidRootDirectories', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toBe(subDir);
+    });
+
+    it('should preserve original and resolved root directory forms', async () => {
+      const actualDir = join(testDir1, 'actual-root');
+      const aliasDir = join(testDir1, 'alias-root');
+      mkdirSync(actualDir);
+
+      try {
+        symlinkSync(actualDir, aliasDir, process.platform === 'win32' ? 'junction' : 'dir');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+          return;
+        }
+        throw error;
+      }
+
+      const result = await getValidRootDirectories([{ uri: aliasDir, name: 'Alias root' }]);
+
+      expect(result).toContain(aliasDir);
+      expect(result).toContain(realpathSync(aliasDir));
     });
   });
 
