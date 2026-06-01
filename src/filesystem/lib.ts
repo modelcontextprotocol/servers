@@ -182,6 +182,28 @@ export async function writeFileContent(filePath: string, content: string): Promi
       throw error;
     }
   }
+
+  // Post-write verification: stat the target and confirm size matches the
+  // UTF-8 byte length of the written content. Catches silent write failures
+  // where writeFile resolves successfully but the bytes never reach disk
+  // (observed on Windows in #4138; the underlying cause varies by host but
+  // the failure mode — silent success with no file on disk — is the same).
+  const expectedSize = Buffer.byteLength(content, 'utf-8');
+  let stats: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stats = await fs.stat(filePath);
+  } catch (statError) {
+    throw new Error(
+      `Write to ${filePath} reported success but the file is missing on disk. ` +
+      `This indicates a silent write failure in the host filesystem layer.`
+    );
+  }
+  if (stats.size !== expectedSize) {
+    throw new Error(
+      `Write to ${filePath} reported success but on-disk size is ${stats.size} bytes; ` +
+      `expected ${expectedSize} bytes.`
+    );
+  }
 }
 
 
