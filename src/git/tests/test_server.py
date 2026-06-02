@@ -6,6 +6,7 @@ from mcp_server_git.server import (
     git_checkout,
     git_branch,
     git_add,
+    normalize_file_list,
     git_status,
     git_diff_unstaged,
     git_diff_staged,
@@ -108,6 +109,45 @@ def test_git_add_specific_files(test_repository):
     assert "file1.txt" in staged_files
     assert "file2.txt" not in staged_files
     assert result == "Files staged successfully"
+
+def test_git_add_json_encoded_string(test_repository):
+    file1 = Path(test_repository.working_dir) / "file1.txt"
+    file2 = Path(test_repository.working_dir) / "file2.txt"
+    file1.write_text("file 1 content")
+    file2.write_text("file 2 content")
+
+    # Some clients send the files argument as a JSON-encoded array string.
+    result = git_add(test_repository, '["file1.txt", "file2.txt"]')
+
+    staged_files = [item.a_path for item in test_repository.index.diff("HEAD")]
+    assert "file1.txt" in staged_files
+    assert "file2.txt" in staged_files
+    assert result == "Files staged successfully"
+
+def test_git_add_single_path_string(test_repository):
+    file1 = Path(test_repository.working_dir) / "file1.txt"
+    file2 = Path(test_repository.working_dir) / "file2.txt"
+    file1.write_text("file 1 content")
+    file2.write_text("file 2 content")
+
+    # A single bare path string is treated as one file, not split apart.
+    result = git_add(test_repository, "file1.txt")
+
+    staged_files = [item.a_path for item in test_repository.index.diff("HEAD")]
+    assert "file1.txt" in staged_files
+    assert "file2.txt" not in staged_files
+    assert result == "Files staged successfully"
+
+def test_normalize_file_list():
+    # Real lists pass through unchanged.
+    assert normalize_file_list(["a.py", "b.py"]) == ["a.py", "b.py"]
+    # JSON-encoded array strings are parsed into a list.
+    assert normalize_file_list('["a.py", "b.py"]') == ["a.py", "b.py"]
+    # A bare path that is not valid JSON is kept as a single entry.
+    assert normalize_file_list("a.py") == ["a.py"]
+    # A JSON value that is not a list of strings is treated as a single path.
+    assert normalize_file_list('{"a": 1}') == ['{"a": 1}']
+    assert normalize_file_list("[1, 2]") == ["[1, 2]"]
 
 def test_git_status(test_repository):
     result = git_status(test_repository)
