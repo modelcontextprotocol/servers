@@ -131,7 +131,7 @@ async def serve(local_timezone: str | None = None) -> None:
         return [
             Tool(
                 name=TimeTools.GET_CURRENT_TIME.value,
-                description="Get current time in a specific timezones",
+                description="Get current time in a specific timezone",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -212,6 +212,8 @@ async def serve(local_timezone: str | None = None) -> None:
                 TextContent(type="text", text=json.dumps(result.model_dump(), indent=2))
             ]
 
+        except McpError:
+            raise
         except Exception as e:
             raise ValueError(f"Error processing mcp-server-time query: {str(e)}")
 
