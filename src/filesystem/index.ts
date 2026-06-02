@@ -28,6 +28,19 @@ import {
   setAllowedDirectories,
 } from './lib.js';
 
+type InvalidAllowedDirectory = {
+  directory: string;
+  reason: string;
+};
+
+function formatStartupValidationError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
 // Command line argument parsing
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -68,22 +81,31 @@ let allowedDirectories = (await Promise.all(
 
 // Filter to only accessible directories, warn about inaccessible ones
 const accessibleDirectories: string[] = [];
+const invalidDirectories: InvalidAllowedDirectory[] = [];
 for (const dir of allowedDirectories) {
   try {
     const stats = await fs.stat(dir);
     if (stats.isDirectory()) {
       accessibleDirectories.push(dir);
     } else {
-      console.error(`Warning: ${dir} is not a directory, skipping`);
+      const reason = "not a directory";
+      invalidDirectories.push({ directory: dir, reason });
+      console.error(`Warning: Skipping invalid allowed directory "${dir}": ${reason}`);
     }
   } catch (error) {
-    console.error(`Warning: Cannot access directory ${dir}, skipping`);
+    const reason = `cannot access: ${formatStartupValidationError(error)}`;
+    invalidDirectories.push({ directory: dir, reason });
+    console.error(`Warning: Skipping invalid allowed directory "${dir}": ${reason}`);
   }
 }
 
 // Exit only if ALL paths are inaccessible (and some were specified)
 if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
   console.error("Error: None of the specified directories are accessible");
+  console.error("Invalid allowed directories:");
+  for (const { directory, reason } of invalidDirectories) {
+    console.error(`  - ${directory}: ${reason}`);
+  }
   process.exit(1);
 }
 
