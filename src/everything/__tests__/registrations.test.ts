@@ -67,7 +67,9 @@ describe('Registration Index Files', () => {
 
       registerConditionalTools(mockServerWithCapabilities);
 
-      // Should register 4 conditional tools + 3 task-based tools when all capabilities present
+      // Should register 4 conditional tools via registerTool when all capabilities
+      // are present. Task-based tools register via registerToolTask (counted separately),
+      // so they are not included in this registerTool count.
       expect(mockServerWithCapabilities.registerTool).toHaveBeenCalledTimes(4);
 
       const registeredTools = (

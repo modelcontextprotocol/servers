@@ -71,13 +71,12 @@ export const registerTriggerUrlElicitationTool = (server: McpServer) => {
       name,
       config,
       async (args, extra): Promise<CallToolResult> => {
-        const validatedArgs = TriggerUrlElicitationSchema.parse(args);
         const {
           url,
           message,
           elicitationId: requestedElicitationId,
           errorPath,
-        } = validatedArgs;
+        } = args;
 
         const elicitationId = requestedElicitationId ?? randomUUID();
 
@@ -106,19 +105,33 @@ export const registerTriggerUrlElicitationTool = (server: McpServer) => {
           { timeout: 10 * 60 * 1000 /* 10 minutes */ }
         );
 
-        const content: CallToolResult["content"] = [
-          {
+        // Handle different response actions
+        const content: CallToolResult["content"] = [];
+
+        if (elicitationResult.action === "accept") {
+          content.push({
             type: "text",
             text:
-              `URL elicitation action: ${elicitationResult.action}\n` +
+              `✅ User completed the URL elicitation flow.\n` +
               `Elicitation ID: ${elicitationId}\n` +
               `URL: ${url}`,
-          },
-        ];
+          });
+        } else if (elicitationResult.action === "decline") {
+          content.push({
+            type: "text",
+            text: `❌ User declined to open the URL (Elicitation ID: ${elicitationId}).`,
+          });
+        } else if (elicitationResult.action === "cancel") {
+          content.push({
+            type: "text",
+            text: `⚠️ User cancelled the URL elicitation (Elicitation ID: ${elicitationId}).`,
+          });
+        }
 
+        // Include raw result for debugging
         content.push({
           type: "text",
-          text: `Raw result: ${JSON.stringify(elicitationResult, null, 2)}`,
+          text: `\nRaw result: ${JSON.stringify(elicitationResult, null, 2)}`,
         });
 
         return { content };
