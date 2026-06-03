@@ -197,9 +197,10 @@ export class KnowledgeGraphManager {
     // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
   
-    // Filter relations to only include those between filtered entities
+    // Include relations where at least one endpoint matches the search results.
+    // This lets callers discover connections to nodes outside the result set.
     const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
+      filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
     );
   
     const filteredGraph: KnowledgeGraph = {
@@ -219,9 +220,12 @@ export class KnowledgeGraphManager {
     // Create a Set of filtered entity names for quick lookup
     const filteredEntityNames = new Set(filteredEntities.map(e => e.name));
   
-    // Filter relations to only include those between filtered entities
+    // Include relations where at least one endpoint is in the requested set.
+    // Previously this required BOTH endpoints, which meant relations from a
+    // requested node to an unrequested node were silently dropped — making it
+    // impossible to discover a node's connections without reading the full graph.
     const filteredRelations = graph.relations.filter(r => 
-      filteredEntityNames.has(r.from) && filteredEntityNames.has(r.to)
+      filteredEntityNames.has(r.from) || filteredEntityNames.has(r.to)
     );
   
     const filteredGraph: KnowledgeGraph = {
@@ -265,6 +269,12 @@ server.registerTool(
     },
     outputSchema: {
       entities: z.array(EntitySchema)
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     }
   },
   async ({ entities }) => {
@@ -287,6 +297,12 @@ server.registerTool(
     },
     outputSchema: {
       relations: z.array(RelationSchema)
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     }
   },
   async ({ relations }) => {
@@ -315,6 +331,12 @@ server.registerTool(
         entityName: z.string(),
         addedObservations: z.array(z.string())
       }))
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     }
   },
   async ({ observations }) => {
@@ -338,6 +360,12 @@ server.registerTool(
     outputSchema: {
       success: z.boolean(),
       message: z.string()
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
     }
   },
   async ({ entityNames }) => {
@@ -364,6 +392,12 @@ server.registerTool(
     outputSchema: {
       success: z.boolean(),
       message: z.string()
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
     }
   },
   async ({ deletions }) => {
@@ -387,6 +421,12 @@ server.registerTool(
     outputSchema: {
       success: z.boolean(),
       message: z.string()
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
     }
   },
   async ({ relations }) => {
@@ -408,6 +448,12 @@ server.registerTool(
     outputSchema: {
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     }
   },
   async () => {
@@ -431,6 +477,12 @@ server.registerTool(
     outputSchema: {
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     }
   },
   async ({ query }) => {
@@ -454,6 +506,12 @@ server.registerTool(
     outputSchema: {
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     }
   },
   async ({ names }) => {
