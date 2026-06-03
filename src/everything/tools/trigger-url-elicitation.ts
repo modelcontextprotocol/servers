@@ -40,6 +40,12 @@ const config = {
     "response, and the error path (UrlElicitationRequiredError, -32042) which signals the client " +
     "to handle URL elicitation via the error response. Set errorPath=true to use the error path.",
   inputSchema: TriggerUrlElicitationSchema,
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: true,
+  },
 };
 
 /**
