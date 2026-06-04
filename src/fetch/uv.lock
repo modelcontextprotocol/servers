@@ -561,7 +561,7 @@ wheels = [
 
 [[package]]
 name = "mcp-server-fetch"
-version = "0.6.3"
+version = "2026.6.4"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

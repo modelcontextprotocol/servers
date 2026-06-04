@@ -1,6 +1,6 @@
 {
   "name": "@modelcontextprotocol/server-memory",
-  "version": "0.6.3",
+  "version": "2026.6.4",
   "description": "MCP server for enabling memory for Claude through a knowledge graph",
   "license": "SEE LICENSE IN LICENSE",
   "mcpName": "io.github.modelcontextprotocol/server-memory",
