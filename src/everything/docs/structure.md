@@ -156,7 +156,7 @@ src/everything
 - `trigger-elicitation-request.ts`
   - Registers a `trigger-elicitation-request` tool that sends an `elicitation/create` request to the client/LLM and returns the elicitation result.
 - `trigger-url-elicitation.ts`
-  - Registers a `trigger-url-elicitation` tool that either sends an out-of-band URL-mode `elicitation/create` request (`mode: "url"`) including an `elicitationId` (request path) or throws `UrlElicitationRequiredError` (`-32042`) for client-handled URL elicitation (error path).
+  - Registers a `trigger-url-elicitation` tool that either sends an out-of-band URL-mode `elicitation/create` request (`mode: "url"`) including an `elicitationId` (request path) or throws `UrlElicitationRequiredError` (`-32042`) for client-handled URL elicitation (error path). On the error path the carried prerequisite elicitation points at a different URL than the failing one (`https://modelcontextprotocol.io`), and when the client satisfies it and retries the same call, the retry ignores `errorPath` and proceeds via the request path — so the client does not loop on the same error.
 - `trigger-elicitation-request-async.ts`
   - Registers a `trigger-elicitation-request-async` tool that demonstrates bidirectional MCP tasks for elicitation. Sends an elicitation request with task metadata, then polls the client's `tasks/get` endpoint for completion status before fetching the final result.
 - `trigger-sampling-request.ts`

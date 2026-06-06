@@ -913,7 +913,7 @@ describe('Tools', () => {
       );
     });
 
-    it('should throw MCP error -32042 with required URL elicitation data when errorPath is true', async () => {
+    it('should throw MCP error -32042 with a prerequisite elicitation pointing at a different URL when errorPath is true', async () => {
       const handlers: Map<string, Function> = new Map();
       const mockServer = {
         registerTool: vi.fn((name: string, config: any, handler: Function) => {
@@ -928,7 +928,7 @@ describe('Tools', () => {
 
       const handler = handlers.get('trigger-url-elicitation')!;
 
-      expect.assertions(2);
+      expect.assertions(5);
 
       try {
         await handler(
@@ -942,13 +942,74 @@ describe('Tools', () => {
         );
       } catch (error: any) {
         expect(error.code).toBe(-32042);
-        expect(error.data.elicitations[0]).toEqual({
-          mode: 'url',
-          url: 'https://example.com/connect',
-          message: 'Authorization is required to continue.',
-          elicitationId: 'elicitation-xyz',
-        });
+        const prerequisite = error.data.elicitations[0];
+        expect(prerequisite.mode).toBe('url');
+        // The prerequisite must NOT reuse the failing URL, otherwise the client
+        // would complete it, retry, hit the same error, and loop forever.
+        expect(prerequisite.url).toBe('https://modelcontextprotocol.io');
+        expect(prerequisite.url).not.toBe('https://example.com/connect');
+        // It carries its own elicitation id for the prerequisite itself.
+        expect(typeof prerequisite.elicitationId).toBe('string');
       }
+    });
+
+    it('should ignore errorPath and take the request path when the same call is retried after the prerequisite', async () => {
+      const handlers: Map<string, Function> = new Map();
+      const mockSendRequest = vi.fn().mockResolvedValue({ action: 'accept' });
+
+      const mockServer = {
+        registerTool: vi.fn((name: string, config: any, handler: Function) => {
+          handlers.set(name, handler);
+        }),
+        server: {
+          getClientCapabilities: vi.fn(() => ({ elicitation: { url: {} } })),
+        },
+      } as unknown as McpServer;
+
+      registerTriggerUrlElicitationTool(mockServer);
+
+      const handler = handlers.get('trigger-url-elicitation')!;
+      // A real client retries with the *same* arguments and does not echo the
+      // prerequisite's elicitationId. Note these args omit elicitationId, so the
+      // correlation must rely on stable inputs (session + url), not a per-call
+      // random id.
+      const args = {
+        url: 'https://example.com/connect',
+        message: 'Authorization is required to continue.',
+        errorPath: true,
+      };
+      const extra = { sessionId: 'session-1', sendRequest: mockSendRequest };
+
+      // First call: error path issues the prerequisite and throws -32042.
+      let prerequisiteUrl: string | undefined;
+      try {
+        await handler(args, extra);
+        throw new Error('expected first call to throw');
+      } catch (error: any) {
+        expect(error.code).toBe(-32042);
+        prerequisiteUrl = error.data.elicitations[0].url;
+        expect(prerequisiteUrl).toBe('https://modelcontextprotocol.io');
+        expect(mockSendRequest).not.toHaveBeenCalled();
+      }
+
+      // Plain retry with identical arguments: errorPath is ignored and the call
+      // proceeds via the request path instead of throwing the prerequisite again.
+      const result = await handler({ ...args }, extra);
+
+      expect(mockSendRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'elicitation/create',
+          params: expect.objectContaining({
+            mode: 'url',
+            url: 'https://example.com/connect',
+          }),
+        }),
+        expect.anything(),
+        expect.anything()
+      );
+      expect(result.content[0].text).toContain(
+        '✅ User completed the URL elicitation flow.'
+      );
     });
   });
 
