@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerEchoTool, EchoSchema } from '../tools/echo.js';
 import { registerGetSumTool } from '../tools/get-sum.js';
@@ -13,7 +13,10 @@ import { registerToggleSimulatedLoggingTool } from '../tools/toggle-simulated-lo
 import { registerToggleSubscriberUpdatesTool } from '../tools/toggle-subscriber-updates.js';
 import { registerTriggerSamplingRequestTool } from '../tools/trigger-sampling-request.js';
 import { registerTriggerElicitationRequestTool } from '../tools/trigger-elicitation-request.js';
-import { registerTriggerUrlElicitationTool } from '../tools/trigger-url-elicitation.js';
+import {
+  registerTriggerUrlElicitationTool,
+  __resetIssuedErrorPathElicitations,
+} from '../tools/trigger-url-elicitation.js';
 import { registerGetRootsListTool } from '../tools/get-roots-list.js';
 import { registerGZipFileAsResourceTool } from '../tools/gzip-file-as-resource.js';
 
@@ -708,6 +711,12 @@ describe('Tools', () => {
   });
 
   describe('trigger-url-elicitation', () => {
+    // The error-path marker is module-level state shared across cases; reset it
+    // so tests are independent of order and of each other's leftover keys.
+    beforeEach(() => {
+      __resetIssuedErrorPathElicitations();
+    });
+
     it('should not register when client does not support URL elicitation', () => {
       const handlers: Map<string, Function> = new Map();
       const mockServer = {
