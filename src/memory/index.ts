@@ -269,6 +269,12 @@ server.registerTool(
     },
     outputSchema: {
       entities: z.array(EntitySchema)
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     }
   },
   async ({ entities }) => {
@@ -291,6 +297,12 @@ server.registerTool(
     },
     outputSchema: {
       relations: z.array(RelationSchema)
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     }
   },
   async ({ relations }) => {
@@ -319,6 +331,12 @@ server.registerTool(
         entityName: z.string(),
         addedObservations: z.array(z.string())
       }))
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
     }
   },
   async ({ observations }) => {
@@ -342,6 +360,12 @@ server.registerTool(
     outputSchema: {
       success: z.boolean(),
       message: z.string()
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
     }
   },
   async ({ entityNames }) => {
@@ -368,6 +392,12 @@ server.registerTool(
     outputSchema: {
       success: z.boolean(),
       message: z.string()
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
     }
   },
   async ({ deletions }) => {
@@ -391,6 +421,12 @@ server.registerTool(
     outputSchema: {
       success: z.boolean(),
       message: z.string()
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
     }
   },
   async ({ relations }) => {
@@ -412,6 +448,12 @@ server.registerTool(
     outputSchema: {
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     }
   },
   async () => {
@@ -435,6 +477,12 @@ server.registerTool(
     outputSchema: {
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     }
   },
   async ({ query }) => {
@@ -458,6 +506,12 @@ server.registerTool(
     outputSchema: {
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
     }
   },
   async ({ names }) => {
