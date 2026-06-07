@@ -28,7 +28,8 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "diff": "^8.0.3",
     "glob": "^10.5.0",
-    "minimatch": "^10.0.1"
+    "minimatch": "^10.0.1",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/diff": "^5.0.9",
