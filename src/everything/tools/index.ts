@@ -17,6 +17,7 @@ import { registerTriggerSamplingRequestTool } from "./trigger-sampling-request.j
 import { registerTriggerSamplingRequestAsyncTool } from "./trigger-sampling-request-async.js";
 import { registerTriggerElicitationRequestAsyncTool } from "./trigger-elicitation-request-async.js";
 import { registerSimulateResearchQueryTool } from "./simulate-research-query.js";
+import { registerTriggerUrlElicitationTool } from "./trigger-url-elicitation.js";
 
 /**
  * Register the tools with the MCP server.
@@ -44,6 +45,7 @@ export const registerTools = (server: McpServer) => {
 export const registerConditionalTools = (server: McpServer) => {
   registerGetRootsListTool(server);
   registerTriggerElicitationRequestTool(server);
+  registerTriggerUrlElicitationTool(server);
   registerTriggerSamplingRequestTool(server);
   // Task-based research tool (uses experimental tasks API)
   registerSimulateResearchQueryTool(server);
