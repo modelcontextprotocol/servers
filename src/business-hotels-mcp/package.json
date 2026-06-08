@@ -1,0 +1,60 @@
+{
+  "name": "business-hotels-mcp",
+  "mcpName": "io.github.businesshotelsdeveloper-dot/businesshotels",
+  "version": "1.0.2",
+  "description": "Universal Agentic API for real-time hotel pricing and booking automation via BusinessHotels.com",
+  "main": "build/index.js",
+  "type": "module",
+  "bin": {
+    "business-hotels-mcp": "build/index.js"
+  },
+  "mcp": {
+    "name": "Business Hotels AI Price Finder",
+    "description": "Autonomous protocol for hotel discovery and real-time rate verification using MCP 1.0.",
+    "logo": "https://www.businesshotels.com/img/BusinessHotels-ai-logo-f.png",
+    "categories": [
+      "travel",
+      "hospitality",
+      "booking"
+    ],
+    "links": {
+      "homepage": "https://www.businesshotels.com/ai-hotel-finder.html",
+      "documentation": "https://www.businesshotels.com/tool-config.html",
+      "repository": "https://github.com/businesshotelsdeveloper-dot/businesshotels.com"
+    }
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "prepare": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/businesshotelsdeveloper-dot/businesshotels.com.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "travel",
+    "hotels",
+    "booking",
+    "agentic-ai",
+    "mcp-server",
+    "real-time-pricing"
+  ],
+  "author": "Drago Maximov",
+  "license": "MIT",
+  "homepage": "https://www.businesshotels.com",
+  "bugs": {
+    "url": "https://github.com/businesshotelsdeveloper-dot/businesshotels.com/issues"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

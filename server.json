@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.businesshotelsdeveloper-dot/businesshotels.com",
+  "description": "BusinessHotels.com Universal Agentic API providing real-time hotel price verification.",
+  "repository": {
+    "url": "https://github.com/businesshotelsdeveloper-dot/businesshotels.com",
+    "source": "github"
+  },
+  "version": "2.0.2",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "business-hotels-mcp",
+      "version": "2.0.2",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
