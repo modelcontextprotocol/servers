@@ -32,13 +32,21 @@ export function convertToWindowsPath(p: string): string {
 }
 
 /**
- * Normalizes path by standardizing format while preserving OS-specific behavior
+ * Normalizes path by standardizing format while preserving OS-specific behavior.
+ * Also performs Unicode normalization to ensure consistent handling of non-ASCII characters
+ * like German umlauts (ä, ö, ü, ß).
  * @param p The path to normalize
- * @returns Normalized path
+ * @returns Normalized path with consistent Unicode representation (NFC)
  */
 export function normalizePath(p: string): string {
   // Remove any surrounding quotes and whitespace
   p = p.trim().replace(/^["']|["']$/g, '');
+  
+  // Unicode normalization: Convert to NFC (Canonical Decomposition, followed by Canonical Composition)
+  // This ensures umlauts like 'ä' are represented consistently as single characters (\u00E4)
+  // rather than as decomposed forms (a + combining diaeresis: \u0061\u0308)
+  // This is critical for string comparisons in path validation
+  p = p.normalize('NFC');
 
   // Check if this is a Unix path that should not be converted
   // WSL paths (/mnt/) should ALWAYS be preserved as they work correctly in WSL with Node.js fs
