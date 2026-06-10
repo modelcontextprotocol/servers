@@ -29,6 +29,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   mcp-diff:
     name: Diff Everything Server Interface
@@ -42,7 +46,7 @@ jobs:
           ref: ${{ github.event.inputs.target_ref || github.ref }}
 
       - name: Run MCP Server Diff
-        uses: SamMorrowDrums/mcp-server-diff@a5555e85d68eaa014a334ae7d12b73787f2c49cc # v2.3.5
+        uses: SamMorrowDrums/mcp-server-diff@f7e5e58a4b0c4f68a5827adad2292953bb1ab9ef # v2.3.5
         with:
           setup_node: 'true'
           node_version: '22'
