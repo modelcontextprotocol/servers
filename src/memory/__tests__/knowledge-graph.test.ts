@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { KnowledgeGraphManager, Entity, Relation, KnowledgeGraph } from '../index.js';
+import { KnowledgeGraphManager, Entity, Relation, KnowledgeGraph, readGraphResource } from '../index.js';
 
 describe('KnowledgeGraphManager', () => {
   let manager: KnowledgeGraphManager;
@@ -514,5 +514,51 @@ describe('KnowledgeGraphManager', () => {
       expect(result.relations).toHaveLength(1);
       expect(result.relations[0]).not.toHaveProperty('type');
     });
+  });
+});
+
+describe('readGraphResource', () => {
+  let manager: KnowledgeGraphManager;
+  let testFilePath: string;
+
+  beforeEach(() => {
+    testFilePath = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      `test-resource-${Date.now()}.jsonl`
+    );
+    manager = new KnowledgeGraphManager(testFilePath);
+  });
+
+  afterEach(async () => {
+    try {
+      await fs.unlink(testFilePath);
+    } catch {
+      // Ignore if the file doesn't exist
+    }
+  });
+
+  it('returns the full graph as a JSON resource', async () => {
+    await manager.createEntities([
+      { name: 'Alice', entityType: 'person', observations: ['likes coffee'] },
+    ]);
+
+    const result = await readGraphResource(manager, 'memory://graph');
+
+    expect(result.contents).toHaveLength(1);
+    expect(result.contents[0].uri).toBe('memory://graph');
+    expect(result.contents[0].mimeType).toBe('application/json');
+
+    const data = JSON.parse(result.contents[0].text);
+    expect(data.entities).toHaveLength(1);
+    expect(data.entities[0].name).toBe('Alice');
+    expect(data).toHaveProperty('relations');
+  });
+
+  it('returns an empty graph when nothing has been stored', async () => {
+    const result = await readGraphResource(manager);
+
+    const data = JSON.parse(result.contents[0].text);
+    expect(data.entities).toEqual([]);
+    expect(data.relations).toEqual([]);
   });
 });

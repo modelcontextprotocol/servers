@@ -253,6 +253,24 @@ const RelationSchema = z.object({
 });
 
 // The server instance and tools exposed to Claude
+// Build the MCP resource contents for the full knowledge graph.
+// Exported so it can be unit-tested independently of the server transport.
+export async function readGraphResource(
+  manager: KnowledgeGraphManager,
+  uri: string = "memory://graph",
+) {
+  const graph = await manager.readGraph();
+  return {
+    contents: [
+      {
+        uri,
+        mimeType: "application/json",
+        text: JSON.stringify(graph, null, 2),
+      },
+    ],
+  };
+}
+
 const server = new McpServer({
   name: "memory-server",
   version: "0.6.3",
@@ -521,6 +539,20 @@ server.registerTool(
       structuredContent: { ...graph }
     };
   }
+);
+
+// Expose the full knowledge graph as a readable resource (read-only),
+// complementing the `read_graph` tool. Resources are the idiomatic way to
+// surface read-only data so MCP clients can attach it as context.
+server.registerResource(
+  "knowledge-graph",
+  "memory://graph",
+  {
+    title: "Knowledge Graph",
+    description: "The full knowledge graph (all entities and relations) as JSON",
+    mimeType: "application/json",
+  },
+  async (uri) => readGraphResource(knowledgeGraphManager, uri.href),
 );
 
 async function main() {

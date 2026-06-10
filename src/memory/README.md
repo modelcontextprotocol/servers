@@ -125,6 +125,13 @@ Example:
     - Relations between requested entities
   - Silently skips non-existent nodes
 
+### Resources
+
+- **`memory://graph`** (`knowledge-graph`)
+  - The full knowledge graph (all entities and relations) as JSON
+  - MIME type: `application/json`
+  - Read-only; lets MCP clients attach the whole graph as context without calling the `read_graph` tool
+
 # Usage with Claude Desktop
 
 ### Setup
