@@ -28,6 +28,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,6 +47,7 @@ jobs:
           ref: ${{ github.event.inputs.target_ref || github.ref }}
 
       - name: Run MCP Server Diff
+        id: mcp_diff
         uses: SamMorrowDrums/mcp-server-diff@f7e5e58a4b0c4f68a5827adad2292953bb1ab9ef # v2.3.5
         with:
           setup_node: 'true'
@@ -71,3 +73,43 @@ jobs:
           echo "- New resources, prompts, or capabilities" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Review changes to ensure they align with the intended protocol updates." >> $GITHUB_STEP_SUMMARY
+
+      # Post (or update) a sticky PR comment so reviewers can see the diff without
+      # navigating to the Actions tab. The same comment is updated on subsequent
+      # pushes via the `header` key. Skipped for PRs from forks where GITHUB_TOKEN
+      # is read-only — the report is still available in the workflow summary and
+      # as an uploaded artifact.
+      - name: Build PR comment body
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        id: comment_body
+        run: |
+          {
+            echo 'body<<MCP_DIFF_EOF'
+            echo '## 🔍 Everything Server MCP Interface Diff'
+            echo ''
+            if [ "${{ steps.mcp_diff.outputs.status }}" = "passed" ]; then
+              echo '✅ **No interface changes detected** between this PR and its merge-base.'
+            else
+              echo '⚠️ **Interface changes detected** — review below to confirm they are intentional.'
+            fi
+            echo ''
+            if [ -f conformance-report/CONFORMANCE_REPORT.md ]; then
+              echo '<details><summary>Full report</summary>'
+              echo ''
+              tail -n +5 conformance-report/CONFORMANCE_REPORT.md
+              echo ''
+              echo '</details>'
+            else
+              echo '_Report file not found — see the workflow logs for details._'
+            fi
+            echo ''
+            echo "<sub>Updated by [\`${{ github.workflow }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) · commit \`${{ github.event.pull_request.head.sha }}\`</sub>"
+            echo 'MCP_DIFF_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post / update sticky PR comment
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+        with:
+          header: everything-server-mcp-diff
+          message: ${{ steps.comment_body.outputs.body }}
