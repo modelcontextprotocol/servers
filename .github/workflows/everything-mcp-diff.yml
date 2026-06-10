@@ -11,6 +11,11 @@ on:
     branches: [main]
     paths:
       - 'src/everything/**'
+    # TypeScript release tags also trigger a run, comparing against the
+    # previous typescript-servers-* tag (auto-detected by mcp-server-diff).
+    # This surfaces the cumulative interface delta for each release.
+    tags:
+      - 'typescript-servers-*'
   pull_request:
     paths:
       - 'src/everything/**'
