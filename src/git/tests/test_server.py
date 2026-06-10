@@ -16,6 +16,8 @@ from mcp_server_git.server import (
     git_create_branch,
     git_show,
     validate_repo_path,
+    build_commit_message_prompt,
+    build_summarize_changes_prompt,
 )
 import shutil
 
@@ -482,3 +484,59 @@ def test_git_branch_rejects_contains_flag_injection(test_repository):
 
     with pytest.raises(BadName):
         git_branch(test_repository, "local", not_contains="--exec=evil")
+
+
+# Tests for prompts (git-commit-message, git-summarize-changes)
+
+def test_build_commit_message_prompt_includes_staged_diff(test_repository):
+    file_path = Path(test_repository.working_dir) / "feature.txt"
+    file_path.write_text("hello prompt world")
+    test_repository.index.add(["feature.txt"])
+
+    prompt = build_commit_message_prompt(test_repository)
+
+    assert "Conventional Commits" in prompt
+    assert "feature.txt" in prompt
+    assert "hello prompt world" in prompt  # the staged diff is embedded in the prompt
+
+
+def test_build_commit_message_prompt_no_staged_changes(test_repository):
+    prompt = build_commit_message_prompt(test_repository)
+
+    assert "no staged changes" in prompt.lower()
+
+
+def test_build_summarize_changes_prompt_unstaged(test_repository):
+    file_path = Path(test_repository.working_dir) / "test.txt"
+    file_path.write_text("rewritten content")
+
+    prompt = build_summarize_changes_prompt(test_repository)
+
+    assert "working tree" in prompt
+    assert "rewritten content" in prompt
+
+
+def test_build_summarize_changes_prompt_with_target(test_repository):
+    default_branch = test_repository.active_branch.name
+    test_repository.git.checkout("-b", "summary-branch")
+    file_path = Path(test_repository.working_dir) / "test.txt"
+    file_path.write_text("branch content")
+    test_repository.index.add(["test.txt"])
+    test_repository.index.commit("branch commit")
+
+    prompt = build_summarize_changes_prompt(test_repository, default_branch)
+
+    assert default_branch in prompt
+    assert "branch content" in prompt
+
+
+def test_build_summarize_changes_prompt_no_changes(test_repository):
+    prompt = build_summarize_changes_prompt(test_repository)
+
+    assert "no changes" in prompt.lower()
+
+
+def test_build_summarize_changes_prompt_rejects_flag_injection(test_repository):
+    """The summarize prompt reuses git_diff, so it inherits the '-' guard."""
+    with pytest.raises(BadName):
+        build_summarize_changes_prompt(test_repository, "--output=/tmp/evil")

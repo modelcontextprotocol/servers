@@ -96,6 +96,23 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
    - Returns: List of branches
 
+### Prompts
+
+In addition to tools, the server exposes prompts that assemble a ready-to-send message from real repository data:
+
+1. `git-commit-message`
+   - Generates a [Conventional Commits](https://www.conventionalcommits.org/) message for the currently staged changes
+   - Arguments:
+     - `repo_path` (string, required): Path to Git repository
+   - Returns: A user message embedding the staged diff, with instructions to draft the commit message
+
+2. `git-summarize-changes`
+   - Summarizes repository changes in plain language
+   - Arguments:
+     - `repo_path` (string, required): Path to Git repository
+     - `target` (string, optional): Branch or commit to diff against (defaults to unstaged working-tree changes)
+   - Returns: A user message embedding the diff, with instructions to summarize it
+
 ## Installation
 
 ### Using uv (recommended)
