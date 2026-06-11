@@ -55,7 +55,8 @@ src/everything
      │   ├── trigger-elicitation-request-async.ts
      │   ├── trigger-long-running-operation.ts
      │   ├── trigger-sampling-request.ts
-     │   └── trigger-sampling-request-async.ts
+     │   ├── trigger-sampling-request-async.ts
+     │   └── trigger-url-elicitation.ts
      └── transports
          ├── sse.ts
          ├── stdio.ts
@@ -85,8 +86,8 @@ src/everything
 
 - `architecture.md`
   - This document.
-- `server-instructions.md`
-  - Human‑readable instructions intended to be passed to the client/LLM as for guidance on server use. Loaded by the server at startup and returned in the "initialize" exchange.
+- `instructions.md`
+  - Human‑readable instructions intended to be passed to the client/LLM as guidance on server use. Loaded by the server at startup and returned in the initialize exchange.
 
 ### `prompts/`
 
@@ -154,6 +155,8 @@ src/everything
   - Registers a `simulate-research-query` task-based tool that demonstrates the MCP Tasks feature (SEP-1686). Simulates a multi-stage research operation with progress updates. If the query is marked as ambiguous and the client supports elicitation, it pauses mid-execution to request clarification via `elicitation/create`. Uses `server.experimental.tasks.registerToolTask()` with `execution: { taskSupport: "required" }`.
 - `trigger-elicitation-request.ts`
   - Registers a `trigger-elicitation-request` tool that sends an `elicitation/create` request to the client/LLM and returns the elicitation result.
+- `trigger-url-elicitation.ts`
+  - Registers a `trigger-url-elicitation` tool that either sends an out-of-band URL-mode `elicitation/create` request (`mode: "url"`) including an `elicitationId` (request path) or throws `UrlElicitationRequiredError` (`-32042`) for client-handled URL elicitation (error path). On the error path the carried prerequisite elicitation points at a different URL than the failing one (`https://modelcontextprotocol.io`), and when the client satisfies it and retries the same call, the retry ignores `errorPath` and proceeds via the request path — so the client does not loop on the same error.
 - `trigger-elicitation-request-async.ts`
   - Registers a `trigger-elicitation-request-async` tool that demonstrates bidirectional MCP tasks for elicitation. Sends an elicitation request with task metadata, then polls the client's `tasks/get` endpoint for completion status before fetching the final result.
 - `trigger-sampling-request.ts`
