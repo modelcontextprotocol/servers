@@ -50,6 +50,7 @@ This is a curated collection of community-built frameworks and resources that si
 - **[Awesome MCP Servers by appcypher](https://github.com/appcypher/awesome-mcp-servers)** - A curated list of MCP servers by **[Stephen Akinyemi](https://github.com/appcypher)**
 - **[Awesome MCP Servers by punkpeye](https://github.com/punkpeye/awesome-mcp-servers)** (**[website](https://glama.ai/mcp/servers)**) - A curated list of MCP servers by **[Frank Fiegel](https://github.com/punkpeye)**
 - **[Awesome MCP Servers by wong2](https://github.com/wong2/awesome-mcp-servers)** (**[website](https://mcpservers.org)**) - A curated list of MCP servers by **[wong2](https://github.com/wong2)**
+- **[NowSecure MCP Server](https://github.com/tatavarthitarun/nowsecure-mcp-server)** (**[npm](https://www.npmjs.com/package/nowsecure-mcp-server)**) - MCP server for NowSecure Platform with PDF remediation report generation, bypassing broken UI export by **[Tatavarthi Tarun](https://github.com/tatavarthitarun)**
 - **[Awesome Remote MCP Servers by JAW9C](https://github.com/jaw9c/awesome-remote-mcp-servers)** - A curated list of **remote** MCP servers, including their authentication support by **[JAW9C](https://github.com/jaw9c)**
 - **[Discord Server](https://glama.ai/mcp/discord)** – A community discord server dedicated to MCP by **[Frank Fiegel](https://github.com/punkpeye)**
 - **[Install This MCP](https://installthismcp.com)** - Reduce Installation Friction with beautiful installation guides
