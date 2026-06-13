@@ -28,6 +28,11 @@ dependencies = [
 [project.scripts]
 mcp-server-fetch = "mcp_server_fetch:main"
 
+[project.urls]
+Repository = "https://github.com/modelcontextprotocol/servers"
+Source = "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch"
+Issues = "https://github.com/modelcontextprotocol/servers/issues"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

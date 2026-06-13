@@ -25,6 +25,11 @@ dependencies = [
 [project.scripts]
 mcp-server-git = "mcp_server_git:main"
 
+[project.urls]
+Repository = "https://github.com/modelcontextprotocol/servers"
+Source = "https://github.com/modelcontextprotocol/servers/tree/main/src/git"
+Issues = "https://github.com/modelcontextprotocol/servers/issues"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
