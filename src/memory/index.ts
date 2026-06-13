@@ -13,34 +13,55 @@ export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.met
 // Handle backward compatibility: migrate memory.json to memory.jsonl if needed
 export async function ensureMemoryFilePath(): Promise<string> {
   if (process.env.MEMORY_FILE_PATH) {
-    // Custom path provided, use it as-is (with absolute path resolution)
-    return path.isAbsolute(process.env.MEMORY_FILE_PATH)
+    const configuredPath = path.isAbsolute(process.env.MEMORY_FILE_PATH)
       ? process.env.MEMORY_FILE_PATH
-      : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH);
+      : path.resolve(process.cwd(), process.env.MEMORY_FILE_PATH);
+
+    return normalizeMemoryStoragePath(configuredPath);
   }
-  
-  // No custom path set, check for backward compatibility migration
+
+  // No custom path set, check for backward compatibility migration in package dir
   const oldMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
   const newMemoryPath = defaultMemoryPath;
-  
+
   try {
-    // Check if old file exists and new file doesn't
     await fs.access(oldMemoryPath);
     try {
       await fs.access(newMemoryPath);
-      // Both files exist, use new one (no migration needed)
       return newMemoryPath;
     } catch {
-      // Old file exists, new file doesn't - migrate
       console.error('DETECTED: Found legacy memory.json file, migrating to memory.jsonl for JSONL format compatibility');
       await fs.rename(oldMemoryPath, newMemoryPath);
       console.error('COMPLETED: Successfully migrated memory.json to memory.jsonl');
       return newMemoryPath;
     }
   } catch {
-    // Old file doesn't exist, use new path
     return newMemoryPath;
   }
+}
+
+async function normalizeMemoryStoragePath(memoryPath: string): Promise<string> {
+  await fs.mkdir(path.dirname(memoryPath), { recursive: true });
+
+  if (memoryPath.endsWith('.json') && !memoryPath.endsWith('.jsonl')) {
+    const jsonlPath = `${memoryPath}l`;
+    try {
+      await fs.access(memoryPath);
+      try {
+        await fs.access(jsonlPath);
+        return jsonlPath;
+      } catch {
+        console.error(`DETECTED: Found legacy memory file at ${memoryPath}, migrating to JSONL format`);
+        await fs.rename(memoryPath, jsonlPath);
+        console.error(`COMPLETED: Successfully migrated to ${jsonlPath}`);
+        return jsonlPath;
+      }
+    } catch {
+      return jsonlPath;
+    }
+  }
+
+  return memoryPath;
 }
 
 // Initialize memory file path (will be set during startup)
