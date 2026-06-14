@@ -2,6 +2,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -260,6 +261,18 @@ const server = new McpServer({
 
 const RESOURCE_URI = "memory://knowledge-graph";
 
+// Track which resource URIs the connected client has subscribed to, so we only
+// emit notifications/resources/updated to a client that asked for them.
+const resourceSubscribers = new Set<string>();
+
+// Notify subscribers that the knowledge graph resource changed. No-op when the
+// client has not subscribed.
+function notifyGraphUpdated() {
+  if (resourceSubscribers.has(RESOURCE_URI)) {
+    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
+  }
+}
+
 // Register create_entities tool
 server.registerTool(
   "create_entities",
@@ -275,7 +288,7 @@ server.registerTool(
   },
   async ({ entities }) => {
     const result = await knowledgeGraphManager.createEntities(entities);
-    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
+    notifyGraphUpdated();
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: { entities: result }
@@ -298,7 +311,7 @@ server.registerTool(
   },
   async ({ relations }) => {
     const result = await knowledgeGraphManager.createRelations(relations);
-    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
+    notifyGraphUpdated();
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: { relations: result }
@@ -327,7 +340,7 @@ server.registerTool(
   },
   async ({ observations }) => {
     const result = await knowledgeGraphManager.addObservations(observations);
-    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
+    notifyGraphUpdated();
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
       structuredContent: { results: result }
@@ -351,7 +364,7 @@ server.registerTool(
   },
   async ({ entityNames }) => {
     await knowledgeGraphManager.deleteEntities(entityNames);
-    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
+    notifyGraphUpdated();
     return {
       content: [{ type: "text" as const, text: "Entities deleted successfully" }],
       structuredContent: { success: true, message: "Entities deleted successfully" }
@@ -378,7 +391,7 @@ server.registerTool(
   },
   async ({ deletions }) => {
     await knowledgeGraphManager.deleteObservations(deletions);
-    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
+    notifyGraphUpdated();
     return {
       content: [{ type: "text" as const, text: "Observations deleted successfully" }],
       structuredContent: { success: true, message: "Observations deleted successfully" }
@@ -402,7 +415,7 @@ server.registerTool(
   },
   async ({ relations }) => {
     await knowledgeGraphManager.deleteRelations(relations);
-    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
+    notifyGraphUpdated();
     return {
       content: [{ type: "text" as const, text: "Relations deleted successfully" }],
       structuredContent: { success: true, message: "Relations deleted successfully" }
@@ -504,10 +517,25 @@ export function registerKnowledgeGraphResource(
   );
 }
 
+// Enable clients to subscribe to the knowledge-graph resource and receive
+// notifications/resources/updated when mutation tools change the graph.
+export function registerKnowledgeGraphSubscriptions(server: McpServer) {
+  server.server.registerCapabilities({ resources: { subscribe: true } });
+  server.server.setRequestHandler(SubscribeRequestSchema, async (request) => {
+    resourceSubscribers.add(request.params.uri);
+    return {};
+  });
+  server.server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
+    resourceSubscribers.delete(request.params.uri);
+    return {};
+  });
+}
+
 async function main() {
   MEMORY_FILE_PATH = await ensureMemoryFilePath();
   knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_FILE_PATH);
   registerKnowledgeGraphResource(server, knowledgeGraphManager);
+  registerKnowledgeGraphSubscriptions(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
