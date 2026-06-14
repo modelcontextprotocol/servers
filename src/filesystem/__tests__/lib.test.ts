@@ -380,6 +380,29 @@ describe('Lib Functions', () => {
         expect(result).toEqual([expectedResult]);
       });
 
+      it('matches glob patterns against Windows-style relative paths', async () => {
+        const mockEntries = [
+          { name: 'index.ts', isDirectory: () => false }
+        ];
+
+        mockFs.readdir.mockResolvedValueOnce(mockEntries as any);
+        mockFs.realpath.mockImplementation(async (inputPath: any) => inputPath.toString());
+        vi.spyOn(path, 'relative').mockReturnValueOnce('src\\index.ts');
+
+        const testDir = process.platform === 'win32' ? 'C:\\allowed\\dir' : '/allowed/dir';
+        const allowedDirs = process.platform === 'win32' ? ['C:\\allowed'] : ['/allowed'];
+
+        const result = await searchFilesWithValidation(
+          testDir,
+          '**/*.ts',
+          allowedDirs,
+          {}
+        );
+
+        const expectedResult = process.platform === 'win32' ? 'C:\\allowed\\dir\\index.ts' : '/allowed/dir/index.ts';
+        expect(result).toEqual([expectedResult]);
+      });
+
       it('handles complex exclude patterns with wildcards', async () => {
         const mockEntries = [
           { name: 'test.txt', isDirectory: () => false },
