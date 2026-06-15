@@ -11,6 +11,12 @@ const config = {
     "Demonstrates bidirectional MCP tasks where the server sends an elicitation request and " +
     "the client handles user input asynchronously, allowing the server to poll for completion.",
   inputSchema: {},
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
 };
 
 // Poll interval in milliseconds
@@ -155,12 +161,10 @@ export const registerTriggerElicitationRequestAsyncTool = (
               method: "tasks/get",
               params: { taskId },
             },
-            z
-              .object({
-                status: z.string(),
-                statusMessage: z.string().optional(),
-              })
-              .passthrough()
+            z.looseObject({
+              status: z.string(),
+              statusMessage: z.string().optional(),
+            })
           );
 
           taskStatus = pollResult.status;

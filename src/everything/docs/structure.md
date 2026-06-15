@@ -48,11 +48,15 @@ src/everything
      │   ├── get-sum.ts
      │   ├── get-tiny-image.ts
      │   ├── gzip-file-as-resource.ts
+     │   ├── simulate-research-query.ts
      │   ├── toggle-simulated-logging.ts
      │   ├── toggle-subscriber-updates.ts
      │   ├── trigger-elicitation-request.ts
+     │   ├── trigger-elicitation-request-async.ts
      │   ├── trigger-long-running-operation.ts
-     │   └── trigger-sampling-request.ts
+     │   ├── trigger-sampling-request.ts
+     │   ├── trigger-sampling-request-async.ts
+     │   └── trigger-url-elicitation.ts
      └── transports
          ├── sse.ts
          ├── stdio.ts
@@ -82,8 +86,8 @@ src/everything
 
 - `architecture.md`
   - This document.
-- `server-instructions.md`
-  - Human‑readable instructions intended to be passed to the client/LLM as for guidance on server use. Loaded by the server at startup and returned in the "initialize" exchange.
+- `instructions.md`
+  - Human‑readable instructions intended to be passed to the client/LLM as guidance on server use. Loaded by the server at startup and returned in the initialize exchange.
 
 ### `prompts/`
 
@@ -129,7 +133,7 @@ src/everything
 - `echo.ts`
   - Registers an `echo` tool that takes a message and returns `Echo: {message}`.
 - `get-annotated-message.ts`
-  - Registers an `annotated-message` tool which demonstrates annotated content items by emitting a primary `text` message with `annotations` that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true.
+  - Registers a `get-annotated-message` tool which demonstrates content-level annotations. Emits a primary `text` message with content `annotations` (`priority`, `audience`) that vary by `messageType` (`"error" | "success" | "debug"`), and optionally includes an annotated `image` (tiny PNG) when `includeImage` is true. All tools in this server include tool-level annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
 - `get-env.ts`
   - Registers a `get-env` tool that returns the current process environment variables as formatted JSON text; useful for debugging configuration.
 - `get-resource-links.ts`
@@ -147,18 +151,26 @@ src/everything
     - `GZIP_MAX_FETCH_SIZE` (bytes, default 10 MiB)
     - `GZIP_MAX_FETCH_TIME_MILLIS` (ms, default 30000)
     - `GZIP_ALLOWED_DOMAINS` (comma-separated allowlist; empty means all domains allowed)
+- `simulate-research-query.ts`
+  - Registers a `simulate-research-query` task-based tool that demonstrates the MCP Tasks feature (SEP-1686). Simulates a multi-stage research operation with progress updates. If the query is marked as ambiguous and the client supports elicitation, it pauses mid-execution to request clarification via `elicitation/create`. Uses `server.experimental.tasks.registerToolTask()` with `execution: { taskSupport: "required" }`.
 - `trigger-elicitation-request.ts`
   - Registers a `trigger-elicitation-request` tool that sends an `elicitation/create` request to the client/LLM and returns the elicitation result.
+- `trigger-url-elicitation.ts`
+  - Registers a `trigger-url-elicitation` tool that either sends an out-of-band URL-mode `elicitation/create` request (`mode: "url"`) including an `elicitationId` (request path) or throws `UrlElicitationRequiredError` (`-32042`) for client-handled URL elicitation (error path). On the error path the carried prerequisite elicitation points at a different URL than the failing one (`https://modelcontextprotocol.io`), and when the client satisfies it and retries the same call, the retry ignores `errorPath` and proceeds via the request path — so the client does not loop on the same error.
+- `trigger-elicitation-request-async.ts`
+  - Registers a `trigger-elicitation-request-async` tool that demonstrates bidirectional MCP tasks for elicitation. Sends an elicitation request with task metadata, then polls the client's `tasks/get` endpoint for completion status before fetching the final result.
 - `trigger-sampling-request.ts`
   - Registers a `trigger-sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
+- `trigger-sampling-request-async.ts`
+  - Registers a `trigger-sampling-request-async` tool that demonstrates bidirectional MCP tasks for sampling. Sends a sampling request with task metadata, then polls the client's `tasks/get` endpoint for completion status before fetching the final result.
 - `get-structured-content.ts`
   - Registers a `get-structured-content` tool that demonstrates structuredContent block responses.
 - `get-sum.ts`
-  - Registers an `get-sum` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
+  - Registers a `get-sum` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
 - `get-tiny-image.ts`
   - Registers a `get-tiny-image` tool, which returns a tiny PNG MCP logo as an `image` content item, along with surrounding descriptive `text` items.
 - `trigger-long-running-operation.ts`
-  - Registers a `long-running-operation` tool that simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
+  - Registers a `trigger-long-running-operation` tool that simulates a long-running task over a specified `duration` (seconds) and number of `steps`; emits `notifications/progress` updates when the client supplies a `progressToken`.
 - `toggle-simulated-logging.ts`
   - Registers a `toggle-simulated-logging` tool, which starts or stops simulated logging for the invoking session.
 - `toggle-subscriber-updates.ts`
