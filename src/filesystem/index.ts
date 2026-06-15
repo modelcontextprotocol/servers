@@ -628,8 +628,8 @@ server.registerTool(
   {
     title: "Search Files",
     description:
-      "Recursively search for files and directories matching a pattern. " +
-      "The patterns should be glob-style patterns that match paths relative to the working directory. " +
+      "Recursively search for files and directories by name or path, not file contents. " +
+      "The patterns should be glob-style patterns that match paths relative to the search directory. " +
       "Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
       "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
       "Only searches within allowed directories.",

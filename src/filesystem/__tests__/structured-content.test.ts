@@ -139,6 +139,14 @@ describe('structuredContent schema compliance', () => {
   });
 
   describe('search_files (control - already working)', () => {
+    it('should describe name/path matching rather than content search', async () => {
+      const result = await client.listTools();
+      const searchFiles = result.tools.find((tool) => tool.name === 'search_files');
+
+      expect(searchFiles?.description).toContain('by name or path');
+      expect(searchFiles?.description).toContain('not file contents');
+    });
+
     it('should return structuredContent.content as a string', async () => {
       const result = await client.callTool({
         name: 'search_files',
