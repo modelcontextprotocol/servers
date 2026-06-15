@@ -25,6 +25,8 @@ describe('structuredContent schema compliance', () => {
 
     // Create test files
     await fs.writeFile(path.join(testDir, 'test.txt'), 'test content');
+    await fs.writeFile(path.join(testDir, 'image.png'), Buffer.from('test image data'));
+    await fs.writeFile(path.join(testDir, 'archive.bin'), Buffer.from('test binary data'));
     await fs.mkdir(path.join(testDir, 'subdir'));
     await fs.writeFile(path.join(testDir, 'subdir', 'nested.txt'), 'nested content');
 
@@ -153,6 +155,43 @@ describe('structuredContent schema compliance', () => {
       const structuredContent = result.structuredContent as { content: unknown };
       expect(typeof structuredContent.content).toBe('string');
       expect(Array.isArray(structuredContent.content)).toBe(false);
+    });
+  });
+
+  describe('read_media_file', () => {
+    it('should return spec-compliant image content for image files', async () => {
+      const result = await client.callTool({
+        name: 'read_media_file',
+        arguments: { path: path.join(testDir, 'image.png') }
+      });
+
+      expect(result.isError).not.toBe(true);
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0]).toMatchObject({
+        type: 'image',
+        data: Buffer.from('test image data').toString('base64'),
+        mimeType: 'image/png'
+      });
+
+      const structuredContent = result.structuredContent as { content: unknown[] };
+      expect(structuredContent.content[0]).toMatchObject({
+        type: 'image',
+        mimeType: 'image/png'
+      });
+    });
+
+    it('should reject non-media files instead of returning an invalid blob content type', async () => {
+      const result = await client.callTool({
+        name: 'read_media_file',
+        arguments: { path: path.join(testDir, 'archive.bin') }
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0]).toMatchObject({
+        type: 'text'
+      });
+      expect(JSON.stringify(result)).not.toContain('"blob"');
     });
   });
 });
