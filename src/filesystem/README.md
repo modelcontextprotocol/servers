@@ -204,6 +204,37 @@ The mapping for filesystem tools is:
 
 > Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec.
 
+## Usage with Kiro
+
+For quick installation, click the button below:
+
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=filesystem&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-filesystem%22%2C%22%2Fpath%2Fto%2Fallowed%2Fdir%22%5D%7D)
+
+### Manual Configuration
+
+1. From the Kiro panel, select the **MCP Servers** tab, or open the file `.kiro/settings/mcp.json` in your project.
+2. Add the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/username/Desktop",
+        "/path/to/other/allowed/dir"
+      ]
+    }
+  }
+}
+```
+
+3. Replace the paths with directories you want the server to access.
+
+For more details, see the Kiro MCP documentation for [IDE](https://kiro.dev/docs/ide/mcp/configuration/) or [CLI](https://kiro.dev/docs/cli/mcp/configuration/).
+
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
 
