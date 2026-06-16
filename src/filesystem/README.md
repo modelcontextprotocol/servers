@@ -202,8 +202,6 @@ The mapping for filesystem tools is:
 | `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply      |
 | `move_file`                 | `false`      | `false`        | `true`          | Deletes source file                             |
 
-> Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec.
-
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
 
@@ -346,6 +344,14 @@ On Windows, use:
   }
 }
 ```
+
+## Usage with ypipe
+
+Install and run **ypipe** with a single command using JBang:
+```bash
+jbang ypipe@iunera/ypipe
+```
+Or download the desktop app from [ypipe.com](https://ypipe.com). Once opened, simply import the pre-configured [filesystem.ypipe](./filesystem.ypipe) blueprint configuration file to install and register this MCP server with one click.
 
 ## Build
 

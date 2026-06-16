@@ -1,0 +1,425 @@
+---
+apiVersion: "mcp.ypipe.com/v1"
+kind: "McpIntegrationBlueprint"
+metadata:
+  name: "filesystem"
+  namespace: "system"
+spec:
+  displayName: "Local Filesystem"
+  description: "Secure local filesystem access for reading, writing, and managing\
+    \ files and directories within authorized paths."
+  source: "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem"
+  configurationSchema:
+    BASE_PATH:
+      type: "string"
+      required: true
+      default: "${user.home}"
+      description: "The absolute path to the directory the AI is allowed to access.\
+        \ Defaults to your user home."
+      sensitive: false
+      pattern: null
+  mcpConfig:
+    type: "stdio"
+    command: "npx"
+    args:
+    - "-y"
+    - "@modelcontextprotocol/server-filesystem"
+    - "${MCP_FILESYSTEM_ALLOWED_DIRS}"
+    env:
+      MCP_FILESYSTEM_ALLOWED_DIRS: "${BASE_PATH}"
+    url: null
+    headers: null
+  disabledTools:
+  - "read_file"
+  - "write_file"
+  - "edit_file"
+  - "move_file"
+  suggestions:
+  - id: "filesystem-list-directories"
+    title: "${metadata.name}: List Directories"
+    label: "List my Home Directory with Sizes"
+    action: "Run ${metadata.name}_list_allowed_directories to the get the allowed directoryname\
+      \ and then use ${metadata.name}_list_directory_with_sizes for all directories and\
+      \ list them with sizes"
+    actionType: null
+    target: null
+  - id: "filesystem-directory-tree"
+    title: "${metadata.name}: Directory Tree"
+    label: "Tree of all Files and Directories"
+    action: "Run ${metadata.name}_list_allowed_directories to the get the allowed directoryname\
+      \ and then use ${metadata.name}_directory_tree on my home.dir"
+    actionType: null
+    target: null
+  tools:
+    list_directory:
+      description: "List the contents of a specific directory to browse files and\
+        \ folders."
+      usageIntent: null
+      discoveryHint: "Retrieve a clean, detailed, and organized listing of all files\
+        \ and subdirectories located within a specific, named path on the authorized\
+        \ filesystem. This tool is the fundamental, indispensable starting point for\
+        \ any file-based exploration or reconnaissance task, providing a high-level\
+        \ overview of available resources and the organizational structure of a project\
+        \ or repository. By providing a valid directory path, the agent receives a\
+        \ complete inventory of everything inside that specific location, allowing\
+        \ it to navigate the hierarchy much like a human user would with 'ls' or 'dir'.\
+        \ This is essential for a wide variety of tasks, including browsing a newly\
+        \ cloned project directory to understand its layout, discovering hidden documentation,\
+        \ locating source code folders, and verifying the presence of expected output\
+        \ files or artifacts. Synonyms include directory listing, file discovery,\
+        \ filesystem exploration, path navigation, reconnaissance, and folder inventory.\
+        \ Keywords: directory structure, file inventory, navigation, discovery, local\
+        \ mapping, filesystem awareness. Behavioral notes: The output clearly and\
+        \ consistently distinguishes between files and directories using standard\
+        \ prefixes like [FILE] and [DIR], making it easy for the AI to navigate the\
+        \ hierarchy and decide where to go next. It only operates within the predefined\
+        \ base directory to maintain strict security, privacy, and system integrity\
+        \ standards. Caveats: If a directory contains thousands of files (like a 'node_modules'\
+        \ or 'target' folder), the output can be overwhelming and consume a large\
+        \ portion of the context window; in such cases, consider using 'search_files'\
+        \ with a specific glob filter to find what you need. This tool provides the\
+        \ essential 'sight' needed to move through the filesystem with confidence.\
+        \ It allows the AI to build an accurate mental model of the project's layout,\
+        \ ensuring that subsequent operations are targeted at the correct locations.\
+        \ It is the 'first step' for any file management task, providing the basic\
+        \ visibility required for any autonomous action. Performance is extremely\
+        \ fast for standard directories, providing near-instant feedback. The AI should\
+        \ use this tool frequently to orient itself in unfamiliar repositories before\
+        \ attempting to read specific files, ensuring a professional and systematic\
+        \ approach to exploration."
+      properties: null
+      required: null
+    directory_tree:
+      description: "Generate a recursive JSON tree representation of a directory structure."
+      usageIntent: null
+      discoveryHint: "Generate a powerful, recursive, and structured JSON representation\
+        \ of the entire directory hierarchy starting from a specified root path. This\
+        \ tool provides a comprehensive, birds-eye view of a project's entire architecture,\
+        \ showing the complex relationships and nesting between files and folders\
+        \ across all levels of the tree in a single, efficient operation. By analyzing\
+        \ the entire subtree at once, the agent can rapidly understand complex software\
+        \ architectures and locate deeply nested modules or configuration files without\
+        \ making dozens of individual, sequential 'list_directory' calls. This is\
+        \ essential for a wide variety of tasks, including understanding complex microservices\
+        \ architectures, visualizing project layouts for documentation, identifying\
+        \ where specific modules are located in a large monorepo, and preparing high-level\
+        \ summaries of a codebase for human review. Synonyms include project structure\
+        \ visualization, recursive tree, architectural mapping, hierarchy visualization,\
+        \ JSON representation, and codebase overview. Keywords: recursion, tree structure,\
+        \ project map, architectural overview, hierarchy, JSON export. Behavioral\
+        \ notes: Each node in the resulting tree includes the name, type (file or\
+        \ directory), and an array of children for directories. It supports optional\
+        \ but highly recommended 'exclude' patterns to filter out common noise like\
+        \ 'node_modules', '.git', 'target', or build artifacts, ensuring a clean and\
+        \ focused view of the relevant project structure. Caveats: For extremely deep\
+        \ or massive filesystems (like the root of a large server), the tree can become\
+        \ exceptionally large; always use exclusion patterns to keep the output manageable\
+        \ and avoid exceeding the AI's context limit. This tool is by far the best\
+        \ way for an AI to quickly internalize the 'big picture' of a new repository.\
+        \ It avoids the need for dozens of sequential and tedious 'list_directory'\
+        \ calls, providing all the structural context in a single, well-organized\
+        \ response. Performance can be a factor for very large directories with millions\
+        \ of files, so recursive depth limits or exclusion patterns are highly recommended\
+        \ for efficiency. The AI should think of this as its primary 'map' of the\
+        \ entire project world it is currently operating in."
+      properties: null
+      required: null
+    create_directory:
+      description: "Create a new directory or ensure a path exists recursively."
+      usageIntent: null
+      discoveryHint: "Create a brand new directory at the specified path, ensuring\
+        \ that all necessary parent directories in the path are also created automatically\
+        \ if they do not already exist (equivalent to the 'mkdir -p' command on Unix-like\
+        \ systems). This tool is fundamental for organizing the filesystem and preparing\
+        \ the environment for data generation, project scaffolding, or structured\
+        \ output storage. By allowing for recursive path creation, the agent can set\
+        \ up complex, deeply nested folder structures in a single, clean command.\
+        \ This is essential for a wide variety of tasks, including setting up a new\
+        \ project structure with 'src', 'docs', and 'test' folders, creating an 'output'\
+        \ or 'results' folder before writing generated files, organizing large amounts\
+        \ of data into subcategories or dates, and ensuring that temporary work directories\
+        \ are available for complex processing pipelines. Synonyms include folder\
+        \ creation, path initialization, project scaffolding, directory management,\
+        \ recursive mkdir, and directory provisioning. Keywords: directory creation,\
+        \ filesystem organization, path setup, automation, structure, mkdir. Behavioral\
+        \ notes: If the target directory already exists, the operation typically succeeds\
+        \ silently without error, making it idempotent and perfectly safe to use in\
+        \ automated scripts and repeated workflows. It operates strictly within the\
+        \ authorized zones to ensure system integrity and prevent directory creation\
+        \ in sensitive system paths. Caveats: You must have appropriate write and\
+        \ 'create' permissions to generate directories in the target path. Ensure\
+        \ that the directory names follow the naming conventions and restrictions\
+        \ of the underlying operating system (e.g., avoiding forbidden characters\
+        \ like '/', ':', or '*' depending on the OS) to prevent errors and ensure\
+        \ cross-platform compatibility. This tool provides the AI with the critical\
+        \ ability to impose order on the filesystem, allowing it to build the necessary\
+        \ organizational structures to support its analytical and creative work. It\
+        \ is a key enabler for any task that involves generating multiple related\
+        \ outputs or setting up complex, multi-stage environments. From a security\
+        \ perspective, this is a write operation and is subject to strict base path\
+        \ restrictions. Performance is very fast as it only involves minor metadata\
+        \ updates on the disk."
+      properties: null
+      required: null
+    read_multiple_files:
+      description: "Read the contents of multiple files in a single operation."
+      usageIntent: null
+      discoveryHint: "Efficiently read and aggregate the contents of multiple text\
+        \ files in a single, atomic, and high-performance operation. This specialized\
+        \ tool is specifically engineered to drastically reduce the overhead, network\
+        \ latency, and process-switching costs associated with making multiple individual\
+        \ 'read_text_file' calls in sequence. It is the ideal choice for situations\
+        \ where the AI needs to collect broad context from several related source\
+        \ files simultaneously, such as when analyzing a set of interconnected classes\
+        \ in a software project, comparing configuration settings across different\
+        \ environments (e.g., dev vs. prod), or gathering log data from multiple related\
+        \ services. By bundling multiple file paths into a single request, the agent\
+        \ optimizes I/O performance and minimizes the number of round-trips to the\
+        \ filesystem, which is a major efficiency gain in large repositories. This\
+        \ is essential for a wide variety of tasks, including gathering full context\
+        \ for complex multi-file refactoring, preparing a comprehensive project overview\
+        \ for a new developer, collecting distributed log data for root-cause analysis,\
+        \ and comparing similar documents for differences or commonalities. Synonyms\
+        \ include batch file reading, multi-file access, bulk text extraction, context\
+        \ optimization, and parallel reading. Keywords: batch I/O, context window\
+        \ management, efficient retrieval, multi-file analysis, project scouting,\
+        \ atomic operations. Behavioral notes: The tool returns a list of results\
+        \ where each file's content is paired with its absolute path, allowing the\
+        \ AI to easily distinguish between the data sources and maintain accurate\
+        \ context. If one or more files in the requested list are missing or inaccessible,\
+        \ the tool typically continues to process the remaining valid files, providing\
+        \ a partial but still highly useful result set. Caveats: Be mindful of the\
+        \ total aggregate amount of data being requested; reading dozens of large\
+        \ files at once can consume significant memory and quickly overflow the AI's\
+        \ context window. It is best to group related files that are semantically\
+        \ linked to the current task to maintain high-quality reasoning. This tool\
+        \ significantly speeds up the research and discovery phase of any complex\
+        \ development or analysis task, making the AI feel much more responsive and\
+        \ capable. From a security perspective, all requested files must reside within\
+        \ the authorized base path. Performance is optimized for throughput, making\
+        \ it significantly faster than sequential reads for projects with many small\
+        \ modules."
+      properties: null
+      required: null
+    read_media_file:
+      description: "Read a media file like an image or audio and return its base64\
+        \ content."
+      usageIntent: null
+      discoveryHint: "Read a non-textual media file, such as an image, audio recording,\
+        \ or other binary asset, and return its raw binary content as a standard base64\
+        \ encoded string, accompanied by its appropriate and descriptive MIME type.\
+        \ This specialized tool allows the AI to interact with and process assets\
+        \ within the authorized filesystem boundaries that cannot be handled by standard\
+        \ text-reading tools. Supported formats generally include common image types\
+        \ like PNG, JPEG, GIF, and WEBP, as well as audio formats such as MP3, WAV,\
+        \ or OGG. By converting raw binary data into a text-safe base64 format, the\
+        \ agent can transmit complex assets over the MCP protocol for further analysis\
+        \ by vision-capable models, for external storage, or for presentation to the\
+        \ user. This is essential for a wide variety of tasks, including verifying\
+        \ the existence and visual integrity of UI assets, extracting text from images\
+        \ via OCR (Optical Character Recognition) in a later step, analyzing the technical\
+        \ metadata (like EXIF data) of media files, or retrieving audio recordings\
+        \ for subsequent transcription or sentiment analysis. Synonyms include binary\
+        \ data retrieval, base64 encoding, image retrieval, audio access, asset verification,\
+        \ and binary-to-text conversion. Keywords: media processing, binary encoding,\
+        \ base64, MIME types, asset management, multi-modal access. Behavioral notes:\
+        \ The base64 encoding ensures that binary data can be safely transmitted over\
+        \ text-based protocols without risk of character corruption. This tool is\
+        \ particularly useful for verifying UI icons in a web project, checking generated\
+        \ diagrams for accuracy, analyzing screenshots for bug reports, and retrieving\
+        \ voice memos. Caveats: This tool does not perform image or audio processing,\
+        \ editing, or analysis itself; it merely fetches the raw data for other components\
+        \ to use. Large media files (e.g., high-resolution 4K images or long audio\
+        \ tracks) can result in very long base64 strings that may be difficult for\
+        \ some systems to handle efficiently and can significantly impact the AI's\
+        \ context window usage or session memory. Ensure the path points to a legitimate\
+        \ and supported media file to avoid encoding or decoding errors. This tool\
+        \ extends the AI's reach beyond simple text, allowing for a more holistic\
+        \ and multi-modal understanding of project resources. Performance-wise, encoding\
+        \ large binaries can be CPU-intensive, so the AI should use this sparingly\
+        \ for very large files and focus on targeted assets."
+      properties: null
+      required: null
+    read_text_file:
+      description: "Read the complete UTF-8 text content of a file from the local\
+        \ filesystem."
+      usageIntent: null
+      discoveryHint: "Read the complete UTF-8 text content of an individual file from\
+        \ the local filesystem. This tool is the primary, foundational mechanism for\
+        \ the AI to examine and internalize the contents of text-based resources such\
+        \ as source code (Python, JavaScript, Java, C++, etc.), structured configuration\
+        \ files (.json, .yaml, .xml, .toml), plain text notes, system logs, and extensive\
+        \ markdown documentation. It is an absolute requirement for an AI to gather\
+        \ necessary context, analyze data points, and understand the internal state\
+        \ and logic of a complex project. By providing a valid file path, the agent\
+        \ initiates a low-level filesystem call where the underlying operating system's\
+        \ I/O operations retrieve the raw binary bytes and decode them into a human-readable\
+        \ string using the UTF-8 character set. This is essential for a wide variety\
+        \ of professional tasks, including reviewing source code for logic bugs or\
+        \ security vulnerabilities, reading 'README' and 'INSTALL' files for project\
+        \ orientation and dependency mapping, analyzing verbose log files for runtime\
+        \ errors, and fetching raw data from CSV or TSV files for analytical processing.\
+        \ Synonyms for this action include file reading, text extraction, context\
+        \ gathering, data ingestion, local storage access, and document loading. Keywords:\
+        \ file system, text parsing, UTF-8 decoding, local access, data retrieval,\
+        \ source code analysis, log inspection. Behavioral notes: The tool expects\
+        \ a path relative to the authorized base directory; absolute paths outside\
+        \ this zone will be rejected for security. It handles standard text encodings\
+        \ but may encounter issues with binary files or unconventional character sets\
+        \ like UTF-16 without a BOM. Caveats: Reading extremely large files (multiple\
+        \ megabytes) can be slow and may quickly exceed the AI's context window limits,\
+        \ leading to truncation or memory pressure. For very large files, always check\
+        \ the size first using 'get_file_info'. This tool is a cornerstone of all\
+        \ filesystem interactions, enabling the AI to 'see' the data it needs to process\
+        \ and ensuring it has the most accurate information directly from the source.\
+        \ From a security perspective, this tool is strictly restricted to the authorized\
+        \ base path, preventing unauthorized access to sensitive system files or private\
+        \ user data outside the intended scope. Performance-wise, reading from a local\
+        \ SSD is near-instant, providing a highly responsive experience for the AI\
+        \ and the user alike. The AI should think of this tool as its primary way\
+        \ to 'learn' and 'research' the details of the local environment."
+      properties: null
+      required: null
+    search_files:
+      description: "Search for files matching a glob pattern within the authorized\
+        \ filesystem."
+      usageIntent: null
+      discoveryHint: "Perform a powerful, recursive search for files and directories\
+        \ that match a specific glob-style pattern within the authorized filesystem\
+        \ boundaries. This tool is absolutely indispensable for locating specific\
+        \ resources when their exact path is unknown, when they are deeply nested,\
+        \ or when you need to find all instances of a certain file type (e.g., finding\
+        \ every '.py', '.ts', or '.sql' file in a multi-module project). By using\
+        \ advanced pattern matching, the agent can rapidly narrow down thousands of\
+        \ files to a small, relevant set. This is essential for a wide variety of\
+        \ tasks, including locating a specific configuration file by name across many\
+        \ services, finding all source files for a global refactoring or search-and-replace\
+        \ task, identifying all markdown notes in a large knowledge base, and searching\
+        \ for specific keywords or naming conventions in filenames. Synonyms include\
+        \ file searching, glob matching, recursive discovery, pattern finding, resource\
+        \ location, and filesystem querying. Keywords: glob, pattern matching, recursive\
+        \ search, discovery, resource finding, path resolution. Behavioral notes:\
+        \ It supports standard and powerful globbing syntax, where '*' matches characters\
+        \ within a single directory and '**' matches across multiple levels of subdirectories.\
+        \ You can also specify exclusion patterns to ignore irrelevant and noisy folders\
+        \ like 'dist', 'build', 'temp', or 'vendor'. Caveats: Broad searches (like\
+        \ searching for '*' or '**.tmp' from the root of a massive repository) can\
+        \ be slow and computationally expensive for the OS. Be as specific as possible\
+        \ with your patterns to improve performance and reduce noise. The tool returns\
+        \ full paths which can then be immediately used with 'read_text_file' or other\
+        \ granular operations. This is a high-leverage tool that saves immense amounts\
+        \ of time and reduces the number of steps needed to find critical information\
+        \ across a complex directory structure. From a performance perspective, recursive\
+        \ globbing is efficient but can be throttled on very large filesystems to\
+        \ prevent system strain. The AI should use this as its 'find' command to jump\
+        \ directly to targets and avoid manual traversal."
+      properties: null
+      required: null
+    list_allowed_directories:
+      description: "List the root directories the server is authorized to access."
+      usageIntent: null
+      discoveryHint: "Retrieve a definitive and comprehensive list of all top-level\
+        \ root directories that the Model Context Protocol (MCP) filesystem server\
+        \ is currently authorized and configured to access. This specialized tool\
+        \ serves as a critical security and reconnaissance mechanism, providing the\
+        \ AI with essential situational awareness regarding its operational boundaries\
+        \ and the 'sandbox' environment in which it resides. In a professional development\
+        \ or data processing environment, the AI's access is typically restricted\
+        \ to specific, pre-vetted project folders or user-specified directories to\
+        \ maintain strict system integrity and prevent unauthorized access to sensitive\
+        \ OS-level files. By invoking this tool, the agent can immediately verify\
+        \ which portions of the local filesystem are within its reach, ensuring that\
+        \ all subsequent file operations—such as reading source code, writing logs,\
+        \ or searching for assets—are targeted at valid and accessible locations.\
+        \ This is an absolute requirement for robust error handling, as it allows\
+        \ the AI to proactively identify if a requested path falls outside its authorized\
+        \ scope before attempting a failing operation. This is essential for a wide\
+        \ variety of tasks, including initial environment discovery when starting\
+        \ a new session, verifying the success of dynamic root registration via the\
+        \ MCP Roots protocol, and mapping out the high-level structure of a multi-root\
+        \ workspace. Synonyms for this action include access verification, boundary\
+        \ discovery, authorized path listing, root directory inspection, sandbox reconnaissance,\
+        \ and filesystem permissions audit. Keywords: security, authorization, roots,\
+        \ sandbox, filesystem access, environment discovery, path mapping, boundary\
+        \ awareness, technical inventory. Behavioral notes: The tool returns a clean\
+        \ array of absolute filesystem paths that represent the 'safe zones' for the\
+        \ current session. It is a lightweight, read-only metadata operation that\
+        \ does not traverse the filesystem or impact performance. Caveats: This tool\
+        \ only reveals the top-level authorized directories; it does not list the\
+        \ files or subdirectories within them—for that, the agent must follow up with\
+        \ 'list_directory' or 'directory_tree'. It provides the fundamental 'legal'\
+        \ framework within which the AI must operate, ensuring that its actions remain\
+        \ predictable, secure, and fully aligned with the user's explicit configuration."
+      properties: null
+      required: null
+    list_directory_with_sizes:
+      description: "List directory contents including exact file sizes in bytes."
+      usageIntent: null
+      discoveryHint: "Retrieve a comprehensive and metadata-rich listing of all files\
+        \ and directories in a specified path, including their exact sizes in bytes.\
+        \ This enhanced version of the standard listing tool provides critical technical\
+        \ data that helps the AI make highly informed decisions about file handling,\
+        \ resource management, and processing strategy. By knowing the size of a file\
+        \ before attempting to read or process it, the agent can proactively avoid\
+        \ crashing, timing out, or overflowing its context window with massive logs,\
+        \ database exports, or raw datasets. This is essential for a wide variety\
+        \ of tasks, including identifying bloated log files that might need truncation\
+        \ or rotation, finding massive datasets for optimization, verifying that a\
+        \ file has been written with the expected amount of data after a processing\
+        \ step, and performing comprehensive disk space audits. Synonyms include size-aware\
+        \ listing, disk usage analysis, file metadata inspection, inventory management,\
+        \ and storage auditing. Keywords: file size, disk usage, metadata, inventory,\
+        \ storage management, resource planning, data auditing. Behavioral notes:\
+        \ Sizes are provided in bytes for all individual files, while directories\
+        \ are clearly marked as [DIR]. The output facilitates easier and safer navigation\
+        \ of data-heavy repositories. Use cases include identifying oversized 'node_modules'\
+        \ folders, checking the size of large binary assets, and monitoring disk usage\
+        \ trends during long-running tasks. Caveats: Calculating sizes for a vast\
+        \ number of files can take slightly longer than a simple listing, though it\
+        \ is usually still very fast. It does not recursively calculate the total\
+        \ size of subdirectories (it only shows the size of the directory entry itself\
+        \ as reported by the OS). This tool is particularly valuable for 'garbage\
+        \ collection', performance tuning, or data engineering tasks, where identifying\
+        \ the largest consumers of disk space is a primary goal. It ensures the AI\
+        \ can manage its own resources effectively and avoid operations on files that\
+        \ are simply too large for its current context or processing capabilities,\
+        \ leading to a much more stable and reliable agent experience. From a security\
+        \ perspective, it only reveals metadata within authorized zones. Performance\
+        \ is slightly slower than a basic 'list_directory' but provides a much higher\
+        \ signal-to-noise ratio for professional resource planning and system maintenance."
+      properties: null
+      required: null
+    get_file_info:
+      description: "Retrieve metadata and properties for a specific file or directory."
+      usageIntent: null
+      discoveryHint: "Retrieve comprehensive metadata, technical properties, and status\
+        \ information for a specific file or directory without having to read its\
+        \ actual content. This tool provides a quick and efficient 'stat' of the file,\
+        \ providing essential details like its size in bytes, creation timestamp,\
+        \ last modification time (mtime), last access time (atime), and whether it\
+        \ is a regular file, a directory, or a symbolic link. This is essential for\
+        \ a wide variety of tasks, including verifying if a file actually exists before\
+        \ attempting to use it, checking if a log file or report has been updated\
+        \ recently, determining if a file is too large to read entirely into the context\
+        \ window, and auditing file permissions or ownership in a multi-user environment.\
+        \ Synonyms include file metadata, property inspection, existence check, timestamp\
+        \ analysis, resource auditing, and file status retrieval. Keywords: stat,\
+        \ metadata, existence, timestamps, file properties, inode information. Behavioral\
+        \ notes: It is an extremely efficient way to check the state of a resource\
+        \ before committing to a more expensive or risky operation like reading, processing,\
+        \ or deleting it. This 'pre-flight' check is a critical part of building robust,\
+        \ error-resistant, and professional automation flows. Caveats: It only provides\
+        \ metadata, not the file's content or any internal data. If you need to see\
+        \ what's inside, you must follow up with 'read_text_file' or 'read_media_file'.\
+        \ This tool is essential for robust error handling—for example, by deciding\
+        \ to only read the last 100 lines of a 1GB log file instead of attempting\
+        \ to load the whole thing into memory and crashing the session. It ensures\
+        \ the AI remains responsive, predictable, and avoids wasting resources on\
+        \ invalid or overly large targets. Security-wise, it provides structural awareness\
+        \ and verification within authorized paths without exposing sensitive content\
+        \ prematurely. Performance is near-instant as it only reads the metadata from\
+        \ the OS filesystem table. The AI should use this to validate its assumptions\
+        \ about a file's state before taking any action."
+      properties: null
+      required: null
+  modelSemantics: null
