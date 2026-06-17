@@ -389,7 +389,7 @@ export async function searchFilesWithValidation(
       try {
         await validatePath(fullPath);
 
-        const relativePath = path.relative(rootPath, fullPath);
+        const relativePath = path.relative(rootPath, fullPath).replace(/\\/g, '/');
         const shouldExclude = excludePatterns.some(excludePattern =>
           minimatch(relativePath, excludePattern, { dot: true })
         );
