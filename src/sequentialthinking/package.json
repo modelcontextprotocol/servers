@@ -25,16 +25,16 @@
     "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "chalk": "^5.3.0",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
     "@types/node": "^22",
     "@types/yargs": "^17.0.32",
-    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/coverage-v8": "^4.1.8",
     "shx": "^0.3.4",
     "typescript": "^5.3.3",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.8"
   }
 }

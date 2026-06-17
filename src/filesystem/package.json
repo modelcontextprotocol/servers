@@ -25,19 +25,18 @@
     "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "diff": "^8.0.3",
     "glob": "^10.5.0",
-    "minimatch": "^10.0.1",
-    "zod-to-json-schema": "^3.23.5"
+    "minimatch": "^10.0.1"
   },
   "devDependencies": {
     "@types/diff": "^5.0.9",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^22",
-    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/coverage-v8": "^4.1.8",
     "shx": "^0.3.4",
     "typescript": "^5.8.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.8"
   }
 }
