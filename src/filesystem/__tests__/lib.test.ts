@@ -519,6 +519,20 @@ describe('Lib Functions', () => {
           .rejects.toThrow('Could not find exact match for edit');
       });
 
+      it('includes line context when edit text is not found', async () => {
+        const edits = [
+          { oldText: 'line2 with typo', newText: 'replacement' }
+        ];
+
+        await expect(applyFileEdits('/test/file.txt', edits, false))
+          .rejects.toThrow(
+            'Could not find exact match for edit:\nline2 with typo\n\n' +
+            'First 3 lines of file (3 total lines):\n' +
+            '1: line1\n2: line2\n3: line3\n\n' +
+            'Hint: re-read the file and copy the exact current text, including whitespace.'
+          );
+      });
+
       it('handles complex multi-line edits with indentation', async () => {
         mockFs.readFile.mockResolvedValue('function test() {\n  console.log("hello");\n  return true;\n}');
         

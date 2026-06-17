@@ -191,6 +191,32 @@ interface FileEdit {
   newText: string;
 }
 
+function buildEditNotFoundError(edit: FileEdit, content: string): Error {
+  const contentLines = content.endsWith('\n')
+    ? content.slice(0, -1).split('\n')
+    : content.split('\n');
+  const oldLines = normalizeLineEndings(edit.oldText).split('\n');
+  const anchorLine = oldLines.find(line => line.trim().length > 0)?.trim();
+  const anchorIndex = anchorLine
+    ? contentLines.findIndex(line => line.trim().includes(anchorLine))
+    : -1;
+  const contextStart = Math.max(0, (anchorIndex >= 0 ? anchorIndex : 0) - 2);
+  const contextEnd = Math.min(contentLines.length, contextStart + 5);
+  const contextLines = contentLines
+    .slice(contextStart, contextEnd)
+    .map((line, index) => `${contextStart + index + 1}: ${line}`)
+    .join('\n');
+  const contextHeading = anchorIndex >= 0
+    ? `Closest context around line ${anchorIndex + 1}`
+    : `First ${contextEnd - contextStart} lines of file`;
+
+  return new Error(
+    `Could not find exact match for edit:\n${edit.oldText}\n\n` +
+    `${contextHeading} (${contentLines.length} total lines):\n${contextLines}\n\n` +
+    'Hint: re-read the file and copy the exact current text, including whitespace.'
+  );
+}
+
 export async function applyFileEdits(
   filePath: string,
   edits: FileEdit[],
@@ -248,7 +274,7 @@ export async function applyFileEdits(
     }
 
     if (!matchFound) {
-      throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
+      throw buildEditNotFoundError(edit, modifiedContent);
     }
   }
 
