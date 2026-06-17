@@ -4,6 +4,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolResult,
+  ErrorCode,
+  McpError,
   RootsListChangedNotificationSchema,
   type Root,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -166,6 +168,12 @@ const server = new McpServer(
     version: "0.2.0",
   }
 );
+
+// Tracks whether the MCP lifecycle handshake has completed
+// (initialize request handled + notifications/initialized received).
+// Requests other than `initialize` and `ping` are rejected until this flips
+// to true. See installHandshakeGate() below.
+let handshakeComplete = false;
 
 // Reads a file as a stream of buffers, concatenates them, and then encodes
 // the result to a Base64 string. This is a memory-efficient way to handle
@@ -729,6 +737,11 @@ server.server.setNotificationHandler(RootsListChangedNotificationSchema, async (
 
 // Handles post-initialization setup, specifically checking for and fetching MCP roots.
 server.server.oninitialized = async () => {
+  // Mark the handshake complete before any further work so subsequent
+  // requests (including the listRoots() round-trip below) are not blocked
+  // by installHandshakeGate().
+  handshakeComplete = true;
+
   const clientCapabilities = server.server.getClientCapabilities();
 
   if (clientCapabilities?.roots) {
@@ -750,6 +763,49 @@ server.server.oninitialized = async () => {
     }
   }
 };
+
+/**
+ * Install a pre-dispatch gate that rejects requests received before the MCP
+ * lifecycle handshake (initialize request → server response →
+ * notifications/initialized) has completed. Per the MCP spec, the only
+ * methods a server should accept pre-handshake are `initialize` and `ping`.
+ *
+ * The MCP TypeScript SDK does not currently expose a middleware or
+ * pre-dispatch hook, so we wrap the protocol's internal request handler map
+ * here. Each entry except `initialize` and `ping` is replaced with a wrapper
+ * that throws InvalidRequest when `handshakeComplete` is false and otherwise
+ * delegates to the original handler.
+ *
+ * Must be called after all `server.registerTool(...)` calls have run, so
+ * that the SDK-installed `tools/list` and `tools/call` handlers are in the
+ * map and get wrapped.
+ */
+function installHandshakeGate(): void {
+  const ALWAYS_ALLOWED_METHODS = new Set([
+    "initialize", // by definition - this is what completes the handshake
+    "ping",       // health check; allowed pre-handshake per MCP spec
+  ]);
+
+  type ProtocolInternals = {
+    _requestHandlers: Map<string, (req: unknown, extra: unknown) => unknown>;
+  };
+  const handlers = (server.server as unknown as ProtocolInternals)._requestHandlers;
+
+  for (const [method, originalHandler] of handlers) {
+    if (ALWAYS_ALLOWED_METHODS.has(method)) continue;
+    handlers.set(method, async (req: unknown, extra: unknown) => {
+      if (!handshakeComplete) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          "Request received before MCP initialization handshake completed",
+        );
+      }
+      return originalHandler(req, extra);
+    });
+  }
+}
+
+installHandshakeGate();
 
 // Start server
 async function runServer() {
