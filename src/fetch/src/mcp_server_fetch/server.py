@@ -1,5 +1,7 @@
+import ipaddress
+import socket
 from typing import Annotated, Tuple
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import markdownify
 import readabilipy.simple_json
@@ -22,6 +24,139 @@ from pydantic import BaseModel, Field, AnyUrl
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
+
+# Maximum number of redirects to follow with per-hop URL revalidation.
+# Mirrors httpx's conventional default but kept low so a malicious server
+# cannot make us validate an unbounded number of hops.
+MAX_REDIRECTS = 10
+
+# Set of URL schemes the fetch tool will issue requests for. Other schemes
+# (file://, gopher://, dict://, ftp://, etc.) get blocked at the URL-safety
+# gate because httpx will happily honor them and they enable trivial local
+# resource disclosure or SSRF against non-HTTP services.
+ALLOWED_URL_SCHEMES = {"http", "https"}
+
+
+def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str | None:
+    """Return a human-readable reason if the IP is in a blocked range, else None.
+
+    Order matters — Python's ipaddress library overlaps categories (e.g. 0.0.0.0
+    is BOTH `is_unspecified` and `is_private`); we check the most-specific
+    classification first so the error message is precise.
+
+    Blocks (rejected unless caller opted into private networks):
+      * Unspecified (0.0.0.0, ::)
+      * Loopback (127.0.0.0/8, ::1)
+      * Link-local (169.254.0.0/16, fe80::/10) — covers cloud-metadata endpoints
+      * Private (10/8, 172.16/12, 192.168/16, fc00::/7)
+      * Multicast
+      * Reserved / broadcast
+    """
+    if ip.is_unspecified:
+        return "unspecified address"
+    if ip.is_loopback:
+        return "loopback address"
+    if ip.is_link_local:
+        return "link-local address (covers cloud-metadata endpoints)"
+    if ip.is_private:
+        return "RFC1918 / unique-local private address"
+    if ip.is_multicast:
+        return "multicast address"
+    if ip.is_reserved:
+        return "reserved address"
+    return None
+
+
+def _resolve_host(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Resolve a hostname to its IP addresses via socket.getaddrinfo. Returns
+    parsed ipaddress objects. Raises socket.gaierror on resolution failure."""
+    resolved: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    for family, _socktype, _proto, _canonname, sockaddr in socket.getaddrinfo(
+        hostname, None, type=socket.SOCK_STREAM
+    ):
+        if family == socket.AF_INET:
+            resolved.append(ipaddress.IPv4Address(sockaddr[0]))
+        elif family == socket.AF_INET6:
+            resolved.append(ipaddress.IPv6Address(sockaddr[0]))
+    return resolved
+
+
+def assert_url_safe_or_raise(url: str, *, allow_private_networks: bool) -> None:
+    """Reject URLs that target private / loopback / link-local / non-HTTP destinations.
+
+    Best-effort SSRF defense:
+      * Block non-http(s) schemes outright (file://, gopher://, dict://, ftp://, …).
+      * Resolve the hostname to its full IP set and reject if any resolved IP is
+        in a blocked range. The "any" semantics matter because DNS records can
+        resolve to multiple A/AAAA entries; if even one is loopback, an attacker
+        can win a race by being the one connection httpx picks.
+      * Reject empty/missing hostname (catches `http:///path` style payloads).
+
+    The hostname → IP resolution is best-effort against DNS rebinding: the IP
+    seen here may differ from the IP that httpx ultimately connects to. For
+    higher assurance, run the fetch server behind a network egress filter or
+    an explicit proxy that enforces the same policy.
+
+    Raises McpError with INVALID_PARAMS on rejection.
+    """
+    parsed = urlparse(url)
+
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in ALLOWED_URL_SCHEMES:
+        raise McpError(ErrorData(
+            code=INVALID_PARAMS,
+            message=f"Refusing to fetch URL with disallowed scheme {scheme!r}: only {sorted(ALLOWED_URL_SCHEMES)} are permitted.",
+        ))
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise McpError(ErrorData(
+            code=INVALID_PARAMS,
+            message=f"Refusing to fetch URL with empty hostname: {url!r}",
+        ))
+
+    # If the hostname is itself an IP literal, evaluate it directly without DNS.
+    try:
+        literal_ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        literal_ip = None
+
+    if literal_ip is not None:
+        block_reason = _is_blocked_ip(literal_ip)
+        if block_reason and not allow_private_networks:
+            raise McpError(ErrorData(
+                code=INVALID_PARAMS,
+                message=f"Refusing to fetch {url!r}: target IP {literal_ip} is a {block_reason}. "
+                        f"Pass --allow-private-networks at startup to permit fetches against private/loopback ranges.",
+            ))
+        return
+
+    # Hostname is a name — resolve and check every returned IP.
+    try:
+        resolved_ips = _resolve_host(hostname)
+    except socket.gaierror as e:
+        raise McpError(ErrorData(
+            code=INVALID_PARAMS,
+            message=f"Refusing to fetch {url!r}: failed to resolve hostname {hostname!r}: {e}",
+        ))
+
+    if not resolved_ips:
+        raise McpError(ErrorData(
+            code=INVALID_PARAMS,
+            message=f"Refusing to fetch {url!r}: hostname {hostname!r} resolved to no IPs.",
+        ))
+
+    if allow_private_networks:
+        return
+
+    for ip in resolved_ips:
+        block_reason = _is_blocked_ip(ip)
+        if block_reason:
+            raise McpError(ErrorData(
+                code=INVALID_PARAMS,
+                message=f"Refusing to fetch {url!r}: hostname {hostname!r} resolves to {ip}, a {block_reason}. "
+                        f"Pass --allow-private-networks at startup to permit fetches against private/loopback ranges.",
+            ))
 
 
 def extract_content_from_html(html: str) -> str:
@@ -109,27 +244,60 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
 
 
 async def fetch_url(
-    url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None
+    url: str,
+    user_agent: str,
+    force_raw: bool = False,
+    proxy_url: str | None = None,
+    allow_private_networks: bool = False,
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
+
+    Follows up to MAX_REDIRECTS redirects manually so each hop's Location header
+    is revalidated against the SSRF safety rules — `httpx`'s native
+    `follow_redirects=True` would happily redirect from a public URL into a
+    loopback or cloud-metadata endpoint without re-checking. Caller must have
+    already validated the initial URL via assert_url_safe_or_raise.
     """
     from httpx import AsyncClient, HTTPError
 
     async with AsyncClient(proxy=proxy_url) as client:
-        try:
-            response = await client.get(
-                url,
-                follow_redirects=True,
-                headers={"User-Agent": user_agent},
-                timeout=30,
-            )
-        except HTTPError as e:
-            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}"))
-        if response.status_code >= 400:
+        current_url = url
+        for _ in range(MAX_REDIRECTS + 1):
+            try:
+                response = await client.get(
+                    current_url,
+                    follow_redirects=False,
+                    headers={"User-Agent": user_agent},
+                    timeout=30,
+                )
+            except HTTPError as e:
+                raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {current_url}: {e!r}"))
+
+            if response.is_redirect:
+                location = response.headers.get("location")
+                if not location:
+                    raise McpError(ErrorData(
+                        code=INTERNAL_ERROR,
+                        message=f"Failed to fetch {current_url}: redirect response with no Location header",
+                    ))
+                # Resolve relative redirects against the current URL.
+                next_url = urljoin(current_url, location)
+                # Revalidate the redirect target against the SSRF policy before re-issuing.
+                assert_url_safe_or_raise(next_url, allow_private_networks=allow_private_networks)
+                current_url = next_url
+                continue
+
+            if response.status_code >= 400:
+                raise McpError(ErrorData(
+                    code=INTERNAL_ERROR,
+                    message=f"Failed to fetch {current_url} - status code {response.status_code}",
+                ))
+            break
+        else:
             raise McpError(ErrorData(
                 code=INTERNAL_ERROR,
-                message=f"Failed to fetch {url} - status code {response.status_code}",
+                message=f"Failed to fetch {url}: exceeded {MAX_REDIRECTS} redirects",
             ))
 
         page_raw = response.text
@@ -182,6 +350,7 @@ async def serve(
     custom_user_agent: str | None = None,
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
+    allow_private_networks: bool = False,
 ) -> None:
     """Run the fetch MCP server.
 
@@ -189,6 +358,11 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        allow_private_networks: Disable the SSRF safety check that rejects URLs
+            resolving to loopback / link-local / RFC1918 / cloud-metadata
+            addresses. Off by default. Enable only for local-network use cases
+            where every reachable target is trusted (developer-loop tooling,
+            internal-network scraping with an explicit allowlist upstream).
     """
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
@@ -231,11 +405,19 @@ Although originally you did not have internet access, and were advised to refuse
         if not url:
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
+        # SSRF safety gate: block private / loopback / link-local / non-HTTP
+        # targets before any network call (including the robots.txt probe).
+        assert_url_safe_or_raise(url, allow_private_networks=allow_private_networks)
+
         if not ignore_robots_txt:
             await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
 
         content, prefix = await fetch_url(
-            url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url
+            url,
+            user_agent_autonomous,
+            force_raw=args.raw,
+            proxy_url=proxy_url,
+            allow_private_networks=allow_private_networks,
         )
         original_length = len(content)
         if args.start_index >= original_length:
@@ -262,7 +444,13 @@ Although originally you did not have internet access, and were advised to refuse
         url = arguments["url"]
 
         try:
-            content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url)
+            assert_url_safe_or_raise(url, allow_private_networks=allow_private_networks)
+            content, prefix = await fetch_url(
+                url,
+                user_agent_manual,
+                proxy_url=proxy_url,
+                allow_private_networks=allow_private_networks,
+            )
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:
             return GetPromptResult(
