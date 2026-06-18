@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolResult,
+  ErrorCode,
   RootsListChangedNotificationSchema,
   type Root,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -701,6 +702,54 @@ server.registerTool(
     };
   }
 );
+
+type RequestHandler = (request: unknown, extra: unknown) => unknown;
+type RequestHandlerRegistry = {
+  _requestHandlers: Map<string, RequestHandler>;
+};
+type RegisteredToolRegistry = {
+  _registeredTools: Record<string, unknown>;
+};
+
+class JsonRpcError extends Error {
+  constructor(
+    readonly code: ErrorCode,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+function preserveUnknownToolProtocolErrors() {
+  const requestHandlers = (
+    server.server as unknown as RequestHandlerRegistry
+  )._requestHandlers;
+  const callToolHandler = requestHandlers.get("tools/call");
+
+  if (!callToolHandler) {
+    return;
+  }
+
+  // The SDK CallTool handler converts tool execution failures to tool results.
+  // Unknown tools are protocol errors, so intercept them before the handler runs.
+  requestHandlers.set("tools/call", (request: unknown, extra: unknown) => {
+    const toolName = (request as { params?: { name?: unknown } }).params?.name;
+    const registeredTools = (
+      server as unknown as RegisteredToolRegistry
+    )._registeredTools;
+
+    if (typeof toolName === "string" && !registeredTools[toolName]) {
+      throw new JsonRpcError(
+        ErrorCode.InvalidParams,
+        `Unknown tool: ${toolName}`
+      );
+    }
+
+    return callToolHandler(request, extra);
+  });
+}
+
+preserveUnknownToolProtocolErrors();
 
 // Updates allowed directories based on MCP client roots
 async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
