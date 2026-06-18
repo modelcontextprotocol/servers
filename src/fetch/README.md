@@ -26,7 +26,7 @@ The fetch tool will truncate the response, but by using the `start_index` argume
 
 ## Installation
 
-Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
+The default HTML simplifier runs in Python and does not require Node.js.
 
 ### Using uv (recommended)
 

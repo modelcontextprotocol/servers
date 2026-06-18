@@ -87,6 +87,18 @@ class TestExtractContentFromHtml:
         result = extract_content_from_html(html)
         assert "<error>" in result
 
+    def test_uses_python_readability_backend_by_default(self):
+        """Test HTML simplification does not require the optional Node.js backend."""
+        html = "<html><body><article><p>Hello World</p></article></body></html>"
+
+        with patch("readabilipy.simple_json.simple_json_from_html_string") as mock_extract:
+            mock_extract.return_value = {"content": "<article><p>Hello World</p></article>"}
+
+            result = extract_content_from_html(html)
+
+        mock_extract.assert_called_once_with(html, use_readability=False)
+        assert "Hello World" in result
+
 
 class TestCheckMayAutonomouslyFetchUrl:
     """Tests for check_may_autonomously_fetch_url function."""
