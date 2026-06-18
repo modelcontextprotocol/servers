@@ -2,6 +2,8 @@
 
 <!-- mcp-name: io.github.modelcontextprotocol/server-fetch -->
 
+Source: [modelcontextprotocol/servers/src/fetch](https://github.com/modelcontextprotocol/servers/tree/main/src/fetch)
+
 A Model Context Protocol server that provides web content fetching capabilities. This server enables LLMs to retrieve and process content from web pages, converting HTML to markdown for easier consumption.
 
 > [!CAUTION]
