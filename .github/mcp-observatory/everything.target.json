@@ -1,5 +1,5 @@
 {
-  "targetId": "mcp-server",
+  "targetId": "everything",
   "adapter": "local-process",
   "command": "npx",
   "args": [
@@ -8,6 +8,6 @@
   ],
   "timeoutMs": 15000,
   "metadata": {
-    "observatory": "generated-by-init-ci"
+    "observatory": "certification-pr"
   }
 }
