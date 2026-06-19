@@ -16,4 +16,5 @@ jobs:
           target: .github/mcp-observatory/sequential-thinking.target.json
           deep: false
           security: true
-          comment-on-pr: true
+          comment-on-pr: false
+          set-status: false
