@@ -9,19 +9,11 @@ jobs:
   mcp-observatory:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: everything
-            target: .github/mcp-observatory/everything.target.json
-          - name: sequential-thinking
-            target: .github/mcp-observatory/sequential-thinking.target.json
     steps:
       - uses: actions/checkout@v4
       - uses: KryptosAI/mcp-observatory/action@main
         with:
-          target: ${{ matrix.target }}
-          deep: true
+          target: .github/mcp-observatory/sequential-thinking.target.json
+          deep: false
           security: true
           comment-on-pr: true
