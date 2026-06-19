@@ -137,6 +137,33 @@ On Windows, apply the same wrapper to each `npx`-based entry above by changing `
 
 Interested in creating your own MCP server? Visit the official documentation at [modelcontextprotocol.io](https://modelcontextprotocol.io/introduction) for comprehensive guides, best practices, and technical details on implementing MCP servers.
 
+## 🧾 Optional Server Readiness Metadata
+
+For teams evaluating server maturity, maintainers may optionally document a compact readiness metadata block per reference server.
+
+Suggested fields:
+
+- Maintainer or owning team
+- Last updated date
+- Authentication model (none, token, OAuth, delegated)
+- Supported transports (stdio, streamable HTTP, SSE)
+- Security policy link
+- License
+
+Example:
+
+```yaml
+server_readiness:
+  maintainer: mcp-steering-group
+  updated: 2026-06-19
+  auth: token
+  transports: [stdio, streamable-http]
+  security: https://github.com/modelcontextprotocol/servers/blob/main/SECURITY.md
+  license: Apache-2.0
+```
+
+This metadata is optional and can help reduce repeated due-diligence effort across organizations.
+
 ## 📚 Learn More
 
 See [ADDITIONAL.md](ADDITIONAL.md) for a curated list of frameworks and resources that simplify building MCP servers and clients.
