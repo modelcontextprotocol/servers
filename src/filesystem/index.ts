@@ -352,10 +352,7 @@ server.registerTool(
       "Create a new file or completely overwrite an existing file with new content. " +
       "Use with caution as it will overwrite existing files without warning. " +
       "Handles text content with proper encoding. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      content: z.string()
-    },
+    inputSchema: WriteFileArgsSchema,
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
   },
@@ -381,14 +378,7 @@ server.registerTool(
       "Make line-based edits to a text file. Each edit replaces exact line sequences " +
       "with new content. Returns a git-style diff showing the changes made. " +
       "Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      edits: z.array(z.object({
-        oldText: z.string().describe("Text to search for - must match exactly"),
-        newText: z.string().describe("Text to replace with")
-      })),
-      dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
-    },
+    inputSchema: EditFileArgsSchema,
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
   },
