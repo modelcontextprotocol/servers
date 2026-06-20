@@ -1,0 +1,67 @@
+{
+  "name": "moyan-security-audit",
+  "description": "AI Agent security audit with verifiable PMI trust scores, DecayProof, and 43 defense lines across 7 layers. Supports Alipay/WeChat/ClawTip AI payment loop.",
+  "url": "https://sixu-ai.net.cn",
+  "transport": "http",
+  "tools": [
+    {
+      "name": "security_audit",
+      "description": "Submit code for security audit. Returns PMI 4-dimensional trust score (integrity/compliance/reliability/decay_aware) + violation details across L0/L1/L2 layers.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Code to audit"
+          },
+          "language": {
+            "type": "string",
+            "description": "Programming language (sql, python, bash, etc.)"
+          },
+          "audit_level": {
+            "type": "string",
+            "enum": [
+              "L0",
+              "L1",
+              "L2"
+            ],
+            "default": "L2",
+            "description": "Audit depth: L0=full(43 defenses), L1=runtime+output(31), L2=output only(13)"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      }
+    },
+    {
+      "name": "payment_health",
+      "description": "Check payment service health status (Alipay/WeChat/ClawTip channels)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "kappa_diagnosis",
+      "description": "Get κ_Axiom self-diagnosis with Ω index, complexity/evidence ratio, and L0/L1/L2 violation classification",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ],
+  "pricing": {
+    "free": "100 scans/month (L2 only)",
+    "standard": "¥1,500/month (1,000 scans)",
+    "pro": "¥8,000/month (10,000 scans, L0-L2)"
+  },
+  "homepage": "https://github.com/Liuyanfeng1234/agent-os/discussions/38",
+  "documentation": "https://github.com/Liuyanfeng1234/agent-os/discussions/39",
+  "standards": [
+    "W3C agent-identity (TRAIL+MolTrust+Agent OS convergence)",
+    "A2A Protocol 64/64 TSC compliance",
+    "CompositionRef v1.2 (SHA-256 JCS RFC 8785)",
+    "SIAP independent verification (28/28 PASS)"
+  ]
+}
