@@ -112,13 +112,21 @@ const ReadMultipleFilesArgsSchema = z.object({
 
 const WriteFileArgsSchema = z.object({
   path: z.string(),
-  content: z.string(),
-});
+  content: z.string().optional(),
+  content_base64: z.string().optional(),
+}).refine(
+  args => args.content !== undefined || args.content_base64 !== undefined,
+  { message: "Must provide either content or content_base64" }
+);
 
 const EditOperation = z.object({
   oldText: z.string().describe('Text to search for - must match exactly'),
-  newText: z.string().describe('Text to replace with')
-});
+  newText: z.string().optional().describe('Text to replace with'),
+  newText_base64: z.string().optional().describe('Base64-encoded replacement text')
+}).refine(
+  args => args.newText !== undefined || args.newText_base64 !== undefined,
+  { message: "Must provide either newText or newText_base64" }
+);
 
 const EditFileArgsSchema = z.object({
   path: z.string(),
@@ -353,7 +361,10 @@ server.registerTool(
   },
   async (args: z.infer<typeof WriteFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
-    await writeFileContent(validPath, args.content);
+    const content = args.content_base64
+      ? Buffer.from(args.content_base64, 'base64').toString('utf-8')
+      : args.content!;
+    await writeFileContent(validPath, content);
     const text = `Successfully wrote to ${args.path}`;
     return {
       content: [{ type: "text" as const, text }],
@@ -383,7 +394,13 @@ server.registerTool(
   },
   async (args: z.infer<typeof EditFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
-    const result = await applyFileEdits(validPath, args.edits, args.dryRun);
+    const edits = args.edits.map(edit => ({
+      ...edit,
+      newText: edit.newText_base64
+        ? Buffer.from(edit.newText_base64, 'base64').toString('utf-8')
+        : edit.newText!
+    }));
+    const result = await applyFileEdits(validPath, edits, args.dryRun);
     return {
       content: [{ type: "text" as const, text: result }],
       structuredContent: { content: result }
