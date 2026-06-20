@@ -361,6 +361,7 @@ server.registerTool(
     const content = args.content_base64
       ? Buffer.from(args.content_base64, 'base64').toString('utf-8')
       : args.content!;
+    await fs.mkdir(path.dirname(validPath), { recursive: true });
     await writeFileContent(validPath, content);
     const text = `Successfully wrote to ${args.path}`;
     return {
