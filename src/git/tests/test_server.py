@@ -508,3 +508,27 @@ def test_git_branch_rejects_contains_flag_injection(test_repository):
 
     with pytest.raises(BadName):
         git_branch(test_repository, "local", not_contains="--exec=evil")
+
+
+def test_git_log_with_timestamp_filter_parses_each_commit(test_repository):
+    """git_log's timestamp-filtered branch must parse one record per commit.
+
+    A trailing %n in the pretty-format emitted 5 newline-delimited fields per
+    commit while the parser strided by 4, shifting every commit after the first
+    (Author showed the next commit's hash, etc.).
+    """
+    repo_path = Path(test_repository.working_dir)
+    for msg in ("second commit", "third commit"):
+        (repo_path / "test.txt").write_text(msg)
+        test_repository.index.add(["test.txt"])
+        test_repository.index.commit(msg)
+
+    result = git_log(test_repository, start_timestamp="10 years ago")
+
+    assert len(result) == 3
+    messages = [entry.splitlines()[3][len("Message: "):] for entry in result]
+    assert messages == ["third commit", "second commit", "initial commit"]
+    for entry in result:
+        author = entry.splitlines()[1][len("Author: "):]
+        # The bug placed the next commit's 40-char hash in the Author field.
+        assert not (len(author) == 40 and all(c in "0123456789abcdef" for c in author))
