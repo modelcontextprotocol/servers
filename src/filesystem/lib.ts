@@ -385,16 +385,15 @@ export async function searchFilesWithValidation(
 
     for (const entry of entries) {
       const fullPath = path.join(currentPath, entry.name);
+      const relativePath = path.relative(rootPath, fullPath);
+      const shouldExclude = excludePatterns.some(excludePattern =>
+        minimatch(relativePath, excludePattern, { dot: true })
+      );
+
+      if (shouldExclude) continue;
 
       try {
         await validatePath(fullPath);
-
-        const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(excludePattern =>
-          minimatch(relativePath, excludePattern, { dot: true })
-        );
-
-        if (shouldExclude) continue;
 
         // Use glob matching for the search pattern
         if (minimatch(relativePath, pattern, { dot: true })) {

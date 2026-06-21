@@ -349,6 +349,40 @@ describe('Lib Functions', () => {
         expect(result).toEqual([expectedResult]);
       });
 
+      it('skips excluded entries before validating their real paths', async () => {
+        const mockEntries = [
+          { name: 'GoogleDrive-lazy', isDirectory: () => true },
+          { name: 'match.txt', isDirectory: () => false }
+        ];
+
+        mockFs.readdir.mockResolvedValueOnce(mockEntries as any);
+
+        const testDir = process.platform === 'win32' ? 'C:\\allowed\\dir' : '/allowed/dir';
+        const allowedDirs = process.platform === 'win32' ? ['C:\\allowed'] : ['/allowed'];
+
+        mockFs.realpath.mockImplementation(async (inputPath: any) => {
+          const pathStr = inputPath.toString();
+          if (pathStr.includes('GoogleDrive-lazy')) {
+            throw new Error('excluded entries should not be realpathed');
+          }
+          return pathStr;
+        });
+
+        const result = await searchFilesWithValidation(
+          testDir,
+          '*',
+          allowedDirs,
+          { excludePatterns: ['GoogleDrive-*'] }
+        );
+
+        const expectedResult = process.platform === 'win32' ? 'C:\\allowed\\dir\\match.txt' : '/allowed/dir/match.txt';
+        expect(result).toEqual([expectedResult]);
+        const validatedExcludedEntry = mockFs.realpath.mock.calls.some(([inputPath]: any[]) =>
+          inputPath.toString().includes('GoogleDrive-lazy')
+        );
+        expect(validatedExcludedEntry).toBe(false);
+      });
+
       it('handles validation errors during search', async () => {
         const mockEntries = [
           { name: 'test.txt', isDirectory: () => false },
