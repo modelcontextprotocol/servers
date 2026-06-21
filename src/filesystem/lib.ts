@@ -297,6 +297,7 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
     let chunk = Buffer.alloc(CHUNK_SIZE);
     let linesFound = 0;
     let remainingText = '';
+    let isEndChunk = true;
     
     // Read chunks from the end of the file until we have enough lines
     while (position > 0 && linesFound < numLines) {
@@ -312,6 +313,11 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
       
       // Split by newlines and count
       const chunkLines = normalizeLineEndings(chunkText).split('\n');
+
+      if (isEndChunk && chunkLines[chunkLines.length - 1] === '') {
+        chunkLines.pop();
+      }
+      isEndChunk = false;
       
       // If this isn't the end of the file, the first line is likely incomplete
       // Save it to prepend to the next chunk
