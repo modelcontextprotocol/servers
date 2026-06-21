@@ -93,10 +93,12 @@ allowedDirectories = accessibleDirectories;
 setAllowedDirectories(allowedDirectories);
 
 // Schema definitions
+const LineLimitSchema = z.number().int().nonnegative();
+
 const ReadTextFileArgsSchema = z.object({
   path: z.string(),
-  tail: z.number().optional().describe('If provided, returns only the last N lines of the file'),
-  head: z.number().optional().describe('If provided, returns only the first N lines of the file')
+  tail: LineLimitSchema.optional().describe('If provided, returns only the last N lines of the file'),
+  head: LineLimitSchema.optional().describe('If provided, returns only the first N lines of the file')
 });
 
 const ReadMediaFileArgsSchema = z.object({
@@ -190,16 +192,19 @@ async function readFileAsBase64Stream(filePath: string): Promise<string> {
 // read_file (deprecated) and read_text_file
 const readTextFileHandler = async (args: z.infer<typeof ReadTextFileArgsSchema>) => {
   const validPath = await validatePath(args.path);
+  const { head, tail } = args;
+  const hasHead = head !== undefined;
+  const hasTail = tail !== undefined;
 
-  if (args.head && args.tail) {
+  if (hasHead && hasTail) {
     throw new Error("Cannot specify both head and tail parameters simultaneously");
   }
 
   let content: string;
-  if (args.tail) {
-    content = await tailFile(validPath, args.tail);
-  } else if (args.head) {
-    content = await headFile(validPath, args.head);
+  if (hasTail) {
+    content = await tailFile(validPath, tail);
+  } else if (hasHead) {
+    content = await headFile(validPath, head);
   } else {
     content = await readFileContent(validPath);
   }
@@ -236,8 +241,8 @@ server.registerTool(
       "Only works within allowed directories.",
     inputSchema: {
       path: z.string(),
-      tail: z.number().optional().describe("If provided, returns only the last N lines of the file"),
-      head: z.number().optional().describe("If provided, returns only the first N lines of the file")
+      tail: LineLimitSchema.optional().describe("If provided, returns only the last N lines of the file"),
+      head: LineLimitSchema.optional().describe("If provided, returns only the first N lines of the file")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true }
