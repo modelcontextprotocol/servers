@@ -216,6 +216,7 @@ Response:
 {
   "timezone": "Europe/Warsaw",
   "datetime": "2024-01-01T13:00:00+01:00",
+  "day_of_week": "Monday",
   "is_dst": false
 }
 ```
@@ -236,15 +237,17 @@ Response:
 {
   "source": {
     "timezone": "America/New_York",
-    "datetime": "2024-01-01T12:30:00-05:00",
+    "datetime": "2024-01-01T16:30:00-05:00",
+    "day_of_week": "Monday",
     "is_dst": false
   },
   "target": {
     "timezone": "Asia/Tokyo",
-    "datetime": "2024-01-01T12:30:00+09:00",
+    "datetime": "2024-01-02T06:30:00+09:00",
+    "day_of_week": "Tuesday",
     "is_dst": false
   },
-  "time_difference": "+13.0h",
+  "time_difference": "+14.0h"
 }
 ```
 

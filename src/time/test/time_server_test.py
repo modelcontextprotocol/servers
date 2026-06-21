@@ -1,4 +1,7 @@
 
+import json
+from pathlib import Path
+
 from freezegun import freeze_time
 from mcp.shared.exceptions import McpError
 import pytest
@@ -6,6 +9,33 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from mcp_server_time.server import TimeServer, get_local_tz
+
+
+def readme_response_blocks():
+    readme = Path(__file__).parents[1] / "README.md"
+    blocks = []
+    for chunk in readme.read_text(encoding="utf-8").split("Response:\n```json\n")[1:]:
+        raw_json, _, _ = chunk.partition("\n```")
+        blocks.append(json.loads(raw_json))
+    return blocks
+
+
+def test_readme_response_examples_match_server_output():
+    time_server = TimeServer()
+
+    with freeze_time("2024-01-01 12:00:00+00:00"):
+        current_time = time_server.get_current_time("Europe/Warsaw").model_dump()
+
+    with freeze_time("2024-01-01 12:00:00+00:00"):
+        converted_time = time_server.convert_time(
+            "America/New_York",
+            "16:30",
+            "Asia/Tokyo",
+        ).model_dump()
+
+    readme_blocks = readme_response_blocks()
+    assert current_time in readme_blocks
+    assert converted_time in readme_blocks
 
 
 @pytest.mark.parametrize(
