@@ -27,6 +27,8 @@ import {
   headFile,
   setAllowedDirectories,
 } from './lib.js';
+import { registerResources } from './resources.js';
+import { registerPrompts } from './prompts.js';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -701,6 +703,9 @@ server.registerTool(
     };
   }
 );
+
+registerResources(server);
+registerPrompts(server);
 
 // Updates allowed directories based on MCP client roots
 async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
