@@ -19,6 +19,8 @@ from collections import Counter
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+if hasattr(sys.stdin, "reconfigure"):
+    sys.stdin.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 
 # ── Configuration ────────────────────────────────────────────────────
 DEFAULT_RATIO = 0.60   # Keep top 60% of sentences by density

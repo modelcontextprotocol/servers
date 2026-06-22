@@ -2,6 +2,10 @@
 
 An MCP server that compresses inter-agent payloads to eliminate token waste in multi-agent pipelines. Uses Zipf word-density scoring validated by Benford's Law structural integrity check. Zero external dependencies beyond the MCP SDK.
 
+> **Core logic and full documentation:** [github.com/VjAlbert/pith-skill](https://github.com/VjAlbert/pith-skill)
+
+---
+
 ## Overview
 
 In multi-agent AI pipelines, agents pass verbose outputs — tool results, reasoning traces, search summaries — to downstream agents without compression. PITH fills this gap: it compresses those inter-agent payloads aggressively while preserving all structured content (code, JSON, URLs, file paths, numbers).
@@ -15,7 +19,11 @@ AGENT B — compressed payload (284 tokens, -42%)
 [PITH | ✓ | -42% tokens | benford:4.3% | compressed]
 ```
 
-## Tools
+This module is the packaged MCP implementation, part of the [Anthropic MCP reference server monorepo](https://github.com/modelcontextprotocol/servers). It is published to PyPI as `mcp-server-pith` and registered with the Claude Desktop and Claude Code MCP clients.
+
+---
+
+## MCP Tools
 
 ### `compress`
 
@@ -25,17 +33,19 @@ Compress a verbose payload. Returns compressed text with a metadata header.
 - `payload` (string, required): Text to compress
 - `ratio` (number, optional, default: `0.6`): Fraction of sentences to keep (0.1–1.0)
 
-**Output example:**
+**Output:**
 ```
 [PITH | ✓ | -42% tokens | benford:4.3% | compressed]
 <compressed text here>
 ```
 
+Header fields: `✓`/`⚠` = Benford gate passed/warned, `-%` = token reduction, `benford:X%` = MAD from ideal distribution, `compressed`/`passthrough` = action taken.
+
 ### `compress_with_metadata`
 
-Same as `compress` but returns a JSON object with full metadata including token counts and Benford MAD values. Useful for programmatic pipelines.
+Same compression, returns a JSON object with full metadata for programmatic pipelines.
 
-**Output example:**
+**Output:**
 ```json
 {
   "compressed": "...",
@@ -55,6 +65,8 @@ Same as `compress` but returns a JSON object with full metadata including token 
 }
 ```
 
+---
+
 ## Compression Ratios
 
 | Ratio | Mode | Best For |
@@ -64,19 +76,13 @@ Same as `compress` but returns a JSON object with full metadata including token 
 | `0.4` | Aggressive | Bulk search results, summaries |
 | `0.3` | Maximum | Context window critical |
 
+---
+
 ## What is Always Preserved
 
-Code blocks, inline code, JSON objects/arrays, URLs, file paths, XML/HTML tags, numbers. These are extracted before compression and reinserted after — never touched.
+Code blocks, inline code, JSON objects/arrays, URLs, file paths, XML/HTML tags. Extracted before compression, reinserted after — never touched by the scorer.
 
-## How it Works
-
-1. **Extract** — code, JSON, URLs, paths quarantined before processing
-2. **Score** — each sentence scored by Zipf density (word length >= 7 chars as rarity proxy)
-3. **Filter** — top N% sentences by density selected (default: 60%)
-4. **Benford Gate** — if compression increases MAD vs Benford's Law by >2×, relax ratio and retry (max 3 attempts)
-5. **Reassemble** — original sentence order restored, preserved blocks reinserted
-
-Benford's Law is used as a structural integrity signal: natural text has sentence-length distributions approximating the logarithmic Benford distribution. Over-compressed text deviates. The gate prevents producing text more artificial than the input.
+---
 
 ## Installation
 
@@ -108,26 +114,42 @@ On Windows:
 ### Direct
 
 ```bash
-# With uvx (recommended)
-uvx mcp-server-pith
-
-# With pip
+uvx mcp-server-pith          # recommended — no install
 pip install mcp-server-pith
 python -m mcp_server_pith
 ```
 
+---
+
+## How it Works
+
+1. **Extract** — code, JSON, URLs, paths quarantined before processing
+2. **Score** — each sentence scored by Zipf density (word length ≥ 7 chars as rarity proxy)
+3. **Filter** — top N% sentences by density selected (default: 60%)
+4. **Benford Gate** — if compression increases MAD vs Benford's Law by > 2×, relax ratio and retry (max 3 attempts)
+5. **Reassemble** — original sentence order restored, preserved blocks reinserted
+
+Full algorithm documentation, theory (Nash equilibrium, Zipf's Law, Benford's Law), comparison matrix, and benchmarks are in the [standalone repository](https://github.com/VjAlbert/pith-skill).
+
+---
+
 ## Windows Encoding
 
-`sys.stdout.reconfigure(encoding="utf-8", errors="replace")` is applied at startup, preventing `UnicodeEncodeError: 'charmap' codec can't encode character` errors common in Windows CP1252 terminals when handling Unicode characters in LLM outputs.
+At startup, both `sys.stdout` and `sys.stdin` are reconfigured to UTF-8 with `hasattr`-guarded calls, preventing `UnicodeEncodeError` on Windows CP1252 terminals. The guards ensure the calls are no-ops on non-standard streams (e.g., `StringIO` in test suites).
 
-## Testing
+---
+
+## Development
 
 ```bash
 cd src/pith
-python tests/run_evals.py
+uv sync --locked --all-extras --dev
+uv run pytest            # run eval suite
+uv run --frozen pyright  # type check
+uv build                 # package
 ```
 
-All 7 eval cases cover: core compression, code preservation, passthrough (short payloads), JSON preservation, aggressive compression, URL preservation, and Benford metadata output.
+---
 
 ## License
 
