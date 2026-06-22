@@ -1,6 +1,6 @@
-# PITH MCP Server
+# PITH v2 MCP Server
 
-An MCP server that compresses inter-agent payloads to eliminate token waste in multi-agent pipelines. Uses Zipf word-density scoring validated by Benford's Law structural integrity check. Zero external dependencies beyond the MCP SDK.
+An MCP server that compresses inter-agent payloads to eliminate token waste in multi-agent pipelines. Uses **Shannon local information scoring** (I(w) = log2(total) − LOG_CACHE[count(w)]) validated by Benford's Law structural integrity check. SIZE_GATE = 10 000 chars ensures Benford statistical stability (≥100 sentences) and positive compute ROI. Zero external dependencies beyond the MCP SDK.
 
 > **Core logic and full documentation:** [github.com/VjAlbert/pith-skill](https://github.com/VjAlbert/pith-skill)
 
