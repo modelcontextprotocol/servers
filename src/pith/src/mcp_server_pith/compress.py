@@ -18,7 +18,7 @@ import heapq
 from collections import Counter
 
 if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
 
 # ── Configuration ────────────────────────────────────────────────────
 DEFAULT_RATIO = 0.60   # Keep top 60% of sentences by density
@@ -180,6 +180,8 @@ def compress(text, target_ratio=DEFAULT_RATIO):
 
     kept_sentences = sentences
     compressed_mad = original_mad
+    candidate: list[str] = []
+    candidate_mad: float = original_mad
 
     for attempt in range(MAX_RETRIES):
         top = heapq.nlargest(keep_n, scored, key=lambda x: x[2])
