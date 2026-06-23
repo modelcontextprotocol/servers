@@ -1,12 +1,8 @@
 """PITH v2 unit tests — SIZE_GATE=10000, Shannon LUT, Polarity, Benford."""
-import sys
 import time
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import mcp_server_pith.compress as compress_mod
 from mcp_server_pith.compress import (
@@ -20,7 +16,7 @@ from mcp_server_pith.compress import (
 
 assert SIZE_GATE == 10000, f"Tests require SIZE_GATE=10000, got {SIZE_GATE}"
 
-# ── Diverse text generator ────────────────────────────────────────────
+# ── Diverse text generator (> SIZE_GATE chars, varied vocabulary) ─────
 
 _SENTENCES = [
     "Quantum computing exploits superposition to process multiple computational states simultaneously.",
@@ -42,6 +38,7 @@ _SENTENCES = [
 
 
 def diverse_long_text(chars: int = SIZE_GATE + 2000) -> str:
+    """Diverse technical text longer than SIZE_GATE with varied word frequencies."""
     parts: list[str] = []
     while sum(len(p) + 1 for p in parts) < chars:
         parts.extend(_SENTENCES)
@@ -68,7 +65,7 @@ class TestSizeGate:
         assert elapsed_ms < 1.0, f"Size gate latency {elapsed_ms:.2f}ms > 1ms"
 
     def test_passthrough_near_boundary(self):
-        text = "word " * 1800
+        text = "word " * 1800  # ~9000 chars, < 10000
         assert len(text) < SIZE_GATE
         result, meta = compress(text)
         assert result == text
@@ -87,30 +84,39 @@ class TestSizeGate:
         assert "size gate" not in meta.get("reason", "")
 
 
-# ── Test 2: Shannon >= Threshold ──────────────────────────────────────
+# ── Test 2: >= Threshold — rare words with equal Shannon score kept ───
 
 class TestShannonThreshold:
     def test_ge_threshold_rare_words_not_bulk_deleted(self):
+        """
+        All unique words share I(w) = log2(N). With >= at threshold boundary,
+        these must NOT be bulk-deleted. At least one rare technical term survives.
+        """
         base = diverse_long_text()
+        # Add extra rare term that appears exactly once
         text = base + " NeuralPITH tokenized latency benchmark achieved."
         assert len(text) >= SIZE_GATE
         result, meta = compress(text, target_ratio=0.7)
         if meta["action"] == "compressed":
+            # "NeuralPITH" appears once → max I(w) → must survive >= threshold
             assert "NeuralPITH" in result, (
-                f">= threshold violated: unique word pruned.\n"
+                f">= threshold violated: unique word 'NeuralPITH' pruned.\n"
                 f"meta={meta}\nresult[:300]={result[:300]}"
             )
 
     def test_common_words_pruned_below_threshold(self):
+        """High-frequency words fall below threshold → get pruned."""
         text = diverse_long_text()
+        assert len(text) >= SIZE_GATE
         result, meta = compress(text, target_ratio=0.5)
         if meta["action"] == "compressed":
-            assert meta["saved_pct"] > 0
+            assert meta["saved_pct"] > 0, "Expected token reduction on diverse text"
 
     def test_log_cache_populated_after_compression(self):
-        compress_mod.LOG_CACHE.clear()
-        compress(diverse_long_text(), target_ratio=0.7)
-        assert len(compress_mod.LOG_CACHE) > 0
+        compress_mod._log2.cache_clear()
+        text = diverse_long_text()
+        compress(text, target_ratio=0.7)
+        assert compress_mod._log2.cache_info().currsize > 0, "_log2 lru_cache never populated"
 
     def test_logical_whitelist_always_kept(self):
         assert "not"   in LOGICAL_WHITELIST
@@ -138,41 +144,52 @@ class TestFillerPatterns:
 
     def test_filler_removed_from_long_text(self):
         base = diverse_long_text()
-        text = base + (
+        filler = (
             " I believe this information covers the topic adequately."
             " No errors were encountered during runtime."
             " Let me summarize what I found."
         )
+        text = base + filler
         assert len(text) >= SIZE_GATE
         result, meta = compress(text, target_ratio=0.7)
         if meta["action"] == "compressed":
-            assert "I believe" not in result
-            assert "Let me" not in result
+            assert "I believe" not in result, "Filler 'I believe' survived into output"
+            assert "Let me" not in result, "Filler 'Let me' survived into output"
 
     def test_filler_removal_does_not_invert_content_negations(self):
+        """Filler removal is sentence-level; content negations in non-filler sentences kept."""
         base = diverse_long_text()
-        text = base + " The system must never process invalid inputs without explicit authorization."
+        content = " The system must never process invalid inputs without explicit authorization."
+        text = base + content
         assert len(text) >= SIZE_GATE
         result, meta = compress(text, target_ratio=0.7)
         if meta["action"] == "compressed":
             low = result.lower()
-            assert "never" in low or "not" in low or "invalid" in low
+            assert "never" in low or "not" in low or "invalid" in low, (
+                "Content negation incorrectly removed"
+            )
 
 
-# ── Test 4: Benford Gate ──────────────────────────────────────────────
+# ── Test 4: Benford Gate Stability ───────────────────────────────────
 
 class TestBenfordGate:
     def test_no_false_rollback_normal_compression(self):
+        """
+        Long diverse text (>10000 chars → ~100+ sentences) must not trigger
+        spurious Benford rollback under default compression settings.
+        """
         text = diverse_long_text(chars=SIZE_GATE + 5000)
+        assert len(text) >= SIZE_GATE
         result, meta = compress(text, target_ratio=0.7)
         if meta["action"] == "compressed":
             assert meta.get("benford_ok", True), (
-                f"False Benford rollback.\n"
+                f"False Benford rollback on natural text.\n"
                 f"original_mad={meta.get('original_benford_mad')}, "
                 f"compressed_mad={meta.get('compressed_benford_mad')}"
             )
 
     def test_benford_gate_retries_on_forced_failure(self):
+        """When MAD exceeds threshold, algorithm retries and reduces compression."""
         text = diverse_long_text()
         call_count = [0]
         real = compress_mod.benford_mad
@@ -180,18 +197,19 @@ class TestBenfordGate:
         def mock(sentences):
             call_count[0] += 1
             if call_count[0] == 1:
-                return 5.0
+                return 5.0   # original_mad
             if call_count[0] == 2:
-                return 50.0
+                return 50.0  # force failure: 50 > 5 * 2
             return real(sentences)
 
         with patch.object(compress_mod, "benford_mad", mock):
             result, _ = compress_mod.compress(text)
 
         assert result is not None
-        assert call_count[0] > 2
+        assert call_count[0] > 2, "Benford gate never retried"
 
     def test_benford_gate_bounded_retries(self):
+        """Benford gate caps at MAX_RETRIES iterations — no infinite loop."""
         text = diverse_long_text()
         call_count = [0]
 
@@ -200,12 +218,13 @@ class TestBenfordGate:
             return 9999.0
 
         with patch.object(compress_mod, "benford_mad", always_fail):
-            result, _ = compress_mod.compress(text)
+            result, meta = compress_mod.compress(text)
 
         assert result is not None
         assert call_count[0] <= MAX_RETRIES + 2
 
     def test_benford_gate_halves_reduction(self):
+        """On gate failure, current_reduction halves → subsequent threshold is lower."""
         text = diverse_long_text()
         call_count = [0]
         real = compress_mod.benford_mad
@@ -220,9 +239,9 @@ class TestBenfordGate:
         def mock_benford(sentences):
             call_count[0] += 1
             if call_count[0] == 1:
-                return 4.0
+                return 4.0   # original_mad
             if call_count[0] <= 3:
-                return 40.0
+                return 40.0  # force failure twice
             return real(sentences)
 
         with (
@@ -231,7 +250,9 @@ class TestBenfordGate:
         ):
             compress_mod.compress(text)
 
-        assert len(set(round(t, 6) for t in threshold_history)) >= 1
+        # Multiple iterations must have occurred and threshold must have changed
+        unique_thresholds = set(round(t, 6) for t in threshold_history)
+        assert len(unique_thresholds) >= 2  # halving must produce distinct thresholds across attempts
 
 
 # ── Test 5: Polarity Protection ───────────────────────────────────────
@@ -240,17 +261,22 @@ class TestPolarityProtection:
     def test_negation_whitelist_words_survive(self):
         text = diverse_long_text()
         text += " The pipeline must never fail and should not discard validated results."
+        assert len(text) >= SIZE_GATE
         result, meta = compress(text, target_ratio=0.5)
         if meta["action"] == "compressed":
-            assert "never" in result.lower() or "not" in result.lower()
+            assert "never" in result.lower() or "not" in result.lower(), (
+                "Negation words removed from content sentence"
+            )
 
     def test_polarity_rollback_on_negation_loss(self):
+        """Sentences that lose negation particles during pruning are restored."""
         call_log: list[int] = []
         orig = compress_mod._count_negations
 
         def mock_count(s):
             v = orig(s)
             call_log.append(v)
+            # Every "after" call (even index) returns divergent value → triggers rollback
             if len(call_log) % 2 == 0:
                 return v + 1
             return v
@@ -268,7 +294,9 @@ class TestMetaContextReceptor:
         text = diverse_long_text()
         result, meta = compress(text)
         if meta["action"] == "compressed":
-            assert result.startswith("<pith_optimization_layer")
+            assert result.startswith("<pith_optimization_layer"), (
+                f"Missing XML wrapper. result[:80]={result[:80]}"
+            )
             assert result.strip().endswith("</pith_optimization_layer>")
 
     def test_xml_attributes_present(self):

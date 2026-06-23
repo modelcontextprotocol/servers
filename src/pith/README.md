@@ -1,6 +1,6 @@
 # PITH v2 MCP Server
 
-An MCP server that compresses inter-agent payloads to eliminate token waste in multi-agent pipelines. Uses **Shannon local information scoring** (I(w) = log2(total) − LOG_CACHE[count(w)]) validated by Benford's Law structural integrity check. SIZE_GATE = 10 000 chars ensures Benford statistical stability (≥100 sentences) and positive compute ROI. Zero external dependencies beyond the MCP SDK.
+An MCP server that compresses inter-agent payloads to eliminate token waste in multi-agent pipelines. Uses **Shannon local information scoring** (I(w) = log2(total) − log2(count(w))) validated by Benford's Law structural integrity check; log2 lookups are O(1) via `@functools.lru_cache(maxsize=8192)`. SIZE_GATE = 10 000 chars ensures Benford statistical stability (≥100 sentences) and positive compute ROI. Zero external dependencies beyond the MCP SDK.
 
 > **Core logic and full documentation:** [github.com/VjAlbert/pith-skill](https://github.com/VjAlbert/pith-skill)
 
@@ -126,7 +126,7 @@ python -m mcp_server_pith
 1. **Size Gate** — payloads < 10 000 chars pass through unchanged (guarantees Benford stability ≥ 100 sentences)
 2. **Extract** — code blocks, JSON, URLs, file paths quarantined before processing
 3. **Filler Pre-pass** — boilerplate sentences (`"I believe…"`, `"Let me…"`, `"No errors…"`) removed before scoring
-4. **Shannon Score** — each token scored via local information: `I(w) = log2(total) − log2(count(w))`; LOG_CACHE LUT makes repeated lookups O(1)
+4. **Shannon Score** — each token scored via local information: `I(w) = log2(total) − log2(count(w))`; `@functools.lru_cache(maxsize=8192)` on `_log2` makes repeated lookups O(1)
 5. **Prune** — tokens below adaptive threshold removed; logical connectors (`not`, `never`, `if`, `or`, …) always kept; polarity micro-checksum rolls back sentences where negation count changes
 6. **Benford Gate** — if compressed MAD vs Benford's Law exceeds 2 × original MAD, halve reduction ratio and retry (max 3 attempts)
 7. **Reassemble** — sentence order preserved, quarantined blocks reinserted, output wrapped in `<pith_optimization_layer>` XML

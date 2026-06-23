@@ -37,8 +37,8 @@ async def list_tools() -> list[Tool]:
                     "ratio": {
                         "type": "number",
                         "description": (
-                            "Fraction of sentences to keep (0.1-1.0). "
-                            "0.6=default, 0.8=conservative, 0.4=aggressive, 0.3=maximum."
+                            "Fraction of token information to retain (0.1-1.0). "
+                            "Default = 0.7. Lower = more aggressive pruning."
                         ),
                         "default": DEFAULT_RATIO,
                     },
@@ -49,7 +49,8 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="compress_with_metadata",
             description=(
-                "Compress a payload with PITH and return full JSON metadata including "
+                "Compress a payload with PITH (Shannon local information scoring "
+                "validated by Benford's Law) and return full JSON metadata including "
                 "token counts, Benford MAD values, and compression ratio. "
                 "Use for programmatic pipelines or when you need to inspect compression quality."
             ),
@@ -63,8 +64,8 @@ async def list_tools() -> list[Tool]:
                     "ratio": {
                         "type": "number",
                         "description": (
-                            "Fraction of sentences to keep (0.1-1.0). "
-                            "0.6=default, 0.8=conservative, 0.4=aggressive, 0.3=maximum."
+                            "Fraction of token information to retain (0.1-1.0). "
+                            "Default = 0.7. Lower = more aggressive pruning."
                         ),
                         "default": DEFAULT_RATIO,
                     },

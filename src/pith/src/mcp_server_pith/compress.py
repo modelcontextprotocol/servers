@@ -4,15 +4,14 @@ PITH v2 — Inter-Agent Payload Compressor
 Shannon local information scoring + Benford structural validation
 
 Pipeline:
-  1. Size gate  (< 10000 chars → passthrough; guarantees Benford stability ≥100 sentences)
-  2. LOG_CACHE  O(1) lookup table for log2
-  3. FILLER     sentence-level boilerplate removal before Shannon scoring
-  4. Shannon    local profiling  I(w) = log2(total) - LOG_CACHE[count(w)]
-  5. Whitelist  logical connectors always preserved
-  6. Pruning    adaptive token pruning: keep if I(w) >= threshold
-  7. Polarity   micro-checksum per sentence; rollback on negation change
-  8. Benford    macro gate; halve reduction and retry on MAD breach (max 3)
-  9. Receptor   wrap output in <pith_optimization_layer> XML
+  1. Size gate  (< 10000 chars → passthrough)
+  2. _log2()    O(1) lru_cache for log2 lookups
+  3. Shannon    local profiling  I(w) = -log2(P(w))
+  4. Whitelist  logical connectors always preserved
+  5. Pruning    adaptive token pruning by information threshold
+  6. Polarity   micro-checksum per sentence; rollback on negation change
+  7. Benford    macro gate; halve reduction and retry on MAD breach
+  8. Receptor   wrap output in <pith_optimization_layer> XML
 """
 
 import sys
@@ -20,6 +19,7 @@ import re
 import json
 import math
 import argparse
+import functools
 from collections import Counter
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -28,24 +28,18 @@ if hasattr(sys.stdin, "reconfigure"):
     sys.stdin.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 
 # ── Constants ─────────────────────────────────────────────────────────
-SIZE_GATE         = 10000  # chars; guarantees ≥100 sentences for Benford stability
-DEFAULT_RATIO     = 0.70
-BENFORD_TOLERANCE = 2.0
-MIN_SENTENCES     = 3
-MAX_RETRIES       = 3
+SIZE_GATE         = 10000   # chars; payloads below this pass through unchanged
+DEFAULT_RATIO     = 0.70    # keep ratio → target_reduction = 1 - ratio = 0.30
+BENFORD_TOLERANCE = 2.0     # MAD multiplier before Benford gate fires
+MIN_SENTENCES     = 5       # minimum sentence count to attempt compression (≥5 for benford_mad to be non-zero)
+MAX_RETRIES       = 3       # Benford gate retry cap
 _VERSION          = "2.0"
 _ENGINE           = "shannon_local"
 
-# ── Log2 Lookup Table (LUT) ───────────────────────────────────────────
-LOG_CACHE: dict[int, float] = {}
-
-
+# ── Log2 LRU Cache ────────────────────────────────────────────────────
+@functools.lru_cache(maxsize=8192)
 def _log2(n: int) -> float:
-    v = LOG_CACHE.get(n)
-    if v is None:
-        v = math.log2(n) if n > 0 else 0.0
-        LOG_CACHE[n] = v
-    return v
+    return math.log2(n) if n > 0 else 0.0
 
 
 # ── Benford Reference Distribution ────────────────────────────────────
@@ -85,7 +79,7 @@ PRESERVE_PATTERNS = [
     ("json_arr",    re.compile(r"\[[^\[\]]{10,}\]")),
     ("url",         re.compile(r"https?://\S+")),
     ("filepath",    re.compile(r"(?:/[\w.\-_]+){2,}")),
-    ("xml_tag",     re.compile(r"<[a-zA-Z][^>]*>[\s\S]*?</[a-zA-Z]+>")),
+    ("xml_tag",     re.compile(r"<[a-zA-Z_][^>]*>[\s\S]*?</[a-zA-Z_]+>")),
 ]
 
 _SPLIT_SENT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-ZÀ-ɏ])")
@@ -129,6 +123,7 @@ def split_sentences(text: str) -> list[str]:
 
 
 def _compute_shannon(words: list[str]) -> dict[str, float]:
+    """I(w) = -log2(P(w)) via lru_cache."""
     total = len(words)
     if total == 0:
         return {}
@@ -154,11 +149,12 @@ def _prune_tokens(sentence: str, info: dict[str, float], threshold: float) -> st
             if w in LOGICAL_WHITELIST or info.get(w, float("inf")) >= threshold:
                 kept.append(tok)
         else:
-            kept.append(tok)
+            kept.append(tok)  # punctuation and spaces always preserved
     return _SPACE_RE.sub(" ", "".join(kept)).strip()
 
 
 def benford_mad(sentences: list[str]) -> float:
+    """Mean Absolute Deviation of sentence-length first digits from Benford's Law."""
     lengths = [len(s.split()) for s in sentences if s.split()]
     if len(lengths) < 5:
         return 0.0
@@ -216,14 +212,17 @@ def compress(text: str, target_ratio: float = DEFAULT_RATIO) -> tuple[str, dict]
 
     original_mad = benford_mad(sentences)
 
-    # 3. Shannon local profiling via LOG_CACHE LUT
+    # 3. Shannon local profiling via _log2 lru_cache
     all_words  = [w.lower() for w in _WORD_RE.findall(working)]
     info       = _compute_shannon(all_words)
-    all_scores = sorted(info.get(w, 0.0) for w in all_words)
+    all_scores = sorted(info.get(w, 0.0) for w in all_words)  # computed once
 
     pruned: list[str]  = sentences
     compressed_mad     = original_mad
     current_reduction  = target_reduction
+
+    # Pre-compute per-sentence negation counts — invariant across Benford retries
+    orig_negations = {i: _count_negations(sent) for i, sent in enumerate(sentences)}
 
     for _attempt in range(MAX_RETRIES):
         if not all_scores:
@@ -234,22 +233,23 @@ def compress(text: str, target_ratio: float = DEFAULT_RATIO) -> tuple[str, dict]
 
         # 5+6. Token pruning with filler pre-pass and polarity micro-checksum
         pruned = []
-        for sent in sentences:
+        for i, sent in enumerate(sentences):
+            # Sentence-level filler removal (procedural / hedging boilerplate)
             if FILLER_PATTERNS.match(sent.strip()):
-                continue
+                continue  # drop whole sentence; polarity check is for token pruning only
 
-            neg_before = _count_negations(sent)
+            neg_before = orig_negations[i]
             candidate  = _prune_tokens(sent, info, threshold)
             neg_after  = _count_negations(candidate)
             if neg_before != neg_after or not candidate.strip():
-                pruned.append(sent)
+                pruned.append(sent)       # local raw passthrough
             else:
                 pruned.append(candidate)
 
         # 7. Benford macro gate
         candidate_mad = benford_mad(pruned)
         if original_mad > 0 and candidate_mad > original_mad * BENFORD_TOLERANCE:
-            current_reduction *= 0.5
+            current_reduction *= 0.5      # halve reduction, retry
             continue
 
         compressed_mad = candidate_mad
