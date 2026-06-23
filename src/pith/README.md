@@ -123,11 +123,13 @@ python -m mcp_server_pith
 
 ## How it Works
 
-1. **Extract** — code, JSON, URLs, paths quarantined before processing
-2. **Score** — each sentence scored by Zipf density (word length ≥ 7 chars as rarity proxy)
-3. **Filter** — top N% sentences by density selected (default: 60%)
-4. **Benford Gate** — if compression increases MAD vs Benford's Law by > 2×, relax ratio and retry (max 3 attempts)
-5. **Reassemble** — original sentence order restored, preserved blocks reinserted
+1. **Size Gate** — payloads < 10 000 chars pass through unchanged (guarantees Benford stability ≥ 100 sentences)
+2. **Extract** — code blocks, JSON, URLs, file paths quarantined before processing
+3. **Filler Pre-pass** — boilerplate sentences (`"I believe…"`, `"Let me…"`, `"No errors…"`) removed before scoring
+4. **Shannon Score** — each token scored via local information: `I(w) = log2(total) − log2(count(w))`; LOG_CACHE LUT makes repeated lookups O(1)
+5. **Prune** — tokens below adaptive threshold removed; logical connectors (`not`, `never`, `if`, `or`, …) always kept; polarity micro-checksum rolls back sentences where negation count changes
+6. **Benford Gate** — if compressed MAD vs Benford's Law exceeds 2 × original MAD, halve reduction ratio and retry (max 3 attempts)
+7. **Reassemble** — sentence order preserved, quarantined blocks reinserted, output wrapped in `<pith_optimization_layer>` XML
 
 Full algorithm documentation, theory (Nash equilibrium, Zipf's Law, Benford's Law), comparison matrix, and benchmarks are in the [standalone repository](https://github.com/VjAlbert/pith-skill).
 

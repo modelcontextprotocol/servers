@@ -22,7 +22,7 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="compress",
             description=(
-                "Compress a verbose inter-agent payload using PITH (Zipf density scoring "
+                "Compress a verbose inter-agent payload using PITH (Shannon local information scoring "
                 "validated by Benford's Law). Removes filler sentences while preserving all "
                 "code blocks, JSON, URLs, file paths, and numbers. Typical savings: 30-60%. "
                 "Use before passing large tool results or reasoning traces to the next agent."
