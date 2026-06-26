@@ -117,7 +117,8 @@ const WriteFileArgsSchema = z.object({
 
 const EditOperation = z.object({
   oldText: z.string().describe('Text to search for - must match exactly'),
-  newText: z.string().describe('Text to replace with')
+  newText: z.string().optional().describe('Text to replace with'),
+  newText_base64: z.string().optional().describe('Base64-encoded UTF-8 replacement text. Use when newText contains characters that are hard to serialize safely in JSON.')
 });
 
 const EditFileArgsSchema = z.object({
@@ -374,7 +375,8 @@ server.registerTool(
       path: z.string(),
       edits: z.array(z.object({
         oldText: z.string().describe("Text to search for - must match exactly"),
-        newText: z.string().describe("Text to replace with")
+        newText: z.string().optional().describe("Text to replace with"),
+        newText_base64: z.string().optional().describe("Base64-encoded UTF-8 replacement text. Use when newText contains characters that are hard to serialize safely in JSON.")
       })),
       dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
     },
@@ -383,7 +385,21 @@ server.registerTool(
   },
   async (args: z.infer<typeof EditFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
-    const result = await applyFileEdits(validPath, args.edits, args.dryRun);
+    const edits = args.edits.map((edit) => {
+      const newText = edit.newText_base64 !== undefined
+        ? Buffer.from(edit.newText_base64, "base64").toString("utf-8")
+        : edit.newText;
+
+      if (newText === undefined) {
+        throw new Error("Each edit must provide either newText or newText_base64");
+      }
+
+      return {
+        oldText: edit.oldText,
+        newText,
+      };
+    });
+    const result = await applyFileEdits(validPath, edits, args.dryRun);
     return {
       content: [{ type: "text" as const, text: result }],
       structuredContent: { content: result }

@@ -123,6 +123,32 @@ describe('structuredContent schema compliance', () => {
     });
   });
 
+  describe('edit_file', () => {
+    it('should decode newText_base64 before applying edits', async () => {
+      const filePath = path.join(testDir, 'script.ps1');
+      const replacement = 'if ($null -eq $toolObject.Config) { Write-Output "$($toolObject.Name)" }';
+      await fs.writeFile(filePath, 'PLACEHOLDER\n');
+
+      const result = await client.callTool({
+        name: 'edit_file',
+        arguments: {
+          path: filePath,
+          edits: [{
+            oldText: 'PLACEHOLDER',
+            newText_base64: Buffer.from(replacement, 'utf-8').toString('base64')
+          }],
+          dryRun: false
+        }
+      });
+
+      expect(result.structuredContent).toBeDefined();
+      expect(await fs.readFile(filePath, 'utf-8')).toBe(`${replacement}\n`);
+
+      const structuredContent = result.structuredContent as { content: unknown };
+      expect(structuredContent.content).toContain(replacement);
+    });
+  });
+
   describe('list_directory (control - already working)', () => {
     it('should return structuredContent.content as a string', async () => {
       const result = await client.callTool({
