@@ -112,7 +112,8 @@ const ReadMultipleFilesArgsSchema = z.object({
 
 const WriteFileArgsSchema = z.object({
   path: z.string(),
-  content: z.string(),
+  content: z.string().optional(),
+  content_base64: z.string().optional(),
 });
 
 const EditOperation = z.object({
@@ -346,14 +347,23 @@ server.registerTool(
       "Handles text content with proper encoding. Only works within allowed directories.",
     inputSchema: {
       path: z.string(),
-      content: z.string()
+      content: z.string().optional(),
+      content_base64: z.string().optional().describe("Base64-encoded UTF-8 content. Use when content contains characters that are hard to serialize safely in JSON.")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
   },
   async (args: z.infer<typeof WriteFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
-    await writeFileContent(validPath, args.content);
+    const content = args.content_base64 !== undefined
+      ? Buffer.from(args.content_base64, "base64").toString("utf-8")
+      : args.content;
+
+    if (content === undefined) {
+      throw new Error("Must provide either content or content_base64");
+    }
+
+    await writeFileContent(validPath, content);
     const text = `Successfully wrote to ${args.path}`;
     return {
       content: [{ type: "text" as const, text }],

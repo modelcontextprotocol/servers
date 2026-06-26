@@ -123,6 +123,27 @@ describe('structuredContent schema compliance', () => {
     });
   });
 
+  describe('write_file', () => {
+    it('should decode content_base64 before writing the file', async () => {
+      const filePath = path.join(testDir, 'base64-write.md');
+      const content = '# Test\n\n`inline code` with "quotes" and ${template} literals.\n';
+
+      const result = await client.callTool({
+        name: 'write_file',
+        arguments: {
+          path: filePath,
+          content_base64: Buffer.from(content, 'utf-8').toString('base64')
+        }
+      });
+
+      expect(result.structuredContent).toBeDefined();
+      expect(await fs.readFile(filePath, 'utf-8')).toBe(content);
+
+      const structuredContent = result.structuredContent as { content: unknown };
+      expect(structuredContent.content).toContain('Successfully wrote');
+    });
+  });
+
   describe('list_directory (control - already working)', () => {
     it('should return structuredContent.content as a string', async () => {
       const result = await client.callTool({
