@@ -2,7 +2,35 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { ensureMemoryFilePath, defaultMemoryPath } from '../index.js';
+import { ensureMemoryFilePath, defaultMemoryPath, readPackageVersion } from '../index.js';
+
+describe('readPackageVersion', () => {
+  const testDir = path.dirname(fileURLToPath(import.meta.url));
+  const firstCandidate = path.join(testDir, `missing-package-${Date.now()}.json`);
+  const fallbackPackagePath = path.join(testDir, `package-version-${Date.now()}.json`);
+
+  afterEach(async () => {
+    try {
+      await fs.unlink(fallbackPackagePath);
+    } catch {
+      // Ignore if file doesn't exist
+    }
+  });
+
+  it('reads the server version from package.json', () => {
+    const version = readPackageVersion();
+
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it('uses the next package.json candidate when the first path is unavailable', async () => {
+    await fs.writeFile(fallbackPackagePath, JSON.stringify({ version: '2026.1.26' }));
+
+    const version = readPackageVersion([firstCandidate, fallbackPackagePath]);
+
+    expect(version).toBe('2026.1.26');
+  });
+});
 
 describe('ensureMemoryFilePath', () => {
   const testDir = path.dirname(fileURLToPath(import.meta.url));

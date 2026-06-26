@@ -4,12 +4,34 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { promises as fs } from 'fs';
+import { promises as fs, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+
+export function readPackageVersion(
+  packageJsonPaths = [
+    path.join(currentDir, 'package.json'),
+    path.join(currentDir, '..', 'package.json'),
+  ],
+): string {
+  for (const packageJsonPath of packageJsonPaths) {
+    try {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as { version?: unknown };
+      if (typeof packageJson.version === 'string' && packageJson.version.length > 0) {
+        return packageJson.version;
+      }
+    } catch {
+      // Try the next candidate; source and dist resolve package.json from different directories.
+    }
+  }
+
+  throw new Error('Unable to read @modelcontextprotocol/server-memory package version');
+}
+
 // Define memory file path using environment variable with fallback
-export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
+export const defaultMemoryPath = path.join(currentDir, 'memory.jsonl');
 
 // Handle backward compatibility: migrate memory.json to memory.jsonl if needed
 export async function ensureMemoryFilePath(): Promise<string> {
@@ -17,11 +39,11 @@ export async function ensureMemoryFilePath(): Promise<string> {
     // Custom path provided, use it as-is (with absolute path resolution)
     return path.isAbsolute(process.env.MEMORY_FILE_PATH)
       ? process.env.MEMORY_FILE_PATH
-      : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH);
+      : path.join(currentDir, process.env.MEMORY_FILE_PATH);
   }
   
   // No custom path set, check for backward compatibility migration
-  const oldMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
+  const oldMemoryPath = path.join(currentDir, 'memory.json');
   const newMemoryPath = defaultMemoryPath;
   
   try {
@@ -256,7 +278,7 @@ const RelationSchema = z.object({
 // The server instance and tools exposed to Claude
 const server = new McpServer({
   name: "memory-server",
-  version: "0.6.3",
+  version: readPackageVersion(),
 });
 
 const RESOURCE_URI = "memory://knowledge-graph";
