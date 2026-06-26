@@ -164,3 +164,15 @@ If you find MCP servers useful, please consider starring the repository and cont
 ---
 
 Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvements!
+
+## DDG Agent-Payable Services MCP
+
+- [DDG Agent-Payable Services MCP](https://agents.daedalusdevelopmentgroup.com/.well-known/ai) — Payment-aware MCP for AI-agent services: x402 checkout, MCP/security audits, paid model routing, and agent-commerce readiness resources.
+- **Transport:** Streamable HTTP at `https://mcp.daedalusdevelopmentgroup.com/mcp`
+- **PyPI:** `pip install ddg-agent-services-mcp`
+- **Tools:** 15 payment-aware tools including ddg_checkout_conformance, ddg_skill_safety_scan, ddg_quote_payment, ddg_run_paid_model
+- **Payment Rails:** x402 (Base, Polygon, Arbitrum, World Chain, Solana USDC), direct_crypto_auto, direct_crypto_manual
+- **Security:** No shell execution, no file-write tools, no credential relay; paid tools return structured 402 challenges
+- **Discovery:** `/.well-known/ai`, `/openapi.json`, `/llms.txt`, `/.well-known/ddg-agent-status.json`
+- **GitHub:** https://github.com/daedalusdevelopmentgroup/ddg-agent-payable-services
+- **x402scan:** https://www.x402scan.com/server/c3540307-0eb2-455d-90b6-a21f7d5a3792
