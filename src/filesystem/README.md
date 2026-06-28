@@ -30,6 +30,11 @@ Roots notified by Client to Server, completely replace any server-side Allowed d
 
 This is the recommended method, as this enables runtime directory updates via `roots/list_changed` notifications without server restart, providing a more flexible and modern integration experience.
 
+> [!NOTE]
+> **Argless Form & Auditing**:
+> Starting the server without path arguments (e.g., `["-y", "@modelcontextprotocol/server-filesystem"]`) is valid, but it delegates the access boundary entirely to the client's roots at runtime. 
+> Because the client dynamically determines what paths are allowed, the access boundary is not self-contained or visible in the MCP configuration file. For an auditable, self-contained configuration where the allowed paths are clearly defined at config-review time, you should specify the directories explicitly as command-line arguments (e.g., `["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"]`).
+
 ### How It Works
 
 The server's directory access control follows this flow:
