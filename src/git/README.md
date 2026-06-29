@@ -1,6 +1,7 @@
 # mcp-server-git: A git MCP server
-
 <!-- mcp-name: io.github.modelcontextprotocol/server-git -->
+
+Source: [modelcontextprotocol/servers/src/git](https://github.com/modelcontextprotocol/servers/tree/main/src/git)
 
 ## Overview
 
