@@ -59,6 +59,20 @@ describe('KnowledgeGraphManager', () => {
       const newEntities = await manager.createEntities([]);
       expect(newEntities).toHaveLength(0);
     });
+    it('should preserve concurrent entity writes', async () => {
+      const entities = Array.from({ length: 20 }, (_, index) => ({
+        name: `Entity ${index}`,
+        entityType: 'test',
+        observations: [],
+      }));
+
+      await Promise.all(entities.map(entity => manager.createEntities([entity])));
+
+      const graph = await manager.readGraph();
+      expect(graph.entities).toHaveLength(20);
+      expect(new Set(graph.entities.map(entity => entity.name)).size).toBe(20);
+    });
+
   });
 
   describe('createRelations', () => {
