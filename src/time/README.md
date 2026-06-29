@@ -1,6 +1,7 @@
 # Time MCP Server
-
 <!-- mcp-name: io.github.modelcontextprotocol/server-time -->
+
+Source: [modelcontextprotocol/servers/src/time](https://github.com/modelcontextprotocol/servers/tree/main/src/time)
 
 A Model Context Protocol server that provides time and timezone conversion capabilities. This server enables LLMs to get current time information and perform timezone conversions using IANA timezone names, with automatic system timezone detection.
 
