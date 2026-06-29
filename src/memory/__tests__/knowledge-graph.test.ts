@@ -323,6 +323,18 @@ describe('KnowledgeGraphManager', () => {
       expect(result.entities).toHaveLength(0);
       expect(result.relations).toHaveLength(0);
     });
+    it('should handle legacy entities without observations when searching', async () => {
+      await fs.writeFile(
+        testFilePath,
+        JSON.stringify({ type: 'entity', name: 'Legacy Node', entityType: 'person' }),
+      );
+
+      const result = await manager.searchNodes('Legacy');
+      expect(result.entities).toHaveLength(1);
+      expect(result.entities[0].name).toBe('Legacy Node');
+      expect(result.entities[0].observations).toEqual([]);
+    });
+
   });
 
   describe('openNodes', () => {

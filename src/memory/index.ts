@@ -79,7 +79,7 @@ export class KnowledgeGraphManager {
           graph.entities.push({
             name: item.name,
             entityType: item.entityType,
-            observations: item.observations
+            observations: Array.isArray(item.observations) ? item.observations : []
           });
         }
         if (item.type === "relation") {
