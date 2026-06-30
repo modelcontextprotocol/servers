@@ -227,7 +227,16 @@ def git_show(repo: git.Repo, revision: str) -> str:
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if revision.startswith("-"):
         raise BadName(f"Invalid revision: '{revision}' - cannot start with '-'")
-    commit = repo.commit(revision)
+    try:
+        commit = repo.commit(revision)
+    except (BadName, KeyError, ValueError):
+        # Support Git object specs such as "HEAD:path/to/file". GitPython's
+        # repo.commit() appends "^0", which makes valid blob specs fail as
+        # "path/to/file^0". Delegate these object specs to `git show` instead.
+        if ":" in revision:
+            return repo.git.show(revision)
+        raise
+
     output = [
         f"Commit: {commit.hexsha!r}\n"
         f"Author: {commit.author!r}\n"

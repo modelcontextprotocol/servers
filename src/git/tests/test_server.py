@@ -278,6 +278,18 @@ def test_git_show_initial_commit(test_repository):
     assert "test.txt" in result
 
 
+def test_git_show_blob_object_spec(test_repository):
+    file_path = Path(test_repository.working_dir) / "logic" / "position_realtime_infos.py"
+    file_path.parent.mkdir()
+    file_path.write_text('print("hello")\n')
+    test_repository.index.add(["logic/position_realtime_infos.py"])
+    test_repository.index.commit("add nested file")
+
+    result = git_show(test_repository, "HEAD:logic/position_realtime_infos.py")
+
+    assert 'print("hello")' in result
+
+
 # Tests for validate_repo_path (repository scoping security fix)
 
 def test_validate_repo_path_no_restriction():
