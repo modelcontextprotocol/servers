@@ -1,0 +1,24 @@
+--- a/src/memory/index.ts
++++ b/src/memory/index.ts
+@@ -1,11 +1,13 @@
+ #!/usr/bin/env node
+
++import { createRequire } from 'module';
+ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+ import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+ import { z } from "zod";
+ import { promises as fs } from 'fs';
+ import path from 'path';
+ import { fileURLToPath } from 'url';
++const require = createRequire(import.meta.url);
+
+ // Define memory file path using environment variable with fallback
+ export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
+@@ -255,7 +257,8 @@
+ // The server instance and tools exposed to Claude
+ const server = new McpServer({
+   name: "memory-server",
+-  version: "0.6.3",
++  version: require("../package.json").version,
+ });

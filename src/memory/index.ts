@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -256,7 +258,7 @@ const RelationSchema = z.object({
 // The server instance and tools exposed to Claude
 const server = new McpServer({
   name: "memory-server",
-  version: "0.6.3",
+  version: require("../package.json").version,
 });
 
 const RESOURCE_URI = "memory://knowledge-graph";
