@@ -6,18 +6,33 @@ import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextp
 import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
 
+// Expand a leading "~" to the user's home directory. MCP clients pass
+// MEMORY_FILE_PATH from JSON config, where no shell performs tilde expansion,
+// so an unexpanded "~" would otherwise be treated as a relative path and
+// joined onto the package directory. Mirrors the helper of the same name in
+// the filesystem server (src/filesystem/path-utils.ts).
+export function expandHome(filepath: string): string {
+  if (filepath.startsWith('~/') || filepath === '~') {
+    return path.join(os.homedir(), filepath.slice(1));
+  }
+  return filepath;
+}
+
 // Handle backward compatibility: migrate memory.json to memory.jsonl if needed
 export async function ensureMemoryFilePath(): Promise<string> {
   if (process.env.MEMORY_FILE_PATH) {
-    // Custom path provided, use it as-is (with absolute path resolution)
-    return path.isAbsolute(process.env.MEMORY_FILE_PATH)
-      ? process.env.MEMORY_FILE_PATH
-      : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH);
+    // Custom path provided. Expand a leading "~" first, then resolve relative
+    // paths against the package directory (absolute paths are used as-is).
+    const customPath = expandHome(process.env.MEMORY_FILE_PATH);
+    return path.isAbsolute(customPath)
+      ? customPath
+      : path.join(path.dirname(fileURLToPath(import.meta.url)), customPath);
   }
   
   // No custom path set, check for backward compatibility migration

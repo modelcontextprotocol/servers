@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
-import { ensureMemoryFilePath, defaultMemoryPath } from '../index.js';
+import { ensureMemoryFilePath, defaultMemoryPath, expandHome } from '../index.js';
 
 describe('ensureMemoryFilePath', () => {
   const testDir = path.dirname(fileURLToPath(import.meta.url));
@@ -71,6 +72,15 @@ describe('ensureMemoryFilePath', () => {
       } else {
         expect(path.isAbsolute(result)).toBe(true);
       }
+    });
+
+    it('should expand a leading "~/" to the home directory', async () => {
+      process.env.MEMORY_FILE_PATH = path.join('~', 'custom-memory.jsonl');
+
+      const result = await ensureMemoryFilePath();
+
+      expect(result).toBe(path.join(os.homedir(), 'custom-memory.jsonl'));
+      expect(path.isAbsolute(result)).toBe(true);
     });
   });
 
@@ -152,5 +162,31 @@ describe('ensureMemoryFilePath', () => {
     it('should be an absolute path', () => {
       expect(path.isAbsolute(defaultMemoryPath)).toBe(true);
     });
+  });
+});
+
+describe('expandHome', () => {
+  it('expands a bare "~" to the home directory', () => {
+    expect(expandHome('~')).toBe(os.homedir());
+  });
+
+  it('expands a leading "~/" to the home directory', () => {
+    expect(expandHome('~/notes/memory.jsonl')).toBe(
+      path.join(os.homedir(), 'notes/memory.jsonl')
+    );
+  });
+
+  it('leaves a "~" not followed by a separator unchanged', () => {
+    expect(expandHome('~backup.jsonl')).toBe('~backup.jsonl');
+  });
+
+  it('leaves absolute paths unchanged', () => {
+    expect(expandHome('/var/data/memory.jsonl')).toBe('/var/data/memory.jsonl');
+  });
+
+  it('leaves relative paths unchanged', () => {
+    expect(expandHome(path.join('data', 'memory.jsonl'))).toBe(
+      path.join('data', 'memory.jsonl')
+    );
   });
 });
