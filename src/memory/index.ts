@@ -4,9 +4,35 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { promises as fs } from 'fs';
+import { promises as fs, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+export function getPackageVersion(): string {
+  let currentDir = path.dirname(fileURLToPath(import.meta.url));
+
+  while (true) {
+    const packageJsonPath = path.join(currentDir, 'package.json');
+
+    try {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as {
+        name?: string;
+        version?: string;
+      };
+      if (packageJson.name === '@modelcontextprotocol/server-memory' && packageJson.version) {
+        return packageJson.version;
+      }
+    } catch {
+      // Keep walking up until we find this workspace package.
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      return '0.6.3';
+    }
+    currentDir = parentDir;
+  }
+}
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
@@ -256,7 +282,7 @@ const RelationSchema = z.object({
 // The server instance and tools exposed to Claude
 const server = new McpServer({
   name: "memory-server",
-  version: "0.6.3",
+  version: getPackageVersion(),
 });
 
 const RESOURCE_URI = "memory://knowledge-graph";

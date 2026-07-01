@@ -2,10 +2,18 @@ import { describe, it, expect, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SubscribeRequestSchema, UnsubscribeRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import {
+  getPackageVersion,
   KnowledgeGraphManager,
   registerKnowledgeGraphResource,
   registerKnowledgeGraphSubscriptions,
 } from '../index.js';
+import packageJson from '../package.json' with { type: 'json' };
+
+describe('package metadata', () => {
+  it('reads the server version from package.json', () => {
+    expect(getPackageVersion()).toBe(packageJson.version);
+  });
+});
 
 describe('knowledge-graph resource', () => {
   it('registers with kebab-case name, correct URI, and JSON mime type', () => {
