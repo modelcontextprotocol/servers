@@ -1,3 +1,5 @@
+# pyright: reportUnknownParameterType=false
+from typing import Any
 import os
 import httpx
 import json
@@ -20,7 +22,7 @@ def get_headers() -> dict:
 
 # Local store for payload between evaluate→commit
 # Maps token → payload so commit can forward the exact same payload
-_pending_payloads: dict[str, dict] = {}
+_pending_payloads: dict[str, Any] = {}
 
 
 @mcp.tool()
