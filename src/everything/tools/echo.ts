@@ -1,24 +1,23 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
+import { McpServer, CallToolResult } from '@modelcontextprotocol/server';
+import { z } from 'zod';
 
 // Tool input schema
 export const EchoSchema = z.object({
-  message: z.string().describe("Message to echo"),
+    message: z.string().describe('Message to echo')
 });
 
 // Tool configuration
-const name = "echo";
+const name = 'echo';
 const config = {
-  title: "Echo Tool",
-  description: "Echoes back the input string",
-  inputSchema: EchoSchema,
-  annotations: {
-    readOnlyHint: true,
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: false,
-  },
+    title: 'Echo Tool',
+    description: 'Echoes back the input string',
+    inputSchema: EchoSchema,
+    annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+    }
 };
 
 /**
@@ -31,10 +30,10 @@ const config = {
  * @returns {void}
  */
 export const registerEchoTool = (server: McpServer) => {
-  server.registerTool(name, config, async (args): Promise<CallToolResult> => {
-    const validatedArgs = EchoSchema.parse(args);
-    return {
-      content: [{ type: "text", text: `Echo: ${validatedArgs.message}` }],
-    };
-  });
+    server.registerTool(name, config, async (args): Promise<CallToolResult> => {
+        const validatedArgs = EchoSchema.parse(args);
+        return {
+            content: [{ type: 'text', text: `Echo: ${validatedArgs.message}` }]
+        };
+    });
 };

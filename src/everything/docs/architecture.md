@@ -29,9 +29,9 @@ resource subscriptions and simulated logging.
 
 ## Build and Distribution
 
-- TypeScript sources are compiled into `dist/` via `npm run build`.
-- The `build` script copies `docs/` into `dist/` so instruction files ship alongside the compiled server.
-- The CLI bin is configured in `package.json` as `mcp-server-everything` → `dist/index.js`.
+-   TypeScript sources are compiled into `dist/` via `npm run build`.
+-   The `build` script copies `docs/` into `dist/` so instruction files ship alongside the compiled server.
+-   The CLI bin is configured in `package.json` as `mcp-server-everything` → `dist/index.js`.
 
 ## [Project Structure](structure.md)
 

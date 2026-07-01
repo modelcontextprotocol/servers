@@ -1,12 +1,8 @@
 #!/usr/bin/env node
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolResult,
-  RootsListChangedNotificationSchema,
-  type Root,
-} from "@modelcontextprotocol/sdk/types.js";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
+import type { Root } from "@modelcontextprotocol/server";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
 import path from "path";
@@ -210,13 +206,14 @@ const readTextFileHandler = async (args: z.infer<typeof ReadTextFileArgsSchema>)
   };
 };
 
+/* @mcp-codemod-error Could not verify `inputSchema` is a schema object. Raw shapes are deprecated in v2 — pass a Standard Schema object (e.g. z.object({ … })); no change is needed if it already is one. */
 server.registerTool(
   "read_file",
   {
     title: "Read File (Deprecated)",
     description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
     inputSchema: ReadTextFileArgsSchema.shape,
-    outputSchema: { content: z.string() },
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
   readTextFileHandler
@@ -234,12 +231,12 @@ server.registerTool(
       "the first N lines of a file, or the 'tail' parameter to read only " +
       "the last N lines of a file. Operates on the file as text regardless of extension. " +
       "Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      tail: z.number().optional().describe("If provided, returns only the last N lines of the file"),
-      head: z.number().optional().describe("If provided, returns only the first N lines of the file")
-    },
-    outputSchema: { content: z.string() },
+    inputSchema: z.object({
+          path: z.string(),
+          tail: z.number().optional().describe("If provided, returns only the last N lines of the file"),
+          head: z.number().optional().describe("If provided, returns only the first N lines of the file")
+        }),
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
   readTextFileHandler
@@ -252,16 +249,16 @@ server.registerTool(
     description:
       "Read an image or audio file. Returns the base64 encoded data and MIME type. " +
       "Only works within allowed directories.",
-    inputSchema: {
-      path: z.string()
-    },
-    outputSchema: {
-      content: z.array(z.object({
-        type: z.enum(["image", "audio", "blob"]),
-        data: z.string(),
-        mimeType: z.string()
-      }))
-    },
+    inputSchema: z.object({
+          path: z.string()
+        }),
+    outputSchema: z.object({
+          content: z.array(z.object({
+            type: z.enum(["image", "audio", "blob"]),
+            data: z.string(),
+            mimeType: z.string()
+          }))
+        }),
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ReadMediaFileArgsSchema>) => {
@@ -307,12 +304,12 @@ server.registerTool(
       "or compare multiple files. Each file's content is returned with its " +
       "path as a reference. Failed reads for individual files won't stop " +
       "the entire operation. Only works within allowed directories.",
-    inputSchema: {
-      paths: z.array(z.string())
-        .min(1)
-        .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories.")
-    },
-    outputSchema: { content: z.string() },
+    inputSchema: z.object({
+          paths: z.array(z.string())
+            .min(1)
+            .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories.")
+        }),
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ReadMultipleFilesArgsSchema>) => {
@@ -344,11 +341,11 @@ server.registerTool(
       "Create a new file or completely overwrite an existing file with new content. " +
       "Use with caution as it will overwrite existing files without warning. " +
       "Handles text content with proper encoding. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      content: z.string()
-    },
-    outputSchema: { content: z.string() },
+    inputSchema: z.object({
+          path: z.string(),
+          content: z.string()
+        }),
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
   },
   async (args: z.infer<typeof WriteFileArgsSchema>) => {
@@ -370,15 +367,15 @@ server.registerTool(
       "Make line-based edits to a text file. Each edit replaces exact line sequences " +
       "with new content. Returns a git-style diff showing the changes made. " +
       "Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      edits: z.array(z.object({
-        oldText: z.string().describe("Text to search for - must match exactly"),
-        newText: z.string().describe("Text to replace with")
-      })),
-      dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
-    },
-    outputSchema: { content: z.string() },
+    inputSchema: z.object({
+          path: z.string(),
+          edits: z.array(z.object({
+            oldText: z.string().describe("Text to search for - must match exactly"),
+            newText: z.string().describe("Text to replace with")
+          })),
+          dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
+        }),
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
   },
   async (args: z.infer<typeof EditFileArgsSchema>) => {
@@ -400,10 +397,10 @@ server.registerTool(
       "nested directories in one operation. If the directory already exists, " +
       "this operation will succeed silently. Perfect for setting up directory " +
       "structures for projects or ensuring required paths exist. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string()
-    },
-    outputSchema: { content: z.string() },
+    inputSchema: z.object({
+          path: z.string()
+        }),
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false }
   },
   async (args: z.infer<typeof CreateDirectoryArgsSchema>) => {
@@ -426,10 +423,10 @@ server.registerTool(
       "Results clearly distinguish between files and directories with [FILE] and [DIR] " +
       "prefixes. This tool is essential for understanding directory structure and " +
       "finding specific files within a directory. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string()
-    },
-    outputSchema: { content: z.string() },
+    inputSchema: z.object({
+          path: z.string()
+        }),
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ListDirectoryArgsSchema>) => {
@@ -454,11 +451,11 @@ server.registerTool(
       "Results clearly distinguish between files and directories with [FILE] and [DIR] " +
       "prefixes. This tool is useful for understanding directory structure and " +
       "finding specific files within a directory. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      sortBy: z.enum(["name", "size"]).optional().default("name").describe("Sort entries by name or size")
-    },
-    outputSchema: { content: z.string() },
+    inputSchema: z.object({
+          path: z.string(),
+          sortBy: z.enum(["name", "size"]).optional().default("name").describe("Sort entries by name or size")
+        }),
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ListDirectoryWithSizesArgsSchema>) => {
@@ -533,11 +530,11 @@ server.registerTool(
       "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
       "Files have no children array, while directories always have a children array (which may be empty). " +
       "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      excludePatterns: z.array(z.string()).optional().default([])
-    },
-    outputSchema: { content: z.string() },
+    inputSchema: z.object({
+          path: z.string(),
+          excludePatterns: z.array(z.string()).optional().default([])
+        }),
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof DirectoryTreeArgsSchema>) => {
@@ -603,11 +600,11 @@ server.registerTool(
       "and rename them in a single operation. If the destination exists, the " +
       "operation will fail. Works across different directories and can be used " +
       "for simple renaming within the same directory. Both source and destination must be within allowed directories.",
-    inputSchema: {
-      source: z.string(),
-      destination: z.string()
-    },
-    outputSchema: { content: z.string() },
+    inputSchema: z.object({
+          source: z.string(),
+          destination: z.string()
+        }),
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
   },
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
@@ -633,12 +630,12 @@ server.registerTool(
       "Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
       "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
       "Only searches within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      pattern: z.string(),
-      excludePatterns: z.array(z.string()).optional().default([])
-    },
-    outputSchema: { content: z.string() },
+    inputSchema: z.object({
+          path: z.string(),
+          pattern: z.string(),
+          excludePatterns: z.array(z.string()).optional().default([])
+        }),
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof SearchFilesArgsSchema>) => {
@@ -661,10 +658,10 @@ server.registerTool(
       "information including size, creation time, last modified time, permissions, " +
       "and type. This tool is perfect for understanding file characteristics " +
       "without reading the actual content. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string()
-    },
-    outputSchema: { content: z.string() },
+    inputSchema: z.object({
+          path: z.string()
+        }),
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof GetFileInfoArgsSchema>) => {
@@ -689,8 +686,8 @@ server.registerTool(
       "Subdirectories within these allowed directories are also accessible. " +
       "Use this to understand which directories and their nested paths are available " +
       "before trying to access files.",
-    inputSchema: {},
-    outputSchema: { content: z.string() },
+    inputSchema: z.object({}),
+    outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
   async () => {
@@ -715,7 +712,7 @@ async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
 }
 
 // Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
-server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+server.server.setNotificationHandler('notifications/roots/list_changed', async () => {
   try {
     // Request the updated roots list from the client
     const response = await server.server.listRoots();
