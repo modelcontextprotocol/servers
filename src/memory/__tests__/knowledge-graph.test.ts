@@ -417,10 +417,14 @@ describe('KnowledgeGraphManager', () => {
         ]);
 
         // saveGraph writes to a temp file, then atomically renames it into place.
-        expect(renameSpy).toHaveBeenCalledWith(
-          expect.stringMatching(/\.tmp$/),
-          testFilePath
-        );
+        expect(renameSpy).toHaveBeenCalledTimes(1);
+        const [tmpArg, destArg] = renameSpy.mock.calls[0];
+        expect(String(destArg)).toBe(testFilePath);
+        // The temp file must live in the target's own directory so the rename
+        // stays on the same filesystem (and is therefore atomic); guard that
+        // invariant rather than just matching any ".tmp" suffix.
+        expect(String(tmpArg).startsWith(`${testFilePath}.`)).toBe(true);
+        expect(String(tmpArg).endsWith('.tmp')).toBe(true);
       } finally {
         renameSpy.mockRestore();
       }
@@ -429,6 +433,30 @@ describe('KnowledgeGraphManager', () => {
       const graph = await manager.readGraph();
       expect(graph.entities.map(e => e.name)).toContain('Alice');
 
+      const dir = path.dirname(testFilePath);
+      const base = path.basename(testFilePath);
+      const leftovers = (await fs.readdir(dir)).filter(
+        f => f.startsWith(base) && f.endsWith('.tmp')
+      );
+      expect(leftovers).toEqual([]);
+    });
+
+    it('should clean up the temp file if the atomic rename fails', async () => {
+      const renameSpy = vi
+        .spyOn(fs, 'rename')
+        .mockRejectedValueOnce(new Error('simulated rename failure'));
+      try {
+        await expect(
+          manager.createEntities([
+            { name: 'Alice', entityType: 'person', observations: [] },
+          ])
+        ).rejects.toThrow('simulated rename failure');
+      } finally {
+        renameSpy.mockRestore();
+      }
+
+      // The temp file written before the failed rename is unlinked (the catch
+      // branch), so no partial file is left behind.
       const dir = path.dirname(testFilePath);
       const base = path.basename(testFilePath);
       const leftovers = (await fs.readdir(dir)).filter(
