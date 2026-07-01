@@ -1,11 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ElicitResultSchema } from "@modelcontextprotocol/core";
-import {
-  McpServer,
-  CallToolResult,
-  ElicitRequestURLParams,
-  UrlElicitationRequiredError,
-} from "@modelcontextprotocol/server";
+import { McpServer, CallToolResult, ElicitRequestURLParams, UrlElicitationRequiredError } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 // Tool input schema
@@ -125,9 +120,7 @@ export const registerTriggerUrlElicitationTool = (server: McpServer) => {
         // the session, the requested URL, and the caller-supplied elicitationId
         // (if any). Keying on the resolved/random elicitationId would change on
         // every call and never match, re-throwing the prerequisite forever.
-        const errorPathKey = `${sessionId}\u0000${url}\u0000${
-          requestedElicitationId ?? ""
-        }`;
+        const errorPathKey = `${sessionId}\u0000${url}\u0000${requestedElicitationId ?? ""}`;
 
         const elicitationParams: ElicitRequestURLParams = {
           mode: "url",

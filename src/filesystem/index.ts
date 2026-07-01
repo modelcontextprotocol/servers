@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
-import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
-import type { Root } from "@modelcontextprotocol/server";
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import { McpServer, CallToolResult } from '@modelcontextprotocol/server';
+import type { Root } from '@modelcontextprotocol/server';
 import fs from "fs/promises";
 import { createReadStream } from "fs";
 import path from "path";
@@ -206,7 +206,6 @@ const readTextFileHandler = async (args: z.infer<typeof ReadTextFileArgsSchema>)
   };
 };
 
-/* @mcp-codemod-error Could not verify `inputSchema` is a schema object. Raw shapes are deprecated in v2 — pass a Standard Schema object (e.g. z.object({ … })); no change is needed if it already is one. */
 server.registerTool(
   "read_file",
   {
@@ -232,10 +231,10 @@ server.registerTool(
       "the last N lines of a file. Operates on the file as text regardless of extension. " +
       "Only works within allowed directories.",
     inputSchema: z.object({
-          path: z.string(),
-          tail: z.number().optional().describe("If provided, returns only the last N lines of the file"),
-          head: z.number().optional().describe("If provided, returns only the first N lines of the file")
-        }),
+      path: z.string(),
+      tail: z.number().optional().describe("If provided, returns only the last N lines of the file"),
+      head: z.number().optional().describe("If provided, returns only the first N lines of the file")
+    }),
     outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
@@ -250,15 +249,15 @@ server.registerTool(
       "Read an image or audio file. Returns the base64 encoded data and MIME type. " +
       "Only works within allowed directories.",
     inputSchema: z.object({
-          path: z.string()
-        }),
+      path: z.string()
+    }),
     outputSchema: z.object({
-          content: z.array(z.object({
-            type: z.enum(["image", "audio", "blob"]),
-            data: z.string(),
-            mimeType: z.string()
-          }))
-        }),
+      content: z.array(z.object({
+        type: z.enum(["image", "audio", "blob"]),
+        data: z.string(),
+        mimeType: z.string()
+      }))
+    }),
     annotations: { readOnlyHint: true }
   },
   async (args: z.infer<typeof ReadMediaFileArgsSchema>) => {
@@ -305,10 +304,10 @@ server.registerTool(
       "path as a reference. Failed reads for individual files won't stop " +
       "the entire operation. Only works within allowed directories.",
     inputSchema: z.object({
-          paths: z.array(z.string())
-            .min(1)
-            .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories.")
-        }),
+      paths: z.array(z.string())
+        .min(1)
+        .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories.")
+    }),
     outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
@@ -342,9 +341,9 @@ server.registerTool(
       "Use with caution as it will overwrite existing files without warning. " +
       "Handles text content with proper encoding. Only works within allowed directories.",
     inputSchema: z.object({
-          path: z.string(),
-          content: z.string()
-        }),
+      path: z.string(),
+      content: z.string()
+    }),
     outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
   },
@@ -368,13 +367,13 @@ server.registerTool(
       "with new content. Returns a git-style diff showing the changes made. " +
       "Only works within allowed directories.",
     inputSchema: z.object({
-          path: z.string(),
-          edits: z.array(z.object({
-            oldText: z.string().describe("Text to search for - must match exactly"),
-            newText: z.string().describe("Text to replace with")
-          })),
-          dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
-        }),
+      path: z.string(),
+      edits: z.array(z.object({
+        oldText: z.string().describe("Text to search for - must match exactly"),
+        newText: z.string().describe("Text to replace with")
+      })),
+      dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
+    }),
     outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
   },
@@ -398,8 +397,8 @@ server.registerTool(
       "this operation will succeed silently. Perfect for setting up directory " +
       "structures for projects or ensuring required paths exist. Only works within allowed directories.",
     inputSchema: z.object({
-          path: z.string()
-        }),
+      path: z.string()
+    }),
     outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false }
   },
@@ -424,8 +423,8 @@ server.registerTool(
       "prefixes. This tool is essential for understanding directory structure and " +
       "finding specific files within a directory. Only works within allowed directories.",
     inputSchema: z.object({
-          path: z.string()
-        }),
+      path: z.string()
+    }),
     outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
@@ -452,9 +451,9 @@ server.registerTool(
       "prefixes. This tool is useful for understanding directory structure and " +
       "finding specific files within a directory. Only works within allowed directories.",
     inputSchema: z.object({
-          path: z.string(),
-          sortBy: z.enum(["name", "size"]).optional().default("name").describe("Sort entries by name or size")
-        }),
+      path: z.string(),
+      sortBy: z.enum(["name", "size"]).optional().default("name").describe("Sort entries by name or size")
+    }),
     outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
@@ -531,9 +530,9 @@ server.registerTool(
       "Files have no children array, while directories always have a children array (which may be empty). " +
       "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
     inputSchema: z.object({
-          path: z.string(),
-          excludePatterns: z.array(z.string()).optional().default([])
-        }),
+      path: z.string(),
+      excludePatterns: z.array(z.string()).optional().default([])
+    }),
     outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
@@ -601,9 +600,9 @@ server.registerTool(
       "operation will fail. Works across different directories and can be used " +
       "for simple renaming within the same directory. Both source and destination must be within allowed directories.",
     inputSchema: z.object({
-          source: z.string(),
-          destination: z.string()
-        }),
+      source: z.string(),
+      destination: z.string()
+    }),
     outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
   },
@@ -631,10 +630,10 @@ server.registerTool(
       "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
       "Only searches within allowed directories.",
     inputSchema: z.object({
-          path: z.string(),
-          pattern: z.string(),
-          excludePatterns: z.array(z.string()).optional().default([])
-        }),
+      path: z.string(),
+      pattern: z.string(),
+      excludePatterns: z.array(z.string()).optional().default([])
+    }),
     outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },
@@ -659,8 +658,8 @@ server.registerTool(
       "and type. This tool is perfect for understanding file characteristics " +
       "without reading the actual content. Only works within allowed directories.",
     inputSchema: z.object({
-          path: z.string()
-        }),
+      path: z.string()
+    }),
     outputSchema: z.object({ content: z.string() }),
     annotations: { readOnlyHint: true }
   },

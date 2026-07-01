@@ -3,7 +3,7 @@ import { getValidRootDirectories } from '../roots-utils.js';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, realpathSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import type { Root } from "@modelcontextprotocol/server";
+import type { Root } from '@modelcontextprotocol/server';
 
 describe('getValidRootDirectories', () => {
   let testDir1: string;

@@ -1,9 +1,4 @@
-import {
-  McpServer,
-  RegisteredResource,
-  Resource,
-  ResourceLink,
-} from "@modelcontextprotocol/server";
+import { McpServer, RegisteredResource, Resource, ResourceLink } from "@modelcontextprotocol/server";
 
 /**
  * Tracks registered session resources by URI to allow updating/removing on re-registration.

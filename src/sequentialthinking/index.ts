@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
-import { McpServer } from "@modelcontextprotocol/server";
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import { McpServer } from '@modelcontextprotocol/server';
 import { z } from "zod";
 import { SequentialThinkingServer } from './lib.js';
 
@@ -81,16 +81,16 @@ You should:
 10. Provide a single, ideally correct answer as the final output
 11. Only set nextThoughtNeeded to false when truly done and a satisfactory answer is reached`,
     inputSchema: z.object({
-          thought: z.string().describe("Your current thinking step"),
-          nextThoughtNeeded: coercedBoolean.describe("Whether another thought step is needed"),
-          thoughtNumber: z.coerce.number().int().min(1).describe("Current thought number (numeric value, e.g., 1, 2, 3)"),
-          totalThoughts: z.coerce.number().int().min(1).describe("Estimated total thoughts needed (numeric value, e.g., 5, 10)"),
-          isRevision: coercedBoolean.optional().describe("Whether this revises previous thinking"),
-          revisesThought: z.coerce.number().int().min(1).optional().describe("Which thought is being reconsidered"),
-          branchFromThought: z.coerce.number().int().min(1).optional().describe("Branching point thought number"),
-          branchId: z.string().optional().describe("Branch identifier"),
-          needsMoreThoughts: coercedBoolean.optional().describe("If more thoughts are needed")
-        }),
+      thought: z.string().describe("Your current thinking step"),
+      nextThoughtNeeded: coercedBoolean.describe("Whether another thought step is needed"),
+      thoughtNumber: z.coerce.number().int().min(1).describe("Current thought number (numeric value, e.g., 1, 2, 3)"),
+      totalThoughts: z.coerce.number().int().min(1).describe("Estimated total thoughts needed (numeric value, e.g., 5, 10)"),
+      isRevision: coercedBoolean.optional().describe("Whether this revises previous thinking"),
+      revisesThought: z.coerce.number().int().min(1).optional().describe("Which thought is being reconsidered"),
+      branchFromThought: z.coerce.number().int().min(1).optional().describe("Branching point thought number"),
+      branchId: z.string().optional().describe("Branch identifier"),
+      needsMoreThoughts: coercedBoolean.optional().describe("If more thoughts are needed")
+    }),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -98,12 +98,12 @@ You should:
       openWorldHint: false,
     },
     outputSchema: z.object({
-          thoughtNumber: z.number(),
-          totalThoughts: z.number(),
-          nextThoughtNeeded: z.boolean(),
-          branches: z.array(z.string()),
-          thoughtHistoryLength: z.number()
-        }),
+      thoughtNumber: z.number(),
+      totalThoughts: z.number(),
+      nextThoughtNeeded: z.boolean(),
+      branches: z.array(z.string()),
+      thoughtHistoryLength: z.number()
+    }),
   },
   async (args) => {
     const result = thinkingServer.processThought(args);
