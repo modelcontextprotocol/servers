@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -279,12 +278,12 @@ server.registerTool(
   {
     title: "Create Entities",
     description: "Create multiple new entities in the knowledge graph",
-    inputSchema: {
+    inputSchema: z.object({
       entities: z.array(EntitySchema)
-    },
-    outputSchema: {
+    }),
+    outputSchema: z.object({
       entities: z.array(EntitySchema)
-    },
+    }),
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -308,12 +307,12 @@ server.registerTool(
   {
     title: "Create Relations",
     description: "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
-    inputSchema: {
+    inputSchema: z.object({
       relations: z.array(RelationSchema)
-    },
-    outputSchema: {
+    }),
+    outputSchema: z.object({
       relations: z.array(RelationSchema)
-    },
+    }),
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -337,18 +336,18 @@ server.registerTool(
   {
     title: "Add Observations",
     description: "Add new observations to existing entities in the knowledge graph",
-    inputSchema: {
+    inputSchema: z.object({
       observations: z.array(z.object({
         entityName: z.string().describe("The name of the entity to add the observations to"),
         contents: z.array(z.string()).describe("An array of observation contents to add")
       }))
-    },
-    outputSchema: {
+    }),
+    outputSchema: z.object({
       results: z.array(z.object({
         entityName: z.string(),
         addedObservations: z.array(z.string())
       }))
-    },
+    }),
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -372,13 +371,13 @@ server.registerTool(
   {
     title: "Delete Entities",
     description: "Delete multiple entities and their associated relations from the knowledge graph",
-    inputSchema: {
+    inputSchema: z.object({
       entityNames: z.array(z.string()).describe("An array of entity names to delete")
-    },
-    outputSchema: {
+    }),
+    outputSchema: z.object({
       success: z.boolean(),
       message: z.string()
-    },
+    }),
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -402,16 +401,16 @@ server.registerTool(
   {
     title: "Delete Observations",
     description: "Delete specific observations from entities in the knowledge graph",
-    inputSchema: {
+    inputSchema: z.object({
       deletions: z.array(z.object({
         entityName: z.string().describe("The name of the entity containing the observations"),
         observations: z.array(z.string()).describe("An array of observations to delete")
       }))
-    },
-    outputSchema: {
+    }),
+    outputSchema: z.object({
       success: z.boolean(),
       message: z.string()
-    },
+    }),
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -435,13 +434,13 @@ server.registerTool(
   {
     title: "Delete Relations",
     description: "Delete multiple relations from the knowledge graph",
-    inputSchema: {
+    inputSchema: z.object({
       relations: z.array(RelationSchema).describe("An array of relations to delete")
-    },
-    outputSchema: {
+    }),
+    outputSchema: z.object({
       success: z.boolean(),
       message: z.string()
-    },
+    }),
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -465,11 +464,11 @@ server.registerTool(
   {
     title: "Read Graph",
     description: "Read the entire knowledge graph",
-    inputSchema: {},
-    outputSchema: {
+    inputSchema: z.object({}),
+    outputSchema: z.object({
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
-    },
+    }),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -492,13 +491,13 @@ server.registerTool(
   {
     title: "Search Nodes",
     description: "Search for nodes in the knowledge graph based on a query",
-    inputSchema: {
+    inputSchema: z.object({
       query: z.string().describe("The search query to match against entity names, types, and observation content")
-    },
-    outputSchema: {
+    }),
+    outputSchema: z.object({
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
-    },
+    }),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -521,13 +520,13 @@ server.registerTool(
   {
     title: "Open Nodes",
     description: "Open specific nodes in the knowledge graph by their names",
-    inputSchema: {
+    inputSchema: z.object({
       names: z.array(z.string()).describe("An array of entity names to retrieve")
-    },
-    outputSchema: {
+    }),
+    outputSchema: z.object({
       entities: z.array(EntitySchema),
       relations: z.array(RelationSchema)
-    },
+    }),
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
@@ -575,11 +574,11 @@ export function registerKnowledgeGraphResource(
 // notifications/resources/updated when mutation tools change the graph.
 export function registerKnowledgeGraphSubscriptions(server: McpServer) {
   server.server.registerCapabilities({ resources: { subscribe: true } });
-  server.server.setRequestHandler(SubscribeRequestSchema, async (request) => {
+  server.server.setRequestHandler("resources/subscribe", async (request) => {
     resourceSubscribers.add(request.params.uri);
     return {};
   });
-  server.server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
+  server.server.setRequestHandler("resources/unsubscribe", async (request) => {
     resourceSubscribers.delete(request.params.uri);
     return {};
   });
