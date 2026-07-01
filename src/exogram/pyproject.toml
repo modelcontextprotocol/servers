@@ -1,0 +1,31 @@
+[project]
+name = "mcp-server-exogram"
+version = "0.1.0"
+description = "A Model Context Protocol server providing tools to evaluate, commit, and audit actions through the Exogram Authority Runtime"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Exogram Team", email = "engineering@exogram.ai" }]
+keywords = ["mcp", "security", "governance", "runtime", "llm"]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "httpx>=0.27",
+    "mcp>=1.1.2",
+    "pydantic>=2.0.0",
+]
+
+[project.scripts]
+mcp-server-exogram = "mcp_server_exogram:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = ["pyright>=1.1.389", "ruff>=0.7.3"]
