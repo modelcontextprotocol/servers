@@ -1,24 +1,27 @@
-import { z } from 'zod';
-import { McpServer, CallToolResult } from '@modelcontextprotocol/server';
+import { z } from "zod";
+import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 
 // Tool input schema
 const TriggerLongRunningOperationSchema = z.object({
-    duration: z.number().default(10).describe('Duration of the operation in seconds'),
-    steps: z.number().default(5).describe('Number of steps in the operation')
+  duration: z
+    .number()
+    .default(10)
+    .describe("Duration of the operation in seconds"),
+  steps: z.number().default(5).describe("Number of steps in the operation"),
 });
 
 // Tool configuration
-const name = 'trigger-long-running-operation';
+const name = "trigger-long-running-operation";
 const config = {
-    title: 'Trigger Long Running Operation Tool',
-    description: 'Demonstrates a long running operation with progress updates.',
-    inputSchema: TriggerLongRunningOperationSchema,
-    annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false
-    }
+  title: "Trigger Long Running Operation Tool",
+  description: "Demonstrates a long running operation with progress updates.",
+  inputSchema: TriggerLongRunningOperationSchema,
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
 };
 
 /**
@@ -36,37 +39,43 @@ const config = {
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
-    server.registerTool(name, config, async (args, ctx): Promise<CallToolResult> => {
-        const validatedArgs = TriggerLongRunningOperationSchema.parse(args);
-        const { duration, steps } = validatedArgs;
-        const stepDuration = duration / steps;
-        const progressToken = ctx.mcpReq._meta?.progressToken;
+  server.registerTool(
+    name,
+    config,
+    async (args, ctx): Promise<CallToolResult> => {
+      const validatedArgs = TriggerLongRunningOperationSchema.parse(args);
+      const { duration, steps } = validatedArgs;
+      const stepDuration = duration / steps;
+      const progressToken = ctx.mcpReq._meta?.progressToken;
 
-        for (let i = 1; i < steps + 1; i++) {
-            await new Promise(resolve => setTimeout(resolve, stepDuration * 1000));
+      for (let i = 1; i < steps + 1; i++) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, stepDuration * 1000)
+        );
 
-            if (progressToken !== undefined) {
-                await server.server.notification(
-                    {
-                        method: 'notifications/progress',
-                        params: {
-                            progress: i,
-                            total: steps,
-                            progressToken
-                        }
-                    },
-                    { relatedRequestId: ctx.mcpReq.id }
-                );
-            }
+        if (progressToken !== undefined) {
+          await server.server.notification(
+            {
+              method: "notifications/progress",
+              params: {
+                progress: i,
+                total: steps,
+                progressToken,
+              },
+            },
+            { relatedRequestId: ctx.mcpReq.id }
+          );
         }
+      }
 
-        return {
-            content: [
-                {
-                    type: 'text',
-                    text: `Long running operation completed. Duration: ${duration} seconds, Steps: ${steps}.`
-                }
-            ]
-        };
-    });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Long running operation completed. Duration: ${duration} seconds, Steps: ${steps}.`,
+          },
+        ],
+      };
+    }
+  );
 };

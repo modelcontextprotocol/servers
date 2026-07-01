@@ -1,24 +1,24 @@
-import { z } from 'zod';
-import { McpServer, CallToolResult } from '@modelcontextprotocol/server';
+import { z } from "zod";
+import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 
 // Tool input schema
 const GetSumSchema = z.object({
-    a: z.number().describe('First number'),
-    b: z.number().describe('Second number')
+  a: z.number().describe("First number"),
+  b: z.number().describe("Second number"),
 });
 
 // Tool configuration
-const name = 'get-sum';
+const name = "get-sum";
 const config = {
-    title: 'Get Sum Tool',
-    description: 'Returns the sum of two numbers',
-    inputSchema: GetSumSchema,
-    annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false
-    }
+  title: "Get Sum Tool",
+  description: "Returns the sum of two numbers",
+  inputSchema: GetSumSchema,
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
 };
 
 /**
@@ -35,16 +35,16 @@ const config = {
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerGetSumTool = (server: McpServer) => {
-    server.registerTool(name, config, async (args): Promise<CallToolResult> => {
-        const validatedArgs = GetSumSchema.parse(args);
-        const sum = validatedArgs.a + validatedArgs.b;
-        return {
-            content: [
-                {
-                    type: 'text',
-                    text: `The sum of ${validatedArgs.a} and ${validatedArgs.b} is ${sum}.`
-                }
-            ]
-        };
-    });
+  server.registerTool(name, config, async (args): Promise<CallToolResult> => {
+    const validatedArgs = GetSumSchema.parse(args);
+    const sum = validatedArgs.a + validatedArgs.b;
+    return {
+      content: [
+        {
+          type: "text",
+          text: `The sum of ${validatedArgs.a} and ${validatedArgs.b} is ${sum}.`,
+        },
+      ],
+    };
+  });
 };

@@ -1,18 +1,21 @@
-import { McpServer, CallToolResult } from '@modelcontextprotocol/server';
-import { beginSimulatedLogging, stopSimulatedLogging } from '../server/logging.js';
+import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
+import {
+  beginSimulatedLogging,
+  stopSimulatedLogging,
+} from "../server/logging.js";
 
 // Tool configuration
-const name = 'toggle-simulated-logging';
+const name = "toggle-simulated-logging";
 const config = {
-    title: 'Toggle Simulated Logging',
-    description: 'Toggles simulated, random-leveled logging on or off.',
-    inputSchema: {},
-    annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false
-    }
+  title: "Toggle Simulated Logging",
+  description: "Toggles simulated, random-leveled logging on or off.",
+  inputSchema: {},
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
 };
 
 // Track enabled clients by session id
@@ -31,22 +34,26 @@ const clients: Set<string | undefined> = new Set<string | undefined>();
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerToggleSimulatedLoggingTool = (server: McpServer) => {
-    server.registerTool(name, config, async (_args, ctx): Promise<CallToolResult> => {
-        const sessionId = ctx?.sessionId;
+  server.registerTool(
+    name,
+    config,
+    async (_args, ctx): Promise<CallToolResult> => {
+      const sessionId = ctx?.sessionId;
 
-        let response: string;
-        if (clients.has(sessionId)) {
-            stopSimulatedLogging(sessionId);
-            clients.delete(sessionId);
-            response = `Stopped simulated logging for session ${sessionId}`;
-        } else {
-            beginSimulatedLogging(server, sessionId);
-            clients.add(sessionId);
-            response = `Started simulated, random-leveled logging for session ${sessionId} at a 5 second pace. Client's selected logging level will be respected. If an interval elapses and the message to be sent is below the selected level, it will not be sent. Thus at higher chosen logging levels, messages should arrive further apart. `;
-        }
+      let response: string;
+      if (clients.has(sessionId)) {
+        stopSimulatedLogging(sessionId);
+        clients.delete(sessionId);
+        response = `Stopped simulated logging for session ${sessionId}`;
+      } else {
+        beginSimulatedLogging(server, sessionId);
+        clients.add(sessionId);
+        response = `Started simulated, random-leveled logging for session ${sessionId} at a 5 second pace. Client's selected logging level will be respected. If an interval elapses and the message to be sent is below the selected level, it will not be sent. Thus at higher chosen logging levels, messages should arrive further apart. `;
+      }
 
-        return {
-            content: [{ type: 'text', text: `${response}` }]
-        };
-    });
+      return {
+        content: [{ type: "text", text: `${response}` }],
+      };
+    }
+  );
 };

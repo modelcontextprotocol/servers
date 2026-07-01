@@ -1,17 +1,18 @@
-import { McpServer, CallToolResult } from '@modelcontextprotocol/server';
+import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 
 // Tool configuration
-const name = 'get-env';
+const name = "get-env";
 const config = {
-    title: 'Print Environment Tool',
-    description: 'Returns all environment variables, helpful for debugging MCP server configuration',
-    inputSchema: {},
-    annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false
-    }
+  title: "Print Environment Tool",
+  description:
+    "Returns all environment variables, helpful for debugging MCP server configuration",
+  inputSchema: {},
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
 };
 
 /**
@@ -24,14 +25,14 @@ const config = {
  * @returns {void}
  */
 export const registerGetEnvTool = (server: McpServer) => {
-    server.registerTool(name, config, async (args): Promise<CallToolResult> => {
-        return {
-            content: [
-                {
-                    type: 'text',
-                    text: JSON.stringify(process.env, null, 2)
-                }
-            ]
-        };
-    });
+  server.registerTool(name, config, async (args): Promise<CallToolResult> => {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(process.env, null, 2),
+        },
+      ],
+    };
+  });
 };

@@ -1,19 +1,19 @@
-import { McpServer, CallToolResult } from '@modelcontextprotocol/server';
-import { syncRoots } from '../server/roots.js';
+import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
+import { syncRoots } from "../server/roots.js";
 
 // Tool configuration
-const name = 'get-roots-list';
+const name = "get-roots-list";
 const config = {
-    title: 'Get Roots List Tool',
-    description:
-        "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files.",
-    inputSchema: {},
-    annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false
-    }
+  title: "Get Roots List Tool",
+  description:
+    "Lists the current MCP roots provided by the client. Demonstrates the roots protocol capability even though this server doesn't access files.",
+  inputSchema: {},
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
 };
 
 /**
@@ -34,53 +34,64 @@ const config = {
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerGetRootsListTool = (server: McpServer) => {
-    // Does client support roots?
-    const clientCapabilities = server.server.getClientCapabilities() || {};
-    const clientSupportsRoots: boolean = clientCapabilities.roots !== undefined;
+  // Does client support roots?
+  const clientCapabilities = server.server.getClientCapabilities() || {};
+  const clientSupportsRoots: boolean = clientCapabilities.roots !== undefined;
 
-    // If so, register tool
-    if (clientSupportsRoots) {
-        server.registerTool(name, config, async (args, ctx): Promise<CallToolResult> => {
-            // Get the current rootsFetch the current roots list from the client if need be
-            const currentRoots = await syncRoots(server, ctx.sessionId);
+  // If so, register tool
+  if (clientSupportsRoots) {
+    server.registerTool(
+      name,
+      config,
+      async (args, ctx): Promise<CallToolResult> => {
+        // Get the current rootsFetch the current roots list from the client if need be
+        const currentRoots = await syncRoots(server, ctx.sessionId);
 
-            // Respond if client supports roots but doesn't have any configured
-            if (clientSupportsRoots && (!currentRoots || currentRoots.length === 0)) {
-                return {
-                    content: [
-                        {
-                            type: 'text',
-                            text:
-                                'The client supports roots but no roots are currently configured.\n\n' +
-                                'This could mean:\n' +
-                                "1. The client hasn't provided any roots yet\n" +
-                                '2. The client provided an empty roots list\n' +
-                                '3. The roots configuration is still being loaded'
-                        }
-                    ]
-                };
-            }
+        // Respond if client supports roots but doesn't have any configured
+        if (
+          clientSupportsRoots &&
+          (!currentRoots || currentRoots.length === 0)
+        ) {
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  "The client supports roots but no roots are currently configured.\n\n" +
+                  "This could mean:\n" +
+                  "1. The client hasn't provided any roots yet\n" +
+                  "2. The client provided an empty roots list\n" +
+                  "3. The roots configuration is still being loaded",
+              },
+            ],
+          };
+        }
 
-            // Create formatted response if there is a list of roots
-            const rootsList = currentRoots
-                ? currentRoots
-                      .map((root, index) => {
-                          return `${index + 1}. ${root.name || 'Unnamed Root'}\n   URI: ${root.uri}`;
-                      })
-                      .join('\n\n')
-                : 'No roots found';
+        // Create formatted response if there is a list of roots
+        const rootsList = currentRoots
+          ? currentRoots
+              .map((root, index) => {
+                return `${index + 1}. ${root.name || "Unnamed Root"}\n   URI: ${
+                  root.uri
+                }`;
+              })
+              .join("\n\n")
+          : "No roots found";
 
-            return {
-                content: [
-                    {
-                        type: 'text',
-                        text:
-                            `Current MCP Roots (${currentRoots!.length} total):\n\n${rootsList}\n\n` +
-                            "Note: This server demonstrates the roots protocol capability but doesn't actually access files. " +
-                            'The roots are provided by the MCP client and can be used by servers that need file system access.'
-                    }
-                ]
-            };
-        });
-    }
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `Current MCP Roots (${
+                  currentRoots!.length
+                } total):\n\n${rootsList}\n\n` +
+                "Note: This server demonstrates the roots protocol capability but doesn't actually access files. " +
+                "The roots are provided by the MCP client and can be used by servers that need file system access.",
+            },
+          ],
+        };
+      }
+    );
+  }
 };

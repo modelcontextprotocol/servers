@@ -1,7 +1,10 @@
-import { McpServer, Root } from '@modelcontextprotocol/server';
+import { McpServer, Root } from "@modelcontextprotocol/server";
 
 // Track roots by session id
-export const roots: Map<string | undefined, Root[]> = new Map<string | undefined, Root[]>();
+export const roots: Map<string | undefined, Root[]> = new Map<
+  string | undefined,
+  Root[]
+>();
 
 /**
  * Get the latest the client roots list for the session.
@@ -22,57 +25,62 @@ export const roots: Map<string | undefined, Root[]> = new Map<string | undefined
  * @throws {Error} In case of a failure to request the roots from the client, an error log message is sent.
  */
 export const syncRoots = async (server: McpServer, sessionId?: string) => {
-    const clientCapabilities = server.server.getClientCapabilities() || {};
-    const clientSupportsRoots: boolean = clientCapabilities?.roots !== undefined;
+  const clientCapabilities = server.server.getClientCapabilities() || {};
+  const clientSupportsRoots: boolean = clientCapabilities?.roots !== undefined;
 
-    // Fetch the roots list for this client
-    if (clientSupportsRoots) {
-        // Function to request the updated roots list from the client
-        const requestRoots = async () => {
-            try {
-                // Request the updated roots list from the client
-                const response = await server.server.listRoots();
-                if (response && 'roots' in response) {
-                    // Store the roots list for this client
-                    roots.set(sessionId, response.roots);
+  // Fetch the roots list for this client
+  if (clientSupportsRoots) {
+    // Function to request the updated roots list from the client
+    const requestRoots = async () => {
+      try {
+        // Request the updated roots list from the client
+        const response = await server.server.listRoots();
+        if (response && "roots" in response) {
+          // Store the roots list for this client
+          roots.set(sessionId, response.roots);
 
-                    // Notify the client of roots received
-                    await server.sendLoggingMessage(
-                        {
-                            level: 'info',
-                            logger: 'everything-server',
-                            data: `Roots updated: ${response?.roots?.length} root(s) received from client`
-                        },
-                        sessionId
-                    );
-                } else {
-                    await server.sendLoggingMessage(
-                        {
-                            level: 'info',
-                            logger: 'everything-server',
-                            data: 'Client returned no roots set'
-                        },
-                        sessionId
-                    );
-                }
-            } catch (error) {
-                console.error(
-                    `Failed to request roots from client ${sessionId}: ${error instanceof Error ? error.message : String(error)}`
-                );
-            }
-        };
-
-        // If the roots have not been synced for this client,
-        // set notification handler and request initial roots
-        if (!roots.has(sessionId)) {
-            // Set the list changed notification handler
-            server.server.setNotificationHandler('notifications/roots/list_changed', requestRoots);
-
-            // Request the initial roots list immediately
-            await requestRoots();
+          // Notify the client of roots received
+          await server.sendLoggingMessage(
+            {
+              level: "info",
+              logger: "everything-server",
+              data: `Roots updated: ${response?.roots?.length} root(s) received from client`,
+            },
+            sessionId
+          );
+        } else {
+          await server.sendLoggingMessage(
+            {
+              level: "info",
+              logger: "everything-server",
+              data: "Client returned no roots set",
+            },
+            sessionId
+          );
         }
+      } catch (error) {
+        console.error(
+          `Failed to request roots from client ${sessionId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    };
 
-        // Return the roots list for this client
-        return roots.get(sessionId);
+    // If the roots have not been synced for this client,
+    // set notification handler and request initial roots
+    if (!roots.has(sessionId)) {
+      // Set the list changed notification handler
+      server.server.setNotificationHandler(
+        "notifications/roots/list_changed",
+        requestRoots
+      );
+
+      // Request the initial roots list immediately
+      await requestRoots();
     }
+
+    // Return the roots list for this client
+    return roots.get(sessionId);
+  }
 };
