@@ -10,6 +10,7 @@ from mcp_server_fetch.server import (
     check_may_autonomously_fetch_url,
     fetch_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
+    DEFAULT_REQUEST_TIMEOUT,
 )
 
 
@@ -324,3 +325,46 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+    @pytest.mark.asyncio
+    async def test_fetch_uses_default_timeout(self):
+        """Test that fetch_url applies the default timeout to the request."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"data": "test"}'
+        mock_response.headers = {"content-type": "application/json"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+            )
+
+            assert mock_client.get.call_args.kwargs["timeout"] == DEFAULT_REQUEST_TIMEOUT
+
+    @pytest.mark.asyncio
+    async def test_fetch_uses_custom_timeout(self):
+        """Test that an explicit timeout is passed through to the request."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"data": "test"}'
+        mock_response.headers = {"content-type": "application/json"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://api.example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                timeout=60.0,
+            )
+
+            assert mock_client.get.call_args.kwargs["timeout"] == 60.0
