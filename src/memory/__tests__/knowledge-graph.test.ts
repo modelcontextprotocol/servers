@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -407,6 +407,34 @@ describe('KnowledgeGraphManager', () => {
 
       expect(graph.entities).toHaveLength(1);
       expect(graph.entities[0].name).toBe('Alice');
+    });
+
+    it('should persist atomically via a temporary file and rename', async () => {
+      const renameSpy = vi.spyOn(fs, 'rename');
+      try {
+        await manager.createEntities([
+          { name: 'Alice', entityType: 'person', observations: ['atomic'] },
+        ]);
+
+        // saveGraph writes to a temp file, then atomically renames it into place.
+        expect(renameSpy).toHaveBeenCalledWith(
+          expect.stringMatching(/\.tmp$/),
+          testFilePath
+        );
+      } finally {
+        renameSpy.mockRestore();
+      }
+
+      // Data round-trips and no temporary file is left behind.
+      const graph = await manager.readGraph();
+      expect(graph.entities.map(e => e.name)).toContain('Alice');
+
+      const dir = path.dirname(testFilePath);
+      const base = path.basename(testFilePath);
+      const leftovers = (await fs.readdir(dir)).filter(
+        f => f.startsWith(base) && f.endsWith('.tmp')
+      );
+      expect(leftovers).toEqual([]);
     });
 
     it('should handle JSONL format correctly', async () => {
