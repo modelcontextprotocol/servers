@@ -28,6 +28,8 @@ Roots notified by Client to Server, completely replace any server-side Allowed d
 
 **Important**: If server starts without command-line arguments AND client doesn't support roots protocol (or provides empty roots), the server will throw an error during initialization.
 
+When configuring this server in an MCP client, omit filesystem path arguments only if you want the client to define the allowed directories through Roots. In that form, the server does not grant access on its own; it waits for the client to provide Roots during initialization and uses those directories as the access scope.
+
 This is the recommended method, as this enables runtime directory updates via `roots/list_changed` notifications without server restart, providing a more flexible and modern integration experience.
 
 ### How It Works
