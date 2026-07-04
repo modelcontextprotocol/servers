@@ -234,6 +234,28 @@ def test_git_log_default(test_repository):
     assert len(result) >= 1
     assert "initial commit" in result[0]
 
+
+def test_git_log_schema_matches_across_filter_branches(test_repository):
+    """git_log emits the same string schema whether or not timestamp filters are supplied."""
+    for i in range(2):
+        file_path = Path(test_repository.working_dir) / f"schema_test_{i}.txt"
+        file_path.write_text(f"content {i}")
+        test_repository.index.add([f"schema_test_{i}.txt"])
+        test_repository.index.commit(f"schema commit {i}")
+
+    unfiltered = git_log(test_repository, max_count=1)
+    filtered = git_log(test_repository, max_count=1, start_timestamp="1970-01-01")
+
+    assert len(unfiltered) == 1
+    assert len(filtered) == 1
+    # Same keys, same order — parsers that split on "\n" and ":" must not care which branch produced the entry.
+    assert [line.split(":", 1)[0] for line in unfiltered[0].splitlines()] == \
+           [line.split(":", 1)[0] for line in filtered[0].splitlines()]
+    # And no repr() artefacts (leading quotes, angle brackets) that used to appear only in the unfiltered branch.
+    for entry in (unfiltered[0], filtered[0]):
+        commit_line = entry.splitlines()[0]
+        assert not commit_line.startswith("Commit: '"), f"Commit hash should not be repr-quoted: {commit_line!r}"
+
 def test_git_create_branch(test_repository):
     result = git_create_branch(test_repository, "new-feature-branch")
 
