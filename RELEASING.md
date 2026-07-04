@@ -15,7 +15,7 @@ A release run:
 
 1. **Detects changed packages** since the last release tag — a package counts as changed if any `.py`, `.ts`, or `.md` file in its directory changed (READMEs ship inside the published artifacts).
 2. **Stamps versions and pushes the release tag** — versions are date-based (CalVer, e.g. `2026.7.4`).
-3. **Publishes each changed package as an independent matrix job** (`fail-fast: false` — one package's failure never blocks another). Each job: checkout at the release tag → install → double-publish guard → **run the package's tests** (plus `pyright` for Python) → build → publish. The guard differs by registry: the npm job aborts if the version already exists; the PyPI action skips files already uploaded (`skip-existing`).
+3. **Publishes each changed package as an independent matrix job** (`fail-fast: false` — one package's failure never blocks another). Each job: checkout at the release tag → install → double-publish guard → **run the package's tests** (plus `pyright` for Python) → build → publish. The guard differs by registry: the npm job aborts before tests if the version already exists; for PyPI the skip happens at the publish step itself (`skip-existing` on the upload action).
 4. **Creates the GitHub release** with generated notes.
 
 ## When a publish fails
