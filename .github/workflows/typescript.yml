@@ -2,11 +2,13 @@ name: TypeScript
 
 on:
   push:
-    branches:
-      - main
   pull_request:
-  release:
-    types: [published]
+
+# Superseded runs on the same ref are cancelled (e.g. rapid amend-pushes),
+# except on main, where every merge keeps its own CI run
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   detect-packages:
@@ -68,35 +70,3 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: npm run build
 
-  publish:
-    runs-on: ubuntu-latest
-    needs: [build, detect-packages]
-    if: github.event_name == 'release'
-    environment: release
-
-    strategy:
-      matrix:
-        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
-    name: Publish ${{ matrix.package }}
-
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Install dependencies
-        working-directory: src/${{ matrix.package }}
-        run: npm ci
-
-      - name: Publish package
-        working-directory: src/${{ matrix.package }}
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

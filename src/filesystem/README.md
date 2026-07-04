@@ -2,6 +2,8 @@
 
 Node.js server implementing Model Context Protocol (MCP) for filesystem operations.
 
+Published on npm as [`@modelcontextprotocol/server-filesystem`](https://www.npmjs.com/package/@modelcontextprotocol/server-filesystem).
+
 ## Features
 
 - Read/write files
