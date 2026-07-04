@@ -157,45 +157,27 @@ def git_reset(repo: git.Repo) -> str:
     return "All staged changes reset"
 
 def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] = None, end_timestamp: Optional[str] = None) -> list[str]:
-    if start_timestamp or end_timestamp:
-        # Defense in depth: reject timestamps starting with '-' to prevent flag injection
-        if start_timestamp and start_timestamp.startswith("-"):
-            raise ValueError(f"Invalid start_timestamp: '{start_timestamp}' - cannot start with '-'")
-        if end_timestamp and end_timestamp.startswith("-"):
-            raise ValueError(f"Invalid end_timestamp: '{end_timestamp}' - cannot start with '-'")
-        # Use git log command with date filtering
-        args = []
-        if start_timestamp:
-            args.extend(['--since', start_timestamp])
-        if end_timestamp:
-            args.extend(['--until', end_timestamp])
-        args.extend(['--format=%H%n%an%n%ad%n%s%n'])
+    # Defense in depth: reject timestamps starting with '-' to prevent flag injection
+    if start_timestamp and start_timestamp.startswith("-"):
+        raise ValueError(f"Invalid start_timestamp: '{start_timestamp}' - cannot start with '-'")
+    if end_timestamp and end_timestamp.startswith("-"):
+        raise ValueError(f"Invalid end_timestamp: '{end_timestamp}' - cannot start with '-'")
 
-        log_output = repo.git.log(*args).split('\n')
+    rev_kwargs: dict[str, str] = {}
+    if start_timestamp:
+        rev_kwargs["since"] = start_timestamp
+    if end_timestamp:
+        rev_kwargs["until"] = end_timestamp
 
-        log = []
-        # Process commits in groups of 4 (hash, author, date, message)
-        for i in range(0, len(log_output), 4):
-            if i + 3 < len(log_output) and len(log) < max_count:
-                log.append(
-                    f"Commit: {log_output[i]}\n"
-                    f"Author: {log_output[i+1]}\n"
-                    f"Date: {log_output[i+2]}\n"
-                    f"Message: {log_output[i+3]}\n"
-                )
-        return log
-    else:
-        # Use existing logic for simple log without date filtering
-        commits = list(repo.iter_commits(max_count=max_count))
-        log = []
-        for commit in commits:
-            log.append(
-                f"Commit: {commit.hexsha!r}\n"
-                f"Author: {commit.author!r}\n"
-                f"Date: {commit.authored_datetime}\n"
-                f"Message: {commit.message!r}\n"
-            )
-        return log
+    log = []
+    for commit in repo.iter_commits(max_count=max_count, **rev_kwargs):
+        log.append(
+            f"Commit: {commit.hexsha}\n"
+            f"Author: {commit.author}\n"
+            f"Date: {commit.authored_datetime}\n"
+            f"Message: {commit.message}\n"
+        )
+    return log
 
 def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None = None) -> str:
     # Defense in depth: reject names starting with '-' to prevent flag injection
