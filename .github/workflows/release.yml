@@ -155,6 +155,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: src/${{ matrix.package }}/dist
+          skip-existing: true # re-runs tolerate already-uploaded files
 
   publish-npm:
     needs: [update-packages, create-metadata]

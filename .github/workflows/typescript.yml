@@ -5,8 +5,6 @@ on:
     branches:
       - main
   pull_request:
-  release:
-    types: [published]
 
 jobs:
   detect-packages:
@@ -68,35 +66,3 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: npm run build
 
-  publish:
-    runs-on: ubuntu-latest
-    needs: [build, detect-packages]
-    if: github.event_name == 'release'
-    environment: release
-
-    strategy:
-      matrix:
-        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
-    name: Publish ${{ matrix.package }}
-
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Install dependencies
-        working-directory: src/${{ matrix.package }}
-        run: npm ci
-
-      - name: Publish package
-        working-directory: src/${{ matrix.package }}
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
