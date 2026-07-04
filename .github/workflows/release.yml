@@ -142,7 +142,7 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: |
           if [ -d "tests" ] || [ -d "test" ]; then
-            uv run pytest
+            uv run --frozen pytest
           else
             echo "No tests directory, skipping"
           fi
