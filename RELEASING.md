@@ -14,7 +14,7 @@ All packages publish exclusively from the [`release.yml`](.github/workflows/rele
 A release run:
 
 1. **Detects changed packages** since the last release tag (a package counts as changed if any `.py`, `.ts`, or `.md` file in its directory changed — READMEs ship inside the published artifacts).
-2. **Stamps versions and tags** — versions are date-based (CalVer, e.g. `2026.7.4`).
+2. **Stamps versions and tags** — versions are currently date-based (CalVer, e.g. `2026.7.4`) for all packages. (Planned: the TypeScript packages move to semver managed by changesets, while Python stays CalVer — see [#4463](https://github.com/modelcontextprotocol/servers/issues/4463).)
 3. **Publishes each package as an independent matrix job** (`fail-fast: false` — one package's failure never blocks another): checkout at the release tag → install → *skip if this version already exists on the registry* → **run the package's tests** → build → publish.
 4. **Creates the GitHub release** with generated notes.
 
