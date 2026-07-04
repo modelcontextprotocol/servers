@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 
 /**
  * Register a prompt with arguments
@@ -16,6 +16,7 @@ export const registerArgumentsPrompt = (server: McpServer) => {
   };
 
   // Register the prompt
+  /* @mcp-codemod-error Could not verify `argsSchema` is a schema object. Raw shapes are deprecated in v2 — pass a Standard Schema object (e.g. z.object({ … })); no change is needed if it already is one. */
   server.registerPrompt(
     "args-prompt",
     {

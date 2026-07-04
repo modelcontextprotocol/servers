@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { registerGetAnnotatedMessageTool } from "./get-annotated-message.js";
 import { registerEchoTool } from "./echo.js";
 import { registerGetEnvTool } from "./get-env.js";
@@ -16,7 +16,6 @@ import { registerTriggerLongRunningOperationTool } from "./trigger-long-running-
 import { registerTriggerSamplingRequestTool } from "./trigger-sampling-request.js";
 import { registerTriggerSamplingRequestAsyncTool } from "./trigger-sampling-request-async.js";
 import { registerTriggerElicitationRequestAsyncTool } from "./trigger-elicitation-request-async.js";
-import { registerSimulateResearchQueryTool } from "./simulate-research-query.js";
 import { registerTriggerUrlElicitationTool } from "./trigger-url-elicitation.js";
 
 /**
@@ -47,8 +46,6 @@ export const registerConditionalTools = (server: McpServer) => {
   registerTriggerElicitationRequestTool(server);
   registerTriggerUrlElicitationTool(server);
   registerTriggerSamplingRequestTool(server);
-  // Task-based research tool (uses experimental tasks API)
-  registerSimulateResearchQueryTool(server);
   // Bidirectional task tools - server sends requests that client executes as tasks
   registerTriggerSamplingRequestAsyncTool(server);
   registerTriggerElicitationRequestAsyncTool(server);

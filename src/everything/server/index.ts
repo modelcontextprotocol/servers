@@ -1,8 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  InMemoryTaskStore,
-  InMemoryTaskMessageQueue,
-} from "@modelcontextprotocol/sdk/experimental/tasks";
+import { McpServer } from "@modelcontextprotocol/server";
 import {
   setSubscriptionHandlers,
   stopSimulatedResourceUpdates,
@@ -35,10 +31,6 @@ export type ServerFactoryResponse = {
 export const createServer: () => ServerFactoryResponse = () => {
   // Read the server instructions
   const instructions = readInstructions();
-
-  // Create task store and message queue for task support
-  const taskStore = new InMemoryTaskStore();
-  const taskMessageQueue = new InMemoryTaskMessageQueue();
 
   let initializeTimeout: NodeJS.Timeout | null = null;
 
@@ -73,8 +65,6 @@ export const createServer: () => ServerFactoryResponse = () => {
         },
       },
       instructions,
-      taskStore,
-      taskMessageQueue,
     }
   );
 
@@ -110,8 +100,6 @@ export const createServer: () => ServerFactoryResponse = () => {
       // Stop any simulated logging or resource updates that may have been initiated.
       stopSimulatedLogging(sessionId);
       stopSimulatedResourceUpdates(sessionId);
-      // Clean up task store timers
-      taskStore.cleanup();
       if (initializeTimeout) clearTimeout(initializeTimeout);
     },
   } satisfies ServerFactoryResponse;

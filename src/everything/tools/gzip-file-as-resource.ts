@@ -1,6 +1,9 @@
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult, Resource } from "@modelcontextprotocol/sdk/types.js";
+import {
+  McpServer,
+  CallToolResult,
+  Resource,
+} from "@modelcontextprotocol/server";
 import { gzipSync } from "node:zlib";
 import {
   getSessionResourceURI,

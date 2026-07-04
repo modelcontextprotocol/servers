@@ -2,7 +2,7 @@ import { promises as fs, type Stats } from 'fs';
 import path from 'path';
 import os from 'os';
 import { normalizePath } from './path-utils.js';
-import type { Root } from '@modelcontextprotocol/sdk/types.js';
+import type { Root } from '@modelcontextprotocol/server';
 import { fileURLToPath } from "url";
 
 /**

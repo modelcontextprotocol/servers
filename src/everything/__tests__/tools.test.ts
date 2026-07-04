@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { registerEchoTool, EchoSchema } from '../tools/echo.js';
 import { registerGetSumTool } from '../tools/get-sum.js';
 import { registerGetEnvTool } from '../tools/get-env.js';
@@ -19,7 +19,6 @@ import {
 } from '../tools/trigger-url-elicitation.js';
 import { registerGetRootsListTool } from '../tools/get-roots-list.js';
 import { registerGZipFileAsResourceTool } from '../tools/gzip-file-as-resource.js';
-import { registerSimulateResearchQueryTool } from '../tools/simulate-research-query.js';
 
 // Helper to capture registered tool handlers
 function createMockServer() {
@@ -334,7 +333,7 @@ describe('Tools', () => {
       // Use very short duration for test
       const result = await handler(
         { duration: 0.1, steps: 2 },
-        { _meta: {}, requestId: 'test-123' }
+        { mcpReq: { _meta: {}, id: 'test-123' } }
       );
 
       expect(result.content[0].text).toContain('Long running operation completed');
@@ -349,7 +348,7 @@ describe('Tools', () => {
       const handler = handlers.get('trigger-long-running-operation')!;
       await handler(
         { duration: 0.1, steps: 2 },
-        { _meta: { progressToken: 'token-123' }, requestId: 'test-456', sessionId: 'session-1' }
+        { mcpReq: { _meta: { progressToken: 'token-123' }, id: 'test-456' }, sessionId: 'session-1' }
       );
 
       expect(mockServer.server.notification).toHaveBeenCalledTimes(2);
@@ -585,7 +584,7 @@ describe('Tools', () => {
       const handler = handlers.get('trigger-sampling-request')!;
       const result = await handler(
         { prompt: 'Test prompt', maxTokens: 50 },
-        { sendRequest: mockSendRequest }
+        { mcpReq: { send: mockSendRequest } }
       );
 
       expect(mockSendRequest).toHaveBeenCalledWith(
@@ -655,7 +654,7 @@ describe('Tools', () => {
       registerTriggerElicitationRequestTool(mockServer);
 
       const handler = handlers.get('trigger-elicitation-request')!;
-      const result = await handler({}, { sendRequest: mockSendRequest });
+      const result = await handler({}, { mcpReq: { send: mockSendRequest } });
 
       expect(result.content[0].text).toContain('✅');
       expect(result.content[0].text).toContain('provided');
@@ -680,7 +679,7 @@ describe('Tools', () => {
       registerTriggerElicitationRequestTool(mockServer);
 
       const handler = handlers.get('trigger-elicitation-request')!;
-      const result = await handler({}, { sendRequest: mockSendRequest });
+      const result = await handler({}, { mcpReq: { send: mockSendRequest } });
 
       expect(result.content[0].text).toContain('❌');
       expect(result.content[0].text).toContain('declined');
@@ -704,7 +703,7 @@ describe('Tools', () => {
       registerTriggerElicitationRequestTool(mockServer);
 
       const handler = handlers.get('trigger-elicitation-request')!;
-      const result = await handler({}, { sendRequest: mockSendRequest });
+      const result = await handler({}, { mcpReq: { send: mockSendRequest } });
 
       expect(result.content[0].text).toContain('⚠️');
       expect(result.content[0].text).toContain('cancelled');
@@ -782,7 +781,7 @@ describe('Tools', () => {
           elicitationId: 'elicitation-123',
           errorPath: false,
         },
-        { sendRequest: mockSendRequest }
+        { mcpReq: { send: mockSendRequest } }
       );
 
       expect(mockSendRequest).toHaveBeenCalledWith(
@@ -854,7 +853,7 @@ describe('Tools', () => {
           message: 'Open this page to verify your identity',
           errorPath: false,
         },
-        { sendRequest: mockSendRequest }
+        { mcpReq: { send: mockSendRequest } }
       );
 
       const sentParams = mockSendRequest.mock.calls[0][0].params;
@@ -886,7 +885,7 @@ describe('Tools', () => {
           elicitationId: 'elicitation-123',
           errorPath: false,
         },
-        { sendRequest: mockSendRequest }
+        { mcpReq: { send: mockSendRequest } }
       );
 
       expect(result.content[0].text).toContain('❌ User declined to open the URL');
@@ -915,7 +914,7 @@ describe('Tools', () => {
           elicitationId: 'elicitation-123',
           errorPath: false,
         },
-        { sendRequest: mockSendRequest }
+        { mcpReq: { send: mockSendRequest } }
       );
 
       expect(result.content[0].text).toContain(
@@ -988,7 +987,7 @@ describe('Tools', () => {
         message: 'Authorization is required to continue.',
         errorPath: true,
       };
-      const extra = { sessionId: 'session-1', sendRequest: mockSendRequest };
+      const extra = { sessionId: 'session-1', mcpReq: { send: mockSendRequest } };
 
       // First call: error path issues the prerequisite and throws -32042.
       let prerequisiteUrl: string | undefined;
@@ -1051,90 +1050,6 @@ describe('Tools', () => {
           description: expect.stringContaining('roots'),
         }),
         expect.any(Function)
-      );
-    });
-  });
-
-  describe('simulate-research-query', () => {
-    function createMockServerWithTasks() {
-      const taskHandlers: Record<string, any> = {};
-      const mockServer = {
-        experimental: {
-          tasks: {
-            registerToolTask: vi.fn((_name: string, _config: any, handler: any) => {
-              Object.assign(taskHandlers, handler);
-            }),
-          },
-        },
-        server: { getClientCapabilities: vi.fn(() => ({ elicitation: {} })) },
-      } as unknown as McpServer;
-      return { mockServer, taskHandlers };
-    }
-
-    function createMockTaskStore(taskId: string) {
-      return {
-        createTask: vi.fn().mockResolvedValue({
-          taskId,
-          status: 'working',
-          createdAt: new Date().toISOString(),
-          lastUpdatedAt: new Date().toISOString(),
-          ttl: 300000,
-          pollInterval: 1000,
-        }),
-        updateTaskStatus: vi.fn().mockResolvedValue(undefined),
-        storeTaskResult: vi.fn().mockResolvedValue(undefined),
-        getTask: vi.fn(),
-        getTaskResult: vi.fn(),
-      };
-    }
-
-    it('should pass relatedTask to sendRequest when elicitation is triggered', async () => {
-      vi.useFakeTimers();
-
-      const { mockServer, taskHandlers } = createMockServerWithTasks();
-      registerSimulateResearchQueryTool(mockServer);
-
-      const mockTaskStore = createMockTaskStore('task-abc');
-      const mockSendRequest = vi.fn().mockResolvedValue({
-        action: 'accept',
-        content: { interpretation: 'technical' },
-      });
-
-      await taskHandlers.createTask(
-        { topic: 'python', ambiguous: true },
-        { taskStore: mockTaskStore, sendRequest: mockSendRequest }
-      );
-
-      await vi.runAllTimersAsync();
-      vi.useRealTimers();
-
-      expect(mockSendRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'elicitation/create' }),
-        expect.anything(),
-        expect.objectContaining({ relatedTask: { taskId: 'task-abc' } })
-      );
-    });
-
-    it('should complete without elicitation for non-ambiguous query', async () => {
-      vi.useFakeTimers();
-
-      const { mockServer, taskHandlers } = createMockServerWithTasks();
-      registerSimulateResearchQueryTool(mockServer);
-
-      const mockTaskStore = createMockTaskStore('task-def');
-      const mockSendRequest = vi.fn();
-
-      await taskHandlers.createTask(
-        { topic: 'python', ambiguous: false },
-        { taskStore: mockTaskStore, sendRequest: mockSendRequest }
-      );
-
-      await vi.runAllTimersAsync();
-      vi.useRealTimers();
-
-      expect(mockSendRequest).not.toHaveBeenCalled();
-      expect(mockTaskStore.storeTaskResult).toHaveBeenCalledWith(
-        'task-def', 'completed', expect.anything()
       );
     });
   });

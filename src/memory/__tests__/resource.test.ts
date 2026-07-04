@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { SubscribeRequestSchema, UnsubscribeRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import {
   KnowledgeGraphManager,
   registerKnowledgeGraphResource,
@@ -59,8 +58,8 @@ describe('knowledge-graph resource subscriptions', () => {
     return { mockServer, inner };
   }
 
-  function handlerFor(inner: ReturnType<typeof makeMockServer>['inner'], schema: unknown) {
-    const call = inner.setRequestHandler.mock.calls.find((c) => c[0] === schema);
+  function handlerFor(inner: ReturnType<typeof makeMockServer>['inner'], method: string) {
+    const call = inner.setRequestHandler.mock.calls.find((c) => c[0] === method);
     if (!call) throw new Error('handler not registered');
     return call[1] as (request: { params: { uri: string } }) => Promise<unknown>;
   }
@@ -80,9 +79,9 @@ describe('knowledge-graph resource subscriptions', () => {
 
     registerKnowledgeGraphSubscriptions(mockServer);
 
-    const schemas = inner.setRequestHandler.mock.calls.map((c) => c[0]);
-    expect(schemas).toContain(SubscribeRequestSchema);
-    expect(schemas).toContain(UnsubscribeRequestSchema);
+    const methods = inner.setRequestHandler.mock.calls.map((c) => c[0]);
+    expect(methods).toContain('resources/subscribe');
+    expect(methods).toContain('resources/unsubscribe');
   });
 
   it('subscribe and unsubscribe handlers acknowledge with an empty result', async () => {
@@ -91,7 +90,7 @@ describe('knowledge-graph resource subscriptions', () => {
     registerKnowledgeGraphSubscriptions(mockServer);
 
     const req = { params: { uri: 'memory://knowledge-graph' } };
-    await expect(handlerFor(inner, SubscribeRequestSchema)(req)).resolves.toEqual({});
-    await expect(handlerFor(inner, UnsubscribeRequestSchema)(req)).resolves.toEqual({});
+    await expect(handlerFor(inner, 'resources/subscribe')(req)).resolves.toEqual({});
+    await expect(handlerFor(inner, 'resources/unsubscribe')(req)).resolves.toEqual({});
   });
 });

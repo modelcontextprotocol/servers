@@ -1,5 +1,4 @@
-import { LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { LoggingLevel, McpServer } from "@modelcontextprotocol/server";
 
 // Map session ID to the interval for sending logging messages to the client
 const logsUpdateIntervals: Map<string | undefined, NodeJS.Timeout | undefined> =

@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
+import { McpServer, completable } from "@modelcontextprotocol/server";
 
 /**
  * Register a prompt with completable arguments
@@ -42,6 +41,7 @@ export const registerPromptWithCompletions = (server: McpServer) => {
   };
 
   // Register the prompt
+  /* @mcp-codemod-error Could not verify `argsSchema` is a schema object. Raw shapes are deprecated in v2 — pass a Standard Schema object (e.g. z.object({ … })); no change is needed if it already is one. */
   server.registerPrompt(
     "completable-prompt",
     {

@@ -1,11 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  CallToolResult,
-  ElicitRequestURLParams,
-  ElicitResultSchema,
-  UrlElicitationRequiredError,
-} from "@modelcontextprotocol/sdk/types.js";
+import { ElicitResultSchema } from "@modelcontextprotocol/core";
+import { McpServer, CallToolResult, ElicitRequestURLParams, UrlElicitationRequiredError } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 // Tool input schema
@@ -107,7 +102,7 @@ export const registerTriggerUrlElicitationTool = (server: McpServer) => {
     server.registerTool(
       name,
       config,
-      async (args, extra): Promise<CallToolResult> => {
+      async (args, ctx): Promise<CallToolResult> => {
         const {
           url,
           message,
@@ -116,7 +111,7 @@ export const registerTriggerUrlElicitationTool = (server: McpServer) => {
         } = args;
 
         const elicitationId = requestedElicitationId ?? randomUUID();
-        const sessionId = extra.sessionId ?? "default";
+        const sessionId = ctx.sessionId ?? "default";
 
         // Key the one-shot error-path marker on inputs the client resends
         // verbatim when it retries the original tool call. A real client retries
@@ -170,7 +165,7 @@ export const registerTriggerUrlElicitationTool = (server: McpServer) => {
         }
 
         // Request path: send elicitation/create and await the user's response
-        const elicitationResult = await extra.sendRequest(
+        const elicitationResult = await ctx.mcpReq.send(
           {
             method: "elicitation/create",
             params: elicitationParams,

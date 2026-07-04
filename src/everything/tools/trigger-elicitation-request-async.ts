@@ -1,5 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 // Tool configuration
@@ -58,7 +57,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
     server.registerTool(
       name,
       config,
-      async (args, extra): Promise<CallToolResult> => {
+      async (args, ctx): Promise<CallToolResult> => {
         // Create the elicitation request WITH task metadata
         // Using z.any() schema to avoid complex type matching with _meta
         const request = {
@@ -98,8 +97,8 @@ export const registerTriggerElicitationRequestAsyncTool = (
         // Client may return either:
         // - ElicitResult (synchronous execution)
         // - CreateTaskResult (task-based execution with { task } object)
-        const elicitResponse = await extra.sendRequest(
-          request as Parameters<typeof extra.sendRequest>[0],
+        const elicitResponse = await ctx.mcpReq.send(
+          request as Parameters<typeof ctx.mcpReq.send>[0],
           z.union([
             // CreateTaskResult - client created a task
             z.object({
@@ -156,7 +155,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
           attempts++;
 
           // Get task status from client
-          const pollResult = await extra.sendRequest(
+          const pollResult = await ctx.mcpReq.send(
             {
               method: "tasks/get",
               params: { taskId },
@@ -213,7 +212,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
         }
 
         // Fetch the final result
-        const result = await extra.sendRequest(
+        const result = await ctx.mcpReq.send(
           {
             method: "tasks/result",
             params: { taskId },

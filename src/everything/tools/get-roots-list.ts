@@ -1,5 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import { syncRoots } from "../server/roots.js";
 
 // Tool configuration
@@ -44,9 +43,9 @@ export const registerGetRootsListTool = (server: McpServer) => {
     server.registerTool(
       name,
       config,
-      async (args, extra): Promise<CallToolResult> => {
+      async (args, ctx): Promise<CallToolResult> => {
         // Get the current rootsFetch the current roots list from the client if need be
-        const currentRoots = await syncRoots(server, extra.sessionId);
+        const currentRoots = await syncRoots(server, ctx.sessionId);
 
         // Respond if client supports roots but doesn't have any configured
         if (

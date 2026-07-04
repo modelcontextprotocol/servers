@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 
 // Create mock server
 function createMockServer() {
@@ -79,9 +79,6 @@ describe('Registration Index Files', () => {
       expect(registeredTools).toContain('trigger-elicitation-request');
       expect(registeredTools).toContain('trigger-url-elicitation');
       expect(registeredTools).toContain('trigger-sampling-request');
-
-      // Task-based tools are registered via experimental.tasks.registerToolTask
-      expect(mockServerWithCapabilities.experimental.tasks.registerToolTask).toHaveBeenCalled();
     });
 
     it('should not register conditional tools when capabilities missing', async () => {

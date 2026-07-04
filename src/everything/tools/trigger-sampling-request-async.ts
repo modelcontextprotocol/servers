@@ -1,8 +1,8 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  McpServer,
   CallToolResult,
   CreateMessageRequest,
-} from "@modelcontextprotocol/sdk/types.js";
+} from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 // Tool input schema
@@ -66,7 +66,7 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
     server.registerTool(
       name,
       config,
-      async (args, extra): Promise<CallToolResult> => {
+      async (args, ctx): Promise<CallToolResult> => {
         const validatedArgs = TriggerSamplingRequestAsyncSchema.parse(args);
         const { prompt, maxTokens } = validatedArgs;
 
@@ -99,7 +99,7 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
         // Client may return either:
         // - CreateMessageResult (synchronous execution)
         // - CreateTaskResult (task-based execution with { task } object)
-        const samplingResponse = await extra.sendRequest(
+        const samplingResponse = await ctx.mcpReq.send(
           request,
           z.union([
             // CreateTaskResult - client created a task
@@ -160,7 +160,7 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
           attempts++;
 
           // Get task status from client
-          const pollResult = await extra.sendRequest(
+          const pollResult = await ctx.mcpReq.send(
             {
               method: "tasks/get",
               params: { taskId },
@@ -209,7 +209,7 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
         }
 
         // Fetch the final result
-        const result = await extra.sendRequest(
+        const result = await ctx.mcpReq.send(
           {
             method: "tasks/result",
             params: { taskId },

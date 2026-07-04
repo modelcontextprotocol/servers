@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import {
   resourceTypeCompleter,
   resourceIdForPromptCompleter,
@@ -28,6 +28,7 @@ export const registerEmbeddedResourcePrompt = (server: McpServer) => {
   };
 
   // Register the prompt
+  /* @mcp-codemod-error Could not verify `argsSchema` is a schema object. Raw shapes are deprecated in v2 — pass a Standard Schema object (e.g. z.object({ … })); no change is needed if it already is one. */
   server.registerPrompt(
     "resource-prompt",
     {

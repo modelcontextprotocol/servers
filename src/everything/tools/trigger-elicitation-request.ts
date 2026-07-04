@@ -1,8 +1,5 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  ElicitResultSchema,
-  CallToolResult,
-} from "@modelcontextprotocol/sdk/types.js";
+import { ElicitResultSchema } from "@modelcontextprotocol/core";
+import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 
 // Tool configuration
 const name = "trigger-elicitation-request";
@@ -47,8 +44,8 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
     server.registerTool(
       name,
       config,
-      async (args, extra): Promise<CallToolResult> => {
-        const elicitationResult = await extra.sendRequest(
+      async (args, ctx): Promise<CallToolResult> => {
+        const elicitationResult = await ctx.mcpReq.send(
           {
             method: "elicitation/create",
             params: {
