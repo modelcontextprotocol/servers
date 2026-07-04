@@ -4,10 +4,11 @@ on:
   push:
   pull_request:
 
-# Superseded runs on the same ref are cancelled (e.g. rapid amend-pushes)
+# Superseded runs on the same ref are cancelled (e.g. rapid amend-pushes),
+# except on main, where every merge keeps its own CI run
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   detect-packages:
