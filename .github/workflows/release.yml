@@ -171,9 +171,9 @@ jobs:
           cache: npm
           registry-url: 'https://registry.npmjs.org'
 
-      # Trusted publishing requires npm >= 11.5.1; Node 22 bundles an older npm
-      - name: Update npm for trusted publishing
-        run: npm install -g npm@latest
+      # OIDC trusted publishing requires npm >=11.5.1; Node 22's bundled npm is 10.x.
+      - name: Ensure npm CLI supports OIDC trusted publishing
+        run: npm install -g npm@^11.5.1
 
       - name: Install dependencies
         working-directory: src/${{ matrix.package }}
@@ -199,6 +199,8 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: |
           npm publish --access public
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
 
   create-release:
     needs: [update-packages, create-metadata, publish-pypi, publish-npm]
