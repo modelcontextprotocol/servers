@@ -138,6 +138,15 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: uv run --frozen pyright
 
+      - name: Run tests
+        working-directory: src/${{ matrix.package }}
+        run: |
+          if [ -d "tests" ] || [ -d "test" ]; then
+            uv run pytest
+          else
+            echo "No tests directory, skipping"
+          fi
+
       - name: Build package
         working-directory: src/${{ matrix.package }}
         run: uv build
@@ -188,6 +197,10 @@ jobs:
             exit 1
           fi
           echo "Version $VERSION is new, proceeding with publish"
+
+      - name: Run tests
+        working-directory: src/${{ matrix.package }}
+        run: npm test --if-present
 
       - name: Build package
         working-directory: src/${{ matrix.package }}
