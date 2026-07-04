@@ -156,6 +156,9 @@ jobs:
         package: ${{ fromJson(needs.create-metadata.outputs.npm_packages) }}
     name: Build ${{ matrix.package }}
     environment: release
+    permissions:
+      contents: read
+      id-token: write # Required for npm trusted publishing (OIDC)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -167,6 +170,10 @@ jobs:
           node-version: 22
           cache: npm
           registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing requires npm >= 11.5.1; Node 22 bundles an older npm
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         working-directory: src/${{ matrix.package }}
@@ -186,12 +193,12 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: npm run build
 
+      # Authenticates via OIDC trusted publishing (no token) — each package's
+      # npm trusted publisher is bound to this workflow + the release environment
       - name: Publish package
         working-directory: src/${{ matrix.package }}
         run: |
           npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   create-release:
     needs: [update-packages, create-metadata, publish-pypi, publish-npm]
