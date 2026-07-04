@@ -1,9 +1,7 @@
-name: Automatic Release Creation
+name: Release
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 10 * * *'
 
 jobs:
   create-metadata:

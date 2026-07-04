@@ -4,7 +4,7 @@ How the packages in this repository are published, and what to do when a publish
 
 ## How publishing works
 
-All packages publish exclusively from the [`release.yml`](.github/workflows/release.yml) GitHub Actions workflow, gated by the `release` environment (a required reviewer must approve each deployment). Runs are triggered on a daily schedule or manually via **workflow_dispatch**.
+All packages publish exclusively from the [`release.yml`](.github/workflows/release.yml) GitHub Actions workflow, gated by the `release` environment (a required reviewer must approve each deployment). Releases are triggered deliberately by a maintainer via **workflow_dispatch** (Actions → Release → Run workflow, or `gh workflow run release.yml`) — there is no scheduled/automatic release.
 
 **Authentication is OIDC trusted publishing on both registries — there are no registry tokens.**
 
