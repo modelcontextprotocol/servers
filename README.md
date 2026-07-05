@@ -145,6 +145,10 @@ See [ADDITIONAL.md](ADDITIONAL.md) for a curated list of frameworks and resource
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for information about contributing to this repository.
 
+## 📦 Releasing
+
+See [RELEASING.md](RELEASING.md) for how packages are published (OIDC trusted publishing from CI — no registry tokens) and how to retry a failed publish.
+
 ## 🔒 Security
 
 See [SECURITY.md](SECURITY.md) for reporting security vulnerabilities.
