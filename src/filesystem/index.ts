@@ -257,7 +257,7 @@ server.registerTool(
     },
     outputSchema: {
       content: z.array(z.object({
-        type: z.enum(["image", "audio", "blob"]),
+        type: z.enum(["image", "audio"]),
         data: z.string(),
         mimeType: z.string()
       }))
@@ -280,16 +280,19 @@ server.registerTool(
       ".ogg": "audio/ogg",
       ".flac": "audio/flac",
     };
-    const mimeType = mimeTypes[extension] || "application/octet-stream";
+    const mimeType = mimeTypes[extension];
+    if (!mimeType) {
+      throw new Error(
+        `Unsupported media type for ${args.path}. read_media_file only supports image and audio files.`
+      );
+    }
+
     const data = await readFileAsBase64Stream(validPath);
 
     const type = mimeType.startsWith("image/")
       ? "image"
-      : mimeType.startsWith("audio/")
-        ? "audio"
-        // Fallback for other binary types, not officially supported by the spec but has been used for some time
-        : "blob";
-    const contentItem = { type: type as 'image' | 'audio' | 'blob', data, mimeType };
+      : "audio";
+    const contentItem = { type: type as 'image' | 'audio', data, mimeType };
     return {
       content: [contentItem],
       structuredContent: { content: [contentItem] }
