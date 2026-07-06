@@ -2,6 +2,8 @@
 
 This repository is a collection of *reference implementations* for the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), as well as references to community-built servers and additional resources.
 
+- [ContinueWith MCP](https://www.npmjs.com/package/@continuewith/mcp) - MCP server to install the ContinueWith AI handoff widget from Cursor, Claude Code, Codex, and Windsurf (`npx @continuewith/mcp`).
+
 > [!IMPORTANT]
 > If you are looking for a list of MCP servers, you can browse published servers on [the MCP Registry](https://registry.modelcontextprotocol.io/). The repository served by this README is dedicated to housing just the small number of reference servers maintained by the MCP steering group.
 
