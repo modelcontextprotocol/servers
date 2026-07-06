@@ -184,6 +184,10 @@ describe('structuredContent schema compliance', () => {
       expect(content[0].type).toBe('image');
       expect(content[0].mimeType).toBe('image/png');
       expect(Buffer.from(content[0].data!, 'base64').equals(pngBytes)).toBe(true);
+      // structuredContent must MIRROR content. The SDK validates each field independently
+      // against the outputSchema union (either arm is valid for either field), so schema
+      // validation alone cannot catch the two drifting apart — only this equality can.
+      expect(result.structuredContent).toEqual({ content });
     });
 
     it('returns type "audio" for audio files, round-tripping the bytes', async () => {
@@ -200,6 +204,7 @@ describe('structuredContent schema compliance', () => {
       expect(content[0].type).toBe('audio');
       expect(content[0].mimeType).toBe('audio/mpeg');
       expect(Buffer.from(content[0].data!, 'base64').equals(mp3Bytes)).toBe(true);
+      expect(result.structuredContent).toEqual({ content }); // must mirror content (see image case)
     });
 
     it('returns an embedded resource (never "blob") for non-media binaries, round-tripping the bytes', async () => {
@@ -217,8 +222,10 @@ describe('structuredContent schema compliance', () => {
         resource?: { uri: string; mimeType: string; blob: string };
       }>;
       expect(content).toHaveLength(1);
+      // ("never blob" is enforced upstream of any assertion here: the SDK client's
+      // CallToolResultSchema parse rejects a blob block before content is even inspected,
+      // failing the callTool above — which is exactly how this test fails pre-fix.)
       expect(content[0].type).toBe('resource');
-      expect(content[0].type).not.toBe('blob');
       expect(content[0].resource).toBeDefined();
       expect(content[0].resource!.uri.startsWith('file://')).toBe(true);
       // Decode the uri back to a path and confirm it is the file actually read — guards a
@@ -229,6 +236,7 @@ describe('structuredContent schema compliance', () => {
       // The base64 blob must round-trip to the original bytes (data integrity, not just a valid
       // shape) — this also subsumes a non-empty check.
       expect(Buffer.from(content[0].resource!.blob, 'base64').equals(binBytes)).toBe(true);
+      expect(result.structuredContent).toEqual({ content }); // must mirror content (see image case)
     });
 
     it('percent-encodes spaces and non-ASCII chars in the resource uri (pathToFileURL, not a raw file:// concatenation)', async () => {
@@ -253,6 +261,7 @@ describe('structuredContent schema compliance', () => {
       // vacuous on an NFD runner where the precomposed char never appears — is the load-bearing
       // assertion that distinguishes pathToFileURL from a raw `file://${path}` concatenation.
       expect(uri).toMatch(/%C3%A9|%CC%81/);
+      expect(result.structuredContent).toEqual({ content }); // must mirror content (see image case)
     });
 
     it('advertises the widened outputSchema union via tools/list (both branches serialize)', async () => {
