@@ -1,7 +1,9 @@
 import fs from "fs/promises";
+import { createReadStream } from 'fs';
 import path from "path";
 import os from 'os';
 import { randomBytes } from 'crypto';
+import { createInterface } from 'readline';
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 import { normalizePath, expandHome } from './path-utils.js';
@@ -369,6 +371,36 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
   } finally {
     await fileHandle.close();
   }
+}
+
+export async function readFileLines(filePath: string, offset: number, limit: number): Promise<string> {
+  if (limit <= 0) return '';
+
+  const input = createReadStream(filePath, { encoding: 'utf-8' });
+  const lines = createInterface({
+    input,
+    crlfDelay: Infinity
+  });
+  const result: string[] = [];
+  let lineIndex = 0;
+
+  try {
+    for await (const line of lines) {
+      if (lineIndex++ < offset) {
+        continue;
+      }
+
+      result.push(line);
+      if (result.length >= limit) {
+        break;
+      }
+    }
+  } finally {
+    lines.close();
+    input.destroy();
+  }
+
+  return result.join('\n');
 }
 
 export async function searchFilesWithValidation(

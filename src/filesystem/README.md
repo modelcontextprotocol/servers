@@ -74,8 +74,11 @@ The server's directory access control follows this flow:
     - `path` (string)
     - `head` (number, optional): First N lines
     - `tail` (number, optional): Last N lines
+    - `offset` (number, optional): Zero-based line offset to start reading from
+    - `limit` (number, optional): Maximum number of lines to read from `offset`
   - Always treats the file as UTF-8 text regardless of extension
   - Cannot specify both `head` and `tail` simultaneously
+  - Cannot combine `head` or `tail` with `offset` or `limit`; `offset` requires `limit`, while `limit` without `offset` starts at the first line
 
 - **read_media_file**
   - Read an image or audio file

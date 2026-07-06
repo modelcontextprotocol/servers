@@ -25,6 +25,7 @@ import {
   applyFileEdits,
   tailFile,
   headFile,
+  readFileLines,
   setAllowedDirectories,
 } from './lib.js';
 
@@ -95,8 +96,10 @@ setAllowedDirectories(allowedDirectories);
 // Schema definitions
 const ReadTextFileArgsSchema = z.object({
   path: z.string(),
-  tail: z.number().optional().describe('If provided, returns only the last N lines of the file'),
-  head: z.number().optional().describe('If provided, returns only the first N lines of the file')
+  tail: z.number().int().nonnegative().optional().describe('If provided, returns only the last N lines of the file'),
+  head: z.number().int().nonnegative().optional().describe('If provided, returns only the first N lines of the file'),
+  offset: z.number().int().nonnegative().optional().describe('If provided with limit, skips this many lines before reading'),
+  limit: z.number().int().nonnegative().optional().describe('If provided, returns at most this many lines starting from offset or the beginning of the file')
 });
 
 const ReadMediaFileArgsSchema = z.object({
@@ -191,15 +194,28 @@ async function readFileAsBase64Stream(filePath: string): Promise<string> {
 const readTextFileHandler = async (args: z.infer<typeof ReadTextFileArgsSchema>) => {
   const validPath = await validatePath(args.path);
 
-  if (args.head && args.tail) {
+  const head = args.head;
+  const tail = args.tail;
+  const offset = args.offset;
+  const limit = args.limit;
+
+  if (head !== undefined && tail !== undefined) {
     throw new Error("Cannot specify both head and tail parameters simultaneously");
+  }
+  if ((head !== undefined || tail !== undefined) && (offset !== undefined || limit !== undefined)) {
+    throw new Error("Cannot combine head or tail with offset or limit parameters");
+  }
+  if (offset !== undefined && limit === undefined) {
+    throw new Error("Cannot specify offset without limit");
   }
 
   let content: string;
-  if (args.tail) {
-    content = await tailFile(validPath, args.tail);
-  } else if (args.head) {
-    content = await headFile(validPath, args.head);
+  if (tail !== undefined) {
+    content = await tailFile(validPath, tail);
+  } else if (head !== undefined) {
+    content = await headFile(validPath, head);
+  } else if (limit !== undefined) {
+    content = await readFileLines(validPath, offset ?? 0, limit);
   } else {
     content = await readFileContent(validPath);
   }
@@ -231,13 +247,16 @@ server.registerTool(
       "Handles various text encodings and provides detailed error messages " +
       "if the file cannot be read. Use this tool when you need to examine " +
       "the contents of a single file. Use the 'head' parameter to read only " +
-      "the first N lines of a file, or the 'tail' parameter to read only " +
-      "the last N lines of a file. Operates on the file as text regardless of extension. " +
+      "the first N lines of a file, the 'tail' parameter to read only " +
+      "the last N lines of a file, or the 'offset' and 'limit' parameters " +
+      "to read a specific line range. Operates on the file as text regardless of extension. " +
       "Only works within allowed directories.",
     inputSchema: {
       path: z.string(),
-      tail: z.number().optional().describe("If provided, returns only the last N lines of the file"),
-      head: z.number().optional().describe("If provided, returns only the first N lines of the file")
+      tail: z.number().int().nonnegative().optional().describe("If provided, returns only the last N lines of the file"),
+      head: z.number().int().nonnegative().optional().describe("If provided, returns only the first N lines of the file"),
+      offset: z.number().int().nonnegative().optional().describe("If provided with limit, skips this many lines before reading"),
+      limit: z.number().int().nonnegative().optional().describe("If provided, returns at most this many lines starting from offset or the beginning of the file")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true }
