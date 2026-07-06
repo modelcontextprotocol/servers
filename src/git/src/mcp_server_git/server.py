@@ -181,7 +181,7 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
                     f"Commit: {log_output[i]}\n"
                     f"Author: {log_output[i+1]}\n"
                     f"Date: {log_output[i+2]}\n"
-                    f"    {log_output[i+3]}\n"
+                    f"Message: {log_output[i+3]}\n"
                 )
         return log
     else:
@@ -193,7 +193,7 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
                 f"Commit: {commit.hexsha}\n"
                 f"Author: {commit.author}\n"
                 f"Date: {commit.authored_datetime}\n"
-                f"    {commit.message}\n"
+                f"Message: {commit.message}\n"
             )
         return log
 
