@@ -1,0 +1,38 @@
+{
+  "name": "PokeWealth",
+  "description": "Live Pokémon card Oracle pricing, market caps (median PSA10 × population), and grading ROI calculator. Read-only MCP server for collection valuation and investment signals.",
+  "author": "PokeWealth Ltd",
+  "homepage": "https://pokewealth.com",
+  "repository": "https://github.com/pokewealth/mcp-server",
+  "documentation": "https://pokewealth.com/developers",
+  "runtime": "streamable-http",
+  "url": "https://naxpujvoxgemkuctvfzz.supabase.co/functions/v1/mcp-server",
+  "authentication": "optional",
+  "authenticationDescription": "Optional API key (bearer token) for higher rate limits. Free tier works without authentication.",
+  "tools": [
+    {
+      "name": "search_cards",
+      "description": "Search PokeWealth's catalog for Pokémon cards by name. Returns slug, set, image, Oracle price, and market cap."
+    },
+    {
+      "name": "get_card_price",
+      "description": "Get current Oracle price, fair value range, 7/30/90-day changes, and BUY/SELL/HOLD signal."
+    },
+    {
+      "name": "get_market_cap",
+      "description": "Get market cap (median PSA10 × population), rank, and cap status."
+    },
+    {
+      "name": "get_top_100",
+      "description": "Get PokeWealth's Top 100 ranking by market cap with optional filters."
+    },
+    {
+      "name": "get_oracle_signal",
+      "description": "Get BUY/SELL/HOLD investment signal with fair-value bounds and confidence."
+    },
+    {
+      "name": "should_i_grade",
+      "description": "Estimate whether grading a raw card is worthwhile. Returns GRADE/DONT_GRADE/BORDERLINE with ROI."
+    }
+  ]
+}
