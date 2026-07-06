@@ -78,10 +78,12 @@ The server's directory access control follows this flow:
   - Cannot specify both `head` and `tail` simultaneously
 
 - **read_media_file**
-  - Read an image or audio file
+  - Read a file and return it as a base64-encoded content block with its MIME type
   - Inputs:
     - `path` (string)
-  - Streams the file and returns base64 data with the corresponding MIME type
+  - Streams the file and returns base64 data with the corresponding MIME type. Image and
+    audio files are returned as `image`/`audio` content; any other file type is returned as
+    an embedded `resource` (a valid MCP content block for arbitrary binary data)
 
 - **read_multiple_files**
   - Read multiple files simultaneously
