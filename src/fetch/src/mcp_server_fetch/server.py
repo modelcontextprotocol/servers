@@ -1,3 +1,4 @@
+import os
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
@@ -22,6 +23,7 @@ from pydantic import BaseModel, Field, AnyUrl
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
+DEFAULT_TIMEOUT_SECS = 30
 
 
 def extract_content_from_html(html: str) -> str:
@@ -109,7 +111,8 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
 
 
 async def fetch_url(
-    url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None
+    url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None,
+    timeout: int = DEFAULT_TIMEOUT_SECS,
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
@@ -122,7 +125,7 @@ async def fetch_url(
                 url,
                 follow_redirects=True,
                 headers={"User-Agent": user_agent},
-                timeout=30,
+                timeout=timeout,
             )
         except HTTPError as e:
             raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}"))
@@ -176,12 +179,32 @@ class Fetch(BaseModel):
             description="Get the actual HTML content of the requested page, without simplification.",
         ),
     ]
+    timeout: Annotated[
+        int | None,
+        Field(
+            default=None,
+            description="Request timeout in seconds. Overrides server default when provided.",
+            gt=0,
+            lt=600,
+        ),
+    ]
+
+
+def _get_default_timeout(cli_timeout: int | None = None) -> int:
+    """Resolve the server-wide default timeout (CLI flag > env var > hardcoded default)."""
+    if cli_timeout is not None:
+        return cli_timeout
+    env_val = os.environ.get("FETCH_TIMEOUT_MS")
+    if env_val:
+        return max(1, int(env_val) // 1000)
+    return DEFAULT_TIMEOUT_SECS
 
 
 async def serve(
     custom_user_agent: str | None = None,
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
+    timeout: int | None = None,
 ) -> None:
     """Run the fetch MCP server.
 
@@ -189,10 +212,12 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        timeout: Optional default timeout in seconds for all requests
     """
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
     user_agent_manual = custom_user_agent or DEFAULT_USER_AGENT_MANUAL
+    default_timeout = _get_default_timeout(timeout)
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -234,8 +259,10 @@ Although originally you did not have internet access, and were advised to refuse
         if not ignore_robots_txt:
             await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
 
+        request_timeout = args.timeout if args.timeout is not None else default_timeout
         content, prefix = await fetch_url(
-            url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url
+            url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url,
+            timeout=request_timeout,
         )
         original_length = len(content)
         if args.start_index >= original_length:
@@ -262,7 +289,7 @@ Although originally you did not have internet access, and were advised to refuse
         url = arguments["url"]
 
         try:
-            content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url)
+            content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url, timeout=default_timeout)
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:
             return GetPromptResult(
