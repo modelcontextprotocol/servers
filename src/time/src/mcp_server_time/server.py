@@ -53,10 +53,8 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
 def get_zoneinfo(timezone_name: str) -> ZoneInfo:
     try:
         return ZoneInfo(timezone_name)
-    except KeyError:
-        raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Unknown timezone: {timezone_name}"))
     except Exception as e:
-        raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Invalid timezone '{timezone_name}': {e}"))
+        raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Invalid timezone: {str(e)}"))
 
 
 class TimeServer:
