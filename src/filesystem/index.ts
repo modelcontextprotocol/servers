@@ -217,7 +217,7 @@ server.registerTool(
     description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
     inputSchema: ReadTextFileArgsSchema.shape,
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   readTextFileHandler
 );
@@ -240,7 +240,7 @@ server.registerTool(
       head: z.number().optional().describe("If provided, returns only the first N lines of the file")
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   readTextFileHandler
 );
@@ -274,7 +274,7 @@ server.registerTool(
         })
       ]))
     },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof ReadMediaFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -331,7 +331,7 @@ server.registerTool(
         .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories.")
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof ReadMultipleFilesArgsSchema>) => {
     const results = await Promise.all(
@@ -367,7 +367,7 @@ server.registerTool(
       content: z.string()
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof WriteFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -397,7 +397,7 @@ server.registerTool(
       dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof EditFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -422,7 +422,7 @@ server.registerTool(
       path: z.string()
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false }
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false, openWorldHint: false }
   },
   async (args: z.infer<typeof CreateDirectoryArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -448,7 +448,7 @@ server.registerTool(
       path: z.string()
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof ListDirectoryArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -477,7 +477,7 @@ server.registerTool(
       sortBy: z.enum(["name", "size"]).optional().default("name").describe("Sort entries by name or size")
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof ListDirectoryWithSizesArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -556,7 +556,7 @@ server.registerTool(
       excludePatterns: z.array(z.string()).optional().default([])
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof DirectoryTreeArgsSchema>) => {
     interface TreeEntry {
@@ -626,7 +626,7 @@ server.registerTool(
       destination: z.string()
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
     const validSourcePath = await validatePath(args.source);
@@ -657,7 +657,7 @@ server.registerTool(
       excludePatterns: z.array(z.string()).optional().default([])
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof SearchFilesArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -683,7 +683,7 @@ server.registerTool(
       path: z.string()
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof GetFileInfoArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -709,7 +709,7 @@ server.registerTool(
       "before trying to access files.",
     inputSchema: {},
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async () => {
     const text = `Allowed directories:\n${allowedDirectories.join('\n')}`;

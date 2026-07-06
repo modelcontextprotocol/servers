@@ -187,6 +187,7 @@ on each tool so clients can:
 - Distinguish **read‑only** tools from write‑capable tools.
 - Understand which write operations are **idempotent** (safe to retry with the same arguments).
 - Highlight operations that may be **destructive** (overwriting or heavily mutating data).
+- Signal that a tool does **not** reach an open or external world (every filesystem tool sets `openWorldHint: false`).
 
 The mapping for filesystem tools is:
 
@@ -206,7 +207,7 @@ The mapping for filesystem tools is:
 | `edit_file`                 | `false`      | `false`        | `true`          | Re‑applying edits can fail or double‑apply      |
 | `move_file`                 | `false`      | `false`        | `true`          | Deletes source file                             |
 
-> Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec.
+> Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec. Every tool also sets `openWorldHint: false` — this server only accesses the local filesystem within its allowed directories, never an open or external world.
 
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
