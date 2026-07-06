@@ -155,4 +155,49 @@ describe('structuredContent schema compliance', () => {
       expect(Array.isArray(structuredContent.content)).toBe(false);
     });
   });
+
+  describe('read_media_file (issue #4029)', () => {
+    it('returns type: "image" for image files (valid MCP content type)', async () => {
+      // 1x1 transparent PNG (base64)
+      const pngBase64 =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+      const pngPath = path.join(testDir, 'pixel.png');
+      await fs.writeFile(pngPath, Buffer.from(pngBase64, 'base64'));
+
+      const result = await client.callTool({
+        name: 'read_media_file',
+        arguments: { path: pngPath }
+      });
+
+      const content = result.content as Array<{ type: string }>;
+      expect(Array.isArray(content)).toBe(true);
+      expect(content[0].type).toBe('image');
+      // 'blob' is NOT a valid MCP content type per the spec.
+      expect(content[0].type).not.toBe('blob');
+    });
+
+    it('returns type: "resource" for non-image/audio binaries (valid MCP content type)', async () => {
+      const binPath = path.join(testDir, 'data.bin');
+      await fs.writeFile(binPath, Buffer.from([0x00, 0x01, 0x02, 0x03]));
+
+      const result = await client.callTool({
+        name: 'read_media_file',
+        arguments: { path: binPath }
+      });
+
+      const content = result.content as Array<{
+        type: string;
+        resource?: { uri: string; mimeType: string; blob: string };
+      }>;
+      expect(Array.isArray(content)).toBe(true);
+      // Must be a valid MCP content type (text | image | audio | resource_link | resource).
+      expect(['image', 'audio', 'resource']).toContain(content[0].type);
+      expect(content[0].type).not.toBe('blob');
+      if (content[0].type === 'resource') {
+        expect(content[0].resource).toBeDefined();
+        expect(typeof content[0].resource!.uri).toBe('string');
+        expect(typeof content[0].resource!.blob).toBe('string');
+      }
+    });
+  });
 });
