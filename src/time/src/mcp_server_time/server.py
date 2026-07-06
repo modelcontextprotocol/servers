@@ -213,7 +213,7 @@ async def serve(local_timezone: str | None = None) -> None:
             ]
 
         except Exception as e:
-            raise ValueError(f"Error processing mcp-server-time query: {str(e)}")
+            raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Error processing time query: {str(e)}"))
 
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
