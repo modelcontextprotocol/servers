@@ -53,8 +53,10 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
 def get_zoneinfo(timezone_name: str) -> ZoneInfo:
     try:
         return ZoneInfo(timezone_name)
+    except KeyError:
+        raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Unknown timezone: {timezone_name}"))
     except Exception as e:
-        raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Invalid timezone: {str(e)}"))
+        raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Invalid timezone '{timezone_name}': {e}"))
 
 
 class TimeServer:
@@ -213,7 +215,7 @@ async def serve(local_timezone: str | None = None) -> None:
             ]
 
         except Exception as e:
-            raise ValueError(f"Error processing mcp-server-time query: {str(e)}")
+            raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Error processing time query: {str(e)}"))
 
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
