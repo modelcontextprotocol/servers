@@ -3,13 +3,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
-  CallToolResult,
   RootsListChangedNotificationSchema,
   type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
 import path from "path";
+import { pathToFileURL } from "url";
 import { z } from "zod";
 import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from './path-utils.js';
@@ -250,17 +250,29 @@ server.registerTool(
   {
     title: "Read Media File",
     description:
-      "Read an image or audio file. Returns the base64 encoded data and MIME type. " +
-      "Only works within allowed directories.",
+      "Read a file and return it as a base64-encoded content block with its MIME type. " +
+      "Image and audio files are returned as image/audio content; any other file type is " +
+      "returned as an embedded resource. Only works within allowed directories.",
     inputSchema: {
       path: z.string()
     },
     outputSchema: {
-      content: z.array(z.object({
-        type: z.enum(["image", "audio", "blob"]),
-        data: z.string(),
-        mimeType: z.string()
-      }))
+      content: z.array(z.union([
+        z.object({
+          type: z.enum(["image", "audio"]),
+          data: z.string(),
+          mimeType: z.string()
+        }),
+        z.object({
+          type: z.literal("resource"),
+          resource: z.object({
+            uri: z.string(),
+            // Optional, matching the SDK's BlobResourceContents shape (the handler always sets it).
+            mimeType: z.string().optional(),
+            blob: z.string()
+          })
+        })
+      ]))
     },
     annotations: { readOnlyHint: true }
   },
@@ -283,17 +295,23 @@ server.registerTool(
     const mimeType = mimeTypes[extension] || "application/octet-stream";
     const data = await readFileAsBase64Stream(validPath);
 
-    const type = mimeType.startsWith("image/")
-      ? "image"
-      : mimeType.startsWith("audio/")
-        ? "audio"
-        // Fallback for other binary types, not officially supported by the spec but has been used for some time
-        : "blob";
-    const contentItem = { type: type as 'image' | 'audio' | 'blob', data, mimeType };
+    // Map the MIME type to a valid MCP content block. The spec only allows
+    // text, image, audio, resource_link, and resource — so non-image/audio
+    // binaries are returned as an embedded resource (NOT type:"blob", which the
+    // SDK content-block union rejects on schema validation).
+    const contentItem =
+      mimeType.startsWith("image/")
+        ? { type: "image" as const, data, mimeType }
+        : mimeType.startsWith("audio/")
+          ? { type: "audio" as const, data, mimeType }
+          : {
+              type: "resource" as const,
+              resource: { uri: pathToFileURL(validPath).href, mimeType, blob: data }
+            };
     return {
       content: [contentItem],
       structuredContent: { content: [contentItem] }
-    } as unknown as CallToolResult;
+    };
   }
 );
 
