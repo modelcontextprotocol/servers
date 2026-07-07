@@ -22,6 +22,23 @@ const transports: Map<string, SSEServerTransport> = new Map<
   SSEServerTransport
 >();
 
+// Simple in-memory rate limiter: max 60 requests per minute per IP
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+app.use((req, res, next) => {
+  const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    next();
+  } else if (entry.count < 60) {
+    entry.count++;
+    next();
+  } else {
+    res.status(429).json({ error: "Too many requests" });
+  }
+});
+
 // Handle GET requests for new SSE streams
 app.get("/sse", async (req, res) => {
   let transport: SSEServerTransport;
