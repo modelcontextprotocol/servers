@@ -160,7 +160,7 @@ This project is licensed under the Apache License, Version 2.0 for new contribut
 ## 💬 Community
 
 - [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
-
+- [@novaventures-ai/marriage-astro](https://github.com/novaventures-ai/MarriageAstro) - Vedic Astrology MCP server providing 22 endpoints for comprehensive dosha analysis, compatibility scoring, and detailed astrological charts.
 ## ⭐ Support
 
 If you find MCP servers useful, please consider starring the repository and contributing new servers or improvements!
@@ -168,3 +168,4 @@ If you find MCP servers useful, please consider starring the repository and cont
 ---
 
 Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvements!
+
