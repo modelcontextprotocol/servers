@@ -25,6 +25,10 @@ dependencies = [
     "requests>=2.32.3",
 ]
 
+[project.urls]
+Repository = "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch"
+Issues = "https://github.com/modelcontextprotocol/servers/issues"
+
 [project.scripts]
 mcp-server-fetch = "mcp_server_fetch:main"
 

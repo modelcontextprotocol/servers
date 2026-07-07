@@ -3,13 +3,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
-  CallToolResult,
   RootsListChangedNotificationSchema,
   type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
 import path from "path";
+import { pathToFileURL } from "url";
 import { z } from "zod";
 import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from './path-utils.js';
@@ -217,7 +217,7 @@ server.registerTool(
     description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
     inputSchema: ReadTextFileArgsSchema.shape,
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   readTextFileHandler
 );
@@ -240,7 +240,7 @@ server.registerTool(
       head: z.number().optional().describe("If provided, returns only the first N lines of the file")
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   readTextFileHandler
 );
@@ -250,19 +250,31 @@ server.registerTool(
   {
     title: "Read Media File",
     description:
-      "Read an image or audio file. Returns the base64 encoded data and MIME type. " +
-      "Only works within allowed directories.",
+      "Read a file and return it as a base64-encoded content block with its MIME type. " +
+      "Image and audio files are returned as image/audio content; any other file type is " +
+      "returned as an embedded resource. Only works within allowed directories.",
     inputSchema: {
       path: z.string()
     },
     outputSchema: {
-      content: z.array(z.object({
-        type: z.enum(["image", "audio", "blob"]),
-        data: z.string(),
-        mimeType: z.string()
-      }))
+      content: z.array(z.union([
+        z.object({
+          type: z.enum(["image", "audio"]),
+          data: z.string(),
+          mimeType: z.string()
+        }),
+        z.object({
+          type: z.literal("resource"),
+          resource: z.object({
+            uri: z.string(),
+            // Optional, matching the SDK's BlobResourceContents shape (the handler always sets it).
+            mimeType: z.string().optional(),
+            blob: z.string()
+          })
+        })
+      ]))
     },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof ReadMediaFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -283,17 +295,23 @@ server.registerTool(
     const mimeType = mimeTypes[extension] || "application/octet-stream";
     const data = await readFileAsBase64Stream(validPath);
 
-    const type = mimeType.startsWith("image/")
-      ? "image"
-      : mimeType.startsWith("audio/")
-        ? "audio"
-        // Fallback for other binary types, not officially supported by the spec but has been used for some time
-        : "blob";
-    const contentItem = { type: type as 'image' | 'audio' | 'blob', data, mimeType };
+    // Map the MIME type to a valid MCP content block. The spec only allows
+    // text, image, audio, resource_link, and resource — so non-image/audio
+    // binaries are returned as an embedded resource (NOT type:"blob", which the
+    // SDK content-block union rejects on schema validation).
+    const contentItem =
+      mimeType.startsWith("image/")
+        ? { type: "image" as const, data, mimeType }
+        : mimeType.startsWith("audio/")
+          ? { type: "audio" as const, data, mimeType }
+          : {
+              type: "resource" as const,
+              resource: { uri: pathToFileURL(validPath).href, mimeType, blob: data }
+            };
     return {
       content: [contentItem],
       structuredContent: { content: [contentItem] }
-    } as unknown as CallToolResult;
+    };
   }
 );
 
@@ -313,7 +331,7 @@ server.registerTool(
         .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories.")
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof ReadMultipleFilesArgsSchema>) => {
     const results = await Promise.all(
@@ -349,7 +367,7 @@ server.registerTool(
       content: z.string()
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true }
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof WriteFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -379,7 +397,7 @@ server.registerTool(
       dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof EditFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -404,7 +422,7 @@ server.registerTool(
       path: z.string()
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false }
+    annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false, openWorldHint: false }
   },
   async (args: z.infer<typeof CreateDirectoryArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -430,7 +448,7 @@ server.registerTool(
       path: z.string()
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof ListDirectoryArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -459,7 +477,7 @@ server.registerTool(
       sortBy: z.enum(["name", "size"]).optional().default("name").describe("Sort entries by name or size")
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof ListDirectoryWithSizesArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -538,7 +556,7 @@ server.registerTool(
       excludePatterns: z.array(z.string()).optional().default([])
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof DirectoryTreeArgsSchema>) => {
     interface TreeEntry {
@@ -608,7 +626,7 @@ server.registerTool(
       destination: z.string()
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true }
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
     const validSourcePath = await validatePath(args.source);
@@ -639,7 +657,7 @@ server.registerTool(
       excludePatterns: z.array(z.string()).optional().default([])
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof SearchFilesArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -665,7 +683,7 @@ server.registerTool(
       path: z.string()
     },
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof GetFileInfoArgsSchema>) => {
     const validPath = await validatePath(args.path);
@@ -691,7 +709,7 @@ server.registerTool(
       "before trying to access files.",
     inputSchema: {},
     outputSchema: { content: z.string() },
-    annotations: { readOnlyHint: true }
+    annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async () => {
     const text = `Allowed directories:\n${allowedDirectories.join('\n')}`;
