@@ -38,6 +38,11 @@ if (args.length === 0) {
   console.error("At least one directory must be provided by EITHER method for the server to operate.");
 }
 
+// Hidden-file configuration — read once at startup.
+// MCP communicates over stdout, so we must use console.error for any diagnostic output.
+const INCLUDE_HIDDEN = process.env.MCP_FILESYSTEM_INCLUDE_HIDDEN === 'true';
+console.error(`Hidden files/directories: ${INCLUDE_HIDDEN ? 'included' : 'excluded (default)'}`);
+
 // Store allowed directories in normalized and resolved form
 // We store BOTH the original path AND the resolved path to handle symlinks correctly
 // This fixes the macOS /tmp -> /private/tmp symlink issue where users specify /tmp
@@ -454,6 +459,7 @@ server.registerTool(
     const validPath = await validatePath(args.path);
     const entries = await fs.readdir(validPath, { withFileTypes: true });
     const formatted = entries
+      .filter((entry) => INCLUDE_HIDDEN || !entry.name.startsWith('.'))
       .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
       .join("\n");
     return {
@@ -481,7 +487,8 @@ server.registerTool(
   },
   async (args: z.infer<typeof ListDirectoryWithSizesArgsSchema>) => {
     const validPath = await validatePath(args.path);
-    const entries = await fs.readdir(validPath, { withFileTypes: true });
+    const allEntries = await fs.readdir(validPath, { withFileTypes: true });
+    const entries = allEntries.filter((entry) => INCLUDE_HIDDEN || !entry.name.startsWith('.'));
 
     // Get detailed information for each entry
     const detailedEntries = await Promise.all(
@@ -572,6 +579,9 @@ server.registerTool(
       const result: TreeEntry[] = [];
 
       for (const entry of entries) {
+        // Skip dot-prefixed entries unless hidden files are explicitly enabled
+        if (!INCLUDE_HIDDEN && entry.name.startsWith('.')) continue;
+
         const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
         const shouldExclude = excludePatterns.some(pattern => {
           if (pattern.includes('*')) {
@@ -661,7 +671,7 @@ server.registerTool(
   },
   async (args: z.infer<typeof SearchFilesArgsSchema>) => {
     const validPath = await validatePath(args.path);
-    const results = await searchFilesWithValidation(validPath, args.pattern, allowedDirectories, { excludePatterns: args.excludePatterns });
+    const results = await searchFilesWithValidation(validPath, args.pattern, allowedDirectories, { excludePatterns: args.excludePatterns, includeHidden: INCLUDE_HIDDEN });
     const text = results.length > 0 ? results.join("\n") : "No matches found";
     return {
       content: [{ type: "text" as const, text }],
