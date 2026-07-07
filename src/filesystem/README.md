@@ -209,6 +209,22 @@ The mapping for filesystem tools is:
 
 > Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec. Every tool also sets `openWorldHint: false` — this server only accesses the local filesystem within its allowed directories, never an open or external world.
 
+## Environment variables
+
+Three environment variables guard against hangs when `allowed_directories` includes a slow or lazy provider-backed path (macOS `~/Library/CloudStorage/...`, `~/Library/Mobile Documents/com~apple~CloudDocs/...`, NFS / SMB mounts, etc.). Defaults are safe for ordinary local trees; tune only if needed.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `FS_OP_TIMEOUT_MS` | `15000` | Timeout (milliseconds) applied to each `fs.realpath` (in `validatePath`) and `fs.readdir` (in `search_files` and `directory_tree`). On timeout the call rejects with `FsTimeoutError` instead of hanging. |
+| `FS_SEARCH_MAX_VISITED` | `50000` | Hard cap on entries visited by a single `search_files` or `directory_tree` call before aborting with `"Search aborted after visiting N entries..."`. Prevents an unbounded recursion on a large or lazy-materialized tree. |
+| `FS_SEARCH_EXCLUDE_PREFIXES` | (empty) | Comma-separated path prefixes for which recursive search and `directory_tree` are refused outright. `~` is expanded. Matching is boundary-aware: a configured `/data/foo` will not match an unrelated `/data/foobar`. Intended for known-slow roots you'd rather forbid than time out on. |
+
+Invalid numeric values (`"15s"`, `"0"`, negative) print a warning to stderr and fall back to the default, so a typo cannot silently disable a guard.
+
+**Remote-mount tuning:** the 15 s default works well for local trees and warm CloudStorage. On NFS, SMB, or other remote mounts where individual `readdir` calls legitimately take seconds, consider raising `FS_OP_TIMEOUT_MS` (e.g. `30000`–`60000`) to avoid spurious timeouts.
+
+**`FS_SEARCH_EXCLUDE_PREFIXES` is a fast lexical *prefilter*, not a canonical-path exclusion.** The requested root is compared (after `~` expansion and normalisation) against the configured prefixes, with no `realpath` step. A symlink whose target lives under an excluded prefix is therefore **not** blocked — the request would pass the lexical exclude and may still hit the slow provider path through `validatePath`'s realpath. Treat this as a best-effort guard against direct submissions of slow paths, not as a complete symlink-aware exclusion. Security against paths escaping `allowed_directories` is enforced separately by `validatePath`.
+
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
 
