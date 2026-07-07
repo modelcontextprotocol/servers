@@ -10,6 +10,7 @@ from mcp_server_fetch.server import (
     check_may_autonomously_fetch_url,
     fetch_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
+    proxy_url_for_request,
 )
 
 
@@ -324,3 +325,35 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+    @pytest.mark.asyncio
+    async def test_fetch_accepts_socks_proxy_alias(self):
+        """Test that socks:// proxy URLs are accepted as SOCKS5 proxies."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"data": "test"}'
+        mock_response.headers = {"content-type": "application/json"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                proxy_url="socks://127.0.0.1:2080/"
+            )
+
+            mock_client_class.assert_called_once_with(proxy="socks5://127.0.0.1:2080/")
+
+    def test_fetch_accepts_socks_proxy_from_environment(self, monkeypatch):
+        """Test that invalid socks:// environment proxies are normalized."""
+        monkeypatch.delenv("HTTPS_PROXY", raising=False)
+        monkeypatch.delenv("https_proxy", raising=False)
+        monkeypatch.delenv("ALL_PROXY", raising=False)
+        monkeypatch.delenv("all_proxy", raising=False)
+        monkeypatch.setenv("ALL_PROXY", "socks://127.0.0.1:2080/")
+
+        assert proxy_url_for_request("https://example.com/data") == "socks5://127.0.0.1:2080/"
