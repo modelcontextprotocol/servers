@@ -168,3 +168,6 @@ If you find MCP servers useful, please consider starring the repository and cont
 ---
 
 Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvements!
+
+- **[Infinihash KYT](https://github.com/Infinihash/infinihash-kyt-mcp)** - Blockchain transaction monitoring + sanctions screening (OFAC SDN, ScamSniffer, stablecoin freezes) and FinCEN-aligned SAR generation via the [Infinihash KYT](https://kyt.infinihash.com) API.
+- **[MyAi](https://github.com/myaitoken/myai-mcp)** - Decentralized AI inference on Base. OpenAI-compatible chat routed through community GPU providers. Agents pay agents in $MYAI.
