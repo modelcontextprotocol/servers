@@ -1,0 +1,74 @@
+# agents.txt — v1.0
+# https://github.com/barneywohl/agentpress (spec)
+#
+# This file declares what autonomous agents may and may not do in this
+# repository. It is advisory and complements CONTRIBUTING.md, SECURITY.md,
+# and the project's existing review process — it does not override them.
+
+[meta]
+spec_version = 1.0
+project = mcp-servers
+maintainer = modelcontextprotocol-org
+contact_for_agents = https://github.com/modelcontextprotocol/servers/issues
+last_updated = 2026-05-13
+license = Apache-2.0
+ai_disclosure_required = true
+
+[allowed_actions]
+read_documentation
+read_source_code
+run_tests_in_ci
+file_pull_request
+comment_on_issue
+propose_design
+suggest_documentation_fix
+suggest_bug_fix
+reproduce_reported_issue
+
+[prohibited_actions]
+merge_to_main
+deploy_to_production
+publish_package
+modify_secrets
+modify_billing_files
+modify_license
+modify_code_of_conduct
+modify_security_policy
+add_new_reference_server
+add_third_party_server_listing
+rewrite_protocol_semantics
+contact_users_directly
+exfiltrate_secrets
+impersonation
+spam
+
+[requires_human_approval]
+changes_touching = src/**, SECURITY.md, CONTRIBUTING.md, LICENSE, .github/workflows/**, scripts/**
+changes_to_dependencies
+changes_to_test_framework
+changes_to_release_or_publishing_config
+changes_that_alter_public_server_behavior
+changes_that_alter_documented_tool_schemas
+
+[entry_points]
+contributing = CONTRIBUTING.md
+quickstart = README.md
+architecture = README.md
+agent_guide = CLAUDE.md
+
+[scope]
+max_files_per_pr = 25
+max_lines_per_pr = 500
+prefer_single_server_scope = true
+
+[rate_limits]
+max_open_prs_per_agent = 2
+min_hours_between_prs = 24
+
+[disclosure]
+pr_label = agent-authored
+commit_trailer = Co-Authored-By
+require_attribution_in_pr_body = true
+
+[fyi]
+notes = Per CONTRIBUTING.md, bug fixes and usability improvements are welcome; new servers and opinionated features are generally out of scope. New reference servers belong in the MCP Server Registry, not here. Protocol-level changes belong in modelcontextprotocol/specification.
