@@ -81,6 +81,45 @@ class TestExtractContentFromHtml:
         result = extract_content_from_html(html)
         assert "Example" in result
 
+    def test_falls_back_when_readability_is_unavailable(self):
+        """Test that Readability.js failures fall back to the Python simplifier."""
+        calls = []
+
+        def simplify(html, use_readability):
+            calls.append(use_readability)
+            if use_readability:
+                raise RuntimeError("node is not available")
+            return {"content": "<main><p>Fallback content</p></main>"}
+
+        with patch(
+            "mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string",
+            side_effect=simplify,
+        ):
+            result = extract_content_from_html("<html><body>Fallback content</body></html>")
+
+        assert "Fallback content" in result
+        assert calls == [True, False]
+
+    def test_can_disable_readability(self):
+        """Test that callers can skip Readability.js entirely."""
+        calls = []
+
+        def simplify(html, use_readability):
+            calls.append(use_readability)
+            return {"content": "<main><p>Python-only content</p></main>"}
+
+        with patch(
+            "mcp_server_fetch.server.readabilipy.simple_json.simple_json_from_html_string",
+            side_effect=simplify,
+        ):
+            result = extract_content_from_html(
+                "<html><body>Python-only content</body></html>",
+                use_readability=False,
+            )
+
+        assert "Python-only content" in result
+        assert calls == [False]
+
     def test_empty_content_returns_error(self):
         """Test that empty/invalid HTML returns error message."""
         html = ""
