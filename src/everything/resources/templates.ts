@@ -71,6 +71,24 @@ export const resourceIdForResourceTemplateCompleter: CompleteResourceTemplateCal
     return Number.isInteger(resourceId) && resourceId > 0 ? [value] : [];
   };
 
+/**
+ * Validate and convert a value to a positive integer resource ID.
+ * Shared by resource template callbacks and prompt handlers.
+ *
+ * @param value - The value to validate (typically a string from user input)
+ * @returns The validated resource ID as a positive integer
+ * @throws {Error} If the value is not a finite positive integer
+ */
+export const validateResourceId = (value: unknown): number => {
+  const idx = Number(value);
+  if (Number.isFinite(idx) && Number.isInteger(idx) && idx > 0) {
+    return idx;
+  }
+  throw new Error(
+    `Invalid resourceId: ${value}. Must be a finite positive integer.`
+  );
+};
+
 const uriBase: string = "demo://resource/dynamic";
 const textUriBase: string = `${uriBase}/text`;
 const blobUriBase: string = `${uriBase}/blob`;
@@ -144,11 +162,9 @@ const parseResourceId = (uri: URL, variables: Record<string, unknown>) => {
   ) {
     throw new Error(uriError);
   } else {
-    const idxStr = String((variables as any).resourceId ?? "");
-    const idx = Number(idxStr);
-    if (Number.isFinite(idx) && Number.isInteger(idx) && idx > 0) {
-      return idx;
-    } else {
+    try {
+      return validateResourceId((variables as any).resourceId);
+    } catch {
       throw new Error(uriError);
     }
   }

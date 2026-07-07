@@ -193,9 +193,10 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
           const userData = elicitationResult.content;
           const lines = [];
           if (userData.name) lines.push(`- Name: ${userData.name}`);
-          if (userData.check !== undefined)
-            lines.push(`- Agreed to terms: ${userData.check}`);
-          if (userData.color) lines.push(`- Favorite Color: ${userData.color}`);
+          if (userData.agreeToTerms !== undefined)
+            lines.push(`- Agreed to terms: ${userData.agreeToTerms}`);
+          if (userData.firstLine)
+            lines.push(`- First Line: ${userData.firstLine}`);
           if (userData.email) lines.push(`- Email: ${userData.email}`);
           if (userData.homepage) lines.push(`- Homepage: ${userData.homepage}`);
           if (userData.birthdate)
@@ -204,7 +205,24 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
             lines.push(`- Favorite Integer: ${userData.integer}`);
           if (userData.number !== undefined)
             lines.push(`- Favorite Number: ${userData.number}`);
-          if (userData.petType) lines.push(`- Pet Type: ${userData.petType}`);
+          if (userData.untitledSingleSelectEnum)
+            lines.push(
+              `- Untitled Single Select: ${userData.untitledSingleSelectEnum}`
+            );
+          if (userData.untitledMultipleSelectEnum)
+            lines.push(
+              `- Untitled Multiple Select: ${JSON.stringify(userData.untitledMultipleSelectEnum)}`
+            );
+          if (userData.titledSingleSelectEnum)
+            lines.push(
+              `- Titled Single Select: ${userData.titledSingleSelectEnum}`
+            );
+          if (userData.titledMultipleSelectEnum)
+            lines.push(
+              `- Titled Multiple Select: ${JSON.stringify(userData.titledMultipleSelectEnum)}`
+            );
+          if (userData.legacyTitledEnum)
+            lines.push(`- Legacy Titled Enum: ${userData.legacyTitledEnum}`);
 
           content.push({
             type: "text",
