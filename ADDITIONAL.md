@@ -75,6 +75,7 @@ This is a curated collection of community-built frameworks and resources that si
 - **[MCP X Community](https://x.com/i/communities/1861891349609603310)** – A X community for MCP by **[Xiaoyi](https://x.com/chxy)**
 - **[MCPHub](https://github.com/Jeamee/MCPHub-Desktop)** – An Open Source macOS & Windows GUI Desktop app for discovering, installing and managing MCP servers by **[Jeamee](https://github.com/jeamee)**
 - **[mcpm](https://github.com/pathintegral-institute/mcpm.sh)** ([website](https://mcpm.sh)) - MCP Manager (MCPM) is a Homebrew-like service for managing Model Context Protocol (MCP) servers across clients by **[Pathintegral](https://github.com/pathintegral-institute)**
+- **[MCPTools.dev](https://mcptools.dev)** - A curated directory, interactive JSON configuration builder, and learning resource index for Model Context Protocol servers.
 - **[MCPVerse](https://mcpverse.dev)** - A portal for creating & hosting authenticated MCP servers and connecting to them securely.
 - **[MCP Servers Search](https://github.com/atonomus/mcp-servers-search)** - An MCP server that provides tools for querying and discovering available MCP servers from this list.
 - **[Search MCP Server](https://github.com/krzysztofkucmierz/search-mcp-server)** - Recommends the most relevant MCP servers based on the client's query by searching this README file.
