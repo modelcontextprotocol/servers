@@ -36,6 +36,60 @@ async function spawnServer(args: string[], timeoutMs = 2000): Promise<{ exitCode
   });
 }
 
+/**
+ * Spawns the filesystem server and performs a minimal MCP handshake advertising roots
+ * capability, then sends a roots/list_changed notification with an unrelated directory.
+ * Returns collected stderr for assertion.
+ */
+async function spawnServerWithRootsHandshake(
+  args: string[],
+  unrelatedRootUri: string,
+  timeoutMs = 2500,
+): Promise<{ stderr: string }> {
+  return new Promise((resolve) => {
+    const proc = spawn('node', [SERVER_PATH, ...args], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let stderr = '';
+    proc.stderr?.on('data', (data) => {
+      stderr += data.toString();
+    });
+    proc.stdout?.on('data', () => { /* drain JSON-RPC responses */ });
+
+    const initialize = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: { roots: { listChanged: true } },
+        clientInfo: { name: 'test-client', version: '0.0.0' },
+      },
+    };
+    proc.stdin?.write(JSON.stringify(initialize) + '\n');
+    proc.stdin?.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+
+    setTimeout(() => {
+      proc.stdin?.write(JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'notifications/roots/list_changed',
+        params: { roots: [{ uri: unrelatedRootUri }] },
+      }) + '\n');
+    }, 300);
+
+    const timeout = setTimeout(() => proc.kill('SIGTERM'), timeoutMs);
+    proc.on('close', () => {
+      clearTimeout(timeout);
+      resolve({ stderr });
+    });
+    proc.on('error', (err) => {
+      clearTimeout(timeout);
+      resolve({ stderr: err.message });
+    });
+  });
+}
+
 describe('Startup Directory Validation', () => {
   let testDir: string;
   let accessibleDir: string;
@@ -96,5 +150,22 @@ describe('Startup Directory Validation', () => {
 
     // Should still start with the valid directory
     expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+  });
+
+  it('should keep CLI directories and ignore client MCP roots', async () => {
+    const unrelatedDir = path.join(testDir, 'unrelated');
+    await fs.mkdir(unrelatedDir, { recursive: true });
+
+    const { stderr } = await spawnServerWithRootsHandshake(
+      [accessibleDir],
+      `file://${unrelatedDir}`,
+    );
+
+    // New log path should fire instead of the "does not support" one
+    expect(stderr).toContain('CLI directories provided - ignoring client MCP roots');
+    expect(stderr).toContain(accessibleDir);
+    expect(stderr).not.toContain('Client does not support MCP Roots');
+    // Allowed dirs must stay on the CLI-provided set, never pick up the client root
+    expect(stderr).not.toContain(unrelatedDir);
   });
 });
