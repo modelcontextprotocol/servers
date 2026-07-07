@@ -246,7 +246,7 @@ Response:
     "datetime": "2024-01-01T12:30:00+09:00",
     "is_dst": false
   },
-  "time_difference": "+13.0h",
+  "time_difference": "+13.0h"
 }
 ```
 
