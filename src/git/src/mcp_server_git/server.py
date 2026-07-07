@@ -169,7 +169,10 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
             args.extend(['--since', start_timestamp])
         if end_timestamp:
             args.extend(['--until', end_timestamp])
-        args.extend(['--format=%H%n%an%n%ad%n%s%n'])
+        # No trailing %n: git already separates entries with a newline, so a
+        # trailing %n would emit 5 lines per commit and break the groups-of-4
+        # parsing below for every commit after the first.
+        args.extend(['--format=%H%n%an%n%ad%n%s'])
 
         log_output = repo.git.log(*args).split('\n')
 
