@@ -14,7 +14,7 @@ Published on npm as [`@modelcontextprotocol/server-sequential-thinking`](https:/
 
 ## Tool
 
-### sequential_thinking
+### sequentialthinking
 
 Facilitates a detailed, step-by-step thinking process for problem-solving and analysis.
 
@@ -39,7 +39,7 @@ The Sequential Thinking tool is designed for:
 - Tasks that need to maintain context over multiple steps
 - Situations where irrelevant information needs to be filtered out
 
-In practice, you do not call `sequential_thinking` directly by hand unless your client exposes raw tool calls. Instead, connect the server to an MCP-aware host and ask the model to think through a problem step by step. The host can then decide to call the tool one or more times while it works.
+In practice, you do not call `sequentialthinking` directly by hand unless your client exposes raw tool calls. Instead, connect the server to an MCP-aware host and ask the model to think through a problem step by step. The host can then decide to call the tool one or more times while it works.
 
 ### What it looks like in use
 
@@ -51,7 +51,7 @@ Example prompts that typically benefit from this tool:
 
 ### How to tell it is working
 
-If your host or inspector shows tool activity, you should see repeated calls to `sequential_thinking` with fields such as:
+If your host or inspector shows tool activity, you should see repeated calls to `sequentialthinking` with fields such as:
 
 - `thought`
 - `thoughtNumber`
@@ -65,7 +65,7 @@ When the reasoning changes course, you may also see revision or branching fields
 After installing the server in your MCP host:
 
 1. Restart or reload the host so it reconnects to the server.
-2. Confirm the `sequential_thinking` tool appears in the host's MCP tool list or inspector.
+2. Confirm the `sequentialthinking` tool appears in the host's MCP tool list or inspector.
 3. Ask the host to solve a non-trivial problem in a step-by-step way.
 4. Verify that the host invokes the tool multiple times instead of returning a one-shot answer.
 
