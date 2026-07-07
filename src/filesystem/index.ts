@@ -108,6 +108,8 @@ const ReadMultipleFilesArgsSchema = z.object({
     .array(z.string())
     .min(1, "At least one file path must be provided")
     .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories."),
+  head: z.number().int().positive().optional().describe("If provided, returns only the first N lines of each file"),
+  tail: z.number().int().positive().optional().describe("If provided, returns only the last N lines of each file")
 });
 
 const WriteFileArgsSchema = z.object({
@@ -323,22 +325,36 @@ server.registerTool(
       "Read the contents of multiple files simultaneously. This is more " +
       "efficient than reading files one by one when you need to analyze " +
       "or compare multiple files. Each file's content is returned with its " +
-      "path as a reference. Failed reads for individual files won't stop " +
-      "the entire operation. Only works within allowed directories.",
+      "path as a reference. Use 'head' to read only the first N lines of each " +
+      "file, or 'tail' to read only the last N lines. Failed reads for " +
+      "individual files won't stop the entire operation. Only works within allowed directories.",
     inputSchema: {
       paths: z.array(z.string())
         .min(1)
-        .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories.")
+        .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories."),
+      head: z.number().int().positive().optional().describe("If provided, returns only the first N lines of each file"),
+      tail: z.number().int().positive().optional().describe("If provided, returns only the last N lines of each file")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof ReadMultipleFilesArgsSchema>) => {
+    if (args.head && args.tail) {
+      throw new Error("Cannot specify both head and tail parameters simultaneously");
+    }
+
     const results = await Promise.all(
       args.paths.map(async (filePath: string) => {
         try {
           const validPath = await validatePath(filePath);
-          const content = await readFileContent(validPath);
+          let content: string;
+          if (args.tail) {
+            content = await tailFile(validPath, args.tail);
+          } else if (args.head) {
+            content = await headFile(validPath, args.head);
+          } else {
+            content = await readFileContent(validPath);
+          }
           return `${filePath}:\n${content}\n`;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
