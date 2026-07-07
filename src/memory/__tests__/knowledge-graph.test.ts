@@ -103,6 +103,36 @@ describe('KnowledgeGraphManager', () => {
       const newRelations = await manager.createRelations([]);
       expect(newRelations).toHaveLength(0);
     });
+
+    it('should reject relations with a missing from entity', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: [] },
+      ]);
+
+      await expect(
+        manager.createRelations([
+          { from: 'Ghost', to: 'Alice', relationType: 'knows' },
+        ])
+      ).rejects.toThrow('Entity with name Ghost not found');
+
+      const graph = await manager.readGraph();
+      expect(graph.relations).toHaveLength(0);
+    });
+
+    it('should reject relations with a missing to entity', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: [] },
+      ]);
+
+      await expect(
+        manager.createRelations([
+          { from: 'Alice', to: 'Ghost', relationType: 'knows' },
+        ])
+      ).rejects.toThrow('Entity with name Ghost not found');
+
+      const graph = await manager.readGraph();
+      expect(graph.relations).toHaveLength(0);
+    });
   });
 
   describe('addObservations', () => {
