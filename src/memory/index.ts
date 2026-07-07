@@ -7,6 +7,7 @@ import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomBytes } from 'crypto';
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
@@ -114,7 +115,20 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    // Write to a temporary file and atomically rename it into place so an
+    // interrupted or concurrent write cannot leave the memory file truncated
+    // or partially written. Mirrors the atomic-write pattern used by the
+    // filesystem server (src/filesystem/lib.ts).
+    const tmpPath = `${this.memoryFilePath}.${randomBytes(16).toString('hex')}.tmp`;
+    try {
+      await fs.writeFile(tmpPath, lines.join("\n"));
+      await fs.rename(tmpPath, this.memoryFilePath);
+    } catch (error) {
+      try {
+        await fs.unlink(tmpPath);
+      } catch {}
+      throw error;
+    }
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
