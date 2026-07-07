@@ -52,6 +52,14 @@ The following reference servers are now archived and can be found at [servers-ar
 - **[Slack](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/slack)** - Channel management and messaging capabilities. Now maintained by [Zencoder](https://github.com/zencoderai/slack-mcp-server)
 - **[SQLite](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/sqlite)** - Database interaction and business intelligence capabilities.
 
+## 🔐 Community Security Servers
+
+These community-built servers provide MCP integrations for enterprise security platforms.
+
+- **[falcon-mcp](https://github.com/rijul170/falcon-mcp)** - CrowdStrike Falcon MCP server for AI-powered EDR investigation, threat hunting, RTR, and SOC automation via Claude
+- **[sophos-central-mcp](https://github.com/rijul170/sophos-central-mcp)** - Sophos Central MCP server for AI-powered endpoint security, MSSP multi-tenant operations, and Live Discover via Claude
+- **[alertlogic-mcp](https://github.com/rijul170/alertlogic-mcp)** - Alert Logic MDR MCP server for AI-powered incident response, SQL log search, SOAR automation, and SOC workflows via Claude
+
 ## 🚀 Getting Started
 
 ### Using MCP Servers in this Repository
