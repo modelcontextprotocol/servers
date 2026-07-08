@@ -41,6 +41,7 @@ This is a curated collection of community-built frameworks and resources that si
 * **[OpenMCP Client](https://github.com/LSTM-Kirigaya/openmcp-client/)** - An all-in-one vscode/trae/cursor plugin for MCP server debugging. [Document](https://kirigaya.cn/openmcp/) & [OpenMCP SDK](https://kirigaya.cn/openmcp/sdk-tutorial/).
 * **[PHP MCP Client](https://github.com/php-mcp/client)** - Core PHP implementation for the Model Context Protocol (MCP) Client
 * **[Runbear](https://runbear.io/solutions/integrations/slack/mcp)** - No-code MCP client for team chat platforms, such as Slack, Microsoft Teams, and Discord.
+* **[Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts)** - A type-safe TypeScript AI agent framework built on Effect-TS; an MCP-native client/host that runs the same code on local Ollama and frontier APIs.
 
 ## 📚 Resources
 
