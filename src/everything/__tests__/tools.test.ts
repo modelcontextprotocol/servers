@@ -1217,5 +1217,40 @@ describe('Tools', () => {
         handler!({ name: 'test.gz', data: 'ftp://example.com/file.txt', outputType: 'resource' })
       ).rejects.toThrow('Unsupported URL protocol');
     });
+
+    // SSRF protection: the tool must refuse to fetch non-public IP addresses.
+    // These use IP literals so no DNS resolution (or network) is required.
+    const blockedHosts: Array<[string, string]> = [
+      ['loopback IPv4', 'http://127.0.0.1/secret'],
+      ['cloud metadata', 'http://169.254.169.254/latest/meta-data/'],
+      ['private 10/8', 'http://10.0.0.1/'],
+      ['private 192.168/16', 'http://192.168.1.1/'],
+      ['private 172.16/12', 'http://172.16.0.1/'],
+      ['unspecified', 'http://0.0.0.0/'],
+      ['IPv6 loopback', 'http://[::1]/'],
+      ['IPv4-mapped IPv6 loopback', 'http://[::ffff:127.0.0.1]/'],
+    ];
+
+    for (const [label, url] of blockedHosts) {
+      it(`should refuse to fetch non-public host (${label})`, async () => {
+        const mockServer = {
+          registerTool: vi.fn(),
+          registerResource: vi.fn(),
+        } as unknown as McpServer;
+
+        let handler: Function | null = null;
+        (mockServer.registerTool as any).mockImplementation(
+          (name: string, config: any, h: Function) => {
+            handler = h;
+          }
+        );
+
+        registerGZipFileAsResourceTool(mockServer);
+
+        await expect(
+          handler!({ name: 'test.gz', data: url, outputType: 'resource' })
+        ).rejects.toThrow(/SSRF protection/);
+      });
+    }
   });
 });
