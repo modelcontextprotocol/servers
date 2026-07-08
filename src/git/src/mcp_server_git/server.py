@@ -169,7 +169,7 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
             args.extend(['--since', start_timestamp])
         if end_timestamp:
             args.extend(['--until', end_timestamp])
-        args.extend(['--format=%H%n%an%n%ad%n%s%n'])
+        args.extend(['--format=%H%n%an%n%ad%n%s'])
 
         log_output = repo.git.log(*args).split('\n')
 
