@@ -18,11 +18,26 @@ def main():
     )
     parser.add_argument("--proxy-url", type=str, help="Proxy URL to use for requests")
 
+    def positive_timeout(value: str) -> float:
+        seconds = float(value)
+        if seconds <= 0:
+            raise argparse.ArgumentTypeError(
+                "timeout must be a positive number of seconds"
+            )
+        return seconds
+
     env_timeout = os.environ.get("FETCH_TIMEOUT")
+    try:
+        default_timeout = (
+            positive_timeout(env_timeout) if env_timeout else DEFAULT_REQUEST_TIMEOUT
+        )
+    except (ValueError, argparse.ArgumentTypeError) as error:
+        parser.error(f"invalid FETCH_TIMEOUT environment variable: {error}")
+
     parser.add_argument(
         "--timeout",
-        type=float,
-        default=float(env_timeout) if env_timeout else DEFAULT_REQUEST_TIMEOUT,
+        type=positive_timeout,
+        default=default_timeout,
         help="Request timeout in seconds (default: 30, or the FETCH_TIMEOUT env var)",
     )
 

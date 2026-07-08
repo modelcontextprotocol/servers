@@ -23,10 +23,10 @@ from pydantic import BaseModel, Field, AnyUrl
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
 
-# Default per-request timeout, in seconds, for outbound HTTP requests. Matches
-# httpx's timeout unit and the value previously hardcoded here. Overridable via
-# the serve() timeout argument, the --timeout CLI flag, the FETCH_TIMEOUT
-# environment variable, or the per-request "timeout" tool argument.
+# Default per-request timeout, in seconds, for the outbound content fetch.
+# Matches httpx's timeout unit and the value previously hardcoded here.
+# Overridable via the serve() timeout argument, the --timeout CLI flag, the
+# FETCH_TIMEOUT environment variable, or the per-request "timeout" tool argument.
 DEFAULT_REQUEST_TIMEOUT = 30.0
 
 
@@ -69,12 +69,7 @@ def get_robots_txt_url(url: str) -> str:
     return robots_url
 
 
-async def check_may_autonomously_fetch_url(
-    url: str,
-    user_agent: str,
-    proxy_url: str | None = None,
-    timeout: float = DEFAULT_REQUEST_TIMEOUT,
-) -> None:
+async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url: str | None = None) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
@@ -89,7 +84,6 @@ async def check_may_autonomously_fetch_url(
                 robot_txt_url,
                 follow_redirects=True,
                 headers={"User-Agent": user_agent},
-                timeout=timeout,
             )
         except HTTPError:
             raise McpError(ErrorData(
@@ -214,8 +208,8 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
-        timeout: Default request timeout in seconds, used when a fetch call does
-            not specify its own timeout
+        timeout: Default request timeout in seconds for the content fetch, used
+            when a fetch call does not specify its own timeout
     """
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
@@ -261,9 +255,7 @@ Although originally you did not have internet access, and were advised to refuse
         request_timeout = args.timeout if args.timeout is not None else timeout
 
         if not ignore_robots_txt:
-            await check_may_autonomously_fetch_url(
-                url, user_agent_autonomous, proxy_url, timeout=request_timeout
-            )
+            await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
 
         content, prefix = await fetch_url(
             url,

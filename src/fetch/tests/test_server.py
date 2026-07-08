@@ -1,9 +1,13 @@
 """Tests for the fetch MCP server."""
 
+import os
+import sys
+
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from mcp.shared.exceptions import McpError
 
+from mcp_server_fetch import main
 from mcp_server_fetch.server import (
     extract_content_from_html,
     get_robots_txt_url,
@@ -368,3 +372,41 @@ class TestFetchUrl:
             )
 
             assert mock_client.get.call_args.kwargs["timeout"] == 60.0
+
+
+class TestServerTimeoutConfiguration:
+    """Tests for timeout configuration via the CLI flag and environment variable."""
+
+    def _serve_timeout_for(self, argv, env=None):
+        """Run main() with the given argv/env and return the timeout passed to serve()."""
+        import mcp_server_fetch
+
+        with patch.object(mcp_server_fetch, "serve", new=AsyncMock()) as mock_serve, \
+                patch.dict(os.environ, env or {}, clear=False), \
+                patch.object(sys, "argv", argv):
+            if not (env and "FETCH_TIMEOUT" in env):
+                os.environ.pop("FETCH_TIMEOUT", None)
+            main()
+
+        # serve(custom_user_agent, ignore_robots_txt, proxy_url, timeout)
+        return mock_serve.call_args.args[3]
+
+    def test_default_timeout_when_unset(self):
+        """The default timeout is used when neither flag nor env var is set."""
+        assert self._serve_timeout_for(["mcp-server-fetch"]) == DEFAULT_REQUEST_TIMEOUT
+
+    def test_timeout_from_cli_flag(self):
+        """The --timeout flag sets the server default."""
+        assert self._serve_timeout_for(["mcp-server-fetch", "--timeout", "45"]) == 45.0
+
+    def test_timeout_from_env_var(self):
+        """FETCH_TIMEOUT sets the server default when no flag is given."""
+        assert self._serve_timeout_for(
+            ["mcp-server-fetch"], {"FETCH_TIMEOUT": "50"}
+        ) == 50.0
+
+    def test_cli_flag_overrides_env_var(self):
+        """The --timeout flag takes precedence over FETCH_TIMEOUT."""
+        assert self._serve_timeout_for(
+            ["mcp-server-fetch", "--timeout", "45"], {"FETCH_TIMEOUT": "50"}
+        ) == 45.0
