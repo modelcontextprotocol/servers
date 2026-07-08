@@ -81,6 +81,11 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
       return pathDrive === dirDrive && normalizedPath.startsWith(normalizedDir.replace(/\\?$/, '\\'));
     }
     
+    // On Windows, file paths are case-insensitive — compare lowercased
+    // so C:\source matches c:\Source\file.txt
+    if (process.platform === 'win32') {
+      return normalizedPath.toLowerCase().startsWith((normalizedDir + path.sep).toLowerCase());
+    }
     return normalizedPath.startsWith(normalizedDir + path.sep);
   });
 }
