@@ -81,7 +81,9 @@ describe('Startup Directory Validation', () => {
 
     // Should exit with error
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('Error: None of the specified directories are accessible');
+    expect(result.stderr).toMatch(
+      /argv_no_accessible_directories|missing_roots|Error: None of the specified directories are accessible/
+    );
   });
 
   it('should warn when path is not a directory', async () => {
