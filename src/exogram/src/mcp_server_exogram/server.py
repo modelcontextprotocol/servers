@@ -6,7 +6,7 @@ import json
 from mcp.server.fastmcp import FastMCP
 
 # Initialize the proxy server
-mcp = FastMCP("Exogram Execution Control Plane")
+mcp = FastMCP("Exogram Authority Runtime")
 
 API_URL = os.getenv("EXOGRAM_API_URL", "https://api.exogram.ai")
 
@@ -67,7 +67,7 @@ def exogram_evaluate_action(action_type: str, namespace: str, agent_id: str, pay
                 return f"STATUS: ERROR. Code {response.status_code}: {response.text}"
                 
         except Exception as e:
-            return f"STATUS: NETWORK FAILURE. Could not reach Exogram Control Plane: {str(e)}"
+            return f"STATUS: NETWORK FAILURE. Could not reach Exogram Authority Runtime: {str(e)}"
 
 
 @mcp.tool()
@@ -102,7 +102,7 @@ def exogram_commit_action(token: str, status: str) -> str:
                 return f"STATUS: COMMIT ERROR. Code {response.status_code}: {response.text}"
                 
         except Exception as e:
-            return f"STATUS: NETWORK FAILURE. Could not reach Exogram Control Plane: {str(e)}"
+            return f"STATUS: NETWORK FAILURE. Could not reach Exogram Authority Runtime: {str(e)}"
 
 
 @mcp.tool()
