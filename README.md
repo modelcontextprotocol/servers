@@ -116,16 +116,13 @@ Additional examples of using the Claude Desktop as an MCP client might look like
       "command": "uvx",
       "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
     },
-    "github": {
+    "time": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
-      }
+      "args": ["-y", "@modelcontextprotocol/server-time"]
     },
-    "postgres": {
+    "memory": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
     }
   }
 }
