@@ -116,16 +116,13 @@ Additional examples of using the Claude Desktop as an MCP client might look like
       "command": "uvx",
       "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
     },
-    "github": {
+    "time": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
-      }
+      "args": ["-y", "@modelcontextprotocol/server-time"]
     },
-    "postgres": {
+    "memory": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
     }
   }
 }
@@ -144,6 +141,10 @@ See [ADDITIONAL.md](ADDITIONAL.md) for a curated list of frameworks and resource
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for information about contributing to this repository.
+
+## 📦 Releasing
+
+See [RELEASING.md](RELEASING.md) for how packages are published (OIDC trusted publishing from CI — no registry tokens) and how to retry a failed publish.
 
 ## 🔒 Security
 
