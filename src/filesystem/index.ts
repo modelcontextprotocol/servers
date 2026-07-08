@@ -112,13 +112,21 @@ const ReadMultipleFilesArgsSchema = z.object({
 
 const WriteFileArgsSchema = z.object({
   path: z.string(),
-  content: z.string(),
-});
+  content: z.string().optional(),
+  content_base64: z.string().optional(),
+}).refine(
+  args => args.content !== undefined || args.content_base64 !== undefined,
+  { message: "Must provide either content or content_base64" }
+);
 
 const EditOperation = z.object({
   oldText: z.string().describe('Text to search for - must match exactly'),
-  newText: z.string().describe('Text to replace with')
-});
+  newText: z.string().optional().describe('Text to replace with'),
+  newText_base64: z.string().optional().describe('Base64-encoded replacement text')
+}).refine(
+  args => args.newText !== undefined || args.newText_base64 !== undefined,
+  { message: "Must provide either newText or newText_base64" }
+);
 
 const EditFileArgsSchema = z.object({
   path: z.string(),
@@ -362,16 +370,17 @@ server.registerTool(
       "Create a new file or completely overwrite an existing file with new content. " +
       "Use with caution as it will overwrite existing files without warning. " +
       "Handles text content with proper encoding. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      content: z.string()
-    },
+    inputSchema: WriteFileArgsSchema,
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof WriteFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
-    await writeFileContent(validPath, args.content);
+    const content = args.content_base64
+      ? Buffer.from(args.content_base64, 'base64').toString('utf-8')
+      : args.content!;
+    await fs.mkdir(path.dirname(validPath), { recursive: true });
+    await writeFileContent(validPath, content);
     const text = `Successfully wrote to ${args.path}`;
     return {
       content: [{ type: "text" as const, text }],
@@ -388,20 +397,19 @@ server.registerTool(
       "Make line-based edits to a text file. Each edit replaces exact line sequences " +
       "with new content. Returns a git-style diff showing the changes made. " +
       "Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      edits: z.array(z.object({
-        oldText: z.string().describe("Text to search for - must match exactly"),
-        newText: z.string().describe("Text to replace with")
-      })),
-      dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
-    },
+    inputSchema: EditFileArgsSchema,
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof EditFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
-    const result = await applyFileEdits(validPath, args.edits, args.dryRun);
+    const edits = args.edits.map(edit => ({
+      ...edit,
+      newText: edit.newText_base64
+        ? Buffer.from(edit.newText_base64, 'base64').toString('utf-8')
+        : edit.newText!
+    }));
+    const result = await applyFileEdits(validPath, edits, args.dryRun);
     return {
       content: [{ type: "text" as const, text: result }],
       structuredContent: { content: result }
