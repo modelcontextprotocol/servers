@@ -128,6 +128,12 @@ Add this to your `claude_desktop_config.json`:
 <details>
 <summary>Using uvx</summary>
 
+On Windows, if this server is launched by a scheduled task at logon and `uvx`
+was installed by WinGet, avoid pointing the task at the WinGet shim under
+`%LOCALAPPDATA%\Microsoft\WinGet\Links`. Use the real `uvx.exe` in the WinGet
+package directory, or install `uv` with an installer that places a normal
+executable on `PATH`.
+
 ```json
 "mcpServers": {
   "git": {
