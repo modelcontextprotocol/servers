@@ -44,6 +44,8 @@ This is a curated collection of community-built frameworks and resources that si
 
 ## 📚 Resources
 
+- **[asktian](https://github.com/douglasgan/asktian-mcp)** - Chinese metaphysics (bazi 八字, qimen 奇門, 5-element, daily 干支) as decision-support tools for AI agents. Ask "when should I do X" and get specific time windows instead of vague advice. 6 tools: daily reading, compatibility, best-time-for-action, market read, today's energy, name analysis. (`npm install -g @asktian/mcp-server`) by **[asktian](https://github.com/douglasgan)**
+
 - **[A2A-MCP Java Bridge](https://github.com/vishalmysore/a2ajava)** - A2AJava brings powerful A2A-MCP integration directly into your Java applications. It enables developers to annotate standard Java methods and instantly expose them as MCP Server, A2A-discoverable actions — with no boilerplate or service registration overhead.
 - **[AiMCP](https://www.aimcp.info)** - A collection of MCP clients&servers to find the right mcp tools by **[Hekmon](https://github.com/hekmon8)**
 - **[Awesome Crypto MCP Servers by badkk](https://github.com/badkk/awesome-crypto-mcp-servers)** - A curated list of MCP servers by **[Luke Fan](https://github.com/badkk)**
