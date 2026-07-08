@@ -33,6 +33,9 @@ These servers aim to demonstrate MCP features and the official SDKs.
 - **[Memory](src/memory)** - Knowledge graph-based persistent memory system.
 - **[Sequential Thinking](src/sequentialthinking)** - Dynamic and reflective problem-solving through thought sequences.
 - **[Time](src/time)** - Time and timezone conversion capabilities.
+## Community Servers
+
+- **[DeriveAI x402 APIs](https://x402-apis-eta.vercel.app/api/mcp)** - 17 pay-per-request tools for AI agents via x402 protocol: entity due diligence ($0.50), Gulf Arabic NLP, email verification, currency conversion, web scraping, and more. USDC on Base, no auth needed.
 
 ### Archived
 
