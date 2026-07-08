@@ -1,3 +1,6 @@
+import asyncio
+import ipaddress
+import socket
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
@@ -63,7 +66,144 @@ def get_robots_txt_url(url: str) -> str:
     return robots_url
 
 
-async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url: str | None = None) -> None:
+# Cap on the number of redirect hops we will follow (and re-validate).
+MAX_REDIRECTS = 20
+
+# HTTP status codes that indicate a redirect with a Location header.
+REDIRECT_STATUS_CODES = (301, 302, 303, 307, 308)
+
+
+def _is_blocked_ip(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> bool:
+    """Return True if an IP address is not safe to fetch (SSRF target).
+
+    Blocks loopback, private (RFC1918), link-local (including the cloud
+    metadata address 169.254.169.254), unique-local, multicast, reserved,
+    and unspecified addresses.
+    """
+    # Unwrap IPv4-mapped IPv6 addresses (e.g. ::ffff:127.0.0.1) so the
+    # underlying IPv4 address is classified rather than the wrapper.
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+async def _resolve_host_ips(
+    host: str, port: int | None, scheme: str
+) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Resolve a host to the IP addresses it points at.
+
+    If the host is already an IP literal it is returned directly; otherwise
+    DNS resolution is performed and every returned address is checked.
+    """
+    try:
+        return [ipaddress.ip_address(host)]
+    except ValueError:
+        pass
+
+    default_port = 443 if scheme == "https" else 80
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(
+            host, port or default_port, type=socket.SOCK_STREAM
+        )
+    except socket.gaierror as e:
+        raise McpError(ErrorData(
+            code=INTERNAL_ERROR,
+            message=f"Failed to resolve host {host}: {e}",
+        ))
+
+    ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    for info in infos:
+        try:
+            ips.append(ipaddress.ip_address(info[4][0]))
+        except ValueError:
+            continue
+    return ips
+
+
+async def _validate_url_is_safe(url: str) -> None:
+    """Guard a URL against SSRF before it is fetched.
+
+    Rejects non-http(s) schemes and any URL whose host resolves to a
+    non-public IP address. Servers started with --allow-internal-ips skip
+    this check entirely.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise McpError(ErrorData(
+            code=INVALID_PARAMS,
+            message=f"Cannot fetch {url}: only http and https URLs are supported.",
+        ))
+
+    host = parsed.hostname
+    if not host:
+        raise McpError(ErrorData(
+            code=INVALID_PARAMS,
+            message=f"Cannot fetch {url}: URL has no host.",
+        ))
+
+    for ip in await _resolve_host_ips(host, parsed.port, parsed.scheme):
+        if _is_blocked_ip(ip):
+            raise McpError(ErrorData(
+                code=INVALID_PARAMS,
+                message=(
+                    f"Cannot fetch {url}: host {host} resolves to non-public IP "
+                    f"address {ip}. Fetching loopback, private, link-local, and "
+                    f"cloud-metadata addresses is blocked to prevent SSRF. Start "
+                    f"the server with --allow-internal-ips to override this."
+                ),
+            ))
+
+
+async def _get_following_redirects(
+    client,
+    url: str,
+    *,
+    headers: dict,
+    timeout: float,
+    allow_internal_ips: bool,
+):
+    """GET a URL, following redirects manually so every hop is re-validated.
+
+    httpx's automatic redirect handling never re-checks the destination, so
+    a public URL that 302-redirects to an internal address would bypass the
+    guard. Following redirects manually lets us validate each hop.
+    """
+    from httpx import URL
+
+    current_url = url
+    for _ in range(MAX_REDIRECTS + 1):
+        if not allow_internal_ips:
+            await _validate_url_is_safe(current_url)
+        response = await client.get(
+            current_url,
+            follow_redirects=False,
+            headers=headers,
+            timeout=timeout,
+        )
+        if response.status_code in REDIRECT_STATUS_CODES:
+            location = response.headers.get("location")
+            if not location:
+                return response
+            current_url = str(URL(current_url).join(location))
+            continue
+        return response
+
+    raise McpError(ErrorData(
+        code=INTERNAL_ERROR,
+        message=f"Cannot fetch {url}: exceeded the maximum of {MAX_REDIRECTS} redirects.",
+    ))
+
+
+async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url: str | None = None, allow_internal_ips: bool = False) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
@@ -74,10 +214,12 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
 
     async with AsyncClient(proxy=proxy_url) as client:
         try:
-            response = await client.get(
+            response = await _get_following_redirects(
+                client,
                 robot_txt_url,
-                follow_redirects=True,
                 headers={"User-Agent": user_agent},
+                timeout=30,
+                allow_internal_ips=allow_internal_ips,
             )
         except HTTPError:
             raise McpError(ErrorData(
@@ -109,7 +251,7 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
 
 
 async def fetch_url(
-    url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None
+    url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None, allow_internal_ips: bool = False
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
@@ -118,11 +260,12 @@ async def fetch_url(
 
     async with AsyncClient(proxy=proxy_url) as client:
         try:
-            response = await client.get(
+            response = await _get_following_redirects(
+                client,
                 url,
-                follow_redirects=True,
                 headers={"User-Agent": user_agent},
                 timeout=30,
+                allow_internal_ips=allow_internal_ips,
             )
         except HTTPError as e:
             raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}"))
@@ -182,6 +325,7 @@ async def serve(
     custom_user_agent: str | None = None,
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
+    allow_internal_ips: bool = False,
 ) -> None:
     """Run the fetch MCP server.
 
@@ -189,6 +333,8 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        allow_internal_ips: Allow fetching loopback/private/link-local/metadata
+            addresses (disables SSRF protection). Off by default.
     """
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
@@ -232,10 +378,10 @@ Although originally you did not have internet access, and were advised to refuse
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
         if not ignore_robots_txt:
-            await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
+            await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url, allow_internal_ips)
 
         content, prefix = await fetch_url(
-            url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url
+            url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url, allow_internal_ips=allow_internal_ips
         )
         original_length = len(content)
         if args.start_index >= original_length:
@@ -262,7 +408,7 @@ Although originally you did not have internet access, and were advised to refuse
         url = arguments["url"]
 
         try:
-            content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url)
+            content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url, allow_internal_ips=allow_internal_ips)
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:
             return GetPromptResult(

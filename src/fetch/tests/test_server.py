@@ -9,6 +9,7 @@ from mcp_server_fetch.server import (
     get_robots_txt_url,
     check_may_autonomously_fetch_url,
     fetch_url,
+    _validate_url_is_safe,
     DEFAULT_USER_AGENT_AUTONOMOUS,
 )
 
@@ -90,6 +91,13 @@ class TestExtractContentFromHtml:
 
 class TestCheckMayAutonomouslyFetchUrl:
     """Tests for check_may_autonomously_fetch_url function."""
+
+    @pytest.fixture(autouse=True)
+    def _skip_ssrf_guard(self):
+        """These tests exercise robots.txt handling, not the SSRF guard, and
+        mock the HTTP client, so stub host validation to avoid real DNS."""
+        with patch("mcp_server_fetch.server._validate_url_is_safe", new=AsyncMock()):
+            yield
 
     @pytest.mark.asyncio
     async def test_allows_when_robots_txt_404(self):
@@ -186,6 +194,13 @@ class TestCheckMayAutonomouslyFetchUrl:
 
 class TestFetchUrl:
     """Tests for fetch_url function."""
+
+    @pytest.fixture(autouse=True)
+    def _skip_ssrf_guard(self):
+        """These tests exercise fetch/content handling, not the SSRF guard, and
+        mock the HTTP client, so stub host validation to avoid real DNS."""
+        with patch("mcp_server_fetch.server._validate_url_is_safe", new=AsyncMock()):
+            yield
 
     @pytest.mark.asyncio
     async def test_fetch_html_page(self):
@@ -324,3 +339,82 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+class TestValidateUrlIsSafe:
+    """Tests for the SSRF guard (_validate_url_is_safe).
+
+    These use IP literals so no DNS resolution (and no network) is required.
+    """
+
+    @pytest.mark.asyncio
+    async def test_blocks_loopback_ipv4(self):
+        with pytest.raises(McpError):
+            await _validate_url_is_safe("http://127.0.0.1/")
+
+    @pytest.mark.asyncio
+    async def test_blocks_cloud_metadata_address(self):
+        with pytest.raises(McpError):
+            await _validate_url_is_safe("http://169.254.169.254/latest/meta-data/")
+
+    @pytest.mark.asyncio
+    async def test_blocks_private_ranges(self):
+        for host in ("10.0.0.1", "192.168.1.1", "172.16.0.1"):
+            with pytest.raises(McpError):
+                await _validate_url_is_safe(f"http://{host}/")
+
+    @pytest.mark.asyncio
+    async def test_blocks_unspecified_address(self):
+        with pytest.raises(McpError):
+            await _validate_url_is_safe("http://0.0.0.0/")
+
+    @pytest.mark.asyncio
+    async def test_blocks_ipv6_loopback(self):
+        with pytest.raises(McpError):
+            await _validate_url_is_safe("http://[::1]/")
+
+    @pytest.mark.asyncio
+    async def test_blocks_ipv4_mapped_ipv6_loopback(self):
+        with pytest.raises(McpError):
+            await _validate_url_is_safe("http://[::ffff:127.0.0.1]/")
+
+    @pytest.mark.asyncio
+    async def test_blocks_non_http_scheme(self):
+        with pytest.raises(McpError):
+            await _validate_url_is_safe("file:///etc/passwd")
+
+    @pytest.mark.asyncio
+    async def test_allows_public_ip_literal(self):
+        # Public IP literal: should not raise (no DNS needed).
+        await _validate_url_is_safe("https://1.1.1.1/")
+
+    @pytest.mark.asyncio
+    async def test_blocked_url_rejected_by_fetch_url(self):
+        """The guard is enforced end-to-end through fetch_url by default."""
+        with pytest.raises(McpError):
+            await fetch_url(
+                "http://169.254.169.254/latest/meta-data/",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+            )
+
+    @pytest.mark.asyncio
+    async def test_allow_internal_ips_bypasses_guard(self):
+        """With allow_internal_ips=True the guard is skipped (no McpError from
+        validation); the request proceeds to the mocked client."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "internal"
+        mock_response.headers = {"content-type": "text/plain"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            content, _ = await fetch_url(
+                "http://127.0.0.1/secret",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                allow_internal_ips=True,
+            )
+            assert content == "internal"
