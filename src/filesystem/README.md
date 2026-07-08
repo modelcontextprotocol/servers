@@ -255,6 +255,11 @@ Note: all directories must be mounted to `/projects` by default.
 }
 ```
 
+Use explicit path arguments when you want the filesystem scope to be reviewable
+from this committed config. Running the server without path arguments is valid
+for clients that provide MCP roots at runtime, but then the access boundary is
+determined by the client session rather than by the JSON configuration.
+
 On Windows, use `cmd /c` to launch `npx`:
 
 ```json
@@ -332,6 +337,11 @@ Note: all directories must be mounted to `/projects` by default.
   }
 }
 ```
+
+Use explicit path arguments when you want the filesystem scope to be reviewable
+from this committed config. Running the server without path arguments is valid
+for clients that provide MCP roots at runtime, but then the access boundary is
+determined by the client session rather than by the JSON configuration.
 
 On Windows, use:
 
