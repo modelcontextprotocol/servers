@@ -26,6 +26,12 @@ The fetch tool will truncate the response, but by using the `start_index` argume
   - Arguments:
     - `url` (string, required): URL to fetch
 
+### Content negotiation
+
+The fetch tool sends an `Accept: text/markdown, text/html;q=0.9, */*;q=0.8` request header, asking servers for native markdown when they support it. If the server responds with `Content-Type: text/markdown` (with or without a charset parameter), the response body is returned as-is and the HTML-to-markdown extraction step is skipped. Otherwise the existing readability + markdownify pipeline runs as before.
+
+This benefits sites that serve markdown directly via content negotiation — for example, Cloudflare-hosted sites with the [Markdown for Agents](https://developers.cloudflare.com/fundamentals/reference/markdown-for-agents/) feature enabled (the linked documentation page is itself such a site), content-negotiating CMSes, and raw-content endpoints. Servers that don't recognise the Accept header simply respond with whatever they normally would, so the change is fully backwards-compatible.
+
 ## Installation
 
 Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
