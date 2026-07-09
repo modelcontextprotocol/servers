@@ -87,7 +87,8 @@ The server's directory access control follows this flow:
 
 - **read_multiple_files**
   - Read multiple files simultaneously
-  - Input: `paths` (string[])
+  - Input: `paths` (non-empty string array of file paths within allowed directories)
+  - Returns each file's content with its path as a reference, separated by `---`
   - Failed reads won't stop the entire operation
 
 - **write_file**
