@@ -14,6 +14,7 @@ from mcp.types import (
     PromptMessage,
     TextContent,
     Tool,
+    ToolAnnotations,
     INVALID_PARAMS,
     INTERNAL_ERROR,
 )
@@ -178,6 +179,22 @@ class Fetch(BaseModel):
     ]
 
 
+def _make_fetch_tool() -> Tool:
+    return Tool(
+        name="fetch",
+        description="""Fetches a URL from the internet and optionally extracts its contents as markdown.
+
+Although originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that.""",
+        inputSchema=Fetch.model_json_schema(),
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+    )
+
+
 async def serve(
     custom_user_agent: str | None = None,
     ignore_robots_txt: bool = False,
@@ -196,15 +213,7 @@ async def serve(
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
-        return [
-            Tool(
-                name="fetch",
-                description="""Fetches a URL from the internet and optionally extracts its contents as markdown.
-
-Although originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that.""",
-                inputSchema=Fetch.model_json_schema(),
-            )
-        ]
+        return [_make_fetch_tool()]
 
     @server.list_prompts()
     async def list_prompts() -> list[Prompt]:
