@@ -75,3 +75,16 @@ export async function getValidRootDirectories(
   
   return validatedDirectories;
 }
+
+/**
+ * Merges the fixed CLI directory baseline with the current client-provided roots.
+ *
+ * The merge is recalculated from scratch each time so outdated roots do not linger
+ * after a roots/list_changed update.
+ */
+export function mergeAllowedDirectories(
+  cliAllowedDirectories: readonly string[],
+  rootDirectories: readonly string[]
+): string[] {
+  return [...new Set([...cliAllowedDirectories, ...rootDirectories])];
+}
