@@ -47,6 +47,7 @@ The following reference servers are now archived and can be found at [servers-ar
 - **[Google Maps](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/google-maps)** - Location services, directions, and place details.
 - **[PostgreSQL](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/postgres)** - Read-only database access with schema inspection.
 - **[Puppeteer](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/puppeteer)** - Browser automation and web scraping.
+- **[Queue Inspector](https://github.com/Yusufihsangorgel/queue-inspector-mcp)** - Inspect and operate Redis-backed job queues (Asynq and BullMQ): per-state counts, job detail with decoded payloads, and retry/delete that run each library's own scripts. (TypeScript)
 - **[Redis](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/redis)** - Interact with Redis key-value stores.
 - **[Sentry](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/sentry)** - Retrieving and analyzing issues from Sentry.io.
 - **[Slack](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/slack)** - Channel management and messaging capabilities. Now maintained by [Zencoder](https://github.com/zencoderai/slack-mcp-server)
