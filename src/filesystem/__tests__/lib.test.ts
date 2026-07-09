@@ -516,7 +516,9 @@ describe('Lib Functions', () => {
         ];
         
         await expect(applyFileEdits('/test/file.txt', edits, false))
-          .rejects.toThrow('Could not find exact match for edit');
+          .rejects.toThrow(
+            'Use read_file to inspect the exact current content, then retry with oldText copied from the file'
+          );
       });
 
       it('handles complex multi-line edits with indentation', async () => {
