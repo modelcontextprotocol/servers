@@ -369,6 +369,16 @@ class TestValidateUrlIsSafe:
             await _validate_url_is_safe("http://0.0.0.0/")
 
     @pytest.mark.asyncio
+    async def test_blocks_carrier_grade_nat(self):
+        with pytest.raises(McpError):
+            await _validate_url_is_safe("http://100.64.0.1/")
+
+    @pytest.mark.asyncio
+    async def test_blocks_ipv4_compatible_ipv6_loopback(self):
+        with pytest.raises(McpError):
+            await _validate_url_is_safe("http://[::127.0.0.1]/")
+
+    @pytest.mark.asyncio
     async def test_blocks_ipv6_loopback(self):
         with pytest.raises(McpError):
             await _validate_url_is_safe("http://[::1]/")

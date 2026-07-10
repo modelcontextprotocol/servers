@@ -72,20 +72,37 @@ MAX_REDIRECTS = 20
 # HTTP status codes that indicate a redirect with a Location header.
 REDIRECT_STATUS_CODES = (301, 302, 303, 307, 308)
 
+# Carrier-grade NAT range: not globally reachable, but not flagged by
+# is_private on Python < 3.13, so it is checked explicitly.
+_CGNAT_NETWORK = ipaddress.ip_network("100.64.0.0/10")
+
 
 def _is_blocked_ip(
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
 ) -> bool:
     """Return True if an IP address is not safe to fetch (SSRF target).
 
-    Blocks loopback, private (RFC1918), link-local (including the cloud
-    metadata address 169.254.169.254), unique-local, multicast, reserved,
-    and unspecified addresses.
+    Blocks loopback, private (RFC1918), carrier-grade NAT, link-local
+    (including the cloud metadata address 169.254.169.254), unique-local,
+    multicast, reserved, and unspecified addresses.
     """
     # Unwrap IPv4-mapped IPv6 addresses (e.g. ::ffff:127.0.0.1) so the
     # underlying IPv4 address is classified rather than the wrapper.
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
+    # Unwrap deprecated IPv4-compatible IPv6 addresses (::a.b.c.d, ::/96),
+    # other than :: and ::1 which are classified as unspecified/loopback
+    # below, so the embedded IPv4 address (e.g. ::127.0.0.1) is checked.
+    elif (
+        isinstance(ip, ipaddress.IPv6Address)
+        and int(ip) >> 32 == 0
+        and int(ip) not in (0, 1)
+    ):
+        ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+
+    if isinstance(ip, ipaddress.IPv4Address) and ip in _CGNAT_NETWORK:
+        return True
+
     return (
         ip.is_loopback
         or ip.is_private
