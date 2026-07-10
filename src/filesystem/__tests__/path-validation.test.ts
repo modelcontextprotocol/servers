@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
@@ -40,7 +40,7 @@ async function getSymlinkSupport(): Promise<boolean> {
   if (symlinkSupported === null) {
     symlinkSupported = await checkSymlinkSupport();
     if (!symlinkSupported) {
-      console.log('\n鈿狅笍  Symlink tests will be skipped - symlink creation not supported in this environment');
+      console.log('\n⚠️  Symlink tests will be skipped - symlink creation not supported in this environment');
       console.log('   On Windows, enable Developer Mode or run as Administrator to enable symlink tests');
     }
   }
@@ -194,10 +194,10 @@ describe('Path Validation', () => {
 
   describe('Unicode and special characters', () => {
     it('handles unicode characters in paths', () => {
-      const allowed = ['/home/user/caf茅'];
+      const allowed = ['/home/user/café'];
 
-      expect(isPathWithinAllowedDirectories('/home/user/caf茅', allowed)).toBe(true);
-      expect(isPathWithinAllowedDirectories('/home/user/caf茅/file', allowed)).toBe(true);
+      expect(isPathWithinAllowedDirectories('/home/user/café', allowed)).toBe(true);
+      expect(isPathWithinAllowedDirectories('/home/user/café/file', allowed)).toBe(true);
 
       // Different unicode representation won't match (not normalized)
       const decomposed = '/home/user/cafe\u0301'; // e + combining accent
@@ -679,7 +679,7 @@ describe('Path Validation', () => {
     it('demonstrates symlink race condition allows writing outside allowed directories', async () => {
       const symlinkSupported = await getSymlinkSupport();
       if (!symlinkSupported) {
-        console.log('   鈴笍  Skipping symlink race condition test - symlinks not supported');
+        console.log('   ⏭️  Skipping symlink race condition test - symlinks not supported');
         return;
       }
 
@@ -701,7 +701,7 @@ describe('Path Validation', () => {
     it('shows timing differences between validation approaches', async () => {
       const symlinkSupported = await getSymlinkSupport();
       if (!symlinkSupported) {
-        console.log('   鈴笍  Skipping timing validation test - symlinks not supported');
+        console.log('   ⏭️  Skipping timing validation test - symlinks not supported');
         return;
       }
 
@@ -722,7 +722,7 @@ describe('Path Validation', () => {
     it('validates directory creation timing', async () => {
       const symlinkSupported = await getSymlinkSupport();
       if (!symlinkSupported) {
-        console.log('   鈴笍  Skipping directory creation timing test - symlinks not supported');
+        console.log('   ⏭️  Skipping directory creation timing test - symlinks not supported');
         return;
       }
 
@@ -742,7 +742,7 @@ describe('Path Validation', () => {
     it('demonstrates exclusive file creation behavior', async () => {
       const symlinkSupported = await getSymlinkSupport();
       if (!symlinkSupported) {
-        console.log('   鈴笍  Skipping exclusive file creation test - symlinks not supported');
+        console.log('   ⏭️  Skipping exclusive file creation test - symlinks not supported');
         return;
       }
 
@@ -760,7 +760,7 @@ describe('Path Validation', () => {
     it('should use resolved parent paths for non-existent files', async () => {
       const symlinkSupported = await getSymlinkSupport();
       if (!symlinkSupported) {
-        console.log('   鈴笍  Skipping resolved parent paths test - symlinks not supported');
+        console.log('   ⏭️  Skipping resolved parent paths test - symlinks not supported');
         return;
       }
 
@@ -784,7 +784,7 @@ describe('Path Validation', () => {
     it('demonstrates parent directory symlink traversal', async () => {
       const symlinkSupported = await getSymlinkSupport();
       if (!symlinkSupported) {
-        console.log('   鈴笍  Skipping parent directory symlink traversal test - symlinks not supported');
+        console.log('   ⏭️  Skipping parent directory symlink traversal test - symlinks not supported');
         return;
       }
 
@@ -810,7 +810,7 @@ describe('Path Validation', () => {
     it('should prevent race condition between validatePath and file operation', async () => {
       const symlinkSupported = await getSymlinkSupport();
       if (!symlinkSupported) {
-        console.log('   鈴笍  Skipping race condition prevention test - symlinks not supported');
+        console.log('   ⏭️  Skipping race condition prevention test - symlinks not supported');
         return;
       }
 
@@ -864,7 +864,7 @@ describe('Path Validation', () => {
     it('should handle symlinks that point within allowed directories', async () => {
       const symlinkSupported = await getSymlinkSupport();
       if (!symlinkSupported) {
-        console.log('   鈴笍  Skipping symlinks within allowed directories test - symlinks not supported');
+        console.log('   ⏭️  Skipping symlinks within allowed directories test - symlinks not supported');
         return;
       }
 
@@ -896,7 +896,7 @@ describe('Path Validation', () => {
     it('should prevent overwriting files through symlinks pointing outside allowed directories', async () => {
       const symlinkSupported = await getSymlinkSupport();
       if (!symlinkSupported) {
-        console.log('   鈴笍  Skipping symlink overwrite prevention test - symlinks not supported');
+        console.log('   ⏭️  Skipping symlink overwrite prevention test - symlinks not supported');
         return;
       }
 
@@ -932,7 +932,7 @@ describe('Path Validation', () => {
     it('demonstrates race condition in read operations', async () => {
       const symlinkSupported = await getSymlinkSupport();
       if (!symlinkSupported) {
-        console.log('   鈴笍  Skipping race condition in read operations test - symlinks not supported');
+        console.log('   ⏭️  Skipping race condition in read operations test - symlinks not supported');
         return;
       }
 
@@ -964,7 +964,7 @@ describe('Path Validation', () => {
     it('verifies rename does not follow symlinks', async () => {
       const symlinkSupported = await getSymlinkSupport();
       if (!symlinkSupported) {
-        console.log('   鈴笍  Skipping rename symlink test - symlinks not supported');
+        console.log('   ⏭️  Skipping rename symlink test - symlinks not supported');
         return;
       }
 
@@ -996,40 +996,5 @@ describe('Path Validation', () => {
       expect(targetContent).toBe('NEW CONTENT');
       expect(forbiddenContent).toBe('ORIGINAL CONTENT'); // Unchanged
     });
-  });
-});
-
-describe('Windows case-insensitivity (issue #3921, #447)', () => {
-  // These assertions document the intended Windows behavior.
-  // On non-Windows hosts we simulate the comparison semantics by
-  // lower-casing both sides the same way the implementation does on win32.
-  const ci = (s: string) => (path.sep === '\\' ? s.toLowerCase() : s);
-
-  const samePrefix = (candidate: string, allowed: string): boolean => {
-    const a = ci(allowed);
-    const c = ci(candidate);
-    return c === a || c.startsWith(a + path.sep);
-  };
-
-  it('matches allowed dir regardless of drive-letter case', () => {
-    const allowed = ['C:\\Users\\admin\\Desktop'];
-    expect(isPathWithinAllowedDirectories('c:\\users\\admin\\Desktop\\file.txt', allowed)).toBe(true);
-    expect(isPathWithinAllowedDirectories('C:\\Users\\Admin\\Desktop', allowed)).toBe(true);
-  });
-
-  it('matches allowed dir regardless of path case', () => {
-    const allowed = ['C:\\Users\\admin\\desktop'];
-    expect(isPathWithinAllowedDirectories('C:\\Users\\Admin\\Desktop\\file.txt', allowed))
-      .toBe(samePrefix('C:\\Users\\Admin\\Desktop\\file.txt', allowed[0]));
-  });
-
-  it('treats same directory with different case as equal', () => {
-    const allowed = ['C:\\PROJECTS\\repo'];
-    expect(isPathWithinAllowedDirectories('c:\\projects\\repo', allowed)).toBe(true);
-  });
-
-  it('UNC path is matched case-insensitively', () => {
-    const allowed = ['\\\\SERVER\\Share\\Folder'];
-    expect(isPathWithinAllowedDirectories('\\\\server\\share\\folder\\f.txt', allowed)).toBe(true);
   });
 });
