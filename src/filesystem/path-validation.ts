@@ -1,4 +1,4 @@
-import path from 'path';
+﻿import path from 'path';
 
 /**
  * Checks if an absolute path is within any of the allowed directories.
@@ -61,26 +61,23 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
       throw new Error('Allowed directories must be absolute paths after normalization');
     }
 
-    // Check if normalizedPath is within normalizedDir
-    // Path is inside if it's the same or a subdirectory
-    if (normalizedPath === normalizedDir) {
+    // Windows file systems are case-insensitive: compare drive letters and
+    // UNC shares case-insensitively before the prefix containment check.
+    const ci = path.sep === '\\' ? (s: string) => s.toLowerCase() : (s: string) => s;
+
+    if (ci(normalizedPath) === ci(normalizedDir)) {
       return true;
     }
-    
-    // Special case for root directory to avoid double slash
-    // On Windows, we need to check if both paths are on the same drive
+
     if (normalizedDir === path.sep) {
       return normalizedPath.startsWith(path.sep);
     }
-    
-    // On Windows, also check for drive root (e.g., "C:\")
+
     if (path.sep === '\\' && normalizedDir.match(/^[A-Za-z]:\\?$/)) {
-      // Ensure both paths are on the same drive
-      const dirDrive = normalizedDir.charAt(0).toLowerCase();
-      const pathDrive = normalizedPath.charAt(0).toLowerCase();
-      return pathDrive === dirDrive && normalizedPath.startsWith(normalizedDir.replace(/\\?$/, '\\'));
+      return ci(normalizedDir.charAt(0)) === ci(normalizedPath.charAt(0))
+        && ci(normalizedPath).startsWith(ci(normalizedDir.replace(/\\?$/, '\\')));
     }
-    
-    return normalizedPath.startsWith(normalizedDir + path.sep);
+
+    return ci(normalizedPath).startsWith(ci(normalizedDir) + path.sep);
   });
 }
