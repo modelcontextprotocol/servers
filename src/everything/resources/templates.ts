@@ -139,8 +139,8 @@ export const blobResourceUri = (resourceId: number) =>
 const parseResourceId = (uri: URL, variables: Record<string, unknown>) => {
   const uriError = `Unknown resource: ${uri.toString()}`;
   if (
-    uri.toString().startsWith(textUriBase) &&
-    uri.toString().startsWith(blobUriBase)
+    !uri.toString().startsWith(textUriBase) &&
+    !uri.toString().startsWith(blobUriBase)
   ) {
     throw new Error(uriError);
   } else {
