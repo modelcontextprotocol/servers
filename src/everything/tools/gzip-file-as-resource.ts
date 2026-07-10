@@ -258,6 +258,12 @@ function isBlockedIpv6(ip: string): boolean {
   }
   if (g.every((h) => h === 0)) return true; // :: unspecified
   if (g.slice(0, 7).every((h) => h === 0) && g[7] === 1) return true; // ::1 loopback
+  // IPv4-compatible (deprecated ::a.b.c.d, ::/96): first 96 bits zero. Unwrap
+  // and classify as IPv4 so forms like ::127.0.0.1 are not treated as public.
+  if (g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0 && g[5] === 0) {
+    const v4 = `${g[6] >> 8}.${g[6] & 0xff}.${g[7] >> 8}.${g[7] & 0xff}`;
+    return isBlockedIpv4(v4);
+  }
   const first = g[0];
   if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
   if ((first & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local

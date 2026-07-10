@@ -1227,8 +1227,10 @@ describe('Tools', () => {
       ['private 192.168/16', 'http://192.168.1.1/'],
       ['private 172.16/12', 'http://172.16.0.1/'],
       ['unspecified', 'http://0.0.0.0/'],
+      ['carrier-grade NAT 100.64/10', 'http://100.64.0.1/'],
       ['IPv6 loopback', 'http://[::1]/'],
       ['IPv4-mapped IPv6 loopback', 'http://[::ffff:127.0.0.1]/'],
+      ['IPv4-compatible IPv6 loopback', 'http://[::127.0.0.1]/'],
     ];
 
     for (const [label, url] of blockedHosts) {
