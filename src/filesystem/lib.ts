@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import { constants } from 'fs';
 import path from "path";
 import os from 'os';
 import { randomBytes } from 'crypto';
@@ -209,31 +210,74 @@ export async function writeFileContent(filePath: string, content: string): Promi
     await fs.writeFile(filePath, content, { encoding: "utf-8", flag: 'wx' });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      // Security: Use atomic rename to prevent race conditions where symlinks
-      // could be created between validation and write. Rename operations
-      // replace the target file atomically and don't follow symlinks.
-      const origStats = await fs.stat(filePath);
-      const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-      try {
-        await fs.writeFile(tempPath, content, 'utf-8');
-        await fs.rename(tempPath, filePath);
-      } catch (renameError) {
-        try {
-          await fs.unlink(tempPath);
-        } catch {}
-        throw renameError;
-      }
-      // Restore original permission bits since the atomic rename replaces the
-      // inode and the temp file has default (0644) permissions. Mask off the
-      // file-type bits; POSIX leaves them unspecified for chmod. A chmod
-      // failure must not fail the write, which has already succeeded.
-      try {
-        await fs.chmod(filePath, origStats.mode & 0o777);
-      } catch {}
+      await replaceExistingFile(filePath, content);
     } else {
       throw error;
     }
   }
+}
+
+/**
+ * Overwrite an existing file, choosing the safest strategy for the platform.
+ *
+ * POSIX: write in place through an O_NOFOLLOW handle. This keeps the inode, so
+ * birthtime, hard links, inode-based watchers and permission bits all survive
+ * (#4512, and the permission loss #4115 had to repair with a chmod).
+ *
+ * Windows: O_NOFOLLOW does not exist there - fs.constants.O_NOFOLLOW is
+ * undefined, and `O_RDWR | undefined` silently collapses to a plain O_RDWR
+ * open, which would drop the symlink protection rather than enforce it. Keep
+ * the temp+rename strategy on win32, where creating a symlink already requires
+ * elevation and the threat model differs.
+ */
+async function replaceExistingFile(filePath: string, content: string): Promise<void> {
+  if (process.platform === 'win32') {
+    await writeViaAtomicRename(filePath, content);
+    return;
+  }
+  await writeInPlace(filePath, content);
+}
+
+async function writeInPlace(filePath: string, content: string): Promise<void> {
+  // Security: O_NOFOLLOW rejects symlinks with ELOOP, giving the same TOCTOU
+  // protection the temp+rename pattern provided, without replacing the inode.
+  const fh = await fs.open(filePath, constants.O_RDWR | constants.O_NOFOLLOW);
+  try {
+    // Defence in depth: O_NOFOLLOW only rules out symlinks. Refuse to truncate
+    // anything that is not a regular file (a FIFO or device swapped in after
+    // path validation would otherwise be written through).
+    const stats = await fh.stat();
+    if (!stats.isFile()) {
+      throw new Error(`Refusing to write to ${filePath}: not a regular file`);
+    }
+    await fh.truncate(0);
+    await fh.write(content, 0, 'utf-8');
+  } finally {
+    await fh.close();
+  }
+}
+
+async function writeViaAtomicRename(filePath: string, content: string): Promise<void> {
+  // Security: rename replaces the target atomically and does not follow
+  // symlinks, closing the validate-then-write race.
+  const origStats = await fs.stat(filePath);
+  const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
+  try {
+    await fs.writeFile(tempPath, content, 'utf-8');
+    await fs.rename(tempPath, filePath);
+  } catch (renameError) {
+    try {
+      await fs.unlink(tempPath);
+    } catch {}
+    throw renameError;
+  }
+  // Restore original permission bits since the rename replaces the inode and
+  // the temp file has default (0644) permissions (#4115). Mask off the file-type
+  // bits; POSIX leaves them unspecified for chmod. A chmod failure must not fail
+  // the write, which has already succeeded.
+  try {
+    await fs.chmod(filePath, origStats.mode & 0o777);
+  } catch {}
 }
 
 
@@ -334,27 +378,7 @@ export async function applyFileEdits(
   const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
 
   if (!dryRun) {
-    // Security: Use atomic rename to prevent race conditions where symlinks
-    // could be created between validation and write. Rename operations
-    // replace the target file atomically and don't follow symlinks.
-    const origStats = await fs.stat(filePath);
-    const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-    try {
-      await fs.writeFile(tempPath, modifiedContent, 'utf-8');
-      await fs.rename(tempPath, filePath);
-    } catch (error) {
-      try {
-        await fs.unlink(tempPath);
-      } catch {}
-      throw error;
-    }
-    // Restore original permission bits since the atomic rename replaces the
-    // inode and the temp file has default (0644) permissions. Mask off the
-    // file-type bits; POSIX leaves them unspecified for chmod. A chmod
-    // failure must not fail the write, which has already succeeded.
-    try {
-      await fs.chmod(filePath, origStats.mode & 0o777);
-    } catch {}
+    await replaceExistingFile(filePath, modifiedContent);
   }
 
   return formattedDiff;
