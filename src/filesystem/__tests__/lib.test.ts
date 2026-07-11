@@ -301,12 +301,30 @@ describe('Lib Functions', () => {
     });
 
     describe('writeFileContent', () => {
-      it('writes file content', async () => {
+      it('creates new file with wx flag', async () => {
         mockFs.writeFile.mockResolvedValueOnce(undefined);
-        
+
         await writeFileContent('/test/file.txt', 'new content');
-        
+
         expect(mockFs.writeFile).toHaveBeenCalledWith('/test/file.txt', 'new content', { encoding: "utf-8", flag: 'wx' });
+      });
+
+      it('writes in place when file exists (preserves inode / birthtime)', async () => {
+        const eexist = Object.assign(new Error('EEXIST'), { code: 'EEXIST' });
+        mockFs.writeFile.mockRejectedValueOnce(eexist);
+        const mockFh = {
+          truncate: vi.fn().mockResolvedValue(undefined),
+          write: vi.fn().mockResolvedValue(undefined),
+          close: vi.fn().mockResolvedValue(undefined),
+        };
+        mockFs.open.mockResolvedValueOnce(mockFh);
+
+        await writeFileContent('/test/file.txt', 'updated');
+
+        expect(mockFs.open).toHaveBeenCalledWith('/test/file.txt', expect.any(Number));
+        expect(mockFh.truncate).toHaveBeenCalledWith(0);
+        expect(mockFh.write).toHaveBeenCalledWith('updated', 0, 'utf-8');
+        expect(mockFh.close).toHaveBeenCalled();
       });
     });
 
@@ -413,31 +431,34 @@ describe('Lib Functions', () => {
 
   describe('File Editing Functions', () => {
     describe('applyFileEdits', () => {
+      let mockFileHandle: any;
+
       beforeEach(() => {
         mockFs.readFile.mockResolvedValue('line1\nline2\nline3\n');
-        mockFs.writeFile.mockResolvedValue(undefined);
+        mockFileHandle = {
+          truncate: vi.fn().mockResolvedValue(undefined),
+          write: vi.fn().mockResolvedValue(undefined),
+          close: vi.fn().mockResolvedValue(undefined),
+        };
+        mockFs.open.mockResolvedValue(mockFileHandle);
       });
 
       it('applies simple text replacement', async () => {
         const edits = [
           { oldText: 'line2', newText: 'modified line2' }
         ];
-        
-        mockFs.rename.mockResolvedValueOnce(undefined);
-        
+
         const result = await applyFileEdits('/test/file.txt', edits, false);
-        
+
         expect(result).toContain('modified line2');
-        // Should write to temporary file then rename
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+        expect(mockFs.open).toHaveBeenCalledWith('/test/file.txt', expect.any(Number));
+        expect(mockFileHandle.truncate).toHaveBeenCalledWith(0);
+        expect(mockFileHandle.write).toHaveBeenCalledWith(
           'line1\nmodified line2\nline3\n',
+          0,
           'utf-8'
         );
-        expect(mockFs.rename).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
-          '/test/file.txt'
-        );
+        expect(mockFileHandle.close).toHaveBeenCalled();
       });
 
       it('treats dollar signs in replacement text literally', async () => {
@@ -445,13 +466,11 @@ describe('Lib Functions', () => {
           { oldText: 'line2', newText: "price=$$; match=$&; before=$`; after=$'" }
         ];
 
-        mockFs.rename.mockResolvedValueOnce(undefined);
-
         await applyFileEdits('/test/file.txt', edits, false);
 
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+        expect(mockFileHandle.write).toHaveBeenCalledWith(
           "line1\nprice=$$; match=$&; before=$`; after=$'\nline3\n",
+          0,
           'utf-8'
         );
       });
@@ -460,11 +479,11 @@ describe('Lib Functions', () => {
         const edits = [
           { oldText: 'line2', newText: 'modified line2' }
         ];
-        
+
         const result = await applyFileEdits('/test/file.txt', edits, true);
-        
+
         expect(result).toContain('modified line2');
-        expect(mockFs.writeFile).not.toHaveBeenCalled();
+        expect(mockFs.open).not.toHaveBeenCalled();
       });
 
       it('applies multiple edits sequentially', async () => {
@@ -472,41 +491,29 @@ describe('Lib Functions', () => {
           { oldText: 'line1', newText: 'first line' },
           { oldText: 'line3', newText: 'third line' }
         ];
-        
-        mockFs.rename.mockResolvedValueOnce(undefined);
-        
+
         await applyFileEdits('/test/file.txt', edits, false);
-        
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+
+        expect(mockFileHandle.write).toHaveBeenCalledWith(
           'first line\nline2\nthird line\n',
+          0,
           'utf-8'
-        );
-        expect(mockFs.rename).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
-          '/test/file.txt'
         );
       });
 
       it('handles whitespace-flexible matching', async () => {
         mockFs.readFile.mockResolvedValue('  line1\n    line2\n  line3\n');
-        
+
         const edits = [
           { oldText: 'line2', newText: 'modified line2' }
         ];
-        
-        mockFs.rename.mockResolvedValueOnce(undefined);
-        
+
         await applyFileEdits('/test/file.txt', edits, false);
-        
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+
+        expect(mockFileHandle.write).toHaveBeenCalledWith(
           '  line1\n    modified line2\n  line3\n',
+          0,
           'utf-8'
-        );
-        expect(mockFs.rename).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
-          '/test/file.txt'
         );
       });
 
@@ -514,80 +521,62 @@ describe('Lib Functions', () => {
         const edits = [
           { oldText: 'nonexistent line', newText: 'replacement' }
         ];
-        
+
         await expect(applyFileEdits('/test/file.txt', edits, false))
           .rejects.toThrow('Could not find exact match for edit');
       });
 
       it('handles complex multi-line edits with indentation', async () => {
         mockFs.readFile.mockResolvedValue('function test() {\n  console.log("hello");\n  return true;\n}');
-        
+
         const edits = [
-          { 
-            oldText: '  console.log("hello");\n  return true;', 
-            newText: '  console.log("world");\n  console.log("test");\n  return false;' 
+          {
+            oldText: '  console.log("hello");\n  return true;',
+            newText: '  console.log("world");\n  console.log("test");\n  return false;'
           }
         ];
-        
-        mockFs.rename.mockResolvedValueOnce(undefined);
-        
+
         await applyFileEdits('/test/file.js', edits, false);
-        
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
+
+        expect(mockFileHandle.write).toHaveBeenCalledWith(
           'function test() {\n  console.log("world");\n  console.log("test");\n  return false;\n}',
+          0,
           'utf-8'
-        );
-        expect(mockFs.rename).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
-          '/test/file.js'
         );
       });
 
       it('handles edits with different indentation patterns', async () => {
         mockFs.readFile.mockResolvedValue('    if (condition) {\n        doSomething();\n    }');
-        
+
         const edits = [
-          { 
-            oldText: 'doSomething();', 
-            newText: 'doSomethingElse();\n        doAnotherThing();' 
+          {
+            oldText: 'doSomething();',
+            newText: 'doSomethingElse();\n        doAnotherThing();'
           }
         ];
-        
-        mockFs.rename.mockResolvedValueOnce(undefined);
-        
+
         await applyFileEdits('/test/file.js', edits, false);
-        
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
+
+        expect(mockFileHandle.write).toHaveBeenCalledWith(
           '    if (condition) {\n        doSomethingElse();\n        doAnotherThing();\n    }',
+          0,
           'utf-8'
-        );
-        expect(mockFs.rename).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
-          '/test/file.js'
         );
       });
 
       it('handles CRLF line endings in file content', async () => {
         mockFs.readFile.mockResolvedValue('line1\r\nline2\r\nline3\r\n');
-        
+
         const edits = [
           { oldText: 'line2', newText: 'modified line2' }
         ];
-        
-        mockFs.rename.mockResolvedValueOnce(undefined);
-        
+
         await applyFileEdits('/test/file.txt', edits, false);
-        
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+
+        expect(mockFileHandle.write).toHaveBeenCalledWith(
           'line1\nmodified line2\nline3\n',
+          0,
           'utf-8'
-        );
-        expect(mockFs.rename).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
-          '/test/file.txt'
         );
       });
     });
