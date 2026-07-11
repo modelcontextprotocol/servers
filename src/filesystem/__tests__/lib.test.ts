@@ -172,6 +172,23 @@ describe('Lib Functions', () => {
           .rejects.toThrow('Access denied - path outside allowed directories');
       });
 
+      it('allows paths whose canonical form is in an allowed directory', async () => {
+        const requestedPath = process.platform === 'win32'
+          ? 'Y:\\project\\file.txt'
+          : '/mapped/project/file.txt';
+        const realPath = process.platform === 'win32'
+          ? '\\\\nas\\share\\project\\file.txt'
+          : '/canonical/project/file.txt';
+        const allowedDir = process.platform === 'win32'
+          ? '\\\\nas\\share\\project'
+          : '/canonical/project';
+
+        setAllowedDirectories([allowedDir]);
+        mockFs.realpath.mockResolvedValueOnce(realPath);
+
+        await expect(validatePath(requestedPath)).resolves.toBe(realPath);
+      });
+
       it('handles non-existent files by checking parent directory', async () => {
         const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\newfile.txt' : '/home/user/newfile.txt';
         const parentPath = process.platform === 'win32' ? 'C:\\Users\\test' : '/home/user';
@@ -184,6 +201,28 @@ describe('Lib Functions', () => {
           .mockRejectedValueOnce(enoentError)
           .mockResolvedValueOnce(parentPath);
         
+        const result = await validatePath(newFilePath);
+        expect(result).toBe(path.resolve(newFilePath));
+      });
+
+      it('allows new files whose canonical parent is in an allowed directory', async () => {
+        const newFilePath = process.platform === 'win32'
+          ? 'Y:\\project\\newfile.txt'
+          : '/mapped/project/newfile.txt';
+        const realParentPath = process.platform === 'win32'
+          ? '\\\\nas\\share\\project'
+          : '/canonical/project';
+        const allowedDir = process.platform === 'win32'
+          ? '\\\\nas\\share\\project'
+          : '/canonical/project';
+        const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError.code = 'ENOENT';
+
+        setAllowedDirectories([allowedDir]);
+        mockFs.realpath
+          .mockRejectedValueOnce(enoentError)
+          .mockResolvedValueOnce(realParentPath);
+
         const result = await validatePath(newFilePath);
         expect(result).toBe(path.resolve(newFilePath));
       });
