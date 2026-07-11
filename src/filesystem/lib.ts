@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import { constants as fsConstants } from "fs";
 import path from "path";
 import os from 'os';
 import { randomBytes } from 'crypto';
@@ -165,22 +166,54 @@ export async function writeFileContent(filePath: string, content: string): Promi
     await fs.writeFile(filePath, content, { encoding: "utf-8", flag: 'wx' });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      // Security: Use atomic rename to prevent race conditions where symlinks
-      // could be created between validation and write. Rename operations
-      // replace the target file atomically and don't follow symlinks.
-      const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-      try {
-        await fs.writeFile(tempPath, content, 'utf-8');
-        await fs.rename(tempPath, filePath);
-      } catch (renameError) {
-        try {
-          await fs.unlink(tempPath);
-        } catch {}
-        throw renameError;
-      }
+      await writeFileInPlace(filePath, content);
     } else {
       throw error;
     }
+  }
+}
+
+async function writeFileInPlace(filePath: string, content: string): Promise<void> {
+  if (process.platform === 'win32') {
+    // Windows: symlink creation requires elevated privileges by default, so the
+    // TOCTOU threat model differs, and O_NOFOLLOW isn't reliably enforced there.
+    // Keep the rename-based strategy, which trades file-identity preservation for
+    // the platform's stronger symlink guarantees.
+    await writeFileViaRename(filePath, content);
+    return;
+  }
+
+  // Security: O_NOFOLLOW makes the open() call itself fail if filePath resolves to a
+  // symlink, closing the same TOCTOU window a rename-based swap closed, but writing
+  // into the file's existing inode instead of replacing it. This preserves birthtime,
+  // hard links, and inode-based file watches (see #4512), at the cost of the
+  // crash-atomicity and reader-atomicity a rename gave us: a crash mid-write, or a
+  // concurrent read, can observe truncated/partial content.
+  const handle = await fs.open(filePath, fsConstants.O_RDWR | fsConstants.O_NOFOLLOW);
+  try {
+    // Defense in depth: refuse to write through anything that isn't a regular file
+    // (e.g. a FIFO or device node swapped in at this path).
+    const stats = await handle.stat();
+    if (!stats.isFile()) {
+      throw new Error(`Refusing to write: ${filePath} is not a regular file`);
+    }
+    await handle.truncate(0);
+    await handle.write(content, 0, 'utf-8');
+  } finally {
+    await handle.close();
+  }
+}
+
+async function writeFileViaRename(filePath: string, content: string): Promise<void> {
+  const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
+  try {
+    await fs.writeFile(tempPath, content, 'utf-8');
+    await fs.rename(tempPath, filePath);
+  } catch (error) {
+    try {
+      await fs.unlink(tempPath);
+    } catch {}
+    throw error;
   }
 }
 
@@ -263,19 +296,7 @@ export async function applyFileEdits(
   const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
 
   if (!dryRun) {
-    // Security: Use atomic rename to prevent race conditions where symlinks
-    // could be created between validation and write. Rename operations
-    // replace the target file atomically and don't follow symlinks.
-    const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-    try {
-      await fs.writeFile(tempPath, modifiedContent, 'utf-8');
-      await fs.rename(tempPath, filePath);
-    } catch (error) {
-      try {
-        await fs.unlink(tempPath);
-      } catch {}
-      throw error;
-    }
+    await writeFileInPlace(filePath, modifiedContent);
   }
 
   return formattedDiff;
