@@ -2,6 +2,8 @@
 
 An MCP server implementation that provides a tool for dynamic and reflective problem-solving through a structured thinking process.
 
+Published on npm as [`@modelcontextprotocol/server-sequential-thinking`](https://www.npmjs.com/package/@modelcontextprotocol/server-sequential-thinking).
+
 ## Features
 
 - Break down complex problems into manageable steps
