@@ -42,6 +42,16 @@ This is a curated collection of community-built frameworks and resources that si
 * **[PHP MCP Client](https://github.com/php-mcp/client)** - Core PHP implementation for the Model Context Protocol (MCP) Client
 * **[Runbear](https://runbear.io/solutions/integrations/slack/mcp)** - No-code MCP client for team chat platforms, such as Slack, Microsoft Teams, and Discord.
 
+
+## 💰 Finance & Trading MCP Servers
+
+* **[SqueezeOS](https://github.com/Timwal78/SqueezeOS)** (TypeScript/Python) - 33-tool institutional trading MCP server. Schwab/Polygon/Alpaca APIs, x402 payment gating via XRPL/RLUSD and Base/USDC, short-squeeze detection. Remote: `https://squeezeos-api.onrender.com/mcp`
+* **[sml-x402-signal-api](https://github.com/Timwal78/sml-x402-signal-api)** (JavaScript) - Pay-per-call US equities signal API for AI agents. $0.01–$0.25 via Base USDC x402. Ed25519-signed responses, 30% affiliate revenue-share.
+* **[Aetheris MCP](https://github.com/Timwal78/aetheris-mcp-render)** (TypeScript) - x402 agentic web scraper MCP server. AI agents pay USDC on Base per scrape. JSDOM sanitization, SSE transport.
+* **[Ghost Layer](https://github.com/Timwal78/ghost-layer)** (Go/Python) - Dual-chain XRPL/Base toll gateway for autonomous AI agents. URIToken licensing, x402 protocol, zero custody. MCP: `https://ghost-layer.onrender.com/mcp`
+* **[proof402-middleware / @relayos/mcp-paywall](https://github.com/Timwal78/proof402-middleware)** (JavaScript) - Drop-in HTTP 402 paywall middleware for MCP servers. XRPL/RLUSD + Base/USDC. [npm](https://www.npmjs.com/package/@relayos/mcp-paywall)
+* **[ZeroQuery Protocol](https://github.com/Timwal78/zeroquery-protocol)** - Proof-of-Intent open protocol for AI agent identity. x402-compatible, no OAuth.
+
 ## 📚 Resources
 
 - **[A2A-MCP Java Bridge](https://github.com/vishalmysore/a2ajava)** - A2AJava brings powerful A2A-MCP integration directly into your Java applications. It enables developers to annotate standard Java methods and instantly expose them as MCP Server, A2A-discoverable actions — with no boilerplate or service registration overhead.
