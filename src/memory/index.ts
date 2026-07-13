@@ -119,7 +119,11 @@ export class KnowledgeGraphManager {
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
     const graph = await this.loadGraph();
-    const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
+    const newEntities = entities.filter((e, index) =>
+      !graph.entities.some(existingEntity => existingEntity.name === e.name) &&
+      // Also skip duplicates appearing earlier in this same batch
+      !entities.slice(0, index).some(earlier => earlier.name === e.name)
+    );
     graph.entities.push(...newEntities);
     await this.saveGraph(graph);
     return newEntities;
@@ -127,11 +131,15 @@ export class KnowledgeGraphManager {
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
     const graph = await this.loadGraph();
-    const newRelations = relations.filter(r => !graph.relations.some(existingRelation => 
-      existingRelation.from === r.from && 
-      existingRelation.to === r.to && 
-      existingRelation.relationType === r.relationType
-    ));
+    const isSameRelation = (a: Relation, b: Relation) =>
+      a.from === b.from &&
+      a.to === b.to &&
+      a.relationType === b.relationType;
+    const newRelations = relations.filter((r, index) =>
+      !graph.relations.some(existingRelation => isSameRelation(existingRelation, r)) &&
+      // Also skip duplicates appearing earlier in this same batch
+      !relations.slice(0, index).some(earlier => isSameRelation(earlier, r))
+    );
     graph.relations.push(...newRelations);
     await this.saveGraph(graph);
     return newRelations;
