@@ -158,6 +158,27 @@ export async function readFileContent(filePath: string, encoding: string = 'utf-
   return await fs.readFile(filePath, encoding as BufferEncoding);
 }
 
+/**
+ * Atomically replaces a file by renaming a temporary file over it.
+ * On Windows, fs.rename() fails with EPERM when the target file is locked
+ * by another process (e.g., open in an editor). This function falls back
+ * to fs.cp() + fs.unlink() which can overwrite locked files.
+ */
+async function atomicReplaceFile(tempPath: string, targetPath: string): Promise<void> {
+  try {
+    await fs.rename(tempPath, targetPath);
+  } catch (error) {
+    // On Windows, rename fails with EPERM if target file is locked by another process
+    if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+      // Fallback: copy over the locked file, then remove temp file
+      await fs.cp(tempPath, targetPath, { force: true });
+      await fs.unlink(tempPath);
+    } else {
+      throw error;
+    }
+  }
+}
+
 export async function writeFileContent(filePath: string, content: string): Promise<void> {
   try {
     // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
@@ -171,12 +192,12 @@ export async function writeFileContent(filePath: string, content: string): Promi
       const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
       try {
         await fs.writeFile(tempPath, content, 'utf-8');
-        await fs.rename(tempPath, filePath);
-      } catch (renameError) {
+        await atomicReplaceFile(tempPath, filePath);
+      } catch (replaceError) {
         try {
           await fs.unlink(tempPath);
         } catch {}
-        throw renameError;
+        throw replaceError;
       }
     } else {
       throw error;
@@ -269,7 +290,7 @@ export async function applyFileEdits(
     const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
     try {
       await fs.writeFile(tempPath, modifiedContent, 'utf-8');
-      await fs.rename(tempPath, filePath);
+      await atomicReplaceFile(tempPath, filePath);
     } catch (error) {
       try {
         await fs.unlink(tempPath);
