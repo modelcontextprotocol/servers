@@ -45,7 +45,10 @@ if (args.length === 0) {
 let allowedDirectories = (await Promise.all(
   args.map(async (dir) => {
     const expanded = expandHome(dir);
-    const absolute = path.resolve(expanded);
+    // UNC-aware: path.resolve corrupts UNC paths (\\server\share becomes
+    // C:\server\share on Windows). Skip it for UNC paths and let normalizePath
+    // handle them. Same fix applied in lib.ts validatePath.
+    const absolute = expanded.startsWith('\\\\') ? expanded : path.resolve(expanded);
     const normalizedOriginal = normalizePath(absolute);
     try {
       // Security: Resolve symlinks in allowed directories during startup
