@@ -160,6 +160,7 @@ This project is licensed under the Apache License, Version 2.0 for new contribut
 ## 💬 Community
 
 - [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
+- [M2MCent](https://m2mcent.com) - A high-performance payment facilitator for MCP servers on Base L2, enabling atomic USDC micropayments via x402 protocol. (SDK: [m2mcent-sdk](https://github.com/Evozim/m2mcent-sdk))
 
 ## ⭐ Support
 
