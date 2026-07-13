@@ -167,4 +167,4 @@ If you find MCP servers useful, please consider starring the repository and cont
 
 ---
 
-Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvements!
+Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvement.
