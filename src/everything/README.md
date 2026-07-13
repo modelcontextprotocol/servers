@@ -93,6 +93,12 @@ On Windows, use:
 }
 ```
 
+### Usage with Codex CLI
+
+```bash
+codex mcp add everything -- npx -y @modelcontextprotocol/server-everything
+```
+
 ## Running from source with [HTTP+SSE Transport](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#http-with-sse) (deprecated as of [2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports))
 
 ```shell
