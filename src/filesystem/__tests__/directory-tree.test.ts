@@ -14,7 +14,7 @@ interface TreeEntry {
 }
 
 async function buildTreeForTesting(currentPath: string, rootPath: string, excludePatterns: string[] = []): Promise<TreeEntry[]> {
-    const entries = await fs.readdir(currentPath, {withFileTypes: true});
+    const entries = (await fs.readdir(currentPath, {withFileTypes: true})).sort((a, b) => a.name.localeCompare(b.name));
     const result: TreeEntry[] = [];
 
     for (const entry of entries) {
@@ -137,11 +137,58 @@ describe('buildTree exclude patterns', () => {
     it('should handle empty exclude patterns', async () => {
         const tree = await buildTreeForTesting(testDir, testDir, []);
         const entryNames = tree.map(entry => entry.name);
-        
+
         // All entries should be included
         expect(entryNames).toContain('node_modules');
         expect(entryNames).toContain('.env');
         expect(entryNames).toContain('.git');
         expect(entryNames).toContain('src');
+    });
+});
+
+describe('buildTree ordering', () => {
+    let testDir: string;
+
+    beforeEach(async () => {
+        testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'filesystem-order-test-'));
+
+        // Create entries whose lexicographic order differs from typical filesystem insertion order
+        await fs.writeFile(path.join(testDir, 'zebra.txt'), '');
+        await fs.mkdir(path.join(testDir, 'alpha'));
+        await fs.writeFile(path.join(testDir, 'mango.txt'), '');
+        await fs.mkdir(path.join(testDir, 'beta'));
+        await fs.writeFile(path.join(testDir, 'apple.txt'), '');
+        await fs.writeFile(path.join(testDir, 'alpha', 'z.txt'), '');
+        await fs.writeFile(path.join(testDir, 'alpha', 'a.txt'), '');
+    });
+
+    afterEach(async () => {
+        await fs.rm(testDir, { recursive: true, force: true });
+    });
+
+    it('should return siblings in stable lexicographic order', async () => {
+        const tree = await buildTreeForTesting(testDir, testDir);
+        const names = tree.map(e => e.name);
+
+        for (let i = 0; i < names.length - 1; i++) {
+            expect(names[i].localeCompare(names[i + 1])).toBeLessThanOrEqual(0);
+        }
+    });
+
+    it('should return nested siblings in stable lexicographic order', async () => {
+        const tree = await buildTreeForTesting(testDir, testDir);
+        const alphaDir = tree.find(e => e.name === 'alpha');
+        expect(alphaDir).toBeDefined();
+        const childNames = alphaDir!.children!.map(e => e.name);
+
+        for (let i = 0; i < childNames.length - 1; i++) {
+            expect(childNames[i].localeCompare(childNames[i + 1])).toBeLessThanOrEqual(0);
+        }
+    });
+
+    it('should produce identical output on repeated calls', async () => {
+        const tree1 = await buildTreeForTesting(testDir, testDir);
+        const tree2 = await buildTreeForTesting(testDir, testDir);
+        expect(JSON.stringify(tree1)).toBe(JSON.stringify(tree2));
     });
 });
