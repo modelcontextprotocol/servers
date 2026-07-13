@@ -7,6 +7,11 @@ import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
+
+const _dirname = path.dirname(fileURLToPath(import.meta.url));
+const pkgPath = path.join(_dirname, path.basename(_dirname) === 'dist' ? '../package.json' : 'package.json');
+const packageJson = JSON.parse(readFileSync(pkgPath, 'utf-8'));
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
@@ -256,7 +261,7 @@ const RelationSchema = z.object({
 // The server instance and tools exposed to Claude
 const server = new McpServer({
   name: "memory-server",
-  version: "0.6.3",
+  version: packageJson.version,
 });
 
 const RESOURCE_URI = "memory://knowledge-graph";
