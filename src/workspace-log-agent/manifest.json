@@ -1,0 +1,14 @@
+{
+  "name": "workspace-log-agent",
+  "description": "An AI-powered local workspace log and task manager for developer project lists via JSON state stores.",
+  "runtime": "python",
+  "transport": "stdio",
+  "source": {
+    "type": "git",
+    "url": "https://github.com/GARVITBHARDWAJ/mcp-workspace-agent"
+  },
+  "install": {
+    "command": "uvx",
+    "args": ["mcp-workspace-agent"]
+  }
+}
