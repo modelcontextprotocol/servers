@@ -1,9 +1,7 @@
-name: Automatic Release Creation
+name: Release
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 10 * * *'
 
 jobs:
   create-metadata:
@@ -138,6 +136,15 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: uv run --frozen pyright
 
+      - name: Run tests
+        working-directory: src/${{ matrix.package }}
+        run: |
+          if [ -d "tests" ] || [ -d "test" ]; then
+            uv run --frozen pytest
+          else
+            echo "No tests directory, skipping"
+          fi
+
       - name: Build package
         working-directory: src/${{ matrix.package }}
         run: uv build
@@ -146,6 +153,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: src/${{ matrix.package }}/dist
+          skip-existing: true # re-runs tolerate already-uploaded files
 
   publish-npm:
     needs: [update-packages, create-metadata]
@@ -156,6 +164,9 @@ jobs:
         package: ${{ fromJson(needs.create-metadata.outputs.npm_packages) }}
     name: Build ${{ matrix.package }}
     environment: release
+    permissions:
+      contents: read
+      id-token: write # Required for npm trusted publishing (OIDC)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -167,6 +178,10 @@ jobs:
           node-version: 22
           cache: npm
           registry-url: 'https://registry.npmjs.org'
+
+      # OIDC trusted publishing requires npm >=11.5.1; Node 22's bundled npm is 10.x.
+      - name: Ensure npm CLI supports OIDC trusted publishing
+        run: npm install -g npm@^11.5.1
 
       - name: Install dependencies
         working-directory: src/${{ matrix.package }}
@@ -182,16 +197,22 @@ jobs:
           fi
           echo "Version $VERSION is new, proceeding with publish"
 
+      - name: Run tests
+        working-directory: src/${{ matrix.package }}
+        run: npm test --if-present
+
       - name: Build package
         working-directory: src/${{ matrix.package }}
         run: npm run build
 
+      # Authenticates via OIDC trusted publishing (no token) — each package's
+      # npm trusted publisher is bound to this workflow + the release environment
       - name: Publish package
         working-directory: src/${{ matrix.package }}
         run: |
           npm publish --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
 
   create-release:
     needs: [update-packages, create-metadata, publish-pypi, publish-npm]
