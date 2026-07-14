@@ -4,6 +4,8 @@
 
 A Model Context Protocol server that provides time and timezone conversion capabilities. This server enables LLMs to get current time information and perform timezone conversions using IANA timezone names, with automatic system timezone detection.
 
+Source: https://github.com/modelcontextprotocol/servers/tree/main/src/time
+
 ### Available Tools
 
 - `get_current_time` - Get current time in a specific timezone or system timezone.
