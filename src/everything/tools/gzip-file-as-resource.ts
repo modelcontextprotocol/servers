@@ -272,14 +272,44 @@ function isBlockedIpv6(ip: string): boolean {
 }
 
 /**
+ * Rejects as soon as `signal` aborts so an awaited operation that does not
+ * itself honor the AbortSignal (e.g. DNS resolution via dns/promises.lookup)
+ * still respects the overall fetch timeout instead of hanging past it.
+ */
+function withAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+  message: string
+): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new Error(message));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error(message));
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      }
+    );
+  });
+}
+
+/**
  * Resolves a URL's host and throws if any resolved address is a non-public
  * (loopback/private/link-local/metadata) IP, to prevent SSRF. Only http/https
  * URLs are checked; other schemes (e.g. data:) are left to the caller.
  *
  * @param {URL} url The URL whose destination host should be validated.
+ * @param {AbortSignal} [signal] Abort signal that also bounds DNS resolution to
+ *   the caller's timeout.
  * @throws {Error} If the host resolves to a blocked address or cannot be resolved.
  */
-async function assertPublicHost(url: URL): Promise<void> {
+async function assertPublicHost(url: URL, signal?: AbortSignal): Promise<void> {
   // url.hostname keeps brackets around IPv6 literals; strip them.
   const host = url.hostname.replace(/^\[|\]$/g, "");
 
@@ -287,7 +317,11 @@ async function assertPublicHost(url: URL): Promise<void> {
   if (isIP(host)) {
     addresses = [host];
   } else {
-    const resolved = await lookup(host, { all: true });
+    const resolved = await withAbort(
+      lookup(host, { all: true }),
+      signal,
+      `Timed out resolving host ${host} for ${url}.`
+    );
     addresses = resolved.map((r) => r.address);
     if (addresses.length === 0) {
       throw new Error(`Could not resolve host ${host} for ${url}`);
@@ -405,7 +439,7 @@ async function fetchWithGuardedRedirects(
   let current = url;
   for (let hop = 0; hop <= GZIP_MAX_REDIRECTS; hop++) {
     if (current.protocol === "http:" || current.protocol === "https:") {
-      await assertPublicHost(current);
+      await assertPublicHost(current, signal);
     }
 
     const response = await fetch(current, { signal, redirect: "manual" });

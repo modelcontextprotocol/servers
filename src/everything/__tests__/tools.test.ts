@@ -1254,5 +1254,47 @@ describe('Tools', () => {
         ).rejects.toThrow(/SSRF protection/);
       });
     }
+
+    it('should re-validate redirects and refuse a public URL that redirects to a blocked IP', async () => {
+      const mockServer = {
+        registerTool: vi.fn(),
+        registerResource: vi.fn(),
+      } as unknown as McpServer;
+
+      let handler: Function | null = null;
+      (mockServer.registerTool as any).mockImplementation(
+        (name: string, config: any, h: Function) => {
+          handler = h;
+        }
+      );
+
+      registerGZipFileAsResourceTool(mockServer);
+
+      // First (public) hop responds with a redirect to the cloud-metadata IP.
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(null, {
+          status: 302,
+          headers: { location: 'http://169.254.169.254/latest/meta-data/' },
+        })
+      );
+
+      try {
+        await expect(
+          handler!({
+            name: 'test.gz',
+            // Public IP literal so the first hop needs no DNS resolution.
+            data: 'http://93.184.216.34/',
+            outputType: 'resource',
+          })
+        ).rejects.toThrow(/SSRF protection/);
+
+        // The blocked redirect target must be rejected before any request is
+        // made to it: only the initial public URL was fetched.
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        expect(String(fetchSpy.mock.calls[0][0])).toBe('http://93.184.216.34/');
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
   });
 });
