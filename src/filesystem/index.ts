@@ -21,6 +21,8 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
+  appendFileContent,
+  createOrAppendFileContent,
   searchFilesWithValidation,
   applyFileEdits,
   tailFile,
@@ -110,10 +112,13 @@ const ReadMultipleFilesArgsSchema = z.object({
     .describe("Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories."),
 });
 
-const WriteFileArgsSchema = z.object({
+const PathContentArgsSchema = z.object({
   path: z.string(),
   content: z.string(),
 });
+const WriteFileArgsSchema = PathContentArgsSchema;
+const AppendFileArgsSchema = PathContentArgsSchema;
+const CreateOrAppendFileArgsSchema = PathContentArgsSchema;
 
 const EditOperation = z.object({
   oldText: z.string().describe('Text to search for - must match exactly'),
@@ -376,6 +381,66 @@ server.registerTool(
     return {
       content: [{ type: "text" as const, text }],
       structuredContent: { content: text }
+    };
+  }
+);
+
+server.registerTool(
+  "append_file",
+  {
+    title: "Append File",
+    description:
+      "Append content to the end of an existing file. This operation adds new content " +
+      "to the file without modifying existing content. The file must already exist - " +
+      "use write_file to create new files or create_or_append_file to create or append. " +
+      "Only works within allowed directories.",
+    inputSchema: {
+      path: z.string(),
+      content: z.string()
+    },
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false }
+  },
+  async (args: z.infer<typeof AppendFileArgsSchema>) => {
+    const validPath = await validatePath(args.path);
+    await appendFileContent(validPath, args.content);
+    const text = `Successfully appended content to ${args.path}`;
+    return {
+      content: [{ type: "text" as const, text }],
+      structuredContent: { content: text }
+    };
+  }
+);
+
+server.registerTool(
+  "create_or_append_file",
+  {
+    title: "Create or Append File",
+    description:
+      "Create a new file with content, or append to an existing file. If the file " +
+      "does not exist, it will be created with the provided content. If the file " +
+      "already exists, the new content will be appended to the end without overwriting " +
+      "existing content. This is useful when you want to add content to a file but " +
+      "preserve existing data. Only works within allowed directories.",
+    inputSchema: {
+      path: z.string(),
+      content: z.string()
+    },
+    outputSchema: { content: z.string() },
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false }
+  },
+  async (args: z.infer<typeof CreateOrAppendFileArgsSchema>) => {
+    const validPath = await validatePath(args.path);
+    const existed = await fs.access(validPath).then(() => true).catch(() => false);
+    await createOrAppendFileContent(validPath, args.content);
+
+    const message = existed
+      ? `Successfully appended content to ${args.path}`
+      : `Successfully created ${args.path} with content`;
+
+    return {
+      content: [{ type: "text" as const, text: message }],
+      structuredContent: { content: message }
     };
   }
 );
