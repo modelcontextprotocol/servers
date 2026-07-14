@@ -437,7 +437,7 @@ async function fetchWithGuardedRedirects(
   signal: AbortSignal
 ): Promise<Response> {
   let current = url;
-  for (let hop = 0; hop <= GZIP_MAX_REDIRECTS; hop++) {
+  for (let redirects = 0; ; redirects++) {
     if (current.protocol === "http:" || current.protocol === "https:") {
       await assertPublicHost(current, signal);
     }
@@ -452,6 +452,14 @@ async function fetchWithGuardedRedirects(
       return response;
     }
 
+    // Enforce the limit before following (and re-validating) another hop, so
+    // we never resolve or fetch a redirect target beyond GZIP_MAX_REDIRECTS.
+    if (redirects >= GZIP_MAX_REDIRECTS) {
+      throw new Error(
+        `Too many redirects while fetching ${url} (max ${GZIP_MAX_REDIRECTS}).`
+      );
+    }
+
     const next = new URL(response.headers.get("location")!, current);
     if (next.protocol !== "http:" && next.protocol !== "https:") {
       throw new Error(
@@ -460,8 +468,4 @@ async function fetchWithGuardedRedirects(
     }
     current = next;
   }
-
-  throw new Error(
-    `Too many redirects while fetching ${url} (max ${GZIP_MAX_REDIRECTS}).`
-  );
 }
