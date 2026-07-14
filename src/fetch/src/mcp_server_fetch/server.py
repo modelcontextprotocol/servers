@@ -139,10 +139,21 @@ async def _resolve_host_ips(
 
     ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
     for info in infos:
+        # Strip any IPv6 zone/scope id (e.g. "fe80::1%eth0") before parsing so
+        # scoped addresses are still classified rather than silently skipped.
+        addr = info[4][0].split("%", 1)[0]
         try:
-            ips.append(ipaddress.ip_address(info[4][0]))
+            ips.append(ipaddress.ip_address(addr))
         except ValueError:
             continue
+
+    # Fail closed: if resolution produced no address we could parse and
+    # classify, refuse rather than fall through to an empty (allow-all) check.
+    if not ips:
+        raise McpError(ErrorData(
+            code=INTERNAL_ERROR,
+            message=f"Failed to resolve host {host} to a usable IP address.",
+        ))
     return ips
 
 

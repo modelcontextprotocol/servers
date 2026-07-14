@@ -1,5 +1,7 @@
 """Tests for the fetch MCP server."""
 
+import asyncio
+
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from mcp.shared.exceptions import McpError
@@ -428,3 +430,51 @@ class TestValidateUrlIsSafe:
                 allow_internal_ips=True,
             )
             assert content == "internal"
+
+    @pytest.mark.asyncio
+    async def test_blocks_redirect_from_public_to_internal_ip(self):
+        """A public URL that redirects to an internal/metadata IP is rejected
+        at the redirect hop, before the internal host is ever fetched."""
+        redirect_response = MagicMock()
+        redirect_response.status_code = 302
+        redirect_response.headers = {
+            "location": "http://169.254.169.254/latest/meta-data/"
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=redirect_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with pytest.raises(McpError):
+                await fetch_url(
+                    "http://1.1.1.1/redirect",
+                    DEFAULT_USER_AGENT_AUTONOMOUS,
+                )
+
+            # Only the initial public URL should have been requested; the
+            # internal redirect target must be blocked before any fetch.
+            assert mock_client.get.await_count == 1
+            assert mock_client.get.await_args_list[0].args[0] == "http://1.1.1.1/redirect"
+
+    @pytest.mark.asyncio
+    async def test_strips_ipv6_zone_id_and_blocks_link_local(self):
+        """A resolved IPv6 address carrying a zone id (fe80::1%eth0) must have
+        the zone stripped and still be classified as link-local (blocked),
+        not silently skipped."""
+        loop = asyncio.get_running_loop()
+        fake = [(0, 0, 0, "", ("fe80::1%eth0", 80, 0, 3))]
+        with patch.object(loop, "getaddrinfo", new=AsyncMock(return_value=fake)):
+            with pytest.raises(McpError):
+                await _validate_url_is_safe("http://router.local/")
+
+    @pytest.mark.asyncio
+    async def test_fails_closed_when_no_resolved_ip_parses(self):
+        """If resolution yields no address we can parse, fail closed rather than
+        fall through to an empty (allow-all) IP check."""
+        loop = asyncio.get_running_loop()
+        fake = [(0, 0, 0, "", ("not-an-ip-at-all", 80, 0, 0))]
+        with patch.object(loop, "getaddrinfo", new=AsyncMock(return_value=fake)):
+            with pytest.raises(McpError):
+                await _validate_url_is_safe("http://weird.example/")
