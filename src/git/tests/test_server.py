@@ -234,6 +234,38 @@ def test_git_log_default(test_repository):
     assert len(result) >= 1
     assert "initial commit" in result[0]
 
+def test_git_log_with_timestamp_filter(test_repository):
+    """Date-filtered git_log must map fields correctly for every commit, not
+    just the first. Regression for a trailing ``%n`` in the pretty-format that
+    emitted a blank line per commit, shifting every commit after the first by
+    one field (the hash showed up under ``Author:``, the date under
+    ``Message:``, and a commit could be dropped)."""
+    for i in range(3):
+        file_path = Path(test_repository.working_dir) / f"ts_log_{i}.txt"
+        file_path.write_text(f"content {i}")
+        test_repository.index.add([f"ts_log_{i}.txt"])
+        test_repository.index.commit(f"timestamped commit {i}")
+
+    # initial commit + 3 new commits all fall after this floor
+    result = git_log(test_repository, max_count=10, start_timestamp="2000-01-01")
+
+    assert isinstance(result, list)
+    assert len(result) == 4
+
+    messages = []
+    for entry in result:
+        lines = entry.splitlines()
+        assert lines[0].startswith("Commit: ")
+        assert lines[1].startswith("Author: ")
+        assert lines[2].startswith("Date: ")
+        assert lines[3].startswith("Message: ")
+        messages.append(lines[3][len("Message: "):])
+
+    # Under the bug these messages land in the wrong field for commits 2..n.
+    assert "timestamped commit 2" in messages
+    assert "timestamped commit 1" in messages
+    assert "initial commit" in messages
+
 def test_git_create_branch(test_repository):
     result = git_create_branch(test_repository, "new-feature-branch")
 
