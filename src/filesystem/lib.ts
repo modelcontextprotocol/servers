@@ -145,16 +145,17 @@ export async function validatePath(requestedPath: string): Promise<string> {
  *
  * Uses `fs.rename` for an atomic swap when possible. On Windows, rename can
  * fail with `EPERM` when the target is held open by another process (e.g.
- * VS Code) *provided* that process opened the file with `FILE_SHARE_DELETE`.
- * In that case the function falls back to `fs.cp` + best-effort `fs.unlink`.
+ * VS Code). In that case the function first overwrites the target in place,
+ * avoiding the destination unlink performed by `fs.cp({ force: true })`.
+ * If direct overwrite is also blocked, it falls back to `fs.cp`.
  *
  * **Limitations:**
- * - The `fs.cp` fallback is *not* atomic — there is a brief window between
- *   the internal `unlink(dest)` and `copyFile(src, dest)` performed by
- *   `fs.cp({ force: true })`.
- * - The fallback only succeeds when the locking process uses
- *   `FILE_SHARE_DELETE`. Editors that lock without this flag will still
- *   produce an `EPERM` error.
+ * - Direct overwrite requires the locking process to share write access.
+ * - The `fs.cp` fallback requires delete sharing and is *not* atomic: there
+ *   is a brief symlink race window between its internal `unlink(dest)` and
+ *   `copyFile(src, dest)`.
+ * - Editors that grant neither write nor delete sharing still produce an
+ *   error.
  *
  * @param tempPath  Path to the temporary file that contains the new content.
  * @param targetPath  Path to the destination file to be replaced.
@@ -170,12 +171,16 @@ async function replaceFileFromTemp(tempPath: string, targetPath: string): Promis
     await fs.rename(tempPath, targetPath);
   } catch (renameError) {
     if ((renameError as NodeJS.ErrnoException).code === 'EPERM') {
-      // Fallback: copy then best-effort cleanup
       try {
-        await fs.cp(tempPath, targetPath, { force: true });
-      } catch (copyError) {
-        await cleanupTempFile(tempPath);
-        throw copyError;
+        const content = await fs.readFile(tempPath);
+        await fs.writeFile(targetPath, content);
+      } catch {
+        try {
+          await fs.cp(tempPath, targetPath, { force: true });
+        } catch (copyError) {
+          await cleanupTempFile(tempPath);
+          throw copyError;
+        }
       }
       await cleanupTempFile(tempPath);
     } else {
@@ -211,9 +216,8 @@ export async function writeFileContent(filePath: string, content: string): Promi
     await fs.writeFile(filePath, content, { encoding: "utf-8", flag: 'wx' });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      // Security: Use atomic rename to prevent race conditions where symlinks
-      // could be created between validation and write. Rename operations
-      // replace the target file atomically and don't follow symlinks.
+      // Prefer atomic rename; replaceFileFromTemp documents the Windows
+      // locked-file fallbacks and their security tradeoffs.
       const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
       try {
         await fs.writeFile(tempPath, content, 'utf-8');
@@ -307,9 +311,8 @@ export async function applyFileEdits(
   const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
 
   if (!dryRun) {
-    // Security: Use atomic rename to prevent race conditions where symlinks
-    // could be created between validation and write. Rename operations
-    // replace the target file atomically and don't follow symlinks.
+    // Prefer atomic rename; replaceFileFromTemp documents the Windows
+    // locked-file fallbacks and their security tradeoffs.
     const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
     try {
       await fs.writeFile(tempPath, modifiedContent, 'utf-8');
