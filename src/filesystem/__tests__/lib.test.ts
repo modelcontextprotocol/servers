@@ -308,6 +308,126 @@ describe('Lib Functions', () => {
         
         expect(mockFs.writeFile).toHaveBeenCalledWith('/test/file.txt', 'new content', { encoding: "utf-8", flag: 'wx' });
       });
+
+      it('uses direct overwrite before the symlink-unsafe fs.cp fallback', async () => {
+        const eexistError = new Error('EEXIST') as NodeJS.ErrnoException;
+        eexistError.code = 'EEXIST';
+        const epermError = new Error('EPERM') as NodeJS.ErrnoException;
+        epermError.code = 'EPERM';
+
+        mockFs.writeFile
+          .mockRejectedValueOnce(eexistError)   // First write fails (file exists)
+          .mockResolvedValueOnce(undefined)      // Temp file write succeeds
+          .mockResolvedValueOnce(undefined);     // Direct overwrite succeeds
+        mockFs.rename.mockRejectedValueOnce(epermError);  // Rename fails (locked)
+        mockFs.readFile.mockResolvedValueOnce(Buffer.from('new content'));
+        mockFs.unlink.mockResolvedValueOnce(undefined);   // Temp cleanup succeeds
+
+        await writeFileContent('/test/file.txt', 'new content');
+
+        expect(mockFs.rename).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          '/test/file.txt'
+        );
+        expect(mockFs.readFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/)
+        );
+        expect(mockFs.writeFile).toHaveBeenLastCalledWith(
+          '/test/file.txt',
+          Buffer.from('new content')
+        );
+        expect(mockFs.cp).not.toHaveBeenCalled();
+        expect(mockFs.unlink).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+        );
+      });
+
+      it('falls back to fs.cp when direct overwrite fails', async () => {
+        const eexistError = new Error('EEXIST') as NodeJS.ErrnoException;
+        eexistError.code = 'EEXIST';
+        const epermError = new Error('EPERM') as NodeJS.ErrnoException;
+        epermError.code = 'EPERM';
+        const ebusyWriteError = new Error('EBUSY') as NodeJS.ErrnoException;
+        ebusyWriteError.code = 'EBUSY';
+        const ebusyError = new Error('EBUSY') as NodeJS.ErrnoException;
+        ebusyError.code = 'EBUSY';
+
+        mockFs.writeFile
+          .mockRejectedValueOnce(eexistError)
+          .mockResolvedValueOnce(undefined)
+          .mockRejectedValueOnce(ebusyWriteError);
+        mockFs.rename.mockRejectedValueOnce(epermError);
+        mockFs.readFile.mockResolvedValueOnce(Buffer.from('new content'));
+        mockFs.cp.mockResolvedValueOnce(undefined);
+        mockFs.unlink.mockRejectedValueOnce(ebusyError);   // Temp cleanup fails (e.g. antivirus)
+
+        // Should NOT throw — the target file was written successfully
+        await expect(writeFileContent('/test/file.txt', 'new content'))
+          .resolves.toBeUndefined();
+
+        expect(mockFs.readFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/)
+        );
+        expect(mockFs.writeFile).toHaveBeenLastCalledWith(
+          '/test/file.txt',
+          Buffer.from('new content')
+        );
+        expect(mockFs.cp).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          '/test/file.txt',
+          { force: true }
+        );
+      });
+
+      it('cleans up temp file and re-throws when fs.cp fails after EPERM', async () => {
+        const eexistError = new Error('EEXIST') as NodeJS.ErrnoException;
+        eexistError.code = 'EEXIST';
+        const epermError = new Error('EPERM') as NodeJS.ErrnoException;
+        epermError.code = 'EPERM';
+        const ebusyError = new Error('EBUSY') as NodeJS.ErrnoException;
+        ebusyError.code = 'EBUSY';
+        const enospcError = new Error('ENOSPC') as NodeJS.ErrnoException;
+        enospcError.code = 'ENOSPC';
+
+        mockFs.writeFile
+          .mockRejectedValueOnce(eexistError)
+          .mockResolvedValueOnce(undefined)
+          .mockRejectedValueOnce(ebusyError);
+        mockFs.rename.mockRejectedValueOnce(epermError);
+        mockFs.readFile.mockResolvedValueOnce(Buffer.from('new content'));
+        mockFs.cp.mockRejectedValueOnce(enospcError);
+        mockFs.unlink.mockResolvedValue(undefined);
+
+        await expect(writeFileContent('/test/file.txt', 'new content'))
+          .rejects.toThrow('ENOSPC');
+
+        expect(mockFs.writeFile).toHaveBeenLastCalledWith(
+          '/test/file.txt',
+          Buffer.from('new content')
+        );
+        expect(mockFs.unlink).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/)
+        );
+      });
+
+      it('cleans up temp file and re-throws when temp write fails', async () => {
+        const eexistError = new Error('EEXIST') as NodeJS.ErrnoException;
+        eexistError.code = 'EEXIST';
+        const enospcError = new Error('ENOSPC') as NodeJS.ErrnoException;
+        enospcError.code = 'ENOSPC';
+
+        mockFs.writeFile
+          .mockRejectedValueOnce(eexistError)
+          .mockRejectedValueOnce(enospcError);
+        mockFs.unlink.mockResolvedValue(undefined);
+
+        await expect(writeFileContent('/test/file.txt', 'new content'))
+          .rejects.toThrow('ENOSPC');
+
+        expect(mockFs.unlink).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/)
+        );
+      });
     });
 
   });
@@ -566,6 +686,98 @@ describe('Lib Functions', () => {
         expect(mockFs.rename).toHaveBeenCalledWith(
           expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
           '/test/file.js'
+        );
+      });
+
+      it('uses direct overwrite before the symlink-unsafe fs.cp fallback during file edit', async () => {
+        const epermError = new Error('EPERM') as NodeJS.ErrnoException;
+        epermError.code = 'EPERM';
+
+        mockFs.readFile
+          .mockResolvedValueOnce('line1\nline2\nline3\n')
+          .mockResolvedValueOnce(Buffer.from('line1\nmodified line2\nline3\n'));
+        mockFs.writeFile
+          .mockResolvedValueOnce(undefined)
+          .mockResolvedValueOnce(undefined);
+        mockFs.rename.mockRejectedValueOnce(epermError);
+        mockFs.unlink.mockResolvedValueOnce(undefined);
+
+        const edits = [{ oldText: 'line2', newText: 'modified line2' }];
+        const result = await applyFileEdits('/test/file.txt', edits, false);
+
+        // Should try rename, then overwrite in place without invoking fs.cp.
+        expect(mockFs.rename).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          '/test/file.txt'
+        );
+        expect(mockFs.readFile).toHaveBeenLastCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/)
+        );
+        expect(mockFs.writeFile).toHaveBeenLastCalledWith(
+          '/test/file.txt',
+          Buffer.from('line1\nmodified line2\nline3\n')
+        );
+        expect(mockFs.cp).not.toHaveBeenCalled();
+        expect(mockFs.unlink).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+        );
+        // Edit should still produce a valid diff
+        expect(result).toContain('modified line2');
+      });
+
+      it('falls back to fs.cp when direct overwrite fails during file edit', async () => {
+        const epermError = new Error('EPERM') as NodeJS.ErrnoException;
+        epermError.code = 'EPERM';
+        const ebusyWriteError = new Error('EBUSY') as NodeJS.ErrnoException;
+        ebusyWriteError.code = 'EBUSY';
+        const ebusyError = new Error('EBUSY') as NodeJS.ErrnoException;
+        ebusyError.code = 'EBUSY';
+
+        mockFs.readFile
+          .mockResolvedValueOnce('line1\nline2\nline3\n')
+          .mockResolvedValueOnce(Buffer.from('line1\nmodified line2\nline3\n'));
+        mockFs.writeFile
+          .mockResolvedValueOnce(undefined)
+          .mockRejectedValueOnce(ebusyWriteError);
+        mockFs.rename.mockRejectedValueOnce(epermError);
+        mockFs.cp.mockResolvedValueOnce(undefined);
+        mockFs.unlink.mockRejectedValueOnce(ebusyError);  // Temp cleanup fails
+
+        const edits = [{ oldText: 'line2', newText: 'modified line2' }];
+
+        // Should NOT throw — the target file was written successfully
+        const result = await applyFileEdits('/test/file.txt', edits, false);
+
+        expect(result).toContain('modified line2');
+        expect(mockFs.readFile).toHaveBeenLastCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/)
+        );
+        expect(mockFs.writeFile).toHaveBeenLastCalledWith(
+          '/test/file.txt',
+          Buffer.from('line1\nmodified line2\nline3\n')
+        );
+        expect(mockFs.cp).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          '/test/file.txt',
+          { force: true }
+        );
+      });
+
+      it('cleans up temp file and re-throws when temp write fails during file edit', async () => {
+        const enospcError = new Error('ENOSPC') as NodeJS.ErrnoException;
+        enospcError.code = 'ENOSPC';
+
+        mockFs.readFile.mockResolvedValue('line1\nline2\nline3\n');
+        mockFs.writeFile.mockRejectedValueOnce(enospcError);
+        mockFs.unlink.mockResolvedValue(undefined);
+
+        const edits = [{ oldText: 'line2', newText: 'modified line2' }];
+
+        await expect(applyFileEdits('/test/file.txt', edits, false))
+          .rejects.toThrow('ENOSPC');
+
+        expect(mockFs.unlink).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/)
         );
       });
 
