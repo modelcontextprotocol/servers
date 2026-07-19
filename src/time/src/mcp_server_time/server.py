@@ -165,7 +165,7 @@ async def serve(local_timezone: str | None = None) -> None:
                         },
                         "target_timezone": {
                             "type": "string",
-                            "description": f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use '{local_tz}' as local timezone if no target timezone provided by the user.",
+                            "description": f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/Los_Angeles'). Use '{local_tz}' as local timezone if no target timezone provided by the user.",
                         },
                     },
                     "required": ["source_timezone", "time", "target_timezone"],
