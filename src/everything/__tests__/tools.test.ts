@@ -20,6 +20,15 @@ import {
 import { registerGetRootsListTool } from '../tools/get-roots-list.js';
 import { registerGZipFileAsResourceTool } from '../tools/gzip-file-as-resource.js';
 import { registerSimulateResearchQueryTool } from '../tools/simulate-research-query.js';
+import { lookup } from 'node:dns/promises';
+
+// Mock DNS resolution so the gzip tool's hostname SSRF path can be exercised
+// without real network lookups. Defaults to the real implementation; tests
+// override per-call with mockResolvedValueOnce.
+vi.mock('node:dns/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:dns/promises')>();
+  return { ...actual, lookup: vi.fn(actual.lookup) };
+});
 
 // Helper to capture registered tool handlers
 function createMockServer() {
@@ -1295,6 +1304,65 @@ describe('Tools', () => {
       } finally {
         fetchSpy.mockRestore();
       }
+    });
+
+    it('should refuse a hostname that resolves to a blocked IP', async () => {
+      const mockServer = {
+        registerTool: vi.fn(),
+        registerResource: vi.fn(),
+      } as unknown as McpServer;
+
+      let handler: Function | null = null;
+      (mockServer.registerTool as any).mockImplementation(
+        (name: string, config: any, h: Function) => {
+          handler = h;
+        }
+      );
+
+      registerGZipFileAsResourceTool(mockServer);
+
+      // Hostname (not an IP literal) resolves to the cloud-metadata address.
+      vi.mocked(lookup).mockResolvedValueOnce([
+        { address: '169.254.169.254', family: 4 },
+      ] as any);
+
+      await expect(
+        handler!({
+          name: 'test.gz',
+          data: 'http://metadata.internal.example/',
+          outputType: 'resource',
+        })
+      ).rejects.toThrow(/SSRF protection/);
+    });
+
+    it('should refuse when any of several resolved addresses is blocked', async () => {
+      const mockServer = {
+        registerTool: vi.fn(),
+        registerResource: vi.fn(),
+      } as unknown as McpServer;
+
+      let handler: Function | null = null;
+      (mockServer.registerTool as any).mockImplementation(
+        (name: string, config: any, h: Function) => {
+          handler = h;
+        }
+      );
+
+      registerGZipFileAsResourceTool(mockServer);
+
+      // A public and a private address: the "any blocked" rule must reject.
+      vi.mocked(lookup).mockResolvedValueOnce([
+        { address: '93.184.216.34', family: 4 },
+        { address: '10.0.0.5', family: 4 },
+      ] as any);
+
+      await expect(
+        handler!({
+          name: 'test.gz',
+          data: 'http://mixed.example/',
+          outputType: 'resource',
+        })
+      ).rejects.toThrow(/SSRF protection/);
     });
   });
 });

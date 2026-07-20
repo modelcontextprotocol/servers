@@ -452,6 +452,11 @@ async function fetchWithGuardedRedirects(
       return response;
     }
 
+    // This redirect response is never returned to the caller, so drain its
+    // body to let undici release the socket instead of leaving it pinned
+    // across the redirect chain (a leak under load).
+    await response.body?.cancel();
+
     // Enforce the limit before following (and re-validating) another hop, so
     // we never resolve or fetch a redirect target beyond GZIP_MAX_REDIRECTS.
     if (redirects >= GZIP_MAX_REDIRECTS) {
