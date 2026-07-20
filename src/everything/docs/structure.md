@@ -151,6 +151,7 @@ src/everything
     - `GZIP_MAX_FETCH_SIZE` (bytes, default 10 MiB)
     - `GZIP_MAX_FETCH_TIME_MILLIS` (ms, default 30000)
     - `GZIP_ALLOWED_DOMAINS` (comma-separated allowlist; empty means all domains allowed)
+  - SSRF protection: loopback, private (RFC1918), link-local, and cloud-metadata IP addresses are always refused (and re-validated on every redirect hop), independent of `GZIP_ALLOWED_DOMAINS`.
 - `simulate-research-query.ts`
   - Registers a `simulate-research-query` task-based tool that demonstrates the MCP Tasks feature (SEP-1686). Simulates a multi-stage research operation with progress updates. If the query is marked as ambiguous and the client supports elicitation, it pauses mid-execution to request clarification via `elicitation/create`. Uses `server.experimental.tasks.registerToolTask()` with `execution: { taskSupport: "required" }`.
 - `trigger-elicitation-request.ts`
