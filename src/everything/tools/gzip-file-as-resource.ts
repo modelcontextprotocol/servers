@@ -317,11 +317,20 @@ async function assertPublicHost(url: URL, signal?: AbortSignal): Promise<void> {
   if (isIP(host)) {
     addresses = [host];
   } else {
-    const resolved = await withAbort(
-      lookup(host, { all: true }),
-      signal,
-      `Timed out resolving host ${host} for ${url}.`
-    );
+    let resolved;
+    try {
+      resolved = await withAbort(
+        lookup(host, { all: true }),
+        signal,
+        "DNS resolution timed out"
+      );
+    } catch (error) {
+      // Wrap raw Node lookup errors (ENOTFOUND/EAI_AGAIN, or the timeout
+      // above) so the failure carries host + URL context and matches the
+      // tool's other error messages.
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Could not resolve host ${host} for ${url}: ${message}`);
+    }
     addresses = resolved.map((r) => r.address);
     if (addresses.length === 0) {
       throw new Error(`Could not resolve host ${host} for ${url}`);
