@@ -133,7 +133,7 @@ async def _resolve_host_ips(
         )
     except socket.gaierror as e:
         raise McpError(ErrorData(
-            code=INTERNAL_ERROR,
+            code=INVALID_PARAMS,
             message=f"Failed to resolve host {host}: {e}",
         ))
 
@@ -151,18 +151,19 @@ async def _resolve_host_ips(
     # classify, refuse rather than fall through to an empty (allow-all) check.
     if not ips:
         raise McpError(ErrorData(
-            code=INTERNAL_ERROR,
+            code=INVALID_PARAMS,
             message=f"Failed to resolve host {host} to a usable IP address.",
         ))
     return ips
 
 
-async def _validate_url_is_safe(url: str) -> None:
+async def _validate_url_is_safe(url: str, *, check_private_ips: bool = True) -> None:
     """Guard a URL against SSRF before it is fetched.
 
     Rejects non-http(s) schemes and any URL whose host resolves to a
-    non-public IP address. Servers started with --allow-internal-ips skip
-    this check entirely.
+    non-public IP address. The scheme (and host-presence) check is always
+    enforced; --allow-internal-ips only relaxes the private-IP check
+    (check_private_ips=False), so it never unlocks non-http(s) schemes.
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
@@ -177,6 +178,9 @@ async def _validate_url_is_safe(url: str) -> None:
             code=INVALID_PARAMS,
             message=f"Cannot fetch {url}: URL has no host.",
         ))
+
+    if not check_private_ips:
+        return
 
     for ip in await _resolve_host_ips(host, parsed.port, parsed.scheme):
         if _is_blocked_ip(ip):
@@ -208,27 +212,32 @@ async def _get_following_redirects(
     from httpx import URL
 
     current_url = url
-    for _ in range(MAX_REDIRECTS + 1):
-        if not allow_internal_ips:
-            await _validate_url_is_safe(current_url)
+    redirects = 0
+    while True:
+        # The scheme lock is always enforced; --allow-internal-ips only relaxes
+        # the private-IP check, so it can never unlock file:// et al.
+        await _validate_url_is_safe(
+            current_url, check_private_ips=not allow_internal_ips
+        )
         response = await client.get(
             current_url,
             follow_redirects=False,
             headers=headers,
             timeout=timeout,
         )
-        if response.status_code in REDIRECT_STATUS_CODES:
-            location = response.headers.get("location")
-            if not location:
-                return response
-            current_url = str(URL(current_url).join(location))
-            continue
-        return response
-
-    raise McpError(ErrorData(
-        code=INTERNAL_ERROR,
-        message=f"Cannot fetch {url}: exceeded the maximum of {MAX_REDIRECTS} redirects.",
-    ))
+        if response.status_code not in REDIRECT_STATUS_CODES:
+            return response
+        location = response.headers.get("location")
+        if not location:
+            return response
+        # Enforce the cap before following (and re-validating) the next hop.
+        if redirects >= MAX_REDIRECTS:
+            raise McpError(ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"Cannot fetch {url}: exceeded the maximum of {MAX_REDIRECTS} redirects.",
+            ))
+        redirects += 1
+        current_url = str(URL(current_url).join(location))
 
 
 async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url: str | None = None, allow_internal_ips: bool = False) -> None:

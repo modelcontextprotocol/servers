@@ -478,3 +478,22 @@ class TestValidateUrlIsSafe:
         with patch.object(loop, "getaddrinfo", new=AsyncMock(return_value=fake)):
             with pytest.raises(McpError):
                 await _validate_url_is_safe("http://weird.example/")
+
+    @pytest.mark.asyncio
+    async def test_allow_internal_ips_still_blocks_non_http_scheme(self):
+        """--allow-internal-ips relaxes only the private-IP check; the scheme
+        lock stays on, so file:// is still refused and no request is made."""
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock()
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with pytest.raises(McpError):
+                await fetch_url(
+                    "file:///etc/passwd",
+                    DEFAULT_USER_AGENT_AUTONOMOUS,
+                    allow_internal_ips=True,
+                )
+
+            mock_client.get.assert_not_called()
