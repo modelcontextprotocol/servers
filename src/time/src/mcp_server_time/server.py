@@ -32,12 +32,6 @@ class TimeConversionResult(BaseModel):
     time_difference: str
 
 
-class TimeConversionInput(BaseModel):
-    source_tz: str
-    time: str
-    target_tz_list: list[str]
-
-
 def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     if local_tz_override:
         return ZoneInfo(local_tz_override)
