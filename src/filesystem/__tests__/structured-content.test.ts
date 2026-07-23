@@ -122,6 +122,81 @@ describe('structuredContent schema compliance', () => {
       // The content should contain success message
       expect(structuredContent.content).toContain('Successfully moved');
     });
+
+    it('should reject an existing destination without replacing it', async () => {
+      const sourcePath = path.join(testDir, 'source.txt');
+      const destPath = path.join(testDir, 'existing.txt');
+      await fs.writeFile(sourcePath, 'source content');
+      await fs.writeFile(destPath, 'existing content');
+
+      const result = await client.callTool({
+        name: 'move_file',
+        arguments: {
+          source: sourcePath,
+          destination: destPath
+        }
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0]).toMatchObject({ type: 'text' });
+      expect((result.content[0] as { text: string }).text).toContain(
+        'Destination already exists'
+      );
+      await expect(fs.readFile(sourcePath, 'utf8')).resolves.toBe('source content');
+      await expect(fs.readFile(destPath, 'utf8')).resolves.toBe('existing content');
+    });
+
+    it('should move directories recursively without replacing an existing tree', async () => {
+      const sourcePath = path.join(testDir, 'source-dir');
+      const destPath = path.join(testDir, 'moved-dir');
+      await fs.mkdir(path.join(sourcePath, 'nested'), { recursive: true });
+      await fs.writeFile(path.join(sourcePath, 'nested', 'file.txt'), 'source content');
+
+      const result = await client.callTool({
+        name: 'move_file',
+        arguments: {
+          source: sourcePath,
+          destination: destPath
+        }
+      });
+
+      expect(result.isError).not.toBe(true);
+      await expect(fs.stat(sourcePath)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(
+        fs.readFile(path.join(destPath, 'nested', 'file.txt'), 'utf8')
+      ).resolves.toBe('source content');
+    });
+
+    it('should reject an existing directory destination without merging trees', async () => {
+      const sourcePath = path.join(testDir, 'source-dir');
+      const destPath = path.join(testDir, 'existing-dir');
+      await fs.mkdir(sourcePath);
+      await fs.mkdir(destPath);
+      await fs.writeFile(path.join(sourcePath, 'source.txt'), 'source content');
+      await fs.writeFile(path.join(destPath, 'existing.txt'), 'existing content');
+
+      const result = await client.callTool({
+        name: 'move_file',
+        arguments: {
+          source: sourcePath,
+          destination: destPath
+        }
+      });
+
+      expect(result.isError).toBe(true);
+      expect((result.content[0] as { text: string }).text).toContain(
+        'Destination already exists'
+      );
+      await expect(
+        fs.readFile(path.join(sourcePath, 'source.txt'), 'utf8')
+      ).resolves.toBe('source content');
+      await expect(
+        fs.readFile(path.join(destPath, 'existing.txt'), 'utf8')
+      ).resolves.toBe('existing content');
+      await expect(fs.stat(path.join(destPath, 'source.txt'))).rejects.toMatchObject({
+        code: 'ENOENT'
+      });
+    });
   });
 
   describe('list_directory (control - already working)', () => {
