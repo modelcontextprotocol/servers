@@ -39,6 +39,22 @@
 - Dynamic Text: `demo://resource/dynamic/text/{index}` (content generated on the fly)
 - Dynamic Blob: `demo://resource/dynamic/blob/{index}` (base64 payload generated on the fly)
 - Static Documents: `demo://resource/static/document/<filename>` (serves files from `src/everything/docs/` as static file-based resources)
+
+### Result caching (2026-07-28)
+
+The revision requires `ttlMs` and `cacheScope` on cacheable results. Values resolve
+most-specific-author-first: fields the handler puts on the result, then a
+per-registration `cacheHint`, then the server-level `ServerOptions.cacheHints`, then the
+conservative default (`ttlMs: 0`, `cacheScope: "private"`). These fields are emitted only
+toward modern-era clients — legacy responses are byte-for-byte unchanged.
+
+This server exercises two of those layers:
+
+| Surface                                                    | Hint                              | Why                                                       |
+| ---------------------------------------------------------- | --------------------------------- | --------------------------------------------------------- |
+| `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `server/discover` | server-level, 60s `public`        | static for the process lifetime and identical per caller  |
+| Static Documents (`resources/read`)                        | per-registration, 1h `public`     | ship inside the package; only change when it is rebuilt   |
+| Dynamic, Session Scoped (`resources/read`)                  | none — falls through to the default | generated per call, or scoped to one caller               |
 - Session Scoped: `demo://resource/session/<name>` (per-session resources registered dynamically; available only for the lifetime of the session)
 
 ## Resource Subscriptions and Notifications
