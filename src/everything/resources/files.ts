@@ -42,11 +42,30 @@ export const registerFileResources = (server: McpServer) => {
     const mimeType = getMimeType(name);
     const description = `Static document file exposed from /docs: ${name}`;
 
-    // Register file resource
+    // Register file resource.
+    //
+    // These are the one genuinely static surface this server exposes: the
+    // files ship inside the package and only change when it is rebuilt. So
+    // they carry a per-registration `cacheHint`, which wins over the
+    // server-level `cacheHints` for their own `resources/read` result.
+    //
+    // Cache fields resolve most-specific-author-first: fields the handler puts
+    // on the result, then this `cacheHint`, then `ServerOptions.cacheHints`,
+    // then the conservative default (`ttlMs: 0`, `cacheScope: "private"`).
+    // Without this, reads of these files would fall through to that default
+    // and never be cached. `public` is safe here because the content is
+    // identical for every caller -- unlike the dynamic and session-scoped
+    // resources, which deliberately carry no hint.
+    //
+    // Emitted only toward modern-era clients; legacy responses are unchanged.
     server.registerResource(
       name,
       uri,
-      { mimeType, description },
+      {
+        mimeType,
+        description,
+        cacheHint: { ttlMs: 3_600_000, cacheScope: "public" },
+      },
       async (uri) => {
         const text = readFileSafe(fullPath);
         return {
