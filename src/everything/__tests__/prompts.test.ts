@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from '@modelcontextprotocol/server';
 import { registerSimplePrompt } from '../prompts/simple.js';
 import { registerArgumentsPrompt } from '../prompts/args.js';
 import { registerPromptWithCompletions } from '../prompts/completions.js';

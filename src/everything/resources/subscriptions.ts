@@ -1,8 +1,5 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  SubscribeRequestSchema,
-  UnsubscribeRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { getNotifier } from "../server/notifier.js";
 
 // Track subscriber session id lists by URI
 const subscriptions: Map<string, Set<string | undefined>> = new Map<
@@ -36,13 +33,13 @@ const subsUpdateIntervals: Map<string | undefined, NodeJS.Timeout | undefined> =
 export const setSubscriptionHandlers = (server: McpServer) => {
   // Set the subscription handler
   server.server.setRequestHandler(
-    SubscribeRequestSchema,
-    async (request, extra) => {
+    "resources/subscribe",
+    async (request, ctx) => {
       // Get the URI to subscribe to
       const { uri } = request.params;
 
       // Get the session id (can be undefined for stdio)
-      const sessionId = extra.sessionId as string;
+      const sessionId = ctx.sessionId as string;
 
       // Acknowledge the subscribe request
       await server.sendLoggingMessage(
@@ -67,13 +64,13 @@ export const setSubscriptionHandlers = (server: McpServer) => {
 
   // Set the unsubscription handler
   server.server.setRequestHandler(
-    UnsubscribeRequestSchema,
-    async (request, extra) => {
+    "resources/unsubscribe",
+    async (request, ctx) => {
       // Get the URI to subscribe to
       const { uri } = request.params;
 
       // Get the session id (can be undefined for stdio)
-      const sessionId = extra.sessionId as string;
+      const sessionId = ctx.sessionId as string;
 
       // Acknowledge the subscribe request
       await server.sendLoggingMessage(
@@ -99,10 +96,16 @@ export const setSubscriptionHandlers = (server: McpServer) => {
 /**
  * Sends simulated resource update notifications to the subscribed client.
  *
- * This function iterates through all resource URIs stored in the subscriptions
- * and checks if the specified session ID is subscribed to them. If so, it sends
- * a notification through the provided server. If the session ID is no longer valid
- * (disconnected), it removes the session ID from the list of subscribers.
+ * Publishing goes through `getNotifier`, not the server instance directly, so
+ * the update reaches the client on both eras. On stdio the notifier calls the
+ * pinned instance and `serveStdio` routes it; over Streamable HTTP it publishes
+ * onto the handler's `subscriptions/listen` bus, which is the only path that
+ * works when every request is served by a fresh instance.
+ *
+ * The legacy-era `resources/subscribe` bookkeeping below is only consulted when a
+ * session exists. On a 2026-07-28 connection the client's `subscriptions/listen`
+ * filter decides who receives a `resources/updated`, so the notifier is called
+ * for every known URI and the bus does the filtering.
  *
  * @param {McpServer} server - The server instance used to send notifications.
  * @param {string | undefined} sessionId - The session ID of the client to check for subscriptions.
@@ -112,16 +115,15 @@ const sendSimulatedResourceUpdates = async (
   server: McpServer,
   sessionId: string | undefined
 ): Promise<void> => {
+  const notifier = getNotifier(server);
+
   // Search all URIs for ones this client is subscribed to
   for (const uri of subscriptions.keys()) {
     const subscribers = subscriptions.get(uri) as Set<string | undefined>;
 
     // If this client is subscribed, send the notification
     if (subscribers.has(sessionId)) {
-      await server.server.notification({
-        method: "notifications/resources/updated",
-        params: { uri },
-      });
+      notifier.resourceUpdated(uri);
     } else {
       subscribers.delete(sessionId); // subscriber has disconnected
     }

@@ -1,9 +1,18 @@
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { SSEServerTransport } from "@modelcontextprotocol/server-legacy/sse";
 import express from "express";
-import { createServer } from "../server/index.js";
 import cors from "cors";
+import { createServer, cleanupSession } from "../server/index.js";
 
-console.error("Starting SSE server...");
+/**
+ * The deprecated HTTP+SSE transport (protocol revision 2024-11-05).
+ *
+ * This transport is **legacy-era only** -- it predates Streamable HTTP and has no
+ * 2026-07-28 equivalent. It is served here from
+ * `@modelcontextprotocol/server-legacy`, a frozen copy of the v1 transport kept
+ * for migration only. New clients should use `streamableHttp`, which serves
+ * both eras from one endpoint.
+ */
+console.error("Starting SSE server (deprecated, legacy-era only)...");
 
 // Express app with permissive CORS for testing with Inspector direct connect mode
 const app = express();
@@ -25,7 +34,6 @@ const transports: Map<string, SSEServerTransport> = new Map<
 // Handle GET requests for new SSE streams
 app.get("/sse", async (req, res) => {
   let transport: SSEServerTransport;
-  const { server, cleanup } = createServer();
 
   // Session Id should not exist for GET /sse requests
   if (req?.query?.sessionId) {
@@ -36,6 +44,10 @@ app.get("/sse", async (req, res) => {
       transport.sessionId
     );
   } else {
+    // This transport only ever serves the legacy era, so the factory is built
+    // with an explicit legacy construction context.
+    const server = createServer({ era: "legacy" });
+
     // Create and store transport for the new session
     transport = new SSEServerTransport("/message", res);
     transports.set(transport.sessionId, transport);
@@ -50,7 +62,7 @@ app.get("/sse", async (req, res) => {
       const sessionId = transport.sessionId;
       console.error("Client Disconnected: ", sessionId);
       transports.delete(sessionId);
-      cleanup(sessionId);
+      cleanupSession(sessionId);
     };
   }
 });

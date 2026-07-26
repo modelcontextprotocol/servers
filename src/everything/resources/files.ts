@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { readdirSync, readFileSync, statSync } from "fs";

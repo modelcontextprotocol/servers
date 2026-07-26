@@ -12,6 +12,9 @@
     "url": "https://github.com/modelcontextprotocol/servers.git"
   },
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "mcp-server-everything": "dist/index.js"
   },
@@ -30,7 +33,10 @@
     "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/core": "2.0.0-beta.5",
+    "@modelcontextprotocol/node": "2.0.0-beta.5",
+    "@modelcontextprotocol/server": "2.0.0-beta.5",
+    "@modelcontextprotocol/server-legacy": "2.0.0-beta.5",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "jszip": "^3.10.1",

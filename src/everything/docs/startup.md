@@ -18,56 +18,74 @@
 
 ## 2. The Transport Manager
 
-- Creates a server instance using `createServer()` from `server/index.ts`
-  - Connects it to the chosen transport type from the MCP SDK.
-- Handles communication according to the MCP specs for the chosen transport.
-  - **STDIO**:
-    - One simple, process‑bound connection.
-    - Calls`clientConnect()` upon connection.
-    - Closes and calls `cleanup()` on `SIGINT`.
-  - **SSE**:
-    - Supports multiple client connections.
-    - Client transports are mapped to `sessionId`;
-    - Calls `clientConnect(sessionId)` upon connection.
-    - Hooks server’s `onclose` to clean and remove session.
-    - Exposes
-      - `/sse` **GET** (SSE stream)
-      - `/message` **POST** (JSON‑RPC messages)
-  - **Streamable HTTP**:
-    - Supports multiple client connections.
-    - Client transports are mapped to `sessionId`;
-    - Calls `clientConnect(sessionId)` upon connection.
-    - Exposes `/mcp` for
-      - **POST** (JSON‑RPC messages)
-      - **GET** (SSE stream)
-      - **DELETE** (termination)
-    - Uses an event store for resumability and stores transports by `sessionId`.
-    - Calls `cleanup(sessionId)` on **DELETE**.
+Each transport hands the **server factory itself** to an SDK serving entry, rather than
+constructing one server and connecting it to a transport. The entry decides which protocol
+era a given connection or request is on, and calls the factory to build an instance for it.
+
+- **STDIO** — `serveStdio(ctx => createServer(ctx))` from `@modelcontextprotocol/server/stdio`.
+  - Serves **both eras**. The opening exchange decides which: a `server/discover` probe
+    means 2026-07-28, an `initialize` handshake means the legacy era.
+  - One factory instance is pinned for the connection lifetime.
+  - Pass `{ legacy: "reject" }` to refuse legacy-era openings.
+  - Closes the handle and calls `cleanupSession()` on `SIGINT`.
+- **Streamable HTTP** — `createMcpHandler(ctx => createServer(ctx))` wrapped with
+  `toNodeHandler` from `@modelcontextprotocol/node`, mounted at `app.all("/mcp", …)`.
+  - Serves **both eras from one endpoint and one route**: 2026-07-28 per request, and — on
+    the default `legacy: "stateless"` posture — legacy traffic per request through the
+    stateless idiom. The handler classifies each request and routes it internally.
+  - A fresh instance is built per request. There is no session map, no `mcp-session-id`,
+    no event store, and no hand-rolled GET/DELETE routes: 2026-07-28 removed
+    protocol-level sessions and SSE resumability, and replaced the standalone GET
+    notification stream with `subscriptions/listen`, which the handler answers itself.
+  - `handler.notify` is registered as the change-notification bus at startup via
+    `setBusNotifier`.
+  - `handler.close()` on `SIGINT` aborts in-flight exchanges and sends the graceful-close
+    result on every open `subscriptions/listen` stream.
+- **SSE** — the deprecated HTTP+SSE transport (protocol revision 2024-11-05), served from
+  `@modelcontextprotocol/server-legacy`.
+  - **Legacy era only** — it predates Streamable HTTP and has no 2026-07-28 equivalent, so
+    it builds the factory with an explicit `{ era: "legacy" }` context.
+  - Supports multiple clients; transports are mapped by `sessionId`.
+  - Hooks the server's `onclose` to call `cleanupSession(sessionId)` and remove the session.
+  - Exposes `/sse` **GET** (SSE stream) and `/message` **POST** (JSON‑RPC messages).
 
 ## 3. The Server Factory
 
-- Invoke `createServer()` from `server/index.ts`
+- `createServer(ctx?)` from `server/index.ts`, called by the serving entry once per
+  serving unit — one HTTP request under `createMcpHandler`, one connection under
+  `serveStdio`.
+- `ctx` carries the `era` this instance will serve, plus (HTTP only) `authInfo` and
+  `requestInfo`. It does **not** carry client capabilities: those arrive per request in
+  `_meta` on the modern era.
 - Creates a new `McpServer` instance with
-  - **Capabilities**:
-    - `tools: {}`
-    - `logging: {}`
-    - `prompts: {}`
-    - `resources: { subscribe: true }`
-  - **Server Instructions**
-    - Loaded from the docs folder (`server-instructions.md`).
-  - **Registrations**
-    - Registers **tools** via `registerTools(server)`.
-    - Registers **resources** via `registerResources(server)`.
-    - Registers **prompts** via `registerPrompts(server)`.
-  - **Other Request Handlers**
-    - Sets up resource subscription handlers via `setSubscriptionHandlers(server)`.
-    - Roots list change handler is added post-connection via
-  - **Returns**
-    - The `McpServer` instance
-    - A `clientConnect(sessionId)` callback that enables post-connection setup
-    - A `cleanup(sessionId?)` callback that stops any active intervals and removes any session‑scoped state
+  - **Capabilities**: `tools: { listChanged }`, `prompts: { listChanged }`,
+    `resources: { subscribe, listChanged }`, `logging: {}`.
+  - **Server Instructions** — loaded from `docs/instructions.md`.
+  - **Cache hints** — real `ttlMs` / `cacheScope` for the cacheable list surfaces, instead
+    of the SDK's conservative `ttlMs: 0` / `private` default. Modern era only; these fields
+    never appear on legacy responses.
+  - **`requestState` verification** — `requestStateCodec.verify` is wired into
+    `ServerOptions.requestState`, so an echoed `requestState` is integrity-checked before
+    any handler runs.
+  - **Registrations** — `registerTools(server)`, `registerResources(server)`,
+    `registerPrompts(server)`. All tools register unconditionally; there is no longer a
+    capability-gated second pass.
+  - **Other Request Handlers** — `setSubscriptionHandlers(server)` installs the legacy-era
+    `resources/subscribe` / `resources/unsubscribe` handlers.
+  - **Legacy-only hook** — on a legacy-era instance, `oninitialized` schedules `syncRoots`
+    to pull `roots/list` after the handshake. 2026-07-28 has no handshake and no
+    server-to-client request channel, so on the modern era the `get-roots-list` tool asks
+    for roots via `inputRequired` instead.
+  - **Returns** the `McpServer` instance. Session teardown is a separate module-level
+    `cleanupSession(sessionId?)` export, since the factory's return value is now the
+    instance itself.
 
-## Enabling Multiple Clients
+## Sessions and Multiple Clients
 
-Some of the transport managers defined in the `transports` folder can support multiple clients.
-In order to do so, they must map certain data to a session identifier.
+The `sse` transport and legacy-era Streamable HTTP connections have sessions, and map
+per-client state to a session identifier.
+
+2026-07-28 removed protocol-level sessions entirely. Modern-era serving is per request and
+holds nothing between exchanges — cross-call state is carried in explicit, server-minted
+handles instead (`requestState` for multi-round flows; see
+[How It Works](how-it-works.md#multi-round-trip-requests)).
