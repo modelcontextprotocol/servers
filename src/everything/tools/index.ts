@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { registerGetAnnotatedMessageTool } from "./get-annotated-message.js";
 import { registerEchoTool } from "./echo.js";
 import { registerGetEnvTool } from "./get-env.js";
@@ -14,13 +14,24 @@ import { registerToggleSubscriberUpdatesTool } from "./toggle-subscriber-updates
 import { registerTriggerElicitationRequestTool } from "./trigger-elicitation-request.js";
 import { registerTriggerLongRunningOperationTool } from "./trigger-long-running-operation.js";
 import { registerTriggerSamplingRequestTool } from "./trigger-sampling-request.js";
-import { registerTriggerSamplingRequestAsyncTool } from "./trigger-sampling-request-async.js";
-import { registerTriggerElicitationRequestAsyncTool } from "./trigger-elicitation-request-async.js";
 import { registerSimulateResearchQueryTool } from "./simulate-research-query.js";
 import { registerTriggerUrlElicitationTool } from "./trigger-url-elicitation.js";
 
 /**
  * Register the tools with the MCP server.
+ *
+ * There is deliberately no second "conditional tools" pass here any more. The
+ * old split existed because the tools that need elicitation / sampling / roots
+ * had to wait for the `initialize` handshake to learn the client's
+ * capabilities. 2026-07-28 has no handshake, and it does not need one: those
+ * tools now *return* `inputRequired(...)`, and the SDK refuses an embedded
+ * request with `-32021 MissingRequiredClientCapabilityError` at dispatch when
+ * the caller never declared the capability. That gate runs on both eras, so
+ * every tool can be registered up front, unconditionally.
+ *
+ * Tools listed here are era-agnostic: each is written once and served to 2025-
+ * and modern-era clients alike.
+ *
  * @param server
  */
 export const registerTools = (server: McpServer) => {
@@ -29,27 +40,16 @@ export const registerTools = (server: McpServer) => {
   registerGetEnvTool(server);
   registerGetResourceLinksTool(server);
   registerGetResourceReferenceTool(server);
+  registerGetRootsListTool(server);
   registerGetStructuredContentTool(server);
   registerGetSumTool(server);
   registerGetTinyImageTool(server);
   registerGZipFileAsResourceTool(server);
+  registerSimulateResearchQueryTool(server);
   registerToggleSimulatedLoggingTool(server);
   registerToggleSubscriberUpdatesTool(server);
-  registerTriggerLongRunningOperationTool(server);
-};
-
-/**
- * Register the tools that are conditional upon client capabilities.
- * These must be registered conditionally, after initialization.
- */
-export const registerConditionalTools = (server: McpServer) => {
-  registerGetRootsListTool(server);
   registerTriggerElicitationRequestTool(server);
-  registerTriggerUrlElicitationTool(server);
+  registerTriggerLongRunningOperationTool(server);
   registerTriggerSamplingRequestTool(server);
-  // Task-based research tool (uses experimental tasks API)
-  registerSimulateResearchQueryTool(server);
-  // Bidirectional task tools - server sends requests that client executes as tasks
-  registerTriggerSamplingRequestAsyncTool(server);
-  registerTriggerElicitationRequestAsyncTool(server);
+  registerTriggerUrlElicitationTool(server);
 };

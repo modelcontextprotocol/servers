@@ -35,6 +35,8 @@ src/everything
      ├── server
      │   ├── index.ts
      │   ├── logging.ts
+     │   ├── notifier.ts
+     │   ├── request-state.ts
      │   └── roots.ts
      ├── tools
      │   ├── index.ts
@@ -52,10 +54,8 @@ src/everything
      │   ├── toggle-simulated-logging.ts
      │   ├── toggle-subscriber-updates.ts
      │   ├── trigger-elicitation-request.ts
-     │   ├── trigger-elicitation-request-async.ts
      │   ├── trigger-long-running-operation.ts
      │   ├── trigger-sampling-request.ts
-     │   ├── trigger-sampling-request-async.ts
      │   └── trigger-url-elicitation.ts
      └── transports
          ├── sse.ts
@@ -130,11 +130,16 @@ src/everything
 ### `server/`
 
 - `index.ts`
-  - Server factory that creates an `McpServer` with declared capabilities, loads server instructions, and registers tools, prompts, and resources.
-  - Sets resource subscription handlers via `setSubscriptionHandlers(server)`.
-  - Exposes `{ server, cleanup }` to the chosen transport. Cleanup stops any running intervals in the server when the transport disconnects.
+  - Server factory `createServer(ctx?)` that creates an `McpServer` with declared capabilities, cache hints, and `requestState` verification; loads server instructions; and registers tools, prompts, and resources.
+  - Called by the SDK serving entry once per serving unit — one HTTP request under `createMcpHandler`, one connection under `serveStdio`. `ctx` carries the `era` being served, plus (HTTP only) `authInfo` and `requestInfo`.
+  - Sets resource subscription handlers via `setSubscriptionHandlers(server)`, and on legacy-era instances installs the `oninitialized` hook that pulls the client's roots.
+  - Returns the `McpServer`. Session teardown is the separate `cleanupSession(sessionId?)` export, which stops any running intervals when a session ends.
 - `logging.ts`
-  - Implements simulated logging. Periodically sends randomized log messages at various levels to the connected client session. Started/stopped on demand via a dedicated tool.
+  - Implements simulated logging. Periodically sends randomized log messages at various levels to the connected client session. Started/stopped on demand via a dedicated tool. Legacy era only — 2026-07-28 has no connection-level notification channel for a background interval to write to.
+- `notifier.ts`
+  - Routes change notifications to whichever publish path the active transport needs: instance methods under `serveStdio` (which routes them onto open subscriptions), or the handler's `subscriptions/listen` bus under `createMcpHandler`, where each request gets a fresh instance with no long-lived stream. Tools call `getNotifier(server)` and stay unaware of the difference.
+- `request-state.ts`
+  - The shared HMAC-SHA256 `requestState` codec for multi-round-trip tools. `requestState` round-trips through the client and is untrusted on re-entry, so it is sealed and bound to the originating method and principal. `verify` is wired into `ServerOptions.requestState` so it runs before any handler. Signed, not encrypted — never put secrets in the payload.
 
 ### `tools/`
 
@@ -151,7 +156,7 @@ src/everything
 - `get-resource-reference.ts`
   - Registers a `get-resource-reference` tool that returns a reference for a selected dynamic resource.
 - `get-roots-list.ts`
-  - Registers a `get-roots-list` tool that returns the last list of roots sent by the client.
+  - Registers a `get-roots-list` tool that reports the client's workspace roots. On the legacy era the server has usually already pulled and cached them after the handshake; on 2026-07-28 nothing is cached, so the tool asks via `inputRequired.listRoots()` and the client retries with the listing attached. The cache lookup simply misses on the modern era, so one code path serves both.
 - `gzip-file-as-resource.ts`
   - Registers a `gzip-file-as-resource` tool that fetches content from a URL or data URI, compresses it, and then either:
     - returns a `resource_link` to a session-scoped resource (default), or
@@ -162,17 +167,13 @@ src/everything
     - `GZIP_MAX_FETCH_TIME_MILLIS` (ms, default 30000)
     - `GZIP_ALLOWED_DOMAINS` (comma-separated allowlist; empty means all domains allowed)
 - `simulate-research-query.ts`
-  - Registers a `simulate-research-query` task-based tool that demonstrates the MCP Tasks feature (SEP-1686). Simulates a multi-stage research operation with progress updates. If the query is marked as ambiguous and the client supports elicitation, it pauses mid-execution to request clarification via `elicitation/create`. Uses `server.experimental.tasks.registerToolTask()` with `execution: { taskSupport: "required" }`.
+  - Registers a `simulate-research-query` tool simulating a multi-stage research operation with per-stage progress notifications. When the query is marked ambiguous it pauses mid-execution and asks which interpretation was meant, then resumes and produces the report. The only multi-round flow here: the topic is carried across rounds in an HMAC-sealed `requestState`, since `inputResponses` are per round.
 - `trigger-elicitation-request.ts`
-  - Registers a `trigger-elicitation-request` tool that sends an `elicitation/create` request to the client/LLM and returns the elicitation result.
+  - Registers a `trigger-elicitation-request` tool that asks for a form-mode `elicitation/create` covering the full range of supported field types, and reports the resulting action/content.
 - `trigger-url-elicitation.ts`
-  - Registers a `trigger-url-elicitation` tool that either sends an out-of-band URL-mode `elicitation/create` request (`mode: "url"`) including an `elicitationId` (request path) or throws `UrlElicitationRequiredError` (`-32042`) for client-handled URL elicitation (error path). On the error path the carried prerequisite elicitation points at a different URL than the failing one (`https://modelcontextprotocol.io`), and when the client satisfies it and retries the same call, the retry ignores `errorPath` and proceeds via the request path — so the client does not loop on the same error.
-- `trigger-elicitation-request-async.ts`
-  - Registers a `trigger-elicitation-request-async` tool that demonstrates bidirectional MCP tasks for elicitation. Sends an elicitation request with task metadata, then polls the client's `tasks/get` endpoint for completion status before fetching the final result.
+  - Registers a `trigger-url-elicitation` tool that asks for a URL-mode `elicitation/create` (`mode: "url"`) directing the user to a browser flow, then reports whether they completed, declined, or cancelled it. The v1 `-32042` `UrlElicitationRequiredError` error path is gone: it is legacy-era only (the SDK refuses that throw on a modern request and steers to `inputRequired.elicitUrl(...)`), and its session-keyed retry-suppression `Set` has no modern equivalent since 2026-07-28 has no sessions.
 - `trigger-sampling-request.ts`
-  - Registers a `trigger-sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
-- `trigger-sampling-request-async.ts`
-  - Registers a `trigger-sampling-request-async` tool that demonstrates bidirectional MCP tasks for sampling. Sends a sampling request with task metadata, then polls the client's `tasks/get` endpoint for completion status before fetching the final result.
+  - Registers a `trigger-sampling-request` tool that asks the client/LLM for a completion and returns the sampling result.
 - `get-structured-content.ts`
   - Registers a `get-structured-content` tool that demonstrates structuredContent block responses.
 - `get-sum.ts`
@@ -189,16 +190,15 @@ src/everything
 ### `transports/`
 
 - `stdio.ts`
-  - Starts a `StdioServerTransport`, created the server via `createServer()`, and connects it.
-  - Handles `SIGINT` to close cleanly and calls `cleanup()` to remove any live intervals.
+  - Hands the factory to `serveStdio(ctx => createServer(ctx))`, which serves **both eras** over stdio: the opening exchange selects one (`server/discover` probe → 2026-07-28, `initialize` handshake → legacy), and one instance is pinned for the connection.
+  - Handles `SIGINT` to close the handle and calls `cleanupSession()` to remove any live intervals.
 - `sse.ts`
+  - The deprecated HTTP+SSE transport (protocol revision 2024-11-05), served from `@modelcontextprotocol/server-legacy`. **Legacy era only** — it predates Streamable HTTP and has no 2026-07-28 equivalent, so it builds the factory with an explicit `{ era: "legacy" }` context.
   - Express server exposing:
     - `GET /sse` to establish an SSE connection per session.
     - `POST /message` for client messages.
-  - Manages multiple connected clients via a transport map.
-  - Starts an `SSEServerTransport`, created the server via `createServer()`, and connects it to a new transport.
-  - On server disconnect, calls `cleanup()` to remove any live intervals.
+  - Manages multiple connected clients via a transport map; on disconnect calls `cleanupSession(sessionId)`.
 - `streamableHttp.ts`
-  - Express server exposing a single `/mcp` endpoint for POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `StreamableHTTPServerTransport`.
-  - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`.
-  - Connects a fresh server instance on initialization POST and reuses the transport for subsequent requests.
+  - Hands the factory to `createMcpHandler(ctx => createServer(ctx))`, wrapped with `toNodeHandler` and mounted once as `app.all("/mcp", …)`. Serves **both eras from one endpoint**: 2026-07-28 per request, and legacy traffic per request through the default `legacy: "stateless"` posture.
+  - No session map, no `mcp-session-id`, no `InMemoryEventStore`, and no hand-written GET/DELETE routes — 2026-07-28 removed protocol-level sessions and SSE resumability, and replaced the standalone GET notification stream with `subscriptions/listen`, which the handler answers itself.
+  - Registers `handler.notify` as the change-notification bus via `setBusNotifier`, and on `SIGINT` calls `handler.close()` to abort in-flight exchanges and gracefully close open subscription streams.

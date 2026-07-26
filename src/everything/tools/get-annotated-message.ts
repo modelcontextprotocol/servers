@@ -1,5 +1,5 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { MCP_TINY_IMAGE } from "./get-tiny-image.js";
 
@@ -22,10 +22,10 @@ const config = {
     "Demonstrates how annotations can be used to provide metadata about content.",
   inputSchema: GetAnnotatedMessageSchema,
   annotations: {
-    readOnlyHint: true,       // This tool only returns data, no side effects
-    destructiveHint: false,   // Does not delete or modify anything
-    idempotentHint: true,     // Same input always produces same output
-    openWorldHint: false,     // Does not interact with external systems
+    readOnlyHint: true, // This tool only returns data, no side effects
+    destructiveHint: false, // Does not delete or modify anything
+    idempotentHint: true, // Same input always produces same output
+    openWorldHint: false, // Does not interact with external systems
   },
 };
 

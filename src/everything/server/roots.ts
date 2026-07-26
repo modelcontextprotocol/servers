@@ -1,8 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  Root,
-  RootsListChangedNotificationSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { McpServer, Root } from "@modelcontextprotocol/server";
 
 // Track roots by session id
 export const roots: Map<string | undefined, Root[]> = new Map<
@@ -74,9 +70,12 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
     // If the roots have not been synced for this client,
     // set notification handler and request initial roots
     if (!roots.has(sessionId)) {
-      // Set the list changed notification handler
+      // Set the list changed notification handler. This notification was
+      // removed in 2026-07-28, so it is physically absent from that era's
+      // registry -- registering it only ever takes effect on a legacy-era
+      // connection, which is the only era `syncRoots` runs on anyway.
       server.server.setNotificationHandler(
-        RootsListChangedNotificationSchema,
+        "notifications/roots/list_changed",
         requestRoots
       );
 

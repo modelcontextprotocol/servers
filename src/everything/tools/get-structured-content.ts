@@ -1,9 +1,6 @@
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  CallToolResult,
-  ContentBlock,
-} from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { CallToolResult, ContentBlock } from "@modelcontextprotocol/server";
 
 // Tool input schema
 const GetStructuredContentInputSchema = {
