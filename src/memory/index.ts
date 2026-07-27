@@ -69,6 +69,26 @@ export interface KnowledgeGraph {
 export class KnowledgeGraphManager {
   constructor(private memoryFilePath: string) {}
 
+  // Serializes all read-modify-write graph mutations behind a single queue.
+  // Without this, concurrent tool calls (e.g. multiple mutations dispatched
+  // from one LLM turn) each independently load the graph, mutate their own
+  // copy, and write it back — so whichever write lands last silently
+  // overwrites the other's changes, and interleaved writes to the same file
+  // can corrupt it outright. See #1819.
+  private mutationQueue: Promise<unknown> = Promise.resolve();
+
+  private async withLock<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.mutationQueue.then(operation, operation);
+    // Always resolve the queue itself, even if this operation failed, so a
+    // single failed mutation doesn't permanently wedge every call after it.
+    // The failure still propagates normally to whoever awaited `result`.
+    this.mutationQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
       const data = await fs.readFile(this.memoryFilePath, "utf-8");
@@ -118,66 +138,78 @@ export class KnowledgeGraphManager {
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
-    const graph = await this.loadGraph();
-    const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
-    graph.entities.push(...newEntities);
-    await this.saveGraph(graph);
-    return newEntities;
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
+      graph.entities.push(...newEntities);
+      await this.saveGraph(graph);
+      return newEntities;
+    });
   }
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
-    const graph = await this.loadGraph();
-    const newRelations = relations.filter(r => !graph.relations.some(existingRelation => 
-      existingRelation.from === r.from && 
-      existingRelation.to === r.to && 
-      existingRelation.relationType === r.relationType
-    ));
-    graph.relations.push(...newRelations);
-    await this.saveGraph(graph);
-    return newRelations;
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const newRelations = relations.filter(r => !graph.relations.some(existingRelation => 
+        existingRelation.from === r.from && 
+        existingRelation.to === r.to && 
+        existingRelation.relationType === r.relationType
+      ));
+      graph.relations.push(...newRelations);
+      await this.saveGraph(graph);
+      return newRelations;
+    });
   }
 
   async addObservations(observations: { entityName: string; contents: string[] }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
-    const graph = await this.loadGraph();
-    const results = observations.map(o => {
-      const entity = graph.entities.find(e => e.name === o.entityName);
-      if (!entity) {
-        throw new Error(`Entity with name ${o.entityName} not found`);
-      }
-      const newObservations = o.contents.filter(content => !entity.observations.includes(content));
-      entity.observations.push(...newObservations);
-      return { entityName: o.entityName, addedObservations: newObservations };
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const results = observations.map(o => {
+        const entity = graph.entities.find(e => e.name === o.entityName);
+        if (!entity) {
+          throw new Error(`Entity with name ${o.entityName} not found`);
+        }
+        const newObservations = o.contents.filter(content => !entity.observations.includes(content));
+        entity.observations.push(...newObservations);
+        return { entityName: o.entityName, addedObservations: newObservations };
+      });
+      await this.saveGraph(graph);
+      return results;
     });
-    await this.saveGraph(graph);
-    return results;
   }
 
   async deleteEntities(entityNames: string[]): Promise<void> {
-    const graph = await this.loadGraph();
-    graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
-    graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
-    await this.saveGraph(graph);
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
+      graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
+      await this.saveGraph(graph);
+    });
   }
 
   async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
-    const graph = await this.loadGraph();
-    deletions.forEach(d => {
-      const entity = graph.entities.find(e => e.name === d.entityName);
-      if (entity) {
-        entity.observations = entity.observations.filter(o => !d.observations.includes(o));
-      }
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      deletions.forEach(d => {
+        const entity = graph.entities.find(e => e.name === d.entityName);
+        if (entity) {
+          entity.observations = entity.observations.filter(o => !d.observations.includes(o));
+        }
+      });
+      await this.saveGraph(graph);
     });
-    await this.saveGraph(graph);
   }
 
   async deleteRelations(relations: Relation[]): Promise<void> {
-    const graph = await this.loadGraph();
-    graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
-      r.from === delRelation.from && 
-      r.to === delRelation.to && 
-      r.relationType === delRelation.relationType
-    ));
-    await this.saveGraph(graph);
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
+        r.from === delRelation.from && 
+        r.to === delRelation.to && 
+        r.relationType === delRelation.relationType
+      ));
+      await this.saveGraph(graph);
+    });
   }
 
   async readGraph(): Promise<KnowledgeGraph> {
