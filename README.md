@@ -33,6 +33,7 @@ These servers aim to demonstrate MCP features and the official SDKs.
 - **[Memory](src/memory)** - Knowledge graph-based persistent memory system.
 - **[Sequential Thinking](src/sequentialthinking)** - Dynamic and reflective problem-solving through thought sequences.
 - **[Time](src/time)** - Time and timezone conversion capabilities.
+- **[UnblockAPI](src/unblockapi)** - Screenshots, browser rendering, web search, captcha solving, email/SMS verification for AI agents.
 
 ### Archived
 
