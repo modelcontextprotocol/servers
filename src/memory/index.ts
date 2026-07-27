@@ -4,9 +4,16 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { promises as fs } from 'fs';
+import { promises as fs, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PACKAGE_VERSION: string = JSON.parse(
+  readFileSync(path.join(__dirname, "..", "package.json"), "utf-8")
+).version;
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
@@ -256,7 +263,7 @@ const RelationSchema = z.object({
 // The server instance and tools exposed to Claude
 const server = new McpServer({
   name: "memory-server",
-  version: "0.6.3",
+  version: PACKAGE_VERSION,
 });
 
 const RESOURCE_URI = "memory://knowledge-graph";
