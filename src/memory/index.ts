@@ -8,6 +8,12 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+
+
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const PACKAGE_VERSION: string = require('../package.json').version;
+
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
 
@@ -256,7 +262,7 @@ const RelationSchema = z.object({
 // The server instance and tools exposed to Claude
 const server = new McpServer({
   name: "memory-server",
-  version: "0.6.3",
+  version: PACKAGE_VERSION,
 });
 
 const RESOURCE_URI = "memory://knowledge-graph";
