@@ -1,0 +1,91 @@
+# Smithery configuration for revnuvo-x402-mcp
+# Docs: https://smithery.ai/docs/config
+#
+# This file declares how Smithery.ai should build and deploy the
+# revnuvo-x402-mcp server. Smithery will:
+#   1. Install dependencies with `npm install`
+#   2. Build the TypeScript source with `npm run build`
+#   3. Run `startCommand` as the server entrypoint, exposing it over HTTP/SSE
+#      for MCP clients to connect to.
+
+startCommand:
+  type: stdio
+  configSchema:
+    # These become environment variables injected at runtime.
+    # `WALLET_PRIVATE_KEY` is marked secret so Smithery masks it in the UI.
+    type: object
+    properties:
+      WALLET_PRIVATE_KEY:
+        type: string
+        description: >-
+          EVM private key (hex, with or without 0x prefix) of the wallet that
+          holds USDC on Base. Required — every tool call pays the requested
+          USDC amount from this wallet.
+        secret: true
+      REVNUVO_FACILITATOR:
+        type: string
+        description: x402 facilitator URL that verifies payments server-side.
+        default: https://facilitator.xpay.sh
+      REVNUVO_NETWORK:
+        type: string
+        description: >-
+          Settlement network for USDC payments. Use "base" for mainnet or
+          "base-sepolia" for testnet.
+        default: base
+        enum: [base, base-sepolia]
+    required:
+      - WALLET_PRIVATE_KEY
+  command: node
+  args:
+    - build/index.js
+
+# Build-time configuration. Smithery runs these in order before starting the
+# server process.
+build:
+  # Smithery uses the standard Node.js builder. We just need to make sure
+  # devDependencies (typescript) are available for `npm run build`.
+  runtime: nodejs
+  nodeVersion: "20"
+  steps:
+    - run: npm install --omit=optional
+    - run: npm run build
+
+# Metadata shown in the Smithery registry.
+metadata:
+  name: revnuvo-x402-mcp
+  displayName: Revnuvo x402 Domain Intelligence
+  description: >-
+    Paid-per-call domain intelligence MCP server. Wraps all four Revnuvo x402
+    API endpoints — domain verification, DNS lookup, quick domain assessment,
+    and full domain assessment — and handles the x402 v2 USDC-on-Base payment
+    flow automatically.
+  category: research
+  tags:
+    - x402
+    - payments
+    - domain-intelligence
+    - dns
+    - usdc
+    - base
+    - revnuvo
+  author:
+    name: Revnuvo Technologies Ltd
+    url: https://revnuvo.site
+  license: MIT
+  homepage: https://revnuvo.site
+  repository: https://github.com/revnuvo/revnuvo-x402-mcp
+
+# Pricing disclosure so Smithery can show end-users the real cost per call.
+pricing:
+  currency: USDC
+  network: Base
+  perCall:
+    verify_domain: "0.001"
+    dns_lookup: "0.002"
+    assess_domain: "0.005"
+    assess_domain_full: "0.05"
+  note: >-
+    Each tool call settles on-chain via USDC on Base. The wallet configured
+    via WALLET_PRIVATE_KEY must hold sufficient USDC balance to cover the
+    requested call. Gas for the payment settlement is sponsored by the x402
+    facilitator.

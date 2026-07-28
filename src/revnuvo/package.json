@@ -1,0 +1,69 @@
+{
+  "name": "revnuvo-x402-mcp",
+  "version": "1.0.0",
+  "description": "MCP server exposing Revnuvo x402 paid APIs (verify, dns, assess, assess-full) as Model Context Protocol tools. Handles the x402 USDC-on-Base payment flow automatically via @revnuvo/x402.",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "revnuvo-x402-mcp": "build/index.js"
+  },
+  "files": [
+    "build",
+    "README.md",
+    "smithery.yaml",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node build/index.js",
+    "start:http": "node build/index.js --http --port 8080",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "x402",
+    "revnuvo",
+    "domain-intelligence",
+    "usdc",
+    "base",
+    "claude-desktop",
+    "cursor",
+    "ai-tools"
+  ],
+  "author": "Revnuvo Technologies Ltd",
+  "license": "MIT",
+  "homepage": "https://revnuvo.site",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/revnuvo/revnuvo-x402-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/revnuvo/revnuvo-x402-mcp/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@revnuvo/x402": "^0.3.0",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.4",
+    "tsx": "^4.19.0"
+  },
+  "mcp": {
+    "transport": "stdio",
+    "command": "node",
+    "args": ["build/index.js"],
+    "env": {
+      "WALLET_PRIVATE_KEY": "${WALLET_PRIVATE_KEY}",
+      "REVNUVO_FACILITATOR": "https://facilitator.xpay.sh",
+      "REVNUVO_NETWORK": "base"
+    }
+  }
+}

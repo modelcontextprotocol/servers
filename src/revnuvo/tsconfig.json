@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "esModuleInterop": true,
+    "strict": true,
+    "outDir": "./dist",
+    "declaration": true
+  },
+  "include": ["index.ts"]
+}
