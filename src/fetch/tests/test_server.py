@@ -1,8 +1,11 @@
 """Tests for the fetch MCP server."""
 
+import tomllib
 import pytest
+from pathlib import Path
 from unittest.mock import AsyncMock, patch, MagicMock
 from mcp.shared.exceptions import McpError
+from packaging.requirements import Requirement
 
 from mcp_server_fetch.server import (
     extract_content_from_html,
@@ -324,3 +327,23 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+class TestDeclaredDependencies:
+    """Tests for the dependencies declared in pyproject.toml."""
+
+    def test_mcp_requirement_excludes_2x(self):
+        """Test that the mcp requirement excludes the 2.x line.
+
+        mcp 2.0.0 renamed McpError to MCPError and changed its constructor, so
+        server.py fails to import against it. Without an upper bound, unpinned
+        launchers such as uvx resolve 2.x and the server dies on startup.
+        """
+        pyproject = Path(__file__).parent.parent / "pyproject.toml"
+        with pyproject.open("rb") as f:
+            dependencies = tomllib.load(f)["project"]["dependencies"]
+
+        requirements = [Requirement(dep) for dep in dependencies]
+        mcp_requirement = next(req for req in requirements if req.name == "mcp")
+
+        assert not mcp_requirement.specifier.contains("2.0.0")
