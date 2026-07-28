@@ -6,6 +6,8 @@
 
 A Model Context Protocol server for Git repository interaction and automation. This server provides tools to read, search, and manipulate Git repositories via Large Language Models.
 
+This package targets MCP Python SDK v2 (`mcp>=2,<3`).
+
 Source: https://github.com/modelcontextprotocol/servers/tree/main/src/git
 
 Please note that mcp-server-git is currently in early development. The functionality and available tools are subject to change and expansion as we continue to develop and improve the server.
