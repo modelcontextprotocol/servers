@@ -1,5 +1,7 @@
 # Model Context Protocol servers
 
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2Fmodelcontextprotocol%2Ffetch.svg)](https://mcptoplist.com/server/glama%2Fmodelcontextprotocol%2Ffetch)
+
 This repository is a collection of *reference implementations* for the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), as well as references to community-built servers and additional resources.
 
 > [!IMPORTANT]
