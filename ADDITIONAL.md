@@ -54,6 +54,7 @@ This is a curated collection of community-built frameworks and resources that si
 - **[Discord Server](https://glama.ai/mcp/discord)** – A community discord server dedicated to MCP by **[Frank Fiegel](https://github.com/punkpeye)**
 - **[Install This MCP](https://installthismcp.com)** - Reduce Installation Friction with beautiful installation guides
 - **[Klavis AI](https://www.klavis.ai)** - Open Source MCP Infra. Hosted MCP servers and MCP clients on Slack and Discord.
+- **[mcp-server-groq](https://github.com/Bhanu-teja-VCE/mcp-server-groq)** - An ultra-fast Model Context Protocol (MCP) server for Groq LLaMA 3.3 70B inference and code analysis by **[Bhanu Kiran](https://github.com/Bhanu-teja-VCE)**
 - **[MCP Badges](https://github.com/mcpx-dev/mcp-badges)** – Quickly highlight your MCP project with clear, eye-catching badges, by **[Ironben](https://github.com/nanbingxyz)**
 - **[MCPProxy](https://github.com/smart-mcp-proxy/mcpproxy-go)** - Open-source local app that enables access to multiple MCP servers and thousands of tools with intelligent discovery via MCP protocol, runs servers in isolated environments, and features automatic quarantine protection against malicious tools.
 - **[MCPRepository.com](https://mcprepository.com/)** - A repository that indexes and organizes all MCP servers for easy discovery.
