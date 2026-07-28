@@ -3,18 +3,17 @@
   "version": "1.0.0",
   "description": "MCP server exposing Revnuvo x402 paid APIs (verify, dns, assess, assess-full) as Model Context Protocol tools. Handles the x402 USDC-on-Base payment flow automatically via @revnuvo/x402.",
   "type": "module",
-  "main": "build/index.js",
+  "main": "dist/index.js",
   "bin": {
-    "revnuvo-x402-mcp": "build/index.js"
+    "revnuvo-x402-mcp": "dist/index.js"
   },
   "files": [
-    "build",
+    "dist",
     "README.md",
-    "smithery.yaml",
-    "LICENSE"
+    "smithery.yaml"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "npx tsc",
     "dev": "tsc --watch",
     "start": "node build/index.js",
     "start:http": "node build/index.js --http --port 8080",
@@ -48,7 +47,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
-    "@revnuvo/x402": "^0.3.0",
+    "@revnuvo/x402": "^0.1.4",
     "viem": "^2.21.0"
   },
   "devDependencies": {
@@ -59,7 +58,9 @@
   "mcp": {
     "transport": "stdio",
     "command": "node",
-    "args": ["build/index.js"],
+    "args": [
+      "dist/index.js"
+    ],
     "env": {
       "WALLET_PRIVATE_KEY": "${WALLET_PRIVATE_KEY}",
       "REVNUVO_FACILITATOR": "https://facilitator.xpay.sh",

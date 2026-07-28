@@ -44,54 +44,56 @@ import {
   type Tool,
   type ToolSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import {
-  wrapFetchWithPayment,
-  type PaymentMiddlewareOptions,
-  // @revnuvo/x402 exposes both a fetch wrapper and a lower-level client.
-  // The fetch wrapper is the simplest API and is what we use here.
-} from "@revnuvo/x402";
+import { buildXPaymentHeader } from "@revnuvo/x402";
+import { privateKeyToAccount } from "viem/accounts";
+import { toHex, getAddress } from "viem";
 
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
 
 const WALLET_PRIVATE_KEY = process.env.WALLET_PRIVATE_KEY;
+const NETWORK = "base";
 const FACILITATOR_URL =
   process.env.REVNUVO_FACILITATOR ?? "https://facilitator.xpay.sh";
-const NETWORK = (process.env.REVNUVO_NETWORK ?? "base") as
-  | "base"
-  | "base-sepolia";
 
 if (!WALLET_PRIVATE_KEY) {
-  // We log to stderr so we don't corrupt the MCP stdio JSON-RPC stream.
-  console.error(
-    "[revnuvo-mcp] ERROR: WALLET_PRIVATE_KEY environment variable is required."
-  );
-  console.error(
-    "[revnuvo-mcp]        Set it to the hex private key of the wallet that"
-  );
-  console.error(
-    "[revnuvo-mcp]        holds USDC on Base. Example:"
-  );
-  console.error(
-    '[revnuvo-mcp]          export WALLET_PRIVATE_KEY="0xabc123..."'
-  );
+  console.error("[revnuvo-mcp] ERROR: WALLET_PRIVATE_KEY environment variable is required.");
   process.exit(1);
 }
 
-// Normalize the private key (accept with or without 0x prefix).
-const privateKey = WALLET_PRIVATE_KEY.startsWith("0x")
-  ? WALLET_PRIVATE_KEY
-  : `0x${WALLET_PRIVATE_KEY}`;
+const privateKey = WALLET_PRIVATE_KEY.startsWith("0x") ? WALLET_PRIVATE_KEY : `0x${WALLET_PRIVATE_KEY}`;
+const payer = privateKeyToAccount(privateKey as `0x${string}`);
 
-// Build the payment-enabled fetch client once and reuse it for every tool call.
-// @revnuvo/x402 handles: 402 detection -> payment signing -> retry with header.
-const paymentOptions: PaymentMiddlewareOptions = {
-  privateKey,
-  facilitatorUrl: FACILITATOR_URL,
-  network: NETWORK,
-};
-const paidFetch = wrapFetchWithPayment(fetch, paymentOptions);
+// Manual x402 payment flow: fetch → 402 → sign EIP-3009 → retry with payment header
+async function paidFetch(url: string, init?: RequestInit): Promise<Response> {
+  const res1 = await fetch(url, init);
+  if (res1.status !== 402) return res1;
+
+  const prHeader = res1.headers.get("payment-required");
+  if (!prHeader) throw new Error("402 but no payment-required header");
+  const challenge = JSON.parse(Buffer.from(prHeader, "base64").toString("utf-8"));
+  const req = challenge.accepts[0];
+
+  const nonce = toHex(crypto.getRandomValues(new Uint8Array(32)));
+  const now = Math.floor(Date.now() / 1000);
+  const authorization = {
+    from: payer.address, to: getAddress(req.payTo), value: req.amount,
+    validAfter: "0", validBefore: String(now + (req.maxTimeoutSeconds ?? 300)), nonce,
+  };
+  const chainId = parseInt(req.network.split(":")[1], 10);
+  const domain = { name: req.extra?.name ?? "USD Coin", version: req.extra?.version ?? "2", chainId, verifyingContract: getAddress(req.asset) };
+  const types = { TransferWithAuthorization: [{name:"from",type:"address"},{name:"to",type:"address"},{name:"value",type:"uint256"},{name:"validAfter",type:"uint256"},{name:"validBefore",type:"uint256"},{name:"nonce",type:"bytes32"}] };
+  const message = { from: getAddress(authorization.from), to: getAddress(authorization.to), value: BigInt(authorization.value), validAfter: BigInt(authorization.validAfter), validBefore: BigInt(authorization.validBefore), nonce: authorization.nonce };
+  const signature = await payer.signTypedData({ domain, types, primaryType: "TransferWithAuthorization", message });
+
+  const payload = { x402Version: 2, resource: challenge.resource, accepted: req, payload: { authorization, signature } };
+  const header = Buffer.from(JSON.stringify(payload)).toString("base64");
+  const headers = new Headers(init?.headers);
+  headers.set("payment-signature", header);
+  return fetch(url, { ...init, headers });
+}
+
 
 // ---------------------------------------------------------------------------
 // Endpoint registry
@@ -171,7 +173,7 @@ const ENDPOINTS: Record<string, RevnuvoEndpoint> = {
  * a tool accepts. All four Revnuvo tools take a single `domain` string.
  */
 const domainArgumentSchema = {
-  type: "object",
+  type: "object" as const,
   properties: {
     domain: {
       type: "string",
@@ -184,7 +186,7 @@ const domainArgumentSchema = {
   },
   required: ["domain"],
   additionalProperties: false,
-} as const;
+}
 
 const TOOL_DEFINITIONS: Tool[] = Object.values(ENDPOINTS).map((ep) => ({
   name: ep.toolName,
