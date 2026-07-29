@@ -127,6 +127,17 @@ export class KnowledgeGraphManager {
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
     const graph = await this.loadGraph();
+    const entityNames = new Set(graph.entities.map(e => e.name));
+
+    relations.forEach(r => {
+      if (!entityNames.has(r.from)) {
+        throw new Error(`Entity with name ${r.from} not found`);
+      }
+      if (!entityNames.has(r.to)) {
+        throw new Error(`Entity with name ${r.to} not found`);
+      }
+    });
+
     const newRelations = relations.filter(r => !graph.relations.some(existingRelation => 
       existingRelation.from === r.from && 
       existingRelation.to === r.to && 

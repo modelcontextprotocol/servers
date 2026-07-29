@@ -99,6 +99,38 @@ describe('KnowledgeGraphManager', () => {
       expect(graph.relations).toHaveLength(1);
     });
 
+    it('should reject relations from non-existent entities', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: [] },
+      ]);
+
+      await expect(
+        manager.createRelations([
+          { from: 'Ghost', to: 'Alice', relationType: 'knows' },
+        ])
+      ).rejects.toThrow('Entity with name Ghost not found');
+
+      const graph = await manager.readGraph();
+      expect(graph.relations).toHaveLength(0);
+    });
+
+    it('should reject relation batches that reference non-existent target entities', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: [] },
+        { name: 'Bob', entityType: 'person', observations: [] },
+      ]);
+
+      await expect(
+        manager.createRelations([
+          { from: 'Alice', to: 'Bob', relationType: 'knows' },
+          { from: 'Alice', to: 'Ghost', relationType: 'knows' },
+        ])
+      ).rejects.toThrow('Entity with name Ghost not found');
+
+      const graph = await manager.readGraph();
+      expect(graph.relations).toHaveLength(0);
+    });
+
     it('should handle empty relation arrays', async () => {
       const newRelations = await manager.createRelations([]);
       expect(newRelations).toHaveLength(0);
