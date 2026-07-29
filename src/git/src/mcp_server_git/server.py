@@ -244,7 +244,10 @@ def git_show(repo: git.Repo, revision: str) -> str:
         if d.diff is None:
             continue
         if isinstance(d.diff, bytes):
-            output.append(d.diff.decode('utf-8'))
+            # Git diffs can contain arbitrary file bytes. Replace malformed
+            # UTF-8 sequences so one binary file cannot make the whole result
+            # fail with UnicodeDecodeError.
+            output.append(d.diff.decode('utf-8', errors='replace'))
         else:
             output.append(d.diff)
     return "".join(output)

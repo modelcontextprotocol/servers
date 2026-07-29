@@ -277,6 +277,18 @@ def test_git_show_initial_commit(test_repository):
     assert "initial commit" in result
     assert "test.txt" in result
 
+def test_git_show_handles_non_utf8_diff(test_repository):
+    file_path = Path(test_repository.working_dir) / "binary.bin"
+    file_path.write_bytes(b"hello\xffworld\n")
+    test_repository.index.add(["binary.bin"])
+    commit = test_repository.index.commit("binary diff commit")
+
+    result = git_show(test_repository, commit.hexsha)
+
+    assert "binary diff commit" in result
+    assert "binary.bin" in result
+    assert "hello\ufffdworld" in result
+
 
 # Tests for validate_repo_path (repository scoping security fix)
 
