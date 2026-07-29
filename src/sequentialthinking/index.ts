@@ -4,6 +4,27 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { SequentialThinkingServer } from './lib.js';
+// Read the published package version so serverInfo.version stays in
+// sync with the actual published artifact. Fixes #4575.
+// Use fs.readFileSync rather than `import './package.json'` because
+// Node 22's import-attribute rules require `with { type: 'json' }` which
+// is awkward to add when targeting ES2022 in the build.
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+let pkgVersion: string;
+try {
+  const __dirname_ = dirname(fileURLToPath(import.meta.url));
+  pkgVersion = (JSON.parse(
+    readFileSync(join(__dirname_, 'package.json'), 'utf-8')
+  ) as { version: string }).version;
+} catch (e) {
+  // If package.json can't be read (corrupt, missing, or wrong module
+  // resolution), fall back to "unknown" rather than crash the server
+  // at module-load time. The version is metadata, not load-bearing.
+  pkgVersion = 'unknown';
+}
 
 /** Safe boolean coercion that correctly handles string "false" */
 const coercedBoolean = z.preprocess((val) => {
@@ -17,7 +38,7 @@ const coercedBoolean = z.preprocess((val) => {
 
 const server = new McpServer({
   name: "sequential-thinking-server",
-  version: "0.2.0",
+  version: pkgVersion,
 });
 
 const thinkingServer = new SequentialThinkingServer();
