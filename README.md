@@ -160,6 +160,7 @@ This project is licensed under the Apache License, Version 2.0 for new contribut
 ## 💬 Community
 
 - [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
+- [Trends MCP](https://github.com/trendsmcp-ai/Trends-MCP) - Live trend data across 25+ platforms (Google, YouTube, TikTok, Reddit, Amazon, news sentiment, app downloads, more). MCP server + REST API. [Free tier](https://trendsmcp.ai) (100 req/mo).
 
 ## ⭐ Support
 
