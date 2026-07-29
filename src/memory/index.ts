@@ -296,7 +296,7 @@ server.registerTool(
     const result = await knowledgeGraphManager.createEntities(entities);
     notifyGraphUpdated();
     return {
-      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      content: [],
       structuredContent: { entities: result }
     };
   }
@@ -325,7 +325,7 @@ server.registerTool(
     const result = await knowledgeGraphManager.createRelations(relations);
     notifyGraphUpdated();
     return {
-      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      content: [],
       structuredContent: { relations: result }
     };
   }
@@ -360,7 +360,7 @@ server.registerTool(
     const result = await knowledgeGraphManager.addObservations(observations);
     notifyGraphUpdated();
     return {
-      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      content: [],
       structuredContent: { results: result }
     };
   }
@@ -390,7 +390,7 @@ server.registerTool(
     await knowledgeGraphManager.deleteEntities(entityNames);
     notifyGraphUpdated();
     return {
-      content: [{ type: "text" as const, text: "Entities deleted successfully" }],
+      content: [],
       structuredContent: { success: true, message: "Entities deleted successfully" }
     };
   }
@@ -423,7 +423,7 @@ server.registerTool(
     await knowledgeGraphManager.deleteObservations(deletions);
     notifyGraphUpdated();
     return {
-      content: [{ type: "text" as const, text: "Observations deleted successfully" }],
+      content: [],
       structuredContent: { success: true, message: "Observations deleted successfully" }
     };
   }
@@ -453,7 +453,7 @@ server.registerTool(
     await knowledgeGraphManager.deleteRelations(relations);
     notifyGraphUpdated();
     return {
-      content: [{ type: "text" as const, text: "Relations deleted successfully" }],
+      content: [],
       structuredContent: { success: true, message: "Relations deleted successfully" }
     };
   }
@@ -480,7 +480,7 @@ server.registerTool(
   async () => {
     const graph = await knowledgeGraphManager.readGraph();
     return {
-      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
+      content: [],
       structuredContent: { ...graph }
     };
   }
@@ -509,7 +509,7 @@ server.registerTool(
   async ({ query }) => {
     const graph = await knowledgeGraphManager.searchNodes(query);
     return {
-      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
+      content: [],
       structuredContent: { ...graph }
     };
   }
@@ -538,7 +538,7 @@ server.registerTool(
   async ({ names }) => {
     const graph = await knowledgeGraphManager.openNodes(names);
     return {
-      content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
+      content: [],
       structuredContent: { ...graph }
     };
   }
