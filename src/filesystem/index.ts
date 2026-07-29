@@ -631,7 +631,27 @@ server.registerTool(
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
     const validSourcePath = await validatePath(args.source);
     const validDestPath = await validatePath(args.destination);
-    await fs.rename(validSourcePath, validDestPath);
+
+    try {
+      // `rename()` can overwrite a destination created after a separate
+      // existence check. `cp()` creates each destination entry exclusively
+      // when these options are set, so a concurrent creator cannot be clobbered.
+      await fs.cp(validSourcePath, validDestPath, {
+        recursive: true,
+        force: false,
+        errorOnExist: true,
+        preserveTimestamps: true,
+      });
+    } catch (error) {
+      if (
+        (error as NodeJS.ErrnoException).code === "EEXIST" ||
+        (error as NodeJS.ErrnoException).code === "ERR_FS_CP_EEXIST"
+      ) {
+        throw new Error(`Destination already exists: ${args.destination}`);
+      }
+      throw error;
+    }
+    await fs.rm(validSourcePath, { recursive: true });
     const text = `Successfully moved ${args.source} to ${args.destination}`;
     const contentBlock = { type: "text" as const, text };
     return {
