@@ -102,12 +102,12 @@ Add to your Zed settings.json:
 <summary>Using uvx</summary>
 
 ```json
-"context_servers": [
+"context_servers": {
   "mcp-server-time": {
     "command": "uvx",
     "args": ["mcp-server-time"]
   }
-],
+},
 ```
 </details>
 
