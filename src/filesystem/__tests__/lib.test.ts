@@ -303,10 +303,43 @@ describe('Lib Functions', () => {
     describe('writeFileContent', () => {
       it('writes file content', async () => {
         mockFs.writeFile.mockResolvedValueOnce(undefined);
-        
+        mockFs.stat.mockResolvedValueOnce({ size: Buffer.byteLength('new content', 'utf-8') } as any);
+
         await writeFileContent('/test/file.txt', 'new content');
-        
+
         expect(mockFs.writeFile).toHaveBeenCalledWith('/test/file.txt', 'new content', { encoding: "utf-8", flag: 'wx' });
+        expect(mockFs.stat).toHaveBeenCalledWith('/test/file.txt');
+      });
+
+      // Regression for #4138: write_file silently returns success on Windows
+      // even though no bytes reach disk. The post-write stat verification turns
+      // that silent failure into an explicit error.
+      it('throws when post-write stat finds the file missing (silent write failure)', async () => {
+        mockFs.writeFile.mockResolvedValueOnce(undefined);
+        const enoent = Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' });
+        mockFs.stat.mockRejectedValueOnce(enoent);
+
+        await expect(writeFileContent('/test/file.txt', 'payload')).rejects.toThrow(
+          /reported success but the file is missing on disk/
+        );
+      });
+
+      it('throws when post-write stat reports a size mismatch', async () => {
+        mockFs.writeFile.mockResolvedValueOnce(undefined);
+        // Content is 7 bytes ('payload'); pretend disk shows 0 bytes.
+        mockFs.stat.mockResolvedValueOnce({ size: 0 } as any);
+
+        await expect(writeFileContent('/test/file.txt', 'payload')).rejects.toThrow(
+          /on-disk size is 0 bytes; expected 7 bytes/
+        );
+      });
+
+      it('verifies size correctly for multibyte UTF-8 content', async () => {
+        const content = 'héllo 🌍'; // 12 UTF-8 bytes
+        mockFs.writeFile.mockResolvedValueOnce(undefined);
+        mockFs.stat.mockResolvedValueOnce({ size: Buffer.byteLength(content, 'utf-8') } as any);
+
+        await expect(writeFileContent('/test/file.txt', content)).resolves.toBeUndefined();
       });
     });
 
