@@ -2,6 +2,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SERVER_VERSION } from './version.js';
 import {
   RootsListChangedNotificationSchema,
   type Root,
@@ -163,7 +164,7 @@ const GetFileInfoArgsSchema = z.object({
 const server = new McpServer(
   {
     name: "secure-filesystem-server",
-    version: "0.2.0",
+    version: SERVER_VERSION,
   }
 );
 
