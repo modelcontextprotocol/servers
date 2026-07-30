@@ -1,9 +1,15 @@
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11 (.python-version is 3.10)
+    import tomli as tomllib
+from pathlib import Path
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from freezegun import freeze_time
 from mcp.shared.exceptions import McpError
+from packaging.requirements import Requirement
 import pytest
-from unittest.mock import patch
-from zoneinfo import ZoneInfo
 
 from mcp_server_time.server import TimeServer, get_local_tz
 
@@ -526,3 +532,28 @@ def test_get_local_tz_various_timezones(mock_get_localzone, timezone_name):
     result = get_local_tz()
     assert str(result) == timezone_name
     assert isinstance(result, ZoneInfo)
+
+
+class TestDeclaredDependencies:
+    """Tests for the dependencies declared in pyproject.toml."""
+
+    def test_mcp_requirement_excludes_2x(self):
+        """Test that the mcp requirement admits 1.x but excludes 2.x.
+
+        mcp 2.0.0 renamed McpError to MCPError, so server.py fails to import
+        against it. Without an upper bound, unpinned launchers such as uvx
+        resolve 2.x and the server dies on startup.
+
+        A rename-only alias is not a safe fix either: MCPError's constructor
+        also changed (ErrorData -> code/message), so we cap below 2 instead.
+        """
+        pyproject = Path(__file__).parent.parent / "pyproject.toml"
+        with pyproject.open("rb") as f:
+            dependencies = tomllib.load(f)["project"]["dependencies"]
+
+        requirements = [Requirement(dep) for dep in dependencies]
+        mcp_requirement = next(req for req in requirements if req.name == "mcp")
+
+        assert mcp_requirement.specifier.contains("1.23.0")
+        assert mcp_requirement.specifier.contains("1.29.0")
+        assert not mcp_requirement.specifier.contains("2.0.0")
