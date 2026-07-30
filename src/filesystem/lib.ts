@@ -43,7 +43,7 @@ export interface SearchResult {
 // Pure Utility Functions
 export function formatSize(bytes: number): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  if (bytes === 0) return '0 B';
+  if (bytes <= 0) return '0 B';
   
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   
