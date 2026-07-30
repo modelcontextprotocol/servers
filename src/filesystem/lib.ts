@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import os from 'os';
 import { randomBytes } from 'crypto';
+import { StringDecoder } from 'string_decoder';
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 import { normalizePath, expandHome } from './path-utils.js';
@@ -292,42 +293,37 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
   // Open file for reading
   const fileHandle = await fs.open(filePath, 'r');
   try {
-    const lines: string[] = [];
+    const chunks: Buffer[] = [];
     let position = fileSize;
-    let chunk = Buffer.alloc(CHUNK_SIZE);
-    let linesFound = 0;
-    let remainingText = '';
+    let newlineCount = 0;
+    const chunk = Buffer.alloc(CHUNK_SIZE);
     
-    // Read chunks from the end of the file until we have enough lines
-    while (position > 0 && linesFound < numLines) {
+    // Read chunks from the end of the file until we have enough newlines (or BOF).
+    // Counting newlines at the byte level is safe: 0x0A (LF) never appears inside
+    // a UTF-8 multi-byte sequence by design.
+    while (position > 0 && newlineCount < numLines) {
       const size = Math.min(CHUNK_SIZE, position);
       position -= size;
       
       const { bytesRead } = await fileHandle.read(chunk, 0, size, position);
       if (!bytesRead) break;
       
-      // Get the chunk as a string and prepend any remaining text from previous iteration
-      const readData = chunk.slice(0, bytesRead).toString('utf-8');
-      const chunkText = readData + remainingText;
-      
-      // Split by newlines and count
-      const chunkLines = normalizeLineEndings(chunkText).split('\n');
-      
-      // If this isn't the end of the file, the first line is likely incomplete
-      // Save it to prepend to the next chunk
-      if (position > 0) {
-        remainingText = chunkLines[0];
-        chunkLines.shift(); // Remove the first (incomplete) line
+      // Copy bytes because the chunk buffer is reused across iterations
+      const justRead = Buffer.from(chunk.subarray(0, bytesRead));
+      for (let i = 0; i < bytesRead; i++) {
+        if (justRead[i] === 0x0A) newlineCount++;
       }
-      
-      // Add lines to our result (up to the number we need)
-      for (let i = chunkLines.length - 1; i >= 0 && linesFound < numLines; i--) {
-        lines.unshift(chunkLines[i]);
-        linesFound++;
-      }
+      chunks.unshift(justRead);
     }
     
-    return lines.join('\n');
+    // Decode all accumulated bytes at once so multi-byte characters that span
+    // a chunk boundary are not split mid-sequence. Any character whose leading
+    // bytes lie before the lowest read position becomes U+FFFD at the head of
+    // the decoded text, but that falls within the partial first line we discard.
+    const fullText = normalizeLineEndings(Buffer.concat(chunks).toString('utf-8'));
+    const allLines = fullText.split('\n');
+    
+    return allLines.slice(-numLines).join('\n');
   } finally {
     await fileHandle.close();
   }
@@ -341,13 +337,21 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
     let buffer = '';
     let bytesRead = 0;
     const chunk = Buffer.alloc(1024); // 1KB buffer
+    const decoder = new StringDecoder('utf-8');
     
     // Read chunks and count lines until we have enough or reach EOF
     while (lines.length < numLines) {
       const result = await fileHandle.read(chunk, 0, chunk.length, bytesRead);
-      if (result.bytesRead === 0) break; // End of file
+      if (result.bytesRead === 0) {
+        // EOF: flush any bytes still held by the decoder
+        buffer += decoder.end();
+        break;
+      }
       bytesRead += result.bytesRead;
-      buffer += chunk.slice(0, result.bytesRead).toString('utf-8');
+      // StringDecoder buffers any trailing partial UTF-8 sequence internally
+      // and combines it with the leading bytes of the next read, so multi-byte
+      // characters spanning a chunk boundary are decoded correctly.
+      buffer += decoder.write(chunk.subarray(0, result.bytesRead));
       
       const newLineIndex = buffer.lastIndexOf('\n');
       if (newLineIndex !== -1) {
