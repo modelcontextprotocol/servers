@@ -248,7 +248,11 @@ export async function applyFileEdits(
     }
 
     if (!matchFound) {
-      throw new Error(`Could not find exact match for edit:\n${edit.oldText}`);
+      throw new Error(
+        `Could not find exact match for edit:\n${edit.oldText}\n\n` +
+        `This usually means the requested text differs from the file content in whitespace, indentation, or line endings. ` +
+        `Use read_file to inspect the exact current content, then retry with oldText copied from the file.`
+      );
     }
   }
 
