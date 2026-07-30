@@ -7,7 +7,7 @@ A Model Context Protocol server that provides web content fetching capabilities.
 Source: https://github.com/modelcontextprotocol/servers/tree/main/src/fetch
 
 > [!CAUTION]
-> This server can access local/internal IP addresses and may represent a security risk. Exercise caution when using this MCP server to ensure this does not expose any sensitive data.
+> By default this server refuses to fetch loopback, private (RFC1918), link-local, and cloud-metadata IP addresses to mitigate server-side request forgery (SSRF). If you deliberately need to fetch internal hosts, you can re-enable this with `--allow-internal-ips` (see [Customization - Internal IPs](#customization---internal-ips)) — doing so may expose internal services and cloud instance metadata to the model, so only use it in trusted environments.
 
 The fetch tool will truncate the response, but by using the `start_index` argument, you can specify where to start the content extraction. This lets models read a webpage in chunks, until they find the information they need.
 
@@ -171,6 +171,10 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 ### Customization - Proxy
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
+
+### Customization - Internal IPs
+
+By default the server blocks requests to loopback, private (RFC1918), link-local, cloud-metadata (169.254.169.254), and other non-public IP addresses to prevent SSRF, and it re-validates the destination on every redirect hop. If you need to fetch internal hosts (for example a service on `localhost`), add the argument `--allow-internal-ips` to the `args` list in the configuration. This disables the SSRF protection, so only enable it in trusted environments.
 
 ## Windows Configuration
 
