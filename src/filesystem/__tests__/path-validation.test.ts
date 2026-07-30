@@ -12,10 +12,10 @@ async function checkSymlinkSupport(): Promise<boolean> {
   try {
     const targetFile = path.join(testDir, 'target.txt');
     const linkFile = path.join(testDir, 'link.txt');
-    
+
     await fs.writeFile(targetFile, 'test');
     await fs.symlink(targetFile, linkFile);
-    
+
     // If we get here, symlinks are supported
     return true;
   } catch (error) {
@@ -240,7 +240,11 @@ describe('Path Validation', () => {
 
       // But only on the same filesystem root
       if (path.sep === '\\') {
-        expect(isPathWithinAllowedDirectories('D:\\other', ['/'])).toBe(false);
+        // '/' resolves to the current drive root on Windows, so we must
+        // test with a drive letter that differs from the CWD's drive.
+        const cwdDrive = process.cwd().charAt(0).toUpperCase();
+        const otherDrive = cwdDrive === 'D' ? 'C' : 'D';
+        expect(isPathWithinAllowedDirectories(`${otherDrive}:\\other`, ['/'])).toBe(false);
       }
     });
   });
