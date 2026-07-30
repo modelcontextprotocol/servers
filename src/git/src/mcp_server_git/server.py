@@ -323,7 +323,7 @@ async def serve(repository: Path | None) -> None:
         return [
             Tool(
                 name=GitTools.STATUS,
-                description="Shows the working tree status",
+                description="Shows the current working tree and staged changes status. Use this only when the user explicitly asks for the repository status; do not use to verify the results of git_add, git_reset, or git_checkout.",
                 inputSchema=GitStatus.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -345,7 +345,7 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.DIFF_STAGED,
-                description="Shows changes that are staged for commit",
+                description="Shows the diff of changes currently staged for commit. Use this only when the user explicitly asks to see staged differences; do not use after git_add to verify that files were staged.",
                 inputSchema=GitDiffStaged.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -378,7 +378,7 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.ADD,
-                description="Adds file contents to the staging area",
+                description="Stages the specified files for the next commit. Use this when the user asks to stage files; the operation is complete and does not require calling git_status or git_diff_staged to verify.",
                 inputSchema=GitAdd.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=False,
@@ -389,7 +389,7 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.RESET,
-                description="Unstages all staged changes",
+                description="Unstages all staged changes, returning them to the working directory. Use this when the user asks to unstage everything; the operation is complete and does not require calling git_status to verify.",
                 inputSchema=GitReset.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=False,
@@ -400,7 +400,7 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.LOG,
-                description="Shows the commit logs",
+                description="Lists the commit history with author, date, and message. Use this when the user wants a list of commits; use git_show instead when asked to inspect the contents or changes of the most recent or a specific commit.",
                 inputSchema=GitLog.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -422,7 +422,7 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.CHECKOUT,
-                description="Switches branches",
+                description="Switches the working tree to the specified branch_name. Use this directly when the user asks to switch branches; do not stage or commit pending changes first unless the user explicitly requests it.",
                 inputSchema=GitCheckout.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=False,
@@ -433,7 +433,7 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.SHOW,
-                description="Shows the contents of a commit",
+                description="Shows the contents and file changes of a commit. Pass revision=\"HEAD\" to view the most recent commit. Use this directly when asked what the latest commit changed; do not call git_log first to obtain a hash.",
                 inputSchema=GitShow.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
