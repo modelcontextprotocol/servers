@@ -169,7 +169,7 @@ describe('Lib Functions', () => {
       it('rejects disallowed paths', async () => {
         const testPath = process.platform === 'win32' ? 'C:\\Windows\\System32\\file.txt' : '/etc/passwd';
         await expect(validatePath(testPath))
-          .rejects.toThrow('Access denied - path outside allowed directories');
+          .rejects.toThrow('[path_outside_allowed_roots] Access denied - path outside allowed directories');
       });
 
       it('handles non-existent files by checking parent directory', async () => {
@@ -200,9 +200,9 @@ describe('Lib Functions', () => {
         mockFs.realpath
           .mockRejectedValueOnce(enoentError1)
           .mockRejectedValueOnce(enoentError2);
-        
+
         await expect(validatePath(newFilePath))
-          .rejects.toThrow('Parent directory does not exist');
+          .rejects.toThrow('[path_parent_missing] Parent directory does not exist');
       });
 
       it('resolves relative paths against allowed directories instead of process.cwd()', async () => {
