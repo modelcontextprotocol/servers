@@ -91,6 +91,28 @@ def test_get_current_time_with_invalid_timezone():
         time_server.get_current_time("Invalid/Timezone")
 
 
+def test_get_current_time_defaults_to_configured_local_timezone():
+    with freeze_time("2024-01-01 12:00:00+00:00"):
+        time_server = TimeServer("Europe/London")
+
+        result = time_server.get_current_time()
+
+        assert result.timezone == "Europe/London"
+        assert result.datetime == "2024-01-01T12:00:00+00:00"
+
+
+def test_convert_time_defaults_missing_timezones_to_configured_local_timezone():
+    with freeze_time("2024-01-01 00:00:00+00:00"):
+        time_server = TimeServer("Europe/London")
+
+        result = time_server.convert_time(None, "12:00", "Asia/Tokyo")
+
+        assert result.source.timezone == "Europe/London"
+        assert result.source.datetime == "2024-01-01T12:00:00+00:00"
+        assert result.target.timezone == "Asia/Tokyo"
+        assert result.target.datetime == "2024-01-01T21:00:00+09:00"
+
+
 @pytest.mark.parametrize(
     "source_tz,time_str,target_tz,expected_error",
     [
