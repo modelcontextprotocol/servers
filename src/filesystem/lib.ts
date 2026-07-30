@@ -98,8 +98,14 @@ function resolveRelativePathAgainstAllowedDirectories(relativePath: string): str
 // Security & Validation Functions
 export async function validatePath(requestedPath: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
+  // UNC-aware resolution: path.resolve() on Windows corrupts UNC paths
+  // (\\server\share becomes C:\server\share via path.normalize stripping
+  // a leading backslash, then path.resolve treating it as drive-relative).
+  // For UNC paths we skip path.resolve entirely and let normalizePath handle
+  // them. PR #3921 only patched isPathWithinAllowedDirectories; validatePath
+  // needs the same treatment upstream of it.
   const absolute = path.isAbsolute(expandedPath)
-    ? path.resolve(expandedPath)
+    ? (expandedPath.startsWith('\\\\') ? expandedPath : path.resolve(expandedPath))
     : resolveRelativePathAgainstAllowedDirectories(expandedPath);
 
   const normalizedRequested = normalizePath(absolute);
