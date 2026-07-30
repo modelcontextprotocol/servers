@@ -167,6 +167,13 @@ const server = new McpServer(
   }
 );
 
+server.server.onerror = (error) => {
+  console.error(
+    "MCP filesystem transport error:",
+    error instanceof Error ? error.message : String(error)
+  );
+};
+
 // Reads a file as a stream of buffers, concatenates them, and then encodes
 // the result to a Base64 string. This is a memory-efficient way to handle
 // binary data from a stream before the final encoding.
