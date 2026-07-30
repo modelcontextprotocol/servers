@@ -389,7 +389,8 @@ export async function searchFilesWithValidation(
       try {
         await validatePath(fullPath);
 
-        const relativePath = path.relative(rootPath, fullPath);
+        // Normalize to forward slashes for consistent cross-platform glob matching
+        const relativePath = path.relative(rootPath, fullPath).split(path.sep).join('/');
         const shouldExclude = excludePatterns.some(excludePattern =>
           minimatch(relativePath, excludePattern, { dot: true })
         );
