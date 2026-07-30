@@ -10,7 +10,17 @@ from mcp_server_fetch.server import (
     check_may_autonomously_fetch_url,
     fetch_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
+    validate_public_url,
 )
+
+
+@pytest.fixture(autouse=True)
+def mock_public_dns(monkeypatch):
+    """Keep URL safety checks deterministic in unit tests."""
+    monkeypatch.setattr(
+        "mcp_server_fetch.server.resolve_hostname_addresses",
+        lambda hostname, port: {"93.184.216.34"},
+    )
 
 
 class TestGetRobotsTxtUrl:
@@ -45,6 +55,37 @@ class TestGetRobotsTxtUrl:
         """Test with HTTP URL."""
         result = get_robots_txt_url("http://example.com/page")
         assert result == "http://example.com/robots.txt"
+
+
+class TestValidatePublicUrl:
+    """Tests for SSRF URL validation."""
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "file:///etc/passwd",
+            "http://localhost/admin",
+            "http://127.0.0.1/admin",
+            "http://[::1]/admin",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://10.0.0.4/admin",
+        ],
+    )
+    def test_blocks_non_public_urls(self, url):
+        with pytest.raises(McpError):
+            validate_public_url(url)
+
+    def test_blocks_private_dns_resolution(self, monkeypatch):
+        monkeypatch.setattr(
+            "mcp_server_fetch.server.resolve_hostname_addresses",
+            lambda hostname, port: {"10.0.0.4"},
+        )
+
+        with pytest.raises(McpError):
+            validate_public_url("https://internal.example.com/page")
+
+    def test_allows_public_https_urls(self):
+        validate_public_url("https://example.com/page")
 
 
 class TestExtractContentFromHtml:
@@ -265,6 +306,44 @@ class TestFetchUrl:
 
             assert content == json_content
             assert "cannot be simplified" in prefix
+
+    @pytest.mark.asyncio
+    async def test_blocks_private_url_before_request(self):
+        """Test that private IP URLs are rejected before any HTTP request is sent."""
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with pytest.raises(McpError):
+                await fetch_url(
+                    "http://127.0.0.1/admin",
+                    DEFAULT_USER_AGENT_AUTONOMOUS,
+                )
+
+            mock_client.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_blocks_redirect_to_private_url(self):
+        """Test that redirects are validated before following them."""
+        redirect_response = MagicMock()
+        redirect_response.status_code = 302
+        redirect_response.headers = {"location": "http://127.0.0.1/admin"}
+        redirect_response.url = "https://example.com/start"
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=redirect_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with pytest.raises(McpError):
+                await fetch_url(
+                    "https://example.com/start",
+                    DEFAULT_USER_AGENT_AUTONOMOUS,
+                )
+
+            assert mock_client.get.call_count == 1
 
     @pytest.mark.asyncio
     async def test_fetch_404_raises_error(self):
