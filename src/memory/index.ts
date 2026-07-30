@@ -4,7 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { promises as fs } from 'fs';
+import { promises as fs, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -253,10 +253,27 @@ const RelationSchema = z.object({
   relationType: z.string().describe("The type of the relation")
 });
 
+// Read version from package.json at runtime to stay in sync with the published release.
+// Works from both source (src/memory/index.ts → ./package.json) and
+// compiled (dist/index.js → ../package.json).
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+function loadPackageJson(): { version: string } {
+  const candidates = [
+    path.join(__dirname, 'package.json'),
+    path.join(__dirname, '..', 'package.json'),
+  ];
+  for (const c of candidates) {
+    try { return JSON.parse(readFileSync(c, 'utf-8')); } catch { /* try next */ }
+  }
+  return { version: '0.0.0' };
+}
+const { version: SERVER_VERSION } = loadPackageJson();
+
 // The server instance and tools exposed to Claude
 const server = new McpServer({
   name: "memory-server",
-  version: "0.6.3",
+  version: SERVER_VERSION,
 });
 
 const RESOURCE_URI = "memory://knowledge-graph";
