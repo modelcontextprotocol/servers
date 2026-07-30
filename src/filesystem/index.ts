@@ -14,6 +14,7 @@ import { z } from "zod";
 import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from './path-utils.js';
 import { getValidRootDirectories } from './roots-utils.js';
+import { emitStartupValidationEvent } from './startup-errors.js';
 import {
   // Function imports
   formatSize,
@@ -74,16 +75,37 @@ for (const dir of allowedDirectories) {
     if (stats.isDirectory()) {
       accessibleDirectories.push(dir);
     } else {
-      console.error(`Warning: ${dir} is not a directory, skipping`);
+      const message = `Warning: ${dir} is not a directory, skipping`;
+      console.error(message);
+      emitStartupValidationEvent({
+        code: 'argv_path_not_directory',
+        source: 'argv',
+        path: dir,
+        message,
+      });
     }
   } catch (error) {
-    console.error(`Warning: Cannot access directory ${dir}, skipping`);
+    const message = `Warning: Cannot access directory ${dir}, skipping`;
+    console.error(message);
+    emitStartupValidationEvent({
+      code: 'argv_path_inaccessible',
+      source: 'argv',
+      path: dir,
+      message,
+    });
   }
 }
 
 // Exit only if ALL paths are inaccessible (and some were specified)
 if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
-  console.error("Error: None of the specified directories are accessible");
+  const message = "Error: None of the specified directories are accessible";
+  console.error(message);
+  emitStartupValidationEvent({
+    code: 'argv_no_accessible_directories',
+    source: 'argv',
+    paths: allowedDirectories,
+    message,
+  });
   process.exit(1);
 }
 
