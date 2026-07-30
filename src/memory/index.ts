@@ -4,12 +4,19 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { promises as fs } from 'fs';
+import { promises as fs, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+const currentDirPath = path.dirname(fileURLToPath(import.meta.url));
+const packageJsonUrl = new URL(
+  path.basename(currentDirPath) === 'dist' ? '../package.json' : './package.json',
+  import.meta.url,
+);
+const packageJson = JSON.parse(readFileSync(packageJsonUrl, 'utf-8')) as { version: string };
+
 // Define memory file path using environment variable with fallback
-export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
+export const defaultMemoryPath = path.join(currentDirPath, 'memory.jsonl');
 
 // Handle backward compatibility: migrate memory.json to memory.jsonl if needed
 export async function ensureMemoryFilePath(): Promise<string> {
@@ -17,11 +24,11 @@ export async function ensureMemoryFilePath(): Promise<string> {
     // Custom path provided, use it as-is (with absolute path resolution)
     return path.isAbsolute(process.env.MEMORY_FILE_PATH)
       ? process.env.MEMORY_FILE_PATH
-      : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH);
+      : path.join(currentDirPath, process.env.MEMORY_FILE_PATH);
   }
   
   // No custom path set, check for backward compatibility migration
-  const oldMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
+  const oldMemoryPath = path.join(currentDirPath, 'memory.json');
   const newMemoryPath = defaultMemoryPath;
   
   try {
@@ -256,7 +263,7 @@ const RelationSchema = z.object({
 // The server instance and tools exposed to Claude
 const server = new McpServer({
   name: "memory-server",
-  version: "0.6.3",
+  version: packageJson.version,
 });
 
 const RESOURCE_URI = "memory://knowledge-graph";
