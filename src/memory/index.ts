@@ -278,7 +278,7 @@ server.registerTool(
   "create_entities",
   {
     title: "Create Entities",
-    description: "Create multiple new entities in the knowledge graph",
+    description: "Create new entities in the knowledge graph. Use this when the user asks you to remember, record, or store information about new subjects (e.g., 'Carol is a designer'). Call this directly without searching first. Use add_observations instead to add facts to existing entities.",
     inputSchema: {
       entities: z.array(EntitySchema)
     },
@@ -307,7 +307,7 @@ server.registerTool(
   "create_relations",
   {
     title: "Create Relations",
-    description: "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
+    description: "Create relations between entities in the knowledge graph. Use this when the user asks to record a connection between two entities (e.g., 'Bob works on Project Phoenix'). Call this directly without first calling create_entities. Relations should be in active voice.",
     inputSchema: {
       relations: z.array(RelationSchema)
     },
@@ -401,7 +401,7 @@ server.registerTool(
   "delete_observations",
   {
     title: "Delete Observations",
-    description: "Delete specific observations from entities in the knowledge graph",
+    description: "Use this when the user asks to remove one or more observations from an entity. Provide the exact observation strings in the observations parameter. Call this directly without first reading the entity; do not use open_nodes merely to look up observations before deleting.",
     inputSchema: {
       deletions: z.array(z.object({
         entityName: z.string().describe("The name of the entity containing the observations"),
@@ -464,7 +464,7 @@ server.registerTool(
   "read_graph",
   {
     title: "Read Graph",
-    description: "Read the entire knowledge graph",
+    description: "Read the entire knowledge graph. Use this only when the user explicitly asks for everything or the whole graph. Use open_nodes instead to look up specific entities by name.",
     inputSchema: {},
     outputSchema: {
       entities: z.array(EntitySchema),
@@ -491,7 +491,7 @@ server.registerTool(
   "search_nodes",
   {
     title: "Search Nodes",
-    description: "Search for nodes in the knowledge graph based on a query",
+    description: "Search for nodes using a fuzzy keyword or text query. Use this when the user provides partial descriptions or keywords rather than exact names. Use open_nodes instead when you already know the exact entity names.",
     inputSchema: {
       query: z.string().describe("The search query to match against entity names, types, and observation content")
     },
@@ -520,7 +520,7 @@ server.registerTool(
   "open_nodes",
   {
     title: "Open Nodes",
-    description: "Open specific nodes in the knowledge graph by their names",
+    description: "Retrieve the complete information for specific entities by their exact names. Use this when the user asks about known entities by name (e.g., 'What do you know about Alice?'). Do not use this solely to look up observations before deleting them; use delete_observations directly instead. Use search_nodes instead for fuzzy or keyword searches.",
     inputSchema: {
       names: z.array(z.string()).describe("An array of entity names to retrieve")
     },
