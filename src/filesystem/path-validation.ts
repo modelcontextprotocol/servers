@@ -1,6 +1,34 @@
 import path from 'path';
 
 /**
+ * Normalizes a path without corrupting UNC paths.
+ * On Windows, path.resolve() converts UNC paths like \\server\share to C:\server\share,
+ * which breaks UNC path handling. This function preserves UNC paths.
+ * 
+ * @param p - The path to normalize
+ * @returns Normalized path
+ */
+function normalizePathSafe(p: string): string {
+  // Check if it's a UNC path (starts with \\ or //) BEFORE normalizing
+  // We must check this first because path.normalize on macOS corrupts UNC paths
+  if (p.startsWith('\\\\') || p.startsWith('//')) {
+    // UNC paths: normalize slashes to backslashes and remove redundant slashes
+    // but preserve the leading \\
+    let normalized = p.replace(/\//g, '\\');
+    // Ensure exactly two leading backslashes (not more, not less)
+    normalized = normalized.replace(/^\\+/, '\\\\');
+    // Normalize any double backslashes in the rest of the path to single
+    // but be careful not to break the leading \\
+    const rest = normalized.substring(2).replace(/\\+/g, '\\');
+    return '\\\\' + rest;
+  }
+  
+  // For non-UNC paths, use path.normalize then path.resolve
+  const normalized = path.normalize(p);
+  return path.resolve(normalized);
+}
+
+/**
  * Checks if an absolute path is within any of the allowed directories.
  * 
  * @param absolutePath - The absolute path to check (will be normalized)
@@ -27,13 +55,15 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
   // Normalize the input path
   let normalizedPath: string;
   try {
-    normalizedPath = path.resolve(path.normalize(absolutePath));
+    normalizedPath = normalizePathSafe(absolutePath);
   } catch {
     return false;
   }
 
   // Verify it's absolute after normalization
-  if (!path.isAbsolute(normalizedPath)) {
+  // UNC paths are always absolute, as are resolved paths
+  const isUncPath = normalizedPath.startsWith('\\\\');
+  if (!isUncPath && !path.isAbsolute(normalizedPath)) {
     throw new Error('Path must be absolute after normalization');
   }
 
@@ -51,13 +81,14 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
     // Normalize the allowed directory
     let normalizedDir: string;
     try {
-      normalizedDir = path.resolve(path.normalize(dir));
+      normalizedDir = normalizePathSafe(dir);
     } catch {
       return false;
     }
 
     // Verify allowed directory is absolute after normalization
-    if (!path.isAbsolute(normalizedDir)) {
+    const isUncDir = normalizedDir.startsWith('\\\\');
+    if (!isUncDir && !path.isAbsolute(normalizedDir)) {
       throw new Error('Allowed directories must be absolute paths after normalization');
     }
 
@@ -79,6 +110,18 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
       const dirDrive = normalizedDir.charAt(0).toLowerCase();
       const pathDrive = normalizedPath.charAt(0).toLowerCase();
       return pathDrive === dirDrive && normalizedPath.startsWith(normalizedDir.replace(/\\?$/, '\\'));
+    }
+    
+    // Special handling for UNC paths
+    // Both paths must be UNC paths for a valid match
+    if (isUncPath && isUncDir) {
+      // For UNC paths, use backslash as separator
+      return normalizedPath.startsWith(normalizedDir + '\\');
+    }
+    
+    // If one is UNC and the other isn't, they can't match
+    if (isUncPath !== isUncDir) {
+      return false;
     }
     
     return normalizedPath.startsWith(normalizedDir + path.sep);

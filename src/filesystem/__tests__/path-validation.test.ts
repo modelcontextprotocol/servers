@@ -439,6 +439,40 @@ describe('Path Validation', () => {
         expect(isPathWithinAllowedDirectories('\\\\other\\share\\project', allowed)).toBe(false);
       }
     });
+
+    it('allows UNC path subdirectories (GitHub issue #3527)', () => {
+      // This test verifies that UNC paths like \\server\share\subdir are correctly
+      // recognized as being within allowed directories like \\server\share.
+      // The bug was that path.resolve() on Windows corrupts UNC paths by prepending
+      // the current drive letter (e.g., \\server\share becomes C:\server\share).
+      
+      // Test exact match of UNC share root
+      const allowedRoot = ['\\\\192.168.4.96\\Mega'];
+      expect(isPathWithinAllowedDirectories('\\\\192.168.4.96\\Mega', allowedRoot)).toBe(true);
+      
+      // Test subdirectories under UNC share - this was failing before the fix
+      expect(isPathWithinAllowedDirectories('\\\\192.168.4.96\\Mega\\Drops', allowedRoot)).toBe(true);
+      expect(isPathWithinAllowedDirectories('\\\\192.168.4.96\\Mega\\00R RPGs', allowedRoot)).toBe(true);
+      expect(isPathWithinAllowedDirectories('\\\\192.168.4.96\\Mega\\deeply\\nested\\path', allowedRoot)).toBe(true);
+      expect(isPathWithinAllowedDirectories('\\\\192.168.4.96\\Mega\\file.txt', allowedRoot)).toBe(true);
+      
+      // Test that different shares on same server are blocked
+      expect(isPathWithinAllowedDirectories('\\\\192.168.4.96\\Plex', allowedRoot)).toBe(false);
+      expect(isPathWithinAllowedDirectories('\\\\192.168.4.96\\Plex\\Movies', allowedRoot)).toBe(false);
+      
+      // Test that different servers are blocked
+      expect(isPathWithinAllowedDirectories('\\\\otherserver\\share\\path', allowedRoot)).toBe(false);
+      
+      // Test with multiple UNC allowed directories
+      const allowedMultiple = ['\\\\192.168.4.96\\Mega', '\\\\192.168.4.96\\Plex'];
+      expect(isPathWithinAllowedDirectories('\\\\192.168.4.96\\Mega\\Drops', allowedMultiple)).toBe(true);
+      expect(isPathWithinAllowedDirectories('\\\\192.168.4.96\\Plex\\Movies', allowedMultiple)).toBe(true);
+      expect(isPathWithinAllowedDirectories('\\\\192.168.4.96\\OtherShare\\file', allowedMultiple)).toBe(false);
+      
+      // Test UNC path prefix attacks are blocked
+      expect(isPathWithinAllowedDirectories('\\\\192.168.4.96\\MegaBackup', allowedRoot)).toBe(false);
+      expect(isPathWithinAllowedDirectories('\\\\192.168.4.96\\MegaExtra\\file', allowedRoot)).toBe(false);
+    });
   });
 
   describe('Symlink Tests', () => {
