@@ -33,6 +33,7 @@ interface FileInfo {
 
 export interface SearchOptions {
   excludePatterns?: string[];
+  includeHidden?: boolean;
 }
 
 export interface SearchResult {
@@ -377,13 +378,16 @@ export async function searchFilesWithValidation(
   allowedDirectories: string[],
   options: SearchOptions = {}
 ): Promise<string[]> {
-  const { excludePatterns = [] } = options;
+  const { excludePatterns = [], includeHidden = false } = options;
   const results: string[] = [];
 
   async function search(currentPath: string) {
     const entries = await fs.readdir(currentPath, { withFileTypes: true });
 
     for (const entry of entries) {
+      // Skip dot-prefixed entries unless hidden files are explicitly enabled
+      if (!includeHidden && entry.name.startsWith('.')) continue;
+
       const fullPath = path.join(currentPath, entry.name);
 
       try {
