@@ -38,7 +38,7 @@ const config = {
  *
  * The registered tool retrieves a specified number of resource links and their metadata.
  * Resource links are dynamically generated as either text or binary blob resources,
- * based on their ID being even or odd.
+ * with even resource IDs returning text resources and odd resource IDs returning blobs.
 
  * The response contains a "text" introductory block and multiple "resource_link" blocks.
  *
@@ -57,21 +57,21 @@ export const registerGetResourceLinksTool = (server: McpServer) => {
 
     // Create resource link content blocks
     for (let resourceId = 1; resourceId <= count; resourceId++) {
-      // Get resource uri for text or blob resource based on odd/even resourceId
-      const isOdd = resourceId % 2 === 0;
-      const uri = isOdd
+      // Even IDs use text resources; odd IDs use blob resources.
+      const isTextResource = resourceId % 2 === 0;
+      const uri = isTextResource
         ? textResourceUri(resourceId)
         : blobResourceUri(resourceId);
 
       // Get resource based on the resource type
-      const resource = isOdd
+      const resource = isTextResource
         ? textResource(uri, resourceId)
         : blobResource(uri, resourceId);
 
       content.push({
         type: "resource_link",
         uri: resource.uri,
-        name: `${isOdd ? "Text" : "Blob"} Resource ${resourceId}`,
+        name: `${isTextResource ? "Text" : "Blob"} Resource ${resourceId}`,
         description: `Resource ${resourceId}: ${
           resource.mimeType === "text/plain"
             ? "plaintext resource"
