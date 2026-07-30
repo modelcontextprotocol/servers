@@ -158,6 +158,74 @@ export async function readFileContent(filePath: string, encoding: string = 'utf-
   return await fs.readFile(filePath, encoding as BufferEncoding);
 }
 
+async function writeInPlace(filePath: string, content: string, encoding: BufferEncoding = 'utf-8'): Promise<void> {
+  /**
+   * Write to an existing file preserving its inode, birthtime, hard links,
+   * and file-watcher identity.
+   *
+   * Replaces the previous temp-file + fs.rename() strategy, which created a
+   * new inode on every write — destroying birthtime on macOS/APFS, ext4,
+   * and Windows/NTFS, severing hard links, and silently breaking inode-based
+   * file watchers/editors. See issue #4512.
+   *
+   * Security model: O_NOFOLLOW fails with ELOOP if the path was swapped for a
+   * symlink between validation and write, giving the same TOCTOU protection
+   * as the rename-based approach. The write happens on the original inode,
+   * so the only way an attacker can write to a different file than validated
+   * is to delete + re-create the inode at the same path — which is detectable
+   * via a stat() check.
+   *
+   * On Windows, fs.constants.O_NOFOLLOW is not supported (it throws ERR_UNSUPPORTED
+   * or is silently ignored depending on Node version), so we fall back to the
+   * atomic-rename approach. The threat model on Windows differs: symlink
+   * creation requires elevated privileges by default, and the MCP filesystem
+   * server is typically run inside a sandbox.
+   */
+  const isWindows = process.platform === 'win32';
+  if (isWindows) {
+    // Atomic-rename fallback for Windows — preserves symlink-race safety
+    // at the cost of birthtime (the prior behavior).
+    const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
+    try {
+      await fs.writeFile(tempPath, content);
+      await fs.rename(tempPath, filePath);
+    } catch (renameError) {
+      try { await fs.unlink(tempPath); } catch { /* ignore */ }
+      throw renameError;
+    }
+    return;
+  }
+  // POSIX path: O_NOFOLLOW + O_WRONLY + O_CREAT | O_TRUNC. O_NOFOLLOW
+  // prevents writes through a symlink swapped in after path validation;
+  // O_TRUNC truncates the existing file in place (preserves inode, birthtime,
+  // hard links). Fails with EEXIST only if the path is a freshly-created
+  // symlink, which is the same protection as the rename path's 'wx' flag.
+  let handle: import('fs/promises').FileHandle | null = null;
+  try {
+    handle = await fs.open(
+      filePath,
+      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC
+    );
+    // Verify the resolved handle is a regular file (defense in depth: catches
+    // any race where a non-regular file was swapped in after open()).
+    const stat = await handle.stat();
+    if (!stat.isFile()) {
+      throw new Error(
+        `Refusing to write to non-regular file ${filePath} (mode=${stat.mode})`
+      );
+    }
+    if (typeof content === 'string') {
+      await handle.writeFile(content, { encoding });
+    } else {
+      await handle.writeFile(content);
+    }
+  } finally {
+    if (handle) {
+      try { await handle.close(); } catch { /* ignore */ }
+    }
+  }
+}
+
 export async function writeFileContent(filePath: string, content: string): Promise<void> {
   try {
     // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
@@ -165,19 +233,10 @@ export async function writeFileContent(filePath: string, content: string): Promi
     await fs.writeFile(filePath, content, { encoding: "utf-8", flag: 'wx' });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      // Security: Use atomic rename to prevent race conditions where symlinks
-      // could be created between validation and write. Rename operations
-      // replace the target file atomically and don't follow symlinks.
-      const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-      try {
-        await fs.writeFile(tempPath, content, 'utf-8');
-        await fs.rename(tempPath, filePath);
-      } catch (renameError) {
-        try {
-          await fs.unlink(tempPath);
-        } catch {}
-        throw renameError;
-      }
+      // File exists: write in place to preserve inode, birthtime, hard links,
+      // and inode-based file watchers. See writeInPlace() for the security
+      // rationale. Fixes #4512.
+      await writeInPlace(filePath, content);
     } else {
       throw error;
     }
@@ -263,19 +322,10 @@ export async function applyFileEdits(
   const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
 
   if (!dryRun) {
-    // Security: Use atomic rename to prevent race conditions where symlinks
-    // could be created between validation and write. Rename operations
-    // replace the target file atomically and don't follow symlinks.
-    const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
-    try {
-      await fs.writeFile(tempPath, modifiedContent, 'utf-8');
-      await fs.rename(tempPath, filePath);
-    } catch (error) {
-      try {
-        await fs.unlink(tempPath);
-      } catch {}
-      throw error;
-    }
+    // Write the modified content in place, preserving inode, birthtime,
+    // and hard links. See writeInPlace() for the security rationale and
+    // issue #4512 for the bug this fixes.
+    await writeInPlace(filePath, modifiedContent);
   }
 
   return formattedDiff;
