@@ -2,10 +2,15 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult, Resource } from "@modelcontextprotocol/sdk/types.js";
 import { gzipSync } from "node:zlib";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import {
   getSessionResourceURI,
   registerSessionResource,
 } from "../resources/session.js";
+
+// Maximum number of redirect hops to follow (and re-validate) when fetching.
+const GZIP_MAX_REDIRECTS = 20;
 
 // Maximum input file size - 10 MB default
 const GZIP_MAX_FETCH_SIZE = Number(
@@ -168,6 +173,182 @@ function validateDataURI(dataUri: string): URL {
 }
 
 /**
+ * Determines whether an IPv4 address string falls in a range that must not be
+ * fetched (loopback, private, link-local/cloud-metadata, reserved, etc.).
+ */
+function isBlockedIpv4(ip: string): boolean {
+  const parts = ip.split(".").map((p) => parseInt(p, 10));
+  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) {
+    // Not a well-formed IPv4 address; treat as blocked to fail closed.
+    return true;
+  }
+  const asInt =
+    ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+  const inRange = (base: string, bits: number): boolean => {
+    const b = base.split(".").map((p) => parseInt(p, 10));
+    const baseInt = ((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]) >>> 0;
+    const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+    return (asInt & mask) === (baseInt & mask);
+  };
+  return (
+    inRange("0.0.0.0", 8) || // "this" network / unspecified
+    inRange("10.0.0.0", 8) || // private
+    inRange("100.64.0.0", 10) || // carrier-grade NAT
+    inRange("127.0.0.0", 8) || // loopback
+    inRange("169.254.0.0", 16) || // link-local (incl. cloud metadata 169.254.169.254)
+    inRange("172.16.0.0", 12) || // private
+    inRange("192.0.0.0", 24) || // IETF protocol assignments
+    inRange("192.0.2.0", 24) || // TEST-NET-1
+    inRange("192.168.0.0", 16) || // private
+    inRange("198.18.0.0", 15) || // benchmarking
+    inRange("198.51.100.0", 24) || // TEST-NET-2
+    inRange("203.0.113.0", 24) || // TEST-NET-3
+    inRange("224.0.0.0", 4) || // multicast
+    inRange("240.0.0.0", 4) // reserved (incl. 255.255.255.255)
+  );
+}
+
+/**
+ * Expands an IPv6 address string (possibly using "::" compression and/or a
+ * trailing dotted-quad IPv4 suffix) into its 8 16-bit hextets. Returns null if
+ * the address cannot be parsed.
+ */
+function expandIpv6(addr: string): number[] | null {
+  let s = addr;
+  // Convert a trailing IPv4 dotted-quad (e.g. ::ffff:127.0.0.1) into hextets.
+  const v4match = s.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/);
+  if (v4match) {
+    const v4 = v4match[2].split(".").map((p) => parseInt(p, 10));
+    if (v4.length !== 4 || v4.some((n) => Number.isNaN(n) || n < 0 || n > 255)) {
+      return null;
+    }
+    const h1 = ((v4[0] << 8) | v4[1]).toString(16);
+    const h2 = ((v4[2] << 8) | v4[3]).toString(16);
+    s = `${v4match[1]}${h1}:${h2}`;
+  }
+
+  const halves = s.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  if (halves.length === 1) {
+    if (head.length !== 8) return null;
+    return head.map((g) => parseInt(g, 16));
+  }
+  const missing = 8 - head.length - tail.length;
+  if (missing < 0) return null;
+  const groups = [...head, ...Array(missing).fill("0"), ...tail];
+  if (groups.length !== 8) return null;
+  return groups.map((g) => parseInt(g || "0", 16));
+}
+
+/**
+ * Determines whether an IPv6 address string must not be fetched. IPv4-mapped
+ * addresses (in either dotted or hex form) are unwrapped and classified as IPv4.
+ */
+function isBlockedIpv6(ip: string): boolean {
+  const g = expandIpv6(ip.toLowerCase());
+  if (!g || g.some((h) => Number.isNaN(h))) {
+    return true; // fail closed on anything we cannot parse
+  }
+  // IPv4-mapped (::ffff:a.b.c.d): first 80 bits zero, next 16 bits 0xffff.
+  if (g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0 && g[5] === 0xffff) {
+    const v4 = `${g[6] >> 8}.${g[6] & 0xff}.${g[7] >> 8}.${g[7] & 0xff}`;
+    return isBlockedIpv4(v4);
+  }
+  if (g.every((h) => h === 0)) return true; // :: unspecified
+  if (g.slice(0, 7).every((h) => h === 0) && g[7] === 1) return true; // ::1 loopback
+  // IPv4-compatible (deprecated ::a.b.c.d, ::/96): first 96 bits zero. Unwrap
+  // and classify as IPv4 so forms like ::127.0.0.1 are not treated as public.
+  if (g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0 && g[5] === 0) {
+    const v4 = `${g[6] >> 8}.${g[6] & 0xff}.${g[7] >> 8}.${g[7] & 0xff}`;
+    return isBlockedIpv4(v4);
+  }
+  const first = g[0];
+  if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
+  if ((first & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((first & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+  return false;
+}
+
+/**
+ * Rejects as soon as `signal` aborts so an awaited operation that does not
+ * itself honor the AbortSignal (e.g. DNS resolution via dns/promises.lookup)
+ * still respects the overall fetch timeout instead of hanging past it.
+ */
+function withAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+  message: string
+): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new Error(message));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error(message));
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      }
+    );
+  });
+}
+
+/**
+ * Resolves a URL's host and throws if any resolved address is a non-public
+ * (loopback/private/link-local/metadata) IP, to prevent SSRF. Only http/https
+ * URLs are checked; other schemes (e.g. data:) are left to the caller.
+ *
+ * @param {URL} url The URL whose destination host should be validated.
+ * @param {AbortSignal} [signal] Abort signal that also bounds DNS resolution to
+ *   the caller's timeout.
+ * @throws {Error} If the host resolves to a blocked address or cannot be resolved.
+ */
+async function assertPublicHost(url: URL, signal?: AbortSignal): Promise<void> {
+  // url.hostname keeps brackets around IPv6 literals; strip them.
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+
+  let addresses: string[];
+  if (isIP(host)) {
+    addresses = [host];
+  } else {
+    let resolved;
+    try {
+      resolved = await withAbort(
+        lookup(host, { all: true }),
+        signal,
+        "DNS resolution timed out"
+      );
+    } catch (error) {
+      // Wrap raw Node lookup errors (ENOTFOUND/EAI_AGAIN, or the timeout
+      // above) so the failure carries host + URL context and matches the
+      // tool's other error messages.
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Could not resolve host ${host} for ${url}: ${message}`);
+    }
+    addresses = resolved.map((r) => r.address);
+    if (addresses.length === 0) {
+      throw new Error(`Could not resolve host ${host} for ${url}`);
+    }
+  }
+
+  for (const address of addresses) {
+    const blocked =
+      isIP(address) === 6 ? isBlockedIpv6(address) : isBlockedIpv4(address);
+    if (blocked) {
+      throw new Error(
+        `Refusing to fetch ${url}: host ${host} resolves to non-public address ${address} (SSRF protection).`
+      );
+    }
+  }
+}
+
+/**
  * Fetches data safely from a given URL while ensuring constraints on maximum byte size and timeout duration.
  *
  * @param {URL} url The URL to fetch data from.
@@ -191,8 +372,9 @@ async function fetchSafely(
   );
 
   try {
-    // Fetch the data
-    const response = await fetch(url, { signal: controller.signal });
+    // Fetch the data, following redirects manually so every hop is re-validated
+    // against the SSRF guard (automatic redirects would bypass it).
+    const response = await fetchWithGuardedRedirects(url, controller.signal);
     if (!response.body) {
       throw new Error("No response body");
     }
@@ -244,5 +426,60 @@ async function fetchSafely(
     return buffer.buffer;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+/**
+ * Performs a fetch that follows redirects manually, validating the destination
+ * host against the SSRF guard before every hop. Non-http(s) URLs (e.g. data:)
+ * are fetched without host validation, and redirects to non-http(s) schemes are
+ * refused.
+ *
+ * @param {URL} url The initial URL to fetch.
+ * @param {AbortSignal} signal The abort signal used to enforce the fetch timeout.
+ * @return {Promise<Response>} The final (non-redirect) response.
+ * @throws {Error} If a hop resolves to a blocked host, a redirect targets an
+ *   unsupported scheme, or the redirect limit is exceeded.
+ */
+async function fetchWithGuardedRedirects(
+  url: URL,
+  signal: AbortSignal
+): Promise<Response> {
+  let current = url;
+  for (let redirects = 0; ; redirects++) {
+    if (current.protocol === "http:" || current.protocol === "https:") {
+      await assertPublicHost(current, signal);
+    }
+
+    const response = await fetch(current, { signal, redirect: "manual" });
+
+    const isRedirect =
+      response.status >= 300 &&
+      response.status < 400 &&
+      response.headers.has("location");
+    if (!isRedirect) {
+      return response;
+    }
+
+    // This redirect response is never returned to the caller, so drain its
+    // body to let undici release the socket instead of leaving it pinned
+    // across the redirect chain (a leak under load).
+    await response.body?.cancel();
+
+    // Enforce the limit before following (and re-validating) another hop, so
+    // we never resolve or fetch a redirect target beyond GZIP_MAX_REDIRECTS.
+    if (redirects >= GZIP_MAX_REDIRECTS) {
+      throw new Error(
+        `Too many redirects while fetching ${url} (max ${GZIP_MAX_REDIRECTS}).`
+      );
+    }
+
+    const next = new URL(response.headers.get("location")!, current);
+    if (next.protocol !== "http:" && next.protocol !== "https:") {
+      throw new Error(
+        `Refusing to follow redirect from ${current} to unsupported protocol ${next.protocol}`
+      );
+    }
+    current = next;
   }
 }
