@@ -11,7 +11,6 @@ import { createReadStream } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 import { z } from "zod";
-import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from './path-utils.js';
 import { getValidRootDirectories } from './roots-utils.js';
 import {
@@ -26,6 +25,7 @@ import {
   tailFile,
   headFile,
   setAllowedDirectories,
+  buildDirectoryTree,
 } from './lib.js';
 
 // Command line argument parsing
@@ -559,50 +559,7 @@ server.registerTool(
     annotations: { readOnlyHint: true, openWorldHint: false }
   },
   async (args: z.infer<typeof DirectoryTreeArgsSchema>) => {
-    interface TreeEntry {
-      name: string;
-      type: 'file' | 'directory';
-      children?: TreeEntry[];
-    }
-    const rootPath = args.path;
-
-    async function buildTree(currentPath: string, excludePatterns: string[] = []): Promise<TreeEntry[]> {
-      const validPath = await validatePath(currentPath);
-      const entries = await fs.readdir(validPath, { withFileTypes: true });
-      const result: TreeEntry[] = [];
-
-      for (const entry of entries) {
-        const relativePath = path.relative(rootPath, path.join(currentPath, entry.name));
-        const shouldExclude = excludePatterns.some(pattern => {
-          if (pattern.includes('*')) {
-            return minimatch(relativePath, pattern, { dot: true });
-          }
-          // For files: match exact name or as part of path
-          // For directories: match as directory path
-          return minimatch(relativePath, pattern, { dot: true }) ||
-            minimatch(relativePath, `**/${pattern}`, { dot: true }) ||
-            minimatch(relativePath, `**/${pattern}/**`, { dot: true });
-        });
-        if (shouldExclude)
-          continue;
-
-        const entryData: TreeEntry = {
-          name: entry.name,
-          type: entry.isDirectory() ? 'directory' : 'file'
-        };
-
-        if (entry.isDirectory()) {
-          const subPath = path.join(currentPath, entry.name);
-          entryData.children = await buildTree(subPath, excludePatterns);
-        }
-
-        result.push(entryData);
-      }
-
-      return result;
-    }
-
-    const treeData = await buildTree(rootPath, args.excludePatterns);
+    const treeData = await buildDirectoryTree(args.path, args.excludePatterns);
     const text = JSON.stringify(treeData, null, 2);
     const contentBlock = { type: "text" as const, text };
     return {
