@@ -140,6 +140,57 @@ export async function validatePath(requestedPath: string): Promise<string> {
 }
 
 
+/**
+ * Replace a target file with the contents of a temporary file.
+ *
+ * Uses `fs.rename` for an atomic swap when possible. On Windows, rename can
+ * fail with `EPERM` when the target is held open by another process (e.g.
+ * VS Code). In that case the function first overwrites the target in place,
+ * avoiding the destination unlink performed by `fs.cp({ force: true })`.
+ * If direct overwrite is also blocked, it falls back to `fs.cp`.
+ *
+ * **Limitations:**
+ * - Direct overwrite requires the locking process to share write access.
+ * - The `fs.cp` fallback requires delete sharing and is *not* atomic: there
+ *   is a brief symlink race window between its internal `unlink(dest)` and
+ *   `copyFile(src, dest)`.
+ * - Editors that grant neither write nor delete sharing still produce an
+ *   error.
+ *
+ * @param tempPath  Path to the temporary file that contains the new content.
+ * @param targetPath  Path to the destination file to be replaced.
+ */
+async function cleanupTempFile(tempPath: string): Promise<void> {
+  try {
+    await fs.unlink(tempPath);
+  } catch {}
+}
+
+async function replaceFileFromTemp(tempPath: string, targetPath: string): Promise<void> {
+  try {
+    await fs.rename(tempPath, targetPath);
+  } catch (renameError) {
+    if ((renameError as NodeJS.ErrnoException).code === 'EPERM') {
+      try {
+        const content = await fs.readFile(tempPath);
+        await fs.writeFile(targetPath, content);
+      } catch {
+        try {
+          await fs.cp(tempPath, targetPath, { force: true });
+        } catch (copyError) {
+          await cleanupTempFile(tempPath);
+          throw copyError;
+        }
+      }
+      await cleanupTempFile(tempPath);
+    } else {
+      // For non-EPERM errors, clean up the temp file and re-throw
+      await cleanupTempFile(tempPath);
+      throw renameError;
+    }
+  }
+}
+
 // File Operations
 export async function getFileStats(filePath: string): Promise<FileInfo> {
   const stats = await fs.stat(filePath);
@@ -165,18 +216,15 @@ export async function writeFileContent(filePath: string, content: string): Promi
     await fs.writeFile(filePath, content, { encoding: "utf-8", flag: 'wx' });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      // Security: Use atomic rename to prevent race conditions where symlinks
-      // could be created between validation and write. Rename operations
-      // replace the target file atomically and don't follow symlinks.
+      // Prefer atomic rename; replaceFileFromTemp documents the Windows
+      // locked-file fallbacks and their security tradeoffs.
       const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
       try {
         await fs.writeFile(tempPath, content, 'utf-8');
-        await fs.rename(tempPath, filePath);
-      } catch (renameError) {
-        try {
-          await fs.unlink(tempPath);
-        } catch {}
-        throw renameError;
+        await replaceFileFromTemp(tempPath, filePath);
+      } catch (tempWriteError) {
+        await cleanupTempFile(tempPath);
+        throw tempWriteError;
       }
     } else {
       throw error;
@@ -263,18 +311,15 @@ export async function applyFileEdits(
   const formattedDiff = `${'`'.repeat(numBackticks)}diff\n${diff}${'`'.repeat(numBackticks)}\n\n`;
 
   if (!dryRun) {
-    // Security: Use atomic rename to prevent race conditions where symlinks
-    // could be created between validation and write. Rename operations
-    // replace the target file atomically and don't follow symlinks.
+    // Prefer atomic rename; replaceFileFromTemp documents the Windows
+    // locked-file fallbacks and their security tradeoffs.
     const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
     try {
       await fs.writeFile(tempPath, modifiedContent, 'utf-8');
-      await fs.rename(tempPath, filePath);
-    } catch (error) {
-      try {
-        await fs.unlink(tempPath);
-      } catch {}
-      throw error;
+      await replaceFileFromTemp(tempPath, filePath);
+    } catch (writeError) {
+      await cleanupTempFile(tempPath);
+      throw writeError;
     }
   }
 
