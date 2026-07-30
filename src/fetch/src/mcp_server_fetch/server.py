@@ -24,17 +24,18 @@ DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
 
 
-def extract_content_from_html(html: str) -> str:
+def extract_content_from_html(html: str, *, use_readability_js: bool = False) -> str:
     """Extract and convert HTML content to Markdown format.
 
     Args:
         html: Raw HTML content to process
+        use_readability_js: Whether to use Mozilla Readability via Node.js
 
     Returns:
         Simplified markdown version of the content
     """
     ret = readabilipy.simple_json.simple_json_from_html_string(
-        html, use_readability=True
+        html, use_readability=use_readability_js
     )
     if not ret["content"]:
         return "<error>Page failed to be simplified from HTML</error>"
@@ -42,6 +43,8 @@ def extract_content_from_html(html: str) -> str:
         ret["content"],
         heading_style=markdownify.ATX,
     )
+    if not content.strip():
+        return "<error>Page failed to be simplified from HTML</error>"
     return content
 
 
@@ -63,7 +66,9 @@ def get_robots_txt_url(url: str) -> str:
     return robots_url
 
 
-async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url: str | None = None) -> None:
+async def check_may_autonomously_fetch_url(
+    url: str, user_agent: str, proxy_url: str | None = None
+) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
@@ -80,15 +85,19 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
                 headers={"User-Agent": user_agent},
             )
         except HTTPError:
-            raise McpError(ErrorData(
-                code=INTERNAL_ERROR,
-                message=f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue",
-            ))
+            raise McpError(
+                ErrorData(
+                    code=INTERNAL_ERROR,
+                    message=f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue",
+                )
+            )
         if response.status_code in (401, 403):
-            raise McpError(ErrorData(
-                code=INTERNAL_ERROR,
-                message=f"When fetching robots.txt ({robot_txt_url}), received status {response.status_code} so assuming that autonomous fetching is not allowed, the user can try manually fetching by using the fetch prompt",
-            ))
+            raise McpError(
+                ErrorData(
+                    code=INTERNAL_ERROR,
+                    message=f"When fetching robots.txt ({robot_txt_url}), received status {response.status_code} so assuming that autonomous fetching is not allowed, the user can try manually fetching by using the fetch prompt",
+                )
+            )
         elif 400 <= response.status_code < 500:
             return
         robot_txt = response.text
@@ -97,19 +106,25 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
     )
     robot_parser = Protego.parse(processed_robot_txt)
     if not robot_parser.can_fetch(str(url), user_agent):
-        raise McpError(ErrorData(
-            code=INTERNAL_ERROR,
-            message=f"The sites robots.txt ({robot_txt_url}), specifies that autonomous fetching of this page is not allowed, "
-            f"<useragent>{user_agent}</useragent>\n"
-            f"<url>{url}</url>"
-            f"<robots>\n{robot_txt}\n</robots>\n"
-            f"The assistant must let the user know that it failed to view the page. The assistant may provide further guidance based on the above information.\n"
-            f"The assistant can tell the user that they can try manually fetching the page by using the fetch prompt within their UI.",
-        ))
+        raise McpError(
+            ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"The sites robots.txt ({robot_txt_url}), specifies that autonomous fetching of this page is not allowed, "
+                f"<useragent>{user_agent}</useragent>\n"
+                f"<url>{url}</url>"
+                f"<robots>\n{robot_txt}\n</robots>\n"
+                f"The assistant must let the user know that it failed to view the page. The assistant may provide further guidance based on the above information.\n"
+                f"The assistant can tell the user that they can try manually fetching the page by using the fetch prompt within their UI.",
+            )
+        )
 
 
 async def fetch_url(
-    url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None
+    url: str,
+    user_agent: str,
+    force_raw: bool = False,
+    proxy_url: str | None = None,
+    use_readability_js: bool = False,
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
@@ -125,12 +140,16 @@ async def fetch_url(
                 timeout=30,
             )
         except HTTPError as e:
-            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}"))
+            raise McpError(
+                ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}")
+            )
         if response.status_code >= 400:
-            raise McpError(ErrorData(
-                code=INTERNAL_ERROR,
-                message=f"Failed to fetch {url} - status code {response.status_code}",
-            ))
+            raise McpError(
+                ErrorData(
+                    code=INTERNAL_ERROR,
+                    message=f"Failed to fetch {url} - status code {response.status_code}",
+                )
+            )
 
         page_raw = response.text
 
@@ -140,7 +159,9 @@ async def fetch_url(
     )
 
     if is_page_html and not force_raw:
-        return extract_content_from_html(page_raw), ""
+        return extract_content_from_html(
+            page_raw, use_readability_js=use_readability_js
+        ), ""
 
     return (
         page_raw,
@@ -182,6 +203,7 @@ async def serve(
     custom_user_agent: str | None = None,
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
+    use_readability_js: bool = False,
 ) -> None:
     """Run the fetch MCP server.
 
@@ -189,6 +211,7 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        use_readability_js: Whether to use Mozilla Readability via Node.js
     """
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
@@ -232,22 +255,32 @@ Although originally you did not have internet access, and were advised to refuse
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
         if not ignore_robots_txt:
-            await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
+            await check_may_autonomously_fetch_url(
+                url, user_agent_autonomous, proxy_url
+            )
 
         content, prefix = await fetch_url(
-            url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url
+            url,
+            user_agent_autonomous,
+            force_raw=args.raw,
+            proxy_url=proxy_url,
+            use_readability_js=use_readability_js,
         )
         original_length = len(content)
         if args.start_index >= original_length:
             content = "<error>No more content available.</error>"
         else:
-            truncated_content = content[args.start_index : args.start_index + args.max_length]
+            truncated_content = content[
+                args.start_index : args.start_index + args.max_length
+            ]
             if not truncated_content:
                 content = "<error>No more content available.</error>"
             else:
                 content = truncated_content
                 actual_content_length = len(truncated_content)
-                remaining_content = original_length - (args.start_index + actual_content_length)
+                remaining_content = original_length - (
+                    args.start_index + actual_content_length
+                )
                 # Only add the prompt to continue fetching if there is still remaining content
                 if actual_content_length == args.max_length and remaining_content > 0:
                     next_start = args.start_index + actual_content_length
@@ -262,7 +295,12 @@ Although originally you did not have internet access, and were advised to refuse
         url = arguments["url"]
 
         try:
-            content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url)
+            content, prefix = await fetch_url(
+                url,
+                user_agent_manual,
+                proxy_url=proxy_url,
+                use_readability_js=use_readability_js,
+            )
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:
             return GetPromptResult(

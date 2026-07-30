@@ -28,7 +28,8 @@ The fetch tool will truncate the response, but by using the `start_index` argume
 
 ## Installation
 
-Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
+By default, the fetch server uses a Python-only HTML simplifier and does not require Node.js. Optionally install Node.js and pass
+`--use-readability-js` to use Mozilla Readability through readabilipy's Node.js backend, which may simplify some pages more robustly.
 
 ### Using uv (recommended)
 
@@ -171,6 +172,11 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 ### Customization - Proxy
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
+
+### Customization - Mozilla Readability via Node.js
+
+By default, HTML simplification uses readabilipy's Python-only backend. To opt into Mozilla Readability through readabilipy's Node.js
+backend, install Node.js and add `--use-readability-js` to the `args` list in the configuration.
 
 ## Windows Configuration
 
