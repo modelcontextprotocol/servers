@@ -40,6 +40,107 @@ export interface SearchResult {
   isDirectory: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Mitigations for issue #4162: recursive search / validatePath can hang for
+// minutes on macOS CloudStorage / lazy provider-backed paths, because
+// fs.realpath and fs.readdir have no timeout and recursive search has no
+// upper bound. All knobs below are env-var configurable and default to
+// behavior that is safe for ordinary local trees.
+//
+//   FS_OP_TIMEOUT_MS            timeout (ms) per fs.realpath / fs.readdir
+//                               call. Default 15000. Positive integer.
+//   FS_SEARCH_MAX_VISITED       max entries a single recursive search may
+//                               visit before aborting. Default 50000.
+//                               Positive integer.
+//   FS_SEARCH_EXCLUDE_PREFIXES  comma-separated path prefixes that recursive
+//                               search refuses outright. Empty by default
+//                               (no behavior change). '~' is expanded.
+//
+// Invalid numeric values are ignored (a warning is logged) and the default is
+// used, so a typo cannot silently disable a guard.
+// ---------------------------------------------------------------------------
+
+// Raised when a wrapped filesystem call exceeds FS_OP_TIMEOUT_MS. Distinct
+// from ordinary fs errors so callers can tell a hang apart from e.g. EACCES
+// and avoid silently swallowing it.
+export class FsTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FsTimeoutError';
+  }
+}
+
+// Raised when a recursive search / directory walk reaches FS_SEARCH_MAX_VISITED.
+// A safety-cap abort is a deliberate early exit, not a genuine empty result, so
+// it gets its own type (mirroring FsTimeoutError) -- callers can discriminate it
+// via instanceof rather than string-matching the message, and it carries the
+// visit count and cap for diagnostics.
+export class FsSearchTruncatedError extends Error {
+  constructor(
+    message: string,
+    public readonly visited: number,
+    public readonly maxVisited: number,
+  ) {
+    super(message);
+    this.name = 'FsSearchTruncatedError';
+  }
+}
+
+// Reads a positive-integer env var, falling back to `defaultValue` (with a
+// warning) when unset or invalid. Uses Number() rather than parseInt() so that
+// partially-numeric garbage such as "15s" is rejected instead of truncated.
+function readPositiveIntEnv(name: string, defaultValue: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return defaultValue;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    console.error(`[filesystem] Ignoring invalid ${name}="${raw}"; using default ${defaultValue}.`);
+    return defaultValue;
+  }
+  return parsed;
+}
+
+// Timeout (ms) applied to individual fs.realpath / fs.readdir calls.
+const FS_OP_TIMEOUT_MS = readPositiveIntEnv('FS_OP_TIMEOUT_MS', 15000);
+
+// Hard cap on entries visited by a single recursive search before it aborts.
+export const FS_SEARCH_MAX_VISITED = readPositiveIntEnv('FS_SEARCH_MAX_VISITED', 50000);
+
+// Opt-in: comma-separated path prefixes that recursive search refuses outright.
+// Empty by default -- no behavior change unless the user sets it. Intended for
+// known-slow provider-backed roots (e.g. a CloudStorage folder). Each entry is
+// expanded ('~') and normalized so the containment check below is boundary-
+// aware: "/data/foo" must not match an unrelated "/data/foobar" root.
+const FS_SEARCH_EXCLUDE_PREFIXES = (process.env.FS_SEARCH_EXCLUDE_PREFIXES ?? '')
+  .split(',')
+  .map(prefix => prefix.trim())
+  .filter(prefix => prefix.length > 0)
+  .map(prefix => normalizePath(path.resolve(expandHome(prefix))));
+
+// Races a filesystem promise against a timeout. On timeout it rejects with an
+// FsTimeoutError instead of letting the caller hang. Note: the underlying fs
+// operation cannot be cancelled and may still settle in the background; the
+// timeout only unblocks the caller.
+export async function withFsTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new FsTimeoutError(`Filesystem operation timed out after ${FS_OP_TIMEOUT_MS}ms: ${label}`)),
+      FS_OP_TIMEOUT_MS,
+    );
+  });
+  // Defensive: if the operation wins the race, the timeout promise is left
+  // unhandled. Attach a no-op catch so the eventual rejection (if the timer
+  // does fire before clearTimeout takes effect) isn't reported as an
+  // unhandled rejection. The race result is unaffected.
+  timeout.catch(() => {});
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
+
 // Pure Utility Functions
 export function formatSize(bytes: number): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -112,8 +213,10 @@ export async function validatePath(requestedPath: string): Promise<string> {
 
   // Security: Handle symlinks by checking their real path to prevent symlink attacks
   // This prevents attackers from creating symlinks that point outside allowed directories
+  // #4162: fs.realpath is wrapped with a timeout so a lazy provider-backed path
+  // cannot block validation indefinitely.
   try {
-    const realPath = await fs.realpath(absolute);
+    const realPath = await withFsTimeout(fs.realpath(absolute), `realpath ${absolute}`);
     const normalizedReal = normalizePath(realPath);
     if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
       throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
@@ -124,16 +227,21 @@ export async function validatePath(requestedPath: string): Promise<string> {
     // This ensures we can't create files in unauthorized locations
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       const parentDir = path.dirname(absolute);
+      // #4162: only the realpath call is inside this try, so a timeout
+      // surfaces as FsTimeoutError and the access-denied check below is not
+      // masked into a misleading "Parent directory does not exist".
+      let realParentPath: string;
       try {
-        const realParentPath = await fs.realpath(parentDir);
-        const normalizedParent = normalizePath(realParentPath);
-        if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
-        }
-        return absolute;
-      } catch {
+        realParentPath = await withFsTimeout(fs.realpath(parentDir), `realpath ${parentDir}`);
+      } catch (parentError) {
+        if (parentError instanceof FsTimeoutError) throw parentError;
         throw new Error(`Parent directory does not exist: ${parentDir}`);
       }
+      const normalizedParent = normalizePath(realParentPath);
+      if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
+        throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+      }
+      return absolute;
     }
     throw error;
   }
@@ -371,19 +479,60 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
   }
 }
 
+// #4162: refuse recursive operations outright on user-configured slow roots.
+// Exported so both searchFilesWithValidation here and the directory_tree handler
+// in index.ts share the same containment check -- containment reuses
+// isPathWithinAllowedDirectories so it is boundary-aware: a prefix cannot match
+// an unrelated sibling that merely shares a string head.
+export function assertSearchPathNotExcluded(rootPath: string, opName: string): void {
+  if (FS_SEARCH_EXCLUDE_PREFIXES.length === 0) return;
+  // FS_SEARCH_EXCLUDE_PREFIXES is expanded with expandHome at module load
+  // (see above), so apply the same to rootPath here for symmetric comparison.
+  const normalizedRoot = normalizePath(path.resolve(expandHome(rootPath)));
+  if (isPathWithinAllowedDirectories(normalizedRoot, FS_SEARCH_EXCLUDE_PREFIXES)) {
+    throw new Error(
+      `${opName} is disabled for this path by FS_SEARCH_EXCLUDE_PREFIXES: ${rootPath}. ` +
+      `Recursive operations over lazy provider-backed trees (macOS CloudStorage / FileProvider) ` +
+      `are unreliable; use list_directory on specific subfolders, or narrow the search root.`
+    );
+  }
+}
+
 export async function searchFilesWithValidation(
   rootPath: string,
   pattern: string,
   allowedDirectories: string[],
   options: SearchOptions = {}
 ): Promise<string[]> {
+  assertSearchPathNotExcluded(rootPath, 'Recursive search');
+
   const { excludePatterns = [] } = options;
   const results: string[] = [];
+  // #4162: bound the recursion so a large / lazy-materialized tree cannot keep
+  // the server busy indefinitely. The search aborts once FS_SEARCH_MAX_VISITED
+  // entries have been visited; `aborted` is checked at every re-entry.
+  let visited = 0;
+  let aborted = false;
 
   async function search(currentPath: string) {
-    const entries = await fs.readdir(currentPath, { withFileTypes: true });
+    if (aborted) return;
+    // #4162: fs.readdir is wrapped with a timeout. A timeout (FsTimeoutError)
+    // propagates to the caller from any depth: the per-entry catch below
+    // deliberately re-throws timeouts instead of swallowing them, so a search
+    // never returns silently-partial results.
+    const entries = await withFsTimeout(
+      fs.readdir(currentPath, { withFileTypes: true }),
+      `readdir ${currentPath}`,
+    );
 
     for (const entry of entries) {
+      if (aborted) return;
+      if (visited >= FS_SEARCH_MAX_VISITED) {
+        aborted = true;
+        return;
+      }
+      visited++;
+
       const fullPath = path.join(currentPath, entry.name);
 
       try {
@@ -403,13 +552,26 @@ export async function searchFilesWithValidation(
 
         if (entry.isDirectory()) {
           await search(fullPath);
+          if (aborted) return;
         }
-      } catch {
+      } catch (error) {
+        // #4162: a timeout is a real hang, not an inaccessible entry -- surface
+        // it instead of continuing with partial results.
+        if (error instanceof FsTimeoutError) throw error;
         continue;
       }
     }
   }
 
   await search(rootPath);
+  if (aborted) {
+    throw new FsSearchTruncatedError(
+      `Search aborted after visiting ${visited} entries ` +
+      `(cap FS_SEARCH_MAX_VISITED=${FS_SEARCH_MAX_VISITED}). ` +
+      `Refine the pattern (e.g. '**/name') or narrow the search path.`,
+      visited,
+      FS_SEARCH_MAX_VISITED,
+    );
+  }
   return results;
 }
