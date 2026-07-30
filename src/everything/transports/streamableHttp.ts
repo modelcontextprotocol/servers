@@ -38,11 +38,35 @@ class InMemoryEventStore implements EventStore {
 
 console.log("Starting Streamable HTTP server...");
 
-// Express app with permissive CORS for testing with Inspector direct connect mode
+// CORS is restricted to local Inspector origins by default. Override with
+// MCP_ALLOWED_ORIGINS="https://example.com,https://other.example" for extra
+// origins. The previous default of "*" is intentionally NOT supported here:
+// the everything server is the most-forked MCP reference, and a wildcard
+// default propagates into developer-deployed servers exposing real tools.
+// To opt back into a wildcard (development only), set MCP_ALLOWED_ORIGINS="*".
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:6274",
+  "http://127.0.0.1:6274",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
+const corsOriginEnv = process.env.MCP_ALLOWED_ORIGINS;
+const corsOrigin: string | string[] =
+  corsOriginEnv === "*"
+    ? "*"
+    : corsOriginEnv && corsOriginEnv.trim().length > 0
+      ? corsOriginEnv.split(",").map((s) => s.trim()).filter(Boolean)
+      : DEFAULT_ALLOWED_ORIGINS;
+if (corsOrigin === "*") {
+  console.warn(
+    "[mcp-everything] WARNING: MCP_ALLOWED_ORIGINS='*' — wildcard CORS enabled. Use only on a developer workstation; never in any deployed setting.",
+  );
+}
+
 const app = express();
 app.use(
   cors({
-    origin: "*", // use "*" with caution in production
+    origin: corsOrigin,
     methods: "GET,POST,DELETE",
     preflightContinue: false,
     optionsSuccessStatus: 204,
