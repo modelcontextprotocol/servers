@@ -508,3 +508,27 @@ def test_git_branch_rejects_contains_flag_injection(test_repository):
 
     with pytest.raises(BadName):
         git_branch(test_repository, "local", not_contains="--exec=evil")
+
+
+def test_git_log_timestamp_filter_aligns_commit_fields(tmp_path):
+    """git_log with a timestamp filter must not scramble fields across commits."""
+    repo_path = tmp_path / "ts_repo"
+    repo = git.Repo.init(repo_path)
+    author = git.Actor("Tester", "tester@example.com")
+    (repo_path / "f.txt").write_text("a")
+    repo.index.add(["f.txt"])
+    repo.index.commit("first commit", author=author, commit_date="2024-01-10T10:00:00")
+    (repo_path / "f.txt").write_text("b")
+    repo.index.add(["f.txt"])
+    repo.index.commit("second commit", author=author, commit_date="2024-01-20T10:00:00")
+
+    result = git_log(repo, start_timestamp="2024-01-01")
+
+    assert len(result) == 2
+    joined = "\n".join(result)
+    # Both subjects appear in Message fields (none dropped or shifted).
+    assert "Message: second commit" in joined
+    assert "Message: first commit" in joined
+    # Author appears only in Author fields, never shifted into Commit/Date.
+    assert "Commit: Tester" not in joined
+    assert "Author: Tester" in joined
