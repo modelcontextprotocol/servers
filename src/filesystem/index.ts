@@ -185,6 +185,13 @@ async function readFileAsBase64Stream(filePath: string): Promise<string> {
   });
 }
 
+function asTextToolResult(text: string): CallToolResult {
+  return {
+    content: [{ type: "text", text }],
+    structuredContent: { content: text },
+  };
+}
+
 // Tool registrations
 
 // read_file (deprecated) and read_text_file
@@ -204,10 +211,7 @@ const readTextFileHandler = async (args: z.infer<typeof ReadTextFileArgsSchema>)
     content = await readFileContent(validPath);
   }
 
-  return {
-    content: [{ type: "text" as const, text: content }],
-    structuredContent: { content }
-  };
+  return asTextToolResult(content);
 };
 
 server.registerTool(
@@ -347,10 +351,7 @@ server.registerTool(
       }),
     );
     const text = results.join("\n---\n");
-    return {
-      content: [{ type: "text" as const, text }],
-      structuredContent: { content: text }
-    };
+    return asTextToolResult(text);
   }
 );
 
@@ -373,10 +374,7 @@ server.registerTool(
     const validPath = await validatePath(args.path);
     await writeFileContent(validPath, args.content);
     const text = `Successfully wrote to ${args.path}`;
-    return {
-      content: [{ type: "text" as const, text }],
-      structuredContent: { content: text }
-    };
+    return asTextToolResult(text);
   }
 );
 
@@ -402,10 +400,7 @@ server.registerTool(
   async (args: z.infer<typeof EditFileArgsSchema>) => {
     const validPath = await validatePath(args.path);
     const result = await applyFileEdits(validPath, args.edits, args.dryRun);
-    return {
-      content: [{ type: "text" as const, text: result }],
-      structuredContent: { content: result }
-    };
+    return asTextToolResult(result);
   }
 );
 
@@ -428,10 +423,7 @@ server.registerTool(
     const validPath = await validatePath(args.path);
     await fs.mkdir(validPath, { recursive: true });
     const text = `Successfully created directory ${args.path}`;
-    return {
-      content: [{ type: "text" as const, text }],
-      structuredContent: { content: text }
-    };
+    return asTextToolResult(text);
   }
 );
 
@@ -456,10 +448,7 @@ server.registerTool(
     const formatted = entries
       .map((entry) => `${entry.isDirectory() ? "[DIR]" : "[FILE]"} ${entry.name}`)
       .join("\n");
-    return {
-      content: [{ type: "text" as const, text: formatted }],
-      structuredContent: { content: formatted }
-    };
+    return asTextToolResult(formatted);
   }
 );
 
@@ -534,11 +523,7 @@ server.registerTool(
     ];
 
     const text = [...formattedEntries, ...summary].join("\n");
-    const contentBlock = { type: "text" as const, text };
-    return {
-      content: [contentBlock],
-      structuredContent: { content: text }
-    };
+    return asTextToolResult(text);
   }
 );
 
@@ -604,11 +589,7 @@ server.registerTool(
 
     const treeData = await buildTree(rootPath, args.excludePatterns);
     const text = JSON.stringify(treeData, null, 2);
-    const contentBlock = { type: "text" as const, text };
-    return {
-      content: [contentBlock],
-      structuredContent: { content: text }
-    };
+    return asTextToolResult(text);
   }
 );
 
@@ -633,11 +614,7 @@ server.registerTool(
     const validDestPath = await validatePath(args.destination);
     await fs.rename(validSourcePath, validDestPath);
     const text = `Successfully moved ${args.source} to ${args.destination}`;
-    const contentBlock = { type: "text" as const, text };
-    return {
-      content: [contentBlock],
-      structuredContent: { content: text }
-    };
+    return asTextToolResult(text);
   }
 );
 
@@ -663,10 +640,7 @@ server.registerTool(
     const validPath = await validatePath(args.path);
     const results = await searchFilesWithValidation(validPath, args.pattern, allowedDirectories, { excludePatterns: args.excludePatterns });
     const text = results.length > 0 ? results.join("\n") : "No matches found";
-    return {
-      content: [{ type: "text" as const, text }],
-      structuredContent: { content: text }
-    };
+    return asTextToolResult(text);
   }
 );
 
@@ -691,10 +665,7 @@ server.registerTool(
     const text = Object.entries(info)
       .map(([key, value]) => `${key}: ${value}`)
       .join("\n");
-    return {
-      content: [{ type: "text" as const, text }],
-      structuredContent: { content: text }
-    };
+    return asTextToolResult(text);
   }
 );
 
@@ -713,10 +684,7 @@ server.registerTool(
   },
   async () => {
     const text = `Allowed directories:\n${allowedDirectories.join('\n')}`;
-    return {
-      content: [{ type: "text" as const, text }],
-      structuredContent: { content: text }
-    };
+    return asTextToolResult(text);
   }
 );
 
