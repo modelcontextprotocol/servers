@@ -146,11 +146,11 @@ describe('KnowledgeGraphManager', () => {
     });
 
     it('should throw error for non-existent entity', async () => {
-      await expect(
-        manager.addObservations([
+      await expect(async () => {
+        await manager.addObservations([
           { entityName: 'NonExistent', contents: ['some observation'] },
-        ])
-      ).rejects.toThrow('Entity with name NonExistent not found');
+        ]);
+      }).rejects.toThrow('Entity with name NonExistent not found');
     });
   });
 
