@@ -59,6 +59,20 @@ describe('KnowledgeGraphManager', () => {
       const newEntities = await manager.createEntities([]);
       expect(newEntities).toHaveLength(0);
     });
+
+    it('should ignore duplicate entity names within a single batch', async () => {
+      const entities: Entity[] = [
+        { name: 'Alice', entityType: 'person', observations: ['first'] },
+        { name: 'Alice', entityType: 'person', observations: ['second'] },
+      ];
+
+      const newEntities = await manager.createEntities(entities);
+      expect(newEntities).toHaveLength(1);
+
+      const graph = await manager.readGraph();
+      expect(graph.entities).toHaveLength(1);
+      expect(graph.entities[0].name).toBe('Alice');
+    });
   });
 
   describe('createRelations', () => {
@@ -102,6 +116,24 @@ describe('KnowledgeGraphManager', () => {
     it('should handle empty relation arrays', async () => {
       const newRelations = await manager.createRelations([]);
       expect(newRelations).toHaveLength(0);
+    });
+
+    it('should skip duplicate relations within a single batch', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: [] },
+        { name: 'Bob', entityType: 'person', observations: [] },
+      ]);
+
+      const relations: Relation[] = [
+        { from: 'Alice', to: 'Bob', relationType: 'knows' },
+        { from: 'Alice', to: 'Bob', relationType: 'knows' },
+      ];
+
+      const newRelations = await manager.createRelations(relations);
+      expect(newRelations).toHaveLength(1);
+
+      const graph = await manager.readGraph();
+      expect(graph.relations).toHaveLength(1);
     });
   });
 
