@@ -3,6 +3,7 @@ from urllib.parse import urlparse, urlunparse
 
 import markdownify
 import readabilipy.simple_json
+from bs4 import BeautifulSoup
 from mcp.shared.exceptions import McpError
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -27,22 +28,59 @@ DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://
 def extract_content_from_html(html: str) -> str:
     """Extract and convert HTML content to Markdown format.
 
+    Uses Mozilla Readability via readabilipy as the primary extraction method.
+    Falls back to readabilipy without Readability (less aggressive filtering)
+    or direct markdownify conversion when Readability returns empty content,
+    which commonly happens with progressive SSR sites that deliver content in
+    hidden containers awaiting client-side hydration.
+
     Args:
         html: Raw HTML content to process
 
     Returns:
         Simplified markdown version of the content
     """
+    # Stage 1: Try Readability (best quality for standard pages)
     ret = readabilipy.simple_json.simple_json_from_html_string(
         html, use_readability=True
     )
-    if not ret["content"]:
-        return "<error>Page failed to be simplified from HTML</error>"
+    content_html = ret.get("content", "")
+    if content_html:
+        content = markdownify.markdownify(
+            content_html,
+            heading_style=markdownify.ATX,
+        )
+        if content.strip():
+            return content
+
+    # Stage 2: Try readabilipy without Readability JS (less aggressive,
+    # does not filter by CSS visibility)
+    ret = readabilipy.simple_json.simple_json_from_html_string(
+        html, use_readability=False
+    )
+    content_html = ret.get("content", "")
+    if content_html:
+        content = markdownify.markdownify(
+            content_html,
+            heading_style=markdownify.ATX,
+        )
+        if content.strip():
+            return content
+
+    # Stage 3: Convert full HTML directly with markdownify (last resort).
+    # Strip <script> and <style> first — markdownify renders them verbatim as
+    # plain text, which injects large blobs of JS/CSS noise into the output.
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style"]):
+        tag.decompose()
     content = markdownify.markdownify(
-        ret["content"],
+        str(soup),
         heading_style=markdownify.ATX,
     )
-    return content
+    if content.strip():
+        return content
+
+    return "<error>Page failed to be simplified from HTML</error>"
 
 
 def get_robots_txt_url(url: str) -> str:
