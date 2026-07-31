@@ -97,7 +97,8 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
         line for line in robot_txt.splitlines() if not line.strip().startswith("#")
     )
     robot_parser = Protego.parse(processed_robot_txt)
-    if not robot_parser.can_fetch(str(url), user_agent):
+    # FIX: Protego.can_fetch expects (user_agent, url)
+    if not robot_parser.can_fetch(user_agent, str(url)):
         raise McpError(ErrorData(
             code=INTERNAL_ERROR,
             message=(
