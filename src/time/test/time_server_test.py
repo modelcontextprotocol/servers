@@ -4,7 +4,7 @@ import json
 
 from freezegun import freeze_time
 from mcp.shared.exceptions import MCPError
-from mcp.types import CallToolRequestParams, INVALID_PARAMS
+from mcp.types import CallToolRequestParams, INVALID_PARAMS, TextContent
 import pytest
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -557,7 +557,10 @@ def test_call_tool_get_current_time():
             return await call_tool(None, params)  # type: ignore[arg-type]
 
     result = asyncio.run(_run())
-    payload = json.loads(result.content[0].text)
+    assert len(result.content) == 1
+    content = result.content[0]
+    assert isinstance(content, TextContent)
+    payload = json.loads(content.text)
     assert payload["timezone"] == "Europe/Warsaw"
     assert payload["datetime"] == "2024-01-01T13:00:00+01:00"
 
