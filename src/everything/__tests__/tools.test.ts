@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/server";
 import { registerEchoTool, EchoSchema } from "../tools/echo.js";
 import { registerGetSumTool } from "../tools/get-sum.js";
@@ -8,6 +9,7 @@ import {
   MCP_TINY_IMAGE,
 } from "../tools/get-tiny-image.js";
 import { registerGetStructuredContentTool } from "../tools/get-structured-content.js";
+import { registerGetStructuredContentListTool } from "../tools/get-structured-content-list.js";
 import { registerGetAnnotatedMessageTool } from "../tools/get-annotated-message.js";
 import { registerTriggerLongRunningOperationTool } from "../tools/trigger-long-running-operation.js";
 import { registerGetResourceLinksTool } from "../tools/get-resource-links.js";
@@ -268,6 +270,108 @@ describe("Tools", () => {
         conditions: "Sunny / Clear",
         humidity: 48,
       });
+    });
+  });
+
+  describe("get-structured-content-list", () => {
+    it("should advertise an array-rooted output schema", async () => {
+      const { mockServer, configs } = createMockServer();
+      registerGetStructuredContentListTool(mockServer);
+
+      // The point of this tool: 2026-07-28 lifted the object-root restriction,
+      // so the advertised schema is `"type": "array"` rather than an object
+      // with a wrapper property. The SDK projects this down to the legacy
+      // `{result: ...}` shape for pre-2026 peers; it is NOT authored that way.
+      const outputSchema = configs.get(
+        "get-structured-content-list"
+      )!.outputSchema;
+      const asJsonSchema = z.toJSONSchema(outputSchema) as {
+        type?: string;
+        items?: unknown;
+      };
+
+      expect(asJsonSchema.type).toBe("array");
+      expect(asJsonSchema.items).toBeDefined();
+    });
+
+    it("should return a bare array as structured content", async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerGetStructuredContentListTool(mockServer);
+
+      const handler = handlers.get("get-structured-content-list")!;
+      const result = await handler({ location: "Chicago", days: 3 });
+
+      // Bare array at the root -- not `{ result: [...] }`, and not an object
+      // with a single array-valued property.
+      expect(Array.isArray(result.structuredContent)).toBe(true);
+      expect(result.structuredContent).toEqual([
+        {
+          day: 1,
+          temperature: 36,
+          conditions: "Light rain / drizzle",
+          humidity: 82,
+        },
+        {
+          day: 2,
+          temperature: 37,
+          conditions: "Light rain / drizzle",
+          humidity: 80,
+        },
+        {
+          day: 3,
+          temperature: 38,
+          conditions: "Light rain / drizzle",
+          humidity: 78,
+        },
+      ]);
+    });
+
+    it("should honor the requested number of days", async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerGetStructuredContentListTool(mockServer);
+
+      const handler = handlers.get("get-structured-content-list")!;
+
+      const one = await handler({ location: "New York", days: 1 });
+      expect(one.structuredContent).toHaveLength(1);
+      expect(one.structuredContent[0]).toEqual({
+        day: 1,
+        temperature: 33,
+        conditions: "Cloudy",
+        humidity: 82,
+      });
+
+      const five = await handler({ location: "Los Angeles", days: 5 });
+      expect(five.structuredContent).toHaveLength(5);
+      expect(five.structuredContent[4].day).toBe(5);
+    });
+
+    it("should mirror the structured content in a text block", async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerGetStructuredContentListTool(mockServer);
+
+      const handler = handlers.get("get-structured-content-list")!;
+      const result = await handler({ location: "New York", days: 2 });
+
+      expect(result.content[0].type).toBe("text");
+      expect(JSON.parse(result.content[0].text)).toEqual(
+        result.structuredContent
+      );
+    });
+
+    it("should conform to its own advertised output schema", async () => {
+      const { mockServer, handlers, configs } = createMockServer();
+      registerGetStructuredContentListTool(mockServer);
+
+      const handler = handlers.get("get-structured-content-list")!;
+      const result = await handler({ location: "Chicago", days: 4 });
+
+      // A tool advertising an `outputSchema` MUST return conforming structured
+      // content, so validate the real payload against the real schema.
+      const outputSchema = configs.get(
+        "get-structured-content-list"
+      )!.outputSchema;
+      expect(() => outputSchema.parse(result.structuredContent)).not.toThrow();
     });
   });
 

@@ -6,6 +6,7 @@ import { registerGetResourceLinksTool } from "./get-resource-links.js";
 import { registerGetResourceReferenceTool } from "./get-resource-reference.js";
 import { registerGetRootsListTool } from "./get-roots-list.js";
 import { registerGetStructuredContentTool } from "./get-structured-content.js";
+import { registerGetStructuredContentListTool } from "./get-structured-content-list.js";
 import { registerGetSumTool } from "./get-sum.js";
 import { registerGetTinyImageTool } from "./get-tiny-image.js";
 import { registerGZipFileAsResourceTool } from "./gzip-file-as-resource.js";
@@ -42,6 +43,7 @@ export const registerTools = (server: McpServer) => {
   registerGetResourceReferenceTool(server);
   registerGetRootsListTool(server);
   registerGetStructuredContentTool(server);
+  registerGetStructuredContentListTool(server);
   registerGetSumTool(server);
   registerGetTinyImageTool(server);
   registerGZipFileAsResourceTool(server);

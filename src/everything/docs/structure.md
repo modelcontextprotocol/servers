@@ -47,6 +47,7 @@ src/everything
      │   ├── get-resource-reference.ts
      │   ├── get-roots-list.ts
      │   ├── get-structured-content.ts
+     │   ├── get-structured-content-list.ts
      │   ├── get-sum.ts
      │   ├── get-tiny-image.ts
      │   ├── gzip-file-as-resource.ts
@@ -165,7 +166,9 @@ src/everything
 - `trigger-sampling-request.ts`
   - Registers a `trigger-sampling-request` tool that asks the client/LLM for a completion and returns the sampling result.
 - `get-structured-content.ts`
-  - Registers a `get-structured-content` tool that demonstrates structuredContent block responses.
+  - Registers a `get-structured-content` tool that demonstrates structuredContent block responses, with an object-rooted `outputSchema`.
+- `get-structured-content-list.ts`
+  - Registers a `get-structured-content-list` tool whose `outputSchema` is an **array** at the root — the shape SEP-2106 newly permits at 2026-07-28. The handler returns the bare array on both eras; the SDK's wire codec projects the schema and the payload together into the legacy `{result: …}` shape for pre-2026 peers, so no `ctx.era` branch is needed in the tool.
 - `get-sum.ts`
   - Registers a `get-sum` tool with a Zod input schema that sums two numbers `a` and `b` and returns the result.
 - `get-tiny-image.ts`
