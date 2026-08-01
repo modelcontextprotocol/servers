@@ -81,14 +81,28 @@ src/everything
 - Package metadata and scripts:
   - `build`: TypeScript compile to `dist/`, copies `docs/` into `dist/` and marks the compiled entry scripts as executable.
   - `start:stdio`, `start:sse`, `start:streamableHttp`: Run built transports from `dist/`.
-- Declares dependencies on `@modelcontextprotocol/sdk`, `express`, `cors`, `zod`, etc.
+- Declares dependencies on the SDK v2 packages — `@modelcontextprotocol/server` (plus `/stdio`), `@modelcontextprotocol/node`, `@modelcontextprotocol/core`, and `@modelcontextprotocol/server-legacy` (the frozen SSE transport, used only by `transports/sse.ts`) — along with `express`, `cors`, `zod`, etc. The v1 `@modelcontextprotocol/sdk` package is **not** used: v2 split it into separate server/client packages and raised the floor to Node ≥ 20.
 
 ### `docs/`
 
+Every file here is also served as a static resource at
+`demo://resource/static/document/<filename>` (see `resources/files.ts`), so these
+documents are part of the server's own surface, not just repo documentation.
+
 - `architecture.md`
-  - This document.
+  - Runtime architecture and high-level overview, including the dual-era design.
+- `structure.md`
+  - This document: the project layout and what each module does.
+- `startup.md`
+  - How a process comes up: launcher, transport manager, and the server factory.
+- `features.md`
+  - The catalogue of tools, prompts, resources, and protocol features exercised.
+- `extension.md`
+  - How to add a tool, prompt, or resource without breaking era-agnosticism.
+- `how-it-works.md`
+  - Deeper notes on capability gating, multi-round-trip flows, and notification routing.
 - `instructions.md`
-  - Human‑readable instructions intended to be passed to the client/LLM as guidance on server use. Loaded by the server at startup and returned in the initialize exchange.
+  - Human‑readable instructions intended to be passed to the client/LLM as guidance on server use. Loaded by the server at startup and returned as `instructions` — in the `initialize` result on the legacy era, and in the `server/discover` result on 2026-07-28.
 
 ### `prompts/`
 
@@ -117,6 +131,11 @@ src/everything
   - Registers static file-based resources for each file in the `docs/` folder.
   - URIs follow the pattern: `demo://resource/static/document/<filename>`.
   - Serves markdown files as `text/markdown`, `.txt` as `text/plain`, `.json` as `application/json`, others default to `text/plain`.
+  - Attaches a per-registration `cacheHint` (1h, `public`): these ship inside the package and only change when it is rebuilt.
+- `session.ts`
+  - Session-scoped resources at `demo://resource/session/<name>`, served from memory. `getSessionResourceURI(name)` builds the URI and `registerSessionResource(...)` registers the payload and returns a `resource_link`. Used by `gzip-file-as-resource.ts`. On 2026-07-28 there are no sessions, so such a resource lives only for the request that created it.
+- `subscriptions.ts`
+  - Tracks subscribers per URI as `Map<uri, Set<sessionId>>` and installs the **legacy-era only** `resources/subscribe` / `resources/unsubscribe` handlers via `setSubscriptionHandlers(server)`. Also drives the simulated update interval that `toggle-subscriber-updates` starts and stops. Modern clients register interest with `subscriptions/listen` instead, which the serving entry answers itself.
 
 ### `server/`
 
@@ -131,6 +150,8 @@ src/everything
   - Routes change notifications to whichever publish path the active transport needs: instance methods under `serveStdio` (which routes them onto open subscriptions), or the handler's `subscriptions/listen` bus under `createMcpHandler`, where each request gets a fresh instance with no long-lived stream. Tools call `getNotifier(server)` and stay unaware of the difference.
 - `request-state.ts`
   - The shared HMAC-SHA256 `requestState` codec for multi-round-trip tools. `requestState` round-trips through the client and is untrusted on re-entry, so it is sealed and bound to the originating method and principal. `verify` is wired into `ServerOptions.requestState` so it runs before any handler. Signed, not encrypted — never put secrets in the payload.
+- `roots.ts`
+  - `syncRoots(server, sessionId?)` pulls the client's workspace roots with a server-to-client `roots/list` request and caches them for `get-roots-list`. **Legacy era only** — it is driven by the `oninitialized` hook, and 2026-07-28 has neither a handshake nor a server-to-client request channel, so on the modern era the tool asks via `inputRequired.listRoots()` instead.
 
 ### `tools/`
 
