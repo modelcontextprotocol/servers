@@ -30,7 +30,7 @@ describe("Registration Index Files", () => {
       // `-32021` at dispatch when the caller lacks the capability -- on both
       // eras. Note the mock advertises NO client capabilities, and the
       // capability-gated tools are still expected below.
-      expect(mockServer.registerTool).toHaveBeenCalledTimes(17);
+      expect(mockServer.registerTool).toHaveBeenCalledTimes(18);
 
       // Verify specific tools are registered
       const registeredTools = (mockServer.registerTool as any).mock.calls.map(
@@ -41,6 +41,7 @@ describe("Registration Index Files", () => {
       expect(registeredTools).toContain("get-env");
       expect(registeredTools).toContain("get-tiny-image");
       expect(registeredTools).toContain("get-structured-content");
+      expect(registeredTools).toContain("get-structured-content-list");
       expect(registeredTools).toContain("get-annotated-message");
       expect(registeredTools).toContain("trigger-long-running-operation");
       expect(registeredTools).toContain("get-resource-links");
