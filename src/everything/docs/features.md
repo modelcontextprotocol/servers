@@ -17,7 +17,7 @@
 - `get-roots-list` (tools/get-roots-list.ts): Reports the client's workspace roots. On the legacy era the server has usually already pulled them after the handshake and answers from cache; on 2026-07-28 there is nothing cached, so it asks for them via `inputRequired` and the client retries with the listing attached.
 - `gzip-file-as-resource` (tools/gzip-file-as-resource.ts): Accepts a `name` and `data` (URL or data URI), fetches the data subject to size/time/domain constraints, compresses it, registers it as a session resource at `demo://resource/session/<name>` with `mimeType: application/gzip`, and returns either a `resource_link` (default) or an inline `resource` depending on `outputType`.
 - `get-structured-content` (tools/get-structured-content.ts): Demonstrates structured responses. Accepts `location` input and returns both backward‑compatible `content` (a `text` block containing JSON) and `structuredContent` validated by an `outputSchema` (temperature, conditions, humidity). The output schema has an **object** root — the only shape any revision before 2026-07-28 allowed.
-- `get-structured-content-list` (tools/get-structured-content-list.ts): The same idea with an **array** root, which 2026-07-28 newly permits (SEP-2106 lifted the object-only restriction on `outputSchema`). Accepts `location` and `days` (1–5, default 3) and returns a bare array of daily forecast entries. The handler is era-agnostic and returns the natural array; the SDK adapts the wire shape per era — identity on 2026-07-28, and for a legacy peer it projects *both* the advertised schema (to `{"type":"object","properties":{"result":…}}`) and the payload (to `{"result": [...]}`) so the two cannot drift apart. Note this automatic legacy projection is TypeScript-specific; the Go, Python and Rust SDKs do not currently perform it.
+- `get-structured-content-list` (tools/get-structured-content-list.ts): The same idea with an **array** root, which 2026-07-28 newly permits (SEP-2106 lifted the object-only restriction on `outputSchema`). Accepts `location` and `days` (1–5, default 3) and returns a bare array of daily forecast entries. The handler is era-agnostic and returns the natural array; the SDK adapts the wire shape per era — identity on 2026-07-28, and for a legacy peer it projects _both_ the advertised schema (to `{"type":"object","properties":{"result":…}}`) and the payload (to `{"result": [...]}`) so the two cannot drift apart. Note this automatic legacy projection is TypeScript-specific; the Go, Python and Rust SDKs do not currently perform it.
 - `get-sum` (tools/get-sum.ts): For two numbers `a` and `b` calculates and returns their sum. Uses Zod to validate inputs.
 - `get-tiny-image` (tools/get-tiny-image.ts): Returns a tiny PNG MCP logo as an `image` content item with brief descriptive text before and after.
 - `trigger-long-running-operation` (tools/trigger-long-running-operation.ts): Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client.
@@ -40,6 +40,7 @@
 - Dynamic Text: `demo://resource/dynamic/text/{index}` (content generated on the fly)
 - Dynamic Blob: `demo://resource/dynamic/blob/{index}` (base64 payload generated on the fly)
 - Static Documents: `demo://resource/static/document/<filename>` (serves files from `src/everything/docs/` as static file-based resources)
+- Session Scoped: `demo://resource/session/<name>` (per-session resources registered dynamically; available only for the lifetime of the session)
 
 ### Result caching (2026-07-28)
 
@@ -51,12 +52,11 @@ toward modern-era clients — legacy responses are byte-for-byte unchanged.
 
 This server exercises two of those layers:
 
-| Surface                                                    | Hint                              | Why                                                       |
-| ---------------------------------------------------------- | --------------------------------- | --------------------------------------------------------- |
-| `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `server/discover` | server-level, 60s `public`        | static for the process lifetime and identical per caller  |
-| Static Documents (`resources/read`)                        | per-registration, 1h `public`     | ship inside the package; only change when it is rebuilt   |
-| Dynamic, Session Scoped (`resources/read`)                  | none — falls through to the default | generated per call, or scoped to one caller               |
-- Session Scoped: `demo://resource/session/<name>` (per-session resources registered dynamically; available only for the lifetime of the session)
+| Surface                                                                                       | Hint                                | Why                                                      |
+| --------------------------------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------- |
+| `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `server/discover` | server-level, 60s `public`          | static for the process lifetime and identical per caller |
+| Static Documents (`resources/read`)                                                           | per-registration, 1h `public`       | ship inside the package; only change when it is rebuilt  |
+| Dynamic, Session Scoped (`resources/read`)                                                    | none — falls through to the default | generated per call, or scoped to one caller              |
 
 ## Resource Subscriptions and Notifications
 
