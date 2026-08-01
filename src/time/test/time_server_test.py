@@ -1,11 +1,15 @@
 
+import asyncio
+import json
+
 from freezegun import freeze_time
-from mcp.shared.exceptions import McpError
+from mcp.shared.exceptions import MCPError
+from mcp.types import CallToolRequestParams, INVALID_PARAMS, TextContent
 import pytest
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
-from mcp_server_time.server import TimeServer, get_local_tz
+from mcp_server_time.server import TimeServer, create_tool_handlers, get_local_tz
 
 
 @pytest.mark.parametrize(
@@ -85,7 +89,7 @@ def test_get_current_time(test_time, timezone, expected):
 def test_get_current_time_with_invalid_timezone():
     time_server = TimeServer()
     with pytest.raises(
-        McpError,
+        MCPError,
         match=r"Invalid timezone: 'No time zone found with key Invalid/Timezone'",
     ):
         time_server.get_current_time("Invalid/Timezone")
@@ -116,7 +120,7 @@ def test_get_current_time_with_invalid_timezone():
 )
 def test_convert_time_errors(source_tz, time_str, target_tz, expected_error):
     time_server = TimeServer()
-    with pytest.raises((McpError, ValueError), match=expected_error):
+    with pytest.raises((MCPError, ValueError), match=expected_error):
         time_server.convert_time(source_tz, time_str, target_tz)
 
 
@@ -526,3 +530,62 @@ def test_get_local_tz_various_timezones(mock_get_localzone, timezone_name):
     result = get_local_tz()
     assert str(result) == timezone_name
     assert isinstance(result, ZoneInfo)
+
+
+def test_list_tools_returns_expected_tools():
+    list_tools, _ = create_tool_handlers("UTC")
+
+    async def _run():
+        return await list_tools(None, None)  # type: ignore[arg-type]
+
+    result = asyncio.run(_run())
+    assert [tool.name for tool in result.tools] == [
+        "get_current_time",
+        "convert_time",
+    ]
+
+
+def test_call_tool_get_current_time():
+    _, call_tool = create_tool_handlers("UTC")
+    params = CallToolRequestParams(
+        name="get_current_time",
+        arguments={"timezone": "Europe/Warsaw"},
+    )
+
+    async def _run():
+        with freeze_time("2024-01-01 12:00:00+00:00"):
+            return await call_tool(None, params)  # type: ignore[arg-type]
+
+    result = asyncio.run(_run())
+    assert len(result.content) == 1
+    content = result.content[0]
+    assert isinstance(content, TextContent)
+    payload = json.loads(content.text)
+    assert payload["timezone"] == "Europe/Warsaw"
+    assert payload["datetime"] == "2024-01-01T13:00:00+01:00"
+
+
+def test_call_tool_invalid_timezone_raises_mcp_error():
+    _, call_tool = create_tool_handlers("UTC")
+    params = CallToolRequestParams(
+        name="get_current_time",
+        arguments={"timezone": "Invalid/Timezone"},
+    )
+
+    async def _run():
+        await call_tool(None, params)  # type: ignore[arg-type]
+
+    with pytest.raises(MCPError) as exc_info:
+        asyncio.run(_run())
+    assert exc_info.value.code == INVALID_PARAMS
+
+
+def test_call_tool_unknown_tool_raises_value_error():
+    _, call_tool = create_tool_handlers("UTC")
+    params = CallToolRequestParams(name="unknown_tool", arguments={})
+
+    async def _run():
+        await call_tool(None, params)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="Error processing mcp-server-time query"):
+        asyncio.run(_run())
