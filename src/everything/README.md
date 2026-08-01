@@ -17,7 +17,7 @@ can be exercised against either without changing servers:
 | Era        | Revisions                    | Negotiated by                                       |
 | ---------- | ---------------------------- | --------------------------------------------------- |
 | **legacy** | `2024-10-07` … `2025-11-25`  | the `initialize` handshake                          |
-| **modern** | `2026-07-28` and later       | a [`server/discover`](https://modelcontextprotocol.io/specification/draft/server/discover) probe |
+| **modern** | `2026-07-28` and later       | a [`server/discover`](https://modelcontextprotocol.io/specification/2026-07-28/server/discover) probe |
 
 Both `stdio` and `streamableHttp` serve either era; `streamableHttp` does it from a single
 endpoint. The deprecated `sse` transport is legacy-only. See

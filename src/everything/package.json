@@ -33,10 +33,10 @@
     "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/core": "2.0.0-beta.5",
-    "@modelcontextprotocol/node": "2.0.0-beta.5",
-    "@modelcontextprotocol/server": "2.0.0-beta.5",
-    "@modelcontextprotocol/server-legacy": "2.0.0-beta.5",
+    "@modelcontextprotocol/core": "^2.0.0",
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "@modelcontextprotocol/server-legacy": "^2.0.0",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "jszip": "^3.10.1",
