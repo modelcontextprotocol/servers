@@ -128,7 +128,8 @@ class TimeServer:
         )
 
 
-async def serve(local_timezone: str | None = None) -> None:
+def create_tool_handlers(local_timezone: str | None = None):
+    """Build list_tools / call_tool handlers for the time MCP server."""
     time_server = TimeServer()
     local_tz = str(get_local_tz(local_timezone))
 
@@ -224,9 +225,16 @@ async def serve(local_timezone: str | None = None) -> None:
                 ]
             )
 
+        except MCPError:
+            raise
         except Exception as e:
             raise ValueError(f"Error processing mcp-server-time query: {str(e)}")
 
+    return list_tools, call_tool
+
+
+async def serve(local_timezone: str | None = None) -> None:
+    list_tools, call_tool = create_tool_handlers(local_timezone)
     server = Server(
         "mcp-time",
         on_list_tools=list_tools,
