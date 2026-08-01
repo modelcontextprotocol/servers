@@ -1,6 +1,6 @@
 
 from freezegun import freeze_time
-from mcp.shared.exceptions import McpError
+from mcp.shared.exceptions import MCPError
 import pytest
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -85,7 +85,7 @@ def test_get_current_time(test_time, timezone, expected):
 def test_get_current_time_with_invalid_timezone():
     time_server = TimeServer()
     with pytest.raises(
-        McpError,
+        MCPError,
         match=r"Invalid timezone: 'No time zone found with key Invalid/Timezone'",
     ):
         time_server.get_current_time("Invalid/Timezone")
@@ -116,7 +116,7 @@ def test_get_current_time_with_invalid_timezone():
 )
 def test_convert_time_errors(source_tz, time_str, target_tz, expected_error):
     time_server = TimeServer()
-    with pytest.raises((McpError, ValueError), match=expected_error):
+    with pytest.raises((MCPError, ValueError), match=expected_error):
         time_server.convert_time(source_tz, time_str, target_tz)
 
 
