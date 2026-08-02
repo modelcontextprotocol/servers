@@ -11,7 +11,7 @@ const GetStructuredContentInputSchema = {
 
 // Tool output schema
 const GetStructuredContentOutputSchema = z.object({
-  temperature: z.number().describe("Temperature in celsius"),
+  temperature: z.number().describe("Temperature in fahrenheit"),
   conditions: z.string().describe("Weather conditions description"),
   humidity: z.number().describe("Humidity percentage"),
 });
