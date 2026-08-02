@@ -26,7 +26,7 @@ const GetStructuredContentListInputSchema = {
 const GetStructuredContentListOutputSchema = z.array(
   z.object({
     day: z.number().int().describe("Forecast day, 1-based"),
-    temperature: z.number().describe("Temperature in celsius"),
+    temperature: z.number().describe("Temperature in fahrenheit"),
     conditions: z.string().describe("Weather conditions description"),
     humidity: z.number().describe("Humidity percentage"),
   })
