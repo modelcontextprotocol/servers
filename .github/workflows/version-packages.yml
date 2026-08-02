@@ -1,0 +1,39 @@
+name: Version Packages
+
+# Maintains the rolling changesets "Version Packages" PR: every push to main
+# re-runs `changeset version` against the accumulated changesets and creates or
+# updates the PR that applies the version bumps and CHANGELOG entries.
+# Publishing is separate — see release.yml (triggered by GitHub Releases).
+
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  version:
+    if: github.repository_owner == 'modelcontextprotocol'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create or update the Version Packages PR
+        uses: changesets/action@v1
+        with:
+          title: "chore: version packages"
+          commit: "chore: version packages"
+        env:
+          # Also used by @changesets/changelog-github to link PRs in CHANGELOGs
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -16,7 +16,13 @@
     "build": "npm run build --workspaces",
     "watch": "npm run watch --workspaces",
     "publish-all": "npm publish --workspaces --access public",
-    "link-all": "npm link --workspaces"
+    "link-all": "npm link --workspaces",
+    "changeset": "changeset",
+    "version-packages": "changeset version"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.5",
+    "@changesets/changelog-github": "^0.5.1"
   },
   "dependencies": {
     "@modelcontextprotocol/server-everything": "*",

@@ -23,6 +23,18 @@ We're more selective about:
 We don't accept:
 - **New server implementations** — We encourage you to publish them to the [MCP Server Registry](https://github.com/modelcontextprotocol/registry) instead.
 
+## Changesets (TypeScript versioning)
+
+The TypeScript servers (`everything`, `filesystem`, `memory`, `sequentialthinking`) are versioned with [changesets](https://github.com/changesets/changesets). If your PR changes one of them in a way users will notice, include a changeset:
+
+```bash
+npm run changeset
+```
+
+Pick the affected package(s), choose a bump type (**patch** = bug fixes; **minor** = new tools, prompts, resources, or options; **major** = breaking changes), and write a one-line summary — it becomes the CHANGELOG entry. Commit the generated `.changeset/*.md` file with your PR.
+
+Docs-only, CI-only, and Python-only changes don't need a changeset. The Python servers use CalVer and are released separately — see [RELEASING.md](RELEASING.md).
+
 ## Testing
 
 When adding or configuring tests for servers implemented in TypeScript, use **vitest** as the test framework. Vitest provides better ESM support, faster test execution, and a more modern testing experience.
