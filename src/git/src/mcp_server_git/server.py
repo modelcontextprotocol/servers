@@ -1,16 +1,16 @@
 import logging
 from pathlib import Path
-from typing import Sequence, Optional
-from mcp.server import Server
-from mcp.server.session import ServerSession
+from typing import Optional
+from mcp.server import Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
 from mcp.types import (
-    ClientCapabilities,
     TextContent,
     Tool,
-    ListRootsResult,
-    RootsCapability,
     ToolAnnotations,
+    CallToolRequestParams,
+    CallToolResult,
+    ListToolsResult,
+    PaginatedRequestParams,
 )
 from enum import Enum
 import git
@@ -316,286 +316,274 @@ async def serve(repository: Path | None) -> None:
             logger.error(f"{repository} is not a valid Git repository")
             return
 
-    server = Server("mcp-git")
-
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
+    async def handle_list_tools(
+        ctx: ServerRequestContext, params: PaginatedRequestParams | None
+    ) -> ListToolsResult:
+        return ListToolsResult(tools=[
             Tool(
                 name=GitTools.STATUS,
                 description="Shows the working tree status",
-                inputSchema=GitStatus.model_json_schema(),
+                input_schema=GitStatus.model_json_schema(),
                 annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
+                    read_only_hint=True,
+                    destructive_hint=False,
+                    idempotent_hint=True,
+                    open_world_hint=False,
                 ),
             ),
             Tool(
                 name=GitTools.DIFF_UNSTAGED,
                 description="Shows changes in the working directory that are not yet staged",
-                inputSchema=GitDiffUnstaged.model_json_schema(),
+                input_schema=GitDiffUnstaged.model_json_schema(),
                 annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
+                    read_only_hint=True,
+                    destructive_hint=False,
+                    idempotent_hint=True,
+                    open_world_hint=False,
                 ),
             ),
             Tool(
                 name=GitTools.DIFF_STAGED,
                 description="Shows changes that are staged for commit",
-                inputSchema=GitDiffStaged.model_json_schema(),
+                input_schema=GitDiffStaged.model_json_schema(),
                 annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
+                    read_only_hint=True,
+                    destructive_hint=False,
+                    idempotent_hint=True,
+                    open_world_hint=False,
                 ),
             ),
             Tool(
                 name=GitTools.DIFF,
                 description="Shows differences between branches or commits",
-                inputSchema=GitDiff.model_json_schema(),
+                input_schema=GitDiff.model_json_schema(),
                 annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
+                    read_only_hint=True,
+                    destructive_hint=False,
+                    idempotent_hint=True,
+                    open_world_hint=False,
                 ),
             ),
             Tool(
                 name=GitTools.COMMIT,
                 description="Records changes to the repository",
-                inputSchema=GitCommit.model_json_schema(),
+                input_schema=GitCommit.model_json_schema(),
                 annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=False,
-                    idempotentHint=False,
-                    openWorldHint=False,
+                    read_only_hint=False,
+                    destructive_hint=False,
+                    idempotent_hint=False,
+                    open_world_hint=False,
                 ),
             ),
             Tool(
                 name=GitTools.ADD,
                 description="Adds file contents to the staging area",
-                inputSchema=GitAdd.model_json_schema(),
+                input_schema=GitAdd.model_json_schema(),
                 annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
+                    read_only_hint=False,
+                    destructive_hint=False,
+                    idempotent_hint=True,
+                    open_world_hint=False,
                 ),
             ),
             Tool(
                 name=GitTools.RESET,
                 description="Unstages all staged changes",
-                inputSchema=GitReset.model_json_schema(),
+                input_schema=GitReset.model_json_schema(),
                 annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=True,
-                    idempotentHint=True,
-                    openWorldHint=False,
+                    read_only_hint=False,
+                    destructive_hint=True,
+                    idempotent_hint=True,
+                    open_world_hint=False,
                 ),
             ),
             Tool(
                 name=GitTools.LOG,
                 description="Shows the commit logs",
-                inputSchema=GitLog.model_json_schema(),
+                input_schema=GitLog.model_json_schema(),
                 annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
+                    read_only_hint=True,
+                    destructive_hint=False,
+                    idempotent_hint=True,
+                    open_world_hint=False,
                 ),
             ),
             Tool(
                 name=GitTools.CREATE_BRANCH,
                 description="Creates a new branch from an optional base branch",
-                inputSchema=GitCreateBranch.model_json_schema(),
+                input_schema=GitCreateBranch.model_json_schema(),
                 annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=False,
-                    idempotentHint=False,
-                    openWorldHint=False,
+                    read_only_hint=False,
+                    destructive_hint=False,
+                    idempotent_hint=False,
+                    open_world_hint=False,
                 ),
             ),
             Tool(
                 name=GitTools.CHECKOUT,
                 description="Switches branches",
-                inputSchema=GitCheckout.model_json_schema(),
+                input_schema=GitCheckout.model_json_schema(),
                 annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=False,
-                    idempotentHint=False,
-                    openWorldHint=False,
+                    read_only_hint=False,
+                    destructive_hint=False,
+                    idempotent_hint=False,
+                    open_world_hint=False,
                 ),
             ),
             Tool(
                 name=GitTools.SHOW,
                 description="Shows the contents of a commit",
-                inputSchema=GitShow.model_json_schema(),
+                input_schema=GitShow.model_json_schema(),
                 annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
+                    read_only_hint=True,
+                    destructive_hint=False,
+                    idempotent_hint=True,
+                    open_world_hint=False,
                 ),
             ),
             Tool(
                 name=GitTools.BRANCH,
                 description="List Git branches",
-                inputSchema=GitBranch.model_json_schema(),
+                input_schema=GitBranch.model_json_schema(),
                 annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
+                    read_only_hint=True,
+                    destructive_hint=False,
+                    idempotent_hint=True,
+                    open_world_hint=False,
                 ),
             )
-        ]
+        ])
 
-    async def list_repos() -> Sequence[str]:
-        async def by_roots() -> Sequence[str]:
-            if not isinstance(server.request_context.session, ServerSession):
-                raise TypeError("server.request_context.session must be a ServerSession")
+    # NOTE: list_repos()/by_roots() appear unused (not called anywhere in this file
+    # or imported elsewhere in the package) and were not migrated. by_roots() relied
+    # on server.request_context.session, which the v2 SDK removes entirely; if this
+    # is actually needed, it must be rewritten to take ctx.session as an explicit
+    # parameter instead.
 
-            if not server.request_context.session.check_client_capability(
-                ClientCapabilities(roots=RootsCapability())
-            ):
-                return []
+    async def handle_call_tool(
+        ctx: ServerRequestContext, params: CallToolRequestParams
+    ) -> CallToolResult:
+        arguments = params.arguments or {}
+        try:
+            repo_path = Path(arguments["repo_path"])
 
-            roots_result: ListRootsResult = await server.request_context.session.list_roots()
-            logger.debug(f"Roots result: {roots_result}")
-            repo_paths = []
-            for root in roots_result.roots:
-                path = root.uri.path
-                try:
-                    git.Repo(path)
-                    repo_paths.append(str(path))
-                except git.InvalidGitRepositoryError:
-                    pass
-            return repo_paths
+            # Validate repo_path is within allowed repository
+            validate_repo_path(repo_path, repository)
 
-        def by_commandline() -> Sequence[str]:
-            return [str(repository)] if repository is not None else []
+            # For all commands, we need an existing repo
+            repo = git.Repo(repo_path)
 
-        cmd_repos = by_commandline()
-        root_repos = await by_roots()
-        return [*root_repos, *cmd_repos]
+            match params.name:
+                case GitTools.STATUS:
+                    status = git_status(repo)
+                    return CallToolResult(content=[TextContent(
+                        type="text",
+                        text=f"Repository status:\n{status}"
+                    )], is_error=False)
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-        repo_path = Path(arguments["repo_path"])
+                case GitTools.DIFF_UNSTAGED:
+                    diff = git_diff_unstaged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
+                    return CallToolResult(content=[TextContent(
+                        type="text",
+                        text=f"Unstaged changes:\n{diff}"
+                    )], is_error=False)
 
-        # Validate repo_path is within allowed repository
-        validate_repo_path(repo_path, repository)
+                case GitTools.DIFF_STAGED:
+                    diff = git_diff_staged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
+                    return CallToolResult(content=[TextContent(
+                        type="text",
+                        text=f"Staged changes:\n{diff}"
+                    )], is_error=False)
 
-        # For all commands, we need an existing repo
-        repo = git.Repo(repo_path)
+                case GitTools.DIFF:
+                    diff = git_diff(repo, arguments["target"], arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
+                    return CallToolResult(content=[TextContent(
+                        type="text",
+                        text=f"Diff with {arguments['target']}:\n{diff}"
+                    )], is_error=False)
 
-        match name:
-            case GitTools.STATUS:
-                status = git_status(repo)
-                return [TextContent(
-                    type="text",
-                    text=f"Repository status:\n{status}"
-                )]
+                case GitTools.COMMIT:
+                    result = git_commit(repo, arguments["message"])
+                    return CallToolResult(content=[TextContent(
+                        type="text",
+                        text=result
+                    )], is_error=False)
 
-            case GitTools.DIFF_UNSTAGED:
-                diff = git_diff_unstaged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
-                return [TextContent(
-                    type="text",
-                    text=f"Unstaged changes:\n{diff}"
-                )]
+                case GitTools.ADD:
+                    result = git_add(repo, arguments["files"])
+                    return CallToolResult(content=[TextContent(
+                        type="text",
+                        text=result
+                    )], is_error=False)
 
-            case GitTools.DIFF_STAGED:
-                diff = git_diff_staged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
-                return [TextContent(
-                    type="text",
-                    text=f"Staged changes:\n{diff}"
-                )]
+                case GitTools.RESET:
+                    result = git_reset(repo)
+                    return CallToolResult(content=[TextContent(
+                        type="text",
+                        text=result
+                    )], is_error=False)
 
-            case GitTools.DIFF:
-                diff = git_diff(repo, arguments["target"], arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
-                return [TextContent(
-                    type="text",
-                    text=f"Diff with {arguments['target']}:\n{diff}"
-                )]
+                # Update the LOG case:
+                case GitTools.LOG:
+                    log = git_log(
+                        repo,
+                        arguments.get("max_count", 10),
+                        arguments.get("start_timestamp"),
+                        arguments.get("end_timestamp")
+                    )
+                    return CallToolResult(content=[TextContent(
+                        type="text",
+                        text="Commit history:\n" + "\n".join(log)
+                    )], is_error=False)
 
-            case GitTools.COMMIT:
-                result = git_commit(repo, arguments["message"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                case GitTools.CREATE_BRANCH:
+                    result = git_create_branch(
+                        repo,
+                        arguments["branch_name"],
+                        arguments.get("base_branch")
+                    )
+                    return CallToolResult(content=[TextContent(
+                        type="text",
+                        text=result
+                    )], is_error=False)
 
-            case GitTools.ADD:
-                result = git_add(repo, arguments["files"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                case GitTools.CHECKOUT:
+                    result = git_checkout(repo, arguments["branch_name"])
+                    return CallToolResult(content=[TextContent(
+                        type="text",
+                        text=result
+                    )], is_error=False)
 
-            case GitTools.RESET:
-                result = git_reset(repo)
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                case GitTools.SHOW:
+                    result = git_show(repo, arguments["revision"])
+                    return CallToolResult(content=[TextContent(
+                        type="text",
+                        text=result
+                    )], is_error=False)
 
-            # Update the LOG case:
-            case GitTools.LOG:
-                log = git_log(
-                    repo,
-                    arguments.get("max_count", 10),
-                    arguments.get("start_timestamp"),
-                    arguments.get("end_timestamp")
-                )
-                return [TextContent(
-                    type="text",
-                    text="Commit history:\n" + "\n".join(log)
-                )]
+                case GitTools.BRANCH:
+                    result = git_branch(
+                        repo,
+                        arguments.get("branch_type", 'local'),
+                        arguments.get("contains", None),
+                        arguments.get("not_contains", None),
+                    )
+                    return CallToolResult(content=[TextContent(
+                        type="text",
+                        text=result
+                    )], is_error=False)
 
-            case GitTools.CREATE_BRANCH:
-                result = git_create_branch(
-                    repo,
-                    arguments["branch_name"],
-                    arguments.get("base_branch")
-                )
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                case _:
+                    raise ValueError(f"Unknown tool: {params.name}")
+        except Exception as e:
+            return CallToolResult(content=[TextContent(
+                type="text",
+                text=str(e)
+            )], is_error=True)
 
-            case GitTools.CHECKOUT:
-                result = git_checkout(repo, arguments["branch_name"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
-
-            case GitTools.SHOW:
-                result = git_show(repo, arguments["revision"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
-
-            case GitTools.BRANCH:
-                result = git_branch(
-                    repo,
-                    arguments.get("branch_type", 'local'),
-                    arguments.get("contains", None),
-                    arguments.get("not_contains", None),
-                )
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
-
-            case _:
-                raise ValueError(f"Unknown tool: {name}")
+    server = Server(
+        "mcp-git", on_list_tools=handle_list_tools, on_call_tool=handle_call_tool
+    )
 
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
