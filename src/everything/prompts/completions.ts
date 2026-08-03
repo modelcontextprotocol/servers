@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { completable } from "@modelcontextprotocol/server";
 
 /**
  * Register a prompt with completable arguments

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { CallToolResult } from "@modelcontextprotocol/server";
 
 // Tool input schema
 const TriggerLongRunningOperationSchema = z.object({
@@ -43,11 +43,11 @@ export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
   server.registerTool(
     name,
     config,
-    async (args, extra): Promise<CallToolResult> => {
+    async (args, ctx): Promise<CallToolResult> => {
       const validatedArgs = TriggerLongRunningOperationSchema.parse(args);
       const { duration, steps } = validatedArgs;
       const stepDuration = duration / steps;
-      const progressToken = extra._meta?.progressToken;
+      const progressToken = ctx.mcpReq._meta?.progressToken;
 
       for (let i = 1; i < steps + 1; i++) {
         await new Promise((resolve) =>
@@ -55,17 +55,18 @@ export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
         );
 
         if (progressToken !== undefined) {
-          await server.server.notification(
-            {
-              method: "notifications/progress",
-              params: {
-                progress: i,
-                total: steps,
-                progressToken,
-              },
+          // `ctx.mcpReq.notify` binds the notification to the originating
+          // request, which is what both eras need: on 2026-07-28,
+          // request-scoped notifications flow on that request's own response
+          // stream rather than a standalone one.
+          await ctx.mcpReq.notify({
+            method: "notifications/progress",
+            params: {
+              progress: i,
+              total: steps,
+              progressToken,
             },
-            { relatedRequestId: extra.requestId }
-          );
+          });
         }
       }
 

@@ -9,6 +9,24 @@
 
 This MCP server attempts to exercise all the features of the MCP protocol. It is not intended to be a useful server, but rather a test server for builders of MCP clients. It implements prompts, tools, resources, sampling, and more to showcase MCP capabilities.
 
+## Protocol support
+
+The server is **dual-era** — one codebase serving both protocol generations, so a client
+can be exercised against either without changing servers:
+
+| Era        | Revisions                    | Negotiated by                                       |
+| ---------- | ---------------------------- | --------------------------------------------------- |
+| **legacy** | `2024-10-07` … `2025-11-25`  | the `initialize` handshake                          |
+| **modern** | `2026-07-28` and later       | a [`server/discover`](https://modelcontextprotocol.io/specification/2026-07-28/server/discover) probe |
+
+Both `stdio` and `streamableHttp` serve either era; `streamableHttp` does it from a single
+endpoint. The deprecated `sse` transport is legacy-only. See
+[Architecture](docs/architecture.md) for what actually differs between them, and
+[Server Features](docs/features.md) for how the tools behave on each.
+
+Requires **Node.js >= 20** and is ESM-only, inherited from the v2 SDK
+(`@modelcontextprotocol/server`).
+
 ## Tools, Resources, Prompts, and Other Features
 
 A complete list of the registered MCP primitives and other protocol features demonstrated can be found in the [Server Features](docs/features.md) document.

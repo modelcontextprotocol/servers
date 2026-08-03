@@ -1,33 +1,30 @@
 #!/usr/bin/env node
 
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { createServer } from "../server/index.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
+import { createServer, cleanupSession } from "../server/index.js";
 
 console.error("Starting default (STDIO) server...");
 
 /**
- * The main method
- * - Initializes the StdioServerTransport, sets up the server,
- * - Handles cleanup on process exit.
+ * Serve MCP over stdio, both protocol eras.
  *
- * @return {Promise<void>} A promise that resolves when the main function has executed and the process exits.
+ * `serveStdio` owns the era decision for the connection: the opening exchange
+ * selects it (a `server/discover` probe means 2026-07-28, an `initialize`
+ * handshake means the legacy era), one instance from the factory is pinned for
+ * the connection lifetime, and everything after passes straight through. Pass
+ * `{ legacy: "reject" }` to refuse legacy-era openings.
+ *
+ * This replaces the v1 `server.connect(new StdioServerTransport())` wiring,
+ * which can only ever speak the legacy era.
  */
-async function main(): Promise<void> {
-  const transport = new StdioServerTransport();
-  const { server, cleanup } = createServer();
+const handle = serveStdio((ctx) => createServer(ctx), {
+  onerror: (error) => console.error("Server error:", error),
+});
 
-  // Connect transport to server
-  await server.connect(transport);
-
-  // Cleanup on exit
-  process.on("SIGINT", async () => {
-    await server.close();
-    cleanup();
-    process.exit(0);
-  });
-}
-
-main().catch((error) => {
-  console.error("Server error:", error);
-  process.exit(1);
+// Cleanup on exit. stdio has no session id, so the process-level simulation
+// state is keyed under `undefined`.
+process.on("SIGINT", async () => {
+  await handle.close();
+  cleanupSession();
+  process.exit(0);
 });

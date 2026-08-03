@@ -1,9 +1,10 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  McpServer,
   CallToolResult,
-  CreateMessageRequest,
-  CreateMessageResultSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+  InputRequiredResult,
+  inputRequired,
+  inputResponse,
+} from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 // Tool input schema
@@ -29,69 +30,87 @@ const config = {
   },
 };
 
+// Key for this tool's embedded sampling request.
+const COMPLETION = "completion";
+
 /**
  * Registers the 'trigger-sampling-request' tool.
  *
- * If the client does not support the sampling capability, the tool is not registered.
- *
  * The registered tool performs the following operations:
  * - Validates incoming arguments using `TriggerSamplingRequestSchema`.
- * - Constructs a `sampling/createMessage` request object using provided prompt and maximum tokens.
- * - Sends the request to the server for sampling.
+ * - Asks the client for an LLM completion using the provided prompt and token budget.
  * - Formats and returns the sampling result content to the client.
+ *
+ * The request is made in the **multi-round-trip** style -- the handler returns
+ * `inputRequired(...)` instead of pushing a server->client
+ * `sampling/createMessage` request. Written once, it serves both eras: the
+ * 2026-07-28 client fulfils and retries, and the SDK's legacy shim converts the
+ * same return into a real server->client request for legacy-era connections.
+ *
+ * Registration is unconditional: the SDK refuses the embedded request with
+ * `-32021` at dispatch when the caller never declared the `sampling`
+ * capability, on both eras.
  *
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerTriggerSamplingRequestTool = (server: McpServer) => {
-  // Does the client support sampling?
-  const clientCapabilities = server.server.getClientCapabilities() || {};
-  const clientSupportsSampling: boolean =
-    clientCapabilities.sampling !== undefined;
+  server.registerTool(
+    name,
+    config,
+    async (args, ctx): Promise<CallToolResult | InputRequiredResult> => {
+      const validatedArgs = TriggerSamplingRequestSchema.parse(args);
+      const { prompt, maxTokens } = validatedArgs;
 
-  // If so, register tool
-  if (clientSupportsSampling) {
-    server.registerTool(
-      name,
-      config,
-      async (args, extra): Promise<CallToolResult> => {
-        const validatedArgs = TriggerSamplingRequestSchema.parse(args);
-        const { prompt, maxTokens } = validatedArgs;
+      const answer = inputResponse(ctx.mcpReq.inputResponses, COMPLETION);
 
-        // Create the sampling request
-        const request: CreateMessageRequest = {
-          method: "sampling/createMessage",
-          params: {
-            messages: [
-              {
-                role: "user",
-                content: {
-                  type: "text",
-                  text: `Resource ${name} context: ${prompt}`,
+      // First round: ask the client to run the completion.
+      if (answer.kind === "missing") {
+        return inputRequired({
+          inputRequests: {
+            [COMPLETION]: inputRequired.createMessage({
+              messages: [
+                {
+                  role: "user",
+                  content: {
+                    type: "text",
+                    text: `Resource ${name} context: ${prompt}`,
+                  },
                 },
-              },
-            ],
-            systemPrompt: "You are a helpful test server.",
-            maxTokens,
-            temperature: 0.7,
+              ],
+              systemPrompt: "You are a helpful test server.",
+              maxTokens,
+              temperature: 0.7,
+            }),
           },
-        };
+        });
+      }
 
-        // Send the sampling request to the client
-        const result = await extra.sendRequest(
-          request,
-          CreateMessageResultSchema
-        );
-
-        // Return the result to the client
+      // Re-entry: the client ran the completion and retried the call.
+      if (answer.kind !== "sampling") {
         return {
+          isError: true,
           content: [
             {
               type: "text",
-              text: `LLM sampling result: \n${JSON.stringify(result, null, 2)}`,
+              text: `Expected a sampling response for "${COMPLETION}", got "${answer.kind}".`,
             },
           ],
         };
       }
-    );
-  }
+
+      // Return the result to the client
+      return {
+        content: [
+          {
+            type: "text",
+            text: `LLM sampling result: \n${JSON.stringify(
+              answer.result,
+              null,
+              2
+            )}`,
+          },
+        ],
+      };
+    }
+  );
 };

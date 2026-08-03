@@ -1,9 +1,6 @@
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  CallToolResult,
-  ContentBlock,
-} from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { CallToolResult, ContentBlock } from "@modelcontextprotocol/server";
 
 // Tool input schema
 const GetStructuredContentInputSchema = {
@@ -14,7 +11,7 @@ const GetStructuredContentInputSchema = {
 
 // Tool output schema
 const GetStructuredContentOutputSchema = z.object({
-  temperature: z.number().describe("Temperature in celsius"),
+  temperature: z.number().describe("Temperature in fahrenheit"),
   conditions: z.string().describe("Weather conditions description"),
   humidity: z.number().describe("Humidity percentage"),
 });
