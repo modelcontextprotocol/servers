@@ -85,7 +85,14 @@ process.on("SIGINT", async () => {
   // sends the graceful-close result on every open `subscriptions/listen` stream.
   await handler.close();
   setBusNotifier(undefined);
-  httpServer.close();
+
+  // `close()` stops new connections but resolves only once the existing ones
+  // end, and it is callback-based -- exiting straight after calling it can kill
+  // the process with the listen socket still open and pending writes unflushed.
+  // Drop keep-alive sockets first so the close can actually complete, then wait
+  // for it.
+  httpServer.closeAllConnections();
+  await new Promise<void>((resolve) => httpServer.close(() => resolve()));
 
   console.log("Server shutdown complete");
   process.exit(0);

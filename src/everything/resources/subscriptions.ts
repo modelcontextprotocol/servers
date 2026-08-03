@@ -38,8 +38,10 @@ export const setSubscriptionHandlers = (server: McpServer) => {
       // Get the URI to subscribe to
       const { uri } = request.params;
 
-      // Get the session id (can be undefined for stdio)
-      const sessionId = ctx.sessionId as string;
+      // No session id on stdio. `undefined` is a legitimate subscriber key
+      // here -- it identifies the single sessionless connection -- so it is
+      // carried as-is rather than cast away.
+      const sessionId: string | undefined = ctx.sessionId;
 
       // Acknowledge the subscribe request
       await server.sendLoggingMessage(
@@ -53,9 +55,8 @@ export const setSubscriptionHandlers = (server: McpServer) => {
       );
 
       // Get the subscribers for this URI
-      const subscribers = subscriptions.has(uri)
-        ? (subscriptions.get(uri) as Set<string>)
-        : new Set<string>();
+      const subscribers =
+        subscriptions.get(uri) ?? new Set<string | undefined>();
       subscribers.add(sessionId);
       subscriptions.set(uri, subscribers);
       return {};
@@ -69,8 +70,10 @@ export const setSubscriptionHandlers = (server: McpServer) => {
       // Get the URI to subscribe to
       const { uri } = request.params;
 
-      // Get the session id (can be undefined for stdio)
-      const sessionId = ctx.sessionId as string;
+      // No session id on stdio. `undefined` is a legitimate subscriber key
+      // here -- it identifies the single sessionless connection -- so it is
+      // carried as-is rather than cast away.
+      const sessionId: string | undefined = ctx.sessionId;
 
       // Acknowledge the subscribe request
       await server.sendLoggingMessage(
@@ -84,10 +87,7 @@ export const setSubscriptionHandlers = (server: McpServer) => {
       );
 
       // Remove the subscriber
-      if (subscriptions.has(uri)) {
-        const subscribers = subscriptions.get(uri) as Set<string>;
-        if (subscribers.has(sessionId)) subscribers.delete(sessionId);
-      }
+      subscriptions.get(uri)?.delete(sessionId);
       return {};
     }
   );
@@ -107,25 +107,27 @@ export const setSubscriptionHandlers = (server: McpServer) => {
  * filter decides who receives a `resources/updated`, so the notifier is called
  * for every known URI and the bus does the filtering.
  *
+ * Synchronous: publishing through the notifier is fire-and-forget on both
+ * paths, so there is nothing to await.
+ *
  * @param {McpServer} server - The server instance used to send notifications.
  * @param {string | undefined} sessionId - The session ID of the client to check for subscriptions.
- * @returns {Promise<void>} Resolves once all applicable notifications are sent.
  */
-const sendSimulatedResourceUpdates = async (
+const sendSimulatedResourceUpdates = (
   server: McpServer,
   sessionId: string | undefined
-): Promise<void> => {
+): void => {
   const notifier = getNotifier(server);
 
   // Search all URIs for ones this client is subscribed to
-  for (const uri of subscriptions.keys()) {
-    const subscribers = subscriptions.get(uri) as Set<string | undefined>;
-
-    // If this client is subscribed, send the notification
+  for (const [uri, subscribers] of subscriptions) {
+    // If this client is subscribed, send the notification. Subscribers are
+    // reaped by `cleanupSession` -> `stopSimulatedResourceUpdates` when the
+    // session ends, not here: a session that is absent from this URI's set is
+    // simply not subscribed to it, which says nothing about whether it is
+    // still connected.
     if (subscribers.has(sessionId)) {
       notifier.resourceUpdated(uri);
-    } else {
-      subscribers.delete(sessionId); // subscriber has disconnected
     }
   }
 };
