@@ -256,7 +256,7 @@ const RelationSchema = z.object({
 // The server instance and tools exposed to Claude
 const server = new McpServer({
   name: "memory-server",
-  version: "0.6.3",
+  version: "1.0.0",
 });
 
 const RESOURCE_URI = "memory://knowledge-graph";

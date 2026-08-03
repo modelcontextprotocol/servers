@@ -1,124 +1,137 @@
 name: Release
 
+# Publishing is triggered by a maintainer creating a GitHub Release (see
+# RELEASING.md). No job here computes, stamps, or tags a version: the versions
+# in package.json / pyproject.toml on the released ref are the source of truth,
+# and every package publishes if (and only if) its version is not already on
+# the registry. A package whose publish failed or was skipped simply publishes
+# on the next release — the registry-diff guard picks it up.
+#
+# Authentication is OIDC trusted publishing on both registries. The npm and
+# PyPI trusted publishers are bound to this workflow filename (release.yml)
+# and the `release` environment — the publish jobs must stay in this file.
+
 on:
-  workflow_dispatch:
+  release:
+    types: [published]
 
 jobs:
-  create-metadata:
+  detect-packages:
     runs-on: ubuntu-latest
     if: github.repository_owner == 'modelcontextprotocol'
     outputs:
-      hash: ${{ steps.last-release.outputs.hash }}
-      version: ${{ steps.create-version.outputs.version}}
-      npm_packages: ${{ steps.create-npm-packages.outputs.npm_packages}}
-      pypi_packages: ${{ steps.create-pypi-packages.outputs.pypi_packages}}
+      npm_packages: ${{ steps.find-packages.outputs.npm_packages }}
+      pypi_packages: ${{ steps.find-packages.outputs.pypi_packages }}
     steps:
+      # Defaults to the release tag — the exact ref the maintainer released
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
-      - name: Get last release hash
-        id: last-release
+      - name: Find all packages
+        id: find-packages
+        working-directory: src
         run: |
-          HASH=$(git rev-list --tags --max-count=1 || echo "HEAD~1")
-          echo "hash=${HASH}" >> $GITHUB_OUTPUT
-          echo "Using last release hash: ${HASH}"
+          NPM=$(find . -name package.json -not -path "*/node_modules/*" -exec dirname {} \; | sed 's/^\.\///' | jq -R -s -c 'split("\n")[:-1]')
+          PYPI=$(find . -name pyproject.toml -exec dirname {} \; | sed 's/^\.\///' | jq -R -s -c 'split("\n")[:-1]')
+          echo "npm_packages=$NPM" >> "$GITHUB_OUTPUT"
+          echo "pypi_packages=$PYPI" >> "$GITHUB_OUTPUT"
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Create version name
-        id: create-version
-        run: |
-          VERSION=$(uv run --script scripts/release.py generate-version)
-          echo "version $VERSION"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Create notes
-        run: |
-          HASH="${{ steps.last-release.outputs.hash }}"
-          uv run --script scripts/release.py generate-notes --directory src/ $HASH > RELEASE_NOTES.md
-          cat RELEASE_NOTES.md
-
-      - name: Release notes
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-notes
-          path: RELEASE_NOTES.md
-
-      - name: Create python matrix
-        id: create-pypi-packages
-        run: |
-          HASH="${{ steps.last-release.outputs.hash }}"
-          PYPI=$(uv run --script scripts/release.py generate-matrix --pypi --directory src $HASH)
-          echo "pypi_packages $PYPI"
-          echo "pypi_packages=$PYPI" >> $GITHUB_OUTPUT
-
-      - name: Create npm matrix
-        id: create-npm-packages
-        run: |
-          HASH="${{ steps.last-release.outputs.hash }}"
-          NPM=$(uv run --script scripts/release.py generate-matrix --npm --directory src $HASH)
-          echo "npm_packages $NPM"
-          echo "npm_packages=$NPM" >> $GITHUB_OUTPUT
-
-  update-packages:
-    needs: [create-metadata]
-    if: ${{ needs.create-metadata.outputs.npm_packages != '[]' || needs.create-metadata.outputs.pypi_packages != '[]' }}
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: write
-    outputs:
-      changes_made: ${{ steps.commit.outputs.changes_made }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Update packages
-        run: |
-          HASH="${{ needs.create-metadata.outputs.hash }}"
-          uv run --script scripts/release.py update-packages --directory src/ $HASH
-
-      - name: Configure git
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-
-      - name: Commit changes
-        id: commit
-        run: |
-          VERSION="${{ needs.create-metadata.outputs.version }}"
-          git add -u
-          if git diff-index --quiet HEAD; then
-            echo "changes_made=false" >> $GITHUB_OUTPUT
-          else
-            git commit -m 'Automatic update of packages'
-            git tag -a "$VERSION" -m "Release $VERSION"
-            git push origin "$VERSION"
-            echo "changes_made=true" >> $GITHUB_OUTPUT
-          fi
-
-  publish-pypi:
-    needs: [update-packages, create-metadata]
-    if: ${{ needs.create-metadata.outputs.pypi_packages != '[]' && needs.create-metadata.outputs.pypi_packages != '' }}
+  publish-npm:
+    needs: [detect-packages]
+    if: ${{ needs.detect-packages.outputs.npm_packages != '[]' }}
     strategy:
       fail-fast: false
       matrix:
-        package: ${{ fromJson(needs.create-metadata.outputs.pypi_packages) }}
-    name: Build ${{ matrix.package }}
+        package: ${{ fromJson(needs.detect-packages.outputs.npm_packages) }}
+    name: Publish ${{ matrix.package }} (npm)
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # Required for npm trusted publishing (OIDC)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: "https://registry.npmjs.org"
+
+      # OIDC trusted publishing requires npm >=11.5.1; Node 22's bundled npm is 10.x.
+      - name: Ensure npm CLI supports OIDC trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      # Registry-diff guard: skip (not fail) when the version is already
+      # published, and treat a never-published package (E404) as "publish it"
+      - name: Check whether this version is already on npm
+        id: guard
+        working-directory: src/${{ matrix.package }}
+        run: |
+          NAME=$(jq -r .name package.json)
+          VERSION=$(jq -r .version package.json)
+          # stdout only: with --json, npm writes errors as JSON to stdout, and
+          # stray stderr warnings must not corrupt the payload we parse
+          set +e
+          PUBLISHED=$(npm view "$NAME" versions --json 2>/dev/null)
+          EXIT_CODE=$?
+          set -e
+          if [ $EXIT_CODE -ne 0 ]; then
+            if echo "$PUBLISHED" | grep -q "E404"; then
+              echo "$NAME has never been published — proceeding with first publish"
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "npm view failed for $NAME:"
+              echo "$PUBLISHED"
+              exit 1
+            fi
+          elif echo "$PUBLISHED" | jq -e --arg v "$VERSION" '(if type == "array" then . else [.] end) | index($v) != null' > /dev/null; then
+            echo "$NAME@$VERSION is already on npm — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$NAME@$VERSION is new — proceeding with publish"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.guard.outputs.skip != 'true'
+        working-directory: src/${{ matrix.package }}
+        run: npm ci
+
+      # Defense in depth: CI already validated main, but this tests the exact
+      # ref being published (covers manual tags and any future trigger path)
+      - name: Run tests
+        if: steps.guard.outputs.skip != 'true'
+        working-directory: src/${{ matrix.package }}
+        run: npm test --if-present
+
+      - name: Build package
+        if: steps.guard.outputs.skip != 'true'
+        working-directory: src/${{ matrix.package }}
+        run: npm run build
+
+      # Authenticates via OIDC trusted publishing (no token) — each package's
+      # npm trusted publisher is bound to this workflow + the release environment
+      - name: Publish package
+        if: steps.guard.outputs.skip != 'true'
+        working-directory: src/${{ matrix.package }}
+        run: npm publish --access public
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+
+  publish-pypi:
+    needs: [detect-packages]
+    if: ${{ needs.detect-packages.outputs.pypi_packages != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.pypi_packages) }}
+    name: Publish ${{ matrix.package }} (PyPI)
     environment: release
     permissions:
       id-token: write # Required for trusted publishing
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.create-metadata.outputs.version }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -136,6 +149,8 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: uv run --frozen pyright
 
+      # Defense in depth: CI already validated main, but this tests the exact
+      # ref being published (covers manual tags and any future trigger path)
       - name: Run tests
         working-directory: src/${{ matrix.package }}
         run: |
@@ -149,95 +164,10 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: uv build
 
+      # skip-existing is the PyPI equivalent of the npm registry-diff guard:
+      # an already-published version is skipped, not failed
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: src/${{ matrix.package }}/dist
-          skip-existing: true # re-runs tolerate already-uploaded files
-
-  publish-npm:
-    needs: [update-packages, create-metadata]
-    if: ${{ needs.create-metadata.outputs.npm_packages != '[]' && needs.create-metadata.outputs.npm_packages != '' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        package: ${{ fromJson(needs.create-metadata.outputs.npm_packages) }}
-    name: Build ${{ matrix.package }}
-    environment: release
-    permissions:
-      contents: read
-      id-token: write # Required for npm trusted publishing (OIDC)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.create-metadata.outputs.version }}
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-          registry-url: 'https://registry.npmjs.org'
-
-      # OIDC trusted publishing requires npm >=11.5.1; Node 22's bundled npm is 10.x.
-      - name: Ensure npm CLI supports OIDC trusted publishing
-        run: npm install -g npm@^11.5.1
-
-      - name: Install dependencies
-        working-directory: src/${{ matrix.package }}
-        run: npm ci
-
-      - name: Check if version exists on npm
-        working-directory: src/${{ matrix.package }}
-        run: |
-          VERSION=$(jq -r .version package.json)
-          if npm view --json | jq -e --arg version "$VERSION" '[.[]][0].versions | contains([$version])'; then
-            echo "Version $VERSION already exists on npm"
-            exit 1
-          fi
-          echo "Version $VERSION is new, proceeding with publish"
-
-      - name: Run tests
-        working-directory: src/${{ matrix.package }}
-        run: npm test --if-present
-
-      - name: Build package
-        working-directory: src/${{ matrix.package }}
-        run: npm run build
-
-      # Authenticates via OIDC trusted publishing (no token) — each package's
-      # npm trusted publisher is bound to this workflow + the release environment
-      - name: Publish package
-        working-directory: src/${{ matrix.package }}
-        run: |
-          npm publish --access public
-        env:
-          NPM_CONFIG_PROVENANCE: "true"
-
-  create-release:
-    needs: [update-packages, create-metadata, publish-pypi, publish-npm]
-    if: |
-      always() &&
-      needs.update-packages.outputs.changes_made == 'true' &&
-      (needs.publish-pypi.result == 'success' || needs.publish-npm.result == 'success')
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Download release notes
-        uses: actions/download-artifact@v8
-        with:
-          name: release-notes
-
-      - name: Create release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN}}
-        run: |
-          VERSION="${{ needs.create-metadata.outputs.version }}"
-          gh release create "$VERSION" \
-            --title "Release $VERSION" \
-            --notes-file RELEASE_NOTES.md
-
+          skip-existing: true

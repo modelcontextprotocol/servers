@@ -17,7 +17,7 @@ const coercedBoolean = z.preprocess((val) => {
 
 const server = new McpServer({
   name: "sequential-thinking-server",
-  version: "0.2.0",
+  version: "1.0.0",
 });
 
 const thinkingServer = new SequentialThinkingServer();
