@@ -17,7 +17,7 @@ let pkgVersion: string;
 try {
   const __dirname_ = dirname(fileURLToPath(import.meta.url));
   pkgVersion = (JSON.parse(
-    readFileSync(join(__dirname_, 'package.json'), 'utf-8')
+    readFileSync(join(__dirname_, '..', 'package.json'), 'utf-8')
   ) as { version: string }).version;
 } catch (e) {
   // If package.json can't be read (corrupt, missing, or wrong module
