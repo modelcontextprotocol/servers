@@ -7,7 +7,7 @@ How the packages in this repository are versioned and published, and what to do 
 **No workflow ever computes or stamps a version at release time.** The version in each package's manifest on `main` is the source of truth, and versions only change through reviewed PRs:
 
 - **TypeScript servers** (`everything`, `filesystem`, `memory`, `sequentialthinking`) use **semver, managed by [changesets](https://github.com/changesets/changesets)**. Feature PRs include a changeset file (see [CONTRIBUTING.md](CONTRIBUTING.md)); merged changesets accumulate in a rolling **"Version Packages" PR** (maintained by [`version-packages.yml`](.github/workflows/version-packages.yml) on every push to `main`), which applies version bumps and CHANGELOG entries when merged. Semver policy: **patch** = bug fixes; **minor** = new tools, prompts, resources, or options; **major** = breaking changes (tool removed or renamed, schema change that breaks clients, protocol or Node floor bump).
-- **Python servers** (`fetch`, `git`, `time`) use **CalVer** (e.g. `2026.8.1`). A maintainer dispatches the **Prepare Python Release** workflow ([`prepare-release.yml`](.github/workflows/prepare-release.yml)), which stamps today's date onto each Python package that changed since its last version bump and opens a normal PR.
+- **Python servers** (`fetch`, `git`, `time`) use **CalVer** (e.g. `2026.8.1`). A maintainer dispatches the **Prepare Python Release** workflow ([`prepare-python-release.yml`](.github/workflows/prepare-python-release.yml)), which stamps today's date onto each Python package that changed since its last version bump and opens a normal PR.
 
 > [!NOTE]
 > PRs opened by these workflows use the workflow token, which doesn't trigger CI. Close and reopen the PR to run CI before merging.
