@@ -69,8 +69,10 @@ jobs:
         run: |
           NAME=$(jq -r .name package.json)
           VERSION=$(jq -r .version package.json)
+          # stdout only: with --json, npm writes errors as JSON to stdout, and
+          # stray stderr warnings must not corrupt the payload we parse
           set +e
-          PUBLISHED=$(npm view "$NAME" versions --json 2>&1)
+          PUBLISHED=$(npm view "$NAME" versions --json 2>/dev/null)
           EXIT_CODE=$?
           set -e
           if [ $EXIT_CODE -ne 0 ]; then
