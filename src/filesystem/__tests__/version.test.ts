@@ -1,26 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolvePackageVersion } from '../version.js';
+import { resolvePackageVersion, SERVER_VERSION } from '../version.js';
 
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs')>();
-  return { ...actual, readFileSync: vi.fn(actual.readFileSync) };
+vi.mock('node:module', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:module')>();
+  return { ...actual, createRequire: vi.fn(actual.createRequire) };
 });
 
-const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs');
-const readFileSyncMock = vi.mocked(readFileSync);
+const actualModule = await vi.importActual<typeof import('node:module')>('node:module');
+const createRequireMock = vi.mocked(createRequire);
 
-const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-const { version } = JSON.parse(actualFs.readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+const packageRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const { version } = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8'));
 
-/** fs errors carry a `code`; only ENOENT/ENOTDIR mean "not at this path". */
-const fsError = (code: string) => Object.assign(new Error(code), { code });
+/** A `require` that fails to find a module carries this code; anything else is a real failure. */
+const moduleNotFound = () =>
+  Object.assign(new Error('Cannot find module'), { code: 'MODULE_NOT_FOUND' });
+
+/** Stands in for the `require` returned by createRequire, driven by `impl`. */
+const stubRequire = (impl: (id: string) => unknown) =>
+  impl as unknown as ReturnType<typeof createRequire>;
 
 beforeEach(() => {
-  readFileSyncMock.mockReset();
-  readFileSyncMock.mockImplementation(actualFs.readFileSync);
+  createRequireMock.mockReset();
+  createRequireMock.mockImplementation(actualModule.createRequire);
 });
 
 describe('resolvePackageVersion', () => {
@@ -28,75 +34,65 @@ describe('resolvePackageVersion', () => {
     expect(resolvePackageVersion()).toBe(version);
   });
 
-  it('does not fall back while the manifest is readable', () => {
-    expect(resolvePackageVersion('unused-fallback')).toBe(version);
+  it('exposes the resolved version as SERVER_VERSION', () => {
+    expect(SERVER_VERSION).toBe(version);
   });
 
-  it('falls back when no manifest is found', () => {
-    readFileSyncMock.mockImplementation(() => {
-      throw fsError('ENOENT');
-    });
-
-    expect(resolvePackageVersion('1.2.3-fallback')).toBe('1.2.3-fallback');
-  });
-
-  it('falls back to 0.0.0-dev by default', () => {
-    readFileSyncMock.mockImplementation(() => {
-      throw fsError('ENOENT');
-    });
-
-    expect(resolvePackageVersion()).toBe('0.0.0-dev');
-  });
-
-  it('checks the parent directory, covering the dist/ layout', () => {
-    readFileSyncMock
-      .mockImplementationOnce(() => {
-        throw fsError('ENOENT');
-      })
-      .mockImplementationOnce(() => JSON.stringify({ version: '9.9.9' }));
+  it('falls through to the parent directory, covering the dist/ layout', () => {
+    const seen: string[] = [];
+    createRequireMock.mockReturnValue(
+      stubRequire((id) => {
+        seen.push(id);
+        if (seen.length === 1) throw moduleNotFound();
+        return { version: '9.9.9' };
+      }),
+    );
 
     expect(resolvePackageVersion()).toBe('9.9.9');
-  });
-
-  it('treats ENOTDIR as a missing manifest', () => {
-    readFileSyncMock
-      .mockImplementationOnce(() => {
-        throw fsError('ENOTDIR');
-      })
-      .mockImplementationOnce(() => JSON.stringify({ version: '8.8.8' }));
-
-    expect(resolvePackageVersion()).toBe('8.8.8');
+    expect(seen).toHaveLength(2);
   });
 
   it('skips a manifest that has no version field', () => {
-    readFileSyncMock
-      .mockImplementationOnce(() => JSON.stringify({ name: 'no-version-here' }))
-      .mockImplementationOnce(() => JSON.stringify({ version: '7.7.7' }));
+    let call = 0;
+    createRequireMock.mockReturnValue(
+      stubRequire(() => (++call === 1 ? { name: 'no-version-here' } : { version: '7.7.7' })),
+    );
 
     expect(resolvePackageVersion()).toBe('7.7.7');
   });
 
-  it('stops searching at the package root', () => {
-    readFileSyncMock.mockImplementation(() => {
-      throw fsError('ENOENT');
-    });
+  it('throws when no manifest is found, without searching past the package root', () => {
+    const seen: string[] = [];
+    createRequireMock.mockReturnValue(
+      stubRequire((id) => {
+        seen.push(id);
+        throw moduleNotFound();
+      }),
+    );
 
-    resolvePackageVersion();
-
-    expect(readFileSyncMock).toHaveBeenCalledTimes(2);
+    expect(() => resolvePackageVersion()).toThrow(
+      'Could not locate package.json for server version',
+    );
+    expect(seen).toHaveLength(2);
   });
 
   it('propagates errors other than a missing manifest', () => {
-    const denied = fsError('EACCES');
-    readFileSyncMock.mockImplementation(() => {
-      throw denied;
-    });
+    const denied = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    createRequireMock.mockReturnValue(
+      stubRequire(() => {
+        throw denied;
+      }),
+    );
 
     expect(() => resolvePackageVersion()).toThrow(denied);
   });
 
-  it('propagates a malformed manifest', () => {
-    readFileSyncMock.mockImplementation(() => '{ "version": ');
+  it('propagates a malformed manifest instead of reporting it as missing', () => {
+    createRequireMock.mockReturnValue(
+      stubRequire(() => {
+        throw new SyntaxError('Unexpected end of JSON input');
+      }),
+    );
 
     expect(() => resolvePackageVersion()).toThrow(SyntaxError);
   });

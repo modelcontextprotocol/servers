@@ -1,33 +1,36 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Only "manifest isn't here" is skippable; other errors propagate. */
-const isMissingFile = (error: unknown): boolean => {
-  const code = (error as NodeJS.ErrnoException)?.code;
-  return code === 'ENOENT' || code === 'ENOTDIR';
-};
-
 /**
- * Reads this package's version from package.json. release.py stamps the version
- * at release time, so a literal in source is always stale.
+ * Resolve this package's version from package.json.
+ *
+ * Works both from source (`src/filesystem/`) and from the published
+ * layout (`dist/`), where package.json lives one directory up.
  */
-export const resolvePackageVersion = (fallback = '0.0.0-dev'): string => {
-  const moduleDir = dirname(fileURLToPath(import.meta.url));
+export function resolvePackageVersion(): string {
+  const require = createRequire(import.meta.url);
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.join(moduleDir, 'package.json'),
+    path.join(moduleDir, '..', 'package.json'),
+  ];
 
-  // Manifest sits alongside this module from source, one level up from dist/.
-  for (const dir of [moduleDir, dirname(moduleDir)]) {
-    let manifest: string;
+  for (const candidate of candidates) {
     try {
-      manifest = readFileSync(join(dir, 'package.json'), 'utf8');
+      const pkg = require(candidate) as { version?: string };
+      if (pkg.version) {
+        return pkg.version;
+      }
     } catch (error) {
-      if (isMissingFile(error)) continue;
-      throw error;
+      // Only a missing manifest is skippable; a corrupt or unreadable one is a real failure.
+      if ((error as NodeJS.ErrnoException)?.code !== 'MODULE_NOT_FOUND') {
+        throw error;
+      }
     }
-
-    const { version } = JSON.parse(manifest);
-    if (typeof version === 'string') return version;
   }
 
-  return fallback;
-};
+  throw new Error('Could not locate package.json for server version');
+}
+
+export const SERVER_VERSION = resolvePackageVersion();
