@@ -13,7 +13,7 @@ jobs:
       npm_packages: ${{ steps.create-npm-packages.outputs.npm_packages}}
       pypi_packages: ${{ steps.create-pypi-packages.outputs.pypi_packages}}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -72,7 +72,7 @@ jobs:
     outputs:
       changes_made: ${{ steps.commit.outputs.changes_made }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -116,7 +116,7 @@ jobs:
       id-token: write # Required for trusted publishing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.create-metadata.outputs.version }}
 
@@ -169,7 +169,7 @@ jobs:
       id-token: write # Required for npm trusted publishing (OIDC)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.create-metadata.outputs.version }}
 
@@ -225,7 +225,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Download release notes
         uses: actions/download-artifact@v8
