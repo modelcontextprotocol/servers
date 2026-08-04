@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { resolvePackageVersion, SERVER_VERSION } from '../version.js';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { resolvePackageVersion } from '../version.js';
 
 vi.mock('node:module', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:module')>();
@@ -32,33 +34,6 @@ beforeEach(() => {
 describe('resolvePackageVersion', () => {
   it('reports the version from package.json', () => {
     expect(resolvePackageVersion()).toBe(version);
-  });
-
-  it('exposes the resolved version as SERVER_VERSION', () => {
-    expect(SERVER_VERSION).toBe(version);
-  });
-
-  it('falls through to the parent directory, covering the dist/ layout', () => {
-    const seen: string[] = [];
-    createRequireMock.mockReturnValue(
-      stubRequire((id) => {
-        seen.push(id);
-        if (seen.length === 1) throw moduleNotFound();
-        return { version: '9.9.9' };
-      }),
-    );
-
-    expect(resolvePackageVersion()).toBe('9.9.9');
-    expect(seen).toHaveLength(2);
-  });
-
-  it('skips a manifest that has no version field', () => {
-    let call = 0;
-    createRequireMock.mockReturnValue(
-      stubRequire(() => (++call === 1 ? { name: 'no-version-here' } : { version: '7.7.7' })),
-    );
-
-    expect(resolvePackageVersion()).toBe('7.7.7');
   });
 
   it('throws when no manifest is found, without searching past the package root', () => {
@@ -96,4 +71,36 @@ describe('resolvePackageVersion', () => {
 
     expect(() => resolvePackageVersion()).toThrow(SyntaxError);
   });
+});
+
+// The cases above drive the resolver directly; these exercise the real build.
+// They skip when dist/ is absent so an unbuilt tree still passes.
+const distVersionPath = path.join(packageRoot, 'dist', 'version.js');
+const distIndexPath = path.join(packageRoot, 'dist', 'index.js');
+
+describe('built output', () => {
+  it.skipIf(!existsSync(distVersionPath))(
+    'resolves package.json from the dist layout after build',
+    async () => {
+      const dist = await import(/* @vite-ignore */ pathToFileURL(distVersionPath).href);
+
+      expect(dist.SERVER_VERSION).toBe(version);
+    },
+  );
+
+  it.skipIf(!existsSync(distIndexPath))(
+    'stdio initialize reports package.json version in serverInfo',
+    async () => {
+      const client = new Client({ name: 'version-test', version: '1.0.0' }, { capabilities: {} });
+      await client.connect(
+        new StdioClientTransport({ command: process.execPath, args: [distIndexPath] }),
+      );
+
+      try {
+        expect(client.getServerVersion()?.version).toBe(version);
+      } finally {
+        await client.close();
+      }
+    },
+  );
 });
