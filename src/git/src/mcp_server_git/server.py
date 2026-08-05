@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 from typing import Sequence, Optional
@@ -42,7 +43,10 @@ class GitCommit(BaseModel):
 
 class GitAdd(BaseModel):
     repo_path: str
-    files: list[str]
+    files: list[str] | str = Field(
+        ...,
+        description="The files to stage. Normally a list of paths. A JSON-encoded array string such as '[\"a.py\", \"b.py\"]' or a single path string are also accepted for leniency.",
+    )
 
 class GitReset(BaseModel):
     repo_path: str
@@ -129,7 +133,23 @@ def git_commit(repo: git.Repo, message: str) -> str:
     commit = repo.index.commit(message)
     return f"Changes committed successfully with hash {commit.hexsha}"
 
-def git_add(repo: git.Repo, files: list[str]) -> str:
+def normalize_file_list(files: list[str] | str) -> list[str]:
+    # Some clients send the files argument as a JSON-encoded array string,
+    # e.g. '["a.py", "b.py"]', instead of a real array. Accept that form, and
+    # also accept a single bare path string, so a stray string does not fail
+    # the call outright.
+    if isinstance(files, str):
+        try:
+            parsed = json.loads(files)
+        except json.JSONDecodeError:
+            return [files]
+        if isinstance(parsed, list) and all(isinstance(item, str) for item in parsed):
+            return parsed
+        return [files]
+    return files
+
+def git_add(repo: git.Repo, files: list[str] | str) -> str:
+    files = normalize_file_list(files)
     if files == ["."]:
         repo.git.add(".")
     else:
