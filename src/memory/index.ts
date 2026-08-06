@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { randomBytes } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -114,7 +115,22 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    // Write atomically: write to a unique temp file, then rename into place, so
+    // an interruption mid-write can never leave a truncated or corrupted file.
+    // The random suffix avoids collisions when saves overlap.
+    const tmpPath = `${this.memoryFilePath}.${randomBytes(16).toString('hex')}.tmp`;
+    try {
+      await fs.writeFile(tmpPath, lines.join("\n"));
+      await fs.rename(tmpPath, this.memoryFilePath);
+    } catch (error) {
+      // Clean up the temp file so a failed save never leaks artifacts.
+      try {
+        await fs.unlink(tmpPath);
+      } catch {
+        /* best-effort cleanup: never mask the original error */
+      }
+      throw error;
+    }
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
