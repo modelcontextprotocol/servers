@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { randomBytes } from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -114,7 +115,17 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    const temporaryFilePath = `${this.memoryFilePath}.${randomBytes(16).toString('hex')}.tmp`;
+
+    try {
+      await fs.writeFile(temporaryFilePath, lines.join("\n"));
+      await fs.rename(temporaryFilePath, this.memoryFilePath);
+    } catch (error) {
+      try {
+        await fs.unlink(temporaryFilePath);
+      } catch {}
+      throw error;
+    }
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {

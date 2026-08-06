@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -18,6 +18,8 @@ describe('KnowledgeGraphManager', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
+
     // Clean up test file
     try {
       await fs.unlink(testFilePath);
@@ -396,6 +398,35 @@ describe('KnowledgeGraphManager', () => {
   });
 
   describe('file persistence', () => {
+    it('should preserve existing data when a write is interrupted', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: ['persistent data'] },
+      ]);
+
+      const originalFileContent = await fs.readFile(testFilePath, 'utf-8');
+      const writeFile = fs.writeFile.bind(fs);
+
+      vi.spyOn(fs, 'writeFile').mockImplementation(async (file, data) => {
+        await writeFile(file, data.toString().slice(0, 1));
+        throw new Error('interrupted write');
+      });
+
+      await expect(
+        manager.createEntities([
+          { name: 'Bob', entityType: 'person', observations: [] },
+        ])
+      ).rejects.toThrow('interrupted write');
+
+      await expect(fs.readFile(testFilePath, 'utf-8')).resolves.toBe(
+        originalFileContent
+      );
+
+      const files = await fs.readdir(path.dirname(testFilePath));
+      expect(
+        files.filter(file => file.startsWith(`${path.basename(testFilePath)}.`))
+      ).toEqual([]);
+    });
+
     it('should persist data across manager instances', async () => {
       await manager.createEntities([
         { name: 'Alice', entityType: 'person', observations: ['persistent data'] },
