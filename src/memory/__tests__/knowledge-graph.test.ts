@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -18,6 +18,8 @@ describe('KnowledgeGraphManager', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
+
     // Clean up test file
     try {
       await fs.unlink(testFilePath);
@@ -407,6 +409,38 @@ describe('KnowledgeGraphManager', () => {
 
       expect(graph.entities).toHaveLength(1);
       expect(graph.entities[0].name).toBe('Alice');
+    });
+
+    it('should preserve existing data when a write is interrupted', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: ['persistent data'] },
+      ]);
+
+      const originalFileContent = await fs.readFile(testFilePath, 'utf-8');
+      const writeFile = fs.writeFile.bind(fs);
+
+      // Simulate the process being killed mid-write: partial bytes written, then error
+      vi.spyOn(fs, 'writeFile').mockImplementation(async (file, data) => {
+        await writeFile(file, data.toString().slice(0, 1));
+        throw new Error('interrupted write');
+      });
+
+      await expect(
+        manager.createEntities([
+          { name: 'Bob', entityType: 'person', observations: [] },
+        ])
+      ).rejects.toThrow('interrupted write');
+
+      // The original memory file must be untouched
+      await expect(fs.readFile(testFilePath, 'utf-8')).resolves.toBe(
+        originalFileContent
+      );
+
+      // No temp files may leak from the failed write
+      const files = await fs.readdir(path.dirname(testFilePath));
+      expect(
+        files.filter(file => file.startsWith(`${path.basename(testFilePath)}.`))
+      ).toEqual([]);
     });
 
     it('should handle JSONL format correctly', async () => {
