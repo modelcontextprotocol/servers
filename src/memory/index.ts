@@ -118,6 +118,10 @@ export class KnowledgeGraphManager {
     // Write atomically: write to a unique temp file, then rename into place, so
     // an interruption mid-write can never leave a truncated or corrupted file.
     // The random suffix avoids collisions when saves overlap.
+    //
+    // Known limitation: a hard kill (SIGKILL) between the write and the rename
+    // leaves a stray .tmp file behind. This is unavoidable without a journal;
+    // the guarantee we provide is that memory.jsonl itself is never corrupted.
     const tmpPath = `${this.memoryFilePath}.${randomBytes(16).toString('hex')}.tmp`;
     try {
       await fs.writeFile(tmpPath, lines.join("\n"));
