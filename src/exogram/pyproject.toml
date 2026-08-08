@@ -13,12 +13,21 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "httpx>=0.27",
     "mcp>=1.1.2",
     "pydantic>=2.0.0",
 ]
+
+[project.urls]
+Homepage = "https://exogram.ai"
+Repository = "https://github.com/Richard-Ewing/servers"
+Issues = "https://github.com/Richard-Ewing/servers/issues"
+Documentation = "https://exogram.ai/docs"
 
 [project.scripts]
 mcp-server-exogram = "mcp_server_exogram:main"
@@ -28,4 +37,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-dev = ["pyright>=1.1.389", "ruff>=0.7.3"]
+dev = ["pyright>=1.1.389", "ruff>=0.7.3", "pytest", "pytest-asyncio"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
