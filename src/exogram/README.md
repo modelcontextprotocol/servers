@@ -1,3 +1,4 @@
+<!-- mcp-name: io.github.richard-ewing/exogram -->
 # Exogram MCP Server
 
 [![PyPI](https://img.shields.io/pypi/v/mcp-server-exogram)](https://pypi.org/project/mcp-server-exogram/)
