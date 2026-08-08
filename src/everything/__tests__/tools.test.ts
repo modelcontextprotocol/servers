@@ -1217,5 +1217,63 @@ describe('Tools', () => {
         handler!({ name: 'test.gz', data: 'ftp://example.com/file.txt', outputType: 'resource' })
       ).rejects.toThrow('Unsupported URL protocol');
     });
+
+    it('should re-check GZIP_ALLOWED_DOMAINS on redirect targets', async () => {
+      vi.stubEnv('GZIP_ALLOWED_DOMAINS', 'allowed.example');
+      vi.resetModules();
+
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const href = String(input);
+        const redirect = init?.redirect ?? 'follow';
+        if (href === 'https://allowed.example/file') {
+          if (redirect === 'follow') {
+            // Pre-fix behavior would auto-follow into a non-allowed host.
+            return new Response('SECRET_FROM_PRIVATE_HOST', { status: 200 });
+          }
+          return new Response(null, {
+            status: 302,
+            headers: { Location: 'http://127.0.0.1/secret' },
+          });
+        }
+        if (href === 'http://127.0.0.1/secret') {
+          return new Response('SECRET_FROM_PRIVATE_HOST', { status: 200 });
+        }
+        throw new Error(`unexpected fetch: ${href}`);
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { registerGZipFileAsResourceTool: registerFresh } = await import(
+        '../tools/gzip-file-as-resource.js'
+      );
+
+      const mockServer = {
+        registerTool: vi.fn(),
+        registerResource: vi.fn(),
+      } as unknown as McpServer;
+
+      let handler: Function | null = null;
+      (mockServer.registerTool as any).mockImplementation(
+        (name: string, config: any, h: Function) => {
+          handler = h;
+        }
+      );
+
+      registerFresh(mockServer);
+
+      await expect(
+        handler!({
+          name: 'test.gz',
+          data: 'https://allowed.example/file',
+          outputType: 'resource',
+        })
+      ).rejects.toThrow('not in the allowed domains list');
+
+      const fetched = fetchMock.mock.calls.map((c) => String(c[0]));
+      expect(fetched).toEqual(['https://allowed.example/file']);
+      expect(fetched).not.toContain('http://127.0.0.1/secret');
+
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    });
   });
 });
