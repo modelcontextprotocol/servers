@@ -15,7 +15,7 @@
   - `get-roots-list`
   - `trigger-elicitation-request`
   - `trigger-sampling-request`
-- Client capabilities aren't known until after initilization handshake is complete.
+- Client capabilities aren't known until after initialization handshake is complete.
 - Most tools are registered immediately during the Server Factory execution, prior to client connection.
 - To defer registration of these commands until client capabilities are known, a `registerConditionalTools(server)` function is invoked from an `onintitialized` handler.
 
