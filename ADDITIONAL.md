@@ -42,6 +42,10 @@ This is a curated collection of community-built frameworks and resources that si
 * **[PHP MCP Client](https://github.com/php-mcp/client)** - Core PHP implementation for the Model Context Protocol (MCP) Client
 * **[Runbear](https://runbear.io/solutions/integrations/slack/mcp)** - No-code MCP client for team chat platforms, such as Slack, Microsoft Teams, and Discord.
 
+## 🛠️ Hosted Servers
+
+* **[productivity-suite](https://github.com/zellkernel/productivity-suite-mcp)** — Zero-install hosted MCP server with text formatting and summarization tools. Streamable HTTP transport — add via `.mcp.json` with no binary or npm required.
+
 ## 📚 Resources
 
 - **[A2A-MCP Java Bridge](https://github.com/vishalmysore/a2ajava)** - A2AJava brings powerful A2A-MCP integration directly into your Java applications. It enables developers to annotate standard Java methods and instantly expose them as MCP Server, A2A-discoverable actions — with no boilerplate or service registration overhead.
