@@ -120,19 +120,31 @@ export async function validatePath(requestedPath: string): Promise<string> {
     }
     return realPath;
   } catch (error) {
-    // Security: For new files that don't exist yet, verify parent directory
-    // This ensures we can't create files in unauthorized locations
+    // Security: For new files/directories that don't exist yet, walk up to the
+    // nearest existing ancestor and verify it resolves inside an allowed
+    // directory. A single-level check only handles a missing leaf; creating
+    // multiple missing levels at once (e.g. mkdir -p style nested paths) needs
+    // to keep climbing past ancestors that also don't exist yet.
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      const parentDir = path.dirname(absolute);
-      try {
-        const realParentPath = await fs.realpath(parentDir);
-        const normalizedParent = normalizePath(realParentPath);
-        if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+      let ancestor = path.dirname(absolute);
+      while (true) {
+        try {
+          const realAncestorPath = await fs.realpath(ancestor);
+          const normalizedAncestor = normalizePath(realAncestorPath);
+          if (!isPathWithinAllowedDirectories(normalizedAncestor, allowedDirectories)) {
+            throw new Error(`Access denied - parent directory outside allowed directories: ${realAncestorPath} not in ${allowedDirectories.join(', ')}`);
+          }
+          return absolute;
+        } catch (ancestorError) {
+          if ((ancestorError as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw ancestorError;
+          }
+          const nextAncestor = path.dirname(ancestor);
+          if (nextAncestor === ancestor) {
+            throw new Error(`Parent directory does not exist: ${path.dirname(absolute)}`);
+          }
+          ancestor = nextAncestor;
         }
-        return absolute;
-      } catch {
-        throw new Error(`Parent directory does not exist: ${parentDir}`);
       }
     }
     throw error;

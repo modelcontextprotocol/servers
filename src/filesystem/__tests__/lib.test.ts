@@ -188,19 +188,35 @@ describe('Lib Functions', () => {
         expect(result).toBe(path.resolve(newFilePath));
       });
 
-      it('rejects when parent directory does not exist', async () => {
-        const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\nonexistent\\newfile.txt' : '/home/user/nonexistent/newfile.txt';
-        
-        // Create errors with the ENOENT code
-        const enoentError1 = new Error('ENOENT') as NodeJS.ErrnoException;
-        enoentError1.code = 'ENOENT';
-        const enoentError2 = new Error('ENOENT') as NodeJS.ErrnoException;
-        enoentError2.code = 'ENOENT';
-        
+      it('walks past multiple missing ancestors to an existing allowed directory', async () => {
+        // e.g. create_directory('/home/user/nonexistent/nested/newfile.txt') when
+        // neither 'nonexistent' nor 'nonexistent/nested' exist yet, but '/home/user'
+        // (an allowed directory) does. Regression test for #4629.
+        const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\nonexistent\\nested\\newfile.txt' : '/home/user/nonexistent/nested/newfile.txt';
+
+        const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError.code = 'ENOENT';
+
         mockFs.realpath
-          .mockRejectedValueOnce(enoentError1)
-          .mockRejectedValueOnce(enoentError2);
-        
+          .mockRejectedValueOnce(enoentError) // the path itself
+          .mockRejectedValueOnce(enoentError) // .../nonexistent/nested
+          .mockRejectedValueOnce(enoentError); // .../nonexistent
+        // falls through to the beforeEach base implementation for the next
+        // ancestor up ('/home/user'), which echoes the path back as-is
+
+        const result = await validatePath(newFilePath);
+        expect(result).toBe(path.resolve(newFilePath));
+      });
+
+      it('rejects when no ancestor directory exists at all', async () => {
+        const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\nonexistent\\newfile.txt' : '/home/user/nonexistent/newfile.txt';
+
+        const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError.code = 'ENOENT';
+
+        // Every ancestor, all the way up to the filesystem root, is missing.
+        mockFs.realpath.mockRejectedValue(enoentError);
+
         await expect(validatePath(newFilePath))
           .rejects.toThrow('Parent directory does not exist');
       });
