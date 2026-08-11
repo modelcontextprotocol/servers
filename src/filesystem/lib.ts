@@ -185,6 +185,25 @@ export async function writeFileContent(filePath: string, content: string): Promi
 }
 
 
+export async function moveFile(sourcePath: string, destinationPath: string): Promise<void> {
+  // The move_file tool contract (and README) state the operation fails if the
+  // destination already exists. fs.rename would silently overwrite it, which is
+  // a data-loss bug, so reject up front when anything - file, directory, or
+  // symlink - occupies the target. lstat is used so an existing symlink at the
+  // destination is detected rather than followed.
+  try {
+    await fs.lstat(destinationPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      await fs.rename(sourcePath, destinationPath);
+      return;
+    }
+    throw error;
+  }
+  throw new Error(`Destination already exists: ${destinationPath}`);
+}
+
+
 // File Editing Functions
 interface FileEdit {
   oldText: string;
