@@ -160,6 +160,10 @@ This project is licensed under the Apache License, Version 2.0 for new contribut
 ## 💬 Community
 
 - [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
+- - **[NaijaBase](https://github.com/duro1983/naijabase)** - 
+  Nigeria's first BaaS platform. PostgreSQL, Auth, Storage, 
+  Edge Functions, and Realtime — hosted in Lagos, billed in naira. 
+  `npx @naijabase/mcp-server`
 
 ## ⭐ Support
 
