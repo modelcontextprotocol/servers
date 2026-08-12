@@ -96,6 +96,46 @@ function resolveRelativePathAgainstAllowedDirectories(relativePath: string): str
 }
 
 // Security & Validation Functions
+async function resolveUnicodeEquivalentPath(absolutePath: string): Promise<string> {
+  const allowedDirectory = [...allowedDirectories]
+    .sort((left, right) => right.length - left.length)
+    .find(directory => isPathWithinAllowedDirectories(normalizePath(absolutePath), [directory]));
+
+  if (!allowedDirectory) {
+    return absolutePath;
+  }
+
+  let currentPath = await fs.realpath(allowedDirectory);
+  const relativeParts = path.relative(allowedDirectory, absolutePath).split(path.sep).filter(Boolean);
+
+  for (let index = 0; index < relativeParts.length; index++) {
+    const requestedPart = relativeParts[index];
+    const entries = (await fs.readdir(currentPath)) ?? [];
+    const exactMatch = entries.find(entry => entry === requestedPart);
+    const equivalentMatches = exactMatch
+      ? [exactMatch]
+      : entries.filter(entry => entry.normalize('NFC') === requestedPart.normalize('NFC'));
+
+    if (equivalentMatches.length > 1) {
+      throw new Error(`Ambiguous Unicode path component: ${requestedPart}`);
+    }
+
+    if (equivalentMatches.length === 0) {
+      if (index === relativeParts.length - 1) {
+        return path.join(currentPath, requestedPart);
+      }
+      throw new Error(`Parent directory does not exist: ${path.join(currentPath, requestedPart)}`);
+    }
+
+    currentPath = await fs.realpath(path.join(currentPath, equivalentMatches[0]));
+    if (!isPathWithinAllowedDirectories(normalizePath(currentPath), allowedDirectories)) {
+      throw new Error(`Access denied - symlink target outside allowed directories: ${currentPath} not in ${allowedDirectories.join(', ')}`);
+    }
+  }
+
+  return currentPath;
+}
+
 export async function validatePath(requestedPath: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
@@ -123,16 +163,13 @@ export async function validatePath(requestedPath: string): Promise<string> {
     // Security: For new files that don't exist yet, verify parent directory
     // This ensures we can't create files in unauthorized locations
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      const parentDir = path.dirname(absolute);
       try {
-        const realParentPath = await fs.realpath(parentDir);
-        const normalizedParent = normalizePath(realParentPath);
-        if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+        return await resolveUnicodeEquivalentPath(absolute);
+      } catch (resolutionError) {
+        if ((resolutionError as NodeJS.ErrnoException).code === 'ENOENT') {
+          throw new Error(`Parent directory does not exist: ${path.dirname(absolute)}`);
         }
-        return absolute;
-      } catch {
-        throw new Error(`Parent directory does not exist: ${parentDir}`);
+        throw resolutionError;
       }
     }
     throw error;
