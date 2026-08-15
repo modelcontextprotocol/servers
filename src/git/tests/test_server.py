@@ -227,12 +227,34 @@ def test_git_log(test_repository):
     assert "Date:" in result[0]
     assert "Message:" in result[0]
 
-def test_git_log_default(test_repository):
-    result = git_log(test_repository)
+def test_git_log_schema_consistency(test_repository):
+    for i in range(3):
+        file_path = Path(test_repository.working_dir) / f"log_consistent_{i}.txt"
+        file_path.write_text(f"content {i}")
+        test_repository.index.add([f"log_consistent_{i}.txt"])
+        test_repository.index.commit(f"commit consistent {i}")
 
-    assert isinstance(result, list)
-    assert len(result) >= 1
-    assert "initial commit" in result[0]
+    unfiltered = git_log(test_repository, max_count=2)
+    filtered = git_log(test_repository, max_count=2, start_timestamp="2020-01-01")
+
+    assert len(unfiltered) == 2
+    assert len(filtered) == 2
+
+    # Both must NOT have quotes or raw repr around hexsha/message
+    assert "'" not in unfiltered[0].split("\n")[0]
+    assert "'" not in filtered[0].split("\n")[0]
+
+    # Check that field structure is identical across both
+    for entry in [unfiltered[0], filtered[0]]:
+        lines = entry.strip().split("\n")
+        assert lines[0].startswith("Commit: ")
+        assert lines[1].startswith("Author: ")
+        assert lines[2].startswith("Date: ")
+        assert lines[3].startswith("Message: ")
+        # Hexsha must be 40 chars clean
+        sha = lines[0].replace("Commit: ", "").strip()
+        assert len(sha) == 40
+        assert not sha.startswith("'") and not sha.endswith("'")
 
 def test_git_create_branch(test_repository):
     result = git_create_branch(test_repository, "new-feature-branch")
