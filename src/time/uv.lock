@@ -368,7 +368,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", specifier = ">=1.23.0" },
+    { name = "mcp", specifier = ">=1.23.0,<2.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "tzdata", specifier = ">=2024.2" },
     { name = "tzlocal", specifier = ">=5.3.1" },
