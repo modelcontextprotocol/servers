@@ -159,6 +159,7 @@ This project is licensed under the Apache License, Version 2.0 for new contribut
 
 ## 💬 Community
 
+* **[GameEngine-Runtime-MCP](https://github.com/Estiwito/Game-engine-runtime-mcp)** - MCP server connecting Claude AI with game engine runtimes (Unity & Godot) for automated testing, log filtering, and scene hierarchy inspection.
 - [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
 
 ## ⭐ Support
