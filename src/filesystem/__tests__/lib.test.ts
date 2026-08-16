@@ -643,6 +643,33 @@ describe('Lib Functions', () => {
         expect(mockFileHandle.close).toHaveBeenCalled();
       });
 
+      it('ignores trailing newline when returning last lines', async () => {
+        const content = Buffer.from('line1\nline2\n');
+        mockFs.stat.mockResolvedValue({ size: content.length } as any);
+
+        const mockFileHandle = {
+          read: vi.fn(
+            (buffer: Buffer, offset: number, length: number, position: number) => {
+              const bytesRead = content.copy(
+                buffer,
+                offset,
+                position,
+                Math.min(position + length, content.length)
+              );
+              return Promise.resolve({ bytesRead });
+            }
+          ),
+          close: vi.fn().mockResolvedValue(undefined)
+        } as any;
+
+        mockFs.open.mockResolvedValue(mockFileHandle);
+
+        const result = await tailFile('/test/file.txt', 1);
+
+        expect(result).toBe('line2');
+        expect(mockFileHandle.close).toHaveBeenCalled();
+      });
+
       it('handles read errors gracefully', async () => {
         mockFs.stat.mockResolvedValue({ size: 100 } as any);
         
