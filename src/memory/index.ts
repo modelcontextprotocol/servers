@@ -486,6 +486,13 @@ server.registerTool(
   }
 );
 
+export const SEARCH_QUERY_MAX_LENGTH = 2048;
+
+export const SearchNodesQuerySchema = z
+  .string()
+  .max(SEARCH_QUERY_MAX_LENGTH)
+  .describe("The search query to match against entity names, types, and observation content");
+
 // Register search_nodes tool
 server.registerTool(
   "search_nodes",
@@ -493,7 +500,7 @@ server.registerTool(
     title: "Search Nodes",
     description: "Search for nodes in the knowledge graph based on a query",
     inputSchema: {
-      query: z.string().describe("The search query to match against entity names, types, and observation content")
+      query: SearchNodesQuerySchema
     },
     outputSchema: {
       entities: z.array(EntitySchema),
