@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -102,6 +102,55 @@ describe('KnowledgeGraphManager', () => {
     it('should handle empty relation arrays', async () => {
       const newRelations = await manager.createRelations([]);
       expect(newRelations).toHaveLength(0);
+    });
+
+    it('should throw error when "from" entity does not exist', async () => {
+      await manager.createEntities([
+        { name: 'Bob', entityType: 'person', observations: [] },
+      ]);
+
+      await expect(
+        manager.createRelations([
+          { from: 'Alice', to: 'Bob', relationType: 'knows' },
+        ])
+      ).rejects.toThrow('Entity with name Alice not found');
+    });
+
+    it('should throw error when "to" entity does not exist', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: [] },
+      ]);
+
+      await expect(
+        manager.createRelations([
+          { from: 'Alice', to: 'Bob', relationType: 'knows' },
+        ])
+      ).rejects.toThrow('Entity with name Bob not found');
+    });
+
+    it('should throw error when neither entity exists', async () => {
+      await expect(
+        manager.createRelations([
+          { from: 'Alice', to: 'Bob', relationType: 'knows' },
+        ])
+      ).rejects.toThrow('Entity with name Alice not found');
+    });
+
+    it('should fail fast and not create any relations if one relation in batch has missing entity', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: [] },
+        { name: 'Bob', entityType: 'person', observations: [] },
+      ]);
+
+      await expect(
+        manager.createRelations([
+          { from: 'Alice', to: 'Bob', relationType: 'knows' },
+          { from: 'Alice', to: 'Charlie', relationType: 'knows' },
+        ])
+      ).rejects.toThrow('Entity with name Charlie not found');
+
+      const graph = await manager.readGraph();
+      expect(graph.relations).toHaveLength(0);
     });
   });
 
@@ -513,6 +562,50 @@ describe('KnowledgeGraphManager', () => {
 
       expect(result.relations).toHaveLength(1);
       expect(result.relations[0]).not.toHaveProperty('type');
+    });
+
+    it('should write atomically using temporary file and rename', async () => {
+      const renameSpy = vi.spyOn(fs, 'rename');
+
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: ['atomic test'] },
+      ]);
+
+      expect(renameSpy).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(`^${testFilePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.[a-f0-9]{32}\\.tmp$`)),
+        testFilePath
+      );
+
+      renameSpy.mockRestore();
+    });
+
+    it('should clean up temp file and leave existing file intact if rename fails', async () => {
+      // Create initial entity successfully
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: ['initial'] },
+      ]);
+
+      const dir = path.dirname(testFilePath);
+      const renameSpy = vi.spyOn(fs, 'rename').mockRejectedValueOnce(new Error('Disk error during rename'));
+
+      await expect(
+        manager.createEntities([
+          { name: 'Bob', entityType: 'person', observations: ['new'] },
+        ])
+      ).rejects.toThrow('Disk error during rename');
+
+      // Verify no leftover .tmp files in test directory
+      const files = await fs.readdir(dir);
+      const tempFiles = files.filter(f => f.includes(path.basename(testFilePath)) && f.endsWith('.tmp'));
+      expect(tempFiles).toHaveLength(0);
+
+      renameSpy.mockRestore();
+
+      // Verify original file is still intact and valid
+      const manager2 = new KnowledgeGraphManager(testFilePath);
+      const graph = await manager2.readGraph();
+      expect(graph.entities).toHaveLength(1);
+      expect(graph.entities[0].name).toBe('Alice');
     });
   });
 });

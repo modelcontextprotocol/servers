@@ -7,6 +7,7 @@ import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomBytes } from 'crypto';
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
@@ -114,7 +115,18 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    const tempFilePath = `${this.memoryFilePath}.${randomBytes(16).toString('hex')}.tmp`;
+    try {
+      await fs.writeFile(tempFilePath, lines.join("\n"), "utf-8");
+      await fs.rename(tempFilePath, this.memoryFilePath);
+    } catch (error) {
+      try {
+        await fs.unlink(tempFilePath);
+      } catch {
+        // Ignore unlink error if temp file was not created or already removed
+      }
+      throw error;
+    }
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
@@ -127,6 +139,14 @@ export class KnowledgeGraphManager {
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
     const graph = await this.loadGraph();
+    for (const r of relations) {
+      if (!graph.entities.some(e => e.name === r.from)) {
+        throw new Error(`Entity with name ${r.from} not found`);
+      }
+      if (!graph.entities.some(e => e.name === r.to)) {
+        throw new Error(`Entity with name ${r.to} not found`);
+      }
+    }
     const newRelations = relations.filter(r => !graph.relations.some(existingRelation => 
       existingRelation.from === r.from && 
       existingRelation.to === r.to && 
