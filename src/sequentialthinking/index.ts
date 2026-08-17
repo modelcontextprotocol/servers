@@ -1,23 +1,35 @@
 #!/usr/bin/env node
 
+import { readFileSync, existsSync } from "fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { SequentialThinkingServer } from './lib.js';
 
+function getPackageVersion(): string {
+  try {
+    const localPkg = new URL("./package.json", import.meta.url);
+    if (existsSync(localPkg)) {
+      return JSON.parse(readFileSync(localPkg, "utf-8")).version;
+    }
+    const parentPkg = new URL("../package.json", import.meta.url);
+    if (existsSync(parentPkg)) {
+      return JSON.parse(readFileSync(parentPkg, "utf-8")).version;
+    }
+  } catch {}
+  return "0.6.2";
+}
+
 /** Safe boolean coercion that correctly handles string "false" */
-const coercedBoolean = z.preprocess((val) => {
-  if (typeof val === "boolean") return val;
-  if (typeof val === "string") {
-    if (val.toLowerCase() === "true") return true;
-    if (val.toLowerCase() === "false") return false;
-  }
-  return val;
-}, z.boolean());
+const coercedBoolean = z.union([
+  z.boolean(),
+  z.enum(["true", "false"]).transform((v) => v === "true"),
+  z.string().transform((v) => v.toLowerCase() === "true"),
+]);
 
 const server = new McpServer({
   name: "sequential-thinking-server",
-  version: "0.2.0",
+  version: getPackageVersion(),
 });
 
 const thinkingServer = new SequentialThinkingServer();
