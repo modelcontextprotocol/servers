@@ -35,3 +35,12 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcp_server_action_gate"]
+
+[dependency-groups]
+dev = ["pyright>=1.1.407", "ruff>=0.8.1", "pytest>=8.0.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
