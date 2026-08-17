@@ -1,3 +1,4 @@
+import os
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
@@ -22,6 +23,20 @@ from pydantic import BaseModel, Field, AnyUrl
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
+DEFAULT_TIMEOUT = 30.0
+
+
+def get_default_timeout() -> float:
+    """Get the default timeout in seconds from the environment or fallback to DEFAULT_TIMEOUT."""
+    timeout_env = os.environ.get("MCP_FETCH_TIMEOUT")
+    if timeout_env is not None:
+        try:
+            val = float(timeout_env)
+            if val > 0:
+                return val
+        except ValueError:
+            pass
+    return DEFAULT_TIMEOUT
 
 
 def extract_content_from_html(html: str) -> str:
@@ -33,15 +48,30 @@ def extract_content_from_html(html: str) -> str:
     Returns:
         Simplified markdown version of the content
     """
-    ret = readabilipy.simple_json.simple_json_from_html_string(
-        html, use_readability=True
-    )
-    if not ret["content"]:
+    ret = None
+    try:
+        ret = readabilipy.simple_json.simple_json_from_html_string(
+            html, use_readability=True
+        )
+    except Exception:
+        pass
+
+    content_raw = ret.get("content") if ret else None
+    content = None
+    if content_raw and len(content_raw) >= len(html) * 0.05:
+        content = markdownify.markdownify(
+            content_raw,
+            heading_style=markdownify.ATX,
+        )
+
+    if not content or not content.strip():
+        content = markdownify.markdownify(
+            html,
+            heading_style=markdownify.ATX,
+        )
+
+    if not content or not content.strip():
         return "<error>Page failed to be simplified from HTML</error>"
-    content = markdownify.markdownify(
-        ret["content"],
-        heading_style=markdownify.ATX,
-    )
     return content
 
 
@@ -63,13 +93,19 @@ def get_robots_txt_url(url: str) -> str:
     return robots_url
 
 
-async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url: str | None = None) -> None:
+async def check_may_autonomously_fetch_url(
+    url: str,
+    user_agent: str,
+    proxy_url: str | None = None,
+    timeout: float | None = None,
+) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
     """
     from httpx import AsyncClient, HTTPError
 
+    actual_timeout = timeout if timeout is not None else get_default_timeout()
     robot_txt_url = get_robots_txt_url(url)
 
     async with AsyncClient(proxy=proxy_url) as client:
@@ -78,6 +114,7 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
                 robot_txt_url,
                 follow_redirects=True,
                 headers={"User-Agent": user_agent},
+                timeout=actual_timeout,
             )
         except HTTPError:
             raise McpError(ErrorData(
@@ -109,12 +146,18 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
 
 
 async def fetch_url(
-    url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None
+    url: str,
+    user_agent: str,
+    force_raw: bool = False,
+    proxy_url: str | None = None,
+    timeout: float | None = None,
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
     """
     from httpx import AsyncClient, HTTPError
+
+    actual_timeout = timeout if timeout is not None else get_default_timeout()
 
     async with AsyncClient(proxy=proxy_url) as client:
         try:
@@ -122,7 +165,7 @@ async def fetch_url(
                 url,
                 follow_redirects=True,
                 headers={"User-Agent": user_agent},
-                timeout=30,
+                timeout=actual_timeout,
             )
         except HTTPError as e:
             raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}"))
@@ -160,7 +203,7 @@ class Fetch(BaseModel):
             gt=0,
             lt=1000000,
         ),
-    ]
+    ] = 5000
     start_index: Annotated[
         int,
         Field(
@@ -168,20 +211,29 @@ class Fetch(BaseModel):
             description="On return output starting at this character index, useful if a previous fetch was truncated and more context is required.",
             ge=0,
         ),
-    ]
+    ] = 0
     raw: Annotated[
         bool,
         Field(
             default=False,
             description="Get the actual HTML content of the requested page, without simplification.",
         ),
-    ]
+    ] = False
+    timeout: Annotated[
+        float | None,
+        Field(
+            default=None,
+            description="Timeout in seconds for the fetch request.",
+            gt=0,
+        ),
+    ] = None
 
 
 async def serve(
     custom_user_agent: str | None = None,
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
+    timeout: float | None = None,
 ) -> None:
     """Run the fetch MCP server.
 
@@ -189,10 +241,12 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        timeout: Optional default timeout in seconds for requests
     """
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
     user_agent_manual = custom_user_agent or DEFAULT_USER_AGENT_MANUAL
+    server_timeout = timeout if timeout is not None else get_default_timeout()
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -231,11 +285,19 @@ Although originally you did not have internet access, and were advised to refuse
         if not url:
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
+        request_timeout = args.timeout if args.timeout is not None else server_timeout
+
         if not ignore_robots_txt:
-            await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
+            await check_may_autonomously_fetch_url(
+                url, user_agent_autonomous, proxy_url, timeout=request_timeout
+            )
 
         content, prefix = await fetch_url(
-            url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url
+            url,
+            user_agent_autonomous,
+            force_raw=args.raw,
+            proxy_url=proxy_url,
+            timeout=request_timeout,
         )
         original_length = len(content)
         if args.start_index >= original_length:
@@ -262,7 +324,9 @@ Although originally you did not have internet access, and were advised to refuse
         url = arguments["url"]
 
         try:
-            content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url)
+            content, prefix = await fetch_url(
+                url, user_agent_manual, proxy_url=proxy_url, timeout=server_timeout
+            )
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:
             return GetPromptResult(

@@ -18,6 +18,7 @@ The fetch tool will truncate the response, but by using the `start_index` argume
     - `max_length` (integer, optional): Maximum number of characters to return (default: 5000)
     - `start_index` (integer, optional): Start content from this character index (default: 0)
     - `raw` (boolean, optional): Get raw content without markdown conversion (default: false)
+    - `timeout` (number, optional): Timeout in seconds for the fetch request
 
 ### Prompts
 
@@ -171,6 +172,13 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 ### Customization - Proxy
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
+
+### Customization - Timeout
+
+The request timeout can be configured in multiple ways:
+- Via the `--timeout` CLI argument (e.g. `--timeout=60.0`)
+- Via the `MCP_FETCH_TIMEOUT` environment variable (in seconds, default: 30.0)
+- Per-request via the `timeout` tool argument
 
 ## Windows Configuration
 
