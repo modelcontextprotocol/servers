@@ -120,19 +120,32 @@ export async function validatePath(requestedPath: string): Promise<string> {
     }
     return realPath;
   } catch (error) {
-    // Security: For new files that don't exist yet, verify parent directory
-    // This ensures we can't create files in unauthorized locations
+    // Security: For new files/directories that don't exist yet, verify ancestor directory
+    // This ensures we can't create files in unauthorized locations while allowing nested creations
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      const parentDir = path.dirname(absolute);
-      try {
-        const realParentPath = await fs.realpath(parentDir);
-        const normalizedParent = normalizePath(realParentPath);
-        if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+      let currentDir = path.dirname(absolute);
+      while (true) {
+        let realAncestorPath: string;
+        try {
+          realAncestorPath = await fs.realpath(currentDir);
+        } catch (ancestorError) {
+          if ((ancestorError as NodeJS.ErrnoException).code === 'ENOENT') {
+            const parent = path.dirname(currentDir);
+            if (parent === currentDir) {
+              // Reached root without finding an existing directory
+              throw new Error(`Parent directory does not exist: ${path.dirname(absolute)}`);
+            }
+            currentDir = parent;
+            continue;
+          }
+          throw ancestorError;
+        }
+
+        const normalizedAncestor = normalizePath(realAncestorPath);
+        if (!isPathWithinAllowedDirectories(normalizedAncestor, allowedDirectories)) {
+          throw new Error(`Access denied - parent directory outside allowed directories: ${realAncestorPath} not in ${allowedDirectories.join(', ')}`);
         }
         return absolute;
-      } catch {
-        throw new Error(`Parent directory does not exist: ${parentDir}`);
       }
     }
     throw error;

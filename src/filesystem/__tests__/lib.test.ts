@@ -188,18 +188,49 @@ describe('Lib Functions', () => {
         expect(result).toBe(path.resolve(newFilePath));
       });
 
-      it('rejects when parent directory does not exist', async () => {
+      it('handles non-existent paths with multiple non-existent parent directories by walking up to existing ancestor', async () => {
+        const nestedPath = process.platform === 'win32' ? 'C:\\Users\\test\\a\\b\\c' : '/home/user/a/b/c';
+        const ancestorPath = process.platform === 'win32' ? 'C:\\Users\\test' : '/home/user';
+        
+        const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError.code = 'ENOENT';
+        
+        // Mock ENOENT for the full path and intermediate directories, then resolve the existing ancestor
+        mockFs.realpath
+          .mockRejectedValueOnce(enoentError) // C:\Users\test\a\b\c
+          .mockRejectedValueOnce(enoentError) // C:\Users\test\a\b
+          .mockRejectedValueOnce(enoentError) // C:\Users\test\a
+          .mockResolvedValueOnce(ancestorPath); // C:\Users\test
+        
+        const result = await validatePath(nestedPath);
+        expect(result).toBe(path.resolve(nestedPath));
+      });
+
+      it('rejects when ancestor directory resolves outside allowed directories', async () => {
+        const nestedPath = process.platform === 'win32' ? 'C:\\Users\\test\\symlink_out\\a\\b' : '/home/user/symlink_out/a/b';
+        const outsidePath = process.platform === 'win32' ? 'C:\\Windows\\System32' : '/etc';
+        
+        const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError.code = 'ENOENT';
+        
+        mockFs.realpath
+          .mockRejectedValueOnce(enoentError) // symlink_out/a/b
+          .mockRejectedValueOnce(enoentError) // symlink_out/a
+          .mockResolvedValueOnce(outsidePath); // symlink_out resolves outside
+        
+        await expect(validatePath(nestedPath))
+          .rejects.toThrow('Access denied - parent directory outside allowed directories');
+      });
+
+      it('rejects when no ancestor directory exists', async () => {
         const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\nonexistent\\newfile.txt' : '/home/user/nonexistent/newfile.txt';
         
         // Create errors with the ENOENT code
-        const enoentError1 = new Error('ENOENT') as NodeJS.ErrnoException;
-        enoentError1.code = 'ENOENT';
-        const enoentError2 = new Error('ENOENT') as NodeJS.ErrnoException;
-        enoentError2.code = 'ENOENT';
+        const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError.code = 'ENOENT';
         
-        mockFs.realpath
-          .mockRejectedValueOnce(enoentError1)
-          .mockRejectedValueOnce(enoentError2);
+        // All ancestors fail to resolve
+        mockFs.realpath.mockRejectedValue(enoentError);
         
         await expect(validatePath(newFilePath))
           .rejects.toThrow('Parent directory does not exist');

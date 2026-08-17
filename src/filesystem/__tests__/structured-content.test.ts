@@ -96,6 +96,38 @@ describe('structuredContent schema compliance', () => {
     });
   });
 
+  describe('create_directory (issue #4629)', () => {
+    it('should create multiple nested directories in one operation', async () => {
+      const nestedDir = path.join(testDir, 'nested', 'level1', 'level2', 'level3');
+
+      const result = await client.callTool({
+        name: 'create_directory',
+        arguments: { path: nestedDir }
+      });
+
+      expect(result.isError).toBeFalsy();
+      const stats = await fs.stat(nestedDir);
+      expect(stats.isDirectory()).toBe(true);
+
+      const structuredContent = result.structuredContent as { content: unknown };
+      expect(typeof structuredContent.content).toBe('string');
+      expect(structuredContent.content).toContain('Successfully created directory');
+    });
+
+    it('should succeed silently if directory already exists', async () => {
+      const existingDir = path.join(testDir, 'subdir');
+
+      const result = await client.callTool({
+        name: 'create_directory',
+        arguments: { path: existingDir }
+      });
+
+      expect(result.isError).toBeFalsy();
+      const stats = await fs.stat(existingDir);
+      expect(stats.isDirectory()).toBe(true);
+    });
+  });
+
   describe('move_file', () => {
     it('should return structuredContent.content as a string, not an array', async () => {
       const sourcePath = path.join(testDir, 'test.txt');
@@ -121,6 +153,35 @@ describe('structuredContent schema compliance', () => {
 
       // The content should contain success message
       expect(structuredContent.content).toContain('Successfully moved');
+    });
+
+    it('should fail when destination already exists and not overwrite content (issue #4628)', async () => {
+      const sourcePath = path.join(testDir, 'source.txt');
+      const destPath = path.join(testDir, 'dest.txt');
+
+      await fs.writeFile(sourcePath, 'source content');
+      await fs.writeFile(destPath, 'original destination content');
+
+      const result = await client.callTool({
+        name: 'move_file',
+        arguments: {
+          source: sourcePath,
+          destination: destPath
+        }
+      });
+
+      // Operation must fail
+      expect(result.isError).toBe(true);
+      const textContent = (result.content as Array<{ type: string; text?: string }>)[0]?.text;
+      expect(textContent).toContain(`Destination already exists: ${destPath}`);
+
+      // Destination content must NOT have been overwritten
+      const destContent = await fs.readFile(destPath, 'utf-8');
+      expect(destContent).toBe('original destination content');
+
+      // Source file should still exist
+      const sourceContent = await fs.readFile(sourcePath, 'utf-8');
+      expect(sourceContent).toBe('source content');
     });
   });
 

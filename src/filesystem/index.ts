@@ -631,6 +631,18 @@ server.registerTool(
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
     const validSourcePath = await validatePath(args.source);
     const validDestPath = await validatePath(args.destination);
+    let destExists = false;
+    try {
+      await fs.lstat(validDestPath);
+      destExists = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
+    if (destExists) {
+      throw new Error(`Destination already exists: ${args.destination}`);
+    }
     await fs.rename(validSourcePath, validDestPath);
     const text = `Successfully moved ${args.source} to ${args.destination}`;
     const contentBlock = { type: "text" as const, text };
