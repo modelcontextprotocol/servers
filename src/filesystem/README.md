@@ -15,52 +15,59 @@ Published on npm as [`@modelcontextprotocol/server-filesystem`](https://www.npmj
 
 ## Directory Access Control
 
-The server uses a flexible directory access control system. Directories can be specified via command-line arguments or dynamically via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots).
+The server uses a flexible directory access control system. Allowed directories can be configured either statically via command-line arguments or dynamically via the [MCP Roots protocol](https://modelcontextprotocol.io/docs/learn/client-concepts#roots).
 
-### Method 1: Command-line Arguments
-Specify Allowed directories when starting the server:
+### Method 1: Argless Configuration via MCP Roots (Recommended)
+
+When `mcp-server-filesystem` is launched **without directory arguments**, directory scoping is fully delegated to the MCP client:
+
+```bash
+mcp-server-filesystem
+```
+
+In this mode:
+- **Automatic Root Discovery**: Upon connection, the server requests the client's workspace roots via `roots/list`.
+- **Dynamic Updates**: When workspace folders are added or removed in the client, the client sends a `notifications/roots/list_changed` notification. The server automatically queries `roots/list` and updates its allowed directory list at runtime without requiring a server restart.
+- **Client Requirements**: The client must support the roots capability (`capabilities.roots`) and provide at least one valid root directory. If started without arguments and the client does not support roots (or returns an empty roots list), the server will throw an error during initialization.
+
+This is the recommended setup for IDEs and clients with workspace support (such as VS Code), as it avoids hardcoded directory paths and adapts dynamically to the user's active workspace.
+
+### Method 2: Command-line Arguments (Static Scope)
+
+Specify allowed directories explicitly when starting the server:
+
 ```bash
 mcp-server-filesystem /path/to/dir1 /path/to/dir2
 ```
 
-### Method 2: MCP Roots (Recommended)
-MCP clients that support [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories. 
-
-Roots notified by Client to Server, completely replace any server-side Allowed directories when provided.
-
-**Important**: If server starts without command-line arguments AND client doesn't support roots protocol (or provides empty roots), the server will throw an error during initialization.
-
-This is the recommended method, as this enables runtime directory updates via `roots/list_changed` notifications without server restart, providing a more flexible and modern integration experience.
+In this mode:
+- The server uses the specified directories as its allowed scope.
+- If the connected client also supports the MCP Roots protocol, client-provided roots will take precedence and replace the command-line directories upon initialization.
+- If the client does not support roots, the server will continue using the static command-line directories.
 
 ### How It Works
 
-The server's directory access control follows this flow:
+The server's directory access control follows this lifecycle:
 
 1. **Server Startup**
-   - Server starts with directories from command-line arguments (if provided)
-   - If no arguments provided, server starts with empty allowed directories
+   - **With arguments**: Server initializes with the paths passed as command-line arguments.
+   - **Without arguments (Argless)**: Server starts with an empty allowed directory list, waiting for the client to provide roots during initialization.
 
 2. **Client Connection & Initialization**
-   - Client connects and sends `initialize` request with capabilities
-   - Server checks if client supports roots protocol (`capabilities.roots`)
-   
-3. **Roots Protocol Handling** (if client supports roots)
-   - **On initialization**: Server requests roots from client via `roots/list`
-   - Client responds with its configured roots
-   - Server replaces ALL allowed directories with client's roots
-   - **On runtime updates**: Client can send `notifications/roots/list_changed`
-   - Server requests updated roots and replaces allowed directories again
+   - Client connects and sends the `initialize` request with declared capabilities.
+   - Server checks if the client declares roots capability (`capabilities.roots`).
 
-4. **Fallback Behavior** (if client doesn't support roots)
-   - Server continues using command-line directories only
-   - No dynamic updates possible
+3. **Roots Protocol Handling** (When client supports roots)
+   - **On initialization (`roots/list`)**: Server requests the client's configured root directories. The received roots replace all server-side allowed directories.
+   - **On runtime updates (`notifications/roots/list_changed`)**: When roots change in the client, the client emits a notification. The server re-fetches roots via `roots/list` and updates allowed directories in real time.
 
-5. **Access Control**
-   - All filesystem operations are restricted to allowed directories
-   - Use `list_allowed_directories` tool to see current directories
-   - Server requires at least ONE allowed directory to operate
+4. **Fallback & Error Behavior**
+   - **Started with arguments & client lacks roots support**: Server continues operating with the static command-line directories.
+   - **Started without arguments & client lacks roots support (or provides empty roots)**: Server throws an initialization error (`Server cannot operate: No allowed directories available...`) since at least one allowed directory is required to operate.
 
-**Note**: The server will only allow operations within directories specified either via `args` or via Roots.
+5. **Access Control & Path Validation**
+   - All filesystem operations are strictly validated against the active allowed directories (including symlink resolution).
+   - Use the `list_allowed_directories` tool to inspect the active allowed directories at any time.
 
 
 
@@ -239,6 +246,28 @@ Note: all directories must be mounted to `/projects` by default.
 
 ### NPX
 
+**Argless Configuration (MCP Roots Delegation - Recommended):**
+
+If your client supports the MCP Roots protocol, omit directory arguments so the server dynamically discovers and updates allowed directories from client roots:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem"
+      ]
+    }
+  }
+}
+```
+
+**Static Configuration (Explicit Directories):**
+
+Specify explicit directory paths to restrict the server to fixed folders:
+
 ```json
 {
   "mcpServers": {
@@ -318,6 +347,28 @@ Note: all directories must be mounted to `/projects` by default.
 
 ### NPX
 
+**Argless Configuration (MCP Roots Delegation - Recommended):**
+
+VS Code supports the MCP Roots protocol and automatically passes open workspace folders as roots to the server. Omitting directory arguments allows the server to adapt dynamically as you switch or add workspace folders:
+
+```json
+{
+  "servers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem"
+      ]
+    }
+  }
+}
+```
+
+**Explicit Workspace Directory:**
+
+Alternatively, you can explicitly pass the VS Code `${workspaceFolder}` variable:
+
 ```json
 {
   "servers": {
@@ -333,7 +384,7 @@ Note: all directories must be mounted to `/projects` by default.
 }
 ```
 
-On Windows, use:
+On Windows, use `cmd /c` to launch `npx`:
 
 ```json
 {
@@ -344,8 +395,7 @@ On Windows, use:
         "/c",
         "npx",
         "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "${workspaceFolder}"
+        "@modelcontextprotocol/server-filesystem"
       ]
     }
   }
