@@ -2,12 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-try:
-    from mcp_server_action_gate.gate import AgentActionGate
-    from mcp_server_action_gate.schema import Actor, ToolRequest
-except ImportError:
-    from aag.gate import AgentActionGate
-    from aag.schema import Actor, ToolRequest
+from mcp_server_action_gate.gate import AgentActionGate
+from mcp_server_action_gate.schema import Actor, ToolRequest
 
 
 def mcp_call_to_request(call: dict[str, Any], policy: dict[str, Any]) -> tuple[Actor, ToolRequest]:

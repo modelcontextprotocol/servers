@@ -4,18 +4,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-try:
-    from mcp_server_action_gate.cost import estimate_cost_avoidance
-    from mcp_server_action_gate.gate import AgentActionGate
-    from mcp_server_action_gate.ledger import ActionLedger
-    from mcp_server_action_gate.mcp import evaluate_mcp_call
-    from mcp_server_action_gate.schema import Actor, CONSULTATION, INSTANT_AUDIT, ToolRequest
-except ImportError:
-    from aag.cost import estimate_cost_avoidance
-    from aag.gate import AgentActionGate
-    from aag.ledger import ActionLedger
-    from aag.mcp import evaluate_mcp_call
-    from aag.schema import Actor, CONSULTATION, INSTANT_AUDIT, ToolRequest
+from mcp_server_action_gate.cost import estimate_cost_avoidance
+from mcp_server_action_gate.gate import AgentActionGate
+from mcp_server_action_gate.ledger import ActionLedger
+from mcp_server_action_gate.mcp import evaluate_mcp_call
+from mcp_server_action_gate.schema import Actor, CONSULTATION, INSTANT_AUDIT, ToolRequest
 
 def _find_fixtures() -> Path:
     p1 = Path(__file__).resolve().parent.parent / "fixtures"
@@ -34,17 +27,20 @@ def load_case(path: Path) -> dict[str, Any]:
 
 
 def request_from_case(case: dict[str, Any]) -> tuple[Actor, ToolRequest]:
-    actor_raw = case.get("actor") or {}
-    req = case.get("request") or {}
+    actor_value = case.get("actor")
+    request_value = case.get("request")
+    actor_raw = actor_value if isinstance(actor_value, dict) else {}
+    req = request_value if isinstance(request_value, dict) else {}
     actor = Actor(
         id=str(actor_raw.get("id") or "agent-1"),
         type=str(actor_raw.get("type") or "agent"),
         role=str(actor_raw.get("role") or ""),
     )
+    args_value = req.get("args")
     request = ToolRequest(
         tool=str(req.get("tool") or ""),
         tier=str(req.get("tier") or ""),
-        args=req.get("args") if isinstance(req.get("args"), dict) else {},
+        args=args_value if isinstance(args_value, dict) else {},
         thought=str(req.get("thought") or ""),
         model_confidence=req.get("model_confidence"),
         idempotency_key=str(req.get("idempotency_key") or ""),

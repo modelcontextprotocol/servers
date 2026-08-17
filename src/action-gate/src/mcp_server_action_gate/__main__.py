@@ -5,18 +5,11 @@ import json
 import sys
 from pathlib import Path
 
-try:
-    from mcp_server_action_gate.cost import estimate_cost_avoidance
-    from mcp_server_action_gate.demo import demo, load_case, run_case
-    from mcp_server_action_gate.gate import AgentActionGate, kill_switch_engaged
-    from mcp_server_action_gate.ledger import ActionLedger
-    from mcp_server_action_gate.schema import CONSULTATION, INSTANT_AUDIT
-except ImportError:
-    from aag.cost import estimate_cost_avoidance
-    from aag.demo import demo, load_case, run_case
-    from aag.gate import AgentActionGate, kill_switch_engaged
-    from aag.ledger import ActionLedger
-    from aag.schema import CONSULTATION, INSTANT_AUDIT
+from mcp_server_action_gate.cost import estimate_cost_avoidance
+from mcp_server_action_gate.demo import demo, load_case, run_case
+from mcp_server_action_gate.gate import AgentActionGate, kill_switch_engaged
+from mcp_server_action_gate.ledger import ActionLedger
+from mcp_server_action_gate.schema import CONSULTATION, INSTANT_AUDIT
 
 
 def _print(payload: object) -> None:
@@ -43,10 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     token = args.prove_token
 
     if args.cmd == "serve":
-        try:
-            from mcp_server_action_gate.server import serve
-        except ImportError:
-            from aag.server import serve
+        from mcp_server_action_gate.server import serve
 
         serve(gate=AgentActionGate(ledger=ledger, prove_token=token))
         return 0

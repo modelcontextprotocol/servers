@@ -4,18 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-try:
-    from mcp_server_action_gate.demo import demo
-    from mcp_server_action_gate.gate import AgentActionGate
-    from mcp_server_action_gate.ledger import ActionLedger
-    from mcp_server_action_gate.mcp import evaluate_mcp_call
-    from mcp_server_action_gate.schema import Actor, CONSULTATION, INSTANT_AUDIT, ToolRequest
-except ImportError:
-    from aag.demo import demo
-    from aag.gate import AgentActionGate
-    from aag.ledger import ActionLedger
-    from aag.mcp import evaluate_mcp_call
-    from aag.schema import Actor, CONSULTATION, INSTANT_AUDIT, ToolRequest
+from mcp_server_action_gate.demo import demo
+from mcp_server_action_gate.gate import AgentActionGate
+from mcp_server_action_gate.ledger import ActionLedger
+from mcp_server_action_gate.mcp import evaluate_mcp_call
+from mcp_server_action_gate.schema import Actor, CONSULTATION, INSTANT_AUDIT, ToolRequest
 
 
 class GateTests(unittest.TestCase):

@@ -4,12 +4,8 @@ import json
 import sys
 from typing import Any, TextIO
 
-try:
-    from mcp_server_action_gate.gate import AgentActionGate
-    from mcp_server_action_gate.schema import Actor, CONSULTATION, INSTANT_AUDIT, ToolRequest
-except ImportError:
-    from aag.gate import AgentActionGate
-    from aag.schema import Actor, CONSULTATION, INSTANT_AUDIT, ToolRequest
+from mcp_server_action_gate.gate import AgentActionGate
+from mcp_server_action_gate.schema import Actor, CONSULTATION, INSTANT_AUDIT, ToolRequest
 
 SERVER_NAME = "agent-action-gate"
 SERVER_VERSION = "0.2.0"
@@ -67,7 +63,8 @@ class McpSession:
             return _error(message.get("id"), -32600, "Invalid Request")
         method = str(message.get("method") or "")
         msg_id = message.get("id")
-        params = message.get("params") if isinstance(message.get("params"), dict) else {}
+        params_value = message.get("params")
+        params = params_value if isinstance(params_value, dict) else {}
 
         if method.startswith("notifications/") or msg_id is None:
             return None
@@ -92,7 +89,8 @@ class McpSession:
 
     def _call_tool(self, params: dict[str, Any]) -> dict[str, Any]:
         name = str(params.get("name") or "")
-        arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
+        arguments_value = params.get("arguments")
+        arguments = arguments_value if isinstance(arguments_value, dict) else {}
         if name == "ledger_verify":
             payload = {
                 "ok": self.gate.ledger.verify_chain(),
@@ -108,10 +106,11 @@ class McpSession:
             return _tool_text({"error": "missing_tool"}, is_error=True)
         confidence = arguments.get("model_confidence")
         actor = Actor(id=str(arguments.get("actor_id") or "mcp-agent"), type="mcp_tool")
+        request_arguments = arguments.get("arguments")
         req = ToolRequest(
             tool=tool,
             tier=str(arguments.get("tier") or ""),
-            args=arguments.get("arguments") if isinstance(arguments.get("arguments"), dict) else {},
+            args=request_arguments if isinstance(request_arguments, dict) else {},
             thought=str(arguments.get("thought") or ""),
             model_confidence=float(confidence) if isinstance(confidence, (int, float)) else None,
             idempotency_key=str(arguments.get("idempotency_key") or ""),

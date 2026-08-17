@@ -5,14 +5,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-try:
-    from mcp_server_action_gate.ledger import ActionLedger
-    from mcp_server_action_gate.policy import load_policy, resolve_tier
-    from mcp_server_action_gate.schema import HIGH_TIERS, Actor, GateDecision, GateMode, ToolRequest
-except ImportError:
-    from aag.ledger import ActionLedger
-    from aag.policy import load_policy, resolve_tier
-    from aag.schema import HIGH_TIERS, Actor, GateDecision, GateMode, ToolRequest
+from mcp_server_action_gate.ledger import ActionLedger
+from mcp_server_action_gate.policy import load_policy, resolve_tier
+from mcp_server_action_gate.schema import HIGH_TIERS, Actor, GateDecision, GateMode, ToolRequest
 
 
 def kill_switch_engaged(kill_path: Path | None = None) -> bool:

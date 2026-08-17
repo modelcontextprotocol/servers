@@ -6,16 +6,10 @@ import unittest
 from pathlib import Path
 import tempfile
 
-try:
-    from mcp_server_action_gate.gate import AgentActionGate
-    from mcp_server_action_gate.ledger import ActionLedger
-    from mcp_server_action_gate.schema import INSTANT_AUDIT
-    from mcp_server_action_gate.server import McpSession, SERVER_NAME, serve
-except ImportError:
-    from aag.gate import AgentActionGate
-    from aag.ledger import ActionLedger
-    from aag.schema import INSTANT_AUDIT
-    from aag.server import McpSession, SERVER_NAME, serve
+from mcp_server_action_gate.gate import AgentActionGate
+from mcp_server_action_gate.ledger import ActionLedger
+from mcp_server_action_gate.schema import INSTANT_AUDIT
+from mcp_server_action_gate.server import McpSession, SERVER_NAME, serve
 
 
 class ServerTests(unittest.TestCase):
