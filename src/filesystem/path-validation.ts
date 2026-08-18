@@ -81,6 +81,9 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
       return pathDrive === dirDrive && normalizedPath.startsWith(normalizedDir.replace(/\\?$/, '\\'));
     }
     
-    return normalizedPath.startsWith(normalizedDir + path.sep);
+    const normalizedDirWithSep = normalizedDir.endsWith(path.sep)
+      ? normalizedDir
+      : normalizedDir + path.sep;
+    return normalizedPath.startsWith(normalizedDirWithSep);
   });
 }

@@ -107,6 +107,30 @@ export async function validatePath(requestedPath: string): Promise<string> {
   // Security: Check if path is within allowed directories before any file operations
   const isAllowed = isPathWithinAllowedDirectories(normalizedRequested, allowedDirectories);
   if (!isAllowed) {
+    if (process.platform === 'win32') {
+      // Windows mapped drives can resolve to UNC paths at startup, so the raw
+      // drive-letter path may not string-match the canonical allow-list.
+      try {
+        const realPath = await fs.realpath(absolute);
+        const normalizedReal = normalizePath(realPath);
+        if (isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
+          return realPath;
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          const parentDir = path.dirname(absolute);
+          try {
+            const realParentPath = await fs.realpath(parentDir);
+            const normalizedParent = normalizePath(realParentPath);
+            if (isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
+              return absolute;
+            }
+          } catch {
+            // Fall through to the normal access-denied message below.
+          }
+        }
+      }
+    }
     throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
   }
 
