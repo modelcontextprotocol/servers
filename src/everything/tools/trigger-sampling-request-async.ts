@@ -141,6 +141,8 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
         }
 
         const taskId = samplingResponse.task.taskId;
+        const pollInterval =
+          samplingResponse.task.pollInterval ?? POLL_INTERVAL;
         const statusMessages: string[] = [];
         statusMessages.push(`Task created: ${taskId}`);
 
@@ -156,7 +158,7 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
           attempts < MAX_POLL_ATTEMPTS
         ) {
           // Wait before polling
-          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+          await new Promise((resolve) => setTimeout(resolve, pollInterval));
           attempts++;
 
           // Get task status from client
