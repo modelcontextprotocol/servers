@@ -14,6 +14,8 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
+  appendFileContent,
+  createOrAppendFileContent,
   // Search & filtering functions
   searchFilesWithValidation,
   // File editing functions
@@ -303,10 +305,99 @@ describe('Lib Functions', () => {
     describe('writeFileContent', () => {
       it('writes file content', async () => {
         mockFs.writeFile.mockResolvedValueOnce(undefined);
-        
+
         await writeFileContent('/test/file.txt', 'new content');
-        
+
         expect(mockFs.writeFile).toHaveBeenCalledWith('/test/file.txt', 'new content', { encoding: "utf-8", flag: 'wx' });
+      });
+    });
+
+    describe('appendFileContent', () => {
+      it('throws error if file does not exist', async () => {
+        const error = new Error('ENOENT');
+        (error as any).code = 'ENOENT';
+        mockFs.appendFile.mockRejectedValue(error);
+
+        await expect(appendFileContent('/test/nonexistent.txt', 'new content'))
+          .rejects.toThrow('File does not exist');
+      });
+
+      it('appends content to existing file', async () => {
+        mockFs.appendFile.mockResolvedValue(undefined);
+
+        await appendFileContent('/test/file.txt', '\nnew content');
+
+        expect(mockFs.appendFile).toHaveBeenCalledWith(
+          '/test/file.txt',
+          '\nnew content',
+          { encoding: 'utf-8', flag: 'a' }
+        );
+      });
+
+      it('propagates non-ENOENT errors', async () => {
+        const error = new Error('Permission denied');
+        (error as any).code = 'EACCES';
+        mockFs.appendFile.mockRejectedValue(error);
+
+        await expect(appendFileContent('/test/file.txt', 'new content'))
+          .rejects.toThrow('Permission denied');
+      });
+    });
+
+    describe('createOrAppendFileContent', () => {
+      it('creates new file if it does not exist', async () => {
+        const error = new Error('ENOENT');
+        (error as any).code = 'ENOENT';
+        mockFs.appendFile.mockRejectedValue(error);
+        mockFs.writeFile.mockResolvedValue(undefined);
+
+        await createOrAppendFileContent('/test/newfile.txt', 'initial content');
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          '/test/newfile.txt',
+          'initial content',
+          { encoding: 'utf-8', flag: 'wx' }
+        );
+      });
+
+      it('appends to existing file', async () => {
+        mockFs.appendFile.mockResolvedValue(undefined);
+
+        await createOrAppendFileContent('/test/file.txt', '\nappended content');
+
+        expect(mockFs.appendFile).toHaveBeenCalledWith(
+          '/test/file.txt',
+          '\nappended content',
+          { encoding: 'utf-8', flag: 'a' }
+        );
+        expect(mockFs.writeFile).not.toHaveBeenCalled();
+      });
+
+      it('falls back to atomic rename when target file already exists at create time', async () => {
+        const notFoundError = new Error('ENOENT');
+        (notFoundError as any).code = 'ENOENT';
+        const existsError = new Error('EEXIST');
+        (existsError as any).code = 'EEXIST';
+
+        mockFs.appendFile.mockRejectedValue(notFoundError);
+        mockFs.writeFile
+          .mockRejectedValueOnce(existsError)
+          .mockResolvedValueOnce(undefined);
+        mockFs.rename.mockResolvedValue(undefined);
+
+        await createOrAppendFileContent('/test/file.txt', 'content');
+
+        expect(mockFs.writeFile).toHaveBeenCalledTimes(2);
+        expect(mockFs.rename).toHaveBeenCalled();
+      });
+
+      it('propagates non-ENOENT append errors', async () => {
+        const error = new Error('Permission denied');
+        (error as any).code = 'EACCES';
+        mockFs.appendFile.mockRejectedValue(error);
+
+        await expect(createOrAppendFileContent('/test/file.txt', 'content'))
+          .rejects.toThrow('Permission denied');
       });
     });
 
