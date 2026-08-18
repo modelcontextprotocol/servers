@@ -103,12 +103,7 @@ export async function validatePath(requestedPath: string): Promise<string> {
     : resolveRelativePathAgainstAllowedDirectories(expandedPath);
 
   const normalizedRequested = normalizePath(absolute);
-
-  // Security: Check if path is within allowed directories before any file operations
   const isAllowed = isPathWithinAllowedDirectories(normalizedRequested, allowedDirectories);
-  if (!isAllowed) {
-    throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
-  }
 
   // Security: Handle symlinks by checking their real path to prevent symlink attacks
   // This prevents attackers from creating symlinks that point outside allowed directories
@@ -116,7 +111,8 @@ export async function validatePath(requestedPath: string): Promise<string> {
     const realPath = await fs.realpath(absolute);
     const normalizedReal = normalizePath(realPath);
     if (!isPathWithinAllowedDirectories(normalizedReal, allowedDirectories)) {
-      throw new Error(`Access denied - symlink target outside allowed directories: ${realPath} not in ${allowedDirectories.join(', ')}`);
+      const reason = isAllowed ? `symlink target outside allowed directories: ${realPath}` : `path outside allowed directories: ${absolute}`;
+      throw new Error(`Access denied - ${reason} not in ${allowedDirectories.join(', ')}`);
     }
     return realPath;
   } catch (error) {
@@ -124,16 +120,21 @@ export async function validatePath(requestedPath: string): Promise<string> {
     // This ensures we can't create files in unauthorized locations
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       const parentDir = path.dirname(absolute);
+      let realParentPath: string;
       try {
-        const realParentPath = await fs.realpath(parentDir);
-        const normalizedParent = normalizePath(realParentPath);
-        if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
-        }
-        return absolute;
+        realParentPath = await fs.realpath(parentDir);
       } catch {
         throw new Error(`Parent directory does not exist: ${parentDir}`);
       }
+      const normalizedParent = normalizePath(realParentPath);
+      if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
+        const reason = isAllowed ? `parent directory outside allowed directories: ${realParentPath}` : `path outside allowed directories: ${absolute}`;
+        throw new Error(`Access denied - ${reason} not in ${allowedDirectories.join(', ')}`);
+      }
+      return absolute;
+    }
+    if (!isAllowed) {
+      throw new Error(`Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(', ')}`);
     }
     throw error;
   }
