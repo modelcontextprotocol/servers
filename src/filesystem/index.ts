@@ -26,15 +26,22 @@ import {
   tailFile,
   headFile,
   setAllowedDirectories,
+  setSymlinkPolicy,
 } from './lib.js';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error("Usage: mcp-server-filesystem [allowed-directory] [additional-directories...]");
+
+// Filter out flag arguments to get only directory paths
+const dirArgs = args.filter(arg => !arg.startsWith('--'));
+if (dirArgs.length === 0) {
+  console.error("Usage: mcp-server-filesystem [allowed-directory] [additional-directories...] [--follow-symlinks] [--symlink-depth=N]");
   console.error("Note: Allowed directories can be provided via:");
   console.error("  1. Command-line arguments (shown above)");
   console.error("  2. MCP roots protocol (if client supports it)");
+  console.error("Optional flags:");
+  console.error("  --follow-symlinks    Allow symlinks to point outside allowed directories");
+  console.error("  --symlink-depth=N    Max hops outside allowed dirs (default: 1)");
   console.error("At least one directory must be provided by EITHER method for the server to operate.");
 }
 
@@ -43,7 +50,7 @@ if (args.length === 0) {
 // This fixes the macOS /tmp -> /private/tmp symlink issue where users specify /tmp
 // but the resolved path is /private/tmp
 let allowedDirectories = (await Promise.all(
-  args.map(async (dir) => {
+  dirArgs.map(async (dir) => {
     const expanded = expandHome(dir);
     const absolute = path.resolve(expanded);
     const normalizedOriginal = normalizePath(absolute);
@@ -88,6 +95,29 @@ if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
 }
 
 allowedDirectories = accessibleDirectories;
+
+// Parse symlink policy flags from command line
+let followSymlinks = false;
+let symlinkMaxDepth = 1;
+
+// Look for --follow-symlinks flag
+const followSymlinksIndex = args.indexOf('--follow-symlinks');
+if (followSymlinksIndex !== -1) {
+  followSymlinks = true;
+}
+
+// Look for --symlink-depth=N flag
+const depthIndex = args.findIndex(arg => arg.startsWith('--symlink-depth='));
+if (depthIndex !== -1) {
+  const depthValue = args[depthIndex].split('=')[1];
+  const parsedDepth = parseInt(depthValue, 10);
+  if (!isNaN(parsedDepth) && parsedDepth >= 0) {
+    symlinkMaxDepth = parsedDepth;
+  }
+}
+
+// Initialize the symlink policy in lib.ts
+setSymlinkPolicy({ follow: followSymlinks, maxDepth: symlinkMaxDepth });
 
 // Initialize the global allowedDirectories in lib.ts
 setAllowedDirectories(allowedDirectories);
