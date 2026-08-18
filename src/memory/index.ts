@@ -70,10 +70,20 @@ export class KnowledgeGraphManager {
   constructor(private memoryFilePath: string) {}
 
   private async loadGraph(): Promise<KnowledgeGraph> {
+    let data: string;
     try {
-      const data = await fs.readFile(this.memoryFilePath, "utf-8");
-      const lines = data.split("\n").filter(line => line.trim() !== "");
-      return lines.reduce((graph: KnowledgeGraph, line) => {
+      data = await fs.readFile(this.memoryFilePath, "utf-8");
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && (error as any).code === "ENOENT") {
+        return { entities: [], relations: [] };
+      }
+      throw error;
+    }
+
+    const lines = data.split("\n").filter(line => line.trim() !== "");
+    const graph: KnowledgeGraph = { entities: [], relations: [] };
+    for (const line of lines) {
+      try {
         const item = JSON.parse(line);
         if (item.type === "entity") {
           graph.entities.push({
@@ -81,22 +91,20 @@ export class KnowledgeGraphManager {
             entityType: item.entityType,
             observations: item.observations
           });
-        }
-        if (item.type === "relation") {
+        } else if (item.type === "relation") {
           graph.relations.push({
             from: item.from,
             to: item.to,
             relationType: item.relationType
           });
         }
-        return graph;
-      }, { entities: [], relations: [] });
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && (error as any).code === "ENOENT") {
-        return { entities: [], relations: [] };
+      } catch {
+        // Skip malformed lines (e.g. truncated by a crash mid-write) instead
+        // of crashing the whole server. Surfaces a warning on stderr.
+        console.error(`Skipping malformed memory line: ${line.slice(0, 120)}`);
       }
-      throw error;
     }
+    return graph;
   }
 
   private async saveGraph(graph: KnowledgeGraph): Promise<void> {
@@ -114,7 +122,11 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    // Atomic replace: write to a pid-suffixed temp file then rename so a
+    // crash mid-write can never leave a truncated memory file behind.
+    const tmpPath = `${this.memoryFilePath}.${process.pid}.tmp`;
+    await fs.writeFile(tmpPath, lines.join("\n"));
+    await fs.rename(tmpPath, this.memoryFilePath);
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
