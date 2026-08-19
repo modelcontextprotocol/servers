@@ -1,12 +1,14 @@
 # ghl-browser-mcp
 
-Browser-automation MCP that covers the GHL features blocked from REST/PIT access:
-workflow canvas, funnel page editor, pipeline drag-drop, campaign builder,
-social media posting, blog authoring, form builder, email template builder,
-website/funnel page builder, proposals/estimates, calendar configuration,
-reporting dashboard, memberships/courses, invoices, reputation management,
-affiliate management, sub-account settings, trigger links, snapshots,
-conversation AI, media library, tags & custom fields, and automation templates.
+Browser-automation MCP server providing **203 tools** covering the full
+GoHighLevel (GHL) platform. Every major GHL feature area is accessible:
+workflow builder, funnel pages, pipeline management, campaigns, social media,
+blogs, forms, email templates, website/page builder, proposals, calendars,
+reporting, memberships, invoices, reputation, affiliates, settings, trigger
+links, snapshots, conversation AI, media library, tags & custom fields,
+automation templates, conversations, contacts, documents, payments, ecommerce,
+events, communities, copilot, custom objects, notifications, voice AI,
+power dialer, performance AI, and agency management.
 
 Uses Playwright with a **persistent browser profile** so the user logs in once
 interactively (`npm run login`), and subsequent MCP runs reuse the stored
@@ -50,7 +52,7 @@ Speaks MCP over stdio. Add to your MCP client config:
 }
 ```
 
-## Tools (130 total)
+## Tools (203 total)
 
 All tools are best-effort UI automation. If GHL reorganizes the DOM, tools
 may fail gracefully with a screenshot path in the error message for debugging.
@@ -314,6 +316,149 @@ VERBOSE=1 node integration-test.mjs
 | `ghl_browser_install_automation_template` | Install a template, creating a new workflow from the blueprint |
 | `ghl_browser_list_automation_recipes` | List recipes (multi-step sequences combining workflows + campaigns) |
 | `ghl_browser_install_automation_recipe` | Install a recipe creating multiple linked assets from one blueprint |
+
+### Conversations (6)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_conversations` | List conversations with filter: all, unread, starred, sms, email, facebook, instagram, whatsapp, webchat |
+| `ghl_browser_get_conversation_thread` | Get the full message thread for a conversation by contact name |
+| `ghl_browser_send_conversation_message` | Send a message to a contact in an existing conversation (SMS, email, etc.) |
+| `ghl_browser_star_conversation` | Star or unstar a conversation for quick access |
+| `ghl_browser_assign_conversation` | Assign a conversation to a team member |
+| `ghl_browser_get_conversation_contact` | Get contact details associated with a conversation |
+
+### Contacts (7)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_contacts` | List contacts with name, email, phone, tags; supports search |
+| `ghl_browser_get_contact_details_browser` | Get full contact profile: name, email, phone, address, tags, custom fields |
+| `ghl_browser_create_contact_browser` | Create a new contact with name, email, phone, tags, and custom fields |
+| `ghl_browser_edit_contact` | Update an existing contact's name, email, phone, tags, or custom fields |
+| `ghl_browser_list_smart_lists` | List smart lists with name, contact count, and filter criteria |
+| `ghl_browser_create_smart_list` | Create a smart list with filter criteria |
+| `ghl_browser_export_contacts` | Trigger a contact export (CSV) for the current filter or list |
+
+### Documents (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_documents` | List documents with name, status, recipient, and date |
+| `ghl_browser_create_document` | Create a new document with title and content |
+| `ghl_browser_get_document_details` | Get document details: content, signatures, status, activity |
+| `ghl_browser_send_document_signature` | Send a document for e-signature to a contact |
+| `ghl_browser_delete_document` | Delete a document (requires `confirm: true`) |
+
+### Payments (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_transactions` | List payment transactions with amount, status, contact, date |
+| `ghl_browser_get_transaction_details` | Get full transaction details: payment method, charge info, contact |
+| `ghl_browser_list_subscriptions` | List active subscriptions with contact, amount, billing cycle, status |
+| `ghl_browser_list_payment_providers` | List configured payment providers (Stripe, etc.) with status |
+| `ghl_browser_create_payment_link` | Create a payment link with amount, description, and product |
+
+### Ecommerce (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_products` | List products with name, price, inventory, status |
+| `ghl_browser_create_product` | Create a product with name, price, description, and image |
+| `ghl_browser_get_product_details` | Get product details: description, variants, inventory, pricing |
+| `ghl_browser_list_orders` | List orders with ID, contact, amount, status, date |
+| `ghl_browser_get_order_details` | Get order details: items, contact, amount, fulfillment status |
+
+### Events (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_events` | List events with name, date, type, attendee count |
+| `ghl_browser_create_event` | Create an event with name, date, type, and description |
+| `ghl_browser_get_event_details` | Get event details: description, schedule, location, settings |
+| `ghl_browser_list_event_registrations` | List event registrations with name, email, status, check-in state |
+| `ghl_browser_delete_event` | Delete an event (requires `confirm: true`) |
+
+### Communities (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_communities` | List communities/groups with name, member count, post count, status |
+| `ghl_browser_create_community` | Create a community with name and description |
+| `ghl_browser_get_community_details` | Get community details: description, settings, categories, posts |
+| `ghl_browser_list_community_members` | List community members with name, role, join date |
+| `ghl_browser_delete_community` | Delete a community (requires `confirm: true`) |
+
+### Copilot (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_copilot_status` | Get AI Copilot configuration and enabled features |
+| `ghl_browser_configure_copilot` | Update Copilot settings: enable/disable, set behavior preferences |
+| `ghl_browser_list_copilot_automations` | List Copilot automation rules with trigger, status |
+| `ghl_browser_create_copilot_automation` | Create a new Copilot automation rule |
+| `ghl_browser_get_copilot_logs` | Get recent Copilot activity logs |
+
+### Custom Objects (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_custom_objects` | List custom object definitions with name, record count, fields, status |
+| `ghl_browser_get_custom_object_schema` | Get field schema for a custom object: name, type, required flags |
+| `ghl_browser_list_custom_object_records` | List records for a custom object type |
+| `ghl_browser_create_custom_object` | Create a new custom object definition with fields |
+| `ghl_browser_delete_custom_object` | Delete a custom object definition (requires `confirm: true`) |
+
+### Notifications (4)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_notifications` | List recent notifications with filter: all, unread, mentions |
+| `ghl_browser_mark_notification_read` | Mark a notification as read by its label text |
+| `ghl_browser_get_notification_settings` | Get current notification preferences and channel settings |
+| `ghl_browser_update_notification_settings` | Toggle a notification channel (email, sms, push, in_app) on or off |
+
+### Voice AI (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_voice_ai_calls` | List Voice AI calls with contact, phone, duration, status, date |
+| `ghl_browser_get_voice_ai_call` | Get transcript and summary for a specific Voice AI call |
+| `ghl_browser_get_voice_ai_settings` | Get Voice AI configuration: system prompt, enabled status |
+| `ghl_browser_update_voice_ai_settings` | Update Voice AI system prompt or enable/disable |
+| `ghl_browser_list_voice_ai_recordings` | List Voice AI call recordings with name, duration, URL |
+
+### Power Dialer (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_power_dialer_campaigns` | List power dialer campaigns with status, contact count, call count |
+| `ghl_browser_create_power_dialer_campaign` | Create a power dialer campaign with name and optional contact list |
+| `ghl_browser_get_power_dialer_stats` | Get call statistics for a campaign: calls made, connected, duration |
+| `ghl_browser_start_power_dialer_campaign` | Start or resume a power dialer campaign |
+| `ghl_browser_stop_power_dialer_campaign` | Pause or stop a power dialer campaign |
+
+### Performance AI (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_performance_overview` | Get the Performance AI dashboard with key metrics and scores |
+| `ghl_browser_list_performance_suggestions` | List AI-generated optimization suggestions with category and status |
+| `ghl_browser_apply_performance_suggestion` | Apply a specific suggestion by label |
+| `ghl_browser_dismiss_performance_suggestion` | Dismiss a suggestion by label |
+| `ghl_browser_get_performance_scores` | Get performance scores for funnels, websites, and campaigns |
+
+### Agency Management (6)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_sub_accounts` | List all sub-accounts (locations) with name, phone, email, status; supports search |
+| `ghl_browser_create_sub_account` | Create a new sub-account with name, phone, email, address, city, state, zip, country |
+| `ghl_browser_get_agency_billing` | Get agency billing summary: plan, amount, payment method |
+| `ghl_browser_list_agency_users` | List agency-level users with name, email, role, status |
+| `ghl_browser_get_whitelabel_settings` | Get white-label configuration: custom domain, branding, CNAME |
+| `ghl_browser_list_snapshots_agency` | List agency-level snapshots with name, assets, date |
 
 ### Utils (4)
 
