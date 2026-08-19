@@ -68,6 +68,16 @@ import { paymentLinksModule } from "./payment-links.js";
 import { domainConnectModule } from "./domain-connect.js";
 import { clientPortalModule } from "./client-portal.js";
 import { membershipSettingsModule } from "./membership-settings.js";
+import { brandBoardsModule } from "./brand-boards.js";
+import { walletKitModule } from "./wallet-kit.js";
+import { domainResellingModule } from "./domain-reselling.js";
+import { countdownTimerModule } from "./countdown-timer.js";
+import { labsModule } from "./labs.js";
+import { launchpadModule } from "./launchpad.js";
+import { knowledgeBaseModule } from "./knowledge-base.js";
+import { estimatesModule } from "./estimates.js";
+import { phoneIntegrationModule } from "./phone-integration.js";
+import { marketplaceModule } from "./marketplace.js";
 const allModules = [
     workflowsModule,
     funnelsModule,
@@ -139,6 +149,16 @@ const allModules = [
     domainConnectModule,
     clientPortalModule,
     membershipSettingsModule,
+    brandBoardsModule,
+    walletKitModule,
+    domainResellingModule,
+    countdownTimerModule,
+    labsModule,
+    launchpadModule,
+    knowledgeBaseModule,
+    estimatesModule,
+    phoneIntegrationModule,
+    marketplaceModule,
 ];
 export const TOOLS = allModules.flatMap((m) => m.tools);
 export const TOOL_HANDLERS = Object.assign({}, ...allModules.map((m) => m.handlers));

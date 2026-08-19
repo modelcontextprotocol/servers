@@ -320,6 +320,41 @@ const READ_ONLY_TOOLS = [
   { name: "ghl_browser_get_membership_analytics", args: {}, group: "Mbr Settings" },
   { name: "ghl_browser_list_membership_offers", args: {}, group: "Mbr Settings" },
 
+  // Brand Boards
+  { name: "ghl_browser_list_brand_boards", args: {}, group: "Brand" },
+
+  // Wallet Kit
+  { name: "ghl_browser_list_wallet_passes", args: {}, group: "Wallet" },
+
+  // Domain Reselling
+  { name: "ghl_browser_list_resold_domains", args: {}, group: "Dom Resell" },
+  { name: "ghl_browser_get_domain_reseller_pricing", args: {}, group: "Dom Resell" },
+
+  // Countdown Timer
+  { name: "ghl_browser_list_countdown_timers", args: {}, group: "Countdown" },
+
+  // Labs
+  { name: "ghl_browser_list_lab_features", args: {}, group: "Labs" },
+
+  // Launchpad
+  { name: "ghl_browser_get_launchpad_status", args: {}, group: "Launchpad" },
+  { name: "ghl_browser_list_launchpad_tasks", args: {}, group: "Launchpad" },
+  { name: "ghl_browser_get_launchpad_checklist", args: {}, group: "Launchpad" },
+
+  // Knowledge Base
+  { name: "ghl_browser_list_knowledge_bases", args: {}, group: "KB" },
+
+  // Estimates
+  { name: "ghl_browser_list_estimates", args: {}, group: "Estimates" },
+
+  // Phone Integration
+  { name: "ghl_browser_list_phone_numbers", args: {}, group: "Phone" },
+  { name: "ghl_browser_get_call_logs_summary", args: {}, group: "Phone" },
+
+  // Marketplace
+  { name: "ghl_browser_list_marketplace_apps", args: {}, group: "Marketplace" },
+  { name: "ghl_browser_list_installed_integrations", args: {}, group: "Marketplace" },
+
   // Screenshot (read-only — captures a page)
   { name: "ghl_browser_screenshot", args: { path: "/dashboard", label: "integration-test" }, group: "Utils" },
 

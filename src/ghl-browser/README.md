@@ -1,6 +1,6 @@
 # ghl-browser-mcp
 
-Browser-automation MCP server providing **358 tools** covering the full
+Browser-automation MCP server providing **408 tools** covering the full
 GoHighLevel (GHL) platform. Every major GHL feature area is accessible:
 workflow builder, funnel pages, pipeline management, campaigns, social media,
 blogs, forms, email templates, website/page builder, proposals, calendars,
@@ -14,7 +14,9 @@ studio, industry agents, location settings, ad publishing, bulk actions,
 chat widget, content AI, gift cards, preference management, reseller, SaaS
 mode, platform billing, store catalog, WordPress, Yext, template library,
 QR codes, schema markup, store widgets, payment links, domain connect,
-client portal, and membership settings.
+client portal, membership settings, brand boards, wallet kit, domain
+reselling, countdown timers, labs, launchpad, knowledge base, estimates,
+phone integration, and marketplace.
 
 Uses Playwright with a **persistent browser profile** so the user logs in once
 interactively (`npm run login`), and subsequent MCP runs reuse the stored
@@ -58,7 +60,7 @@ Speaks MCP over stdio. Add to your MCP client config:
 }
 ```
 
-## Tools (358 total)
+## Tools (408 total)
 
 All tools are best-effort UI automation. If GHL reorganizes the DOM, tools
 may fail gracefully with a screenshot path in the error message for debugging.
@@ -775,6 +777,106 @@ VERBOSE=1 node integration-test.mjs
 | `ghl_browser_get_membership_analytics` | Get membership analytics: signups, revenue, churn |
 | `ghl_browser_list_membership_offers` | List membership offers/trials with terms and pricing |
 | `ghl_browser_update_membership_branding` | Update membership area branding: logo, colors, CSS |
+
+### Brand Boards (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_brand_boards` | List brand boards with name, status, last updated |
+| `ghl_browser_get_brand_board_details` | Get colors, fonts, logos from a brand board |
+| `ghl_browser_create_brand_board` | Create a new brand board with name and color palette |
+| `ghl_browser_set_brand_colors` | Update color palette on an existing brand board |
+| `ghl_browser_delete_brand_board` | Delete a brand board by name |
+
+### Wallet Kit (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_wallet_passes` | List digital wallet passes (Apple Wallet, Google Pay) |
+| `ghl_browser_get_wallet_pass_details` | Get pass design, fields, distribution details |
+| `ghl_browser_create_wallet_pass` | Create a wallet pass with name, type, branding |
+| `ghl_browser_get_wallet_analytics` | Get pass analytics: installs, opens, engagement |
+| `ghl_browser_delete_wallet_pass` | Delete a wallet pass by name |
+
+### Domain Reselling (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_resold_domains` | List resold domains with status, expiry, auto-renew |
+| `ghl_browser_get_resold_domain_details` | Get registration, DNS, expiry details |
+| `ghl_browser_search_available_domains` | Search for available domain names to register |
+| `ghl_browser_get_domain_reseller_pricing` | Get registration, renewal, transfer costs |
+| `ghl_browser_toggle_domain_auto_renew` | Toggle auto-renew for a resold domain |
+
+### Countdown Timer (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_countdown_timers` | List countdown timers with name, target date, status |
+| `ghl_browser_get_countdown_timer_details` | Get target date, design, embed code |
+| `ghl_browser_create_countdown_timer` | Create a timer with target date/time and style |
+| `ghl_browser_get_countdown_embed_code` | Get embed HTML code for a timer |
+| `ghl_browser_delete_countdown_timer` | Delete a countdown timer by name |
+
+### Labs (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_lab_features` | List experimental/beta features with enable status |
+| `ghl_browser_get_lab_feature_details` | Get description, status, known issues for a feature |
+| `ghl_browser_toggle_lab_feature` | Enable or disable a lab feature |
+| `ghl_browser_get_labs_feedback` | Get feedback and known issues for lab features |
+| `ghl_browser_submit_lab_feedback` | Submit feedback and rating for a lab feature |
+
+### Launchpad (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_launchpad_status` | Get onboarding status: progress, current step |
+| `ghl_browser_list_launchpad_tasks` | List all setup tasks with completion status |
+| `ghl_browser_complete_launchpad_step` | Mark a step as completed or skip it |
+| `ghl_browser_get_launchpad_checklist` | Get full checklist with progress percentage |
+| `ghl_browser_reset_launchpad` | Reset onboarding to start from scratch |
+
+### Knowledge Base (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_knowledge_bases` | List AI knowledge bases with article count, status |
+| `ghl_browser_get_knowledge_base_details` | Get sources, AI agents, indexing status |
+| `ghl_browser_create_knowledge_base` | Create a knowledge base with optional source URL |
+| `ghl_browser_add_knowledge_source` | Add a URL or text source to a knowledge base |
+| `ghl_browser_delete_knowledge_base` | Delete a knowledge base by name |
+
+### Estimates (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_estimates` | List estimates with client, amount, status, date |
+| `ghl_browser_get_estimate_details` | Get line items, totals, terms, validity |
+| `ghl_browser_create_estimate` | Create an estimate for a contact |
+| `ghl_browser_send_estimate` | Send an estimate to the client via email |
+| `ghl_browser_convert_estimate_to_invoice` | Convert an accepted estimate into an invoice |
+
+### Phone Integration (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_phone_numbers` | List phone numbers with type, status, assigned user |
+| `ghl_browser_get_phone_number_details` | Get provider, forwarding, recording settings |
+| `ghl_browser_search_available_numbers` | Search available numbers by area code or city |
+| `ghl_browser_get_call_logs_summary` | Get call summary: total, missed, answered, duration |
+| `ghl_browser_update_phone_settings` | Update recording, voicemail, forwarding settings |
+
+### Marketplace (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_marketplace_apps` | Browse marketplace apps with category and rating |
+| `ghl_browser_get_marketplace_app_details` | Get app description, pricing, reviews |
+| `ghl_browser_list_installed_integrations` | List installed integrations with sync status |
+| `ghl_browser_install_marketplace_app` | Install an app from the marketplace |
+| `ghl_browser_uninstall_marketplace_app` | Uninstall a marketplace integration |
 
 ### Utils (4)
 
