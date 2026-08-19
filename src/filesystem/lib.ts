@@ -297,6 +297,7 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
     let chunk = Buffer.alloc(CHUNK_SIZE);
     let linesFound = 0;
     let remainingText = '';
+    let isLastChunk = true;
     
     // Read chunks from the end of the file until we have enough lines
     while (position > 0 && linesFound < numLines) {
@@ -308,12 +309,23 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
       
       // Get the chunk as a string and prepend any remaining text from previous iteration
       const readData = chunk.slice(0, bytesRead).toString('utf-8');
-      const chunkText = readData + remainingText;
+      let chunkText = readData + remainingText;
+      
+      // If this is the very first chunk read (from the very end of the file)
+      // and it ends with a newline, strip that trailing newline so split doesn't produce
+      // an empty trailing line that skews the line count.
+      if (isLastChunk) {
+        chunkText = normalizeLineEndings(chunkText);
+        if (chunkText.endsWith('\n')) {
+          chunkText = chunkText.slice(0, -1);
+        }
+        isLastChunk = false;
+      }
       
       // Split by newlines and count
       const chunkLines = normalizeLineEndings(chunkText).split('\n');
       
-      // If this isn't the end of the file, the first line is likely incomplete
+      // If this isn't the beginning of the file, the first line is likely incomplete
       // Save it to prepend to the next chunk
       if (position > 0) {
         remainingText = chunkLines[0];
@@ -325,6 +337,11 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
         lines.unshift(chunkLines[i]);
         linesFound++;
       }
+    }
+    
+    // If we reached the start of the file and still have remainingText, add it
+    if (position === 0 && remainingText && linesFound < numLines) {
+      lines.unshift(remainingText);
     }
     
     return lines.join('\n');
