@@ -43,6 +43,12 @@ import { calendarBookingsModule } from "./calendar-bookings.js";
 import { seoModule } from "./seo.js";
 import { snippetsModule } from "./snippets.js";
 import { contactScoringModule } from "./contact-scoring.js";
+import { superagentsModule } from "./superagents.js";
+import { aiEmployeesModule } from "./ai-employees.js";
+import { agentBuilderModule } from "./agent-builder.js";
+import { agentStudioModule } from "./agent-studio.js";
+import { industryAgentsModule } from "./industry-agents.js";
+import { locationSettingsModule } from "./location-settings.js";
 import type { ToolHandler, ToolModule } from "../helpers.js";
 
 const allModules: ToolModule[] = [
@@ -90,6 +96,12 @@ const allModules: ToolModule[] = [
   seoModule,
   snippetsModule,
   contactScoringModule,
+  superagentsModule,
+  aiEmployeesModule,
+  agentBuilderModule,
+  agentStudioModule,
+  industryAgentsModule,
+  locationSettingsModule,
 ];
 
 export const TOOLS: Tool[] = allModules.flatMap((m) => m.tools);

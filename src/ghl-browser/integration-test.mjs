@@ -218,6 +218,18 @@ const READ_ONLY_TOOLS = [
   // Contact Scoring
   { name: "ghl_browser_list_scoring_models", args: {}, group: "Scoring" },
 
+  // AI Suite
+  { name: "ghl_browser_list_superagents", args: {}, group: "AI Suite" },
+  { name: "ghl_browser_list_ai_employees", args: {}, group: "AI Suite" },
+  { name: "ghl_browser_list_agent_blueprints", args: {}, group: "AI Suite" },
+  { name: "ghl_browser_list_agent_studio_sessions", args: {}, group: "AI Suite" },
+  { name: "ghl_browser_list_industry_agents", args: {}, group: "AI Suite" },
+
+  // Location Settings
+  { name: "ghl_browser_get_location_settings", args: {}, group: "Loc Settings" },
+  { name: "ghl_browser_get_location_features", args: {}, group: "Loc Settings" },
+  { name: "ghl_browser_get_location_domains", args: {}, group: "Loc Settings" },
+
   // Screenshot (read-only — captures a page)
   { name: "ghl_browser_screenshot", args: { path: "/dashboard", label: "integration-test" }, group: "Utils" },
 

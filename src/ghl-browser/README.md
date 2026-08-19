@@ -1,6 +1,6 @@
 # ghl-browser-mcp
 
-Browser-automation MCP server providing **229 tools** covering the full
+Browser-automation MCP server providing **258 tools** covering the full
 GoHighLevel (GHL) platform. Every major GHL feature area is accessible:
 workflow builder, funnel pages, pipeline management, campaigns, social media,
 blogs, forms, email templates, website/page builder, proposals, calendars,
@@ -9,7 +9,8 @@ trigger links, snapshots, conversation AI, media library, tags & custom fields,
 automation templates, conversations, contacts, documents, payments, ecommerce,
 events, communities, copilot, custom objects, notifications, voice AI,
 power dialer, performance AI, agency management, dashboard widgets, SEO,
-snippets, and contact scoring.
+snippets, contact scoring, superagents, AI employees, agent builder, agent
+studio, industry agents, and location settings.
 
 Uses Playwright with a **persistent browser profile** so the user logs in once
 interactively (`npm run login`), and subsequent MCP runs reuse the stored
@@ -53,7 +54,7 @@ Speaks MCP over stdio. Add to your MCP client config:
 }
 ```
 
-## Tools (229 total)
+## Tools (258 total)
 
 All tools are best-effort UI automation. If GHL reorganizes the DOM, tools
 may fail gracefully with a screenshot path in the error message for debugging.
@@ -511,6 +512,65 @@ VERBOSE=1 node integration-test.mjs
 | `ghl_browser_create_scoring_model` | Create a new contact scoring model with name and description |
 | `ghl_browser_add_scoring_rule` | Add a scoring rule: field, condition, point value |
 | `ghl_browser_get_contact_scores` | Get scoring results for a contact: model scores, total, breakdown |
+
+### AI Superagents (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_superagents` | List AI Superagents with name, status, type, and last activity |
+| `ghl_browser_get_superagent_details` | Get full config: prompts, knowledge base, channels, handoff settings |
+| `ghl_browser_create_superagent` | Create a new AI Superagent with name and description |
+| `ghl_browser_update_superagent` | Update system prompt, tone, or configuration |
+| `ghl_browser_get_superagent_logs` | Get recent conversation logs for a Superagent |
+
+### AI Employees (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_ai_employees` | List AI Employees with name, role, status, and assigned channels |
+| `ghl_browser_get_ai_employee_details` | Get full config: role, skills, knowledge base, channels, handoff rules |
+| `ghl_browser_create_ai_employee` | Create a new AI Employee with name and role description |
+| `ghl_browser_update_ai_employee` | Update prompt, knowledge base, or channel assignments |
+| `ghl_browser_toggle_ai_employee` | Enable or disable an AI Employee |
+
+### Agent Builder (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_agent_blueprints` | List agent blueprints/templates in the Agent Builder |
+| `ghl_browser_get_agent_blueprint` | Get blueprint details: steps, triggers, actions, prompts |
+| `ghl_browser_create_agent_from_blueprint` | Create a new agent from an existing blueprint |
+| `ghl_browser_get_agent_builder_config` | Open builder and return config: prompts, tools, knowledge |
+| `ghl_browser_publish_agent` | Publish/deploy an agent from the builder |
+
+### Agent Studio (4)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_agent_studio_sessions` | List recent test/debug sessions with agent, status, timestamp |
+| `ghl_browser_get_agent_studio_session` | Get full transcript and metrics from a test session |
+| `ghl_browser_run_agent_test` | Run a test conversation against an agent |
+| `ghl_browser_get_agent_studio_metrics` | Get performance metrics: response time, accuracy, satisfaction |
+
+### Industry Agents (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_industry_agents` | List pre-built industry agents (real estate, dental, legal, etc.) |
+| `ghl_browser_get_industry_agent_details` | Get details: features, prompts, channels, requirements |
+| `ghl_browser_install_industry_agent` | Install an industry agent into the current sub-account |
+| `ghl_browser_list_installed_industry_agents` | List industry agents currently installed |
+| `ghl_browser_uninstall_industry_agent` | Remove an installed industry agent (requires `confirm: true`) |
+
+### Location Settings (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_location_settings` | Get full location settings: business info, timezone, currency, locale |
+| `ghl_browser_update_location_settings` | Update a setting: timezone, currency, locale, phone format |
+| `ghl_browser_get_location_features` | List feature toggles for the sub-account |
+| `ghl_browser_toggle_location_feature` | Enable or disable a feature toggle |
+| `ghl_browser_get_location_domains` | Get configured domains: custom domains, CNAME, SSL status |
 
 ### Utils (4)
 
