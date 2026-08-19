@@ -1,6 +1,6 @@
 # ghl-browser-mcp
 
-Browser-automation MCP server providing **258 tools** covering the full
+Browser-automation MCP server providing **308 tools** covering the full
 GoHighLevel (GHL) platform. Every major GHL feature area is accessible:
 workflow builder, funnel pages, pipeline management, campaigns, social media,
 blogs, forms, email templates, website/page builder, proposals, calendars,
@@ -54,7 +54,7 @@ Speaks MCP over stdio. Add to your MCP client config:
 }
 ```
 
-## Tools (258 total)
+## Tools (308 total)
 
 All tools are best-effort UI automation. If GHL reorganizes the DOM, tools
 may fail gracefully with a screenshot path in the error message for debugging.
@@ -571,6 +571,106 @@ VERBOSE=1 node integration-test.mjs
 | `ghl_browser_get_location_features` | List feature toggles for the sub-account |
 | `ghl_browser_toggle_location_feature` | Enable or disable a feature toggle |
 | `ghl_browser_get_location_domains` | Get configured domains: custom domains, CNAME, SSL status |
+
+### Ad Publishing (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_ad_campaigns` | List ad campaigns (Facebook/Google) with name, platform, status, budget, spend |
+| `ghl_browser_get_ad_campaign_details` | Get detailed metrics and settings for a specific ad campaign |
+| `ghl_browser_create_ad_campaign` | Create a new ad campaign on Facebook or Google |
+| `ghl_browser_get_ad_metrics` | Get aggregate ad performance: impressions, clicks, CTR, spend, conversions |
+| `ghl_browser_toggle_ad_campaign` | Enable or pause an ad campaign |
+
+### Bulk Actions (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_bulk_operations` | List recent bulk operations with type, status, count, and date |
+| `ghl_browser_get_bulk_operation_status` | Get the status and progress of a specific bulk operation |
+| `ghl_browser_bulk_add_tag` | Add a tag to multiple contacts at once |
+| `ghl_browser_bulk_remove_tag` | Remove a tag from multiple contacts at once |
+| `ghl_browser_bulk_update_field` | Update a custom field value for multiple contacts at once |
+
+### Chat Widget (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_chat_widget_config` | Get current live chat widget config: enabled, colors, position, greeting |
+| `ghl_browser_update_chat_widget` | Update chat widget settings: greeting, position, colors |
+| `ghl_browser_toggle_chat_widget` | Enable or disable the live chat widget |
+| `ghl_browser_get_chat_widget_code` | Get the embed code snippet for the chat widget |
+| `ghl_browser_list_chat_widget_departments` | List departments/routing rules with agents and hours |
+
+### Content AI (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_content_ai_settings` | Get Content AI config: tone, brand voice, language, usage limits |
+| `ghl_browser_list_content_ai_templates` | List writing templates by category (email, ad, social, blog) |
+| `ghl_browser_generate_content_ai_text` | Generate AI content using a template and prompt |
+| `ghl_browser_list_content_ai_history` | List recently generated outputs with template and date |
+| `ghl_browser_get_content_ai_usage` | Get usage stats: credits used, remaining, content generated |
+
+### Gift Cards (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_gift_cards` | List gift card products with denomination, status, inventory |
+| `ghl_browser_get_gift_card_details` | Get details of a specific gift card product |
+| `ghl_browser_create_gift_card` | Create a new gift card product with name and denomination |
+| `ghl_browser_list_gift_card_transactions` | List purchase/redemption transactions |
+| `ghl_browser_toggle_gift_card` | Activate or deactivate a gift card product |
+
+### Preference Management (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_preference_settings` | Get communication preference settings: opt-in defaults, channels |
+| `ghl_browser_list_preference_categories` | List preference categories with channel settings |
+| `ghl_browser_create_preference_category` | Create a new preference category |
+| `ghl_browser_get_contact_preferences` | Get a contact's communication preferences across all categories |
+| `ghl_browser_get_compliance_summary` | Get compliance summary: TCPA, GDPR, CAN-SPAM status |
+
+### Reseller (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_reseller_overview` | Get reseller program overview: plan, commission, clients, revenue |
+| `ghl_browser_list_reseller_clients` | List reseller clients with plan, status, monthly revenue |
+| `ghl_browser_get_reseller_client_details` | Get detailed info for a specific reseller client |
+| `ghl_browser_get_reseller_pricing` | Get reseller pricing tiers and commission structure |
+| `ghl_browser_list_reseller_invoices` | List reseller invoices with date, amount, status |
+
+### SaaS Mode (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_saas_overview` | Get SaaS overview: plan, pricing, active clients, MRR |
+| `ghl_browser_list_saas_plans` | List subscription plans with price, features, subscriber count |
+| `ghl_browser_create_saas_plan` | Create a new subscription plan with pricing and features |
+| `ghl_browser_list_saas_clients` | List SaaS clients with plan, status, billing |
+| `ghl_browser_get_saas_billing_summary` | Get billing summary: MRR, ARR, churn rate |
+
+### Platform Billing (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_platform_billing_overview` | Get billing overview: plan, cycle, next payment, balance |
+| `ghl_browser_list_platform_invoices` | List platform-level invoices with date, amount, status |
+| `ghl_browser_get_platform_payment_method` | Get payment method on file: card type, last 4, expiry |
+| `ghl_browser_list_platform_usage` | Get usage breakdown: contacts, emails, SMS, storage |
+| `ghl_browser_get_platform_plan_comparison` | Compare available plans with pricing and limits |
+
+### Store Catalog (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_store_products` | List products with name, price, inventory, category, status |
+| `ghl_browser_get_store_product_details` | Get detailed information for a specific product |
+| `ghl_browser_create_store_product` | Create a new product with name, price, description, category |
+| `ghl_browser_list_store_categories` | List product categories with name and product count |
+| `ghl_browser_get_store_orders_summary` | Get orders summary: total orders, revenue, pending, fulfilled |
 
 ### Utils (4)
 

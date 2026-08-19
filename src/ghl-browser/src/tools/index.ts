@@ -49,6 +49,16 @@ import { agentBuilderModule } from "./agent-builder.js";
 import { agentStudioModule } from "./agent-studio.js";
 import { industryAgentsModule } from "./industry-agents.js";
 import { locationSettingsModule } from "./location-settings.js";
+import { adPublishingModule } from "./ad-publishing.js";
+import { bulkActionsModule } from "./bulk-actions.js";
+import { chatWidgetModule } from "./chat-widget.js";
+import { contentAiModule } from "./content-ai.js";
+import { giftCardsModule } from "./gift-cards.js";
+import { preferenceManagementModule } from "./preference-management.js";
+import { resellerModule } from "./reseller.js";
+import { saasModeModule } from "./saas-mode.js";
+import { platformBillingModule } from "./platform-billing.js";
+import { storeCatalogModule } from "./store-catalog.js";
 import type { ToolHandler, ToolModule } from "../helpers.js";
 
 const allModules: ToolModule[] = [
@@ -102,6 +112,16 @@ const allModules: ToolModule[] = [
   agentStudioModule,
   industryAgentsModule,
   locationSettingsModule,
+  adPublishingModule,
+  bulkActionsModule,
+  chatWidgetModule,
+  contentAiModule,
+  giftCardsModule,
+  preferenceManagementModule,
+  resellerModule,
+  saasModeModule,
+  platformBillingModule,
+  storeCatalogModule,
 ];
 
 export const TOOLS: Tool[] = allModules.flatMap((m) => m.tools);

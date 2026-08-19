@@ -230,6 +230,56 @@ const READ_ONLY_TOOLS = [
   { name: "ghl_browser_get_location_features", args: {}, group: "Loc Settings" },
   { name: "ghl_browser_get_location_domains", args: {}, group: "Loc Settings" },
 
+  // Ad Publishing
+  { name: "ghl_browser_list_ad_campaigns", args: {}, group: "Ads" },
+  { name: "ghl_browser_get_ad_metrics", args: {}, group: "Ads" },
+
+  // Bulk Actions
+  { name: "ghl_browser_list_bulk_operations", args: {}, group: "Bulk" },
+
+  // Chat Widget
+  { name: "ghl_browser_get_chat_widget_config", args: {}, group: "Chat" },
+  { name: "ghl_browser_list_chat_widget_departments", args: {}, group: "Chat" },
+
+  // Content AI
+  { name: "ghl_browser_get_content_ai_settings", args: {}, group: "Content AI" },
+  { name: "ghl_browser_list_content_ai_templates", args: {}, group: "Content AI" },
+  { name: "ghl_browser_list_content_ai_history", args: {}, group: "Content AI" },
+  { name: "ghl_browser_get_content_ai_usage", args: {}, group: "Content AI" },
+
+  // Gift Cards
+  { name: "ghl_browser_list_gift_cards", args: {}, group: "Gift Cards" },
+  { name: "ghl_browser_list_gift_card_transactions", args: {}, group: "Gift Cards" },
+
+  // Preference Management
+  { name: "ghl_browser_get_preference_settings", args: {}, group: "Prefs" },
+  { name: "ghl_browser_list_preference_categories", args: {}, group: "Prefs" },
+  { name: "ghl_browser_get_compliance_summary", args: {}, group: "Prefs" },
+
+  // Reseller
+  { name: "ghl_browser_get_reseller_overview", args: {}, group: "Reseller" },
+  { name: "ghl_browser_list_reseller_clients", args: {}, group: "Reseller" },
+  { name: "ghl_browser_get_reseller_pricing", args: {}, group: "Reseller" },
+  { name: "ghl_browser_list_reseller_invoices", args: {}, group: "Reseller" },
+
+  // SaaS Mode
+  { name: "ghl_browser_get_saas_overview", args: {}, group: "SaaS" },
+  { name: "ghl_browser_list_saas_plans", args: {}, group: "SaaS" },
+  { name: "ghl_browser_list_saas_clients", args: {}, group: "SaaS" },
+  { name: "ghl_browser_get_saas_billing_summary", args: {}, group: "SaaS" },
+
+  // Platform Billing
+  { name: "ghl_browser_get_platform_billing_overview", args: {}, group: "Billing" },
+  { name: "ghl_browser_list_platform_invoices", args: {}, group: "Billing" },
+  { name: "ghl_browser_get_platform_payment_method", args: {}, group: "Billing" },
+  { name: "ghl_browser_list_platform_usage", args: {}, group: "Billing" },
+  { name: "ghl_browser_get_platform_plan_comparison", args: {}, group: "Billing" },
+
+  // Store Catalog
+  { name: "ghl_browser_list_store_products", args: {}, group: "Store" },
+  { name: "ghl_browser_list_store_categories", args: {}, group: "Store" },
+  { name: "ghl_browser_get_store_orders_summary", args: {}, group: "Store" },
+
   // Screenshot (read-only — captures a page)
   { name: "ghl_browser_screenshot", args: { path: "/dashboard", label: "integration-test" }, group: "Utils" },
 
