@@ -1,0 +1,74 @@
+{
+  "path": "/settings/users",
+  "triggerAction": "\n      await new Promise(r => setTimeout(r, 1500));\n      return { ok: true };\n    ",
+  "total": 5,
+  "byHost": {
+    "production.app-manifest.leadconnectorhq.com": 1,
+    "o176457.ingest.sentry.io": 2,
+    "www.google-analytics.com": 1,
+    "backend.leadconnectorhq.com": 1
+  },
+  "endpoints": [
+    "GET /latest/manifest.json",
+    "GET /localization/en-US/",
+    "POST /api/1723141/envelope/",
+    "POST /j/collect"
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://production.app-manifest.leadconnectorhq.com/latest/manifest.json",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787084872693,
+        "finishedAt": 1787084872715
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://o176457.ingest.sentry.io/api/1723141/envelope/?sentry_version=7&sentry_key=c67431ff70d6440fb529c2705792425f&sentry_client=sentry.javascript.vue%2F10.19.0",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": "{\"sent_at\":\"2026-08-18T20:27:53.679Z\",\"sdk\":{\"name\":\"sentry.javascript.vue\",\"version\":\"10.19.0\"}}\n{\"type\":\"session\"}\n{\"sid\":\"1f7b6c6b67c841259459c91c88a35b43\",\"init\":true,\"started\":\"2026-08-18T20:27:53.679Z\",\"timestamp\":\"2026-08-18T20:27:53.679Z\",\"status\":\"ok\",\"errors\":0,\"attrs\":{\"release\":\"7e17e60958ddc78ea5feccd6a73278c1e45705be\",\"environment\":\"production\",\"user_agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36\"}}",
+      "timing": {
+        "startedAt": 1787084873715,
+        "finishedAt": 1787084873743
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://www.google-analytics.com/j/collect?v=1&_v=j102&a=1842008724&t=pageview&_s=1&dl=https%3A%2F%2Fapp.leadconnectorhq.com%2Fsettings%2Fusers&ul=en-us&sr=1440x900&vp=1440x900&_u=SACAAEABEAAAACAAI~&jid=&gjid=&cid=1937679849.1787084840&tid=UA-115177999-2&_gid=1121173055.1787084840&_slc=1&z=2549721",
+      "resourceType": "xhr",
+      "status": null,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787084873715,
+        "finishedAt": null
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://backend.leadconnectorhq.com/localization/en-US/?module=common,smartList,contactDetail,copilot",
+      "resourceType": "xhr",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787084873724,
+        "finishedAt": 1787084873849
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://o176457.ingest.sentry.io/api/1723141/envelope/?sentry_version=7&sentry_key=c67431ff70d6440fb529c2705792425f&sentry_client=sentry.javascript.vue%2F10.19.0",
+      "resourceType": "fetch",
+      "status": 429,
+      "requestBody": "{\"sdk\":{\"name\":\"sentry.javascript.vue\",\"version\":\"10.19.0\"}}\n{\"type\":\"trace_metric\",\"item_count\":1,\"content_type\":\"application/vnd.sentry.items.trace-metric+json\"}\n{\"items\":[{\"timestamp\":1787084873.7401,\"trace_id\":\"dd45ef5f05504148b30d606d21abc8d5\",\"span_id\":\"b88f9d98e621782f\",\"name\":\"webVitals.CLS\",\"type\":\"distribution\",\"unit\":\"MB\",\"value\":0,\"attributes\":{\"webVitalName\":{\"value\":\"CLS\",\"type\":\"string\"},\"webVitalValue\":{\"value\":0,\"type\":\"integer\"},\"webVitalDelta\":{\"value\":0,\"type\":\"integer\"},\"interactionId\":{\"value\":\"v5-1787084873729-3612279265644\",\"type\":\"string\"},\"navigationType\":{\"value\":\"navigate\",\"type\":\"string\"},\"routePath\":{\"value\":\"/\",\"type\":\"string\"},\"sentry.release\":{\"value\":\"7e17e60958ddc78ea5feccd6a73278c1e45705be\",\"type\":\"string\"},\"sentry.environment\":{\"value\":\"production\",\"type\":\"string\"},\"sentry.sdk.name\":{\"value\":\"sentry.javascript.vue\",\"type\":\"string\"},\"sentry.sdk.version\":{\"value\":\"10.19.0\",\"type\":\"string\"}}}]}",
+      "timing": {
+        "startedAt": 1787084878744,
+        "finishedAt": 1787084878797
+      }
+    }
+  ]
+}

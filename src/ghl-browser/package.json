@@ -1,0 +1,29 @@
+{
+  "name": "@qoder/ghl-browser-mcp",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser-automation MCP for full GHL UI coverage: workflows, funnels, pipelines, campaigns, social, blogs, forms, email, pages, proposals, calendars, reporting, memberships, invoices, reputation, affiliates, settings, triggers, and snapshots",
+  "bin": {
+    "ghl-browser-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "start": "node dist/index.js",
+    "login": "node dist/login.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "playwright": "^1.58.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "typescript": "^5.6.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
