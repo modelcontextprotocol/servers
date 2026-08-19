@@ -1,6 +1,6 @@
 # ghl-browser-mcp
 
-Browser-automation MCP server providing **308 tools** covering the full
+Browser-automation MCP server providing **358 tools** covering the full
 GoHighLevel (GHL) platform. Every major GHL feature area is accessible:
 workflow builder, funnel pages, pipeline management, campaigns, social media,
 blogs, forms, email templates, website/page builder, proposals, calendars,
@@ -10,7 +10,11 @@ automation templates, conversations, contacts, documents, payments, ecommerce,
 events, communities, copilot, custom objects, notifications, voice AI,
 power dialer, performance AI, agency management, dashboard widgets, SEO,
 snippets, contact scoring, superagents, AI employees, agent builder, agent
-studio, industry agents, and location settings.
+studio, industry agents, location settings, ad publishing, bulk actions,
+chat widget, content AI, gift cards, preference management, reseller, SaaS
+mode, platform billing, store catalog, WordPress, Yext, template library,
+QR codes, schema markup, store widgets, payment links, domain connect,
+client portal, and membership settings.
 
 Uses Playwright with a **persistent browser profile** so the user logs in once
 interactively (`npm run login`), and subsequent MCP runs reuse the stored
@@ -54,7 +58,7 @@ Speaks MCP over stdio. Add to your MCP client config:
 }
 ```
 
-## Tools (308 total)
+## Tools (358 total)
 
 All tools are best-effort UI automation. If GHL reorganizes the DOM, tools
 may fail gracefully with a screenshot path in the error message for debugging.
@@ -671,6 +675,106 @@ VERBOSE=1 node integration-test.mjs
 | `ghl_browser_create_store_product` | Create a new product with name, price, description, category |
 | `ghl_browser_list_store_categories` | List product categories with name and product count |
 | `ghl_browser_get_store_orders_summary` | Get orders summary: total orders, revenue, pending, fulfilled |
+
+### WordPress (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_wordpress_sites` | List connected WordPress sites with URL, status, last sync |
+| `ghl_browser_get_wordpress_site_details` | Get detailed info for a specific connected WordPress site |
+| `ghl_browser_connect_wordpress_site` | Connect a new WordPress site by URL and credentials |
+| `ghl_browser_sync_wordpress_forms` | Sync forms from a connected WordPress site into GHL |
+| `ghl_browser_list_wordpress_plugins` | List installed plugins on a connected WordPress site |
+
+### Yext (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_yext_overview` | Get Yext overview: listing count, sync status, coverage |
+| `ghl_browser_list_yext_listings` | List directory listings with name, platform, status |
+| `ghl_browser_get_yext_listing_details` | Get details for a specific listing: fields, suppression |
+| `ghl_browser_get_yext_listing_score` | Get listing completeness score and missing fields |
+| `ghl_browser_sync_yext_listings` | Trigger a sync of business info to all Yext directories |
+
+### Template Library (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_template_categories` | List template categories: funnels, websites, emails, etc. |
+| `ghl_browser_list_templates` | Browse templates by category with name, preview, type |
+| `ghl_browser_get_template_preview` | Get preview/thumbnail URL for a specific template |
+| `ghl_browser_import_template` | Import a template from the library into the sub-account |
+| `ghl_browser_list_my_templates` | List templates already imported into this sub-account |
+
+### QR Codes (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_qr_codes` | List QR codes with name, destination URL, scan count |
+| `ghl_browser_get_qr_code_details` | Get details: created date, scans, destination, style |
+| `ghl_browser_create_qr_code` | Create a QR code with destination URL and label |
+| `ghl_browser_get_qr_code_analytics` | Get scan analytics: total scans, unique, by date |
+| `ghl_browser_delete_qr_code` | Delete a QR code by ID |
+
+### Schema Markup (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_schema_markups` | List schema markups with name, type, page, status |
+| `ghl_browser_get_schema_markup_details` | Get JSON-LD content and validation status |
+| `ghl_browser_create_schema_markup` | Create schema markup with type and properties |
+| `ghl_browser_validate_schema_markup` | Validate schema markup against Google's requirements |
+| `ghl_browser_delete_schema_markup` | Delete a schema markup entry by ID |
+
+### Store Widgets (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_store_widgets` | List embeddable store widgets with name, type, status |
+| `ghl_browser_get_store_widget_config` | Get widget configuration: products, layout, styling |
+| `ghl_browser_create_store_widget` | Create a new embeddable store widget |
+| `ghl_browser_get_store_widget_code` | Get embed HTML/JS code for a store widget |
+| `ghl_browser_delete_store_widget` | Delete a store widget by ID |
+
+### Payment Links (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_payment_links` | List payment links with name, amount, status, URL |
+| `ghl_browser_get_payment_link_details` | Get details: products, pricing, thank-you page |
+| `ghl_browser_create_payment_link` | Create a standalone payment link with products |
+| `ghl_browser_get_payment_link_url` | Get the shareable URL for a payment link |
+| `ghl_browser_deactivate_payment_link` | Deactivate a payment link so it no longer accepts payments |
+
+### Domain Connect (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_domains` | List connected domains with URL, CNAME, SSL status |
+| `ghl_browser_get_domain_details` | Get DNS records, SSL certificate, and routing details |
+| `ghl_browser_connect_domain` | Connect a custom domain to a funnel or website |
+| `ghl_browser_check_domain_dns` | Verify DNS propagation and CNAME/A record status |
+| `ghl_browser_disconnect_domain` | Remove a custom domain connection |
+
+### Client Portal (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_client_portal_settings` | Get portal settings: branding, URL, access rules |
+| `ghl_browser_update_client_portal` | Update portal settings: name, logo, colors |
+| `ghl_browser_list_client_portal_users` | List portal users with name, email, last login |
+| `ghl_browser_get_client_portal_url` | Get the public URL for the client portal |
+| `ghl_browser_list_client_portal_pages` | List portal pages with title, visibility, order |
+
+### Membership Settings (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_membership_settings` | Get membership settings: URL, branding, access control |
+| `ghl_browser_list_membership_products` | List membership products with name, price, access level |
+| `ghl_browser_get_membership_analytics` | Get membership analytics: signups, revenue, churn |
+| `ghl_browser_list_membership_offers` | List membership offers/trials with terms and pricing |
+| `ghl_browser_update_membership_branding` | Update membership area branding: logo, colors, CSS |
 
 ### Utils (4)
 

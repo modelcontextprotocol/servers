@@ -1,9 +1,9 @@
 {
   "name": "@qoder/ghl-browser-mcp",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "type": "module",
-  "description": "Browser-automation MCP server providing 308 tools covering the full GHL (GoHighLevel) UI: workflows, funnels, pipelines, campaigns, social, blogs, forms, email, pages, proposals, calendars, bookings, reporting, memberships, invoices, reputation, affiliates, settings, triggers, snapshots, conversation AI, media library, tags, custom fields, automation templates, conversations, contacts, documents, payments, ecommerce, events, communities, copilot, custom objects, notifications, voice AI, power dialer, performance AI, agency management, dashboard widgets, SEO, snippets, contact scoring, superagents, AI employees, agent builder, agent studio, industry agents, location settings, ad publishing, bulk actions, chat widget, content AI, gift cards, preference management, reseller, SaaS mode, platform billing, and store catalog",
+  "description": "Browser-automation MCP server providing 358 tools covering the full GHL (GoHighLevel) UI: workflows, funnels, pipelines, campaigns, social, blogs, forms, email, pages, proposals, calendars, bookings, reporting, memberships, invoices, reputation, affiliates, settings, triggers, snapshots, conversation AI, media library, tags, custom fields, automation templates, conversations, contacts, documents, payments, ecommerce, events, communities, copilot, custom objects, notifications, voice AI, power dialer, performance AI, agency management, dashboard widgets, SEO, snippets, contact scoring, superagents, AI employees, agent builder, agent studio, industry agents, location settings, ad publishing, bulk actions, chat widget, content AI, gift cards, preference management, reseller, SaaS mode, platform billing, store catalog, WordPress, Yext, template library, QR codes, schema markup, store widgets, payment links, domain connect, client portal, and membership settings",
   "bin": {
     "ghl-browser-mcp": "dist/index.js"
   },

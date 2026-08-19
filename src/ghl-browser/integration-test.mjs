@@ -280,6 +280,46 @@ const READ_ONLY_TOOLS = [
   { name: "ghl_browser_list_store_categories", args: {}, group: "Store" },
   { name: "ghl_browser_get_store_orders_summary", args: {}, group: "Store" },
 
+  // WordPress
+  { name: "ghl_browser_list_wordpress_sites", args: {}, group: "WordPress" },
+  { name: "ghl_browser_list_wordpress_plugins", args: {}, group: "WordPress" },
+
+  // Yext
+  { name: "ghl_browser_get_yext_overview", args: {}, group: "Yext" },
+  { name: "ghl_browser_list_yext_listings", args: {}, group: "Yext" },
+  { name: "ghl_browser_get_yext_listing_score", args: {}, group: "Yext" },
+
+  // Template Library
+  { name: "ghl_browser_list_template_categories", args: {}, group: "Templates" },
+  { name: "ghl_browser_list_templates", args: {}, group: "Templates" },
+  { name: "ghl_browser_list_my_templates", args: {}, group: "Templates" },
+
+  // QR Codes
+  { name: "ghl_browser_list_qr_codes", args: {}, group: "QR Codes" },
+
+  // Schema Markup
+  { name: "ghl_browser_list_schema_markups", args: {}, group: "Schema" },
+
+  // Store Widgets
+  { name: "ghl_browser_list_store_widgets", args: {}, group: "Store Widgets" },
+
+  // Payment Links
+  { name: "ghl_browser_list_payment_links", args: {}, group: "Pay Links" },
+
+  // Domain Connect
+  { name: "ghl_browser_list_domains", args: {}, group: "Domains" },
+
+  // Client Portal
+  { name: "ghl_browser_get_client_portal_settings", args: {}, group: "Client Portal" },
+  { name: "ghl_browser_list_client_portal_users", args: {}, group: "Client Portal" },
+  { name: "ghl_browser_list_client_portal_pages", args: {}, group: "Client Portal" },
+
+  // Membership Settings
+  { name: "ghl_browser_get_membership_settings", args: {}, group: "Mbr Settings" },
+  { name: "ghl_browser_list_membership_products", args: {}, group: "Mbr Settings" },
+  { name: "ghl_browser_get_membership_analytics", args: {}, group: "Mbr Settings" },
+  { name: "ghl_browser_list_membership_offers", args: {}, group: "Mbr Settings" },
+
   // Screenshot (read-only — captures a page)
   { name: "ghl_browser_screenshot", args: { path: "/dashboard", label: "integration-test" }, group: "Utils" },
 

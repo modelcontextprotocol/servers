@@ -59,6 +59,16 @@ import { resellerModule } from "./reseller.js";
 import { saasModeModule } from "./saas-mode.js";
 import { platformBillingModule } from "./platform-billing.js";
 import { storeCatalogModule } from "./store-catalog.js";
+import { wordpressModule } from "./wordpress.js";
+import { yextModule } from "./yext.js";
+import { templateLibraryModule } from "./template-library.js";
+import { qrCodesModule } from "./qr-codes.js";
+import { schemaMarkupModule } from "./schema-markup.js";
+import { storeWidgetsModule } from "./store-widgets.js";
+import { paymentLinksModule } from "./payment-links.js";
+import { domainConnectModule } from "./domain-connect.js";
+import { clientPortalModule } from "./client-portal.js";
+import { membershipSettingsModule } from "./membership-settings.js";
 import type { ToolHandler, ToolModule } from "../helpers.js";
 
 const allModules: ToolModule[] = [
@@ -122,6 +132,16 @@ const allModules: ToolModule[] = [
   saasModeModule,
   platformBillingModule,
   storeCatalogModule,
+  wordpressModule,
+  yextModule,
+  templateLibraryModule,
+  qrCodesModule,
+  schemaMarkupModule,
+  storeWidgetsModule,
+  paymentLinksModule,
+  domainConnectModule,
+  clientPortalModule,
+  membershipSettingsModule,
 ];
 
 export const TOOLS: Tool[] = allModules.flatMap((m) => m.tools);

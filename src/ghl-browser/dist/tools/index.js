@@ -42,6 +42,32 @@ import { calendarBookingsModule } from "./calendar-bookings.js";
 import { seoModule } from "./seo.js";
 import { snippetsModule } from "./snippets.js";
 import { contactScoringModule } from "./contact-scoring.js";
+import { superagentsModule } from "./superagents.js";
+import { aiEmployeesModule } from "./ai-employees.js";
+import { agentBuilderModule } from "./agent-builder.js";
+import { agentStudioModule } from "./agent-studio.js";
+import { industryAgentsModule } from "./industry-agents.js";
+import { locationSettingsModule } from "./location-settings.js";
+import { adPublishingModule } from "./ad-publishing.js";
+import { bulkActionsModule } from "./bulk-actions.js";
+import { chatWidgetModule } from "./chat-widget.js";
+import { contentAiModule } from "./content-ai.js";
+import { giftCardsModule } from "./gift-cards.js";
+import { preferenceManagementModule } from "./preference-management.js";
+import { resellerModule } from "./reseller.js";
+import { saasModeModule } from "./saas-mode.js";
+import { platformBillingModule } from "./platform-billing.js";
+import { storeCatalogModule } from "./store-catalog.js";
+import { wordpressModule } from "./wordpress.js";
+import { yextModule } from "./yext.js";
+import { templateLibraryModule } from "./template-library.js";
+import { qrCodesModule } from "./qr-codes.js";
+import { schemaMarkupModule } from "./schema-markup.js";
+import { storeWidgetsModule } from "./store-widgets.js";
+import { paymentLinksModule } from "./payment-links.js";
+import { domainConnectModule } from "./domain-connect.js";
+import { clientPortalModule } from "./client-portal.js";
+import { membershipSettingsModule } from "./membership-settings.js";
 const allModules = [
     workflowsModule,
     funnelsModule,
@@ -87,6 +113,32 @@ const allModules = [
     seoModule,
     snippetsModule,
     contactScoringModule,
+    superagentsModule,
+    aiEmployeesModule,
+    agentBuilderModule,
+    agentStudioModule,
+    industryAgentsModule,
+    locationSettingsModule,
+    adPublishingModule,
+    bulkActionsModule,
+    chatWidgetModule,
+    contentAiModule,
+    giftCardsModule,
+    preferenceManagementModule,
+    resellerModule,
+    saasModeModule,
+    platformBillingModule,
+    storeCatalogModule,
+    wordpressModule,
+    yextModule,
+    templateLibraryModule,
+    qrCodesModule,
+    schemaMarkupModule,
+    storeWidgetsModule,
+    paymentLinksModule,
+    domainConnectModule,
+    clientPortalModule,
+    membershipSettingsModule,
 ];
 export const TOOLS = allModules.flatMap((m) => m.tools);
 export const TOOL_HANDLERS = Object.assign({}, ...allModules.map((m) => m.handlers));
