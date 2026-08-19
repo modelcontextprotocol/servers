@@ -26,6 +26,23 @@ import {
 vi.mock('fs/promises');
 const mockFs = fs as any;
 
+function createMockFileHandle(content: Buffer) {
+  return {
+    read: vi.fn(
+      async (buffer: Buffer, offset: number, length: number, position: number) => {
+        const bytesRead = content.copy(
+          buffer,
+          offset,
+          position,
+          Math.min(position + length, content.length),
+        );
+        return { bytesRead, buffer };
+      },
+    ),
+    close: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
 describe('Lib Functions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -643,6 +660,23 @@ describe('Lib Functions', () => {
         expect(mockFileHandle.close).toHaveBeenCalled();
       });
 
+      it('preserves UTF-8 characters split across chunk boundaries', async () => {
+        const content = Buffer.concat([
+          Buffer.from('discard\n'),
+          Buffer.from('界'),
+          Buffer.alloc(1017, 'a'),
+          Buffer.from('\nlast'),
+        ]);
+        const mockFileHandle = createMockFileHandle(content);
+
+        mockFs.stat.mockResolvedValue({ size: content.length } as any);
+        mockFs.open.mockResolvedValue(mockFileHandle);
+
+        const result = await tailFile('/test/file.txt', 2);
+
+        expect(result).toBe(`界${'a'.repeat(1017)}\nlast`);
+      });
+
       it('handles read errors gracefully', async () => {
         mockFs.stat.mockResolvedValue({ size: 100 } as any);
         
@@ -697,6 +731,20 @@ describe('Lib Functions', () => {
         const result = await headFile('/test/file.txt', 2);
         
         expect(mockFileHandle.close).toHaveBeenCalled();
+      });
+
+      it('preserves UTF-8 characters split across chunk boundaries', async () => {
+        const content = Buffer.concat([
+          Buffer.alloc(1023, 'a'),
+          Buffer.from('界\nsecond'),
+        ]);
+        const mockFileHandle = createMockFileHandle(content);
+
+        mockFs.open.mockResolvedValue(mockFileHandle);
+
+        const result = await headFile('/test/file.txt', 1);
+
+        expect(result).toBe(`${'a'.repeat(1023)}界`);
       });
 
       it('handles files with leftover content', async () => {
