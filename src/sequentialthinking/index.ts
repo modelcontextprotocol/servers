@@ -6,14 +6,14 @@ import { z } from "zod";
 import { SequentialThinkingServer } from './lib.js';
 
 /** Safe boolean coercion that correctly handles string "false" */
-const coercedBoolean = z.preprocess((val) => {
-  if (typeof val === "boolean") return val;
-  if (typeof val === "string") {
-    if (val.toLowerCase() === "true") return true;
-    if (val.toLowerCase() === "false") return false;
-  }
-  return val;
-}, z.boolean());
+// Use a union (rather than z.preprocess) so that zod-to-JSON-Schema conversion
+// keeps this field in the inputSchema `required` list. z.preprocess produces a
+// schema whose input accepts `unknown`, which the conversion treats as optional
+// and drops from `required`, causing a schema/runtime validation mismatch.
+const coercedBoolean = z.union([
+  z.boolean(),
+  z.enum(["true", "false"]).transform((val) => val === "true"),
+]);
 
 const server = new McpServer({
   name: "sequential-thinking-server",
