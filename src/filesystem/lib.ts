@@ -4,6 +4,7 @@ import os from 'os';
 import { randomBytes } from 'crypto';
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
+import { StringDecoder } from 'string_decoder';
 import { normalizePath, expandHome } from './path-utils.js';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
 
@@ -281,9 +282,9 @@ export async function applyFileEdits(
   return formattedDiff;
 }
 
-// Memory-efficient implementation to get the last N lines of a file
+// Read the last N lines of a file (UTF-8 safe)
 export async function tailFile(filePath: string, numLines: number): Promise<string> {
-  const CHUNK_SIZE = 1024; // Read 1KB at a time
+  const CHUNK_SIZE = 1024;
   const stats = await fs.stat(filePath);
   const fileSize = stats.size;
   
@@ -292,48 +293,53 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
   // Open file for reading
   const fileHandle = await fs.open(filePath, 'r');
   try {
-    const lines: string[] = [];
+    // Collect raw byte buffers (read backwards from the end)
+    const rawBuffers: Buffer[] = [];
     let position = fileSize;
-    let chunk = Buffer.alloc(CHUNK_SIZE);
-    let linesFound = 0;
-    let remainingText = '';
+    const chunk = Buffer.alloc(CHUNK_SIZE);
+    let newlineCount = 0;
     
-    // Read chunks from the end of the file until we have enough lines
-    while (position > 0 && linesFound < numLines) {
+    // Read from the end until we have enough lines or reach start
+    while (position > 0 && newlineCount <= numLines) {
       const size = Math.min(CHUNK_SIZE, position);
       position -= size;
       
       const { bytesRead } = await fileHandle.read(chunk, 0, size, position);
       if (!bytesRead) break;
       
-      // Get the chunk as a string and prepend any remaining text from previous iteration
-      const readData = chunk.slice(0, bytesRead).toString('utf-8');
-      const chunkText = readData + remainingText;
+      const data = chunk.slice(0, bytesRead);
+      rawBuffers.push(data);
       
-      // Split by newlines and count
-      const chunkLines = normalizeLineEndings(chunkText).split('\n');
-      
-      // If this isn't the end of the file, the first line is likely incomplete
-      // Save it to prepend to the next chunk
-      if (position > 0) {
-        remainingText = chunkLines[0];
-        chunkLines.shift(); // Remove the first (incomplete) line
-      }
-      
-      // Add lines to our result (up to the number we need)
-      for (let i = chunkLines.length - 1; i >= 0 && linesFound < numLines; i--) {
-        lines.unshift(chunkLines[i]);
-        linesFound++;
+      // Count newlines in raw bytes (0x0A is single-byte even in UTF-8)
+      for (let i = 0; i < data.length; i++) {
+        if (data[i] === 0x0A) newlineCount++;
       }
     }
     
-    return lines.join('\n');
+    // Reverse to get forward chronological order
+    rawBuffers.reverse();
+    
+    // Decode the concatenated buffer with StringDecoder (handles cross-chunk UTF-8)
+    const decoder = new StringDecoder('utf-8');
+    const fullText = rawBuffers.map(b => decoder.write(b)).join('');
+    const finalChunk = decoder.end();
+    
+    // Split into lines and take the last numLines
+    const allLines = normalizeLineEndings(fullText + finalChunk).split('\n');
+    
+    // Filter out the last empty element if the file ends with newline
+    const relevantLines = allLines.filter(Boolean).length > numLines
+      ? allLines.slice(-numLines - 1) // include empty trailing line
+      : allLines;
+    
+    return allLines.slice(-numLines).join('\n');
   } finally {
     await fileHandle.close();
   }
+}  }
 }
 
-// New function to get the first N lines of a file
+// Read the first N lines of a file (UTF-8 safe)
 export async function headFile(filePath: string, numLines: number): Promise<string> {
   const fileHandle = await fs.open(filePath, 'r');
   try {
@@ -341,13 +347,14 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
     let buffer = '';
     let bytesRead = 0;
     const chunk = Buffer.alloc(1024); // 1KB buffer
+    const decoder = new StringDecoder('utf-8');
     
     // Read chunks and count lines until we have enough or reach EOF
     while (lines.length < numLines) {
       const result = await fileHandle.read(chunk, 0, chunk.length, bytesRead);
       if (result.bytesRead === 0) break; // End of file
       bytesRead += result.bytesRead;
-      buffer += chunk.slice(0, result.bytesRead).toString('utf-8');
+      buffer += decoder.write(chunk.slice(0, result.bytesRead));
       
       const newLineIndex = buffer.lastIndexOf('\n');
       if (newLineIndex !== -1) {
@@ -360,7 +367,8 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
       }
     }
     
-    // If there is leftover content and we still need lines, add it
+    // Flush any remaining buffered bytes, and add leftover content if needed
+    buffer += decoder.end();
     if (buffer.length > 0 && lines.length < numLines) {
       lines.push(buffer);
     }
