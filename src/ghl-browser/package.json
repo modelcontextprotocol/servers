@@ -1,9 +1,9 @@
 {
   "name": "@qoder/ghl-browser-mcp",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "Browser-automation MCP for full GHL UI coverage: workflows, funnels, pipelines, campaigns, social, blogs, forms, email, pages, proposals, calendars, reporting, memberships, invoices, reputation, affiliates, settings, triggers, and snapshots",
+  "description": "Browser-automation MCP server providing 203 tools covering the full GHL (GoHighLevel) UI: workflows, funnels, pipelines, campaigns, social, blogs, forms, email, pages, proposals, calendars, reporting, memberships, invoices, reputation, affiliates, settings, triggers, snapshots, conversation AI, media library, tags, custom fields, automation templates, conversations, contacts, documents, payments, ecommerce, events, communities, copilot, custom objects, notifications, voice AI, power dialer, performance AI, and agency management",
   "bin": {
     "ghl-browser-mcp": "dist/index.js"
   },

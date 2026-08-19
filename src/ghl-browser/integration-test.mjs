@@ -148,6 +148,56 @@ const READ_ONLY_TOOLS = [
   { name: "ghl_browser_list_automation_templates", args: {}, group: "Templates" },
   { name: "ghl_browser_list_automation_recipes", args: {}, group: "Templates" },
 
+  // Conversations
+  { name: "ghl_browser_list_conversations", args: {}, group: "Conversations" },
+
+  // Contacts
+  { name: "ghl_browser_list_contacts", args: {}, group: "Contacts" },
+  { name: "ghl_browser_list_smart_lists", args: {}, group: "Contacts" },
+
+  // Documents
+  { name: "ghl_browser_list_documents", args: {}, group: "Documents" },
+
+  // Payments
+  { name: "ghl_browser_list_transactions", args: {}, group: "Payments" },
+  { name: "ghl_browser_list_subscriptions", args: {}, group: "Payments" },
+
+  // Ecommerce
+  { name: "ghl_browser_list_products", args: {}, group: "Ecommerce" },
+  { name: "ghl_browser_list_orders", args: {}, group: "Ecommerce" },
+
+  // Events
+  { name: "ghl_browser_list_events", args: {}, group: "Events" },
+
+  // Communities
+  { name: "ghl_browser_list_communities", args: {}, group: "Communities" },
+
+  // Copilot
+  { name: "ghl_browser_get_copilot_status", args: {}, group: "Copilot" },
+  { name: "ghl_browser_list_copilot_automations", args: {}, group: "Copilot" },
+
+  // Custom Objects
+  { name: "ghl_browser_list_custom_objects", args: {}, group: "Custom Obj" },
+
+  // Notifications
+  { name: "ghl_browser_list_notifications", args: {}, group: "Notifications" },
+  { name: "ghl_browser_get_notification_settings", args: {}, group: "Notifications" },
+
+  // Voice AI
+  { name: "ghl_browser_list_voice_ai_calls", args: {}, group: "Voice AI" },
+  { name: "ghl_browser_get_voice_ai_settings", args: {}, group: "Voice AI" },
+
+  // Power Dialer
+  { name: "ghl_browser_list_power_dialer_campaigns", args: {}, group: "Dialer" },
+
+  // Performance AI
+  { name: "ghl_browser_get_performance_overview", args: {}, group: "Perf AI" },
+  { name: "ghl_browser_list_performance_suggestions", args: {}, group: "Perf AI" },
+
+  // Agency
+  { name: "ghl_browser_list_sub_accounts", args: {}, group: "Agency" },
+  { name: "ghl_browser_list_agency_users", args: {}, group: "Agency" },
+
   // Screenshot (read-only — captures a page)
   { name: "ghl_browser_screenshot", args: { path: "/dashboard", label: "integration-test" }, group: "Utils" },
 

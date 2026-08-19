@@ -1,4 +1,3 @@
-import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { workflowsModule } from "./workflows.js";
 import { funnelsModule } from "./funnels.js";
 import { pipelinesModule } from "./pipelines.js";
@@ -38,53 +37,46 @@ import { voiceAiModule } from "./voice-ai.js";
 import { powerDialerModule } from "./power-dialer.js";
 import { performanceAiModule } from "./performance-ai.js";
 import { agencyModule } from "./agency.js";
-import type { ToolHandler, ToolModule } from "../helpers.js";
-
-const allModules: ToolModule[] = [
-  workflowsModule,
-  funnelsModule,
-  pipelinesModule,
-  campaignsModule,
-  socialModule,
-  blogsModule,
-  utilsModule,
-  discoveryModule,
-  formBuilderModule,
-  emailBuilderModule,
-  pageBuilderModule,
-  proposalsModule,
-  calendarConfigModule,
-  reportingModule,
-  membershipModule,
-  invoiceModule,
-  reputationModule,
-  affiliateModule,
-  settingsModule,
-  triggerLinksModule,
-  snapshotModule,
-  conversationAiModule,
-  mediaLibraryModule,
-  tagsFieldsModule,
-  automationTemplatesModule,
-  conversationsModule,
-  contactsModule,
-  documentsModule,
-  paymentsModule,
-  ecommerceModule,
-  eventsModule,
-  communitiesModule,
-  copilotModule,
-  customObjectsModule,
-  notificationsModule,
-  voiceAiModule,
-  powerDialerModule,
-  performanceAiModule,
-  agencyModule,
+const allModules = [
+    workflowsModule,
+    funnelsModule,
+    pipelinesModule,
+    campaignsModule,
+    socialModule,
+    blogsModule,
+    utilsModule,
+    discoveryModule,
+    formBuilderModule,
+    emailBuilderModule,
+    pageBuilderModule,
+    proposalsModule,
+    calendarConfigModule,
+    reportingModule,
+    membershipModule,
+    invoiceModule,
+    reputationModule,
+    affiliateModule,
+    settingsModule,
+    triggerLinksModule,
+    snapshotModule,
+    conversationAiModule,
+    mediaLibraryModule,
+    tagsFieldsModule,
+    automationTemplatesModule,
+    conversationsModule,
+    contactsModule,
+    documentsModule,
+    paymentsModule,
+    ecommerceModule,
+    eventsModule,
+    communitiesModule,
+    copilotModule,
+    customObjectsModule,
+    notificationsModule,
+    voiceAiModule,
+    powerDialerModule,
+    performanceAiModule,
+    agencyModule,
 ];
-
-export const TOOLS: Tool[] = allModules.flatMap((m) => m.tools);
-
-export const TOOL_HANDLERS: Record<string, ToolHandler> = Object.assign(
-  {},
-  ...allModules.map((m) => m.handlers),
-);
+export const TOOLS = allModules.flatMap((m) => m.tools);
+export const TOOL_HANDLERS = Object.assign({}, ...allModules.map((m) => m.handlers));
