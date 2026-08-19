@@ -198,6 +198,26 @@ const READ_ONLY_TOOLS = [
   { name: "ghl_browser_list_sub_accounts", args: {}, group: "Agency" },
   { name: "ghl_browser_list_agency_users", args: {}, group: "Agency" },
 
+  // Dashboard Widgets
+  { name: "ghl_browser_get_dashboard_overview", args: {}, group: "Dashboard" },
+  { name: "ghl_browser_list_dashboard_widgets", args: {}, group: "Dashboard" },
+  { name: "ghl_browser_get_pipeline_summary", args: {}, group: "Dashboard" },
+  { name: "ghl_browser_get_appointment_summary", args: {}, group: "Dashboard" },
+
+  // Calendar Bookings
+  { name: "ghl_browser_list_bookings", args: {}, group: "Bookings" },
+
+  // SEO
+  { name: "ghl_browser_get_seo_overview", args: {}, group: "SEO" },
+  { name: "ghl_browser_list_seo_pages", args: {}, group: "SEO" },
+  { name: "ghl_browser_list_seo_keywords", args: {}, group: "SEO" },
+
+  // Snippets
+  { name: "ghl_browser_list_snippets", args: {}, group: "Snippets" },
+
+  // Contact Scoring
+  { name: "ghl_browser_list_scoring_models", args: {}, group: "Scoring" },
+
   // Screenshot (read-only — captures a page)
   { name: "ghl_browser_screenshot", args: { path: "/dashboard", label: "integration-test" }, group: "Utils" },
 

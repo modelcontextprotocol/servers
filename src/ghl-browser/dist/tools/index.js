@@ -37,6 +37,11 @@ import { voiceAiModule } from "./voice-ai.js";
 import { powerDialerModule } from "./power-dialer.js";
 import { performanceAiModule } from "./performance-ai.js";
 import { agencyModule } from "./agency.js";
+import { dashboardWidgetsModule } from "./dashboard-widgets.js";
+import { calendarBookingsModule } from "./calendar-bookings.js";
+import { seoModule } from "./seo.js";
+import { snippetsModule } from "./snippets.js";
+import { contactScoringModule } from "./contact-scoring.js";
 const allModules = [
     workflowsModule,
     funnelsModule,
@@ -77,6 +82,11 @@ const allModules = [
     powerDialerModule,
     performanceAiModule,
     agencyModule,
+    dashboardWidgetsModule,
+    calendarBookingsModule,
+    seoModule,
+    snippetsModule,
+    contactScoringModule,
 ];
 export const TOOLS = allModules.flatMap((m) => m.tools);
 export const TOOL_HANDLERS = Object.assign({}, ...allModules.map((m) => m.handlers));

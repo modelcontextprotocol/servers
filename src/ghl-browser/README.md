@@ -1,14 +1,15 @@
 # ghl-browser-mcp
 
-Browser-automation MCP server providing **203 tools** covering the full
+Browser-automation MCP server providing **229 tools** covering the full
 GoHighLevel (GHL) platform. Every major GHL feature area is accessible:
 workflow builder, funnel pages, pipeline management, campaigns, social media,
 blogs, forms, email templates, website/page builder, proposals, calendars,
-reporting, memberships, invoices, reputation, affiliates, settings, trigger
-links, snapshots, conversation AI, media library, tags & custom fields,
+bookings, reporting, memberships, invoices, reputation, affiliates, settings,
+trigger links, snapshots, conversation AI, media library, tags & custom fields,
 automation templates, conversations, contacts, documents, payments, ecommerce,
 events, communities, copilot, custom objects, notifications, voice AI,
-power dialer, performance AI, and agency management.
+power dialer, performance AI, agency management, dashboard widgets, SEO,
+snippets, and contact scoring.
 
 Uses Playwright with a **persistent browser profile** so the user logs in once
 interactively (`npm run login`), and subsequent MCP runs reuse the stored
@@ -52,7 +53,7 @@ Speaks MCP over stdio. Add to your MCP client config:
 }
 ```
 
-## Tools (203 total)
+## Tools (229 total)
 
 All tools are best-effort UI automation. If GHL reorganizes the DOM, tools
 may fail gracefully with a screenshot path in the error message for debugging.
@@ -459,6 +460,57 @@ VERBOSE=1 node integration-test.mjs
 | `ghl_browser_list_agency_users` | List agency-level users with name, email, role, status |
 | `ghl_browser_get_whitelabel_settings` | Get white-label configuration: custom domain, branding, CNAME |
 | `ghl_browser_list_snapshots_agency` | List agency-level snapshots with name, assets, date |
+
+### Dashboard Widgets (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_dashboard_overview` | Read main dashboard KPIs: leads, opportunities, revenue, appointments |
+| `ghl_browser_get_dashboard_widget` | Read data from a specific widget by name |
+| `ghl_browser_list_dashboard_widgets` | List all visible widgets with titles and summary values |
+| `ghl_browser_get_pipeline_summary` | Read pipeline summary cards: stage counts, total value, conversion rate |
+| `ghl_browser_get_appointment_summary` | Read appointment metrics: today's count, upcoming, no-shows, completed |
+
+### Calendar Bookings (6)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_bookings` | List bookings/appointments with contact, date, time, status, calendar |
+| `ghl_browser_get_booking_details` | Get full booking details: contact, time, notes, custom fields |
+| `ghl_browser_confirm_booking` | Confirm a pending booking by contact name |
+| `ghl_browser_cancel_booking` | Cancel a booking with optional reason |
+| `ghl_browser_mark_booking_noshow` | Mark a booking as no-show |
+| `ghl_browser_reschedule_booking` | Reschedule a booking to a new date and time |
+
+### SEO Management (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_get_seo_overview` | Get SEO dashboard: site health score, keyword rankings, traffic, issues |
+| `ghl_browser_list_seo_pages` | List SEO-tracked pages with optimization score, title, URL |
+| `ghl_browser_get_seo_page_analysis` | Get detailed SEO analysis for a page: issues, suggestions, keyword usage |
+| `ghl_browser_list_seo_keywords` | List tracked keywords with ranking, change, and search volume |
+| `ghl_browser_add_seo_keyword` | Add a keyword to track in the SEO dashboard |
+
+### Snippets (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_snippets` | List content snippets with name, preview, and last modified date |
+| `ghl_browser_get_snippet` | Get full content of a specific snippet by name |
+| `ghl_browser_create_snippet` | Create a new content snippet with name and body |
+| `ghl_browser_update_snippet` | Update the content of an existing snippet |
+| `ghl_browser_delete_snippet` | Delete a content snippet (requires `confirm: true`) |
+
+### Contact Scoring (5)
+
+| Tool | Description |
+|---|---|
+| `ghl_browser_list_scoring_models` | List scoring models with name, status, and rule count |
+| `ghl_browser_get_scoring_model` | Get rules and criteria of a scoring model: points, conditions, thresholds |
+| `ghl_browser_create_scoring_model` | Create a new contact scoring model with name and description |
+| `ghl_browser_add_scoring_rule` | Add a scoring rule: field, condition, point value |
+| `ghl_browser_get_contact_scores` | Get scoring results for a contact: model scores, total, breakdown |
 
 ### Utils (4)
 

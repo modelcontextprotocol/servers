@@ -38,6 +38,11 @@ import { voiceAiModule } from "./voice-ai.js";
 import { powerDialerModule } from "./power-dialer.js";
 import { performanceAiModule } from "./performance-ai.js";
 import { agencyModule } from "./agency.js";
+import { dashboardWidgetsModule } from "./dashboard-widgets.js";
+import { calendarBookingsModule } from "./calendar-bookings.js";
+import { seoModule } from "./seo.js";
+import { snippetsModule } from "./snippets.js";
+import { contactScoringModule } from "./contact-scoring.js";
 import type { ToolHandler, ToolModule } from "../helpers.js";
 
 const allModules: ToolModule[] = [
@@ -80,6 +85,11 @@ const allModules: ToolModule[] = [
   powerDialerModule,
   performanceAiModule,
   agencyModule,
+  dashboardWidgetsModule,
+  calendarBookingsModule,
+  seoModule,
+  snippetsModule,
+  contactScoringModule,
 ];
 
 export const TOOLS: Tool[] = allModules.flatMap((m) => m.tools);
