@@ -336,7 +336,6 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
   } finally {
     await fileHandle.close();
   }
-}  }
 }
 
 // Read the first N lines of a file (UTF-8 safe)
