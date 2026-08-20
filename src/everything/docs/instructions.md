@@ -13,9 +13,9 @@ Follow them to use, extend, and troubleshoot the server safely and effectively.
 ## Constraints & Limitations
 
 - `gzip-file-as-resource`: Max fetch size controlled by `GZIP_MAX_FETCH_SIZE` (default 10MB), timeout by `GZIP_MAX_FETCH_TIME_MILLIS` (default 30s), allowed domains by `GZIP_ALLOWED_DOMAINS`
-- Session resources are ephemeral and lost when the session ends
-- Sampling requests (`trigger-sampling-request`) require client sampling capability
-- Elicitation requests (`trigger-elicitation-request`) require client elicitation capability
+- Session resources are ephemeral. On connections that have sessions they last for the session; on protocol revision 2026-07-28 there are no sessions, so they last only for the request that created them
+- Tools needing input from you — `trigger-sampling-request`, `trigger-elicitation-request`, `trigger-url-elicitation`, `get-roots-list` — ask for it by returning an `input_required` result rather than by pushing a request. If your client did not declare the matching capability, the call is refused with `-32021` naming what was missing
+- `toggle-simulated-logging` only delivers messages on pre-2026-07-28 connections; on 2026-07-28 the toggle is accepted but no log messages arrive
 
 ## Operational Patterns
 

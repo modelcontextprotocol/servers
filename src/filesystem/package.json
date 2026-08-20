@@ -25,9 +25,9 @@
     "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "diff": "^8.0.3",
-    "glob": "^10.5.0",
+    "glob": "^13.0.6",
     "minimatch": "^10.0.1"
   },
   "devDependencies": {
@@ -35,7 +35,7 @@
     "@types/minimatch": "^5.1.2",
     "@types/node": "^22",
     "@vitest/coverage-v8": "^4.1.8",
-    "shx": "^0.3.4",
+    "shx": "^0.4.0",
     "typescript": "^5.8.2",
     "vitest": "^4.1.8"
   }

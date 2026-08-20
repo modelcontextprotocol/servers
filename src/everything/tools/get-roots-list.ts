@@ -1,6 +1,12 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { syncRoots } from "../server/roots.js";
+import {
+  McpServer,
+  CallToolResult,
+  InputRequiredResult,
+  Root,
+  inputRequired,
+  inputResponse,
+} from "@modelcontextprotocol/server";
+import { roots as cachedRoots } from "../server/roots.js";
 
 // Tool configuration
 const name = "get-roots-list";
@@ -17,82 +23,97 @@ const config = {
   },
 };
 
+// Key for this tool's embedded roots request.
+const ROOTS = "roots";
+
 /**
  * Registers the 'get-roots-list' tool.
  *
- * If the client does not support the roots capability, the tool is not registered.
+ * Reports the roots the client has made available -- workspace directories or
+ * file system roots. This server demonstrates the capability without actually
+ * reading any files.
  *
- * The registered tool interacts with the MCP roots capability, which enables the server to access
- * information about the client's workspace directories or file system roots.
+ * Roots are obtained differently on each era, and this tool handles both
+ * without branching:
  *
- * When supported, the server automatically retrieves and formats the current list of roots from the
- * client upon connection and whenever the client sends a `roots/list_changed` notification.
+ * - On a **legacy-era** connection the server pulls `roots/list` after the
+ *   handshake and caches the answer per session (see `server/roots.ts`), so the
+ *   list is usually already known by the time this tool runs and it answers
+ *   immediately from cache.
+ * - On **2026-07-28** there is no server->client request channel and no
+ *   session to cache against, so nothing is prefetched. The tool asks for the
+ *   roots by returning `inputRequired({ inputRequests: { roots:
+ *   inputRequired.listRoots() } })` and the client retries the call with the
+ *   listing attached.
  *
- * Therefore, this tool displays the roots that the server currently knows about for the connected
- * client. If for some reason the server never got the initial roots list, the tool will request the
- * list from the client again.
+ * The cache lookup simply misses on the modern era, which falls through to the
+ * request -- the same code path serves both.
+ *
+ * Registration is unconditional. A client that never declared the `roots`
+ * capability is refused by the SDK at dispatch with `-32021`, on both eras.
  *
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerGetRootsListTool = (server: McpServer) => {
-  // Does client support roots?
-  const clientCapabilities = server.server.getClientCapabilities() || {};
-  const clientSupportsRoots: boolean = clientCapabilities.roots !== undefined;
+  server.registerTool(
+    name,
+    config,
+    async (args, ctx): Promise<CallToolResult | InputRequiredResult> => {
+      const answer = inputResponse(ctx.mcpReq.inputResponses, ROOTS);
 
-  // If so, register tool
-  if (clientSupportsRoots) {
-    server.registerTool(
-      name,
-      config,
-      async (args, extra): Promise<CallToolResult> => {
-        // Get the current rootsFetch the current roots list from the client if need be
-        const currentRoots = await syncRoots(server, extra.sessionId);
+      // Prefer a listing the client just sent; otherwise fall back to whatever
+      // the legacy-era post-handshake sync cached for this session.
+      let currentRoots: Root[] | undefined;
+      if (answer.kind === "roots") {
+        currentRoots = answer.roots;
+      } else if (answer.kind === "missing") {
+        currentRoots = cachedRoots.get(ctx.sessionId);
 
-        // Respond if client supports roots but doesn't have any configured
-        if (
-          clientSupportsRoots &&
-          (!currentRoots || currentRoots.length === 0)
-        ) {
-          return {
-            content: [
-              {
-                type: "text",
-                text:
-                  "The client supports roots but no roots are currently configured.\n\n" +
-                  "This could mean:\n" +
-                  "1. The client hasn't provided any roots yet\n" +
-                  "2. The client provided an empty roots list\n" +
-                  "3. The roots configuration is still being loaded",
-              },
-            ],
-          };
+        // Nothing cached (always the case on 2026-07-28): ask for it.
+        if (!currentRoots) {
+          return inputRequired({
+            inputRequests: { [ROOTS]: inputRequired.listRoots() },
+          });
         }
+      }
 
-        // Create formatted response if there is a list of roots
-        const rootsList = currentRoots
-          ? currentRoots
-              .map((root, index) => {
-                return `${index + 1}. ${root.name || "Unnamed Root"}\n   URI: ${
-                  root.uri
-                }`;
-              })
-              .join("\n\n")
-          : "No roots found";
-
+      // Respond if the client supports roots but doesn't have any configured
+      if (!currentRoots || currentRoots.length === 0) {
         return {
           content: [
             {
               type: "text",
               text:
-                `Current MCP Roots (${
-                  currentRoots!.length
-                } total):\n\n${rootsList}\n\n` +
-                "Note: This server demonstrates the roots protocol capability but doesn't actually access files. " +
-                "The roots are provided by the MCP client and can be used by servers that need file system access.",
+                "The client supports roots but no roots are currently configured.\n\n" +
+                "This could mean:\n" +
+                "1. The client hasn't provided any roots yet\n" +
+                "2. The client provided an empty roots list\n" +
+                "3. The roots configuration is still being loaded",
             },
           ],
         };
       }
-    );
-  }
+
+      // Create formatted response if there is a list of roots
+      const rootsList = currentRoots
+        .map((root, index) => {
+          return `${index + 1}. ${root.name || "Unnamed Root"}\n   URI: ${
+            root.uri
+          }`;
+        })
+        .join("\n\n");
+
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Current MCP Roots (${currentRoots.length} total):\n\n${rootsList}\n\n` +
+              "Note: This server demonstrates the roots protocol capability but doesn't actually access files. " +
+              "The roots are provided by the MCP client and can be used by servers that need file system access.",
+          },
+        ],
+      };
+    }
+  );
 };

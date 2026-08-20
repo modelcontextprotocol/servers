@@ -1,8 +1,10 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  ElicitResultSchema,
+  McpServer,
   CallToolResult,
-} from "@modelcontextprotocol/sdk/types.js";
+  InputRequiredResult,
+  inputRequired,
+  inputResponse,
+} from "@modelcontextprotocol/server";
 
 // Tool configuration
 const name = "trigger-elicitation-request";
@@ -18,40 +20,47 @@ const config = {
   },
 };
 
+// Key for this tool's embedded elicitation request. It identifies the request
+// on the way out and its response on the way back in.
+const PROFILE = "profile";
+
 /**
  * Registers the 'trigger-elicitation-request' tool.
  *
- * If the client does not support the elicitation capability, the tool is not registered.
+ * The tool asks the user to fill in a form covering the full range of field
+ * types the elicitation schema supports -- text, booleans, numbers, email,
+ * dates, and enums of several shapes -- then formats the answer, handling
+ * acceptance, decline and cancellation.
  *
- * The registered tool sends an elicitation request for the user to provide information
- * based on a pre-defined schema of fields including text inputs, booleans, numbers,
- * email, dates, enums of various types, etc. It uses validation and handles multiple
- * possible outcomes from the user's response, such as acceptance with content, decline,
- * or cancellation of the dialog. The process also ensures parsing and validating
- * the elicitation input arguments at runtime.
+ * The request is made in the **multi-round-trip** style: the handler *returns*
+ * `inputRequired(...)` rather than pushing a server->client
+ * `elicitation/create` request. This is written once and serves both protocol
+ * eras. On 2026-07-28 the client fulfils the embedded request and retries the
+ * call with `inputResponses`; on a legacy-era connection the SDK's legacy shim
+ * turns the same return into a real server->client request over the live
+ * session and re-enters this handler with the collected response. The handler
+ * cannot tell which era served it.
  *
- * The elicitation dialog response is returned, formatted into a structured result,
- * which contains both user-submitted input data (if provided) and debugging information,
- * including raw results.
+ * There is also no longer a client-capability check around registration. The
+ * SDK gates the embedded request at dispatch on both eras, refusing a caller
+ * that never declared `elicitation` with `-32021`, so the tool can be
+ * registered unconditionally -- which matters because on 2026-07-28 there is no
+ * `initialize` handshake to learn capabilities from in the first place.
  *
- * @param {McpServer} server - TThe McpServer instance where the tool will be registered.
+ * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerTriggerElicitationRequestTool = (server: McpServer) => {
-  // Does the client support elicitation?
-  const clientCapabilities = server.server.getClientCapabilities() || {};
-  const clientSupportsElicitation: boolean =
-    clientCapabilities.elicitation !== undefined;
+  server.registerTool(
+    name,
+    config,
+    async (args, ctx): Promise<CallToolResult | InputRequiredResult> => {
+      const answer = inputResponse(ctx.mcpReq.inputResponses, PROFILE);
 
-  // If so, register tool
-  if (clientSupportsElicitation) {
-    server.registerTool(
-      name,
-      config,
-      async (args, extra): Promise<CallToolResult> => {
-        const elicitationResult = await extra.sendRequest(
-          {
-            method: "elicitation/create",
-            params: {
+      // First round: nothing has been asked yet, so ask.
+      if (answer.kind === "missing") {
+        return inputRequired({
+          inputRequests: {
+            [PROFILE]: inputRequired.elicit({
               message: "Please provide inputs for the following fields:",
               requestedSchema: {
                 type: "object",
@@ -171,65 +180,63 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
                 },
                 required: ["name"],
               },
-            },
+            }),
           },
-          ElicitResultSchema,
-          { timeout: 10 * 60 * 1000 /* 10 minutes */ }
-        );
+        });
+      }
 
-        // Handle different response actions
-        const content: CallToolResult["content"] = [];
+      // Re-entry: the client answered. `answer` is the discriminated view of
+      // this round's response, which covers decline/cancel as well as accept.
+      const content: CallToolResult["content"] = [];
 
-        if (
-          elicitationResult.action === "accept" &&
-          elicitationResult.content
-        ) {
-          content.push({
-            type: "text",
-            text: `✅ User provided the requested information!`,
-          });
-
-          // Only access elicitationResult.content when action is accept
-          const userData = elicitationResult.content;
-          const lines = [];
-          if (userData.name) lines.push(`- Name: ${userData.name}`);
-          if (userData.check !== undefined)
-            lines.push(`- Agreed to terms: ${userData.check}`);
-          if (userData.color) lines.push(`- Favorite Color: ${userData.color}`);
-          if (userData.email) lines.push(`- Email: ${userData.email}`);
-          if (userData.homepage) lines.push(`- Homepage: ${userData.homepage}`);
-          if (userData.birthdate)
-            lines.push(`- Birthdate: ${userData.birthdate}`);
-          if (userData.integer !== undefined)
-            lines.push(`- Favorite Integer: ${userData.integer}`);
-          if (userData.number !== undefined)
-            lines.push(`- Favorite Number: ${userData.number}`);
-          if (userData.petType) lines.push(`- Pet Type: ${userData.petType}`);
-
-          content.push({
-            type: "text",
-            text: `User inputs:\n${lines.join("\n")}`,
-          });
-        } else if (elicitationResult.action === "decline") {
-          content.push({
-            type: "text",
-            text: `❌ User declined to provide the requested information.`,
-          });
-        } else if (elicitationResult.action === "cancel") {
-          content.push({
-            type: "text",
-            text: `⚠️ User cancelled the elicitation dialog.`,
-          });
-        }
-
-        // Include raw result for debugging
+      if (answer.kind === "elicit" && answer.action === "accept") {
         content.push({
           type: "text",
-          text: `\nRaw result: ${JSON.stringify(elicitationResult, null, 2)}`,
+          text: `✅ User provided the requested information!`,
         });
 
-        return { content };
+        // Content only exists on an accepted elicitation. It comes from the
+        // client and is NOT re-validated against `requestedSchema` on either
+        // era -- treat it as untrusted input.
+        const userData = answer.content ?? {};
+        const lines = [];
+        if (userData.name) lines.push(`- Name: ${userData.name}`);
+        if (userData.check !== undefined)
+          lines.push(`- Agreed to terms: ${userData.check}`);
+        if (userData.color) lines.push(`- Favorite Color: ${userData.color}`);
+        if (userData.email) lines.push(`- Email: ${userData.email}`);
+        if (userData.homepage) lines.push(`- Homepage: ${userData.homepage}`);
+        if (userData.birthdate)
+          lines.push(`- Birthdate: ${userData.birthdate}`);
+        if (userData.integer !== undefined)
+          lines.push(`- Favorite Integer: ${userData.integer}`);
+        if (userData.number !== undefined)
+          lines.push(`- Favorite Number: ${userData.number}`);
+        if (userData.petType) lines.push(`- Pet Type: ${userData.petType}`);
+
+        content.push({
+          type: "text",
+          text: `User inputs:\n${lines.join("\n")}`,
+        });
+      } else if (answer.kind === "elicit" && answer.action === "decline") {
+        content.push({
+          type: "text",
+          text: `❌ User declined to provide the requested information.`,
+        });
+      } else if (answer.kind === "elicit" && answer.action === "cancel") {
+        content.push({
+          type: "text",
+          text: `⚠️ User cancelled the elicitation dialog.`,
+        });
       }
-    );
-  }
+
+      // Include raw result for debugging
+      content.push({
+        type: "text",
+        text: `\nRaw result: ${JSON.stringify(answer, null, 2)}`,
+      });
+
+      return { content };
+    }
+  );
 };

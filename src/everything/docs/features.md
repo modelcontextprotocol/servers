@@ -14,20 +14,19 @@
 - `get-env` (tools/get-env.ts): Returns all environment variables from the running process as pretty-printed JSON text.
 - `get-resource-links` (tools/get-resource-links.ts): Returns an intro `text` block followed by multiple `resource_link` items. For a requested `count` (1–10), alternates between dynamic Text and Blob resources using URIs from `resources/templates.ts`.
 - `get-resource-reference` (tools/get-resource-reference.ts): Accepts `resourceType` (`text` or `blob`) and `resourceId` (positive integer). Returns a concrete `resource` content block (with its `uri`, `mimeType`, and data) with surrounding explanatory `text`.
-- `get-roots-list` (tools/get-roots-list.ts): Returns the last list of roots sent by the client.
+- `get-roots-list` (tools/get-roots-list.ts): Reports the client's workspace roots. On the legacy era the server has usually already pulled them after the handshake and answers from cache; on 2026-07-28 there is nothing cached, so it asks for them via `inputRequired` and the client retries with the listing attached.
 - `gzip-file-as-resource` (tools/gzip-file-as-resource.ts): Accepts a `name` and `data` (URL or data URI), fetches the data subject to size/time/domain constraints, compresses it, registers it as a session resource at `demo://resource/session/<name>` with `mimeType: application/gzip`, and returns either a `resource_link` (default) or an inline `resource` depending on `outputType`.
-- `get-structured-content` (tools/get-structured-content.ts): Demonstrates structured responses. Accepts `location` input and returns both backward‑compatible `content` (a `text` block containing JSON) and `structuredContent` validated by an `outputSchema` (temperature, conditions, humidity).
+- `get-structured-content` (tools/get-structured-content.ts): Demonstrates structured responses. Accepts `location` input and returns both backward‑compatible `content` (a `text` block containing JSON) and `structuredContent` validated by an `outputSchema` (temperature, conditions, humidity). The output schema has an **object** root — the only shape any revision before 2026-07-28 allowed.
+- `get-structured-content-list` (tools/get-structured-content-list.ts): The same idea with an **array** root, which 2026-07-28 newly permits (SEP-2106 lifted the object-only restriction on `outputSchema`). Accepts `location` and `days` (1–5, default 3) and returns a bare array of daily forecast entries. The handler is era-agnostic and returns the natural array; the SDK adapts the wire shape per era — identity on 2026-07-28, and for a legacy peer it projects _both_ the advertised schema (to `{"type":"object","properties":{"result":…}}`) and the payload (to `{"result": [...]}`) so the two cannot drift apart. Note this automatic legacy projection is TypeScript-specific; the Go, Python and Rust SDKs do not currently perform it.
 - `get-sum` (tools/get-sum.ts): For two numbers `a` and `b` calculates and returns their sum. Uses Zod to validate inputs.
 - `get-tiny-image` (tools/get-tiny-image.ts): Returns a tiny PNG MCP logo as an `image` content item with brief descriptive text before and after.
 - `trigger-long-running-operation` (tools/trigger-long-running-operation.ts): Simulates a multi-step operation over a given `duration` and number of `steps`; reports progress via `notifications/progress` when a `progressToken` is provided by the client.
-- `toggle-simulated-logging` (tools/toggle-simulated-logging.ts): Starts or stops simulated, random‑leveled logging for the invoking session. Respects the client’s selected minimum logging level.
+- `toggle-simulated-logging` (tools/toggle-simulated-logging.ts): Starts or stops simulated, random‑leveled logging for the invoking session. **Legacy era only** — see [Simulated Logging](#simulated-logging).
 - `toggle-subscriber-updates` (tools/toggle-subscriber-updates.ts): Starts or stops simulated resource update notifications for URIs the invoking session has subscribed to.
-- `trigger-elicitation-request` (tools/trigger-elicitation-request.ts): Issues an `elicitation/create` request using form-mode fields (strings, numbers, booleans, enums, and format validation) and returns the resulting action/content.
-- `trigger-url-elicitation` (tools/trigger-url-elicitation.ts): Issues an `elicitation/create` request in URL mode (`mode: "url"`) with an `elicitationId`, or throws MCP error `-32042` (`UrlElicitationRequiredError`) when `errorPath=true`. On the error path the prerequisite elicitation it returns points at a different URL than the failing request (`https://modelcontextprotocol.io`); when the client satisfies it and retries the same call, the retry ignores `errorPath` and proceeds via the request path, so the client does not loop on the same error. The retry marker is one-shot per `(session, url, elicitationId)`: it is cleared on the recognized retry, so re-running the error path with identical arguments without an intervening prerequisite is treated as a retry and proceeds. Requires client capability `elicitation.url`.
-- `trigger-sampling-request` (tools/trigger-sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM's response payload.
-- `simulate-research-query` (tools/simulate-research-query.ts): Demonstrates MCP Tasks (SEP-1686) with a simulated multi-stage research operation. Accepts `topic` and `ambiguous` parameters. Returns a task that progresses through stages with status updates. If `ambiguous` is true and client supports elicitation, sends an elicitation request directly to gather clarification before completing.
-- `trigger-sampling-request-async` (tools/trigger-sampling-request-async.ts): Demonstrates bidirectional tasks where the server sends a sampling request that the client executes as a background task. Server polls for status and retrieves the LLM result when complete. Requires client to support `tasks.requests.sampling.createMessage`.
-- `trigger-elicitation-request-async` (tools/trigger-elicitation-request-async.ts): Demonstrates bidirectional tasks where the server sends an elicitation request that the client executes as a background task. Server polls while waiting for user input. Requires client to support `tasks.requests.elicitation.create`.
+- `trigger-elicitation-request` (tools/trigger-elicitation-request.ts): Asks for a form-mode elicitation covering the full range of field types (strings, numbers, booleans, enums, format validation) and reports the resulting action/content. Requires client capability `elicitation`.
+- `trigger-url-elicitation` (tools/trigger-url-elicitation.ts): Asks for a URL-mode elicitation (`mode: "url"`), directing the user to a browser flow, then reports whether they completed, declined, or cancelled it. Requires client capability `elicitation.url`. (The v1 `-32042` / `errorPath` variant is gone — see [Multi Round-Trip Requests](#multi-round-trip-requests-sep-2322).)
+- `trigger-sampling-request` (tools/trigger-sampling-request.ts): Asks the client/LLM for a completion using the provided `prompt` and optional generation controls; returns the response payload. Requires client capability `sampling`.
+- `simulate-research-query` (tools/simulate-research-query.ts): Simulates a multi-stage research operation, reporting progress per stage. Accepts `topic` and `ambiguous`. When `ambiguous` is true it pauses partway and asks which interpretation of the topic you meant, then resumes and produces the report. The only **multi-round** flow in this server: it threads the topic across rounds in an HMAC-sealed `requestState`.
 
 ## Prompts
 
@@ -43,63 +42,105 @@
 - Static Documents: `demo://resource/static/document/<filename>` (serves files from `src/everything/docs/` as static file-based resources)
 - Session Scoped: `demo://resource/session/<name>` (per-session resources registered dynamically; available only for the lifetime of the session)
 
+### Result caching (2026-07-28)
+
+The revision requires `ttlMs` and `cacheScope` on cacheable results. Values resolve
+most-specific-author-first: fields the handler puts on the result, then a
+per-registration `cacheHint`, then the server-level `ServerOptions.cacheHints`, then the
+conservative default (`ttlMs: 0`, `cacheScope: "private"`). These fields are emitted only
+toward modern-era clients — legacy responses are byte-for-byte unchanged.
+
+This server exercises two of those layers:
+
+| Surface                                                                                       | Hint                                | Why                                                      |
+| --------------------------------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------- |
+| `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `server/discover` | server-level, 60s `public`          | static for the process lifetime and identical per caller |
+| Static Documents (`resources/read`)                                                           | per-registration, 1h `public`       | ship inside the package; only change when it is rebuilt  |
+| Dynamic, Session Scoped (`resources/read`)                                                    | none — falls through to the default | generated per call, or scoped to one caller              |
+
 ## Resource Subscriptions and Notifications
 
 - Simulated update notifications are opt‑in and off by default.
-- Clients may subscribe/unsubscribe to resource URIs using the MCP `resources/subscribe` and `resources/unsubscribe` requests.
-- Use the `toggle-subscriber-updates` tool to start/stop a per‑session interval that emits `notifications/resources/updated { uri }` only for URIs that session has subscribed to.
-- Multiple concurrent clients are supported; each client’s subscriptions are tracked per session and notifications are delivered independently via the server instance associated with that session.
+- Use the `toggle-subscriber-updates` tool to start/stop an interval that emits
+  `notifications/resources/updated { uri }`.
+- How a client registers interest differs by era, and the server supports both:
+  - **Legacy era** — `resources/subscribe` / `resources/unsubscribe`. Subscribers are
+    tracked per session as `Map<uri, Set<sessionId>>`, and updates are delivered through
+    the server instance bound to that session.
+  - **2026-07-28** — `resources/subscribe` no longer exists. Clients open a
+    `subscriptions/listen` stream and name the notification types they want
+    (`toolsListChanged`, `promptsListChanged`, `resourcesListChanged`,
+    `resourceSubscriptions`). The serving entry answers `subscriptions/listen` itself; the
+    server publishes onto its bus and the bus does the filtering.
+- Publishing is routed through `server/notifier.ts` so tools do not have to care which of
+  the two is in play.
 
 ## Simulated Logging
 
 - Simulated logging is available but off by default.
-- Use the `toggle-simulated-logging` tool to start/stop periodic log messages of varying levels (debug, info, notice, warning, error, critical, alert, emergency) per session.
-- Clients can control the minimum level they receive via the standard MCP `logging/setLevel` request.
+- Use the `toggle-simulated-logging` tool to start/stop periodic log messages of varying
+  levels (debug, info, notice, warning, error, critical, alert, emergency) per session.
+- **Legacy era only.** This models a connection-scoped log stream: a background interval
+  pushing unsolicited `notifications/message` at whatever level the client selected with
+  `logging/setLevel`.
+- 2026-07-28 removed both halves. `logging/setLevel` is gone — the level is now a
+  per-request `io.modelcontextprotocol/logLevel` key in `_meta`, and a server **MUST NOT**
+  emit `notifications/message` for a request that did not carry it. There is no
+  connection-level channel for a background interval to write to, so on a modern
+  connection the toggle is accepted but no messages arrive. The failure is quiet rather
+  than loud: the send is filtered out rather than rejected, so nothing destabilises.
 
-## Tasks (SEP-1686)
+## Multi Round-Trip Requests (SEP-2322)
 
-The server advertises support for MCP Tasks, enabling long-running operations with status tracking:
+The 2026-07-28 revision removed the server-to-client JSON-RPC request channel. A server
+that needs input from the client no longer _pushes_ `elicitation/create`,
+`sampling/createMessage`, or `roots/list` — it **returns** an `input_required` result
+naming what it needs, and the client retries the original call carrying
+`inputResponses`.
 
-- **Capabilities advertised**: `tasks.list`, `tasks.cancel`, `tasks.requests.tools.call`
-- **Task Store**: Uses `InMemoryTaskStore` from SDK experimental for task lifecycle management
-- **Message Queue**: Uses `InMemoryTaskMessageQueue` for task-related messaging
+### Written once, served to both eras
 
-### Task Lifecycle
+Every tool here is written in the 2026 `inputRequired(...)` style, with no branching on
+protocol era. On a legacy-era connection the SDK's legacy shim turns the same return into
+real server-to-client requests over the live session and re-enters the handler with the
+answers collected. The handler cannot tell which era served it.
 
-1. Client calls `tools/call` with `task: true` parameter
-2. Server returns `CreateTaskResult` with `taskId` instead of immediate result
-3. Client polls `tasks/get` to check status and receive `statusMessage` updates
-4. When status is `completed`, client calls `tasks/result` to retrieve the final result
+| Tool                          | Asks for                                   |
+| ----------------------------- | ------------------------------------------ |
+| `trigger-elicitation-request` | form-mode `elicitation/create`             |
+| `trigger-url-elicitation`     | URL-mode `elicitation/create`              |
+| `trigger-sampling-request`    | `sampling/createMessage`                   |
+| `get-roots-list`              | `roots/list`                               |
+| `simulate-research-query`     | form-mode `elicitation/create`, mid-flight |
 
-### Task Statuses
+### Multi-round flows and `requestState`
 
-- `working`: Task is actively processing
-- `input_required`: Task needs additional input (server sends elicitation request directly)
-- `completed`: Task finished successfully
-- `failed`: Task encountered an error
-- `cancelled`: Task was cancelled by client
+`inputResponses` are **per round** — a retry carries only that round's answers, never
+earlier ones. Anything that must survive the trip through the client goes in
+`requestState`, an opaque server-minted string the client echoes back byte-for-byte.
 
-### Demo Tools
+`simulate-research-query` is the worked example: it pauses at the synthesis stage to ask
+which interpretation of an ambiguous topic you meant, carrying the topic forward in
+`requestState` so the resumed round can finish the report.
 
-**Server-side tasks (client calls server):**
-Use the `simulate-research-query` tool to exercise the full task lifecycle. Set `ambiguous: true` to trigger elicitation - the server will send an `elicitation/create` request directly and await the response before completing.
+Because `requestState` round-trips through the client it is **untrusted input** on
+re-entry. This server seals it with HMAC-SHA256 via `createRequestStateCodec`
+(`server/request-state.ts`), bound to the originating method and authenticated principal,
+and verifies it before any handler runs.
 
-**Client-side tasks (server calls client):**
-Use `trigger-sampling-request-async` or `trigger-elicitation-request-async` to demonstrate bidirectional tasks where the server sends requests that the client executes as background tasks. These require the client to advertise `tasks.requests.sampling.createMessage` or `tasks.requests.elicitation.create` capabilities respectively.
+### Capability requirements
 
-### Bidirectional Task Flow
+A tool needing a capability the caller never declared is refused at dispatch with
+`-32021 MissingRequiredClientCapability`, whose `data.requiredCapabilities` lists what was
+missing. This is a spec **MUST**, and it is why tools are registered unconditionally
+rather than hidden — `tools/list` may not vary per connection on 2026-07-28.
 
-MCP Tasks are bidirectional - both server and client can be task executors:
+### Tasks
 
-| Direction        | Request Type             | Task Executor | Demo Tool                           |
-| ---------------- | ------------------------ | ------------- | ----------------------------------- |
-| Client -> Server | `tools/call`             | Server        | `simulate-research-query`           |
-| Server -> Client | `sampling/createMessage` | Client        | `trigger-sampling-request-async`    |
-| Server -> Client | `elicitation/create`     | Client        | `trigger-elicitation-request-async` |
-
-For client-side tasks:
-
-1. Server sends request with task metadata (e.g., `params.task.ttl`)
-2. Client creates task and returns `CreateTaskResult` with `taskId`
-3. Server polls `tasks/get` for status updates
-4. When complete, server calls `tasks/result` to retrieve the result
+This server no longer demonstrates tasks. The 2025-11-25 experimental tasks API was
+removed in SDK v2, and 2026-07-28 moved tasks into an extension
+(`io.modelcontextprotocol/tasks`, SEP-2663) that the SDK cannot currently serve: `tasks/*`
+are spec method names absent from the modern era's registry, so they are answered `-32601`
+even when a handler is registered, and they cannot be re-registered as vendor-prefixed
+custom methods. `simulate-research-query` keeps the staged progress and mid-flight
+elicitation it always demonstrated; only the task wire shape is gone.
