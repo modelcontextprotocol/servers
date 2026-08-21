@@ -425,7 +425,7 @@ server.registerTool(
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false, openWorldHint: false }
   },
   async (args: z.infer<typeof CreateDirectoryArgsSchema>) => {
-    const validPath = await validatePath(args.path);
+    const validPath = await validatePath(args.path, { allowNonExistentAncestors: true });
     await fs.mkdir(validPath, { recursive: true });
     const text = `Successfully created directory ${args.path}`;
     return {

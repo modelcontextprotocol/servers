@@ -95,8 +95,20 @@ function resolveRelativePathAgainstAllowedDirectories(relativePath: string): str
   return path.resolve(allowedDirectories[0], relativePath);
 }
 
+// Options for validatePath
+export interface ValidatePathOptions {
+  /**
+   * When true, allows paths whose ancestor directories do not yet exist.
+   * Walks up using path.dirname() until an existing directory is found,
+   * then validates that directory against the allowed directories list.
+   * This is needed for recursive directory creation (mkdir -p) where
+   * multiple levels of parent directories may not exist yet.
+   */
+  allowNonExistentAncestors?: boolean;
+}
+
 // Security & Validation Functions
-export async function validatePath(requestedPath: string): Promise<string> {
+export async function validatePath(requestedPath: string, options: ValidatePathOptions = {}): Promise<string> {
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
@@ -132,6 +144,35 @@ export async function validatePath(requestedPath: string): Promise<string> {
         }
         return absolute;
       } catch {
+        // If allowNonExistentAncestors is set, walk up until we find an
+        // existing ancestor directory and validate that instead.
+        // This supports recursive mkdir where multiple levels don't exist yet.
+        if (options.allowNonExistentAncestors) {
+          let current = parentDir;
+          while (true) {
+            const parent = path.dirname(current);
+            if (parent === current) {
+              // Reached filesystem root without finding an existing directory
+              throw new Error(`No existing ancestor directory found for: ${absolute}`);
+            }
+            current = parent;
+            try {
+              const realAncestorPath = await fs.realpath(current);
+              const normalizedAncestor = normalizePath(realAncestorPath);
+              if (!isPathWithinAllowedDirectories(normalizedAncestor, allowedDirectories)) {
+                throw new Error(`Access denied - ancestor directory outside allowed directories: ${realAncestorPath} not in ${allowedDirectories.join(', ')}`);
+              }
+              return absolute;
+            } catch (ancestorError) {
+              if ((ancestorError as NodeJS.ErrnoException).code === 'ENOENT') {
+                // This ancestor doesn't exist either, keep walking up
+                continue;
+              }
+              // Re-throw non-ENOENT errors (including our own access denied)
+              throw ancestorError;
+            }
+          }
+        }
         throw new Error(`Parent directory does not exist: ${parentDir}`);
       }
     }
