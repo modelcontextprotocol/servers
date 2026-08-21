@@ -1,5 +1,14 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { normalizePath, expandHome, convertToWindowsPath } from '../path-utils.js';
+import * as path from 'path';
+import * as os from 'os';
+import { existsSync, realpathSync } from 'fs';
+import {
+  normalizePath,
+  expandHome,
+  convertToWindowsPath,
+  parseAllowedDirectory,
+  parseAllowedDirectories,
+} from '../path-utils.js';
 
 describe('Path Utilities', () => {
   describe('convertToWindowsPath', () => {
@@ -377,6 +386,125 @@ describe('Path Utilities', () => {
       } else {
         expect(result).toBe('some/relative/path');
       }
+    });
+  });
+
+  describe('parseAllowedDirectories (issue #447 - Windows config paths)', () => {
+    const home = os.homedir();
+
+    it('preserves spaces in paths', () => {
+      if (process.platform === 'win32') {
+        expect(parseAllowedDirectory('C:\\Program Files\\Some App'))
+          .toBe('C:\\Program Files\\Some App');
+        expect(parseAllowedDirectory('C:/Program Files/Some App'))
+          .toBe('C:\\Program Files\\Some App');
+      } else {
+        expect(parseAllowedDirectory('/home/user/some app'))
+          .toBe('/home/user/some app');
+      }
+    });
+
+    it('strips surrounding double quotes from entries', () => {
+      // Simulates a claude_desktop_config.json entry whose quote characters
+      // arrive as part of the argument itself
+      if (process.platform === 'win32') {
+        expect(parseAllowedDirectory('"C:\\Program Files\\App Name"'))
+          .toBe('C:\\Program Files\\App Name');
+      } else {
+        expect(parseAllowedDirectory('"/home/user/app name"'))
+          .toBe('/home/user/app name');
+      }
+    });
+
+    it('strips surrounding single quotes from entries', () => {
+      if (process.platform === 'win32') {
+        expect(parseAllowedDirectory("'C:\\Program Files\\App Name'"))
+          .toBe('C:\\Program Files\\App Name');
+      } else {
+        expect(parseAllowedDirectory("'/home/user/app name'"))
+          .toBe('/home/user/app name');
+      }
+    });
+
+    it('trims whitespace around entries', () => {
+      if (process.platform === 'win32') {
+        expect(parseAllowedDirectory('   C:\\dir with space  '))
+          .toBe('C:\\dir with space');
+      } else {
+        expect(parseAllowedDirectory('   /home/user/dir  '))
+          .toBe('/home/user/dir');
+      }
+    });
+
+    it('expands ~ to the home directory', () => {
+      const result = parseAllowedDirectory('~');
+      expect(result).not.toContain('~');
+      expect(result).toBe(path.resolve(home));
+    });
+
+    it('expands ~/ prefixed paths (quotes included) keeping spaces', () => {
+      expect(parseAllowedDirectory('"~/my documents"'))
+        .toBe(path.join(home, 'my documents'));
+      expect(parseAllowedDirectory('~/projects/my work'))
+        .toBe(path.join(home, 'projects', 'my work'));
+    });
+
+    it('converts MSYS/Git-Bash style /c/ paths only on win32', () => {
+      if (process.platform === 'win32') {
+        expect(parseAllowedDirectory('/c/Users/name/App'))
+          .toBe('C:\\Users\\name\\App');
+        expect(parseAllowedDirectory('/c/Program Files/App Name'))
+          .toBe('C:\\Program Files\\App Name');
+        expect(parseAllowedDirectory('/d/data/project'))
+          .toBe('D:\\data\\project');
+        // Bare drive roots convert too
+        expect(parseAllowedDirectory('/c/')).toBe('C:\\');
+      } else {
+        // Off Windows, /c/foo is just an ordinary Unix path
+        expect(parseAllowedDirectory('/c/Users/name/App'))
+          .toBe('/c/Users/name/App');
+      }
+    });
+
+    it('leaves WSL /mnt/c/ paths untouched', () => {
+      // The /^\/([A-Za-z])\// conversion regex must not match multi-letter mounts
+      expect(parseAllowedDirectory('/mnt/c/Users/name'))
+        .toBe(path.resolve('/mnt/c/Users/name'));
+    });
+
+    it('does not break 8.3 short names while parsing', () => {
+      if (process.platform === 'win32') {
+        expect(parseAllowedDirectory('C:\\PROGRA~1'))
+          .toBe('C:\\PROGRA~1');
+      }
+    });
+
+    it('resolves relative paths to absolute ones', () => {
+      const result = parseAllowedDirectory('some relative dir');
+      expect(path.isAbsolute(result)).toBe(true);
+    });
+
+    it('parses every argv entry in order', () => {
+      expect(parseAllowedDirectories(['~/a', '~/b']))
+        .toEqual([path.join(home, 'a'), path.join(home, 'b')]);
+    });
+
+    it('expands real 8.3 short names via native realpath (startup behavior)', () => {
+      // Mirrors the startup resolution now used by index.ts.
+      // Skipped when 8.3 short-name generation is disabled on this volume.
+      if (process.platform !== 'win32') return;
+      const shortPath = 'C:\\PROGRA~1';
+      if (!existsSync(shortPath)) return;
+
+      const parsed = parseAllowedDirectories([shortPath])[0];
+      // The parser must preserve short names verbatim
+      expect(parsed).toBe(shortPath);
+
+      // Native realpath expands them to the long form
+      const longForm = realpathSync.native(parsed);
+      expect(existsSync(longForm)).toBe(true);
+      expect(longForm.toLowerCase()).not.toBe(shortPath.toLowerCase());
+      expect(longForm.includes('~')).toBe(false);
     });
   });
 });

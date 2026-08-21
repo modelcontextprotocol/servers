@@ -97,4 +97,44 @@ describe('Startup Directory Validation', () => {
     // Should still start with the valid directory
     expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
   });
+
+  it('starts cleanly when a path with spaces arrives wrapped in literal quotes', async () => {
+    // claude_desktop_config.json entries sometimes carry their own quote
+    // characters around paths containing spaces (issue #447)
+    const quoted = `"${accessibleDir}"`;
+
+    const result = await spawnServer([quoted]);
+
+    expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+    expect(result.stderr).not.toContain('Warning:');
+  });
+
+  it('accepts MSYS/Git-Bash style /c/ paths on Windows', async () => {
+    if (process.platform !== 'win32') return;
+
+    // C:\...\accessible -> /c/.../accessible
+    const msysDir = `/${accessibleDir.charAt(0).toLowerCase()}${accessibleDir.slice(2).replace(/\\/g, '/')}`;
+
+    const result = await spawnServer([msysDir]);
+
+    expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+    expect(result.stderr).not.toContain('Warning:');
+  });
+
+  it('expands 8.3 short names at startup via native realpath resolution', async () => {
+    if (process.platform !== 'win32') return;
+
+    // Skip when 8.3 short-name generation is disabled on this volume
+    try {
+      await fs.stat('C:\\PROGRA~1');
+    } catch {
+      return;
+    }
+
+    const result = await spawnServer(['C:\\PROGRA~1']);
+
+    // Startup must succeed without treating the short name as inaccessible
+    expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+    expect(result.stderr).not.toContain('Warning: Cannot access directory');
+  });
 });
