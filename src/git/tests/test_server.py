@@ -234,6 +234,41 @@ def test_git_log_default(test_repository):
     assert len(result) >= 1
     assert "initial commit" in result[0]
 
+def test_git_log_consistent_format(test_repository):
+    """git_log output format should be identical between filtered and unfiltered calls."""
+    # Create a commit so we have something to compare
+    file_path = Path(test_repository.working_dir) / "format_test.txt"
+    file_path.write_text("format test content")
+    test_repository.index.add(["format_test.txt"])
+    test_repository.index.commit("format consistency test")
+
+    # Get unfiltered result
+    unfiltered = git_log(test_repository, max_count=1)
+    # Get filtered result (broad enough to include the commit)
+    filtered = git_log(test_repository, max_count=1, start_timestamp="1 year ago")
+
+    assert len(unfiltered) == 1
+    assert len(filtered) == 1
+
+    # Both should have the same format: no repr quotes, clean author, full message
+    for entry in [unfiltered[0], filtered[0]]:
+        # Should NOT contain repr-style quotes around the hash
+        assert "Commit: '" not in entry
+        # Should NOT contain git.Actor repr
+        assert "git.Actor" not in entry
+        # Should have clean Author format with angle brackets
+        assert "<" in entry and ">" in entry
+        # Should contain all four fields
+        assert "Commit:" in entry
+        assert "Author:" in entry
+        assert "Date:" in entry
+        assert "Message:" in entry
+
+    # The commit hash should be the same in both
+    unfiltered_hash = unfiltered[0].split("\n")[0].split("Commit: ")[1]
+    filtered_hash = filtered[0].split("\n")[0].split("Commit: ")[1]
+    assert unfiltered_hash == filtered_hash
+
 def test_git_create_branch(test_repository):
     result = git_create_branch(test_repository, "new-feature-branch")
 
