@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 
+import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { SequentialThinkingServer } from './lib.js';
+
+const require = createRequire(import.meta.url);
+const { version } = require('./package.json');
 
 /** Safe boolean coercion that correctly handles string "false" */
 const coercedBoolean = z.preprocess((val) => {
@@ -17,7 +21,7 @@ const coercedBoolean = z.preprocess((val) => {
 
 const server = new McpServer({
   name: "sequential-thinking-server",
-  version: "0.2.0",
+  version,
 });
 
 const thinkingServer = new SequentialThinkingServer();
