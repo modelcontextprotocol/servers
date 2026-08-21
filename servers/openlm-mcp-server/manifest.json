@@ -1,0 +1,55 @@
+{
+    "name": "openlm-mcp-server",
+    "version": "0.1.0",
+    "displayName": "OpenLM License Manager",
+    "description": "Query license usage, allocations, and analytics data through Claude",
+    "author": {
+          "name": "OpenLM",
+          "email": "support@openlm.com",
+          "url": "https://www.openlm.com"
+    },
+    "homepage": "https://www.openlm.com",
+    "documentationUrl": "https://www.openlm.com/docs/mcp-server",
+    "repositoryUrl": "https://openlm.visualstudio.com/OpenLM/_git/OpenlmAIReporting",
+    "protocol": "mcp",
+    "protocolVersion": "2024-11-05",
+    "capabilities": {
+          "resources": false,
+          "prompts": false,
+          "tools": true
+    },
+    "tools": [
+          {
+                  "name": "Query License Usage",
+                  "description": "Query license usage data and metrics"
+          },
+          {
+                  "name": "Get Allocations",
+                  "description": "Retrieve license allocations and assignments"
+          },
+          {
+                  "name": "View Analytics",
+                  "description": "Access license analytics and reporting data"
+          }
+    ],
+    "authentication": {
+          "type": "oauth2",
+          "endpoint": "https://cloud-us.openlm.com/mcp",
+          "tokenEndpoint": "https://cloud-us.openlm.com/oauth/token",
+          "scopes": ["read:licenses", "read:usage", "read:analytics"],
+          "description": "Authenticate with your OpenLM credentials via OAuth 2.0"
+    },
+    "pricing": {
+          "model": "free",
+          "description": "Free for OpenLM subscribers"
+    },
+    "keywords": [
+          "license-management",
+          "mcp",
+          "model-context-protocol",
+          "openlm",
+          "reporting",
+          "analytics"
+    ],
+    "tags": ["integration", "productivity", "analytics"]
+}
