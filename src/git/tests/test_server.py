@@ -109,6 +109,32 @@ def test_git_add_specific_files(test_repository):
     assert "file2.txt" not in staged_files
     assert result == "Files staged successfully"
 
+def test_git_add_rejects_path_traversal(test_repository):
+    # Security invariant (CVE-2026-27735): a relative path escaping the
+    # repository must never be staged. Accept rejection from either the
+    # defense-in-depth validation (ValueError) or the underlying git CLI
+    # (GitCommandError) so the test asserts the property, not the layer.
+    outside = Path(test_repository.working_dir).parent / "outside.txt"
+    outside.write_text("secret")
+
+    with pytest.raises((ValueError, git.GitCommandError)):
+        git_add(test_repository, ["../outside.txt"])
+
+    staged = [path for path, _stage in test_repository.index.entries]
+    assert "../outside.txt" not in staged
+    assert "outside.txt" not in staged
+
+def test_git_add_rejects_absolute_path_outside(test_repository):
+    # An absolute path outside the repository must never be staged.
+    outside = Path(test_repository.working_dir).parent / "abs_outside.txt"
+    outside.write_text("secret")
+
+    with pytest.raises((ValueError, git.GitCommandError)):
+        git_add(test_repository, [str(outside)])
+
+    staged = [path for path, _stage in test_repository.index.entries]
+    assert "abs_outside.txt" not in staged
+
 def test_git_status(test_repository):
     result = git_status(test_repository)
 
