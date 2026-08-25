@@ -114,7 +114,18 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    const tmpPath = `${this.memoryFilePath}.${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`;
+    try {
+      await fs.writeFile(tmpPath, lines.join("\n"));
+      await fs.rename(tmpPath, this.memoryFilePath);
+    } catch (error) {
+      try {
+        await fs.unlink(tmpPath);
+      } catch {
+        // Ignore cleanup error if temp file does not exist
+      }
+      throw error;
+    }
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {

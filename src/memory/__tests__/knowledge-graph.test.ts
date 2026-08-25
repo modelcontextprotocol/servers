@@ -515,4 +515,20 @@ describe('KnowledgeGraphManager', () => {
       expect(result.relations[0]).not.toHaveProperty('type');
     });
   });
+
+  describe('atomic saveGraph persistence', () => {
+    it('should cleanly persist data and leave no leftover temp files', async () => {
+      await manager.createEntities([
+        { name: 'Carol', entityType: 'person', observations: ['software engineer'] },
+      ]);
+
+      const dir = path.dirname(testFilePath);
+      const files = await fs.readdir(dir);
+      const tempFiles = files.filter(f => f.startsWith(path.basename(testFilePath)) && f.endsWith('.tmp'));
+      expect(tempFiles).toHaveLength(0);
+
+      const content = await fs.readFile(testFilePath, 'utf-8');
+      expect(content).toContain('Carol');
+    });
+  });
 });
