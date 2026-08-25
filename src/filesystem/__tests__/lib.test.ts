@@ -205,6 +205,23 @@ describe('Lib Functions', () => {
           .rejects.toThrow('Parent directory does not exist');
       });
 
+      it('allows missing parent directory when allowMissingParents is true', async () => {
+        const allowedDir = process.platform === 'win32' ? 'C:\\Users\\test' : '/home/user';
+        const deeplyNestedPath = process.platform === 'win32' ? 'C:\\Users\\test\\deep\\nested\\dir' : '/home/user/deep/nested/dir';
+
+        const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError.code = 'ENOENT';
+
+        mockFs.realpath
+          .mockRejectedValueOnce(enoentError) // deep/nested/dir
+          .mockRejectedValueOnce(enoentError) // deep/nested
+          .mockRejectedValueOnce(enoentError) // deep
+          .mockResolvedValueOnce(allowedDir); // /home/user
+
+        const result = await validatePath(deeplyNestedPath, true);
+        expect(result).toBe(path.resolve(deeplyNestedPath));
+      });
+
       it('resolves relative paths against allowed directories instead of process.cwd()', async () => {
         const relativePath = 'test-file.txt';
         const originalCwd = process.cwd;

@@ -96,7 +96,7 @@ function resolveRelativePathAgainstAllowedDirectories(relativePath: string): str
 }
 
 // Security & Validation Functions
-export async function validatePath(requestedPath: string): Promise<string> {
+export async function validatePath(requestedPath: string, allowMissingParents: boolean = false): Promise<string> {
   const expandedPath = expandHome(requestedPath);
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
@@ -123,6 +123,31 @@ export async function validatePath(requestedPath: string): Promise<string> {
     // Security: For new files that don't exist yet, verify parent directory
     // This ensures we can't create files in unauthorized locations
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      if (allowMissingParents) {
+        let cur = path.dirname(absolute);
+        while (cur !== path.dirname(cur)) {
+          const normalizedCur = normalizePath(cur);
+          if (!isPathWithinAllowedDirectories(normalizedCur, allowedDirectories)) {
+            throw new Error(`Access denied - ancestor directory outside allowed directories: ${cur} not in ${allowedDirectories.join(', ')}`);
+          }
+          try {
+            const realCur = await fs.realpath(cur);
+            const normalizedRealCur = normalizePath(realCur);
+            if (!isPathWithinAllowedDirectories(normalizedRealCur, allowedDirectories)) {
+              throw new Error(`Access denied - ancestor directory outside allowed directories: ${realCur} not in ${allowedDirectories.join(', ')}`);
+            }
+            return absolute;
+          } catch (ancestorErr) {
+            if ((ancestorErr as NodeJS.ErrnoException).code === 'ENOENT') {
+              cur = path.dirname(cur);
+              continue;
+            }
+            throw ancestorErr;
+          }
+        }
+        return absolute;
+      }
+
       const parentDir = path.dirname(absolute);
       try {
         const realParentPath = await fs.realpath(parentDir);
