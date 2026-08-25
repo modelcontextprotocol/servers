@@ -5,15 +5,20 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { SequentialThinkingServer } from './lib.js';
 
-/** Safe boolean coercion that correctly handles string "false" */
-const coercedBoolean = z.preprocess((val) => {
-  if (typeof val === "boolean") return val;
-  if (typeof val === "string") {
-    if (val.toLowerCase() === "true") return true;
-    if (val.toLowerCase() === "false") return false;
-  }
-  return val;
-}, z.boolean());
+/** Safe boolean coercion that correctly handles string "false" and survives JSON Schema generation */
+const coercedBoolean = z.union([
+  z.boolean(),
+  z.string().transform((val, ctx) => {
+    const lower = val.toLowerCase();
+    if (lower === "true") return true;
+    if (lower === "false") return false;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Expected boolean string (\"true\" or \"false\")",
+    });
+    return z.NEVER;
+  }),
+]);
 
 const server = new McpServer({
   name: "sequential-thinking-server",
