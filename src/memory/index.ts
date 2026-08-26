@@ -6,6 +6,7 @@ import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextp
 import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
+import { randomBytes } from 'crypto';
 import { fileURLToPath } from 'url';
 
 // Define memory file path using environment variable with fallback
@@ -126,7 +127,7 @@ export class KnowledgeGraphManager {
     const directory = path.dirname(this.memoryFilePath);
     const tempFilePath = path.join(
       directory,
-      `.${path.basename(this.memoryFilePath)}.${process.pid}.${Date.now()}.tmp`
+      `${path.basename(this.memoryFilePath)}.${randomBytes(16).toString('hex')}.tmp`
     );
 
     try {
