@@ -1,4 +1,25 @@
 import chalk from 'chalk';
+import { z } from 'zod';
+
+/**
+ * Boolean coercion that also accepts the strings "true"/"false" (case-insensitive),
+ * which some MCP clients send for boolean arguments.
+ *
+ * Implemented as a union rather than `z.preprocess(fn, z.boolean())`: `z.preprocess`
+ * widens the *input* type to `unknown`, so JSON Schema generation (`io: "input"`)
+ * treats the field as optional and drops it from `required` even when it is not
+ * `.optional()`. A union keeps a concrete input type, so required fields stay required.
+ */
+export const coercedBoolean = z.union([
+  z.boolean(),
+  z.string().transform((val, ctx) => {
+    const normalized = val.toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+    ctx.addIssue({ code: 'custom', message: `Expected "true" or "false", received "${val}"` });
+    return z.NEVER;
+  }),
+]);
 
 export interface ThoughtData {
   thought: string;
