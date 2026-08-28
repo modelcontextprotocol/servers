@@ -631,6 +631,17 @@ server.registerTool(
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
     const validSourcePath = await validatePath(args.source);
     const validDestPath = await validatePath(args.destination);
+    // fs.rename replaces an existing destination on POSIX (and has platform-
+    // dependent overwrite semantics elsewhere). The tool contract promises a
+    // failed move instead, so make the check explicit to prevent data loss.
+    try {
+      await fs.lstat(validDestPath);
+      throw new Error(`Destination already exists: ${args.destination}`);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
     await fs.rename(validSourcePath, validDestPath);
     const text = `Successfully moved ${args.source} to ${args.destination}`;
     const contentBlock = { type: "text" as const, text };

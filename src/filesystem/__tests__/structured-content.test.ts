@@ -124,6 +124,20 @@ describe('structuredContent schema compliance', () => {
       // The content should contain success message
       expect(structuredContent.content).toContain('Successfully moved');
     });
+
+    it('should reject an existing destination without overwriting it', async () => {
+      const sourcePath = path.join(testDir, 'test.txt');
+      const destPath = path.join(testDir, 'existing.txt');
+      await fs.writeFile(destPath, 'keep this content');
+
+      await expect(client.callTool({
+        name: 'move_file',
+        arguments: { source: sourcePath, destination: destPath }
+      })).rejects.toThrow('Destination already exists');
+
+      await expect(fs.readFile(sourcePath, 'utf-8')).resolves.toBe('test content');
+      await expect(fs.readFile(destPath, 'utf-8')).resolves.toBe('keep this content');
+    });
   });
 
   describe('list_directory (control - already working)', () => {
