@@ -173,15 +173,19 @@ export async function writeFileContent(filePath: string, content: string): Promi
       try {
         await fs.writeFile(tempPath, content, 'utf-8');
         await fs.rename(tempPath, filePath);
-        // Restore original file permissions since the atomic rename replaces
-        // the inode and the temp file has default (0644) permissions.
-        await fs.chmod(filePath, origStats.mode);
       } catch (renameError) {
         try {
           await fs.unlink(tempPath);
         } catch {}
         throw renameError;
       }
+      // Restore original permission bits since the atomic rename replaces the
+      // inode and the temp file has default (0644) permissions. Mask off the
+      // file-type bits; POSIX leaves them unspecified for chmod. A chmod
+      // failure must not fail the write, which has already succeeded.
+      try {
+        await fs.chmod(filePath, origStats.mode & 0o777);
+      } catch {}
     } else {
       throw error;
     }
@@ -275,15 +279,19 @@ export async function applyFileEdits(
     try {
       await fs.writeFile(tempPath, modifiedContent, 'utf-8');
       await fs.rename(tempPath, filePath);
-      // Restore original file permissions since the atomic rename replaces
-      // the inode and the temp file has default (0644) permissions.
-      await fs.chmod(filePath, origStats.mode);
     } catch (error) {
       try {
         await fs.unlink(tempPath);
       } catch {}
       throw error;
     }
+    // Restore original permission bits since the atomic rename replaces the
+    // inode and the temp file has default (0644) permissions. Mask off the
+    // file-type bits; POSIX leaves them unspecified for chmod. A chmod
+    // failure must not fail the write, which has already succeeded.
+    try {
+      await fs.chmod(filePath, origStats.mode & 0o777);
+    } catch {}
   }
 
   return formattedDiff;

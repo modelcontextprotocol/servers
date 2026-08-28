@@ -322,7 +322,18 @@ describe('Lib Functions', () => {
         await writeFileContent('/test/script.sh', 'new content');
 
         expect(mockFs.stat).toHaveBeenCalledWith('/test/script.sh');
-        expect(mockFs.chmod).toHaveBeenCalledWith('/test/script.sh', 0o100755);
+        expect(mockFs.chmod).toHaveBeenCalledWith('/test/script.sh', 0o755);
+      });
+
+      it('does not fail the write when chmod fails', async () => {
+        mockFs.writeFile.mockRejectedValueOnce(Object.assign(new Error('EEXIST'), { code: 'EEXIST' }));
+        mockFs.stat.mockResolvedValueOnce({ mode: 0o100755 });
+        mockFs.writeFile.mockResolvedValueOnce(undefined);
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        mockFs.chmod.mockRejectedValueOnce(Object.assign(new Error('EPERM'), { code: 'EPERM' }));
+
+        await expect(writeFileContent('/test/script.sh', 'new content')).resolves.toBeUndefined();
+        expect(mockFs.unlink).not.toHaveBeenCalled();
       });
     });
 
@@ -523,7 +534,7 @@ describe('Lib Functions', () => {
         await applyFileEdits('/test/script.sh', edits, false);
         
         expect(mockFs.stat).toHaveBeenCalledWith('/test/script.sh');
-        expect(mockFs.chmod).toHaveBeenCalledWith('/test/script.sh', 0o100755);
+        expect(mockFs.chmod).toHaveBeenCalledWith('/test/script.sh', 0o755);
       });
 
       it('does not restore permissions in dry run mode', async () => {
