@@ -130,10 +130,15 @@ describe('structuredContent schema compliance', () => {
       const destPath = path.join(testDir, 'existing.txt');
       await fs.writeFile(destPath, 'keep this content');
 
-      await expect(client.callTool({
+      const result = await client.callTool({
         name: 'move_file',
         arguments: { source: sourcePath, destination: destPath }
-      })).rejects.toThrow('Destination already exists');
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]).toMatchObject({
+        type: 'text',
+        text: expect.stringContaining('Destination already exists'),
+      });
 
       await expect(fs.readFile(sourcePath, 'utf-8')).resolves.toBe('test content');
       await expect(fs.readFile(destPath, 'utf-8')).resolves.toBe('keep this content');
