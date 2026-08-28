@@ -7,6 +7,7 @@ import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomUUID } from 'crypto';
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
@@ -114,7 +115,22 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+    // Write the complete snapshot away from the live file, then atomically
+    // replace it. A direct writeFile truncates memory.jsonl first, so a process
+    // interruption can leave the graph permanently partial or unreadable.
+    const temporaryPath = `${this.memoryFilePath}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await fs.writeFile(temporaryPath, lines.join("\n"));
+      await fs.rename(temporaryPath, this.memoryFilePath);
+    } finally {
+      try {
+        await fs.unlink(temporaryPath);
+      } catch (error) {
+        if (!(error instanceof Error && 'code' in error && (error as any).code === 'ENOENT')) {
+          throw error;
+        }
+      }
+    }
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {

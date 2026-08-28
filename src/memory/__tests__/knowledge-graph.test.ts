@@ -59,6 +59,16 @@ describe('KnowledgeGraphManager', () => {
       const newEntities = await manager.createEntities([]);
       expect(newEntities).toHaveLength(0);
     });
+
+    it('should persist graph snapshots without leaving temporary files', async () => {
+      await manager.createEntities([
+        { name: 'Atomic', entityType: 'test', observations: ['durable'] },
+      ]);
+
+      const files = await fs.readdir(path.dirname(testFilePath));
+      expect(files.filter(file => file.startsWith(path.basename(testFilePath) + '.') && file.endsWith('.tmp'))).toEqual([]);
+      await expect(fs.readFile(testFilePath, 'utf-8')).resolves.toContain('Atomic');
+    });
   });
 
   describe('createRelations', () => {
