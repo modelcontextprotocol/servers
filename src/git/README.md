@@ -8,6 +8,8 @@ A Model Context Protocol server for Git repository interaction and automation. T
 
 Source: https://github.com/modelcontextprotocol/servers/tree/main/src/git
 
+Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server uses. The port to v2 is in progress.
+
 Please note that mcp-server-git is currently in early development. The functionality and available tools are subject to change and expansion as we continue to develop and improve the server.
 
 ### Tools

@@ -14,6 +14,7 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
+  moveFile,
   // Search & filtering functions
   searchFilesWithValidation,
   // File editing functions
@@ -25,6 +26,23 @@ import {
 // Mock fs module
 vi.mock('fs/promises');
 const mockFs = fs as any;
+
+function createMockFileHandle(content: Buffer) {
+  return {
+    read: vi.fn(
+      async (buffer: Buffer, offset: number, length: number, position: number) => {
+        const bytesRead = content.copy(
+          buffer,
+          offset,
+          position,
+          Math.min(position + length, content.length),
+        );
+        return { bytesRead, buffer };
+      },
+    ),
+    close: vi.fn().mockResolvedValue(undefined),
+  };
+}
 
 describe('Lib Functions', () => {
   beforeEach(() => {
@@ -65,8 +83,10 @@ describe('Lib Functions', () => {
       });
 
       it('handles negative numbers', () => {
-        // Negative numbers will result in NaN for the log calculation
-        expect(formatSize(-1024)).toContain('NaN');
+        // Negative numbers should return '0 B' as file sizes cannot be negative
+        expect(formatSize(-1)).toBe('0 B');
+        expect(formatSize(-1024)).toBe('0 B');
+        expect(formatSize(-1000000)).toBe('0 B');
         expect(formatSize(-0)).toBe('0 B');
       });
 
@@ -197,12 +217,11 @@ describe('Lib Functions', () => {
         const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
         enoentError.code = 'ENOENT';
 
-        mockFs.realpath
-          .mockRejectedValueOnce(enoentError) // the path itself
-          .mockRejectedValueOnce(enoentError) // .../nonexistent/nested
-          .mockRejectedValueOnce(enoentError); // .../nonexistent
-        // falls through to the beforeEach base implementation for the next
-        // ancestor up ('/home/user'), which echoes the path back as-is
+        // The path itself is missing. The resolver then realpaths the allowed
+        // directory ('/home/user'), which falls through to the beforeEach base
+        // implementation and echoes the path back as-is. readdir is mocked to
+        // undefined, so every component below it counts as missing.
+        mockFs.realpath.mockRejectedValueOnce(enoentError);
 
         const result = await validatePath(newFilePath);
         expect(result).toBe(path.resolve(newFilePath));
@@ -324,6 +343,56 @@ describe('Lib Functions', () => {
         
         expect(mockFs.writeFile).toHaveBeenCalledWith('/test/file.txt', 'new content', { encoding: "utf-8", flag: 'wx' });
       });
+
+      it('preserves file permissions when overwriting existing file', async () => {
+        // First writeFile call with 'wx' flag fails because file exists
+        mockFs.writeFile.mockRejectedValueOnce(Object.assign(new Error('EEXIST'), { code: 'EEXIST' }));
+        // stat returns executable permissions
+        mockFs.stat.mockResolvedValueOnce({ mode: 0o100755 });
+        // Second writeFile (to temp) succeeds
+        mockFs.writeFile.mockResolvedValueOnce(undefined);
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        mockFs.chmod.mockResolvedValueOnce(undefined);
+
+        await writeFileContent('/test/script.sh', 'new content');
+
+        expect(mockFs.stat).toHaveBeenCalledWith('/test/script.sh');
+        expect(mockFs.chmod).toHaveBeenCalledWith('/test/script.sh', 0o755);
+      });
+
+      it('does not fail the write when chmod fails', async () => {
+        mockFs.writeFile.mockRejectedValueOnce(Object.assign(new Error('EEXIST'), { code: 'EEXIST' }));
+        mockFs.stat.mockResolvedValueOnce({ mode: 0o100755 });
+        mockFs.writeFile.mockResolvedValueOnce(undefined);
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        mockFs.chmod.mockRejectedValueOnce(Object.assign(new Error('EPERM'), { code: 'EPERM' }));
+
+        await expect(writeFileContent('/test/script.sh', 'new content')).resolves.toBeUndefined();
+        expect(mockFs.unlink).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('moveFile', () => {
+      it('moves the file when the destination does not exist', async () => {
+        const enoent = Object.assign(new Error('not found'), { code: 'ENOENT' });
+        mockFs.lstat.mockRejectedValueOnce(enoent);
+        mockFs.rename.mockResolvedValueOnce(undefined);
+
+        await moveFile('/test/source.txt', '/test/dest.txt');
+
+        expect(mockFs.rename).toHaveBeenCalledWith('/test/source.txt', '/test/dest.txt');
+      });
+
+      it('fails without overwriting when the destination already exists', async () => {
+        // lstat resolving means the destination is occupied.
+        mockFs.lstat.mockResolvedValueOnce({} as any);
+
+        await expect(moveFile('/test/source.txt', '/test/dest.txt')).rejects.toThrow(
+          'Destination already exists'
+        );
+
+        expect(mockFs.rename).not.toHaveBeenCalled();
+      });
     });
 
   });
@@ -432,6 +501,8 @@ describe('Lib Functions', () => {
       beforeEach(() => {
         mockFs.readFile.mockResolvedValue('line1\nline2\nline3\n');
         mockFs.writeFile.mockResolvedValue(undefined);
+        mockFs.stat.mockResolvedValue({ mode: 0o100644 });
+        mockFs.chmod.mockResolvedValue(undefined);
       });
 
       it('applies simple text replacement', async () => {
@@ -524,6 +595,30 @@ describe('Lib Functions', () => {
           expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
           '/test/file.txt'
         );
+      });
+
+      it('preserves file permissions after applying edits', async () => {
+        mockFs.stat.mockResolvedValue({ mode: 0o100755 });
+        const edits = [
+          { oldText: 'line2', newText: 'modified line2' }
+        ];
+        
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        
+        await applyFileEdits('/test/script.sh', edits, false);
+        
+        expect(mockFs.stat).toHaveBeenCalledWith('/test/script.sh');
+        expect(mockFs.chmod).toHaveBeenCalledWith('/test/script.sh', 0o755);
+      });
+
+      it('does not restore permissions in dry run mode', async () => {
+        const edits = [
+          { oldText: 'line2', newText: 'modified line2' }
+        ];
+        
+        await applyFileEdits('/test/file.txt', edits, true);
+        
+        expect(mockFs.chmod).not.toHaveBeenCalled();
       });
 
       it('throws error for non-matching edits', async () => {
@@ -659,6 +754,23 @@ describe('Lib Functions', () => {
         expect(mockFileHandle.close).toHaveBeenCalled();
       });
 
+      it('preserves UTF-8 characters split across chunk boundaries', async () => {
+        const content = Buffer.concat([
+          Buffer.from('discard\n'),
+          Buffer.from('界'),
+          Buffer.alloc(1017, 'a'),
+          Buffer.from('\nlast'),
+        ]);
+        const mockFileHandle = createMockFileHandle(content);
+
+        mockFs.stat.mockResolvedValue({ size: content.length } as any);
+        mockFs.open.mockResolvedValue(mockFileHandle);
+
+        const result = await tailFile('/test/file.txt', 2);
+
+        expect(result).toBe(`界${'a'.repeat(1017)}\nlast`);
+      });
+
       it('handles read errors gracefully', async () => {
         mockFs.stat.mockResolvedValue({ size: 100 } as any);
         
@@ -713,6 +825,20 @@ describe('Lib Functions', () => {
         const result = await headFile('/test/file.txt', 2);
         
         expect(mockFileHandle.close).toHaveBeenCalled();
+      });
+
+      it('preserves UTF-8 characters split across chunk boundaries', async () => {
+        const content = Buffer.concat([
+          Buffer.alloc(1023, 'a'),
+          Buffer.from('界\nsecond'),
+        ]);
+        const mockFileHandle = createMockFileHandle(content);
+
+        mockFs.open.mockResolvedValue(mockFileHandle);
+
+        const result = await headFile('/test/file.txt', 1);
+
+        expect(result).toBe(`${'a'.repeat(1023)}界`);
       });
 
       it('handles files with leftover content', async () => {
