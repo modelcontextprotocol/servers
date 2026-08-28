@@ -43,7 +43,7 @@ export interface SearchResult {
 // Pure Utility Functions
 export function formatSize(bytes: number): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  if (bytes === 0) return '0 B';
+  if (bytes <= 0) return '0 B';
   
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   
@@ -168,6 +168,7 @@ export async function writeFileContent(filePath: string, content: string): Promi
       // Security: Use atomic rename to prevent race conditions where symlinks
       // could be created between validation and write. Rename operations
       // replace the target file atomically and don't follow symlinks.
+      const origStats = await fs.stat(filePath);
       const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
       try {
         await fs.writeFile(tempPath, content, 'utf-8');
@@ -178,6 +179,13 @@ export async function writeFileContent(filePath: string, content: string): Promi
         } catch {}
         throw renameError;
       }
+      // Restore original permission bits since the atomic rename replaces the
+      // inode and the temp file has default (0644) permissions. Mask off the
+      // file-type bits; POSIX leaves them unspecified for chmod. A chmod
+      // failure must not fail the write, which has already succeeded.
+      try {
+        await fs.chmod(filePath, origStats.mode & 0o777);
+      } catch {}
     } else {
       throw error;
     }
@@ -266,6 +274,7 @@ export async function applyFileEdits(
     // Security: Use atomic rename to prevent race conditions where symlinks
     // could be created between validation and write. Rename operations
     // replace the target file atomically and don't follow symlinks.
+    const origStats = await fs.stat(filePath);
     const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
     try {
       await fs.writeFile(tempPath, modifiedContent, 'utf-8');
@@ -276,6 +285,13 @@ export async function applyFileEdits(
       } catch {}
       throw error;
     }
+    // Restore original permission bits since the atomic rename replaces the
+    // inode and the temp file has default (0644) permissions. Mask off the
+    // file-type bits; POSIX leaves them unspecified for chmod. A chmod
+    // failure must not fail the write, which has already succeeded.
+    try {
+      await fs.chmod(filePath, origStats.mode & 0o777);
+    } catch {}
   }
 
   return formattedDiff;

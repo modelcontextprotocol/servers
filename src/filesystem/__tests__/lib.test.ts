@@ -65,8 +65,10 @@ describe('Lib Functions', () => {
       });
 
       it('handles negative numbers', () => {
-        // Negative numbers will result in NaN for the log calculation
-        expect(formatSize(-1024)).toContain('NaN');
+        // Negative numbers should return '0 B' as file sizes cannot be negative
+        expect(formatSize(-1)).toBe('0 B');
+        expect(formatSize(-1024)).toBe('0 B');
+        expect(formatSize(-1000000)).toBe('0 B');
         expect(formatSize(-0)).toBe('0 B');
       });
 
@@ -308,6 +310,33 @@ describe('Lib Functions', () => {
         
         expect(mockFs.writeFile).toHaveBeenCalledWith('/test/file.txt', 'new content', { encoding: "utf-8", flag: 'wx' });
       });
+
+      it('preserves file permissions when overwriting existing file', async () => {
+        // First writeFile call with 'wx' flag fails because file exists
+        mockFs.writeFile.mockRejectedValueOnce(Object.assign(new Error('EEXIST'), { code: 'EEXIST' }));
+        // stat returns executable permissions
+        mockFs.stat.mockResolvedValueOnce({ mode: 0o100755 });
+        // Second writeFile (to temp) succeeds
+        mockFs.writeFile.mockResolvedValueOnce(undefined);
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        mockFs.chmod.mockResolvedValueOnce(undefined);
+
+        await writeFileContent('/test/script.sh', 'new content');
+
+        expect(mockFs.stat).toHaveBeenCalledWith('/test/script.sh');
+        expect(mockFs.chmod).toHaveBeenCalledWith('/test/script.sh', 0o755);
+      });
+
+      it('does not fail the write when chmod fails', async () => {
+        mockFs.writeFile.mockRejectedValueOnce(Object.assign(new Error('EEXIST'), { code: 'EEXIST' }));
+        mockFs.stat.mockResolvedValueOnce({ mode: 0o100755 });
+        mockFs.writeFile.mockResolvedValueOnce(undefined);
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        mockFs.chmod.mockRejectedValueOnce(Object.assign(new Error('EPERM'), { code: 'EPERM' }));
+
+        await expect(writeFileContent('/test/script.sh', 'new content')).resolves.toBeUndefined();
+        expect(mockFs.unlink).not.toHaveBeenCalled();
+      });
     });
 
   });
@@ -416,6 +445,8 @@ describe('Lib Functions', () => {
       beforeEach(() => {
         mockFs.readFile.mockResolvedValue('line1\nline2\nline3\n');
         mockFs.writeFile.mockResolvedValue(undefined);
+        mockFs.stat.mockResolvedValue({ mode: 0o100644 });
+        mockFs.chmod.mockResolvedValue(undefined);
       });
 
       it('applies simple text replacement', async () => {
@@ -508,6 +539,30 @@ describe('Lib Functions', () => {
           expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
           '/test/file.txt'
         );
+      });
+
+      it('preserves file permissions after applying edits', async () => {
+        mockFs.stat.mockResolvedValue({ mode: 0o100755 });
+        const edits = [
+          { oldText: 'line2', newText: 'modified line2' }
+        ];
+        
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        
+        await applyFileEdits('/test/script.sh', edits, false);
+        
+        expect(mockFs.stat).toHaveBeenCalledWith('/test/script.sh');
+        expect(mockFs.chmod).toHaveBeenCalledWith('/test/script.sh', 0o755);
+      });
+
+      it('does not restore permissions in dry run mode', async () => {
+        const edits = [
+          { oldText: 'line2', newText: 'modified line2' }
+        ];
+        
+        await applyFileEdits('/test/file.txt', edits, true);
+        
+        expect(mockFs.chmod).not.toHaveBeenCalled();
       });
 
       it('throws error for non-matching edits', async () => {
