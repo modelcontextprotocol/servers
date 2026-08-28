@@ -6,6 +6,7 @@ import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 import { normalizePath, expandHome } from './path-utils.js';
 import { isPathWithinAllowedDirectories } from './path-validation.js';
+import { StringDecoder } from 'string_decoder';
 
 // Global allowed directories - set by the main module
 let allowedDirectories: string[] = [];
@@ -308,42 +309,24 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
   // Open file for reading
   const fileHandle = await fs.open(filePath, 'r');
   try {
-    const lines: string[] = [];
     let position = fileSize;
     let chunk = Buffer.alloc(CHUNK_SIZE);
-    let linesFound = 0;
-    let remainingText = '';
+    let rawBytes = Buffer.alloc(0);
     
     // Read chunks from the end of the file until we have enough lines
-    while (position > 0 && linesFound < numLines) {
+    while (position > 0 && rawBytes.toString('binary').split('\n').length <= numLines) {
       const size = Math.min(CHUNK_SIZE, position);
       position -= size;
       
       const { bytesRead } = await fileHandle.read(chunk, 0, size, position);
       if (!bytesRead) break;
       
-      // Get the chunk as a string and prepend any remaining text from previous iteration
-      const readData = chunk.slice(0, bytesRead).toString('utf-8');
-      const chunkText = readData + remainingText;
-      
-      // Split by newlines and count
-      const chunkLines = normalizeLineEndings(chunkText).split('\n');
-      
-      // If this isn't the end of the file, the first line is likely incomplete
-      // Save it to prepend to the next chunk
-      if (position > 0) {
-        remainingText = chunkLines[0];
-        chunkLines.shift(); // Remove the first (incomplete) line
-      }
-      
-      // Add lines to our result (up to the number we need)
-      for (let i = chunkLines.length - 1; i >= 0 && linesFound < numLines; i--) {
-        lines.unshift(chunkLines[i]);
-        linesFound++;
-      }
+      // Keep bytes intact while reading backwards. Decoding each chunk can
+      // split a multi-byte UTF-8 character at the chunk boundary.
+      rawBytes = Buffer.concat([chunk.slice(0, bytesRead), rawBytes]);
     }
-    
-    return lines.join('\n');
+    const lines = normalizeLineEndings(rawBytes.toString('utf-8')).split('\n');
+    return lines.slice(Math.max(0, lines.length - numLines)).join('\n');
   } finally {
     await fileHandle.close();
   }
@@ -357,13 +340,14 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
     let buffer = '';
     let bytesRead = 0;
     const chunk = Buffer.alloc(1024); // 1KB buffer
+    const decoder = new StringDecoder('utf8');
     
     // Read chunks and count lines until we have enough or reach EOF
     while (lines.length < numLines) {
       const result = await fileHandle.read(chunk, 0, chunk.length, bytesRead);
       if (result.bytesRead === 0) break; // End of file
       bytesRead += result.bytesRead;
-      buffer += chunk.slice(0, result.bytesRead).toString('utf-8');
+      buffer += decoder.write(chunk.slice(0, result.bytesRead));
       
       const newLineIndex = buffer.lastIndexOf('\n');
       if (newLineIndex !== -1) {
@@ -376,6 +360,7 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
       }
     }
     
+    buffer += decoder.end();
     // If there is leftover content and we still need lines, add it
     if (buffer.length > 0 && lines.length < numLines) {
       lines.push(buffer);

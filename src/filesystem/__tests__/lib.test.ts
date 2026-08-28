@@ -718,6 +718,26 @@ describe('Lib Functions', () => {
     });
 
     describe('headFile', () => {
+      it('preserves UTF-8 characters split across read chunks', async () => {
+        const content = Buffer.concat([
+          Buffer.from('a'.repeat(1023)),
+          Buffer.from('中\nsecond line', 'utf8'),
+        ]);
+        const mockFileHandle = {
+          read: vi.fn(async (target: Buffer, _offset: number, length: number, position: number) => {
+            const bytes = content.subarray(position, position + length);
+            bytes.copy(target, 0);
+            return { bytesRead: bytes.length };
+          }),
+          close: vi.fn().mockResolvedValue(undefined),
+        } as any;
+        mockFs.open.mockResolvedValue(mockFileHandle);
+
+        const result = await headFile('/test/file.txt', 1);
+
+        expect(result).toBe('a'.repeat(1023) + '中');
+      });
+
       it('opens file for reading', async () => {
         // Mock file handle with proper typing
         const mockFileHandle = {
