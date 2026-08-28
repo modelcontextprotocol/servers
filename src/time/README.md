@@ -6,6 +6,8 @@ A Model Context Protocol server that provides time and timezone conversion capab
 
 Source: https://github.com/modelcontextprotocol/servers/tree/main/src/time
 
+Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server uses. The port to v2 is in progress.
+
 ### Available Tools
 
 - `get_current_time` - Get current time in a specific timezone or system timezone.
