@@ -120,19 +120,29 @@ export async function validatePath(requestedPath: string): Promise<string> {
     }
     return realPath;
   } catch (error) {
-    // Security: For new files that don't exist yet, verify parent directory
-    // This ensures we can't create files in unauthorized locations
+    // Security: For new files/directories, resolve the nearest existing
+    // ancestor. This permits mkdir({ recursive: true }) while still checking
+    // the real path of an existing directory for symlink escapes.
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      const parentDir = path.dirname(absolute);
-      try {
-        const realParentPath = await fs.realpath(parentDir);
-        const normalizedParent = normalizePath(realParentPath);
-        if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+      let existingAncestor = path.dirname(absolute);
+      while (true) {
+        try {
+          const realAncestorPath = await fs.realpath(existingAncestor);
+          const normalizedAncestor = normalizePath(realAncestorPath);
+          if (!isPathWithinAllowedDirectories(normalizedAncestor, allowedDirectories)) {
+            throw new Error(`Access denied - parent directory outside allowed directories: ${realAncestorPath} not in ${allowedDirectories.join(', ')}`);
+          }
+          return absolute;
+        } catch (ancestorError) {
+          if ((ancestorError as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw ancestorError;
+          }
         }
-        return absolute;
-      } catch {
-        throw new Error(`Parent directory does not exist: ${parentDir}`);
+        const parent = path.dirname(existingAncestor);
+        if (parent === existingAncestor) {
+          throw new Error(`Parent directory does not exist: ${existingAncestor}`);
+        }
+        existingAncestor = parent;
       }
     }
     throw error;
