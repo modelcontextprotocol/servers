@@ -715,6 +715,34 @@ describe('Lib Functions', () => {
         
         expect(mockFileHandle.close).toHaveBeenCalled();
       });
+
+      it('handles multi-byte UTF-8 characters across chunk boundaries without corruption', async () => {
+        // Construct a string with emoji or multi-byte unicode characters placed across 1024-byte boundary
+        const pad = 'a'.repeat(1020);
+        const multibyteChar = '🌟'; // 4 bytes in UTF-8
+        const line1 = 'first line';
+        const line2 = `${pad}${multibyteChar}`;
+        const line3 = 'third line';
+        const fileContent = `${line1}\n${line2}\n${line3}`;
+        const fileBuffer = Buffer.from(fileContent, 'utf-8');
+
+        mockFs.stat.mockResolvedValue({ size: fileBuffer.length } as any);
+
+        const mockFileHandle = {
+          read: vi.fn().mockImplementation((buf: Buffer, offset: number, length: number, position: number) => {
+            const bytesToRead = Math.min(length, fileBuffer.length - position);
+            fileBuffer.copy(buf, offset, position, position + bytesToRead);
+            return Promise.resolve({ bytesRead: bytesToRead, buffer: buf });
+          }),
+          close: vi.fn().mockResolvedValue(undefined)
+        } as any;
+
+        mockFs.open.mockResolvedValue(mockFileHandle);
+
+        const result = await tailFile('/test/utf8.txt', 2);
+        expect(result).toContain(multibyteChar);
+        expect(result).toBe(`${line2}\n${line3}`);
+      });
     });
 
     describe('headFile', () => {
