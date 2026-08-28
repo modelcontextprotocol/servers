@@ -98,6 +98,12 @@ function resolveRelativePathAgainstAllowedDirectories(relativePath: string): str
 // Security & Validation Functions
 export async function validatePath(requestedPath: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
+  // Do not silently reinterpret a Windows drive path as a relative POSIX path.
+  // This would create a literal filename such as `C:\\Users\\...` inside the
+  // allowed root and report success for the wrong location.
+  if (process.platform !== 'win32' && /^(?:[A-Za-z]:)(?:[\\/]|$)/.test(expandedPath)) {
+    throw new Error(`Access denied - Windows-style path received on a POSIX host: ${requestedPath}`);
+  }
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
     : resolveRelativePathAgainstAllowedDirectories(expandedPath);
