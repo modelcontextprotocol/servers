@@ -6,6 +6,7 @@ import {
 import {
   setSubscriptionHandlers,
   stopSimulatedResourceUpdates,
+  removeSubscriber,
 } from "../resources/subscriptions.js";
 import { registerConditionalTools, registerTools } from "../tools/index.js";
 import { registerResources, readInstructions } from "../resources/index.js";
@@ -110,6 +111,8 @@ export const createServer: () => ServerFactoryResponse = () => {
       // Stop any simulated logging or resource updates that may have been initiated.
       stopSimulatedLogging(sessionId);
       stopSimulatedResourceUpdates(sessionId);
+      // Drop this session from any resource subscriptions it left open.
+      removeSubscriber(sessionId);
       // Clean up task store timers
       taskStore.cleanup();
       if (initializeTimeout) clearTimeout(initializeTimeout);
