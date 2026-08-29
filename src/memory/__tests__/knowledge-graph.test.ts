@@ -515,4 +515,51 @@ describe('KnowledgeGraphManager', () => {
       expect(result.relations[0]).not.toHaveProperty('type');
     });
   });
+
+  describe('loadGraph validation', () => {
+    it('skips corrupt entities instead of crashing search', async () => {
+      const lines = [
+        JSON.stringify({ type: 'entity', name: 'Alice', entityType: 'person', observations: ['works at Acme Corp'] }),
+        JSON.stringify({ type: 'entity', name: 'Broken', observations: ['missing entityType'] }),
+        JSON.stringify({ type: 'entity', name: 'BadObs', entityType: 'person', observations: ['ok', null] }),
+      ];
+      await fs.writeFile(testFilePath, lines.join('\n') + '\n');
+
+      const graph = await manager.readGraph();
+      expect(graph.entities).toHaveLength(1);
+      expect(graph.entities[0].name).toBe('Alice');
+
+      // searchNodes must not throw even though the file contains corrupt entries
+      const result = await manager.searchNodes('Acme');
+      expect(result.entities).toHaveLength(1);
+      expect(result.entities[0].name).toBe('Alice');
+    });
+
+    it('skips corrupt relations', async () => {
+      const lines = [
+        JSON.stringify({ type: 'entity', name: 'Alice', entityType: 'person', observations: [] }),
+        JSON.stringify({ type: 'relation', from: 'Alice', to: 'Bob' }), // missing relationType
+        JSON.stringify({ type: 'relation', from: 'Alice', to: 'Bob', relationType: 'knows' }),
+      ];
+      await fs.writeFile(testFilePath, lines.join('\n') + '\n');
+
+      const graph = await manager.readGraph();
+      expect(graph.entities).toHaveLength(1);
+      expect(graph.relations).toHaveLength(1);
+      expect(graph.relations[0].relationType).toBe('knows');
+    });
+
+    it('skips malformed JSON lines', async () => {
+      const lines = [
+        JSON.stringify({ type: 'entity', name: 'Alice', entityType: 'person', observations: [] }),
+        '{this is not valid json',
+        JSON.stringify({ type: 'entity', name: 'Bob', entityType: 'person', observations: [] }),
+      ];
+      await fs.writeFile(testFilePath, lines.join('\n') + '\n');
+
+      const graph = await manager.readGraph();
+      expect(graph.entities).toHaveLength(2);
+      expect(graph.entities.map(e => e.name)).toEqual(['Alice', 'Bob']);
+    });
+  });
 });

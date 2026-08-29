@@ -74,24 +74,47 @@ export class KnowledgeGraphManager {
     try {
       const data = await fs.readFile(this.memoryFilePath, "utf-8");
       const lines = data.split("\n").filter(line => line.trim() !== "");
-      return lines.reduce((graph: KnowledgeGraph, line) => {
-        const item = JSON.parse(line);
-        if (item.type === "entity") {
-          graph.entities.push({
-            name: item.name,
-            entityType: item.entityType,
-            observations: item.observations
-          });
+      const graph: KnowledgeGraph = { entities: [], relations: [] };
+
+      for (const line of lines) {
+        let item: unknown;
+        try {
+          item = JSON.parse(line);
+        } catch {
+          console.error("Skipping malformed line in memory file");
+          continue;
         }
-        if (item.type === "relation") {
-          graph.relations.push({
-            from: item.from,
-            to: item.to,
-            relationType: item.relationType
-          });
+
+        if (typeof item !== "object" || item === null) {
+          console.error("Skipping non-object line in memory file");
+          continue;
         }
-        return graph;
-      }, { entities: [], relations: [] });
+
+        const record = item as Record<string, unknown>;
+        if (record.type === "entity") {
+          const parsed = EntitySchema.safeParse(item);
+          if (parsed.success) {
+            graph.entities.push(parsed.data);
+          } else {
+            console.error(
+              "Skipping invalid entity in memory file:",
+              parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join(", ")
+            );
+          }
+        } else if (record.type === "relation") {
+          const parsed = RelationSchema.safeParse(item);
+          if (parsed.success) {
+            graph.relations.push(parsed.data);
+          } else {
+            console.error(
+              "Skipping invalid relation in memory file:",
+              parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join(", ")
+            );
+          }
+        }
+      }
+
+      return graph;
     } catch (error) {
       if (error instanceof Error && 'code' in error && (error as any).code === "ENOENT") {
         return { entities: [], relations: [] };
