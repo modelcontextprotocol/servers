@@ -39,6 +39,16 @@ describe.skipIf(!existsSync(distIndexPath))('sequentialthinking input schema', (
     );
   });
 
+  // Regression coverage for #4721: each call accumulates in-memory thought
+  // history, so the tool must not advertise itself as read-only or idempotent.
+  it('marks the tool as neither read-only nor idempotent', async () => {
+    const { tools } = await client.listTools();
+    const tool = tools.find(t => t.name === 'sequentialthinking');
+    expect(tool).toBeDefined();
+    expect(tool!.annotations?.readOnlyHint).toBe(false);
+    expect(tool!.annotations?.idempotentHint).toBe(false);
+  });
+
   it('rejects a call that omits nextThoughtNeeded', async () => {
     const result = await client.callTool({
       name: 'sequentialthinking',
