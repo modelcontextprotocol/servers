@@ -6,6 +6,10 @@ from mcp.server.session import ServerSession
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     ClientCapabilities,
+    GetPromptResult,
+    Prompt,
+    PromptArgument,
+    PromptMessage,
     TextContent,
     Tool,
     ListRootsResult,
@@ -107,6 +111,10 @@ class GitTools(str, Enum):
     SHOW = "git_show"
 
     BRANCH = "git_branch"
+
+class GitPrompts(str, Enum):
+    COMMIT_MESSAGE = "git-commit-message"
+    SUMMARIZE_CHANGES = "git-summarize-changes"
 
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
@@ -303,6 +311,38 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
     branch_info = repo.git.branch(b_type, *contains_sha, *not_contains_sha)
 
     return branch_info
+
+
+def build_commit_message_prompt(repo: git.Repo) -> str:
+    diff = git_diff_staged(repo)
+    if not diff.strip():
+        return (
+            "There are no staged changes in this repository. Ask the user to stage "
+            "changes with `git add` before requesting a commit message."
+        )
+    return (
+        "Write a commit message for the following staged changes, following the "
+        "Conventional Commits specification (e.g. `feat:`, `fix:`, `docs:`, `refactor:`). "
+        "Use an imperative subject line under 72 characters, and add a short body only if it "
+        "adds useful context.\n\n"
+        f"Staged diff:\n```diff\n{diff}\n```"
+    )
+
+
+def build_summarize_changes_prompt(repo: git.Repo, target: str | None = None) -> str:
+    if target:
+        diff = git_diff(repo, target)
+        scope = f"compared to `{target}`"
+    else:
+        diff = git_diff_unstaged(repo)
+        scope = "in the working tree (unstaged)"
+    if not diff.strip():
+        return f"There are no changes {scope} to summarize."
+    return (
+        f"Summarize the following changes {scope} in plain language for a reviewer. Group "
+        "related changes and explain the intent behind them, not just the modified lines.\n\n"
+        f"Diff:\n```diff\n{diff}\n```"
+    )
 
 
 async def serve(repository: Path | None) -> None:
@@ -596,6 +636,68 @@ async def serve(repository: Path | None) -> None:
 
             case _:
                 raise ValueError(f"Unknown tool: {name}")
+
+    @server.list_prompts()
+    async def list_prompts() -> list[Prompt]:
+        return [
+            Prompt(
+                name=GitPrompts.COMMIT_MESSAGE,
+                description="Generate a Conventional Commits message for the currently staged changes",
+                arguments=[
+                    PromptArgument(
+                        name="repo_path",
+                        description="Path to the git repository",
+                        required=True,
+                    ),
+                ],
+            ),
+            Prompt(
+                name=GitPrompts.SUMMARIZE_CHANGES,
+                description="Summarize repository changes in plain language (working tree, or compared to a target ref)",
+                arguments=[
+                    PromptArgument(
+                        name="repo_path",
+                        description="Path to the git repository",
+                        required=True,
+                    ),
+                    PromptArgument(
+                        name="target",
+                        description="Optional branch or commit to diff against (defaults to unstaged working-tree changes)",
+                        required=False,
+                    ),
+                ],
+            ),
+        ]
+
+    @server.get_prompt()
+    async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
+        arguments = arguments or {}
+        if "repo_path" not in arguments:
+            raise ValueError("Missing required argument: repo_path")
+
+        repo_path = Path(arguments["repo_path"])
+        validate_repo_path(repo_path, repository)
+        repo = git.Repo(repo_path)
+
+        match name:
+            case GitPrompts.COMMIT_MESSAGE:
+                text = build_commit_message_prompt(repo)
+                description = "Draft a commit message for the staged changes"
+            case GitPrompts.SUMMARIZE_CHANGES:
+                text = build_summarize_changes_prompt(repo, arguments.get("target"))
+                description = "Summarize the repository changes"
+            case _:
+                raise ValueError(f"Unknown prompt: {name}")
+
+        return GetPromptResult(
+            description=description,
+            messages=[
+                PromptMessage(
+                    role="user",
+                    content=TextContent(type="text", text=text),
+                )
+            ],
+        )
 
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
