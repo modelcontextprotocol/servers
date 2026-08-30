@@ -241,7 +241,48 @@ export async function moveFile(sourcePath: string, destinationPath: string): Pro
     await fs.lstat(destinationPath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      await fs.rename(sourcePath, destinationPath);
+      try {
+        await fs.rename(sourcePath, destinationPath);
+      } catch (renameError) {
+        if ((renameError as NodeJS.ErrnoException).code !== 'EXDEV') {
+          throw renameError;
+        }
+
+        // rename cannot cross filesystem boundaries, which is common when
+        // moving between container volumes, network mounts, and local disks.
+        // Stage the copy beside the destination, then rename it into place so
+        // a failed copy never exposes a partial destination. This follows the
+        // same temporary-file pattern used by writeFileContent and
+        // applyFileEdits.
+        const tempPath = `${destinationPath}.${randomBytes(16).toString('hex')}.tmp`;
+        try {
+          await fs.cp(sourcePath, tempPath, {
+            recursive: true,
+            errorOnExist: true,
+            force: false,
+            preserveTimestamps: true,
+            verbatimSymlinks: true,
+          });
+
+          // The copy can be long-running. Recheck immediately before the final
+          // rename to minimize the existing lstat/rename race and avoid
+          // overwriting a path created during the copy.
+          try {
+            await fs.lstat(destinationPath);
+          } catch (destinationError) {
+            if ((destinationError as NodeJS.ErrnoException).code === 'ENOENT') {
+              await fs.rename(tempPath, destinationPath);
+              await fs.rm(sourcePath, { recursive: true });
+              return;
+            }
+            throw destinationError;
+          }
+          throw new Error(`Destination already exists: ${destinationPath}`);
+        } catch (copyError) {
+          await fs.rm(tempPath, { recursive: true, force: true }).catch(() => {});
+          throw copyError;
+        }
+      }
       return;
     }
     throw error;
