@@ -227,6 +227,25 @@ def test_git_log(test_repository):
     assert "Date:" in result[0]
     assert "Message:" in result[0]
 
+def test_git_log_with_date_filter(test_repository):
+    """Every commit on the date-filtered path parses into aligned fields."""
+    for i in range(3):
+        file_path = Path(test_repository.working_dir) / f"log_filter_{i}.txt"
+        file_path.write_text(f"content {i}")
+        test_repository.index.add([f"log_filter_{i}.txt"])
+        test_repository.index.commit(f"commit {i}")
+
+    result = git_log(test_repository, start_timestamp="2000-01-01")
+
+    # initial commit fixture + 3 above
+    assert len(result) == 4
+    for i, entry in enumerate(reversed(result[:3])):
+        lines = entry.splitlines()
+        assert lines[0].startswith("Commit: ") and len(lines[0]) == len("Commit: ") + 40
+        assert lines[1].startswith("Author: ") and lines[1] != "Author: "
+        assert lines[2].startswith("Date: ")
+        assert lines[3] == f"Message: commit {i}"
+
 def test_git_log_default(test_repository):
     result = git_log(test_repository)
 
