@@ -190,10 +190,10 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
         log = []
         for commit in commits:
             log.append(
-                f"Commit: {commit.hexsha!r}\n"
-                f"Author: {commit.author!r}\n"
+                f"Commit: {commit.hexsha}\n"
+                f"Author: {commit.author}\n"
                 f"Date: {commit.authored_datetime}\n"
-                f"Message: {commit.message!r}\n"
+                f"Message: {commit.message}\n"
             )
         return log
 
@@ -297,7 +297,7 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
         case 'all':
             b_type = "-a"
         case _:
-            return f"Invalid branch type: {branch_type}"
+            raise ValueError(f"Invalid branch type: {branch_type}. Expected 'local', 'remote', or 'all'.")
 
     # None value will be auto deleted by GitPython
     branch_info = repo.git.branch(b_type, *contains_sha, *not_contains_sha)
