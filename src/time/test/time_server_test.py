@@ -2,8 +2,10 @@
 from freezegun import freeze_time
 from mcp.shared.exceptions import McpError
 import pytest
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
-from mcp_server_time.server import TimeServer
+from mcp_server_time.server import TimeServer, get_local_tz
 
 
 @pytest.mark.parametrize(
@@ -458,3 +460,69 @@ def test_convert_time(test_time, source_tz, time_str, target_tz, expected):
         assert result.source.is_dst == expected["source"]["is_dst"]
         assert result.target.is_dst == expected["target"]["is_dst"]
         assert result.time_difference == expected["time_difference"]
+
+
+def test_get_local_tz_with_override():
+    """Test that timezone override works correctly."""
+    result = get_local_tz("America/New_York")
+    assert str(result) == "America/New_York"
+    assert isinstance(result, ZoneInfo)
+
+
+def test_get_local_tz_with_invalid_override():
+    """Test that invalid timezone override raises an error."""
+    with pytest.raises(Exception):  # ZoneInfo will raise an exception
+        get_local_tz("Invalid/Timezone")
+
+
+@patch('mcp_server_time.server.get_localzone_name')
+def test_get_local_tz_with_valid_iana_name(mock_get_localzone):
+    """Test that valid IANA timezone names from tzlocal work correctly."""
+    mock_get_localzone.return_value = "Europe/London"
+    result = get_local_tz()
+    assert str(result) == "Europe/London"
+    assert isinstance(result, ZoneInfo)
+
+
+@patch('mcp_server_time.server.get_localzone_name')
+def test_get_local_tz_when_none_returned(mock_get_localzone):
+    """Test default to UTC when tzlocal returns None."""
+    mock_get_localzone.return_value = None
+    result = get_local_tz()
+    assert str(result) == "UTC"
+
+
+@patch('mcp_server_time.server.get_localzone_name')
+def test_get_local_tz_handles_windows_timezones(mock_get_localzone):
+    """Test that tzlocal properly handles Windows timezone names.
+    
+    Note: tzlocal should convert Windows names like 'Pacific Standard Time'
+    to proper IANA names like 'America/Los_Angeles'.
+    """
+    # tzlocal should return IANA names even on Windows
+    mock_get_localzone.return_value = "America/Los_Angeles"
+    result = get_local_tz()
+    assert str(result) == "America/Los_Angeles"
+    assert isinstance(result, ZoneInfo)
+
+
+@pytest.mark.parametrize(
+    "timezone_name",
+    [
+        "America/New_York",
+        "Europe/Paris", 
+        "Asia/Tokyo",
+        "Australia/Sydney",
+        "Africa/Cairo",
+        "America/Sao_Paulo",
+        "Pacific/Auckland",
+        "UTC",
+    ],
+)
+@patch('mcp_server_time.server.get_localzone_name')
+def test_get_local_tz_various_timezones(mock_get_localzone, timezone_name):
+    """Test various timezone names that tzlocal might return."""
+    mock_get_localzone.return_value = timezone_name
+    result = get_local_tz()
+    assert str(result) == timezone_name
+    assert isinstance(result, ZoneInfo)

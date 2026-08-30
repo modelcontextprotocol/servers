@@ -1,11 +1,14 @@
 {
-    "extends": "../../tsconfig.json",
-    "compilerOptions": {
-      "outDir": "./dist",
-      "rootDir": "."
-    },
-    "include": [
-      "./**/*.ts"
-    ]
-  }
-  
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "."
+  },
+  "include": [
+    "./**/*.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "vitest.config.ts"
+  ]
+}

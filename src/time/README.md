@@ -1,6 +1,12 @@
 # Time MCP Server
 
+<!-- mcp-name: io.github.modelcontextprotocol/server-time -->
+
 A Model Context Protocol server that provides time and timezone conversion capabilities. This server enables LLMs to get current time information and perform timezone conversions using IANA timezone names, with automatic system timezone detection.
+
+Source: https://github.com/modelcontextprotocol/servers/tree/main/src/time
+
+Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server uses. The port to v2 is in progress.
 
 ### Available Tools
 
@@ -20,6 +26,10 @@ A Model Context Protocol server that provides time and timezone conversion capab
 
 When using [`uv`](https://docs.astral.sh/uv/) no specific installation is needed. We will
 use [`uvx`](https://docs.astral.sh/uv/guides/tools/) to directly run *mcp-server-time*.
+
+```bash
+uvx mcp-server-time
+```
 
 ### Using PIP
 
@@ -64,7 +74,7 @@ Add to your Claude settings:
   "mcpServers": {
     "time": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "mcp/time"]
+      "args": ["run", "-i", "--rm", "-e", "LOCAL_TIMEZONE", "mcp/time"]
     }
   }
 }
@@ -161,6 +171,24 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
     }
   }
 }
+```
+</details>
+
+### Configure for Zencoder
+
+1. Go to the Zencoder menu (...)
+2. From the dropdown menu, select `Agent Tools`
+3. Click on the `Add Custom MCP`
+4. Add the name and server configuration from below, and make sure to hit the `Install` button
+
+<details>
+<summary>Using uvx</summary>
+
+```json
+{
+    "command": "uvx",
+    "args": ["mcp-server-time"]
+  }
 ```
 </details>
 

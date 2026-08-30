@@ -97,6 +97,9 @@ class PyPiPackage:
         with open(self.path / "pyproject.toml", "w") as f:
             f.write(tomlkit.dumps(data))
 
+        # Regenerate uv.lock to match the updated pyproject.toml
+        subprocess.run(["uv", "lock"], cwd=self.path, check=True)
+
 
 def has_changes(path: Path, git_hash: GitHash) -> bool:
     """Check if any files changed between current state and git hash"""
@@ -110,7 +113,9 @@ def has_changes(path: Path, git_hash: GitHash) -> bool:
         )
 
         changed_files = [Path(f) for f in output.stdout.splitlines()]
-        relevant_files = [f for f in changed_files if f.suffix in [".py", ".ts"]]
+        # .md counts as a change: READMEs ship inside the published package
+        # (npm tarball / PyPI long_description)
+        relevant_files = [f for f in changed_files if f.suffix in [".py", ".ts", ".md"]]
         return len(relevant_files) >= 1
     except subprocess.CalledProcessError:
         return False

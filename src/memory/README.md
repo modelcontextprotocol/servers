@@ -2,6 +2,8 @@
 
 A basic implementation of persistent memory using a local knowledge graph. This lets Claude remember information about the user across chats.
 
+Published on npm as [`@modelcontextprotocol/server-memory`](https://www.npmjs.com/package/@modelcontextprotocol/server-memory).
+
 ## Core Concepts
 
 ### Entities
@@ -125,6 +127,14 @@ Example:
     - Relations between requested entities
   - Silently skips non-existent nodes
 
+### Resources
+
+- **knowledge-graph** (`memory://knowledge-graph`)
+  - The full knowledge graph as a readable MCP Resource
+  - MIME type: `application/json`
+  - Returns the same shape as `read_graph` (entities and relations)
+  - Mutation tools (`create_entities`, `create_relations`, `add_observations`, `delete_entities`, `delete_observations`, `delete_relations`) emit `notifications/resources/updated` for this URI, so subscribed clients see live changes
+
 # Usage with Claude Desktop
 
 ### Setup
@@ -159,6 +169,24 @@ Add this to your claude_desktop_config.json:
 }
 ```
 
+On Windows, use `cmd /c` to launch `npx`:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    }
+  }
+}
+```
+
 #### NPX with custom setting
 
 The server can be configured using the following environment variables:
@@ -173,14 +201,35 @@ The server can be configured using the following environment variables:
         "@modelcontextprotocol/server-memory"
       ],
       "env": {
-        "MEMORY_FILE_PATH": "/path/to/custom/memory.json"
+        "MEMORY_FILE_PATH": "/path/to/custom/memory.jsonl"
       }
     }
   }
 }
 ```
 
-- `MEMORY_FILE_PATH`: Path to the memory storage JSON file (default: `memory.json` in the server directory)
+On Windows, use:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "/path/to/custom/memory.jsonl"
+      }
+    }
+  }
+}
+```
+
+- `MEMORY_FILE_PATH`: Path to the memory storage JSONL file (default: `memory.jsonl` in the server directory)
 
 # VS Code Installation Instructions
 
@@ -190,25 +239,45 @@ For quick installation, use one of the one-click installation buttons below:
 
 [![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=memory&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22-v%22%2C%22claude-memory%3A%2Fapp%2Fdist%22%2C%22--rm%22%2C%22mcp%2Fmemory%22%5D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=memory&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22-v%22%2C%22claude-memory%3A%2Fapp%2Fdist%22%2C%22--rm%22%2C%22mcp%2Fmemory%22%5D%7D&quality=insiders)
 
-For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open Settings (JSON)`.
+For manual installation, you can configure the MCP server using one of these methods:
 
-Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others. 
+**Method 1: User Configuration (Recommended)**
+Add the configuration to your user-level MCP configuration file. Open the Command Palette (`Ctrl + Shift + P`) and run `MCP: Open User Configuration`. This will open your user `mcp.json` file where you can add the server configuration.
 
-> Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
+**Method 2: Workspace Configuration**
+Alternatively, you can add the configuration to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
+
+> For more details about MCP configuration in VS Code, see the [official VS Code MCP documentation](https://code.visualstudio.com/docs/copilot/customization/mcp-servers).
 
 #### NPX
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "memory": {
-        "command": "npx",
-        "args": [
-          "-y",
-          "@modelcontextprotocol/server-memory"
-        ]
-      }
+  "servers": {
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    }
+  }
+}
+```
+
+On Windows, use:
+
+```json
+{
+  "servers": {
+    "memory": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
     }
   }
 }
@@ -218,19 +287,17 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "memory": {
-        "command": "docker",
-        "args": [
-          "run",
-          "-i",
-          "-v",
-          "claude-memory:/app/dist",
-          "--rm",
-          "mcp/memory"
-        ]
-      }
+  "servers": {
+    "memory": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "-v",
+        "claude-memory:/app/dist",
+        "--rm",
+        "mcp/memory"
+      ]
     }
   }
 }
@@ -265,7 +332,7 @@ Follow these steps for each interaction:
    - If any new information was gathered during the interaction, update your memory as follows:
      a) Create entities for recurring organizations, people, and significant events
      b) Connect them to the current entities using relations
-     b) Store facts about them as observations
+     c) Store facts about them as observations
 ```
 
 ## Building
@@ -275,6 +342,8 @@ Docker:
 ```sh
 docker build -t mcp/memory -f src/memory/Dockerfile . 
 ```
+
+For Awareness: a prior mcp/memory volume contains an index.js file that could be overwritten by the new container. If you are using a docker volume for storage, delete the old docker volume's `index.js` file before starting the new container.
 
 ## License
 

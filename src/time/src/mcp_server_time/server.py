@@ -8,7 +8,7 @@ from tzlocal import get_localzone_name  # ← returns "Europe/Paris", etc.
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
+from mcp.types import Tool, ToolAnnotations, TextContent, ImageContent, EmbeddedResource, ErrorData, INVALID_PARAMS
 from mcp.shared.exceptions import McpError
 
 from pydantic import BaseModel
@@ -22,6 +22,7 @@ class TimeTools(str, Enum):
 class TimeResult(BaseModel):
     timezone: str
     datetime: str
+    day_of_week: str
     is_dst: bool
 
 
@@ -45,14 +46,15 @@ def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     local_tzname = get_localzone_name()
     if local_tzname is not None:
         return ZoneInfo(local_tzname)
-    raise McpError("Could not determine local timezone - tzinfo is None")
+    # Default to UTC if local timezone cannot be determined
+    return ZoneInfo("UTC")
 
 
 def get_zoneinfo(timezone_name: str) -> ZoneInfo:
     try:
         return ZoneInfo(timezone_name)
     except Exception as e:
-        raise McpError(f"Invalid timezone: {str(e)}")
+        raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Invalid timezone: {str(e)}"))
 
 
 class TimeServer:
@@ -64,6 +66,7 @@ class TimeServer:
         return TimeResult(
             timezone=timezone_name,
             datetime=current_time.isoformat(timespec="seconds"),
+            day_of_week=current_time.strftime("%A"),
             is_dst=bool(current_time.dst()),
         )
 
@@ -104,11 +107,13 @@ class TimeServer:
             source=TimeResult(
                 timezone=source_tz,
                 datetime=source_time.isoformat(timespec="seconds"),
+                day_of_week=source_time.strftime("%A"),
                 is_dst=bool(source_time.dst()),
             ),
             target=TimeResult(
                 timezone=target_tz,
                 datetime=target_time.isoformat(timespec="seconds"),
+                day_of_week=target_time.strftime("%A"),
                 is_dst=bool(target_time.dst()),
             ),
             time_difference=time_diff_str,
@@ -126,7 +131,7 @@ async def serve(local_timezone: str | None = None) -> None:
         return [
             Tool(
                 name=TimeTools.GET_CURRENT_TIME.value,
-                description="Get current time in a specific timezones",
+                description="Get current time in a specific timezone",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -137,6 +142,12 @@ async def serve(local_timezone: str | None = None) -> None:
                     },
                     "required": ["timezone"],
                 },
+                annotations=ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
+                ),
             ),
             Tool(
                 name=TimeTools.CONVERT_TIME.value,
@@ -159,6 +170,12 @@ async def serve(local_timezone: str | None = None) -> None:
                     },
                     "required": ["source_timezone", "time", "target_timezone"],
                 },
+                annotations=ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
+                ),
             ),
         ]
 

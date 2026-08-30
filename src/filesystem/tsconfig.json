@@ -8,5 +8,11 @@
   },
   "include": [
     "./**/*.ts"
+  ],
+  "exclude": [
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "vitest.config.ts"
   ]
 }
