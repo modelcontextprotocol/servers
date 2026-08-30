@@ -90,11 +90,39 @@ export const setSubscriptionHandlers = (server: McpServer) => {
       if (subscriptions.has(uri)) {
         const subscribers = subscriptions.get(uri) as Set<string>;
         if (subscribers.has(sessionId)) subscribers.delete(sessionId);
+        if (subscribers.size === 0) {
+          subscriptions.delete(uri);
+        }
       }
       return {};
     }
   );
 };
+
+/**
+ * Removes all subscriptions associated with a given session ID.
+ *
+ * Iterates through all tracked subscription URIs, removes the session ID,
+ * and deletes the URI key if no subscribers remain.
+ *
+ * @param {string | undefined} [sessionId] - The session ID to clean up.
+ */
+export const cleanupSubscriptions = (sessionId?: string) => {
+  for (const [uri, subscribers] of subscriptions.entries()) {
+    subscribers.delete(sessionId);
+    if (subscribers.size === 0) {
+      subscriptions.delete(uri);
+    }
+  }
+};
+
+/**
+ * Returns the current subscriptions map (for testing/inspection).
+ */
+export const getSubscriptions = (): ReadonlyMap<
+  string,
+  ReadonlySet<string | undefined>
+> => subscriptions;
 
 /**
  * Sends simulated resource update notifications to the subscribed client.

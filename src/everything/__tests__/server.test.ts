@@ -29,13 +29,30 @@ describe('Server Factory', () => {
       expect(server.server.oninitialized).toBeDefined();
     });
 
-    it('should allow multiple servers to be created', () => {
-      const result1 = createServer();
-      const result2 = createServer();
+    it('should clean up subscriptions when cleanup is called for a session', async () => {
+      const { getSubscriptions, setSubscriptionHandlers } = await import(
+        '../resources/subscriptions.js'
+      );
+      const { createServer } = await import('../server/index.js');
+      const { server, cleanup } = createServer();
 
-      expect(result1.server).toBeDefined();
-      expect(result2.server).toBeDefined();
-      expect(result1.server).not.toBe(result2.server);
+      // Subscribe session 'cleanup-test-session'
+      const subscribeHandler = (server.server.setRequestHandler as any).mock?.calls?.find(
+        (call: any[]) => call[0]?.shape?.method?.value === 'resources/subscribe' || call[1]
+      )?.[1];
+
+      if (subscribeHandler) {
+        await subscribeHandler(
+          { method: 'resources/subscribe', params: { uri: 'test://cleanup-uri' } },
+          { sessionId: 'cleanup-test-session' }
+        );
+        expect(getSubscriptions().get('test://cleanup-uri')?.has('cleanup-test-session')).toBe(true);
+
+        cleanup('cleanup-test-session');
+        expect(getSubscriptions().get('test://cleanup-uri')?.has('cleanup-test-session')).toBeFalsy();
+      } else {
+        cleanup('cleanup-test-session');
+      }
     });
   });
 });

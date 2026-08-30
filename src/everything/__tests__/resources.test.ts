@@ -22,6 +22,8 @@ import {
   setSubscriptionHandlers,
   beginSimulatedResourceUpdates,
   stopSimulatedResourceUpdates,
+  cleanupSubscriptions,
+  getSubscriptions,
 } from '../resources/subscriptions.js';
 
 describe('Resource Templates', () => {
@@ -283,10 +285,13 @@ describe('File Resources', () => {
 
 describe('Subscriptions', () => {
   describe('setSubscriptionHandlers', () => {
-    it('should set request handlers on server', () => {
+    it('should set request handlers on server and handle subscribe/unsubscribe/cleanup', async () => {
+      const handlers: Record<string, Function> = {};
       const mockServer = {
         server: {
-          setRequestHandler: vi.fn(),
+          setRequestHandler: vi.fn((schema: any, handler: Function) => {
+            handlers[schema.shape?.method?.value || 'handler'] = handler;
+          }),
         },
         sendLoggingMessage: vi.fn(),
       } as unknown as McpServer;
@@ -295,6 +300,82 @@ describe('Subscriptions', () => {
 
       // Should set both subscribe and unsubscribe handlers
       expect(mockServer.server.setRequestHandler).toHaveBeenCalledTimes(2);
+
+      const subscribeHandler = (mockServer.server.setRequestHandler as any).mock.calls[0][1];
+      const unsubscribeHandler = (mockServer.server.setRequestHandler as any).mock.calls[1][1];
+
+      // Subscribe session1 to uri1 and uri2
+      await subscribeHandler(
+        { method: 'resources/subscribe', params: { uri: 'test://uri1' } },
+        { sessionId: 'session1' }
+      );
+      await subscribeHandler(
+        { method: 'resources/subscribe', params: { uri: 'test://uri2' } },
+        { sessionId: 'session1' }
+      );
+      // Subscribe session2 to uri1
+      await subscribeHandler(
+        { method: 'resources/subscribe', params: { uri: 'test://uri1' } },
+        { sessionId: 'session2' }
+      );
+
+      const subs = getSubscriptions();
+      expect(subs.has('test://uri1')).toBe(true);
+      expect(subs.get('test://uri1')?.has('session1')).toBe(true);
+      expect(subs.get('test://uri1')?.has('session2')).toBe(true);
+      expect(subs.get('test://uri2')?.has('session1')).toBe(true);
+
+      // Unsubscribe session2 from uri1
+      await unsubscribeHandler(
+        { method: 'resources/unsubscribe', params: { uri: 'test://uri1' } },
+        { sessionId: 'session2' }
+      );
+      expect(subs.get('test://uri1')?.has('session2')).toBe(false);
+      expect(subs.get('test://uri1')?.has('session1')).toBe(true);
+
+      // Cleanup session1 on disconnect - should remove session1 from uri1 and uri2, deleting empty uri sets
+      cleanupSubscriptions('session1');
+      expect(subs.has('test://uri1')).toBe(false);
+      expect(subs.has('test://uri2')).toBe(false);
+    });
+  });
+
+  describe('cleanupSubscriptions', () => {
+    it('should cleanly remove subscriptions for disconnected session', async () => {
+      const mockServer = {
+        server: {
+          setRequestHandler: vi.fn(),
+        },
+        sendLoggingMessage: vi.fn(),
+      } as unknown as McpServer;
+
+      setSubscriptionHandlers(mockServer);
+      const subscribeHandler = (mockServer.server.setRequestHandler as any).mock.calls[0][1];
+
+      await subscribeHandler(
+        { method: 'resources/subscribe', params: { uri: 'test://shared' } },
+        { sessionId: 'userA' }
+      );
+      await subscribeHandler(
+        { method: 'resources/subscribe', params: { uri: 'test://shared' } },
+        { sessionId: 'userB' }
+      );
+      await subscribeHandler(
+        { method: 'resources/subscribe', params: { uri: 'test://privateA' } },
+        { sessionId: 'userA' }
+      );
+
+      const subs = getSubscriptions();
+      expect(subs.get('test://shared')?.size).toBe(2);
+      expect(subs.get('test://privateA')?.size).toBe(1);
+
+      cleanupSubscriptions('userA');
+      expect(subs.get('test://shared')?.has('userA')).toBe(false);
+      expect(subs.get('test://shared')?.has('userB')).toBe(true);
+      expect(subs.has('test://privateA')).toBe(false);
+
+      cleanupSubscriptions('userB');
+      expect(subs.has('test://shared')).toBe(false);
     });
   });
 
