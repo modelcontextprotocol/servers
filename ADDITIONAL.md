@@ -30,6 +30,7 @@ This is a curated collection of community-built frameworks and resources that si
 * **[AgentR Universal MCP SDK](https://github.com/universal-mcp/universal-mcp)** - A python SDK to build MCP Servers with inbuilt credential management by **[Agentr](https://agentr.dev/home)**
 * **[Vercel MCP Adapter](https://github.com/vercel/mcp-adapter)** (TypeScript) - A simple package to start serving an MCP server on most major JS meta-frameworks including Next, Nuxt, Svelte, and more.
 * **[PHP MCP Server](https://github.com/php-mcp/server)** (PHP) - Core PHP implementation for the Model Context Protocol (MCP) server
+* **[mcp-cj](https://atomgit.com/ystyle/mcp-cj)** (Cangjie) - A Model Context Protocol (MCP) framework with server and client support for the Cangjie programming language, featuring Stdio and Streamable HTTP transports. [Cangjie registry](https://pkg.cangjie-lang.cn/package/mcp) by **[ystyle](https://atomgit.com/ystyle)
 
 ### For clients
 
