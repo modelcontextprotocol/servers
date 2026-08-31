@@ -173,6 +173,13 @@ describe('Lib Functions', () => {
 
   describe('Security & Validation Functions', () => {
     describe('validatePath', () => {
+      it('rejects Windows drive paths on POSIX hosts', async () => {
+        if (process.platform === 'win32') return;
+
+        await expect(validatePath('C:\\Users\\me\\notes\\file.md'))
+          .rejects.toThrow('Windows-style path received on a POSIX host');
+      });
+
       // Use Windows-compatible paths for testing
       const allowedDirs = process.platform === 'win32' ? ['C:\\Users\\test', 'C:\\temp'] : ['/home/user', '/tmp'];
 
