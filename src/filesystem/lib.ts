@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import os from 'os';
 import { randomBytes } from 'crypto';
+import { StringDecoder } from 'string_decoder';
 import { diffLines, createTwoFilesPatch } from 'diff';
 import { minimatch } from 'minimatch';
 import { normalizePath, expandHome } from './path-utils.js';
@@ -96,8 +97,54 @@ function resolveRelativePathAgainstAllowedDirectories(relativePath: string): str
 }
 
 // Security & Validation Functions
+async function resolveUnicodeEquivalentPath(absolutePath: string): Promise<string> {
+  const allowedDirectory = [...allowedDirectories]
+    .sort((left, right) => right.length - left.length)
+    .find(directory => isPathWithinAllowedDirectories(normalizePath(absolutePath), [directory]));
+
+  if (!allowedDirectory) {
+    return absolutePath;
+  }
+
+  let currentPath = await fs.realpath(allowedDirectory);
+  const relativeParts = path.relative(allowedDirectory, absolutePath).split(path.sep).filter(Boolean);
+
+  for (let index = 0; index < relativeParts.length; index++) {
+    const requestedPart = relativeParts[index];
+    const entries = (await fs.readdir(currentPath)) ?? [];
+    const exactMatch = entries.find(entry => entry === requestedPart);
+    const equivalentMatches = exactMatch
+      ? [exactMatch]
+      : entries.filter(entry => entry.normalize('NFC') === requestedPart.normalize('NFC'));
+
+    if (equivalentMatches.length > 1) {
+      throw new Error(`Ambiguous Unicode path component: ${requestedPart}`);
+    }
+
+    if (equivalentMatches.length === 0) {
+      // Nothing below this point exists yet, so there are no symlinks left to
+      // resolve. currentPath is already realpath'd and inside an allowed
+      // directory; append the missing tail so create_directory can mkdir -p it.
+      return path.join(currentPath, ...relativeParts.slice(index));
+    }
+
+    currentPath = await fs.realpath(path.join(currentPath, equivalentMatches[0]));
+    if (!isPathWithinAllowedDirectories(normalizePath(currentPath), allowedDirectories)) {
+      throw new Error(`Access denied - symlink target outside allowed directories: ${currentPath} not in ${allowedDirectories.join(', ')}`);
+    }
+  }
+
+  return currentPath;
+}
+
 export async function validatePath(requestedPath: string): Promise<string> {
   const expandedPath = expandHome(requestedPath);
+  // Do not silently reinterpret a Windows drive path as a relative POSIX path.
+  // This would create a literal filename such as `C:\\Users\\...` inside the
+  // allowed root and report success for the wrong location.
+  if (process.platform !== 'win32' && /^(?:[A-Za-z]:)(?:[\\/]|$)/.test(expandedPath)) {
+    throw new Error(`Access denied - Windows-style path received on a POSIX host: ${requestedPath}`);
+  }
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
     : resolveRelativePathAgainstAllowedDirectories(expandedPath);
@@ -123,16 +170,13 @@ export async function validatePath(requestedPath: string): Promise<string> {
     // Security: For new files that don't exist yet, verify parent directory
     // This ensures we can't create files in unauthorized locations
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      const parentDir = path.dirname(absolute);
       try {
-        const realParentPath = await fs.realpath(parentDir);
-        const normalizedParent = normalizePath(realParentPath);
-        if (!isPathWithinAllowedDirectories(normalizedParent, allowedDirectories)) {
-          throw new Error(`Access denied - parent directory outside allowed directories: ${realParentPath} not in ${allowedDirectories.join(', ')}`);
+        return await resolveUnicodeEquivalentPath(absolute);
+      } catch (resolutionError) {
+        if ((resolutionError as NodeJS.ErrnoException).code === 'ENOENT') {
+          throw new Error(`Parent directory does not exist: ${path.dirname(absolute)}`);
         }
-        return absolute;
-      } catch {
-        throw new Error(`Parent directory does not exist: ${parentDir}`);
+        throw resolutionError;
       }
     }
     throw error;
@@ -190,6 +234,25 @@ export async function writeFileContent(filePath: string, content: string): Promi
       throw error;
     }
   }
+}
+
+
+export async function moveFile(sourcePath: string, destinationPath: string): Promise<void> {
+  // The move_file tool contract (and README) state the operation fails if the
+  // destination already exists. fs.rename would silently overwrite it, which is
+  // a data-loss bug, so reject up front when anything - file, directory, or
+  // symlink - occupies the target. lstat is used so an existing symlink at the
+  // destination is detected rather than followed.
+  try {
+    await fs.lstat(destinationPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      await fs.rename(sourcePath, destinationPath);
+      return;
+    }
+    throw error;
+  }
+  throw new Error(`Destination already exists: ${destinationPath}`);
 }
 
 
@@ -308,42 +371,28 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
   // Open file for reading
   const fileHandle = await fs.open(filePath, 'r');
   try {
-    const lines: string[] = [];
+    const chunks: Buffer[] = [];
     let position = fileSize;
-    let chunk = Buffer.alloc(CHUNK_SIZE);
-    let linesFound = 0;
-    let remainingText = '';
+    const chunk = Buffer.alloc(CHUNK_SIZE);
+    let newlinesFound = 0;
     
     // Read chunks from the end of the file until we have enough lines
-    while (position > 0 && linesFound < numLines) {
+    while (position > 0 && newlinesFound < numLines) {
       const size = Math.min(CHUNK_SIZE, position);
       position -= size;
       
       const { bytesRead } = await fileHandle.read(chunk, 0, size, position);
       if (!bytesRead) break;
-      
-      // Get the chunk as a string and prepend any remaining text from previous iteration
-      const readData = chunk.slice(0, bytesRead).toString('utf-8');
-      const chunkText = readData + remainingText;
-      
-      // Split by newlines and count
-      const chunkLines = normalizeLineEndings(chunkText).split('\n');
-      
-      // If this isn't the end of the file, the first line is likely incomplete
-      // Save it to prepend to the next chunk
-      if (position > 0) {
-        remainingText = chunkLines[0];
-        chunkLines.shift(); // Remove the first (incomplete) line
-      }
-      
-      // Add lines to our result (up to the number we need)
-      for (let i = chunkLines.length - 1; i >= 0 && linesFound < numLines; i--) {
-        lines.unshift(chunkLines[i]);
-        linesFound++;
+
+      const readData = Buffer.from(chunk.subarray(0, bytesRead));
+      chunks.unshift(readData);
+      for (const byte of readData) {
+        if (byte === 0x0a) newlinesFound++;
       }
     }
-    
-    return lines.join('\n');
+
+    const text = normalizeLineEndings(Buffer.concat(chunks).toString('utf-8'));
+    return text.split('\n').slice(-numLines).join('\n');
   } finally {
     await fileHandle.close();
   }
@@ -357,13 +406,14 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
     let buffer = '';
     let bytesRead = 0;
     const chunk = Buffer.alloc(1024); // 1KB buffer
+    const decoder = new StringDecoder('utf-8');
     
     // Read chunks and count lines until we have enough or reach EOF
     while (lines.length < numLines) {
       const result = await fileHandle.read(chunk, 0, chunk.length, bytesRead);
       if (result.bytesRead === 0) break; // End of file
       bytesRead += result.bytesRead;
-      buffer += chunk.slice(0, result.bytesRead).toString('utf-8');
+      buffer += decoder.write(chunk.subarray(0, result.bytesRead));
       
       const newLineIndex = buffer.lastIndexOf('\n');
       if (newLineIndex !== -1) {
@@ -375,6 +425,8 @@ export async function headFile(filePath: string, numLines: number): Promise<stri
         }
       }
     }
+
+    buffer += decoder.end();
     
     // If there is leftover content and we still need lines, add it
     if (buffer.length > 0 && lines.length < numLines) {

@@ -6,6 +6,7 @@ import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextp
 import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
+import { randomBytes } from 'crypto';
 import { fileURLToPath } from 'url';
 
 // Define memory file path using environment variable with fallback
@@ -114,7 +115,29 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+
+    // Write to a temporary file in the same directory, then rename it over
+    // the target. fs.writeFile would truncate the memory file before writing,
+    // so an interruption (SIGKILL, container stop, OOM, power loss) would
+    // leave the only copy of the graph truncated and unrecoverable.
+    // rename(2) is atomic on POSIX filesystems: readers see either the
+    // complete old file or the complete new one, never a partial state.
+    // The temp file is kept in the same directory so the rename stays on one
+    // filesystem — renaming across mount points fails with EXDEV.
+    const directory = path.dirname(this.memoryFilePath);
+    const tempFilePath = path.join(
+      directory,
+      `${path.basename(this.memoryFilePath)}.${randomBytes(16).toString('hex')}.tmp`
+    );
+
+    try {
+      await fs.writeFile(tempFilePath, lines.join("\n"));
+      await fs.rename(tempFilePath, this.memoryFilePath);
+    } catch (error) {
+      // Never leave a stray temp file behind on failure.
+      await fs.unlink(tempFilePath).catch(() => {});
+      throw error;
+    }
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
