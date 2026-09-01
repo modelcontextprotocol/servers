@@ -169,19 +169,21 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
             args.extend(['--since', start_timestamp])
         if end_timestamp:
             args.extend(['--until', end_timestamp])
-        args.extend(['--format=%H%n%an%n%ad%n%s%n'])
+        args.extend([f'-n{max_count}', '--format=%x1e%H%x1f%an <%ae>%x1f%aI%x1f%s'])
 
-        log_output = repo.git.log(*args).split('\n')
+        raw_output = repo.git.log(*args)
+        if not raw_output.strip():
+            return []
 
         log = []
-        # Process commits in groups of 4 (hash, author, date, message)
-        for i in range(0, len(log_output), 4):
-            if i + 3 < len(log_output) and len(log) < max_count:
+        for record in raw_output.strip('\n\x1e').split('\x1e'):
+            parts = record.split('\x1f')
+            if len(parts) >= 4:
                 log.append(
-                    f"Commit: {log_output[i]}\n"
-                    f"Author: {log_output[i+1]}\n"
-                    f"Date: {log_output[i+2]}\n"
-                    f"Message: {log_output[i+3]}\n"
+                    f"Commit: {parts[0]}\n"
+                    f"Author: {parts[1]}\n"
+                    f"Date: {parts[2]}\n"
+                    f"Message: {parts[3]}\n"
                 )
         return log
     else:
@@ -189,11 +191,14 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
         commits = list(repo.iter_commits(max_count=max_count))
         log = []
         for commit in commits:
+            author_str = f"{commit.author.name} <{commit.author.email}>" if commit.author else "Unknown"
+            date_str = commit.authored_datetime.isoformat() if hasattr(commit, "authored_datetime") else str(commit.committed_datetime)
+            message_str = commit.message.strip() if isinstance(commit.message, str) else str(commit.message)
             log.append(
-                f"Commit: {commit.hexsha!r}\n"
-                f"Author: {commit.author!r}\n"
-                f"Date: {commit.authored_datetime}\n"
-                f"Message: {commit.message!r}\n"
+                f"Commit: {commit.hexsha}\n"
+                f"Author: {author_str}\n"
+                f"Date: {date_str}\n"
+                f"Message: {message_str}\n"
             )
         return log
 
@@ -228,11 +233,14 @@ def git_show(repo: git.Repo, revision: str) -> str:
     if revision.startswith("-"):
         raise BadName(f"Invalid revision: '{revision}' - cannot start with '-'")
     commit = repo.commit(revision)
+    author_str = f"{commit.author.name} <{commit.author.email}>" if commit.author else "Unknown"
+    date_str = commit.authored_datetime.isoformat() if hasattr(commit, "authored_datetime") else str(commit.committed_datetime)
+    message_str = commit.message.strip() if isinstance(commit.message, str) else str(commit.message)
     output = [
-        f"Commit: {commit.hexsha!r}\n"
-        f"Author: {commit.author!r}\n"
-        f"Date: {commit.authored_datetime!r}\n"
-        f"Message: {commit.message!r}\n"
+        f"Commit: {commit.hexsha}\n"
+        f"Author: {author_str}\n"
+        f"Date: {date_str}\n"
+        f"Message: {message_str}\n"
     ]
     if commit.parents:
         parent = commit.parents[0]
