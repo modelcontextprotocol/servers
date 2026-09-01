@@ -28,6 +28,7 @@ import {
   headFile,
   setAllowedDirectories,
 } from './lib.js';
+import { SERVER_VERSION } from './version.js';
 
 // Command line argument parsing
 const args = process.argv.slice(2);
@@ -164,7 +165,7 @@ const GetFileInfoArgsSchema = z.object({
 const server = new McpServer(
   {
     name: "secure-filesystem-server",
-    version: "0.2.0",
+    version: SERVER_VERSION,
   }
 );
 
