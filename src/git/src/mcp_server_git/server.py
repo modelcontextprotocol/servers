@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Sequence, Optional
+from typing import Any, Sequence, Optional
 from mcp.server import Server
 from mcp.server.session import ServerSession
 from mcp.server.stdio import stdio_server
@@ -163,7 +163,7 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
     if end_timestamp and end_timestamp.startswith("-"):
         raise ValueError(f"Invalid end_timestamp: '{end_timestamp}' - cannot start with '-'")
 
-    rev_kwargs: dict[str, str] = {}
+    rev_kwargs: dict[str, Any] = {}
     if start_timestamp:
         rev_kwargs["since"] = start_timestamp
     if end_timestamp:
