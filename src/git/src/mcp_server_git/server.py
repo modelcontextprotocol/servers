@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 from typing import Sequence, Optional
 from mcp.server import Server
@@ -16,6 +17,13 @@ from enum import Enum
 import git
 from git.exc import BadName
 from pydantic import BaseModel, Field
+
+# Optional GuardClaw Cryptographic Execution Audit Hook (GEF-SPEC-1.0)
+try:
+    from guardclaw import GEFLedger, Ed25519KeyManager, RecordType
+    _GUARDCLAW_AVAILABLE = True
+except ImportError:
+    _GUARDCLAW_AVAILABLE = False
 
 # Default number of context lines to show in diff output
 DEFAULT_CONTEXT_LINES = 3
@@ -484,6 +492,20 @@ async def serve(repository: Path | None) -> None:
         root_repos = await by_roots()
         return [*root_repos, *cmd_repos]
 
+    # Initialize optional execution audit ledger if configured
+    audit_dir = os.environ.get("GIT_MCP_AUDIT_DIR")
+    audit_ledger = None
+    if audit_dir and _GUARDCLAW_AVAILABLE:
+        try:
+            key_mgr = Ed25519KeyManager.generate()
+            audit_ledger = GEFLedger(
+                key_manager=key_mgr,
+                agent_id="mcp-server-git",
+                ledger_path=audit_dir,
+            )
+        except Exception as exc:
+            logger.warning(f"Could not initialize audit ledger at {audit_dir}: {exc}")
+
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         repo_path = Path(arguments["repo_path"])
@@ -491,111 +513,155 @@ async def serve(repository: Path | None) -> None:
         # Validate repo_path is within allowed repository
         validate_repo_path(repo_path, repository)
 
+        # Record cryptographic intent if auditing is active
+        intent_envelope = None
+        if audit_ledger:
+            try:
+                intent_envelope = audit_ledger.emit(
+                    record_type=RecordType.TOOL_CALL,
+                    payload={"tool": name, "arguments": arguments},
+                )
+            except Exception:
+                pass
+
         # For all commands, we need an existing repo
         repo = git.Repo(repo_path)
 
-        match name:
-            case GitTools.STATUS:
-                status = git_status(repo)
-                return [TextContent(
-                    type="text",
-                    text=f"Repository status:\n{status}"
-                )]
+        try:
+            match name:
+                case GitTools.STATUS:
+                    status = git_status(repo)
+                    response = [TextContent(
+                        type="text",
+                        text=f"Repository status:\n{status}"
+                    )]
 
-            case GitTools.DIFF_UNSTAGED:
-                diff = git_diff_unstaged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
-                return [TextContent(
-                    type="text",
-                    text=f"Unstaged changes:\n{diff}"
-                )]
+                case GitTools.DIFF_UNSTAGED:
+                    diff = git_diff_unstaged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
+                    response = [TextContent(
+                        type="text",
+                        text=f"Unstaged changes:\n{diff}"
+                    )]
 
-            case GitTools.DIFF_STAGED:
-                diff = git_diff_staged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
-                return [TextContent(
-                    type="text",
-                    text=f"Staged changes:\n{diff}"
-                )]
+                case GitTools.DIFF_STAGED:
+                    diff = git_diff_staged(repo, arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
+                    response = [TextContent(
+                        type="text",
+                        text=f"Staged changes:\n{diff}"
+                    )]
 
-            case GitTools.DIFF:
-                diff = git_diff(repo, arguments["target"], arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
-                return [TextContent(
-                    type="text",
-                    text=f"Diff with {arguments['target']}:\n{diff}"
-                )]
+                case GitTools.DIFF:
+                    diff = git_diff(repo, arguments["target"], arguments.get("context_lines", DEFAULT_CONTEXT_LINES))
+                    response = [TextContent(
+                        type="text",
+                        text=f"Diff with {arguments['target']}:\n{diff}"
+                    )]
 
-            case GitTools.COMMIT:
-                result = git_commit(repo, arguments["message"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                case GitTools.COMMIT:
+                    result = git_commit(repo, arguments["message"])
+                    response = [TextContent(
+                        type="text",
+                        text=result
+                    )]
 
-            case GitTools.ADD:
-                result = git_add(repo, arguments["files"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                case GitTools.ADD:
+                    result = git_add(repo, arguments["files"])
+                    response = [TextContent(
+                        type="text",
+                        text=result
+                    )]
 
-            case GitTools.RESET:
-                result = git_reset(repo)
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                case GitTools.RESET:
+                    result = git_reset(repo)
+                    response = [TextContent(
+                        type="text",
+                        text=result
+                    )]
 
-            # Update the LOG case:
-            case GitTools.LOG:
-                log = git_log(
-                    repo,
-                    arguments.get("max_count", 10),
-                    arguments.get("start_timestamp"),
-                    arguments.get("end_timestamp")
-                )
-                return [TextContent(
-                    type="text",
-                    text="Commit history:\n" + "\n".join(log)
-                )]
+                case GitTools.LOG:
+                    log = git_log(
+                        repo,
+                        arguments.get("max_count", 10),
+                        arguments.get("start_timestamp"),
+                        arguments.get("end_timestamp")
+                    )
+                    response = [TextContent(
+                        type="text",
+                        text="Commit history:\n" + "\n".join(log)
+                    )]
 
-            case GitTools.CREATE_BRANCH:
-                result = git_create_branch(
-                    repo,
-                    arguments["branch_name"],
-                    arguments.get("base_branch")
-                )
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                case GitTools.CREATE_BRANCH:
+                    result = git_create_branch(
+                        repo,
+                        arguments["branch_name"],
+                        arguments.get("base_branch")
+                    )
+                    response = [TextContent(
+                        type="text",
+                        text=result
+                    )]
 
-            case GitTools.CHECKOUT:
-                result = git_checkout(repo, arguments["branch_name"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                case GitTools.CHECKOUT:
+                    result = git_checkout(repo, arguments["branch_name"])
+                    response = [TextContent(
+                        type="text",
+                        text=result
+                    )]
 
-            case GitTools.SHOW:
-                result = git_show(repo, arguments["revision"])
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                case GitTools.SHOW:
+                    result = git_show(repo, arguments["revision"])
+                    response = [TextContent(
+                        type="text",
+                        text=result
+                    )]
 
-            case GitTools.BRANCH:
-                result = git_branch(
-                    repo,
-                    arguments.get("branch_type", 'local'),
-                    arguments.get("contains", None),
-                    arguments.get("not_contains", None),
-                )
-                return [TextContent(
-                    type="text",
-                    text=result
-                )]
+                case GitTools.BRANCH:
+                    result = git_branch(
+                        repo,
+                        arguments.get("branch_type", 'local'),
+                        arguments.get("contains", None),
+                        arguments.get("not_contains", None),
+                    )
+                    response = [TextContent(
+                        type="text",
+                        text=result
+                    )]
 
-            case _:
-                raise ValueError(f"Unknown tool: {name}")
+                case _:
+                    raise ValueError(f"Unknown tool: {name}")
+
+            # Record cryptographic result on success
+            if audit_ledger and intent_envelope:
+                try:
+                    audit_ledger.emit(
+                        record_type=RecordType.TOOL_RESULT,
+                        payload={
+                            "tool": name,
+                            "status": "success",
+                            "intent_record_id": intent_envelope.record_id,
+                        },
+                    )
+                except Exception:
+                    pass
+
+            return response
+
+        except Exception as exc:
+            # Record cryptographic result on error
+            if audit_ledger and intent_envelope:
+                try:
+                    audit_ledger.emit(
+                        record_type=RecordType.TOOL_RESULT,
+                        payload={
+                            "tool": name,
+                            "status": "error",
+                            "error": str(exc),
+                            "intent_record_id": intent_envelope.record_id,
+                        },
+                    )
+                except Exception:
+                    pass
+            raise
 
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
