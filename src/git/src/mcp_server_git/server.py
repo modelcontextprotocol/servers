@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Sequence, Optional
+from typing import Sequence, Optional, Any
 from mcp.server import Server
 from mcp.server.session import ServerSession
 from mcp.server.stdio import stdio_server
@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 # Optional GuardClaw Cryptographic Execution Audit Hook (GEF-SPEC-1.0)
 try:
-    from guardclaw import GEFLedger, Ed25519KeyManager, RecordType
+    from guardclaw import GEFLedger, Ed25519KeyManager, RecordType  # type: ignore # pyright: ignore[reportMissingImports]
     _GUARDCLAW_AVAILABLE = True
 except ImportError:
     _GUARDCLAW_AVAILABLE = False
@@ -494,7 +494,7 @@ async def serve(repository: Path | None) -> None:
 
     # Initialize optional execution audit ledger if configured
     audit_dir = os.environ.get("GIT_MCP_AUDIT_DIR")
-    audit_ledger = None
+    audit_ledger: Any = None
     if audit_dir and _GUARDCLAW_AVAILABLE:
         try:
             key_mgr = Ed25519KeyManager.generate()

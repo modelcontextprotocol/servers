@@ -516,7 +516,7 @@ def test_audit_logging_when_enabled(tmp_path: Path):
     if not _GUARDCLAW_AVAILABLE:
         pytest.skip("guardclaw not installed")
 
-    from guardclaw import GEFLedger, Ed25519KeyManager, RecordType, verify_ledger
+    from guardclaw import GEFLedger, Ed25519KeyManager, RecordType, verify_ledger  # type: ignore # pyright: ignore[reportMissingImports]
 
     audit_dir = tmp_path / "git_audit_logs"
     key_mgr = Ed25519KeyManager.generate()
