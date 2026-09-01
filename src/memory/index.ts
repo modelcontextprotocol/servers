@@ -192,7 +192,7 @@ export class KnowledgeGraphManager {
     const filteredEntities = graph.entities.filter(e => 
       e.name.toLowerCase().includes(query.toLowerCase()) ||
       e.entityType.toLowerCase().includes(query.toLowerCase()) ||
-      e.observations.some(o => o.toLowerCase().includes(query.toLowerCase()))
+      (e.observations ?? []).some(o => o.toLowerCase().includes(query.toLowerCase()))
     );
   
     // Create a Set of filtered entity names for quick lookup
