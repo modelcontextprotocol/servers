@@ -512,24 +512,25 @@ def test_git_branch_rejects_contains_flag_injection(test_repository):
 
 def test_audit_logging_when_enabled(tmp_path: Path):
     """Verify that optional audit ledger records git operations when configured."""
-    from mcp_server_git.server import _GUARDCLAW_AVAILABLE
-    if not _GUARDCLAW_AVAILABLE:
+    import importlib.util
+    if importlib.util.find_spec("guardclaw") is None:
         pytest.skip("guardclaw not installed")
 
-    from guardclaw import GEFLedger, Ed25519KeyManager, RecordType, verify_ledger  # type: ignore # pyright: ignore[reportMissingImports]
+    import importlib
+    gc = importlib.import_module("guardclaw")
 
     audit_dir = tmp_path / "git_audit_logs"
-    key_mgr = Ed25519KeyManager.generate()
-    ledger = GEFLedger(
+    key_mgr = gc.Ed25519KeyManager.generate()
+    ledger = gc.GEFLedger(
         key_manager=key_mgr,
         agent_id="mcp-server-git",
         ledger_path=str(audit_dir),
     )
 
     # Emit tool call and result
-    e1 = ledger.emit(RecordType.TOOL_CALL, payload={"tool": "git_status", "repo_path": "/tmp/repo"})
-    e2 = ledger.emit(RecordType.TOOL_RESULT, payload={"tool": "git_status", "status": "clean", "intent_record_id": e1.record_id})
+    e1 = ledger.emit(gc.RecordType.TOOL_CALL, payload={"tool": "git_status", "repo_path": "/tmp/repo"})
+    e2 = ledger.emit(gc.RecordType.TOOL_RESULT, payload={"tool": "git_status", "status": "clean", "intent_record_id": e1.record_id})
 
-    summary = verify_ledger(str(audit_dir))
+    summary = gc.verify_ledger(str(audit_dir))
     assert summary["chain_valid"] is True
     assert summary["verified_count"] == 3  # Genesis + Call + Result

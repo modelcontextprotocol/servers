@@ -1,3 +1,4 @@
+import importlib
 import logging
 import os
 from pathlib import Path
@@ -17,13 +18,6 @@ from enum import Enum
 import git
 from git.exc import BadName
 from pydantic import BaseModel, Field
-
-# Optional GuardClaw Cryptographic Execution Audit Hook (GEF-SPEC-1.0)
-try:
-    from guardclaw import GEFLedger, Ed25519KeyManager, RecordType  # type: ignore # pyright: ignore[reportMissingImports]
-    _GUARDCLAW_AVAILABLE = True
-except ImportError:
-    _GUARDCLAW_AVAILABLE = False
 
 # Default number of context lines to show in diff output
 DEFAULT_CONTEXT_LINES = 3
@@ -495,10 +489,11 @@ async def serve(repository: Path | None) -> None:
     # Initialize optional execution audit ledger if configured
     audit_dir = os.environ.get("GIT_MCP_AUDIT_DIR")
     audit_ledger: Any = None
-    if audit_dir and _GUARDCLAW_AVAILABLE:
+    if audit_dir:
         try:
-            key_mgr = Ed25519KeyManager.generate()
-            audit_ledger = GEFLedger(
+            gc = importlib.import_module("guardclaw")
+            key_mgr = gc.Ed25519KeyManager.generate()
+            audit_ledger = gc.GEFLedger(
                 key_manager=key_mgr,
                 agent_id="mcp-server-git",
                 ledger_path=audit_dir,
@@ -517,8 +512,9 @@ async def serve(repository: Path | None) -> None:
         intent_envelope = None
         if audit_ledger:
             try:
+                gc = importlib.import_module("guardclaw")
                 intent_envelope = audit_ledger.emit(
-                    record_type=RecordType.TOOL_CALL,
+                    record_type=gc.RecordType.TOOL_CALL,
                     payload={"tool": name, "arguments": arguments},
                 )
             except Exception:
@@ -633,8 +629,9 @@ async def serve(repository: Path | None) -> None:
             # Record cryptographic result on success
             if audit_ledger and intent_envelope:
                 try:
+                    gc = importlib.import_module("guardclaw")
                     audit_ledger.emit(
-                        record_type=RecordType.TOOL_RESULT,
+                        record_type=gc.RecordType.TOOL_RESULT,
                         payload={
                             "tool": name,
                             "status": "success",
@@ -650,8 +647,9 @@ async def serve(repository: Path | None) -> None:
             # Record cryptographic result on error
             if audit_ledger and intent_envelope:
                 try:
+                    gc = importlib.import_module("guardclaw")
                     audit_ledger.emit(
-                        record_type=RecordType.TOOL_RESULT,
+                        record_type=gc.RecordType.TOOL_RESULT,
                         payload={
                             "tool": name,
                             "status": "error",
