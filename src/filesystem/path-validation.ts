@@ -1,12 +1,102 @@
 import path from 'path';
 
 /**
+ * Whether path containment should be compared case-insensitively.
+ *
+ * Windows file systems (NTFS/FAT) are case-insensitive but case-preserving,
+ * so the same directory may legitimately be reached as `c:\source`,
+ * `C:\source`, or `C:\Source` (GitHub issue #470). Only fold case when
+ * running on win32; POSIX file systems are case-sensitive and must keep
+ * byte-exact comparisons.
+ */
+const IS_WINDOWS = process.platform === 'win32';
+
+/**
+ * Folds a resolved absolute path into its comparable form.
+ * On Windows both sides of the comparison are lowercased so drive-letter and
+ * inner-component casing differences never cause false access denials.
+ * On POSIX the path is returned untouched.
+ */
+function comparablePath(absolutePath: string): string {
+  return IS_WINDOWS ? absolutePath.toLowerCase() : absolutePath;
+}
+
+/**
+ * Pure containment check: is `targetPath` equal to, or nested under, any of
+ * `allowedRoots`?
+ *
+ * Both sides are resolved with path.resolve() before comparing, so relative
+ * input, redundant separators, and `.`/`..` segments cannot smuggle a path
+ * across a boundary — a traversal escape is judged by its final resolved
+ * location. The root prefix must match up to a segment boundary, so
+ * `/allowed` never matches `/allowed2`.
+ *
+ * The comparison is case-insensitive when `process.platform === 'win32'`
+ * and byte-exact on every other platform.
+ *
+ * @param allowedRoots - Allowed directory roots (absolute recommended; resolved internally)
+ * @param targetPath - Path to test against the allowed roots
+ * @returns true if targetPath is within an allowed root, false otherwise
+ */
+export function isPathWithin(allowedRoots: unknown[], targetPath: unknown): boolean {
+  // Type validation
+  if (!Array.isArray(allowedRoots) || typeof targetPath !== 'string' || !targetPath) {
+    return false;
+  }
+
+  // Reject null bytes (forbidden in paths)
+  if (targetPath.includes('\x00')) {
+    return false;
+  }
+
+  // Normalize the target once; resolve() also collapses `.`/`..` segments so
+  // traversal attempts are judged on where they actually land.
+  let resolvedTarget: string;
+  try {
+    resolvedTarget = path.resolve(path.normalize(targetPath));
+  } catch {
+    return false;
+  }
+  const foldedTarget = comparablePath(resolvedTarget);
+
+  return allowedRoots.some(root => {
+    if (typeof root !== 'string' || !root || root.includes('\x00')) {
+      return false;
+    }
+
+    let resolvedRoot: string;
+    try {
+      resolvedRoot = path.resolve(path.normalize(root));
+    } catch {
+      return false;
+    }
+    const foldedRoot = comparablePath(resolvedRoot);
+
+    // The target may be the allowed root itself
+    if (foldedTarget === foldedRoot) {
+      return true;
+    }
+
+    // Require a segment-boundary prefix. Resolved roots only keep their
+    // trailing separator at a file-system root (`/` or `C:\`), so this one
+    // rule covers plain directories, POSIX root, and drive roots alike —
+    // including the different-drive rejection on Windows.
+    const rootPrefix = foldedRoot.endsWith(path.sep) ? foldedRoot : foldedRoot + path.sep;
+    return foldedTarget.startsWith(rootPrefix);
+  });
+}
+
+/**
  * Checks if an absolute path is within any of the allowed directories.
- * 
+ *
+ * Backward-compatible wrapper around {@link isPathWithin} that preserves the
+ * historic argument order (target path first). All containment decisions —
+ * including the Windows case-insensitive behavior for issue #470 — live in
+ * {@link isPathWithin}.
+ *
  * @param absolutePath - The absolute path to check (will be normalized)
  * @param allowedDirectories - Array of absolute allowed directory paths (will be normalized)
  * @returns true if the path is within an allowed directory, false otherwise
- * @throws Error if given relative paths after normalization
  */
 export function isPathWithinAllowedDirectories(absolutePath: string, allowedDirectories: string[]): boolean {
   // Type validation
@@ -14,73 +104,5 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
     return false;
   }
 
-  // Reject empty inputs
-  if (!absolutePath || allowedDirectories.length === 0) {
-    return false;
-  }
-
-  // Reject null bytes (forbidden in paths)
-  if (absolutePath.includes('\x00')) {
-    return false;
-  }
-
-  // Normalize the input path
-  let normalizedPath: string;
-  try {
-    normalizedPath = path.resolve(path.normalize(absolutePath));
-  } catch {
-    return false;
-  }
-
-  // Verify it's absolute after normalization
-  if (!path.isAbsolute(normalizedPath)) {
-    throw new Error('Path must be absolute after normalization');
-  }
-
-  // Check against each allowed directory
-  return allowedDirectories.some(dir => {
-    if (typeof dir !== 'string' || !dir) {
-      return false;
-    }
-
-    // Reject null bytes in allowed dirs
-    if (dir.includes('\x00')) {
-      return false;
-    }
-
-    // Normalize the allowed directory
-    let normalizedDir: string;
-    try {
-      normalizedDir = path.resolve(path.normalize(dir));
-    } catch {
-      return false;
-    }
-
-    // Verify allowed directory is absolute after normalization
-    if (!path.isAbsolute(normalizedDir)) {
-      throw new Error('Allowed directories must be absolute paths after normalization');
-    }
-
-    // Check if normalizedPath is within normalizedDir
-    // Path is inside if it's the same or a subdirectory
-    if (normalizedPath === normalizedDir) {
-      return true;
-    }
-    
-    // Special case for root directory to avoid double slash
-    // On Windows, we need to check if both paths are on the same drive
-    if (normalizedDir === path.sep) {
-      return normalizedPath.startsWith(path.sep);
-    }
-    
-    // On Windows, also check for drive root (e.g., "C:\")
-    if (path.sep === '\\' && normalizedDir.match(/^[A-Za-z]:\\?$/)) {
-      // Ensure both paths are on the same drive
-      const dirDrive = normalizedDir.charAt(0).toLowerCase();
-      const pathDrive = normalizedPath.charAt(0).toLowerCase();
-      return pathDrive === dirDrive && normalizedPath.startsWith(normalizedDir.replace(/\\?$/, '\\'));
-    }
-    
-    return normalizedPath.startsWith(normalizedDir + path.sep);
-  });
+  return isPathWithin(allowedDirectories, absolutePath);
 }
