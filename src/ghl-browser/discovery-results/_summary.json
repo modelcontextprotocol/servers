@@ -1,0 +1,79 @@
+{
+  "generatedAt": "2026-08-18T20:11:49.610Z",
+  "pagesVisited": 12,
+  "uniqueApiEndpoints": 2,
+  "perPage": [
+    {
+      "label": "dashboard",
+      "path": "/dashboard",
+      "ghApiCount": 1,
+      "newGlobally": 1
+    },
+    {
+      "label": "workflows",
+      "path": "/automation/workflows",
+      "ghApiCount": 1,
+      "newGlobally": 0
+    },
+    {
+      "label": "funnels",
+      "path": "/sites/funnels",
+      "ghApiCount": 1,
+      "newGlobally": 0
+    },
+    {
+      "label": "opportunities",
+      "path": "/opportunities/list",
+      "ghApiCount": 1,
+      "newGlobally": 0
+    },
+    {
+      "label": "campaigns",
+      "path": "/marketing/campaigns",
+      "ghApiCount": 1,
+      "newGlobally": 0
+    },
+    {
+      "label": "social-planner",
+      "path": "/social-media/planner",
+      "ghApiCount": 1,
+      "newGlobally": 0
+    },
+    {
+      "label": "blogs",
+      "path": "/sites/blogs",
+      "ghApiCount": 1,
+      "newGlobally": 0
+    },
+    {
+      "label": "media-library",
+      "path": "/media",
+      "ghApiCount": 1,
+      "newGlobally": 0
+    },
+    {
+      "label": "calendars",
+      "path": "/calendars",
+      "ghApiCount": 1,
+      "newGlobally": 0
+    },
+    {
+      "label": "contacts",
+      "path": "/contacts/list",
+      "ghApiCount": 1,
+      "newGlobally": 0
+    },
+    {
+      "label": "conversations",
+      "path": "/conversations",
+      "ghApiCount": 1,
+      "newGlobally": 0
+    },
+    {
+      "label": "settings",
+      "path": "/settings",
+      "ghApiCount": 2,
+      "newGlobally": 1
+    }
+  ]
+}

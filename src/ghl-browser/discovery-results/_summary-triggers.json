@@ -1,0 +1,51 @@
+{
+  "generatedAt": "2026-08-18T20:28:15.293Z",
+  "triggersRun": 8,
+  "uniqueGhlApiEndpoints": 2,
+  "freshAcrossTriggers": [
+    "GET /localization/en-US/",
+    "GET /companies/branding"
+  ],
+  "perTrigger": [
+    {
+      "label": "contacts-search",
+      "count": 1,
+      "fresh": 1
+    },
+    {
+      "label": "workflows-open-first",
+      "count": 1,
+      "fresh": 0
+    },
+    {
+      "label": "calendar-open",
+      "count": 1,
+      "fresh": 0
+    },
+    {
+      "label": "settings-location",
+      "count": 1,
+      "fresh": 0
+    },
+    {
+      "label": "settings-company",
+      "count": 2,
+      "fresh": 1
+    },
+    {
+      "label": "users-list",
+      "count": 1,
+      "fresh": 0
+    },
+    {
+      "label": "reporting-attribution",
+      "count": 1,
+      "fresh": 0
+    },
+    {
+      "label": "invoices-list",
+      "count": 1,
+      "fresh": 0
+    }
+  ]
+}

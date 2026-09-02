@@ -1,0 +1,134 @@
+{
+  "path": "/dashboard",
+  "url": "https://app.leadconnectorhq.com/dashboard",
+  "globalsFound": 18,
+  "inlineScriptBlobs": 4,
+  "globals": [
+    {
+      "name": "__APP_MANIFEST__",
+      "kind": "object",
+      "size": 13271,
+      "preview": "{\"manifestVersion\":\"1754.5928\",\"mainAppVersion\":\"1754\",\"federatedApps\":{\"reputationApp\":\"https://appcdn.leadconnectorhq.com/revex/reputation/1821/remoteEntry.js?nocache=true\",\"yextApp\":\"https://appcdn.leadconnectorhq.com/revex/yext/1626/remoteEntry.js?nocache=true\",\"agencyDashboardApp\":\"https://appcdn.leadconnectorhq.com/revex/agency-dashboard/1800/remoteEntry.js?nocache=true\",\"voiceAiApp\":\"https://appcdn.leadconnectorhq.com/ai/voice-ai/542/remoteEntry.js?nocache=true\",\"certificatesApp\":\"https://appcdn.leadconnectorhq.com/revex/certificates-builder/1737/remoteEntry.js?nocache=true\",\"templateLibraryApp\":\"https://appcdn.leadconnectorhq.com/leadgen/template-library/154/remoteEntry.js?nocache=true\",\"adPublishingApp\":\"https://appcdn.leadconnectorhq.com/leadgen-ad-publishing/ad-publishing/102/remoteEntry.js?nocache=true\",\"wordpressApp\":\"https://appcdn.leadconnectorhq.com/revex/wordpress/1854/remoteEntry.js?nocache=true\",\"resellingApp\":\"https://appcdn.leadconnectorhq.com/revex/reselling/1865/remoteEntry.js?nocache=true\",\"affiliateDashboardApp\":\"https://appcdn.leadconnectorhq.com/revex/affiliate-portal/1870/remoteEntry.js?nocache=true\",\"saasApp\":\"https://appcdn.leadconnectorhq.com/revex/saas/1866/remoteEntry.js?nocache=true\",\"leadgenPaymentsApp\":\"https://appcdn.leadconnectorhq.com/leadgen/payments-widgets/371/remoteEntry.js?nocache=true\",\"paymentsApp\":\"https://appcdn.leadconnectorhq.com/leadgen/ghl-payments/372/remoteEntry.js?nocache=true\",\"locationBillingApp\":\"https://appcdn.leadconnectorhq.com/revex/location-billing/1827/remoteEntry.js?nocache=true\",\"companyApp\":\"https://appcdn.leadconnectorhq.com/revex/company/1867/remoteEntry.js?nocache=true\",\"locationsApp\":\"https://appcdn.leadconnectorhq.com/revex/locations/1871/remoteEntry.js?nocache=true\",\"contentAIApp\":\"https://appcdn.leadconnectorhq.com/crm/content-ai/31/remoteEntry.js?nocache=true\",\"platformBillingApp\":\"https://appcdn.leadconnectorhq.com/revex/platform-billing/47/remoteEntry.js?nocache=true\",\"agencyInternalToolsApp\":\"https://appcdn.leadconnectorhq.com/revex/agency-internaltools/1000/remoteEntry.js?nocache=true\",\"membershipApp\":\"https://appcdn.leadconnectorhq.com/revex/memberships/1869/remoteEntry.js?nocache=true\",\"communitiesApp\":\"https://appcdn.leadconnectorhq.com/revex/communities-builder/1783/remoteEntry.js?nocache=true\",\"goKollabApp\":\"https://appcdn.leadconnectorhq.com/revex/gokollab-builder/1767/remoteEntry.js?nocache=true\",\"snapshotsApp\":\"https://appcdn.leadconnectorhq.com/revex/snapshots/1850/remoteEntry.js?nocache=true\",\"productsApp\":\"https://appcdn.leadconnectorhq.com/leadgen/products/366/remoteEntry.js?nocache=true\",\"storeWidgetApp\":\"https://appcdn.leadconnectorhq.com/leadgen/store-widgets/25/remoteEntry.js?nocache=true\",\"ecommerceApp\":\"https://appcdn.leadconnectorhq.com/leadgen/ecommerce/65/remoteEntry.js?nocach\",\"aiEmployeesApp\":\"https://appcdn.leadconnectorhq.com/crm/ai-employees/2408/remoteEntry.js?nocache=true\",\"marketplaceApp\":\"https://appcdn.leadconnectorhq.com/marketplace/marketplace/100/remoteEntry.js?nocache=true\",\"powerDialerApp\":\"https://appcdn.leadconnectorhq.com/revex/power-dialer/1779/remoteEntry.js?nocache=true\",\"appointmentModalApp\":\"https://appcdn.leadconnectorhq.com/automation/appointment-modal/472/remoteEntry.js?nocache=true\",\"mediaEditorApp\":\"https://appcdn.leadconnectorhq.com/leadgen/MediaEditor/71/remoteEntry.js?nocache=true\",\"brandBoardsApp\":\"https://appcdn.leadconnectorhq.com/leadgen/brand-boards/38/remoteEntry.js?nocache=true\",\"chatWidgetApp\":\"https://appcdn.leadconnectorhq.com/leadgen/chat-widget/99/remoteEntry.js?nocache=true\",\"emailPreviewApp\":\"https://appcdn.leadconnectorhq.com/leadgen/email-preview/320/remoteEntry.js?nocache=true\",\"calendarSettingsApp\":\"https://appcdn.leadconnectorhq.com/automation/calendar-settings/477/remoteEntry.js?nocache=true\",\"onboardingApp\":\"https://appcdn.leadconnectorhq.com/leadgen/Onboarding/219/remoteEntry.js?nocache=true\",\"defaultEmailTemplatesApp\":\"https://appcdn.leadconnectorhq.com/leadgen/default-emails/317/remoteEntry.js?nocache=true\",\"contactsApp\":\"https://appcdn.leadconnectorhq.com/crm/contacts/2402/remoteEntry.js?nocache=true\",\"ghlContactRestoreApp\":\"https://appcdn.leadconnectorhq.com/crm/contacts-restore/1479/remoteEntry.js?nocache=true\",\"launchpadApp\":\"https://appcdn.leadconnectorhq.com/leadgen/Launchpad/209/remoteEntry.js?nocache=true\",\"agentStudioApp\":\"https://appcdn.leadconnectorhq.com/ai/agent-studio/543/remoteEntry.js?nocache=true\",\"featureDiscoveryApp\":\"https://appcdn.leadconnectorhq.com/automation/feature-discovery/470/remoteEntry.js?nocache=true\",\"invoicesApp\":\"https://appcdn.leadconnectorhq.com/leadgen/invoices/365/remoteEntry.js?nocache=true\",\"estimatesApp\":\"https://appcdn.leadconnectorhq.com/leadgen/estimates/369/remoteEntry.js?nocache=true\",\"leadgenPaymentLinksApp\":\"https://appcdn.leadconnectorhq.com/leadgen/payment-links/363/remoteEntry.js?nocache=true\",\"invoicesIntegrationsApp\":\"https://appcdn.leadconnectorhq.com/leadgen/invoices-integrations/348/remoteEntry.js?nocache=true\",\"reportingApp\":\"https://appcdn.leadconnectorhq.com/automation-reporting/reporting/255/remoteEntry.js?nocache=true\",\"snippetsApp\":\"https://appcdn.leadconnectorhq.com/crm/snippets/1074/remoteEntry.js?nocache=true\",\"scoringApp\":\"https://appcdn.leadconnectorhq.com/crm/scoring/948/remoteEntry.js?nocache=true\",\"labsApp\":\"https://appcdn.leadconnectorhq.com/crm/labs/9/remoteEntry.js?nocache=true\",\"documentsApp\":\"https://appcdn.leadconnectorhq.com/crm/documents/1636/remoteEntry.js?nocache=true\",\"customValuesApp\":\"https://appcdn.leadconnectorhq.com/crm/customValues/187/remoteEntry.js?nocache=true\",\"customFieldsApp\":\"https://appcdn.leadconnectorhq.com/crm/custom-fields/2079/remoteEntry.js?nocache=true\",\"bulkActionsApp\":\"https://appcdn.leadconnectorhq.com/crm/bulk-actions/2384/remoteEntry.js?nocache=true\",\"socialPlannerApp\":\"https://appcdn.leadconnectorhq.com/leadgen/SocialPlanner/325/remoteEntry.js?nocache=true\",\"locationSettingApp\":\"https://appcdn.leadconnectorhq.com/revex/LocationSetting/24/remoteEntry.js?nocache=true\",\"copilotApp\":\"https://appcdn.leadconnectorhq.com/ai/copilot/506/remoteEntry.js?nocache=true\",\"opportunitiesApp\":\"https://appcdn.leadconnectorhq.com/crm/opportunities/2398/remoteEntry.js?nocache=true\",\"domainConnectApp\":\"https://appcdn.leadconnectorhq.com/leadgen/funnel-website-domain-connect/196/remoteEntry.js?nocache=true\",\"domainResellingApp\":\"https://appcdn.leadconnectorhq.com/leadgen/domain-reselling/212/remoteEntry.js?nocache=true\",\"redirectApp\":\"https://appcdn.leadconnectorhq.com/leadgen/funnel-website-redirect/203/remoteEntry.js?nocache=true\",\"countdownTimerApp\":\"https://appcdn.leadconnectorhq.com/leadgen/countdown-timer/5/remoteEntry.js?nocache=true\",\"funnelWebsiteApp\":\"https://appcdn.leadconnectorhq.com/leadgen/funnel-website/216/remoteEntry.js?nocache=true\",\"formSurveyApp\":\"https://appcdn.leadconnectorhq.com/leadgen/form-survey/296/remoteEntry.js?nocache=true\",\"qrCodeListApp\":\"https://appcdn.leadconnectorhq.com/leadgen/qr-code-list/60/remoteEntry.js?nocache=true\",\"qrCodeBuilderApp\":\"https://appcdn.leadconnectorhq.com/leadgen/qr-code-builder/59/remoteEntry.js?nocache=true\",\"quizResultBuilderApp\":\"https://appcdn.leadconnectorhq.com/leadgen/quiz-result-builder/299/remoteEntry.js?nocache=true\",\"mediaCenterApp\":\"https://appcdn.leadconnectorhq.com/leadgen/media-center/165/remoteEntry.js?nocache=true\",\"proposalsEstimatesApp\":\"https://appcdn.leadconnectorhq.com/leadgen/proposals/108/remoteEntry.js?nocache=true\",\"proposalsEstimateTemplateApp\":\"https://appcdn.leadconnectorhq.com/leadgen/templates/108/remoteEntry.js?nocache=true\",\"phoneIntegrationApp\":\"https://appcdn.leadconnectorhq.com/revex/phone-integration/1873/remoteEntry.js?nocache=true\",\"customObjectsApp\":\"https://appcdn.leadconnectorhq.com/crm/custom-objects/2399/remoteEntry.js?nocache=true\",\"integrationsApp\":\"https://appcdn.leadconnectorhq.com/marketplace/integrations/101/remoteEntry.js?nocache=true\",\"conversationsApp\":\"https://appcdn.leadconnectorhq.com/crm/conversation"
+    },
+    {
+      "name": "__VUE_INSTANCE_SETTERS__",
+      "kind": "object",
+      "size": 6,
+      "preview": "[null]"
+    },
+    {
+      "name": "__VUE_SSR_SETTERS__",
+      "kind": "object",
+      "size": 6,
+      "preview": "[null]"
+    },
+    {
+      "name": "__INTLIFY_PROD_DEVTOOLS__",
+      "kind": "boolean",
+      "size": 5,
+      "preview": "false"
+    },
+    {
+      "name": "__INTLIFY_DROP_MESSAGE_COMPILER__",
+      "kind": "boolean",
+      "size": 5,
+      "preview": "false"
+    },
+    {
+      "name": "__VUE_I18N_FULL_INSTALL__",
+      "kind": "boolean",
+      "size": 4,
+      "preview": "true"
+    },
+    {
+      "name": "__VUE_I18N_LEGACY_API__",
+      "kind": "boolean",
+      "size": 4,
+      "preview": "true"
+    },
+    {
+      "name": "__GLOBAL_LOADING_REMOTE_ENTRY__",
+      "kind": "object",
+      "size": 2,
+      "preview": "{}"
+    },
+    {
+      "name": "__cssrContext",
+      "kind": "object",
+      "size": 2,
+      "preview": "{}"
+    },
+    {
+      "name": "__core-js_shared__",
+      "kind": "object",
+      "size": 1329,
+      "preview": "{\"versions\":[{\"version\":\"2.6.10\",\"mode\":\"global\",\"copyright\":\"© 2019 Denis Pushkarev (zloirock.ru)\"},{\"version\":\"3.26.1\",\"mode\":\"global\",\"copyright\":\"© 2014-2022 Denis Pushkarev (zloirock.ru)\",\"license\":\"https://github.com/zloirock/core-js/blob/v3.26.1/LICENSE\",\"source\":\"https://github.com/zloirock/core-js\"},{\"version\":\"3.26.1\",\"mode\":\"global\",\"copyright\":\"© 2014-2022 Denis Pushkarev (zloirock.ru)\",\"license\":\"https://github.com/zloirock/core-js/blob/v3.26.1/LICENSE\",\"source\":\"https://github.com/zloirock/core-js\"},{\"version\":\"3.26.1\",\"mode\":\"global\",\"copyright\":\"© 2014-2022 Denis Pushkarev (zloirock.ru)\",\"license\":\"https://github.com/zloirock/core-js/blob/v3.26.1/LICENSE\",\"source\":\"https://github.com/zloirock/core-js\"},{\"version\":\"3.26.1\",\"mode\":\"global\",\"copyright\":\"© 2014-2022 Denis Pushkarev (zloirock.ru)\",\"license\":\"https://github.com/zloirock/core-js/blob/v3.26.1/LICENSE\",\"source\":\"https://github.com/zloirock/core-js\"},{\"version\":\"3.48.0\",\"mode\":\"global\",\"copyright\":\"© 2013–2025 Denis Pushkarev (zloirock.ru), 2025–2026 CoreJS Company (core-js.io). All rights reserved.\",\"license\":\"https://github.com/zloirock/core-js/blob/v3.48.0/LICENSE\",\"source\":\"https://github.com/zloirock/core-js\"}],\"wks\":{},\"keys\":{\"IE_PROTO\":\"Symbol(IE_PROTO)_3.dyxnm62tz\"},\"symbol-registry\":{},\"symbols\":{},\"op-symbols\":{},\"state\":{}}"
+    },
+    {
+      "name": "__FRONTEND_CORE_EVENT_BUS__",
+      "kind": "object",
+      "size": 280,
+      "preview": "{\"eventBus\":{\"_lastId\":2,\"_subscriptions\":{},\"_options\":{\"logLevel\":\"error\"},\"_validator\":{\"customFormats\":{},\"schemas\":{},\"unresolvedRefs\":[],\"types\":{},\"attributes\":{}}},\"zodSchemas\":{},\"providerApps\":{},\"registeredApps\":{},\"loadingApps\":{},\"channelProviders\":{},\"readyApps\":{}}"
+    },
+    {
+      "name": "__dropCache",
+      "kind": "function",
+      "size": 13,
+      "preview": "[Function: o]"
+    },
+    {
+      "name": "__showCache",
+      "kind": "function",
+      "size": 13,
+      "preview": "[Function: r]"
+    },
+    {
+      "name": "__STATSIG__",
+      "kind": "object",
+      "size": 24,
+      "preview": "{\"SDK_VERSION\":\"3.31.2\"}"
+    },
+    {
+      "name": "__VUE__",
+      "kind": "boolean",
+      "size": 4,
+      "preview": "true"
+    },
+    {
+      "name": "__GHL_INTERACTION_TRACKER_BRIDGE__",
+      "kind": "object",
+      "size": 174,
+      "preview": "{\"config\":{\"mode\":\"ALL\",\"samplingRate\":1,\"enableLogging\":false,\"batchDelayMs\":2000},\"interactions\":{},\"operations\":{},\"metricsBatch\":[],\"globalMetadata\":{},\"batchTimer\":null}"
+    },
+    {
+      "name": "__SENTRY__",
+      "kind": "object",
+      "size": 13534,
+      "preview": "{\"version\":\"10.19.0\",\"10.19.0\":{\"defaultCurrentScope\":{\"_notifyingListeners\":false,\"_scopeListeners\":[],\"_eventProcessors\":[],\"_breadcrumbs\":[],\"_attachments\":[],\"_user\":{},\"_tags\":{},\"_extra\":{},\"_contexts\":{},\"_sdkProcessingMetadata\":{\"normalizedRequest\":{\"url\":\"https://app.leadconnectorhq.com/dashboard\",\"headers\":{\"User-Agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36\"}}},\"_propagationContext\":{\"traceId\":\"bab03578544b48b1acfa004fc2cef0e1\",\"sampleRand\":0.6722287211934288,\"sampled\":false,\"dsc\":{\"environment\":\"production\",\"release\":\"7e17e60958ddc78ea5feccd6a73278c1e45705be\",\"public_key\":\"c67431ff70d6440fb529c2705792425f\",\"trace_id\":\"bab03578544b48b1acfa004fc2cef0e1\",\"org_id\":\"176457\",\"sampled\":\"false\",\"sample_rand\":\"0.6722287211934288\",\"sample_rate\":\"0.02\"}},\"_client\":{\"_options\":{\"release\":\"7e17e60958ddc78ea5feccd6a73278c1e45705be\",\"sendClientReports\":true,\"parentSpanIsAlwaysRootSpan\":true,\"defaultIntegrations\":[{\"name\":\"InboundFilters\",\"isDefaultInstance\":true},{\"name\":\"FunctionToString\",\"isDefaultInstance\":true},{\"name\":\"BrowserApiErrors\",\"isDefaultInstance\":true},{\"name\":\"Breadcrumbs\",\"isDefaultInstance\":true},{\"name\":\"GlobalHandlers\",\"isDefaultInstance\":true},{\"name\":\"LinkedErrors\",\"isDefaultInstance\":true},{\"name\":\"Dedupe\",\"isDefaultInstance\":true},{\"name\":\"HttpContext\",\"isDefaultInstance\":true},{\"name\":\"BrowserSession\",\"isDefaultInstance\":true},{\"name\":\"Vue\",\"isDefaultInstance\":true}],\"dsn\":\"https://c67431ff70d6440fb529c2705792425f@o176457.ingest.sentry.io/1723141\",\"environment\":\"production\",\"_experiments\":{\"enableMetrics\":true},\"integrations\":[{\"name\":\"InboundFilters\",\"isDefaultInstance\":true},{\"name\":\"FunctionToString\",\"isDefaultInstance\":true},{\"name\":\"BrowserApiErrors\",\"isDefaultInstance\":true},{\"name\":\"Breadcrumbs\",\"isDefaultInstance\":true},{\"name\":\"GlobalHandlers\",\"isDefaultInstance\":true},{\"name\":\"LinkedErrors\",\"isDefaultInstance\":true},{\"name\":\"Dedupe\",\"isDefaultInstance\":true},{\"name\":\"HttpContext\",\"isDefaultInstance\":true},{\"name\":\"BrowserSession\",\"isDefaultInstance\":true},{\"name\":\"Vue\"},{\"name\":\"BrowserTracing\"},{\"name\":\"BrowserProfiling\"},{\"name\":\"ModuleMetadata\"}],\"sampleRate\":0.2,\"tracesSampleRate\":0.02,\"profilesSampleRate\":0.05,\"replaysSessionSampleRate\":0,\"replaysOnErrorSampleRate\":0,\"attachProps\":true,\"enableLogs\":false,\"allowUrls\":[{}],\"tracePropagationTargets\":[{}],\"_metadata\":{\"sdk\":{\"name\":\"sentry.javascript.vue\",\"packages\":[{\"name\":\"npm:@sentry/vue\",\"version\":\"10.19.0\"}],\"version\":\"10.19.0\",\"settings\":{\"infer_ip\":\"never\"}}}},\"_integrations\":{\"InboundFilters\":{\"name\":\"InboundFilters\",\"isDefaultInstance\":true},\"FunctionToString\":{\"name\":\"FunctionToString\",\"isDefaultInstance\":true},\"BrowserApiErrors\":{\"name\":\"BrowserApiErrors\",\"isDefaultInstance\":true},\"Breadcrumbs\":{\"name\":\"Breadcrumbs\",\"isDefaultInstance\":true},\"GlobalHandlers\":{\"name\":\"GlobalHandlers\",\"isDefaultInstance\":true},\"LinkedErrors\":{\"name\":\"LinkedErrors\",\"isDefaultInstance\":true},\"Dedupe\":{\"name\":\"Dedupe\",\"isDefaultInstance\":true},\"HttpContext\":{\"name\":\"HttpContext\",\"isDefaultInstance\":true},\"BrowserSession\":{\"name\":\"BrowserSession\",\"isDefaultInstance\":true},\"Vue\":{\"name\":\"Vue\"},\"BrowserTracing\":{\"name\":\"BrowserTracing\"},\"BrowserProfiling\":{\"name\":\"BrowserProfiling\"},\"ModuleMetadata\":{\"name\":\"ModuleMetadata\"}},\"_numProcessing\":0,\"_outcomes\":{\"sample_rate:transaction\":1,\"sample_rate:error\":1},\"_hooks\":{\"flush\":{},\"afterCaptureMetric\":{},\"beforeSendEvent\":{},\"preprocessEvent\":{},\"startNavigationSpan\":{},\"startPageLoadSpan\":{},\"endPageloadSpan\":{},\"spanStart\":{},\"beforeEnvelope\":{},\"applyFrameMetadata\":{},\"spanEnd\":{},\"idleSpanEnableAutoFinish\":{}},\"_eventProcessors\":[null,null,null],\"_dsn\":{\"protocol\":\"https\",\"publicKey\":\"c67431ff70d6440fb529c2705792425f\",\"pass\":\"\",\"host\":\"o176457.ingest.sentry.io\",\"port\":\"\",\"path\":\"\",\"projectId\":\"1723141\"},\"_transport\":{},\"_metricFlushIdleTimeout\":86},\"_transactionName\":\"/dashboard\"},\"defaultIsolationScope\":{\"_notifyingListeners\":false,\"_scopeListeners\":[],\"_eventProcessors\":[],\"_breadcrumbs\":[{\"timestamp\":1787086130.385,\"category\":\"console\",\"data\":{\"arguments\":[\"The user is not logged in. user_not_logged_in\"],\"logger\":\"console\"},\"level\":\"error\",\"message\":\"The user is not logged in. user_not_logged_in\"},{\"timestamp\":1787086130.419,\"category\":\"console\",\"data\":{\"arguments\":[\"This is test file\"],\"logger\":\"console\"},\"level\":\"log\",\"message\":\"This is test file\"},{\"timestamp\":1787086130.436,\"category\":\"xhr\",\"data\":{\"method\":\"POST\",\"url\":\"https://www.google-analytics.com/j/collect?v=1&_v=j102&a=1572775747&t=pageview&_s=1&dl=https%3A%2F%2Fapp.leadconnectorhq.com%2Fdashboard&ul=en-us&sr=1440x900&vp=1440x900&_u=aEBAAEABEAAAACAAI~&jid=408252574&gjid=1557220953&cid=1360487466.1787086130&tid=UA-115177999-2&_gid=1067786681.1787086130&_r=1&_slc=1&z=1243415441\",\"status_code\":0},\"type\":\"http\"},{\"timestamp\":1787086130.631,\"category\":\"xhr\",\"data\":{\"method\":\"GET\",\"url\":\"https://backend.leadconnectorhq.com/localization/en-US/?module=common,smartList,contactDetail,copilot\",\"status_code\":200},\"type\":\"http\"},{\"timestamp\":1787086130.637,\"category\":\"console\",\"data\":{\"arguments\":[\"Bootstrap - Error while checking firebase token\",\"The user is not logged in. user_not_logged_in\"],\"logger\":\"console\"},\"level\":\"error\",\"message\":\"Bootstrap - Error while checking firebase token The user is not logged in. user_not_logged_in\"},{\"timestamp\":1787086130.638,\"category\":\"navigation\",\"data\":{\"from\":\"/dashboard\",\"to\":\"/dashboard\"}},{\"timestamp\":1787086130.785,\"category\":\"fetch\",\"data\":{\"method\":\"POST\",\"url\":\"https://firebaseinstallations.googleapis.com/v1/projects/highlevel-backend/installations\",\"__span\":\"b029cf8736793eec\",\"status_code\":200},\"type\":\"http\"},{\"timestamp\":1787086131.031,\"category\":\"fetch\",\"data\":{\"method\":\"POST\",\"url\":\"https://firebaseremoteconfig.googleapis.com/v1/projects/highlevel-backend/namespaces/firebase:fetch?key=AIzaSyB_w3vXmsI7WeQtrIOkjR6xTRVN5uOieiE\",\"__span\":\"8a22c58f1d76b45e\",\"status_code\":200},\"type\":\"http\"}],\"_attachments\":[],\"_user\":{},\"_tags\":{\"module\":\"spm-ts\"},\"_extra\":{},\"_contexts\":{},\"_sdkProcessingMetadata\":{},\"_propagationContext\":{\"traceId\":\"3dd306d63b114818b1fde8f166b567af\",\"sampleRand\":0.040209978587049555},\"_session\":{\"sid\":\"e24117bffa624c01a6e9b6581438bf43\",\"init\":false,\"started\":\"2026-08-18T20:48:50.349Z\",\"timestamp\":\"2026-08-18T20:48:50.350Z\",\"status\":\"ok\",\"errors\":0,\"attrs\":{\"release\":\"7e17e60958ddc78ea5feccd6a73278c1e45705be\",\"environment\":\"production\",\"user_agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36\"}}},\"stack\":{\"_stack\":[{\"scope\":{\"_notifyingListeners\":false,\"_scopeListeners\":[],\"_eventProcessors\":[],\"_breadcrumbs\":[],\"_attachments\":[],\"_user\":{},\"_tags\":{},\"_extra\":{},\"_contexts\":{},\"_sdkProcessingMetadata\":{\"normalizedRequest\":{\"url\":\"https://app.leadconnectorhq.com/dashboard\",\"headers\":{\"User-Agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36\"}}},\"_propagationContext\":{\"traceId\":\"bab03578544b48b1acfa004fc2cef0e1\",\"sampleRand\":0.6722287211934288,\"sampled\":false,\"dsc\":{\"environment\":\"production\",\"release\":\"7e17e60958ddc78ea5feccd6a73278c1e45705be\",\"public_key\":\"c67431ff70d6440fb529c2705792425f\",\"trace_id\":\"bab03578544b48b1acfa004fc2cef0e1\",\"org_id\":\"176457\",\"sampled\":\"false\",\"sample_rand\":\"0.6722287211934288\",\"sample_rate\":\"0.02\"}},\"_client\":{\"_options\":{\"release\":\"7e17e60958ddc78ea5feccd6a73278c1e45705be\",\"sendClientReports\":true,\"parentSpanIsAlwaysRootSpan\":true,\"defaultIntegrations\":[{\"name\":\"InboundFilters\",\"isDefaultInstance\":true},{\"name\":\"FunctionToString\",\"isDefaultInstance\":true},{\"name\":\"BrowserApiErrors\",\"isDefaultInstance\":true},{\"name\":\"Breadcrumbs\",\"isDefaultInstance\":true},{\"name\":\"GlobalHandlers\",\"isDefaultInstance\":true},{\"name\":\"LinkedErrors\",\"isDefaultInstance\":true},{\"name\":\"Dedupe\",\"isDefaultInstance\":true},{\"name\":\"HttpContext\",\"isDefaultInstance\":true},{\"name\":\"BrowserSession\",\"isDefaul"
+    },
+    {
+      "name": "__sentry_instrumentation_handlers__",
+      "kind": "object",
+      "size": 24,
+      "preview": "{\"click\":{\"refCount\":2}}"
+    }
+  ],
+  "inlineScripts": [
+    {
+      "size": 953,
+      "preview": ";(function (apiKey) {\n        ;(function (p, e, n, d, o) {\n          var v, w, x, y, z, baseUrl\n          o = p[d] = p[d] || {}\n          o._q = o._q || []\n          v = ['initialize', 'identify', 'updateOptions', 'pageLoad', 'track']\n          for (w = 0, x = v.length; w < x; ++w)\n            (function (m) {\n              o[m] =\n                o[m] ||\n                function () {\n                  o._q[m === v[0] ? 'unshift' : 'push']([m].concat([].slice.call(arguments, 0)))\n                }\n            })(v[w])\n\n          var encodedUrl = 'aHR0cHM6Ly9jb250ZW50LnBhdGhmaW5kZXIuZ29oaWdobGV2ZWwuY29tL2FnZW50L3N0YXRpYy8='\n          baseUrl = atob(encodedUrl)\n\n          y = e.createElement(n)\n          y.async = !0\n          y.src = baseUrl + apiKey + '/pendo.js'\n          z = e.getElementsByTagName(n)[0]\n          z.parentNode.insertBefore(y, z)\n        })(window, document, 'script', 'pendo')\n      })('2609845c-58c9-4b6e-7126-639c4121d0b7')"
+    },
+    {
+      "size": 502,
+      "preview": ";(function (i, s, o, g, r, a, m) {\n        i['GoogleAnalyticsObject'] = r\n        ;((i[r] =\n          i[r] ||\n          function () {\n            ;(i[r].q = i[r].q || []).push(arguments)\n          }),\n          (i[r].l = 1 * new Date()))\n        a = s.createElement(o)\n        s.defer = true\n        m = s.getElementsByTagName(o)[0]\n        a.async = 1\n        a.src = g\n        m.parentNode.insertBefore(a, m)\n      })(window, document, 'script', 'https://www.google-analytics.com/analytics.js', 'ga')"
+    },
+    {
+      "size": 690,
+      "preview": "!(function (w, d, i, s) {\n        function l() {\n          if (!d.getElementById(i)) {\n            var f = d.getElementsByTagName(s)[0],\n              e = d.createElement(s)\n            ;((e.type = 'text/javascript'), (e.async = !0), (e.src = 'https://sdk.canny.io/sdk.js'), f.parentNode.insertBefore(e, f))\n          }\n        }\n        if ('function' != typeof w.Canny) {\n          var c = function () {\n            c.q.push(arguments)\n          }\n          ;((c.q = []),\n            (w.Canny = c),\n            'complete' === d.readyState ? l() : w.attachEvent ? w.attachEvent('onload', l) : w.addEventListener('load', l, !1))\n        }\n      })(window, document, 'canny-jssdk', 'script')"
+    },
+    {
+      "size": 2787,
+      "preview": "const mode = 'production'\n      const isDevServer = 'false' === 'true'\n      const shouldUseManifest = !(mode === 'development' || mode === 'staging')\n      const baseUrl = 'https://static.leadconnectorhq.com/' || '/'\n\n      if (!shouldUseManifest) {\n        window.__APP_MANIFEST__ = {}\n      }\n\n      async function loadManifestAndBootstrap() {\n        if (!shouldUseManifest) {\n          window.__APP_MANIFEST__ = {}\n          return\n        }\n\n        const manifestDomain = mode\n        const manifestBase = `https://${manifestDomain}.app-manifest.leadconnectorhq.com`\n\n        try {\n          const manifest = await fetch(`${manifestBase}/latest/manifest.json`)\n            .then(res => {\n              if (!res.ok) {\n                throw new Error('Failed to fetch latest manifest')\n              }\n              return res.json()\n            })\n            .catch(async err => {\n              console.error('Failed to fetch latest manifest: ', err)\n              console.log('Attempting to fetch fallback manifest...')\n              const fallbackRes = await fetch(`${manifestBase}/fallback/manifest.json`)\n              if (!fallbackRes.ok) {\n                throw new Error('Failed to fetch fallback manifest')\n              }\n              return fallbackRes.json()\n            })\n\n          window.__APP_MANIFEST__ = manifest\n\n          if (typeof manifest.tailwindcss === 'string' && manifest.tailwindcss) {\n            if (!document.querySelector('link[data-manifest-tailwind]')) {\n              const link = document.createElement('link')\n              link.rel = 'stylesheet'\n              link.href = manifest.tailwindcss\n              link.setAttribute('data-manifest-tailwind', 'true')\n              document.head.appendChild(link)\n            }\n          }\n\n          const script = document.createElement('script')\n          script.defer = true\n          script.type = 'module'\n          if (manifest && manifest.mainAppVersion) {\n            //if (mode === 'production') {\n            script.src = `${baseUrl}${manifest.mainAppVersion}/app.js`\n            // } else {\n            // script.src = `${window.location.origin}/${manifest.mainAppVersion}/app.js`\n            // }\n          } else {\n            script.src = `${baseUrl}app.js`\n          }\n          document.body.appendChild(script)\n        } catch (error) {\n          console.error('Error loading manifest:', error)\n\n          // const fallbackScript = document.createElement('script')\n          // fallbackScript.defer = true\n          // fallbackScript.type = 'module';\n          // fallbackScript.src = `${baseUrl}app.js`\n          // document.body.appendChild(fallbackScript)\n        }\n      }\n\n      document.addEventListener('DOMContentLoaded', () => {\n        loadManifestAndBootstrap()\n      })"
+    }
+  ]
+}
