@@ -175,32 +175,45 @@ export class KnowledgeGraphManager {
     return results;
   }
 
-  async deleteEntities(entityNames: string[]): Promise<void> {
+  async deleteEntities(entityNames: string[]): Promise<{ deleted: string[]; notFound: string[] }> {
     const graph = await this.loadGraph();
+    const present = new Set(graph.entities.map(e => e.name));
+    const deleted = entityNames.filter(name => present.has(name));
+    const notFound = entityNames.filter(name => !present.has(name));
     graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
     graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
     await this.saveGraph(graph);
+    return { deleted, notFound };
   }
 
-  async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
+  async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<{ deletedCount: number; missingEntities: string[] }> {
     const graph = await this.loadGraph();
+    let deletedCount = 0;
+    const missingEntities: string[] = [];
     deletions.forEach(d => {
       const entity = graph.entities.find(e => e.name === d.entityName);
       if (entity) {
+        const before = entity.observations.length;
         entity.observations = entity.observations.filter(o => !d.observations.includes(o));
+        deletedCount += before - entity.observations.length;
+      } else {
+        missingEntities.push(d.entityName);
       }
     });
     await this.saveGraph(graph);
+    return { deletedCount, missingEntities };
   }
 
-  async deleteRelations(relations: Relation[]): Promise<void> {
+  async deleteRelations(relations: Relation[]): Promise<{ deletedCount: number }> {
     const graph = await this.loadGraph();
+    const before = graph.relations.length;
     graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
       r.from === delRelation.from && 
       r.to === delRelation.to && 
       r.relationType === delRelation.relationType
     ));
     await this.saveGraph(graph);
+    return { deletedCount: before - graph.relations.length };
   }
 
   async readGraph(): Promise<KnowledgeGraph> {
@@ -410,11 +423,14 @@ server.registerTool(
     }
   },
   async ({ entityNames }) => {
-    await knowledgeGraphManager.deleteEntities(entityNames);
+    const { deleted, notFound } = await knowledgeGraphManager.deleteEntities(entityNames);
     notifyGraphUpdated();
+    const message = notFound.length === 0
+      ? "Entities deleted successfully"
+      : `Deleted ${deleted.length} of ${entityNames.length} entities. Not found: ${notFound.join(", ")}`;
     return {
-      content: [{ type: "text" as const, text: "Entities deleted successfully" }],
-      structuredContent: { success: true, message: "Entities deleted successfully" }
+      content: [{ type: "text" as const, text: message }],
+      structuredContent: { success: true, message }
     };
   }
 );
@@ -443,11 +459,16 @@ server.registerTool(
     }
   },
   async ({ deletions }) => {
-    await knowledgeGraphManager.deleteObservations(deletions);
+    const { deletedCount, missingEntities } = await knowledgeGraphManager.deleteObservations(deletions);
     notifyGraphUpdated();
+    const requested = deletions.reduce((total, d) => total + d.observations.length, 0);
+    const message = deletedCount === requested
+      ? "Observations deleted successfully"
+      : `Deleted ${deletedCount} of ${requested} observations.` +
+        (missingEntities.length ? ` Entities not found: ${missingEntities.join(", ")}` : "");
     return {
-      content: [{ type: "text" as const, text: "Observations deleted successfully" }],
-      structuredContent: { success: true, message: "Observations deleted successfully" }
+      content: [{ type: "text" as const, text: message }],
+      structuredContent: { success: true, message }
     };
   }
 );
@@ -473,11 +494,14 @@ server.registerTool(
     }
   },
   async ({ relations }) => {
-    await knowledgeGraphManager.deleteRelations(relations);
+    const { deletedCount } = await knowledgeGraphManager.deleteRelations(relations);
     notifyGraphUpdated();
+    const message = deletedCount === relations.length
+      ? "Relations deleted successfully"
+      : `Deleted ${deletedCount} of ${relations.length} relations. The rest matched nothing.`;
     return {
-      content: [{ type: "text" as const, text: "Relations deleted successfully" }],
-      structuredContent: { success: true, message: "Relations deleted successfully" }
+      content: [{ type: "text" as const, text: message }],
+      structuredContent: { success: true, message }
     };
   }
 );
