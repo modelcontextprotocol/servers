@@ -6,6 +6,7 @@ import {
   // Pure utility functions
   formatSize,
   normalizeLineEndings,
+  stripTrailingWhitespace,
   createUnifiedDiff,
   // Security & validation functions
   validatePath,
@@ -377,6 +378,57 @@ describe('Lib Functions', () => {
         await expect(writeFileContent('/test/script.sh', 'new content')).resolves.toBeUndefined();
         expect(mockFs.unlink).not.toHaveBeenCalled();
       });
+
+      it('strips trailing whitespace from each line before writing', async () => {
+        mockFs.writeFile.mockResolvedValueOnce(undefined);
+
+        await writeFileContent('/test/file.txt', 'line1   \nline2\t\nline3');
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          '/test/file.txt',
+          'line1\nline2\nline3',
+          { encoding: "utf-8", flag: 'wx' }
+        );
+      });
+
+      it('strips trailing whitespace on the EEXIST/atomic-rename fallback path too', async () => {
+        const eexistError = Object.assign(new Error('exists'), { code: 'EEXIST' });
+        mockFs.writeFile.mockRejectedValueOnce(eexistError);
+        mockFs.stat.mockResolvedValueOnce({ mode: 0o100644 });
+        mockFs.writeFile.mockResolvedValueOnce(undefined);
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        mockFs.chmod.mockResolvedValueOnce(undefined);
+
+        await writeFileContent('/test/file.txt', 'line1   \nline2  ');
+
+        expect(mockFs.writeFile).toHaveBeenLastCalledWith(
+          expect.stringContaining('/test/file.txt.'),
+          'line1\nline2',
+          'utf-8'
+        );
+      });
+    });
+
+    describe('stripTrailingWhitespace', () => {
+      it('removes trailing spaces and tabs from each line', () => {
+        const input = 'line1   \nline2\t\t\nline3';
+        expect(stripTrailingWhitespace(input)).toBe('line1\nline2\nline3');
+      });
+
+      it('leaves leading whitespace untouched', () => {
+        const input = '    indented line   \n\tmixed indent\t';
+        expect(stripTrailingWhitespace(input)).toBe('    indented line\n\tmixed indent');
+      });
+
+      it('does not change content with no trailing whitespace', () => {
+        const input = 'line1\nline2\nline3';
+        expect(stripTrailingWhitespace(input)).toBe(input);
+      });
+
+      it('preserves blank lines and trailing newline', () => {
+        const input = 'line1  \n\nline3   \n';
+        expect(stripTrailingWhitespace(input)).toBe('line1\n\nline3\n');
+      });
     });
 
     describe('moveFile', () => {
@@ -601,6 +653,60 @@ describe('Lib Functions', () => {
         expect(mockFs.rename).toHaveBeenCalledWith(
           expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
           '/test/file.txt'
+        );
+      });
+
+      it('strips trailing whitespace from the new text of an edit', async () => {
+        const edits = [
+          { oldText: 'line2', newText: 'modified line2   \t' }
+        ];
+
+        mockFs.rename.mockResolvedValueOnce(undefined);
+
+        await applyFileEdits('/test/file.txt', edits, false);
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          'line1\nmodified line2\nline3\n',
+          'utf-8'
+        );
+      });
+
+      it('does not touch trailing whitespace on lines outside the edit', async () => {
+        // line3 has trailing spaces but is never targeted by an edit
+        mockFs.readFile.mockResolvedValue('line1\nline2\nline3   \n');
+
+        const edits = [
+          { oldText: 'line1', newText: 'first line' }
+        ];
+
+        mockFs.rename.mockResolvedValueOnce(undefined);
+
+        await applyFileEdits('/test/file.txt', edits, false);
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          'first line\nline2\nline3   \n',
+          'utf-8'
+        );
+      });
+
+      it('strips trailing whitespace from multi-line replacement text', async () => {
+        const edits = [
+          {
+            oldText: 'line1\nline2',
+            newText: 'first line  \nsecond line\t'
+          }
+        ];
+
+        mockFs.rename.mockResolvedValueOnce(undefined);
+
+        await applyFileEdits('/test/file.txt', edits, false);
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+          'first line\nsecond line\nline3\n',
+          'utf-8'
         );
       });
 
