@@ -22,7 +22,12 @@
     "@modelcontextprotocol/server-everything": "*",
     "@modelcontextprotocol/server-memory": "*",
     "@modelcontextprotocol/server-filesystem": "*",
-    "@modelcontextprotocol/server-sequential-thinking": "*"
+    "@modelcontextprotocol/server-sequential-thinking": "*",
+    "@marcelo-ochoa/server-qnap": "*",
+    "@marcelo-ochoa/server-oracle": "*",
+    "@marcelo-ochoa/server-postgres": "*",
+    "@marcelo-ochoa/server-mysql": "*",
+    "@marcelo-ochoa/server-mikrotik": "*"
   },
   "overrides": {
     "qs": ">=6.15.2",

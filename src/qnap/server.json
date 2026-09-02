@@ -1,0 +1,21 @@
+{
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.github.marcelo-ochoa/qnap",
+    "description": "MCP server for QNAP NAS API",
+    "repository": {
+        "url": "https://github.com/marcelo-ochoa/servers",
+        "source": "github",
+        "subfolder": "src/qnap"
+    },
+    "version": "1.0.8",
+    "packages": [
+        {
+            "registryType": "npm",
+            "identifier": "@marcelo-ochoa/server-qnap",
+            "version": "1.0.8",
+            "transport": {
+                "type": "stdio"
+            }
+        }
+    ]
+}

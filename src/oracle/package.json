@@ -1,0 +1,48 @@
+{
+  "name": "@marcelo-ochoa/server-oracle",
+  "mcpName": "io.github.marcelo-ochoa/oracle",
+  "version": "1.0.7",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/marcelo-ochoa/servers.git",
+    "subfolder": "src/oracle"
+  },
+  "description": "An MCP server for Oracle databases.",
+  "keywords": [
+    "read-only-mcp",
+    "oracle-database",
+    "ai-agent",
+    "llm-tool",
+    "oci",
+    "rag"
+  ],
+  "license": "MIT",
+  "author": "Marcelo Fabian Ochoa",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/marcelo-ochoa/servers/issues",
+  "type": "module",
+  "bin": {
+    "mcp-server-oracle": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.2",
+    "@toon-format/toon": "^1.0.0",
+    "oracledb": "^6.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/oracledb": "^6.5.1",
+    "@vitest/coverage-v8": "^2.1.8",
+    "shx": "^0.3.4",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.8"
+  }
+}

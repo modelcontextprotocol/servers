@@ -1,0 +1,6 @@
+node_modules
+dist
+*.ts
+tsconfig.json
+Dockerfile
+.dockerignore
