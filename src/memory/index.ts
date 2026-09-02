@@ -8,6 +8,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { fileURLToPath } from 'url';
+import { SERVER_VERSION } from './version.js';
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
@@ -150,6 +151,17 @@ export class KnowledgeGraphManager {
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
     const graph = await this.loadGraph();
+    const entityNames = new Set(graph.entities.map(e => e.name));
+
+    relations.forEach(r => {
+      if (!entityNames.has(r.from)) {
+        throw new Error(`Entity with name ${r.from} not found`);
+      }
+      if (!entityNames.has(r.to)) {
+        throw new Error(`Entity with name ${r.to} not found`);
+      }
+    });
+
     const newRelations = relations.filter(r => !graph.relations.some(existingRelation => 
       existingRelation.from === r.from && 
       existingRelation.to === r.to && 
@@ -276,10 +288,9 @@ const RelationSchema = z.object({
   relationType: z.string().describe("The type of the relation")
 });
 
-// The server instance and tools exposed to Claude
 const server = new McpServer({
   name: "memory-server",
-  version: "0.6.3",
+  version: SERVER_VERSION,
 });
 
 const RESOURCE_URI = "memory://knowledge-graph";
