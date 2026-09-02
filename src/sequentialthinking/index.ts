@@ -4,20 +4,21 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { SequentialThinkingServer } from './lib.js';
+import { SERVER_VERSION } from './version.js';
 
-/** Safe boolean coercion that correctly handles string "false" */
-const coercedBoolean = z.preprocess((val) => {
+/** Safe boolean coercion that correctly handles string "false". A union+transform,
+ * not z.preprocess (whose input type is `unknown`), so toJSONSchema keeps this required. */
+const coercedBoolean = z.union([z.boolean(), z.string()]).transform((val, ctx) => {
   if (typeof val === "boolean") return val;
-  if (typeof val === "string") {
-    if (val.toLowerCase() === "true") return true;
-    if (val.toLowerCase() === "false") return false;
-  }
-  return val;
-}, z.boolean());
+  if (val.toLowerCase() === "true") return true;
+  if (val.toLowerCase() === "false") return false;
+  ctx.addIssue({ code: "custom", message: `Expected boolean or "true"/"false" string, received "${val}"` });
+  return z.NEVER;
+});
 
 const server = new McpServer({
   name: "sequential-thinking-server",
-  version: "0.2.0",
+  version: SERVER_VERSION,
 });
 
 const thinkingServer = new SequentialThinkingServer();
