@@ -20,6 +20,7 @@ The fetch tool will truncate the response, but by using the `start_index` argume
     - `max_length` (integer, optional): Maximum number of characters to return (default: 5000)
     - `start_index` (integer, optional): Start content from this character index (default: 0)
     - `raw` (boolean, optional): Get raw content without markdown conversion (default: false)
+    - `timeout_ms` (integer, optional): Override the server's default request timeout for this call, in milliseconds
 
 ### Prompts
 
@@ -173,6 +174,13 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 ### Customization - Proxy
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
+
+### Customization - Timeout
+
+By default, requests time out after 30 seconds. This can be changed server-wide with the `--timeout`
+argument (in milliseconds), or by setting the `FETCH_TIMEOUT_MS` environment variable — the `--timeout`
+argument takes precedence if both are set. Individual `fetch` tool calls can also override this by
+passing `timeout_ms` in the call arguments.
 
 ## Windows Configuration
 
