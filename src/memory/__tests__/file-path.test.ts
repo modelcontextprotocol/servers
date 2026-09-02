@@ -56,7 +56,34 @@ describe('ensureMemoryFilePath', () => {
       const result = await ensureMemoryFilePath();
 
       expect(path.isAbsolute(result)).toBe(true);
-      expect(result).toContain('custom-memory.jsonl');
+      expect(result).toBe(path.resolve(process.cwd(), relativePath));
+    });
+
+    it('should create parent directories for custom absolute paths', async () => {
+      const absolutePath = path.join(testDir, 'nested', 'dir', 'memory.jsonl');
+      process.env.MEMORY_FILE_PATH = absolutePath;
+
+      const result = await ensureMemoryFilePath();
+
+      expect(result).toBe(absolutePath);
+      const stat = await fs.stat(path.dirname(absolutePath));
+      expect(stat.isDirectory()).toBe(true);
+
+      await fs.rm(path.join(testDir, 'nested'), { recursive: true, force: true });
+    });
+
+    it('should migrate custom memory.json path to memory.jsonl', async () => {
+      const jsonPath = path.join(testDir, 'custom-memory.json');
+      const jsonlPath = `${jsonPath}l`;
+      process.env.MEMORY_FILE_PATH = jsonPath;
+      await fs.writeFile(jsonPath, '{"type":"entity","name":"a","entityType":"t","observations":[]}');
+
+      const result = await ensureMemoryFilePath();
+
+      expect(result).toBe(jsonlPath);
+      await fs.access(jsonlPath);
+      await fs.rm(jsonPath, { force: true }).catch(() => undefined);
+      await fs.unlink(jsonlPath).catch(() => undefined);
     });
 
     it('should handle Windows absolute paths', async () => {
