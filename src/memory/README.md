@@ -2,6 +2,8 @@
 
 A basic implementation of persistent memory using a local knowledge graph. This lets Claude remember information about the user across chats.
 
+Published on npm as [`@modelcontextprotocol/server-memory`](https://www.npmjs.com/package/@modelcontextprotocol/server-memory).
+
 ## Core Concepts
 
 ### Entities
@@ -70,6 +72,7 @@ Example:
       - `to` (string): Target entity name
       - `relationType` (string): Relationship type in active voice
   - Skips duplicate relations
+  - Fails if either the source or target entity doesn't exist
 
 - **add_observations**
   - Add new observations to existing entities

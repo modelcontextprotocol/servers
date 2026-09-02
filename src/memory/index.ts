@@ -7,7 +7,9 @@ import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { randomBytes } from 'crypto';
 import { fileURLToPath } from 'url';
+import { SERVER_VERSION } from './version.js';
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
@@ -129,7 +131,29 @@ export class KnowledgeGraphManager {
         relationType: r.relationType
       })),
     ];
-    await fs.writeFile(this.memoryFilePath, lines.join("\n"));
+
+    // Write to a temporary file in the same directory, then rename it over
+    // the target. fs.writeFile would truncate the memory file before writing,
+    // so an interruption (SIGKILL, container stop, OOM, power loss) would
+    // leave the only copy of the graph truncated and unrecoverable.
+    // rename(2) is atomic on POSIX filesystems: readers see either the
+    // complete old file or the complete new one, never a partial state.
+    // The temp file is kept in the same directory so the rename stays on one
+    // filesystem — renaming across mount points fails with EXDEV.
+    const directory = path.dirname(this.memoryFilePath);
+    const tempFilePath = path.join(
+      directory,
+      `${path.basename(this.memoryFilePath)}.${randomBytes(16).toString('hex')}.tmp`
+    );
+
+    try {
+      await fs.writeFile(tempFilePath, lines.join("\n"));
+      await fs.rename(tempFilePath, this.memoryFilePath);
+    } catch (error) {
+      // Never leave a stray temp file behind on failure.
+      await fs.unlink(tempFilePath).catch(() => {});
+      throw error;
+    }
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
@@ -142,6 +166,17 @@ export class KnowledgeGraphManager {
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
     const graph = await this.loadGraph();
+    const entityNames = new Set(graph.entities.map(e => e.name));
+
+    relations.forEach(r => {
+      if (!entityNames.has(r.from)) {
+        throw new Error(`Entity with name ${r.from} not found`);
+      }
+      if (!entityNames.has(r.to)) {
+        throw new Error(`Entity with name ${r.to} not found`);
+      }
+    });
+
     const newRelations = relations.filter(r => !graph.relations.some(existingRelation => 
       existingRelation.from === r.from && 
       existingRelation.to === r.to && 
@@ -268,10 +303,9 @@ const RelationSchema = z.object({
   relationType: z.string().describe("The type of the relation")
 });
 
-// The server instance and tools exposed to Claude
 const server = new McpServer({
   name: "memory-server",
-  version: "0.6.3",
+  version: SERVER_VERSION,
 });
 
 const RESOURCE_URI = "memory://knowledge-graph";
