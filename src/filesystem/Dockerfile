@@ -22,4 +22,6 @@ ENV NODE_ENV=production
 
 RUN npm ci --ignore-scripts --omit-dev
 
+USER node
+
 ENTRYPOINT ["node", "/app/dist/index.js"]
