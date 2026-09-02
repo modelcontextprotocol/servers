@@ -54,7 +54,7 @@
     - `prompts: {}`
     - `resources: { subscribe: true }`
   - **Server Instructions**
-    - Loaded from the docs folder (`server-instructions.md`).
+    - Loaded from the docs folder (`instructions.md`).
   - **Registrations**
     - Registers **tools** via `registerTools(server)`.
     - Registers **resources** via `registerResources(server)`.

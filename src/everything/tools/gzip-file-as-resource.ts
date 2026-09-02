@@ -27,7 +27,6 @@ const GZIP_ALLOWED_DOMAINS = (process.env.GZIP_ALLOWED_DOMAINS ?? "")
 const GZipFileAsResourceSchema = z.object({
   name: z.string().describe("Name of the output file").default("README.md.gz"),
   data: z
-    .string()
     .url()
     .describe("URL or data URI of the file content to compress")
     .default(
@@ -48,6 +47,12 @@ const config = {
   description:
     "Compresses a single file using gzip compression. Depending upon the selected output type, returns either the compressed data as a gzipped resource or a resource link, allowing it to be downloaded in a subsequent request during the current session.",
   inputSchema: GZipFileAsResourceSchema,
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
 };
 
 /**

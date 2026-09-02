@@ -31,9 +31,27 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
+On Windows, use `cmd /c` to launch `npx`:
+
+```json
+{
+  "mcpServers": {
+    "everything": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-everything"
+      ]
+    }
+  }
+}
+```
+
 ## Usage with VS Code
 
-For quick installation, use of of the one-click install buttons below...
+For quick installation, use one of the one-click install buttons below...
 
 [![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-NPM-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=everything&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-everything%22%5D%7D) [![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-NPM-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=everything&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-everything%22%5D%7D&quality=insiders)
 
@@ -62,6 +80,19 @@ Alternatively, you can add the configuration to a file called `.vscode/mcp.json`
 }
 ```
 
+On Windows, use:
+
+```json
+{
+  "servers": {
+    "everything": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-everything"]
+    }
+  }
+}
+```
+
 ## Running from source with [HTTP+SSE Transport](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#http-with-sse) (deprecated as of [2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports))
 
 ```shell
@@ -82,7 +113,7 @@ npm run start:streamableHttp
 ### Install 
 ```shell
 npm install -g @modelcontextprotocol/server-everything@latest
-````
+```
 
 ### Run the default (stdio) server
 ```shell
@@ -104,3 +135,6 @@ npx @modelcontextprotocol/server-everything sse
 npx @modelcontextprotocol/server-everything streamableHttp
 ```
 
+## License
+
+This MCP server is licensed under the MIT License. This means you are free to use, modify, and distribute the software, subject to the terms and conditions of the MIT License. For more details, please see the LICENSE file in the project repository.

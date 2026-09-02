@@ -6,7 +6,7 @@
 - Watch mode: `npm run watch` - Watches for changes and rebuilds automatically
 - Run STDIO server: `npm run start:stdio` - Starts the MCP server using stdio transport
 - Run SSE server: `npm run start:sse` - Starts the MCP server with SSE transport
-- Run StreamableHttp server: `npm run start:stremableHttp` - Starts the MCP server with StreamableHttp transport
+- Run StreamableHttp server: `npm run start:streamableHttp` - Starts the MCP server with StreamableHttp transport
 - Prepare release: `npm run prepare` - Builds the project for publishing
 
 ## Code Style Guidelines
