@@ -120,6 +120,37 @@ def test_convert_time_errors(source_tz, time_str, target_tz, expected_error):
         time_server.convert_time(source_tz, time_str, target_tz)
 
 
+def test_convert_time_rejects_nonexistent_dst_time():
+    # New York advances from 01:59 to 03:00 on this date, so 02:30 never
+    # occurs. ZoneInfo otherwise silently assigns it the earlier UTC-05:00
+    # offset and produces a conversion for a nonexistent wall time.
+    with freeze_time("2026-03-08 12:00:00+00:00"):
+        time_server = TimeServer()
+
+        with pytest.raises(
+            ValueError,
+            match=(
+                r"Time 02:30 does not exist in America/New_York on 2026-03-08 "
+                r"due to a UTC offset transition"
+            ),
+        ):
+            time_server.convert_time("America/New_York", "02:30", "UTC")
+
+
+@pytest.mark.parametrize(
+    "time_str,expected_utc",
+    [
+        ("01:30", "2026-03-08T06:30:00+00:00"),
+        ("03:30", "2026-03-08T07:30:00+00:00"),
+    ],
+)
+def test_convert_time_accepts_valid_times_around_dst_gap(time_str, expected_utc):
+    with freeze_time("2026-03-08 12:00:00+00:00"):
+        result = TimeServer().convert_time("America/New_York", time_str, "UTC")
+
+        assert result.target.datetime == expected_utc
+
+
 @pytest.mark.parametrize(
     "test_time,source_tz,time_str,target_tz,expected",
     [
