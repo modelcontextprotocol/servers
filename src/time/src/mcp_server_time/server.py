@@ -1,14 +1,22 @@
 from datetime import datetime, timedelta
 from enum import Enum
 import json
-from typing import Sequence
+from typing import Any, Sequence
 
 from zoneinfo import ZoneInfo
 from tzlocal import get_localzone_name  # ← returns "Europe/Paris", etc.
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, ToolAnnotations, TextContent, ImageContent, EmbeddedResource, ErrorData, INVALID_PARAMS
+from mcp.types import (
+    Tool,
+    ToolAnnotations,
+    TextContent,
+    ImageContent,
+    EmbeddedResource,
+    ErrorData,
+    INVALID_PARAMS,
+)
 from mcp.shared.exceptions import McpError
 
 from pydantic import BaseModel
@@ -38,6 +46,57 @@ class TimeConversionInput(BaseModel):
     target_tz_list: list[str]
 
 
+TIMEZONE_NAME_PATTERN = r"^[A-Za-z0-9_+\-./]+$"
+TIMEZONE_NAME_MAX_LENGTH = 128
+TIME_24H_PATTERN = r"^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
+
+
+def timezone_schema(description: str) -> dict[str, Any]:
+    return {
+        "type": "string",
+        "description": description,
+        "maxLength": TIMEZONE_NAME_MAX_LENGTH,
+        "pattern": TIMEZONE_NAME_PATTERN,
+    }
+
+
+def time_24h_schema() -> dict[str, Any]:
+    return {
+        "type": "string",
+        "description": "Time to convert in 24-hour format (HH:MM)",
+        "maxLength": 5,
+        "pattern": TIME_24H_PATTERN,
+    }
+
+
+def get_current_time_input_schema(local_tz: str) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "timezone": timezone_schema(
+                f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no timezone provided by the user."
+            )
+        },
+        "required": ["timezone"],
+    }
+
+
+def convert_time_input_schema(local_tz: str) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "source_timezone": timezone_schema(
+                f"Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no source timezone provided by the user."
+            ),
+            "time": time_24h_schema(),
+            "target_timezone": timezone_schema(
+                f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use '{local_tz}' as local timezone if no target timezone provided by the user."
+            ),
+        },
+        "required": ["source_timezone", "time", "target_timezone"],
+    }
+
+
 def get_local_tz(local_tz_override: str | None = None) -> ZoneInfo:
     if local_tz_override:
         return ZoneInfo(local_tz_override)
@@ -54,7 +113,9 @@ def get_zoneinfo(timezone_name: str) -> ZoneInfo:
     try:
         return ZoneInfo(timezone_name)
     except Exception as e:
-        raise McpError(ErrorData(code=INVALID_PARAMS, message=f"Invalid timezone: {str(e)}"))
+        raise McpError(
+            ErrorData(code=INVALID_PARAMS, message=f"Invalid timezone: {str(e)}")
+        )
 
 
 class TimeServer:
@@ -132,16 +193,7 @@ async def serve(local_timezone: str | None = None) -> None:
             Tool(
                 name=TimeTools.GET_CURRENT_TIME.value,
                 description="Get current time in a specific timezone",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "timezone": {
-                            "type": "string",
-                            "description": f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no timezone provided by the user.",
-                        }
-                    },
-                    "required": ["timezone"],
-                },
+                inputSchema=get_current_time_input_schema(local_tz),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
                     destructiveHint=False,
@@ -152,24 +204,7 @@ async def serve(local_timezone: str | None = None) -> None:
             Tool(
                 name=TimeTools.CONVERT_TIME.value,
                 description="Convert time between timezones",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "source_timezone": {
-                            "type": "string",
-                            "description": f"Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no source timezone provided by the user.",
-                        },
-                        "time": {
-                            "type": "string",
-                            "description": "Time to convert in 24-hour format (HH:MM)",
-                        },
-                        "target_timezone": {
-                            "type": "string",
-                            "description": f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use '{local_tz}' as local timezone if no target timezone provided by the user.",
-                        },
-                    },
-                    "required": ["source_timezone", "time", "target_timezone"],
-                },
+                inputSchema=convert_time_input_schema(local_tz),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
                     destructiveHint=False,
