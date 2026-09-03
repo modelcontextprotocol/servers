@@ -81,11 +81,11 @@ class TestExtractContentFromHtml:
         result = extract_content_from_html(html)
         assert "Example" in result
 
-    def test_empty_content_returns_error(self):
-        """Test that empty/invalid HTML returns error message."""
+    def test_empty_content_raises_error(self):
+        """Test that empty/invalid HTML raises ValueError."""
         html = ""
-        result = extract_content_from_html(html)
-        assert "<error>" in result
+        with pytest.raises(ValueError, match="Page failed to be simplified from HTML"):
+            extract_content_from_html(html)
 
 
 class TestCheckMayAutonomouslyFetchUrl:
@@ -190,9 +190,7 @@ class TestFetchUrl:
     @pytest.mark.asyncio
     async def test_fetch_html_page(self):
         """Test fetching an HTML page returns markdown content."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = """
+        html_content = """
         <html>
         <body>
             <article>
@@ -202,20 +200,23 @@ class TestFetchUrl:
         </body>
         </html>
         """
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
         mock_response.headers = {"content-type": "text/html"}
+        mock_response.aiter_bytes = MagicMock()
+        mock_response.aiter_bytes.return_value.__aiter__.return_value = [html_content.encode("utf-8")]
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+            mock_client.stream = MagicMock()
+            mock_client.stream.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client
 
             content, prefix = await fetch_url(
                 "https://example.com/page",
                 DEFAULT_USER_AGENT_AUTONOMOUS
             )
 
-            # HTML is processed, so we check it returns something
             assert isinstance(content, str)
             assert prefix == ""
 
@@ -223,16 +224,17 @@ class TestFetchUrl:
     async def test_fetch_html_page_raw(self):
         """Test fetching an HTML page with raw=True returns original HTML."""
         html_content = "<html><body><h1>Test</h1></body></html>"
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.text = html_content
         mock_response.headers = {"content-type": "text/html"}
+        mock_response.aiter_bytes = MagicMock()
+        mock_response.aiter_bytes.return_value.__aiter__.return_value = [html_content.encode("utf-8")]
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+            mock_client.stream = MagicMock()
+            mock_client.stream.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client
 
             content, prefix = await fetch_url(
                 "https://example.com/page",
@@ -247,16 +249,17 @@ class TestFetchUrl:
     async def test_fetch_json_returns_raw(self):
         """Test fetching JSON content returns raw content."""
         json_content = '{"key": "value"}'
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.text = json_content
         mock_response.headers = {"content-type": "application/json"}
+        mock_response.aiter_bytes = MagicMock()
+        mock_response.aiter_bytes.return_value.__aiter__.return_value = [json_content.encode("utf-8")]
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+            mock_client.stream = MagicMock()
+            mock_client.stream.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client
 
             content, prefix = await fetch_url(
                 "https://api.example.com/data",
@@ -269,14 +272,15 @@ class TestFetchUrl:
     @pytest.mark.asyncio
     async def test_fetch_404_raises_error(self):
         """Test that 404 response raises McpError."""
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 404
+        mock_response.headers = {}
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+            mock_client.stream = MagicMock()
+            mock_client.stream.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client
 
             with pytest.raises(McpError):
                 await fetch_url(
@@ -287,14 +291,15 @@ class TestFetchUrl:
     @pytest.mark.asyncio
     async def test_fetch_500_raises_error(self):
         """Test that 500 response raises McpError."""
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 500
+        mock_response.headers = {}
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+            mock_client.stream = MagicMock()
+            mock_client.stream.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client
 
             with pytest.raises(McpError):
                 await fetch_url(
@@ -305,16 +310,17 @@ class TestFetchUrl:
     @pytest.mark.asyncio
     async def test_fetch_with_proxy(self):
         """Test that proxy URL is passed to client."""
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.text = '{"data": "test"}'
         mock_response.headers = {"content-type": "application/json"}
+        mock_response.aiter_bytes = MagicMock()
+        mock_response.aiter_bytes.return_value.__aiter__.return_value = [b'{"data": "test"}']
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+            mock_client.stream = MagicMock()
+            mock_client.stream.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client
 
             await fetch_url(
                 "https://example.com/data",
@@ -323,4 +329,49 @@ class TestFetchUrl:
             )
 
             # Verify AsyncClient was called with proxy
-            mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+            mock_client_class.assert_called_once_with(
+                proxy="http://proxy.example.com:8080",
+                follow_redirects=True,
+                timeout=30.0
+            )
+
+    @pytest.mark.asyncio
+    async def test_fetch_exceeds_content_length_limit(self):
+        """Test that exceeding Content-Length limit raises McpError."""
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Length": str(10 * 1024 * 1024)} # 10MB
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.stream = MagicMock()
+            mock_client.stream.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            with pytest.raises(McpError, match="Response exceeds maximum allowed size"):
+                await fetch_url(
+                    "https://example.com/largefile",
+                    DEFAULT_USER_AGENT_AUTONOMOUS
+                )
+
+    @pytest.mark.asyncio
+    async def test_fetch_exceeds_download_limit(self):
+        """Test that exceeding download limit during streaming raises McpError."""
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        mock_response.headers = {} # No content-length
+        mock_response.aiter_bytes = MagicMock()
+        # Return chunks that exceed 2MB total
+        mock_response.aiter_bytes.return_value.__aiter__.return_value = [b"a" * (1024 * 1024)] * 3
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.stream = MagicMock()
+            mock_client.stream.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            with pytest.raises(McpError, match="Response body exceeded maximum limit"):
+                await fetch_url(
+                    "https://example.com/largefile",
+                    DEFAULT_USER_AGENT_AUTONOMOUS
+                )
