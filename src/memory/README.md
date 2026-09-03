@@ -87,7 +87,7 @@ Example:
   - Remove entities and their relations
   - Input: `entityNames` (string[])
   - Cascading deletion of associated relations
-  - Silent operation if entity doesn't exist
+  - No error if an entity doesn't exist; the response reports which names were not found
 
 - **delete_observations**
   - Remove specific observations from entities
@@ -95,7 +95,7 @@ Example:
     - Each object contains:
       - `entityName` (string): Target entity
       - `observations` (string[]): Observations to remove
-  - Silent operation if observation doesn't exist
+  - No error if an observation doesn't exist; the response reports how many were deleted
 
 - **delete_relations**
   - Remove specific relations from the graph
@@ -104,7 +104,7 @@ Example:
       - `from` (string): Source entity name
       - `to` (string): Target entity name
       - `relationType` (string): Relationship type
-  - Silent operation if relation doesn't exist
+  - No error if a relation doesn't exist; the response reports how many were deleted
 
 - **read_graph**
   - Read the entire knowledge graph
