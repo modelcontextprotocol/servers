@@ -215,7 +215,7 @@ server.registerTool(
   "read_file",
   {
     title: "Read File (Deprecated)",
-    description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
+    description: "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead. Only works within allowed directories.",
     inputSchema: ReadTextFileArgsSchema.shape,
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false }
