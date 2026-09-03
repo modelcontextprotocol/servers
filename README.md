@@ -137,6 +137,19 @@ On Windows, apply the same wrapper to each `npx`-based entry above by changing `
 
 Interested in creating your own MCP server? Visit the official documentation at [modelcontextprotocol.io](https://modelcontextprotocol.io/introduction) for comprehensive guides, best practices, and technical details on implementing MCP servers.
 
+### Publishing a Community Server
+
+Community-built servers should be published to the [MCP Registry](https://registry.modelcontextprotocol.io/), rather than added to this reference-server repository. The Registry stores server metadata and points clients to the package or container that you publish separately.
+
+The usual publishing flow is:
+
+1. Publish and test your server artifact (for example, an npm package or an OCI image).
+2. Add the Registry identity and artifact details to a `server.json` manifest. For GitHub-authenticated publishing, the manifest name must use the `io.github.<account>/...` namespace.
+3. Install [`mcp-publisher`](https://github.com/modelcontextprotocol/registry), then run `mcp-publisher validate` locally.
+4. Authenticate with `mcp-publisher login` and publish with `mcp-publisher publish`.
+
+See the [Registry publishing quickstart](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/quickstart.mdx) for the current manifest schema, package-specific ownership checks, and supported authentication methods. Registry publication does not require a pull request to this repository; use this repository's issue tracker for problems with the reference implementations themselves.
+
 ## 📚 Learn More
 
 See [ADDITIONAL.md](ADDITIONAL.md) for a curated list of frameworks and resources that simplify building MCP servers and clients.
