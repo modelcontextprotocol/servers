@@ -400,6 +400,139 @@ describe('Lib Functions', () => {
 
         expect(mockFs.rename).not.toHaveBeenCalled();
       });
+
+      it('falls back to copy and remove across filesystem boundaries', async () => {
+        const enoent = Object.assign(new Error('not found'), { code: 'ENOENT' });
+        const exdev = Object.assign(new Error('cross-device link'), {
+          code: 'EXDEV',
+        });
+        mockFs.lstat.mockRejectedValueOnce(enoent);
+        mockFs.rename.mockRejectedValueOnce(exdev);
+        mockFs.lstat.mockRejectedValueOnce(enoent);
+        mockFs.cp.mockResolvedValueOnce(undefined);
+        mockFs.rename.mockResolvedValueOnce(undefined);
+        mockFs.rm.mockResolvedValueOnce(undefined);
+
+        await moveFile('/source/file.txt', '/mounted-volume/file.txt');
+
+        expect(mockFs.cp).toHaveBeenCalledWith(
+          '/source/file.txt',
+          expect.stringMatching(
+            /^\/mounted-volume\/file\.txt\.[a-f0-9]+\.tmp$/,
+          ),
+          {
+            recursive: true,
+            errorOnExist: true,
+            force: false,
+            preserveTimestamps: true,
+            verbatimSymlinks: true,
+          },
+        );
+        const tempPath = mockFs.cp.mock.calls[0][1];
+        expect(mockFs.rename).toHaveBeenLastCalledWith(
+          tempPath,
+          '/mounted-volume/file.txt',
+        );
+        expect(mockFs.rm).toHaveBeenCalledWith('/source/file.txt', {
+          recursive: true,
+        });
+      });
+
+      it('does not copy when rename fails for another reason', async () => {
+        const enoent = Object.assign(new Error('not found'), { code: 'ENOENT' });
+        const permissionError = Object.assign(new Error('permission denied'), {
+          code: 'EACCES',
+        });
+        mockFs.lstat.mockRejectedValueOnce(enoent);
+        mockFs.rename.mockRejectedValueOnce(permissionError);
+
+        await expect(
+          moveFile('/source/file.txt', '/mounted-volume/file.txt'),
+        ).rejects.toBe(permissionError);
+
+        expect(mockFs.cp).not.toHaveBeenCalled();
+        expect(mockFs.rm).not.toHaveBeenCalled();
+      });
+
+      it('keeps the source when the cross-filesystem copy fails', async () => {
+        const enoent = Object.assign(new Error('not found'), { code: 'ENOENT' });
+        const exdev = Object.assign(new Error('cross-device link'), {
+          code: 'EXDEV',
+        });
+        mockFs.lstat.mockRejectedValueOnce(enoent);
+        mockFs.rename.mockRejectedValueOnce(exdev);
+        mockFs.cp.mockRejectedValueOnce(new Error('copy failed'));
+        mockFs.rm.mockResolvedValueOnce(undefined);
+
+        await expect(
+          moveFile('/source/file.txt', '/mounted-volume/file.txt'),
+        ).rejects.toThrow('copy failed');
+
+        const tempPath = mockFs.cp.mock.calls[0][1];
+        expect(mockFs.rm).toHaveBeenCalledWith(tempPath, {
+          recursive: true,
+          force: true,
+        });
+        expect(mockFs.rm).not.toHaveBeenCalledWith('/source/file.txt', {
+          recursive: true,
+        });
+      });
+
+      it('does not overwrite a destination created while copying', async () => {
+        const enoent = Object.assign(new Error('not found'), { code: 'ENOENT' });
+        const exdev = Object.assign(new Error('cross-device link'), {
+          code: 'EXDEV',
+        });
+        mockFs.lstat.mockRejectedValueOnce(enoent);
+        mockFs.rename.mockRejectedValueOnce(exdev);
+        mockFs.cp.mockResolvedValueOnce(undefined);
+        mockFs.lstat.mockResolvedValueOnce({} as any);
+        mockFs.rm.mockResolvedValueOnce(undefined);
+
+        await expect(
+          moveFile('/source/file.txt', '/mounted-volume/file.txt'),
+        ).rejects.toThrow('Destination already exists');
+
+        const tempPath = mockFs.cp.mock.calls[0][1];
+        expect(mockFs.rename).toHaveBeenCalledTimes(1);
+        expect(mockFs.rm).toHaveBeenCalledWith(tempPath, {
+          recursive: true,
+          force: true,
+        });
+        expect(mockFs.rm).not.toHaveBeenCalledWith('/source/file.txt', {
+          recursive: true,
+        });
+      });
+
+      it('cleans the staged copy when the final rename fails', async () => {
+        const enoent = Object.assign(new Error('not found'), { code: 'ENOENT' });
+        const exdev = Object.assign(new Error('cross-device link'), {
+          code: 'EXDEV',
+        });
+        const permissionError = Object.assign(new Error('permission denied'), {
+          code: 'EACCES',
+        });
+        mockFs.lstat.mockRejectedValueOnce(enoent);
+        mockFs.rename
+          .mockRejectedValueOnce(exdev)
+          .mockRejectedValueOnce(permissionError);
+        mockFs.cp.mockResolvedValueOnce(undefined);
+        mockFs.lstat.mockRejectedValueOnce(enoent);
+        mockFs.rm.mockResolvedValueOnce(undefined);
+
+        await expect(
+          moveFile('/source/file.txt', '/mounted-volume/file.txt'),
+        ).rejects.toBe(permissionError);
+
+        const tempPath = mockFs.cp.mock.calls[0][1];
+        expect(mockFs.rm).toHaveBeenCalledWith(tempPath, {
+          recursive: true,
+          force: true,
+        });
+        expect(mockFs.rm).not.toHaveBeenCalledWith('/source/file.txt', {
+          recursive: true,
+        });
+      });
     });
 
   });
