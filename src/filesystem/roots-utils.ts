@@ -4,6 +4,7 @@ import os from 'os';
 import { normalizePath } from './path-utils.js';
 import type { Root } from '@modelcontextprotocol/sdk/types.js';
 import { fileURLToPath } from "url";
+import { emitStartupValidationEvent } from './startup-errors.js';
 
 /**
  * Converts a root URI to a normalized directory path with basic security validation.
@@ -57,7 +58,18 @@ export async function getValidRootDirectories(
   for (const requestedRoot of requestedRoots) {
     const resolvedPath = await parseRootUri(requestedRoot.uri);
     if (!resolvedPath) {
-      console.error(formatDirectoryError(requestedRoot.uri, undefined, 'invalid path or inaccessible'));
+      const message = formatDirectoryError(
+        requestedRoot.uri,
+        undefined,
+        'invalid path or inaccessible',
+      );
+      console.error(message);
+      emitStartupValidationEvent({
+        code: 'root_invalid_or_inaccessible',
+        source: 'roots',
+        path: requestedRoot.uri,
+        message,
+      });
       continue;
     }
     
@@ -66,10 +78,28 @@ export async function getValidRootDirectories(
       if (stats.isDirectory()) {
         validatedDirectories.push(resolvedPath);
       } else {
-        console.error(formatDirectoryError(resolvedPath, undefined, 'non-directory root'));
+        const message = formatDirectoryError(
+          resolvedPath,
+          undefined,
+          'non-directory root',
+        );
+        console.error(message);
+        emitStartupValidationEvent({
+          code: 'root_not_directory',
+          source: 'roots',
+          path: resolvedPath,
+          message,
+        });
       }
     } catch (error) {
-      console.error(formatDirectoryError(resolvedPath, error));
+      const message = formatDirectoryError(resolvedPath, error);
+      console.error(message);
+      emitStartupValidationEvent({
+        code: 'root_validation_error',
+        source: 'roots',
+        path: resolvedPath,
+        message,
+      });
     }
   }
   
