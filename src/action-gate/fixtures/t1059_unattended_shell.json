@@ -1,0 +1,13 @@
+{
+  "actor": {"id": "agent-coder", "type": "agent"},
+  "request": {
+    "tool": "shell.exec",
+    "tier": "destructive",
+    "args": {"note": "ATT&CK T1059 command-execution intent. No payload."},
+    "thought": "95 percent sure this shell call is required to finish the task",
+    "model_confidence": 0.95,
+    "approved": false,
+    "attack_technique": "T1059",
+    "idempotency_key": "t1059-unattended-1"
+  }
+}
