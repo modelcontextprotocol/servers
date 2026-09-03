@@ -588,3 +588,29 @@ def test_serve_run_does_not_raise_exceptions(tmp_path: Path):
                 assert kwargs.get("raise_exceptions") is not True
 
     anyio.run(_run)
+
+
+def test_audit_logging_when_enabled(tmp_path: Path):
+    """Verify that optional audit ledger records git operations when configured."""
+    import importlib.util
+    if importlib.util.find_spec("guardclaw") is None:
+        pytest.skip("guardclaw not installed")
+
+    import importlib
+    gc = importlib.import_module("guardclaw")
+
+    audit_dir = tmp_path / "git_audit_logs"
+    key_mgr = gc.Ed25519KeyManager.generate()
+    ledger = gc.GEFLedger(
+        key_manager=key_mgr,
+        agent_id="mcp-server-git",
+        ledger_path=str(audit_dir),
+    )
+
+    # Emit tool call and result
+    e1 = ledger.emit(gc.RecordType.TOOL_CALL, payload={"tool": "git_status", "repo_path": "/tmp/repo"})
+    e2 = ledger.emit(gc.RecordType.TOOL_RESULT, payload={"tool": "git_status", "status": "clean", "intent_record_id": e1.record_id})
+
+    summary = gc.verify_ledger(str(audit_dir))
+    assert summary["chain_valid"] is True
+    assert summary["verified_count"] == 3  # Genesis + Call + Result
