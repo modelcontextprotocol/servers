@@ -27,22 +27,52 @@ DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://
 def extract_content_from_html(html: str) -> str:
     """Extract and convert HTML content to Markdown format.
 
-    Args:
-        html: Raw HTML content to process
+    Uses a three-stage fallback so pages that use progressive SSR -- where
+    the real content lives in a hidden pre-hydration container that Mozilla
+    Readability discards -- are not silently reduced to a one-line loading
+    shell.
 
-    Returns:
-        Simplified markdown version of the content
+    Stage 1: readabilipy + Readability (existing behaviour).
+    Stage 2: readabilipy without Readability -- keeps visibility:hidden
+             markup used by SSR frameworks.
+    Stage 3: raw markdownify as a last resort.
+
+    Stage 2/3 only fire when Stage 1 produces less than ~1% of the input
+    HTML as text, so normal pages see no behaviour change.
     """
-    ret = readabilipy.simple_json.simple_json_from_html_string(
-        html, use_readability=True
-    )
-    if not ret["content"]:
+
+    def _plain(x):
+        return markdownify.markdownify(x, heading_style=markdownify.ATX) if x else ""
+
+    stripped = html.strip()
+    if not stripped:
         return "<error>Page failed to be simplified from HTML</error>"
-    content = markdownify.markdownify(
-        ret["content"],
-        heading_style=markdownify.ATX,
-    )
-    return content
+
+    # Stage 1 -- Readability.
+    t = readabilipy.simple_json.simple_json_from_html_string(
+        stripped, use_readability=True
+    ).get("content") or ""
+    s1 = _plain(t).strip()
+
+    threshold = max(50, len(stripped) // 100)
+
+    if len(s1) >= threshold:
+        return s1
+
+    # Stage 2 -- readabilipy without Readability.
+    t2 = readabilipy.simple_json.simple_json_from_html_string(
+        stripped, use_readability=False
+    ).get("content") or ""
+    s2 = _plain(t2).strip()
+    if len(s2) >= threshold:
+        return s2
+
+    # Stage 3 -- raw markdownify of the original HTML.
+    fb = _plain(stripped).strip()
+    if len(fb) >= threshold:
+        return fb
+
+    return s1 or "<error>Page failed to be simplified from HTML</error>"
 
 
 def get_robots_txt_url(url: str) -> str:
