@@ -341,6 +341,49 @@ def test_validate_repo_path_symlink_escape(tmp_path: Path):
     with pytest.raises(ValueError) as exc_info:
         validate_repo_path(symlink, allowed)
     assert "outside the allowed repository" in str(exc_info.value)
+
+
+def test_validate_repo_path_prefix_collision(tmp_path: Path):
+    """Path sharing a common prefix with allowed_repository must not bypass validation."""
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    prefix_collision = tmp_path / "allowed_suffix"
+    prefix_collision.mkdir()
+
+    with pytest.raises(ValueError) as exc_info:
+        validate_repo_path(prefix_collision, allowed)
+    assert "outside the allowed repository" in str(exc_info.value)
+
+
+def test_validate_repo_path_nested_symlink_chain(tmp_path: Path):
+    """Chained symlinks pointing outside allowed_repository must be rejected."""
+    allowed = tmp_path / "allowed_repo"
+    allowed.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    link1 = allowed / "link1"
+    link2 = allowed / "link2"
+    link2.symlink_to(outside)
+    link1.symlink_to(link2)
+
+    with pytest.raises(ValueError) as exc_info:
+        validate_repo_path(link1, allowed)
+    assert "outside the allowed repository" in str(exc_info.value)
+
+
+def test_validate_repo_path_symlink_inside_allowed(tmp_path: Path):
+    """Symlink pointing to a target inside allowed_repository should be accepted."""
+    allowed = tmp_path / "allowed_repo"
+    allowed.mkdir()
+    real_subdir = allowed / "real_dir"
+    real_subdir.mkdir()
+
+    symlink = allowed / "symlink_dir"
+    symlink.symlink_to(real_subdir)
+
+    validate_repo_path(symlink, allowed)  # Should not raise
+
 # Tests for argument injection protection
 
 def test_git_diff_rejects_flag_injection(test_repository):
