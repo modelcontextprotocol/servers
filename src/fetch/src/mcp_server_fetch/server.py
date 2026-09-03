@@ -78,6 +78,7 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
                 robot_txt_url,
                 follow_redirects=True,
                 headers={"User-Agent": user_agent},
+                timeout=30,
             )
         except HTTPError:
             raise McpError(ErrorData(
@@ -91,6 +92,11 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
             ))
         elif 400 <= response.status_code < 500:
             return
+        elif response.status_code >= 500:
+            raise McpError(ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"Failed to fetch robots.txt {robot_txt_url} - server error (status {response.status_code})",
+            ))
         robot_txt = response.text
     processed_robot_txt = "\n".join(
         line for line in robot_txt.splitlines() if not line.strip().startswith("#")
