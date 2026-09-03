@@ -75,7 +75,7 @@ describe('ensureMemoryFilePath', () => {
     });
 
     it('should expand a leading "~/" to the home directory', async () => {
-      process.env.MEMORY_FILE_PATH = path.join('~', 'custom-memory.jsonl');
+      process.env.MEMORY_FILE_PATH = '~/custom-memory.jsonl';
 
       const result = await ensureMemoryFilePath();
 
