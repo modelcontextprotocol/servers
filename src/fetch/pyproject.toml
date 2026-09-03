@@ -18,12 +18,16 @@ classifiers = [
 dependencies = [
     "httpx>=0.27",
     "markdownify>=0.13.1",
-    "mcp>=1.1.3",
+    "mcp>=1.29.0,<2",
     "protego>=0.3.1",
     "pydantic>=2.0.0",
     "readabilipy>=0.2.0",
     "requests>=2.32.3",
 ]
+
+[project.urls]
+Repository = "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch"
+Issues = "https://github.com/modelcontextprotocol/servers/issues"
 
 [project.scripts]
 mcp-server-fetch = "mcp_server_fetch:main"
