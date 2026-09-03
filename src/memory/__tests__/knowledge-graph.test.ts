@@ -696,4 +696,79 @@ describe('KnowledgeGraphManager', () => {
       expect(graph.entities.map(e => e.name)).toEqual(['Alice', 'Bob']);
     });
   });
+
+  describe('concurrent mutations', () => {
+    // Regression test for #1819: concurrent tool calls each independently
+    // load the graph, mutate their own copy, and write it back. Without
+    // serialization, whichever write lands last silently discards the
+    // other's changes. All mutations below are fired without awaiting each
+    // other first, simulating multiple tool calls landing close together.
+
+    it('should not lose entities created concurrently', async () => {
+      const batch1: Entity[] = Array.from({ length: 10 }, (_, i) => ({
+        name: `batch1-entity-${i}`,
+        entityType: 'test',
+        observations: [],
+      }));
+      const batch2: Entity[] = Array.from({ length: 10 }, (_, i) => ({
+        name: `batch2-entity-${i}`,
+        entityType: 'test',
+        observations: [],
+      }));
+
+      // Fire both concurrently instead of awaiting sequentially.
+      await Promise.all([
+        manager.createEntities(batch1),
+        manager.createEntities(batch2),
+      ]);
+
+      const graph = await manager.readGraph();
+      expect(graph.entities).toHaveLength(20);
+      expect(graph.entities.map(e => e.name).sort()).toEqual(
+        [...batch1, ...batch2].map(e => e.name).sort()
+      );
+    });
+
+    it('should not lose relations created concurrently with entity creation', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: [] },
+        { name: 'Bob', entityType: 'person', observations: [] },
+        { name: 'Carol', entityType: 'person', observations: [] },
+      ]);
+
+      await Promise.all([
+        manager.createRelations([{ from: 'Alice', to: 'Bob', relationType: 'knows' }]),
+        manager.createRelations([{ from: 'Bob', to: 'Carol', relationType: 'knows' }]),
+        manager.addObservations([
+          { entityName: 'Alice', contents: ['likes coffee'] },
+        ]),
+      ]);
+
+      const graph = await manager.readGraph();
+      expect(graph.relations).toHaveLength(2);
+      expect(graph.entities.find(e => e.name === 'Alice')?.observations).toContain('likes coffee');
+    });
+
+    it('should keep the file valid JSONL after many concurrent mutations', async () => {
+      const operations = Array.from({ length: 25 }, (_, i) =>
+        manager.createEntities([
+          { name: `stress-entity-${i}`, entityType: 'test', observations: [] },
+        ])
+      );
+
+      await Promise.all(operations);
+
+      const raw = await fs.readFile(testFilePath, 'utf-8');
+      const lines = raw.split('\n').filter(line => line.trim() !== '');
+
+      // Every line must parse as valid JSON; a corrupted interleaved write
+      // would produce a truncated or malformed line here.
+      for (const line of lines) {
+        expect(() => JSON.parse(line)).not.toThrow();
+      }
+
+      const graph = await manager.readGraph();
+      expect(graph.entities).toHaveLength(25);
+    });
+  });
 });

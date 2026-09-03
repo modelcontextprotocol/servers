@@ -86,6 +86,26 @@ export interface KnowledgeGraph {
 export class KnowledgeGraphManager {
   constructor(private memoryFilePath: string) {}
 
+  // Serializes all read-modify-write graph mutations behind a single queue.
+  // Without this, concurrent tool calls (e.g. multiple mutations dispatched
+  // from one LLM turn) each independently load the graph, mutate their own
+  // copy, and write it back — so whichever write lands last silently
+  // overwrites the other's changes, and interleaved writes to the same file
+  // can corrupt it outright. See #1819.
+  private mutationQueue: Promise<unknown> = Promise.resolve();
+
+  private async withLock<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.mutationQueue.then(operation, operation);
+    // Always resolve the queue itself, even if this operation failed, so a
+    // single failed mutation doesn't permanently wedge every call after it.
+    // The failure still propagates normally to whoever awaited `result`.
+    this.mutationQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
       const data = await fs.readFile(this.memoryFilePath, "utf-8");
@@ -180,98 +200,110 @@ export class KnowledgeGraphManager {
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
-    const graph = await this.loadGraph();
-    const newEntities = entities.filter((e, index) =>
-      !graph.entities.some(existingEntity => existingEntity.name === e.name) &&
-      // Also skip duplicates appearing earlier in this same batch
-      !entities.slice(0, index).some(earlier => earlier.name === e.name)
-    );
-    graph.entities.push(...newEntities);
-    await this.saveGraph(graph);
-    return newEntities;
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const newEntities = entities.filter((e, index) =>
+        !graph.entities.some(existingEntity => existingEntity.name === e.name) &&
+        // Also skip duplicates appearing earlier in this same batch
+        !entities.slice(0, index).some(earlier => earlier.name === e.name)
+      );
+      graph.entities.push(...newEntities);
+      await this.saveGraph(graph);
+      return newEntities;
+    });
   }
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
-    const graph = await this.loadGraph();
-    const entityNames = new Set(graph.entities.map(e => e.name));
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const entityNames = new Set(graph.entities.map(e => e.name));
 
-    relations.forEach(r => {
-      if (!entityNames.has(r.from)) {
-        throw new Error(`Entity with name ${r.from} not found`);
-      }
-      if (!entityNames.has(r.to)) {
-        throw new Error(`Entity with name ${r.to} not found`);
-      }
+      relations.forEach(r => {
+        if (!entityNames.has(r.from)) {
+          throw new Error(`Entity with name ${r.from} not found`);
+        }
+        if (!entityNames.has(r.to)) {
+          throw new Error(`Entity with name ${r.to} not found`);
+        }
+      });
+
+      const isSameRelation = (a: Relation, b: Relation) =>
+        a.from === b.from &&
+        a.to === b.to &&
+        a.relationType === b.relationType;
+      const newRelations = relations.filter((r, index) =>
+        !graph.relations.some(existingRelation => isSameRelation(existingRelation, r)) &&
+        // Also skip duplicates appearing earlier in this same batch
+        !relations.slice(0, index).some(earlier => isSameRelation(earlier, r))
+      );
+      graph.relations.push(...newRelations);
+      await this.saveGraph(graph);
+      return newRelations;
     });
-
-    const isSameRelation = (a: Relation, b: Relation) =>
-      a.from === b.from &&
-      a.to === b.to &&
-      a.relationType === b.relationType;
-    const newRelations = relations.filter((r, index) =>
-      !graph.relations.some(existingRelation => isSameRelation(existingRelation, r)) &&
-      // Also skip duplicates appearing earlier in this same batch
-      !relations.slice(0, index).some(earlier => isSameRelation(earlier, r))
-    );
-    graph.relations.push(...newRelations);
-    await this.saveGraph(graph);
-    return newRelations;
   }
 
   async addObservations(observations: { entityName: string; contents: string[] }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
-    const graph = await this.loadGraph();
-    const results = observations.map(o => {
-      const entity = graph.entities.find(e => e.name === o.entityName);
-      if (!entity) {
-        throw new Error(`Entity with name ${o.entityName} not found`);
-      }
-      const newObservations = o.contents.filter(content => !entity.observations.includes(content));
-      entity.observations.push(...newObservations);
-      return { entityName: o.entityName, addedObservations: newObservations };
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const results = observations.map(o => {
+        const entity = graph.entities.find(e => e.name === o.entityName);
+        if (!entity) {
+          throw new Error(`Entity with name ${o.entityName} not found`);
+        }
+        const newObservations = o.contents.filter(content => !entity.observations.includes(content));
+        entity.observations.push(...newObservations);
+        return { entityName: o.entityName, addedObservations: newObservations };
+      });
+      await this.saveGraph(graph);
+      return results;
     });
-    await this.saveGraph(graph);
-    return results;
   }
 
   async deleteEntities(entityNames: string[]): Promise<{ deleted: string[]; notFound: string[] }> {
-    const graph = await this.loadGraph();
-    const present = new Set(graph.entities.map(e => e.name));
-    const deleted = entityNames.filter(name => present.has(name));
-    const notFound = entityNames.filter(name => !present.has(name));
-    graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
-    graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
-    await this.saveGraph(graph);
-    return { deleted, notFound };
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const present = new Set(graph.entities.map(e => e.name));
+      const deleted = entityNames.filter(name => present.has(name));
+      const notFound = entityNames.filter(name => !present.has(name));
+      graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
+      graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
+      await this.saveGraph(graph);
+      return { deleted, notFound };
+    });
   }
 
   async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<{ deletedCount: number; missingEntities: string[] }> {
-    const graph = await this.loadGraph();
-    let deletedCount = 0;
-    const missingEntities: string[] = [];
-    deletions.forEach(d => {
-      const entity = graph.entities.find(e => e.name === d.entityName);
-      if (entity) {
-        const before = entity.observations.length;
-        entity.observations = entity.observations.filter(o => !d.observations.includes(o));
-        deletedCount += before - entity.observations.length;
-      } else {
-        missingEntities.push(d.entityName);
-      }
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      let deletedCount = 0;
+      const missingEntities: string[] = [];
+      deletions.forEach(d => {
+        const entity = graph.entities.find(e => e.name === d.entityName);
+        if (entity) {
+          const before = entity.observations.length;
+          entity.observations = entity.observations.filter(o => !d.observations.includes(o));
+          deletedCount += before - entity.observations.length;
+        } else {
+          missingEntities.push(d.entityName);
+        }
+      });
+      await this.saveGraph(graph);
+      return { deletedCount, missingEntities };
     });
-    await this.saveGraph(graph);
-    return { deletedCount, missingEntities };
   }
 
   async deleteRelations(relations: Relation[]): Promise<{ deletedCount: number }> {
-    const graph = await this.loadGraph();
-    const before = graph.relations.length;
-    graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
-      r.from === delRelation.from && 
-      r.to === delRelation.to && 
-      r.relationType === delRelation.relationType
-    ));
-    await this.saveGraph(graph);
-    return { deletedCount: before - graph.relations.length };
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const before = graph.relations.length;
+      graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
+        r.from === delRelation.from && 
+        r.to === delRelation.to && 
+        r.relationType === delRelation.relationType
+      ));
+      await this.saveGraph(graph);
+      return { deletedCount: before - graph.relations.length };
+    });
   }
 
   async readGraph(): Promise<KnowledgeGraph> {
