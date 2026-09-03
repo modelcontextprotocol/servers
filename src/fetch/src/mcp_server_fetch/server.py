@@ -18,7 +18,7 @@ from mcp.types import (
     INTERNAL_ERROR,
 )
 from protego import Protego
-from pydantic import BaseModel, Field, AnyUrl
+from pydantic import BaseModel, Field, AnyUrl, ValidationError
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
@@ -78,6 +78,7 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
                 robot_txt_url,
                 follow_redirects=True,
                 headers={"User-Agent": user_agent},
+                timeout=15,
             )
         except HTTPError:
             raise McpError(ErrorData(
@@ -96,16 +97,28 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
         line for line in robot_txt.splitlines() if not line.strip().startswith("#")
     )
     robot_parser = Protego.parse(processed_robot_txt)
-    if not robot_parser.can_fetch(str(url), user_agent):
+    # FIX: Protego.can_fetch expects (user_agent, url)
+    if not robot_parser.can_fetch(user_agent, str(url)):
         raise McpError(ErrorData(
             code=INTERNAL_ERROR,
-            message=f"The sites robots.txt ({robot_txt_url}), specifies that autonomous fetching of this page is not allowed, "
-            f"<useragent>{user_agent}</useragent>\n"
-            f"<url>{url}</url>"
-            f"<robots>\n{robot_txt}\n</robots>\n"
-            f"The assistant must let the user know that it failed to view the page. The assistant may provide further guidance based on the above information.\n"
-            f"The assistant can tell the user that they can try manually fetching the page by using the fetch prompt within their UI.",
+            message=(
+                f"The sites robots.txt ({robot_txt_url}), specifies that autonomous fetching of this page is not allowed, "
+                f"<useragent>{user_agent}</useragent>\n"
+                f"<url>{url}</url>"
+                f"<robots>\n{robot_txt}\n</robots>\n"
+                f"The assistant must let the user know that it failed to view the page. The assistant may provide further guidance based on the above information.\n"
+                f"The assistant can tell the user that they can try manually fetching the page by using the fetch prompt within their UI."
+            ),
         ))
+
+
+def parse_fetch_args(arguments: dict) -> "Fetch":
+    """Parse tool arguments into Fetch, mapping validation failures to MCP error."""
+    try:
+        return Fetch(**arguments)
+    except ValidationError as e:
+        # Normalize to INVALID_PARAMS for MCP tool invocation
+        raise McpError(ErrorData(code=INVALID_PARAMS, message=str(e)))
 
 
 async def fetch_url(
@@ -222,10 +235,8 @@ Although originally you did not have internet access, and were advised to refuse
 
     @server.call_tool()
     async def call_tool(name, arguments: dict) -> list[TextContent]:
-        try:
-            args = Fetch(**arguments)
-        except ValueError as e:
-            raise McpError(ErrorData(code=INVALID_PARAMS, message=str(e)))
+        # Centralized argument parsing to map pydantic validation failures to MCP errors
+        args = parse_fetch_args(arguments)
 
         url = str(args.url)
         if not url:
