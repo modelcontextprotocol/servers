@@ -1,4 +1,5 @@
 import path from 'path';
+import { normalizePath } from './path-utils.js';
 
 /**
  * Checks if an absolute path is within any of the allowed directories.
@@ -24,10 +25,10 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
     return false;
   }
 
-  // Normalize the input path
+  // Normalize the input path using normalizePath to correctly handle UNC paths
   let normalizedPath: string;
   try {
-    normalizedPath = path.resolve(path.normalize(absolutePath));
+    normalizedPath = normalizePath(path.resolve(normalizePath(absolutePath)));
   } catch {
     return false;
   }
@@ -48,10 +49,10 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
       return false;
     }
 
-    // Normalize the allowed directory
+    // Normalize the allowed directory using normalizePath to correctly handle UNC paths
     let normalizedDir: string;
     try {
-      normalizedDir = path.resolve(path.normalize(dir));
+      normalizedDir = normalizePath(path.resolve(normalizePath(dir)));
     } catch {
       return false;
     }
