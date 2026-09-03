@@ -95,7 +95,8 @@ export class KnowledgeGraphManager {
   private mutationQueue: Promise<unknown> = Promise.resolve();
 
   private async withLock<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.mutationQueue.then(operation, operation);
+    const guarded = () => this.withFileLock(operation);
+    const result = this.mutationQueue.then(guarded, guarded);
     // Always resolve the queue itself, even if this operation failed, so a
     // single failed mutation doesn't permanently wedge every call after it.
     // The failure still propagates normally to whoever awaited `result`.
@@ -104,6 +105,56 @@ export class KnowledgeGraphManager {
       () => undefined,
     );
     return result;
+  }
+
+  // Cross-process exclusion. The queue above serialises this instance's
+  // mutations, but the server is stdio-only, so every client is its own
+  // process: two editor windows or two git worktrees sharing MEMORY_FILE_PATH
+  // each run their own queue and still overwrite each other's load→mutate→save
+  // (#1819, #3286). Measured on this commit: 20 writes split across two
+  // processes keep exactly 10 — each process serialises its own half and the
+  // last one to write the file wins. A sidecar lock file created with O_EXCL is
+  // atomic on POSIX and Windows and needs no dependency. A lock older than
+  // LOCK_STALE_MS is treated as left behind by a crashed process.
+  private static readonly LOCK_STALE_MS = 30_000;
+  private static readonly LOCK_RETRY_MS = 15;
+  private static readonly LOCK_TIMEOUT_MS = 10_000;
+
+  private get lockFilePath(): string {
+    return `${this.memoryFilePath}.lock`;
+  }
+
+  private async withFileLock<T>(operation: () => Promise<T>): Promise<T> {
+    await fs.mkdir(path.dirname(this.memoryFilePath), { recursive: true }).catch(() => {});
+    const deadline = Date.now() + KnowledgeGraphManager.LOCK_TIMEOUT_MS;
+    for (;;) {
+      let handle: fs.FileHandle;
+      try {
+        handle = await fs.open(this.lockFilePath, 'wx');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        try {
+          const stat = await fs.stat(this.lockFilePath);
+          if (Date.now() - stat.mtimeMs > KnowledgeGraphManager.LOCK_STALE_MS) {
+            await fs.unlink(this.lockFilePath).catch(() => {});
+            continue;
+          }
+        } catch {
+          continue; // the holder released between open and stat; retry now
+        }
+        if (Date.now() > deadline) {
+          throw new Error(`Timed out waiting for lock ${this.lockFilePath}`);
+        }
+        await new Promise(resolve => setTimeout(resolve, KnowledgeGraphManager.LOCK_RETRY_MS));
+        continue;
+      }
+      try {
+        return await operation();
+      } finally {
+        await handle.close().catch(() => {});
+        await fs.unlink(this.lockFilePath).catch(() => {});
+      }
+    }
   }
 
   private async loadGraph(): Promise<KnowledgeGraph> {
