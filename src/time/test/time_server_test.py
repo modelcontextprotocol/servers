@@ -526,3 +526,34 @@ def test_get_local_tz_various_timezones(mock_get_localzone, timezone_name):
     result = get_local_tz()
     assert str(result) == timezone_name
     assert isinstance(result, ZoneInfo)
+
+
+def test_get_current_time_invalid_timezone_raises_invalid_params():
+    """McpError for an unknown timezone must carry the INVALID_PARAMS error code.
+
+    This guards against the call_tool handler accidentally catching McpError and
+    re-raising it as a plain ValueError (which loses the structured error code).
+    """
+    from mcp.types import INVALID_PARAMS as MCP_INVALID_PARAMS
+    time_server = TimeServer()
+    with pytest.raises(McpError) as exc_info:
+        time_server.get_current_time("Bad/Timezone")
+    assert exc_info.value.error.code == MCP_INVALID_PARAMS
+
+
+def test_convert_time_invalid_source_timezone_raises_invalid_params():
+    """McpError for an invalid source timezone must carry the INVALID_PARAMS error code."""
+    from mcp.types import INVALID_PARAMS as MCP_INVALID_PARAMS
+    time_server = TimeServer()
+    with pytest.raises(McpError) as exc_info:
+        time_server.convert_time("Bad/Source", "12:00", "Europe/London")
+    assert exc_info.value.error.code == MCP_INVALID_PARAMS
+
+
+def test_convert_time_invalid_target_timezone_raises_invalid_params():
+    """McpError for an invalid target timezone must carry the INVALID_PARAMS error code."""
+    from mcp.types import INVALID_PARAMS as MCP_INVALID_PARAMS
+    time_server = TimeServer()
+    with pytest.raises(McpError) as exc_info:
+        time_server.convert_time("Europe/London", "12:00", "Bad/Target")
+    assert exc_info.value.error.code == MCP_INVALID_PARAMS
