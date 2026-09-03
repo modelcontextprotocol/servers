@@ -166,3 +166,22 @@ export const stopSimulatedResourceUpdates = (sessionId?: string) => {
     subsUpdateIntervals.delete(sessionId);
   }
 };
+
+/**
+ * Removes a disconnected session from all subscription Sets.
+ *
+ * Called from the server factory's `cleanup()` when a transport closes so
+ * that a client that subscribed and then disconnects without unsubscribing
+ * does not leave its sessionId in every Set it joined for the life of the
+ * process. Drops empty entries to avoid unbounded map growth.
+ *
+ * @param sessionId - The session ID to remove (can be undefined for stdio).
+ */
+export const removeSubscriber = (sessionId?: string) => {
+  for (const [uri, subscribers] of subscriptions.entries()) {
+    subscribers.delete(sessionId);
+    if (subscribers.size === 0) {
+      subscriptions.delete(uri);
+    }
+  }
+};
