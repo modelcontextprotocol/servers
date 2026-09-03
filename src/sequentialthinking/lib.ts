@@ -21,6 +21,16 @@ export class SequentialThinkingServer {
     this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
   }
 
+  // CSI escape sequences produced by chalk (e.g. "\x1b[34m...\x1b[39m") inflate
+  // `string.length` without adding any visible columns. Strip them before
+  // measuring width so the box frame and padding match what the user actually
+  // sees on screen.
+  private static readonly ANSI_PATTERN = /\x1b\[[0-9;]*[A-Za-z]/g;
+
+  private visibleWidth(s: string): number {
+    return s.replace(SequentialThinkingServer.ANSI_PATTERN, '').length;
+  }
+
   private formatThought(thoughtData: ThoughtData): string {
     const { thoughtNumber, totalThoughts, thought, isRevision, revisesThought, branchFromThought, branchId } = thoughtData;
 
@@ -39,13 +49,29 @@ export class SequentialThinkingServer {
     }
 
     const header = `${prefix} ${thoughtNumber}/${totalThoughts}${context}`;
-    const border = '─'.repeat(Math.max(header.length, thought.length) + 4);
+    const headerWidth = this.visibleWidth(header);
+
+    // Support multi-line thoughts: break on \n and size the box to the widest
+    // line. Previously a thought containing newlines produced a single very
+    // long row with the trailing "│" pushed onto a new line, breaking the box.
+    const thoughtLines = thought.split('\n');
+    const widestThoughtLine = thoughtLines.reduce(
+      (max, line) => Math.max(max, line.length),
+      0,
+    );
+
+    const innerWidth = Math.max(headerWidth, widestThoughtLine);
+    const border = '─'.repeat(innerWidth + 2);
+    const headerPadding = ' '.repeat(innerWidth - headerWidth);
+    const bodyLines = thoughtLines
+      .map((line) => `│ ${line.padEnd(innerWidth)} │`)
+      .join('\n');
 
     return `
 ┌${border}┐
-│ ${header} │
+│ ${header}${headerPadding} │
 ├${border}┤
-│ ${thought.padEnd(border.length - 2)} │
+${bodyLines}
 └${border}┘`;
   }
 
