@@ -83,7 +83,7 @@ describe('Resource Templates', () => {
       const resource = blobResource(uri, 1);
 
       expect(resource.uri).toBe(uri.toString());
-      expect(resource.mimeType).toBe('text/plain');
+      expect(resource.mimeType).toBe('application/octet-stream');
       expect(resource.blob).toBeDefined();
     });
 
