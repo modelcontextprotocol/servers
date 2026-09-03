@@ -13,6 +13,17 @@ Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server
 
 The fetch tool will truncate the response, but by using the `start_index` argument, you can specify where to start the content extraction. This lets models read a webpage in chunks, until they find the information they need.
 
+### Tool annotations
+
+This server sets [MCP ToolAnnotations](https://modelcontextprotocol.io/specification/2025-03-26/server/tools#toolannotations)
+on its tool so clients can apply safety policies (for example, gating outbound network access).
+
+| Tool   | readOnlyHint | idempotentHint | destructiveHint | openWorldHint |
+|--------|--------------|----------------|-----------------|---------------|
+| fetch  | true         | true           | false           | true          |
+
+The `openWorldHint: true` annotation reflects that `fetch` performs outbound HTTP requests to user-supplied URLs.
+
 ### Available Tools
 
 - `fetch` - Fetches a URL from the internet and extracts its contents as markdown.
