@@ -87,6 +87,57 @@ class TestExtractContentFromHtml:
         result = extract_content_from_html(html)
         assert "<error>" in result
 
+    def test_ssr_hidden_content_falls_back_to_raw(self):
+        """Test that SSR content with visibility:hidden triggers fallback to raw HTML.
+
+        Streaming/SSR sites inject content hidden (visibility:hidden, position:absolute,
+        top:-9999px) which Readability strips. When this happens, we fall back to
+        converting the raw HTML so the content is not silently dropped.
+        """
+        # Large SSR page where Readability would strip the hidden content
+        # The actual content is in a visibility:hidden div that Readability strips.
+        # When Readability returns minimal content (< 5% of input HTML), we fall back.
+        # We mock readabilipy to return minimal content (simulating the SSR stripping).
+        import readabilipy.simple_json
+        original_fn = readabilipy.simple_json.simple_json_from_html_string
+        
+        def mock_readability(html, **kwargs):
+            # Simulate Readability stripping hidden content and returning only
+            # the visible loading shell (tiny fraction of the HTML)
+            return {
+                "content": "<p>Loading...</p>",  # tiny content = fallback triggers
+                "title": None,
+                "byline": None,
+                "date": None,
+            }
+        
+        html = """<!DOCTYPE html>
+<html>
+<head><title>Streaming SSR Page</title></head>
+<body>
+    <div class="loading-shell">
+        <h1>Loading...</h1>
+        <p>This is the loading shell visible initially</p>
+    </div>
+    <div id="ssr-content" style="visibility:hidden; position:absolute; top:-9999px;">
+        <article>
+            <h1>Actual Page Title</h1>
+            <p>This is the real content that was rendered server-side but hidden</p>
+            <ul>
+                <li>Feature one</li>
+                <li>Feature two</li>
+                <li>Feature three</li>
+            </ul>
+        </article>
+    </div>
+</body>
+</html>"""
+        with patch.object(readabilipy.simple_json, 'simple_json_from_html_string', mock_readability):
+            result = extract_content_from_html(html)
+        # The fallback should preserve the hidden SSR content
+        assert "Actual Page Title" in result
+        assert "Feature one" in result
+        assert "Feature two" in result
 
 class TestCheckMayAutonomouslyFetchUrl:
     """Tests for check_may_autonomously_fetch_url function."""
