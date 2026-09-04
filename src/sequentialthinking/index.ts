@@ -93,9 +93,9 @@ You should:
       needsMoreThoughts: coercedBoolean.optional().describe("If more thoughts are needed")
     },
     annotations: {
-      readOnlyHint: true,
+      readOnlyHint: false,
       destructiveHint: false,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     },
     outputSchema: {
