@@ -198,6 +198,91 @@ def test_git_commit(test_repository):
     latest_commit = test_repository.head.commit
     assert latest_commit.message.strip() == "test commit message"
 
+def test_git_commit_refuses_when_nothing_is_staged(test_repository):
+    """repo.index.commit() writes a tree unconditionally, so an unstaged edit
+    used to come back as a hash for an empty commit while the working tree
+    stayed dirty and the edit stayed uncommitted."""
+    head_before = test_repository.head.commit.hexsha
+    file_path = Path(test_repository.working_dir) / "test.txt"
+    file_path.write_text("edited but never staged")
+
+    with pytest.raises(ValueError, match="No changes staged for commit"):
+        git_commit(test_repository, "should not be created")
+
+    assert test_repository.head.commit.hexsha == head_before
+    assert test_repository.is_dirty()
+
+def test_git_commit_refuses_on_a_clean_tree(test_repository):
+    head_before = test_repository.head.commit.hexsha
+
+    with pytest.raises(ValueError, match="No changes staged for commit"):
+        git_commit(test_repository, "nothing to record")
+
+    assert test_repository.head.commit.hexsha == head_before
+
+def test_git_commit_refuses_when_only_untracked_files_exist(test_repository):
+    head_before = test_repository.head.commit.hexsha
+    Path(test_repository.working_dir, "untracked.txt").write_text("never added")
+
+    with pytest.raises(ValueError, match="No changes staged for commit"):
+        git_commit(test_repository, "should not be created")
+
+    assert test_repository.head.commit.hexsha == head_before
+
+def test_git_commit_records_a_staged_deletion(test_repository):
+    """A deletion leaves no file behind, so it must not read as an empty index."""
+    test_repository.git.rm("test.txt")
+
+    result = git_commit(test_repository, "remove test.txt")
+
+    assert "Changes committed successfully with hash" in result
+    assert "test.txt" not in test_repository.head.commit.tree
+
+def test_git_commit_allows_the_first_commit_on_an_unborn_branch(tmp_path: Path):
+    repo = git.Repo.init(tmp_path / "unborn")
+    Path(repo.working_dir, "first.txt").write_text("first")
+    repo.index.add(["first.txt"])
+
+    result = git_commit(repo, "initial commit")
+
+    assert "Changes committed successfully with hash" in result
+    assert repo.head.commit.message.strip() == "initial commit"
+
+def test_git_commit_allows_an_empty_merge_commit(test_repository):
+    """git itself permits an empty commit while a merge is in progress, so a
+    merge whose result matches HEAD must still be committable.
+
+    Uses --no-commit rather than provoking a conflict: it sets MERGE_HEAD
+    deterministically, without depending on how a given git version reports
+    conflicts. The repo needs an explicit identity because `git merge` shells
+    out to git, which refuses to run without one.
+    """
+    with test_repository.config_writer() as cw:
+        cw.set_value("user", "name", "Test")
+        cw.set_value("user", "email", "test@example.com")
+
+    starting_branch = test_repository.active_branch.name
+    test_repository.git.checkout("-b", "side")
+    Path(test_repository.working_dir, "side.txt").write_text("side only")
+    test_repository.git.add("side.txt")
+    test_repository.index.commit("side change")
+
+    test_repository.git.checkout(starting_branch)
+    test_repository.git.merge("side", "--no-commit", "--no-ff")
+
+    # A merge is genuinely in progress...
+    assert (Path(test_repository.git_dir) / "MERGE_HEAD").exists()
+
+    # ...and the index is rolled back to HEAD's own content, so the pending
+    # commit records no change at all. git allows exactly this.
+    test_repository.git.rm("side.txt", "--cached")
+    Path(test_repository.working_dir, "side.txt").unlink()
+    assert not test_repository.index.diff(test_repository.head.commit)
+
+    result = git_commit(test_repository, "merge side")
+
+    assert "Changes committed successfully with hash" in result
+
 def test_git_reset(test_repository):
     file_path = Path(test_repository.working_dir) / "reset_test.txt"
     file_path.write_text("content to reset")
