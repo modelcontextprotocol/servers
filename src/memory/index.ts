@@ -6,19 +6,35 @@ import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextp
 import { z } from "zod";
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
 import { randomBytes } from 'crypto';
 import { fileURLToPath } from 'url';
+import { SERVER_VERSION } from './version.js';
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
 
+// Expand a leading "~" to the user's home directory. MCP clients pass
+// MEMORY_FILE_PATH from JSON config, where no shell performs tilde expansion,
+// so an unexpanded "~" would otherwise be treated as a relative path and
+// joined onto the package directory. Mirrors the helper of the same name in
+// the filesystem server (src/filesystem/path-utils.ts).
+export function expandHome(filepath: string): string {
+  if (filepath.startsWith('~/') || filepath === '~') {
+    return path.join(os.homedir(), filepath.slice(1));
+  }
+  return filepath;
+}
+
 // Handle backward compatibility: migrate memory.json to memory.jsonl if needed
 export async function ensureMemoryFilePath(): Promise<string> {
   if (process.env.MEMORY_FILE_PATH) {
-    // Custom path provided, use it as-is (with absolute path resolution)
-    return path.isAbsolute(process.env.MEMORY_FILE_PATH)
-      ? process.env.MEMORY_FILE_PATH
-      : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH);
+    // Custom path provided. Expand a leading "~" first, then resolve relative
+    // paths against the package directory (absolute paths are used as-is).
+    const customPath = expandHome(process.env.MEMORY_FILE_PATH);
+    return path.isAbsolute(customPath)
+      ? customPath
+      : path.join(path.dirname(fileURLToPath(import.meta.url)), customPath);
   }
   
   // No custom path set, check for backward compatibility migration
@@ -70,28 +86,71 @@ export interface KnowledgeGraph {
 export class KnowledgeGraphManager {
   constructor(private memoryFilePath: string) {}
 
+  // Serializes all read-modify-write graph mutations behind a single queue.
+  // Without this, concurrent tool calls (e.g. multiple mutations dispatched
+  // from one LLM turn) each independently load the graph, mutate their own
+  // copy, and write it back — so whichever write lands last silently
+  // overwrites the other's changes, and interleaved writes to the same file
+  // can corrupt it outright. See #1819.
+  private mutationQueue: Promise<unknown> = Promise.resolve();
+
+  private async withLock<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.mutationQueue.then(operation, operation);
+    // Always resolve the queue itself, even if this operation failed, so a
+    // single failed mutation doesn't permanently wedge every call after it.
+    // The failure still propagates normally to whoever awaited `result`.
+    this.mutationQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
       const data = await fs.readFile(this.memoryFilePath, "utf-8");
       const lines = data.split("\n").filter(line => line.trim() !== "");
-      return lines.reduce((graph: KnowledgeGraph, line) => {
-        const item = JSON.parse(line);
-        if (item.type === "entity") {
-          graph.entities.push({
-            name: item.name,
-            entityType: item.entityType,
-            observations: item.observations
-          });
+      const graph: KnowledgeGraph = { entities: [], relations: [] };
+
+      for (const line of lines) {
+        let item: unknown;
+        try {
+          item = JSON.parse(line);
+        } catch {
+          console.error("Skipping malformed line in memory file");
+          continue;
         }
-        if (item.type === "relation") {
-          graph.relations.push({
-            from: item.from,
-            to: item.to,
-            relationType: item.relationType
-          });
+
+        if (typeof item !== "object" || item === null) {
+          console.error("Skipping non-object line in memory file");
+          continue;
         }
-        return graph;
-      }, { entities: [], relations: [] });
+
+        const record = item as Record<string, unknown>;
+        if (record.type === "entity") {
+          const parsed = EntitySchema.safeParse(item);
+          if (parsed.success) {
+            graph.entities.push(parsed.data);
+          } else {
+            console.error(
+              "Skipping invalid entity in memory file:",
+              parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join(", ")
+            );
+          }
+        } else if (record.type === "relation") {
+          const parsed = RelationSchema.safeParse(item);
+          if (parsed.success) {
+            graph.relations.push(parsed.data);
+          } else {
+            console.error(
+              "Skipping invalid relation in memory file:",
+              parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join(", ")
+            );
+          }
+        }
+      }
+
+      return graph;
     } catch (error) {
       if (error instanceof Error && 'code' in error && (error as any).code === "ENOENT") {
         return { entities: [], relations: [] };
@@ -131,7 +190,7 @@ export class KnowledgeGraphManager {
     );
 
     try {
-      await fs.writeFile(tempFilePath, lines.join("\n"));
+      await fs.writeFile(tempFilePath, lines.join("\n") + "\n");
       await fs.rename(tempFilePath, this.memoryFilePath);
     } catch (error) {
       // Never leave a stray temp file behind on failure.
@@ -141,66 +200,110 @@ export class KnowledgeGraphManager {
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
-    const graph = await this.loadGraph();
-    const newEntities = entities.filter(e => !graph.entities.some(existingEntity => existingEntity.name === e.name));
-    graph.entities.push(...newEntities);
-    await this.saveGraph(graph);
-    return newEntities;
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const newEntities = entities.filter((e, index) =>
+        !graph.entities.some(existingEntity => existingEntity.name === e.name) &&
+        // Also skip duplicates appearing earlier in this same batch
+        !entities.slice(0, index).some(earlier => earlier.name === e.name)
+      );
+      graph.entities.push(...newEntities);
+      await this.saveGraph(graph);
+      return newEntities;
+    });
   }
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
-    const graph = await this.loadGraph();
-    const newRelations = relations.filter(r => !graph.relations.some(existingRelation => 
-      existingRelation.from === r.from && 
-      existingRelation.to === r.to && 
-      existingRelation.relationType === r.relationType
-    ));
-    graph.relations.push(...newRelations);
-    await this.saveGraph(graph);
-    return newRelations;
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const entityNames = new Set(graph.entities.map(e => e.name));
+
+      relations.forEach(r => {
+        if (!entityNames.has(r.from)) {
+          throw new Error(`Entity with name ${r.from} not found`);
+        }
+        if (!entityNames.has(r.to)) {
+          throw new Error(`Entity with name ${r.to} not found`);
+        }
+      });
+
+      const isSameRelation = (a: Relation, b: Relation) =>
+        a.from === b.from &&
+        a.to === b.to &&
+        a.relationType === b.relationType;
+      const newRelations = relations.filter((r, index) =>
+        !graph.relations.some(existingRelation => isSameRelation(existingRelation, r)) &&
+        // Also skip duplicates appearing earlier in this same batch
+        !relations.slice(0, index).some(earlier => isSameRelation(earlier, r))
+      );
+      graph.relations.push(...newRelations);
+      await this.saveGraph(graph);
+      return newRelations;
+    });
   }
 
   async addObservations(observations: { entityName: string; contents: string[] }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
-    const graph = await this.loadGraph();
-    const results = observations.map(o => {
-      const entity = graph.entities.find(e => e.name === o.entityName);
-      if (!entity) {
-        throw new Error(`Entity with name ${o.entityName} not found`);
-      }
-      const newObservations = o.contents.filter(content => !entity.observations.includes(content));
-      entity.observations.push(...newObservations);
-      return { entityName: o.entityName, addedObservations: newObservations };
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const results = observations.map(o => {
+        const entity = graph.entities.find(e => e.name === o.entityName);
+        if (!entity) {
+          throw new Error(`Entity with name ${o.entityName} not found`);
+        }
+        const newObservations = o.contents.filter(content => !entity.observations.includes(content));
+        entity.observations.push(...newObservations);
+        return { entityName: o.entityName, addedObservations: newObservations };
+      });
+      await this.saveGraph(graph);
+      return results;
     });
-    await this.saveGraph(graph);
-    return results;
   }
 
-  async deleteEntities(entityNames: string[]): Promise<void> {
-    const graph = await this.loadGraph();
-    graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
-    graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
-    await this.saveGraph(graph);
-  }
-
-  async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<void> {
-    const graph = await this.loadGraph();
-    deletions.forEach(d => {
-      const entity = graph.entities.find(e => e.name === d.entityName);
-      if (entity) {
-        entity.observations = entity.observations.filter(o => !d.observations.includes(o));
-      }
+  async deleteEntities(entityNames: string[]): Promise<{ deleted: string[]; notFound: string[] }> {
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const present = new Set(graph.entities.map(e => e.name));
+      const deleted = entityNames.filter(name => present.has(name));
+      const notFound = entityNames.filter(name => !present.has(name));
+      graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
+      graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
+      await this.saveGraph(graph);
+      return { deleted, notFound };
     });
-    await this.saveGraph(graph);
   }
 
-  async deleteRelations(relations: Relation[]): Promise<void> {
-    const graph = await this.loadGraph();
-    graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
-      r.from === delRelation.from && 
-      r.to === delRelation.to && 
-      r.relationType === delRelation.relationType
-    ));
-    await this.saveGraph(graph);
+  async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<{ deletedCount: number; missingEntities: string[] }> {
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      let deletedCount = 0;
+      const missingEntities: string[] = [];
+      deletions.forEach(d => {
+        const entity = graph.entities.find(e => e.name === d.entityName);
+        if (entity) {
+          const before = entity.observations.length;
+          entity.observations = entity.observations.filter(o => !d.observations.includes(o));
+          deletedCount += before - entity.observations.length;
+        } else {
+          missingEntities.push(d.entityName);
+        }
+      });
+      await this.saveGraph(graph);
+      return { deletedCount, missingEntities };
+    });
+  }
+
+  async deleteRelations(relations: Relation[]): Promise<{ deletedCount: number }> {
+    return this.withLock(async () => {
+      const graph = await this.loadGraph();
+      const before = graph.relations.length;
+      graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
+        r.from === delRelation.from && 
+        r.to === delRelation.to && 
+        r.relationType === delRelation.relationType
+      ));
+      await this.saveGraph(graph);
+      return { deletedCount: before - graph.relations.length };
+    });
   }
 
   async readGraph(): Promise<KnowledgeGraph> {
@@ -276,10 +379,9 @@ const RelationSchema = z.object({
   relationType: z.string().describe("The type of the relation")
 });
 
-// The server instance and tools exposed to Claude
 const server = new McpServer({
   name: "memory-server",
-  version: "0.6.3",
+  version: SERVER_VERSION,
 });
 
 const RESOURCE_URI = "memory://knowledge-graph";
@@ -410,11 +512,14 @@ server.registerTool(
     }
   },
   async ({ entityNames }) => {
-    await knowledgeGraphManager.deleteEntities(entityNames);
+    const { deleted, notFound } = await knowledgeGraphManager.deleteEntities(entityNames);
     notifyGraphUpdated();
+    const message = notFound.length === 0
+      ? "Entities deleted successfully"
+      : `Deleted ${deleted.length} of ${entityNames.length} entities. Not found: ${notFound.join(", ")}`;
     return {
-      content: [{ type: "text" as const, text: "Entities deleted successfully" }],
-      structuredContent: { success: true, message: "Entities deleted successfully" }
+      content: [{ type: "text" as const, text: message }],
+      structuredContent: { success: true, message }
     };
   }
 );
@@ -443,11 +548,16 @@ server.registerTool(
     }
   },
   async ({ deletions }) => {
-    await knowledgeGraphManager.deleteObservations(deletions);
+    const { deletedCount, missingEntities } = await knowledgeGraphManager.deleteObservations(deletions);
     notifyGraphUpdated();
+    const requested = deletions.reduce((total, d) => total + d.observations.length, 0);
+    const message = deletedCount === requested
+      ? "Observations deleted successfully"
+      : `Deleted ${deletedCount} of ${requested} observations.` +
+        (missingEntities.length ? ` Entities not found: ${missingEntities.join(", ")}` : "");
     return {
-      content: [{ type: "text" as const, text: "Observations deleted successfully" }],
-      structuredContent: { success: true, message: "Observations deleted successfully" }
+      content: [{ type: "text" as const, text: message }],
+      structuredContent: { success: true, message }
     };
   }
 );
@@ -473,11 +583,14 @@ server.registerTool(
     }
   },
   async ({ relations }) => {
-    await knowledgeGraphManager.deleteRelations(relations);
+    const { deletedCount } = await knowledgeGraphManager.deleteRelations(relations);
     notifyGraphUpdated();
+    const message = deletedCount === relations.length
+      ? "Relations deleted successfully"
+      : `Deleted ${deletedCount} of ${relations.length} relations. The rest matched nothing.`;
     return {
-      content: [{ type: "text" as const, text: "Relations deleted successfully" }],
-      structuredContent: { success: true, message: "Relations deleted successfully" }
+      content: [{ type: "text" as const, text: message }],
+      structuredContent: { success: true, message }
     };
   }
 );
@@ -509,6 +622,13 @@ server.registerTool(
   }
 );
 
+export const SEARCH_QUERY_MAX_LENGTH = 2048;
+
+export const SearchNodesQuerySchema = z
+  .string()
+  .max(SEARCH_QUERY_MAX_LENGTH)
+  .describe("The search query to match against entity names, types, and observation content");
+
 // Register search_nodes tool
 server.registerTool(
   "search_nodes",
@@ -516,7 +636,7 @@ server.registerTool(
     title: "Search Nodes",
     description: "Search for nodes in the knowledge graph based on a query",
     inputSchema: {
-      query: z.string().describe("The search query to match against entity names, types, and observation content")
+      query: SearchNodesQuerySchema
     },
     outputSchema: {
       entities: z.array(EntitySchema),
