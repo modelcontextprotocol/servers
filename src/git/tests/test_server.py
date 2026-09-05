@@ -250,23 +250,33 @@ def test_git_commit_allows_the_first_commit_on_an_unborn_branch(tmp_path: Path):
 
 def test_git_commit_allows_an_empty_merge_commit(test_repository):
     """git itself permits an empty commit while a merge is in progress, so a
-    conflict resolved back to HEAD's content must still be committable."""
+    merge whose result matches HEAD must still be committable.
+
+    Uses --no-commit rather than provoking a conflict: it sets MERGE_HEAD
+    deterministically, without depending on how a given git version reports
+    conflicts. The repo needs an explicit identity because `git merge` shells
+    out to git, which refuses to run without one.
+    """
+    with test_repository.config_writer() as cw:
+        cw.set_value("user", "name", "Test")
+        cw.set_value("user", "email", "test@example.com")
+
+    starting_branch = test_repository.active_branch.name
     test_repository.git.checkout("-b", "side")
-    Path(test_repository.working_dir, "test.txt").write_text("side")
-    test_repository.git.add("test.txt")
+    Path(test_repository.working_dir, "side.txt").write_text("side only")
+    test_repository.git.add("side.txt")
     test_repository.index.commit("side change")
 
-    test_repository.git.checkout("-")
-    Path(test_repository.working_dir, "test.txt").write_text("mainline")
-    test_repository.git.add("test.txt")
-    test_repository.index.commit("mainline change")
+    test_repository.git.checkout(starting_branch)
+    test_repository.git.merge("side", "--no-commit", "--no-ff")
 
-    with pytest.raises(git.GitCommandError):
-        test_repository.git.merge("side")
+    # A merge is genuinely in progress...
+    assert (Path(test_repository.git_dir) / "MERGE_HEAD").exists()
 
-    # Resolve to HEAD's own content, so the index matches HEAD exactly.
-    Path(test_repository.working_dir, "test.txt").write_text("mainline")
-    test_repository.git.add("test.txt")
+    # ...and the index is rolled back to HEAD's own content, so the pending
+    # commit records no change at all. git allows exactly this.
+    test_repository.git.rm("side.txt", "--cached")
+    Path(test_repository.working_dir, "side.txt").unlink()
     assert not test_repository.index.diff(test_repository.head.commit)
 
     result = git_commit(test_repository, "merge side")
