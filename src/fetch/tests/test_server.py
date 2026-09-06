@@ -7,9 +7,12 @@ from mcp.shared.exceptions import McpError
 from mcp_server_fetch.server import (
     extract_content_from_html,
     get_robots_txt_url,
+    is_host_allowed,
+    validate_url_allowed,
     check_may_autonomously_fetch_url,
     fetch_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
+    MAX_REDIRECTS,
 )
 
 
@@ -324,3 +327,394 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+def _make_mock_client(*responses):
+    """Build a mock httpx.AsyncClient whose get() returns the given responses in order."""
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=list(responses))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    return mock_client
+
+
+def _redirect_response(location: str, url: str = "https://example.com/start"):
+    mock_response = MagicMock()
+    mock_response.status_code = 302
+    mock_response.headers = {"location": location}
+    mock_response.url = url
+    return mock_response
+
+
+def _text_response(text: str = "hello", content_type: str = "text/plain"):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = text
+    mock_response.headers = {"content-type": content_type}
+    return mock_response
+
+
+class TestIsHostAllowed:
+    """Tests for is_host_allowed matching rules."""
+
+    def test_no_allowlist_allows_everything(self):
+        """Test that a None allowlist permits any host."""
+        assert is_host_allowed("anything.example", None) is True
+        assert is_host_allowed(None, None) is True
+
+    def test_exact_match(self):
+        """Test that an exact entry allows the same host."""
+        assert is_host_allowed("example.com", ["example.com"]) is True
+
+    def test_non_listed_host_denied(self):
+        """Test that a host absent from the list is denied."""
+        assert is_host_allowed("evil.com", ["example.com"]) is False
+
+    def test_case_insensitive(self):
+        """Test that matching ignores case on both sides."""
+        assert is_host_allowed("ExAmPlE.CoM", ["example.com"]) is True
+        assert is_host_allowed("example.com", ["EXAMPLE.COM"]) is True
+
+    def test_trailing_dot_normalized(self):
+        """Test that a trailing root-label dot is ignored."""
+        assert is_host_allowed("example.com.", ["example.com"]) is True
+
+    def test_subdomain_of_exact_entry_denied(self):
+        """Test that an exact entry does not cover subdomains."""
+        assert is_host_allowed("api.example.com", ["example.com"]) is False
+
+    def test_wildcard_matches_subdomain(self):
+        """Test that a wildcard entry matches a subdomain."""
+        assert is_host_allowed("api.example.com", ["*.example.com"]) is True
+
+    def test_wildcard_matches_bare_domain(self):
+        """Test that a wildcard entry also matches the bare domain."""
+        assert is_host_allowed("example.com", ["*.example.com"]) is True
+
+    def test_wildcard_matches_deep_subdomain(self):
+        """Test that a wildcard entry matches multi-level subdomains."""
+        assert is_host_allowed("a.b.example.com", ["*.example.com"]) is True
+
+    def test_wildcard_does_not_match_partial_suffix(self):
+        """Test that lookalike domains sharing a suffix are denied."""
+        assert is_host_allowed("notexample.com", ["*.example.com"]) is False
+        assert is_host_allowed("example.com.evil.com", ["*.example.com"]) is False
+        assert is_host_allowed("example.com.evil.com", ["example.com"]) is False
+
+    def test_ip_literal_exact_match(self):
+        """Test that IP literals match literally."""
+        assert is_host_allowed("127.0.0.1", ["127.0.0.1"]) is True
+        assert is_host_allowed("127.0.0.1", ["example.com"]) is False
+
+    def test_ipv6_entry_with_or_without_brackets(self):
+        """Test that IPv6 entries are accepted in both bracketed and bare form."""
+        assert is_host_allowed("::1", ["::1"]) is True
+        assert is_host_allowed("::1", ["[::1]"]) is True
+
+    def test_empty_list_denies_everything(self):
+        """Test that an empty allowlist denies all hosts."""
+        assert is_host_allowed("example.com", []) is False
+
+    def test_multiple_entries(self):
+        """Test matching against several entries."""
+        allowed = ["example.com", "*.github.com"]
+        assert is_host_allowed("example.com", allowed) is True
+        assert is_host_allowed("api.github.com", allowed) is True
+        assert is_host_allowed("example.org", allowed) is False
+
+    def test_entries_are_stripped(self):
+        """Test that whitespace around entries is ignored."""
+        assert is_host_allowed("example.com", [" example.com "]) is True
+
+    def test_idn_matches_punycode_form(self):
+        """Test that Unicode IDN hosts and punycode entries compare equal both ways."""
+        assert is_host_allowed("例え.jp", ["xn--r8jz45g.jp"]) is True
+        assert is_host_allowed("xn--r8jz45g.jp", ["例え.jp"]) is True
+        assert is_host_allowed("api.例え.jp", ["*.例え.jp"]) is True
+
+
+class TestValidateUrlAllowed:
+    """Tests for validate_url_allowed."""
+
+    def test_no_allowlist_never_raises(self):
+        """Test that a None allowlist permits any URL."""
+        validate_url_allowed("https://anything.example/page", None)
+
+    def test_allowed_host_passes(self):
+        """Test that an allowlisted host passes validation."""
+        validate_url_allowed("https://api.example.com/page", ["*.example.com"])
+
+    def test_denied_host_raises(self):
+        """Test that a non-allowlisted host raises McpError."""
+        with pytest.raises(McpError) as exc_info:
+            validate_url_allowed("https://evil.com/page", ["example.com"])
+        assert "not allowed" in str(exc_info.value)
+
+    def test_userinfo_does_not_bypass_allowlist(self):
+        """Test that https://allowed.com@evil.com/ connects to evil.com and is denied."""
+        with pytest.raises(McpError) as exc_info:
+            validate_url_allowed("https://example.com@evil.com/page", ["example.com"])
+        assert "evil.com" in str(exc_info.value)
+
+    def test_port_is_not_part_of_matching(self):
+        """Test that an entry allows the host on any port."""
+        validate_url_allowed("https://example.com:8443/page", ["example.com"])
+
+    def test_ipv6_url_validated_without_brackets(self):
+        """Test that the host of an IPv6 URL matches a bare IPv6 entry."""
+        validate_url_allowed("https://[::1]/page", ["::1"])
+
+    def test_url_without_hostname_raises(self):
+        """Test that a URL without a hostname raises McpError."""
+        with pytest.raises(McpError):
+            validate_url_allowed("file:///etc/passwd", ["example.com"])
+
+    def test_malformed_url_raises_mcp_error(self):
+        """Test that malformed URLs (e.g. invalid IPv6 literal) fail closed with McpError."""
+        with pytest.raises(McpError):
+            validate_url_allowed("https://[example.com]/", ["example.com"])
+
+    def test_url_without_hostname_allowed_when_no_allowlist(self):
+        """Test that hostless URLs pass when no allowlist is set."""
+        validate_url_allowed("file:///etc/passwd", None)
+
+
+class TestFetchUrlWithAllowlist:
+    """Tests for allowlist enforcement in fetch_url."""
+
+    @pytest.mark.asyncio
+    async def test_allowed_host_fetches(self):
+        """Test that an allowlisted host is fetched normally."""
+        mock_client = _make_mock_client(_text_response('{"ok": true}', "application/json"))
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            content, _ = await fetch_url(
+                "https://example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                allowed_hosts=["example.com"],
+            )
+        assert content == '{"ok": true}'
+
+    @pytest.mark.asyncio
+    async def test_denied_host_raises_before_request(self):
+        """Test that a denied host raises before any request is sent."""
+        mock_client = _make_mock_client(_text_response())
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(McpError) as exc_info:
+                await fetch_url(
+                    "https://evil.com/data",
+                    DEFAULT_USER_AGENT_AUTONOMOUS,
+                    allowed_hosts=["example.com"],
+                )
+        assert "not allowed" in str(exc_info.value)
+        mock_client.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_wildcard_allowlist_permits_subdomain(self):
+        """Test fetching a subdomain allowed via a wildcard entry."""
+        mock_client = _make_mock_client(_text_response("sub", "text/plain"))
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            content, _ = await fetch_url(
+                "https://api.example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                allowed_hosts=["*.example.com"],
+            )
+        assert content == "sub"
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_allowed_host_followed(self):
+        """Test that a redirect to an allowlisted host is followed."""
+        mock_client = _make_mock_client(
+            _redirect_response("https://cdn.example.com/final"),
+            _text_response("redirected", "text/plain"),
+        )
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            content, _ = await fetch_url(
+                "https://example.com/start",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                allowed_hosts=["*.example.com"],
+            )
+        assert content == "redirected"
+        assert mock_client.get.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_denied_host_blocked(self):
+        """Test that a redirect to a denied host raises before the second request."""
+        mock_client = _make_mock_client(
+            _redirect_response("https://evil.com/steal"),
+            _text_response(),
+        )
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(McpError) as exc_info:
+                await fetch_url(
+                    "https://example.com/start",
+                    DEFAULT_USER_AGENT_AUTONOMOUS,
+                    allowed_hosts=["example.com"],
+                )
+        assert "not allowed" in str(exc_info.value)
+        # Only the first request may have gone out
+        assert mock_client.get.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_redirect_loop_raises(self):
+        """Test that an endless redirect loop raises after the redirect limit."""
+        mock_client = _make_mock_client(
+            *[_redirect_response("https://example.com/loop", url="https://example.com/loop")]
+            * (MAX_REDIRECTS + 1),
+        )
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(McpError) as exc_info:
+                await fetch_url(
+                    "https://example.com/loop",
+                    DEFAULT_USER_AGENT_AUTONOMOUS,
+                    allowed_hosts=["example.com"],
+                )
+        assert "redirect" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_relative_redirect_resolved(self):
+        """Test that a relative Location header is resolved against the hop URL."""
+        mock_client = _make_mock_client(
+            _redirect_response("/final", url="https://example.com/start"),
+            _text_response("relative ok", "text/plain"),
+        )
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            content, _ = await fetch_url(
+                "https://example.com/start",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                allowed_hosts=["example.com"],
+            )
+        assert content == "relative ok"
+        assert mock_client.get.call_args_list[1].args[0] == "https://example.com/final"
+
+    @pytest.mark.asyncio
+    async def test_empty_location_redirect_loops_until_limit(self):
+        """Test that an empty Location header self-redirects (like httpx) until the limit."""
+        mock_client = _make_mock_client(
+            *[_redirect_response("", url="https://example.com/start")] * (MAX_REDIRECTS + 1),
+        )
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(McpError) as exc_info:
+                await fetch_url(
+                    "https://example.com/start",
+                    DEFAULT_USER_AGENT_AUTONOMOUS,
+                )
+        assert "redirect" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_malformed_location_raises_mcp_error(self):
+        """Test that an unparseable Location header raises McpError, not a raw exception."""
+        mock_client = _make_mock_client(
+            _redirect_response("http://[::1", url="https://example.com/start"),
+        )
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(McpError):
+                await fetch_url(
+                    "https://example.com/start",
+                    DEFAULT_USER_AGENT_AUTONOMOUS,
+                )
+
+    @pytest.mark.asyncio
+    async def test_redirect_without_location_returned_as_final(self):
+        """Test that a redirect status without a Location header is returned as-is."""
+        response = _text_response("placeholder", "text/plain")
+        response.status_code = 302
+        mock_client = _make_mock_client(response)
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            content, _ = await fetch_url(
+                "https://example.com/start",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+            )
+        assert content == "placeholder"
+        assert mock_client.get.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_no_allowlist_redirect_anywhere_still_works(self):
+        """Test that without an allowlist, redirects to any host behave as before."""
+        mock_client = _make_mock_client(
+            _redirect_response("https://other.example/final"),
+            _text_response("free", "text/plain"),
+        )
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            content, _ = await fetch_url(
+                "https://example.com/start",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+            )
+        assert content == "free"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status_code", [301, 302, 303, 307, 308])
+    async def test_all_redirect_statuses_followed_and_validated(self, status_code):
+        """Test that every redirect status triggers re-validation of the target."""
+        redirect = _redirect_response("https://evil.com/final")
+        redirect.status_code = status_code
+        mock_client = _make_mock_client(redirect, _text_response())
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(McpError) as exc_info:
+                await fetch_url(
+                    "https://example.com/start",
+                    DEFAULT_USER_AGENT_AUTONOMOUS,
+                    allowed_hosts=["example.com"],
+                )
+        assert "not allowed" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_per_request_timeout_preserved(self):
+        """Test that fetch requests keep their 30 second per-request timeout."""
+        mock_client = _make_mock_client(_text_response("ok", "text/plain"))
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            await fetch_url(
+                "https://example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                allowed_hosts=["example.com"],
+            )
+        assert mock_client.get.call_args.kwargs["timeout"] == 30
+
+
+class TestCheckMayAutonomouslyFetchUrlWithAllowlist:
+    """Tests for allowlist enforcement in the robots.txt pre-check."""
+
+    @pytest.mark.asyncio
+    async def test_denied_host_raises_before_request(self):
+        """Test that a denied host raises before the robots.txt request is sent."""
+        mock_client = _make_mock_client(_text_response())
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(McpError) as exc_info:
+                await check_may_autonomously_fetch_url(
+                    "https://evil.com/page",
+                    DEFAULT_USER_AGENT_AUTONOMOUS,
+                    allowed_hosts=["example.com"],
+                )
+        assert "not allowed" in str(exc_info.value)
+        mock_client.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_allowed_host_checks_robots(self):
+        """Test that an allowlisted host has its robots.txt fetched."""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_client = _make_mock_client(mock_response)
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            # Should not raise
+            await check_may_autonomously_fetch_url(
+                "https://example.com/page",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                allowed_hosts=["*.example.com"],
+            )
+        assert mock_client.get.call_args_list[0].args[0] == "https://example.com/robots.txt"
+
+    @pytest.mark.asyncio
+    async def test_robots_redirect_to_denied_host_blocked(self):
+        """Test that a robots.txt redirect to a denied host is blocked."""
+        mock_client = _make_mock_client(
+            _redirect_response("https://evil.com/robots.txt", url="https://example.com/robots.txt"),
+            _text_response(),
+        )
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(McpError) as exc_info:
+                await check_may_autonomously_fetch_url(
+                    "https://example.com/page",
+                    DEFAULT_USER_AGENT_AUTONOMOUS,
+                    allowed_hosts=["example.com"],
+                )
+        assert "not allowed" in str(exc_info.value)
+        assert mock_client.get.call_count == 1
