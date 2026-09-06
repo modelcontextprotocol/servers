@@ -129,8 +129,14 @@ def _staged_paths(repo: git.Repo) -> list[str]:
     """Paths the index currently holds as changes against HEAD."""
     if not repo.head.is_valid():
         # Unborn branch: everything in the index is staged for the first commit.
-        return [entry[0] for entry in repo.index.entries]
-    return [diff.a_path or diff.b_path for diff in repo.index.diff(repo.head.commit)]
+        return [str(path) for path, _stage in repo.index.entries]
+    # A rename or delete leaves one side of the diff unset, so take whichever
+    # path the entry does carry and drop any entry with neither.
+    return [
+        path
+        for diff in repo.index.diff(repo.head.commit)
+        if (path := diff.a_path or diff.b_path) is not None
+    ]
 
 def git_commit(repo: git.Repo, message: str) -> str:
     commit = repo.index.commit(message)
