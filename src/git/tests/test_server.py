@@ -199,35 +199,27 @@ def test_git_commit(test_repository):
     assert latest_commit.message.strip() == "test commit message"
 
 def test_git_commit_refuses_when_nothing_is_staged(test_repository):
-    """repo.index.commit() writes a tree unconditionally, so an unstaged edit
-    used to come back as a hash for an empty commit while the working tree
-    stayed dirty and the edit stayed uncommitted."""
+    """repo.index.commit() writes a tree unconditionally, so any of these used
+    to come back as a hash for an empty commit with HEAD left where it was."""
     head_before = test_repository.head.commit.hexsha
-    file_path = Path(test_repository.working_dir) / "test.txt"
-    file_path.write_text("edited but never staged")
+    working_file = Path(test_repository.working_dir) / "test.txt"
 
+    # A clean tree.
     with pytest.raises(ValueError, match="No changes staged for commit"):
-        git_commit(test_repository, "should not be created")
+        git_commit(test_repository, "nothing to record")
 
-    assert test_repository.head.commit.hexsha == head_before
-    assert test_repository.is_dirty()
+    # An untracked file, which git_add was never called for.
+    Path(test_repository.working_dir, "untracked.txt").write_text("never added")
+    with pytest.raises(ValueError, match="No changes staged for commit"):
+        git_commit(test_repository, "nothing to record")
 
-def test_git_commit_refuses_on_a_clean_tree(test_repository):
-    head_before = test_repository.head.commit.hexsha
-
+    # A tracked file edited but not staged: the case an agent actually hits.
+    working_file.write_text("edited but never staged")
     with pytest.raises(ValueError, match="No changes staged for commit"):
         git_commit(test_repository, "nothing to record")
 
     assert test_repository.head.commit.hexsha == head_before
-
-def test_git_commit_refuses_when_only_untracked_files_exist(test_repository):
-    head_before = test_repository.head.commit.hexsha
-    Path(test_repository.working_dir, "untracked.txt").write_text("never added")
-
-    with pytest.raises(ValueError, match="No changes staged for commit"):
-        git_commit(test_repository, "should not be created")
-
-    assert test_repository.head.commit.hexsha == head_before
+    assert working_file.read_text() == "edited but never staged"
 
 def test_git_commit_records_a_staged_deletion(test_repository):
     """A deletion leaves no file behind, so it must not read as an empty index."""
