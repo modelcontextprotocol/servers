@@ -20,6 +20,7 @@ from mcp_server_git.server import (
 )
 import shutil
 import unittest.mock as mock
+from pydantic import ValidationError
 
 @pytest.fixture
 def test_repository(tmp_path: Path):
@@ -110,6 +111,28 @@ def test_git_add_specific_files(test_repository):
     assert "file1.txt" in staged_files
     assert "file2.txt" not in staged_files
     assert result == "Files staged successfully"
+
+def test_git_add_reports_when_nothing_was_staged(test_repository):
+    """`git add` exits 0 when it stages nothing, so the old unconditional
+    "Files staged successfully" claimed work on an unchanged tree."""
+    assert not test_repository.is_dirty(untracked_files=True)
+
+    result = git_add(test_repository, ["."])
+
+    assert result != "Files staged successfully"
+    assert "No files staged" in result
+    assert not test_repository.index.diff(test_repository.head.commit)
+
+def test_git_add_rejects_an_empty_file_list(test_repository):
+    """`git add --` with no pathspec is a no-op that exits 0."""
+    with pytest.raises(ValueError, match="No files provided to stage"):
+        git_add(test_repository, [])
+
+def test_git_add_schema_rejects_an_empty_file_list():
+    from mcp_server_git.server import GitAdd
+
+    with pytest.raises(ValidationError):
+        GitAdd(repo_path=".", files=[])
 
 def test_git_add_rejects_path_traversal(test_repository):
     # Security invariant (CVE-2026-27735): a relative path escaping the
