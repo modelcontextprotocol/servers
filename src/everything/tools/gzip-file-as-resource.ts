@@ -171,9 +171,9 @@ function validateDataURI(dataUri: string): URL {
  * Fetches data safely from a given URL while ensuring constraints on maximum byte size and timeout duration.
  *
  * @param {URL} url The URL to fetch data from.
- * @param {Object} options An object containing options for the fetch operation.
- * @param {number} options.maxBytes The maximum allowed size (in bytes) of the response. If the response exceeds this size, the operation will be aborted.
- * @param {number} options.timeoutMillis The timeout duration (in milliseconds) for the fetch operation. If the fetch takes longer, it will be aborted.
+ * @param {Object} constraints An object containing constraints for the fetch operation.
+ * @param {number} constraints.maxBytes The maximum allowed size (in bytes) of the response. If the response exceeds this size, the operation will be aborted.
+ * @param {number} constraints.timeoutMillis The timeout duration (in milliseconds) for the fetch operation. If the fetch takes longer, it will be aborted.
  * @return {Promise<ArrayBuffer>} A promise that resolves with the response as an ArrayBuffer if successful.
  * @throws {Error} Throws an error if the response size exceeds the defined limit, the fetch times out, or the response is otherwise invalid.
  */
