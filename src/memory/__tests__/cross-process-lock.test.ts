@@ -52,4 +52,37 @@ describe('KnowledgeGraphManager cross-process exclusion', () => {
     await manager.createEntities([entity('x')]);
     expect((await manager.readGraph()).entities).toHaveLength(1);
   });
+
+  it('lets exactly one of many simultaneous stale-lock reclaimers win', async () => {
+    // The review case: N waiters all observe the same stale lock. A bare
+    // unlink+open lets the slow waiter delete the fast waiter's fresh lock.
+    await fs.mkdir(testDir, { recursive: true });
+    await fs.writeFile(`${testFilePath}.lock`, 'dead-holder');
+    const old = new Date(Date.now() - 60_000);
+    await fs.utimes(`${testFilePath}.lock`, old, old);
+
+    const managers = Array.from({ length: 8 }, () => new KnowledgeGraphManager(testFilePath));
+    await Promise.all(managers.map((m, i) => m.createEntities([entity(`r${i}`)])));
+
+    const names = (await managers[0].readGraph()).entities.map(e => e.name).sort();
+    expect(names).toEqual(Array.from({ length: 8 }, (_, i) => `r${i}`).sort());
+    await expect(fs.stat(`${testFilePath}.lock`)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it("does not let a slow holder's release remove a successor's lock", async () => {
+    // A heartbeating holder must not be stolen from, and a release must never
+    // unlink a lock it does not own.
+    const a = new KnowledgeGraphManager(testFilePath);
+    const b = new KnowledgeGraphManager(testFilePath);
+    const slow = (a as any).withFileLock(async () => {
+      await new Promise(r => setTimeout(r, 400));
+      return 'a-done';
+    });
+    await new Promise(r => setTimeout(r, 50));
+    const fast = b.createEntities([entity('b1')]);
+    expect(await slow).toBe('a-done');
+    await fast;
+    expect((await a.readGraph()).entities.map(e => e.name)).toEqual(['b1']);
+    await expect(fs.stat(`${testFilePath}.lock`)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
 });
