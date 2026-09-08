@@ -3,6 +3,8 @@ from urllib.parse import urlparse, urlunparse
 
 import markdownify
 import readabilipy.simple_json
+import asyncio
+import os
 from mcp.shared.exceptions import McpError
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -22,6 +24,30 @@ from pydantic import BaseModel, Field, AnyUrl
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
+
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+def get_retry_config() -> tuple[int, float]:
+    """Get max retries and base delay from environment variables."""
+    try:
+        max_retries = int(os.environ.get("FETCH_MAX_RETRIES", "3"))
+    except ValueError:
+        max_retries = 3
+    try:
+        base_delay = float(os.environ.get("FETCH_RETRY_DELAY_MS", "1000")) / 1000.0
+    except ValueError:
+        base_delay = 1.0
+    return max(1, max_retries), max(0.01, base_delay)
+
+def calculate_retry_delay(attempt: int, base_delay: float, retry_after_header: str | None = None) -> float:
+    """Calculate delay with exponential backoff or respect Retry-After header."""
+    if retry_after_header:
+        try:
+            return max(0.01, min(float(retry_after_header), 30.0))
+        except ValueError:
+            pass
+    return min(base_delay * (2 ** (attempt - 1)), 10.0)
+
 
 
 def extract_content_from_html(html: str) -> str:
@@ -72,18 +98,29 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
 
     robot_txt_url = get_robots_txt_url(url)
 
+    max_retries, base_delay = get_retry_config()
     async with AsyncClient(proxy=proxy_url) as client:
-        try:
-            response = await client.get(
-                robot_txt_url,
-                follow_redirects=True,
-                headers={"User-Agent": user_agent},
-            )
-        except HTTPError:
-            raise McpError(ErrorData(
-                code=INTERNAL_ERROR,
-                message=f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue",
-            ))
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = await client.get(
+                    robot_txt_url,
+                    follow_redirects=True,
+                    headers={"User-Agent": user_agent},
+                )
+                if response.status_code in RETRYABLE_STATUS_CODES and attempt < max_retries:
+                    delay = calculate_retry_delay(attempt, base_delay, response.headers.get("Retry-After"))
+                    await asyncio.sleep(delay)
+                    continue
+                break
+            except HTTPError:
+                if attempt < max_retries:
+                    delay = calculate_retry_delay(attempt, base_delay)
+                    await asyncio.sleep(delay)
+                    continue
+                raise McpError(ErrorData(
+                    code=INTERNAL_ERROR,
+                    message=f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue",
+                ))
         if response.status_code in (401, 403):
             raise McpError(ErrorData(
                 code=INTERNAL_ERROR,
@@ -116,16 +153,27 @@ async def fetch_url(
     """
     from httpx import AsyncClient, HTTPError
 
+    max_retries, base_delay = get_retry_config()
     async with AsyncClient(proxy=proxy_url) as client:
-        try:
-            response = await client.get(
-                url,
-                follow_redirects=True,
-                headers={"User-Agent": user_agent},
-                timeout=30,
-            )
-        except HTTPError as e:
-            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}"))
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = await client.get(
+                    url,
+                    follow_redirects=True,
+                    headers={"User-Agent": user_agent},
+                    timeout=30,
+                )
+                if response.status_code in RETRYABLE_STATUS_CODES and attempt < max_retries:
+                    delay = calculate_retry_delay(attempt, base_delay, response.headers.get("Retry-After"))
+                    await asyncio.sleep(delay)
+                    continue
+                break
+            except HTTPError as e:
+                if attempt < max_retries:
+                    delay = calculate_retry_delay(attempt, base_delay)
+                    await asyncio.sleep(delay)
+                    continue
+                raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}"))
         if response.status_code >= 400:
             raise McpError(ErrorData(
                 code=INTERNAL_ERROR,

@@ -324,3 +324,54 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+    @pytest.mark.asyncio
+    async def test_fetch_retry_on_429_success(self):
+        """Test that 429 Too Many Requests triggers retry and succeeds."""
+        mock_429 = MagicMock()
+        mock_429.status_code = 429
+        mock_429.headers = {"Retry-After": "0.01"}
+
+        mock_200 = MagicMock()
+        mock_200.status_code = 200
+        mock_200.text = "<html><body><article><h1>Success</h1><p>Done</p></article></body></html>"
+        mock_200.headers = {"content-type": "text/html"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(side_effect=[mock_429, mock_200])
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            content, prefix = await fetch_url(
+                "https://example.com/api",
+                DEFAULT_USER_AGENT_AUTONOMOUS
+            )
+            assert "Success" in content
+            assert mock_client.get.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_fetch_retry_on_503_success(self):
+        """Test that 503 Service Unavailable triggers retry and succeeds."""
+        mock_503 = MagicMock()
+        mock_503.status_code = 503
+        mock_503.headers = {}
+
+        mock_200 = MagicMock()
+        mock_200.status_code = 200
+        mock_200.text = "<html><body><article><h1>Recovered</h1></article></body></html>"
+        mock_200.headers = {"content-type": "text/html"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(side_effect=[mock_503, mock_200])
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            content, prefix = await fetch_url(
+                "https://example.com/transient",
+                DEFAULT_USER_AGENT_AUTONOMOUS
+            )
+            assert "Recovered" in content
+            assert mock_client.get.call_count == 2
