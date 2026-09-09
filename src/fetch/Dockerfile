@@ -26,6 +26,12 @@ FROM python:3.12-slim-bookworm
 WORKDIR /app
  
 COPY --from=uv /root/.local /root/.local
+# /root defaults to 700, which blocks any non-root user from even traversing
+# into /root/.local — and the venv's own python binary is a symlink into
+# /root/.local/share/uv/python/.../bin/python3.11, resolved at every startup,
+# not just at build time. Without this, switching to a non-root USER below
+# breaks the interpreter itself, not just file access.
+RUN chmod o+rx /root
 
 RUN if ! id -u app >/dev/null 2>&1; then \
       useradd -rUM -s /usr/sbin/nologin app; \
@@ -34,6 +40,8 @@ COPY --from=uv --chown=app:app /app/.venv /app/.venv
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
+
+USER app
 
 # when running the container, add --db-path and a bind mount to the host's db file
 ENTRYPOINT ["mcp-server-fetch"]

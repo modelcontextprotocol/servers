@@ -21,4 +21,12 @@ WORKDIR /app
 
 RUN npm ci --ignore-scripts --omit-dev
 
+# Without MEMORY_FILE_PATH set, the server persists its knowledge graph next
+# to its own compiled entrypoint (dist/memory.jsonl) — dist was just copied in
+# as root, so the app user needs ownership of it before it can create/update
+# that file, including when a named volume (see README) mounts over dist/.
+RUN chown -R node:node /app/dist
+
+USER node
+
 ENTRYPOINT ["node", "dist/index.js"]
