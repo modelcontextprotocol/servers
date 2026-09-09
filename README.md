@@ -159,7 +159,8 @@ This project is licensed under the Apache License, Version 2.0 for new contribut
 
 ## 💬 Community
 
-- [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
+-- [busybusybussiness/uk-legislation-changes](https://github.com/busybusybussiness/uk-legislation-changes) — Point-in-time amendment history for UK law: which provisions changed, when, and by how much. Hosted MCP server + keyless REST API, OGL v3.0.
+ [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
 
 ## ⭐ Support
 
