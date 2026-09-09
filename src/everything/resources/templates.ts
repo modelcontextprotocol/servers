@@ -127,31 +127,26 @@ export const blobResourceUri = (resourceId: number) =>
   new URL(`${blobUriBase}/${resourceId}`);
 
 /**
- * Parses the resource identifier from the provided URI and validates it
- * against the given variables. Throws an error if the URI corresponds
- * to an unknown resource or if the resource identifier is invalid.
+ * Parses the resource identifier from the provided variables and validates
+ * that it is a positive integer.
  *
- * @param {URL} uri - The URI of the resource to be parsed.
- * @param {Record<string, unknown>} variables - A record containing context-specific variables that include the resourceId.
- * @returns {number} The parsed and validated resource identifier as an integer.
- * @throws {Error} Throws an error if the URI matches unsupported base URIs or if the resourceId is invalid.
+ * The SDK only routes URIs that match the registered template to the
+ * resource handler, so by the time we get here the URI prefix is already
+ * known to be one of `textUriBase` / `blobUriBase`. Only the resourceId
+ * variable still needs validating.
+ *
+ * @param {URL} uri - The URI of the resource (used in the error message).
+ * @param {Record<string, unknown>} variables - Context variables including resourceId.
+ * @returns {number} The parsed and validated resource identifier as a positive integer.
+ * @throws {Error} If the resourceId is not a finite positive integer.
  */
 const parseResourceId = (uri: URL, variables: Record<string, unknown>) => {
-  const uriError = `Unknown resource: ${uri.toString()}`;
-  if (
-    uri.toString().startsWith(textUriBase) &&
-    uri.toString().startsWith(blobUriBase)
-  ) {
-    throw new Error(uriError);
-  } else {
-    const idxStr = String((variables as any).resourceId ?? "");
-    const idx = Number(idxStr);
-    if (Number.isFinite(idx) && Number.isInteger(idx) && idx > 0) {
-      return idx;
-    } else {
-      throw new Error(uriError);
-    }
+  const idxStr = String((variables as any).resourceId ?? "");
+  const idx = Number(idxStr);
+  if (Number.isFinite(idx) && Number.isInteger(idx) && idx > 0) {
+    return idx;
   }
+  throw new Error(`Unknown resource: ${uri.toString()}`);
 };
 
 /**

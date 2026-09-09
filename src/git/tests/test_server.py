@@ -16,8 +16,10 @@ from mcp_server_git.server import (
     git_create_branch,
     git_show,
     validate_repo_path,
+    serve,
 )
 import shutil
+import unittest.mock as mock
 
 @pytest.fixture
 def test_repository(tmp_path: Path):
@@ -508,3 +510,81 @@ def test_git_branch_rejects_contains_flag_injection(test_repository):
 
     with pytest.raises(BadName):
         git_branch(test_repository, "local", not_contains="--exec=evil")
+
+
+def test_git_log_formatting_no_repr(test_repository):
+    """Test that git_log does not use !r formatting (no Python object repr or quotes)."""
+    file_path = Path(test_repository.working_dir) / "multiline.txt"
+    file_path.write_text("multiline test")
+    test_repository.index.add(["multiline.txt"])
+    test_repository.index.commit("Subject line\n\nDetailed body line 1\nDetailed body line 2")
+
+    result = git_log(test_repository, max_count=1)
+    entry = result[0]
+
+    # Verify no python repr quotes around commit hash or message
+    assert "Commit: '" not in entry
+    assert 'Commit: "' not in entry
+    assert "<git.Actor" not in entry
+    assert "Message: '" not in entry
+    assert 'Message: "' not in entry
+
+    # Verify full message with body is included
+    assert "Subject line\n\nDetailed body line 1\nDetailed body line 2" in entry
+
+
+def test_git_log_filtered_unfiltered_parity(test_repository):
+    """Test that filtered and unfiltered git_log produce identical schema and preserve commit body."""
+    file_path = Path(test_repository.working_dir) / "parity_test.txt"
+    file_path.write_text("parity test")
+    test_repository.index.add(["parity_test.txt"])
+    test_repository.index.commit("Parity subject\n\nParity body line 1\nParity body line 2")
+
+    unfiltered = git_log(test_repository, max_count=1)
+    filtered_since = git_log(test_repository, max_count=1, start_timestamp="yesterday")
+    filtered_until = git_log(test_repository, max_count=1, end_timestamp="2099-01-01")
+
+    # Output schemas and contents must be identical
+    assert unfiltered == filtered_since
+    assert unfiltered == filtered_until
+
+    # Multi-line commit message preserved in filtered results
+    assert "Parity subject\n\nParity body line 1\nParity body line 2" in filtered_since[0]
+
+
+def test_git_log_date_filtering(test_repository):
+    """Test date filtering logic in git_log."""
+    # Future start_timestamp should return no commits
+    future_result = git_log(test_repository, start_timestamp="2099-01-01")
+    assert future_result == []
+
+    # Past end_timestamp should return no commits
+    past_result = git_log(test_repository, end_timestamp="2000-01-01")
+    assert past_result == []
+
+    # Valid range with max_count
+    valid_result = git_log(test_repository, max_count=1, start_timestamp="2000-01-01")
+    assert len(valid_result) == 1
+
+
+def test_serve_run_does_not_raise_exceptions(tmp_path: Path):
+    """Verify that serve() runs server.run without raise_exceptions=True."""
+    import anyio
+
+    repo_path = tmp_path / "serve_test_repo"
+    git.Repo.init(repo_path)
+
+    async def _run():
+        with mock.patch("mcp_server_git.server.stdio_server") as mock_stdio:
+            mock_read = mock.AsyncMock()
+            mock_write = mock.AsyncMock()
+            mock_stdio.return_value.__aenter__.return_value = (mock_read, mock_write)
+            mock_stdio.return_value.__aexit__.return_value = None
+
+            with mock.patch("mcp_server_git.server.Server.run", new_callable=mock.AsyncMock) as mock_run:
+                await serve(repo_path)
+                mock_run.assert_awaited_once()
+                _, kwargs = mock_run.call_args
+                assert kwargs.get("raise_exceptions") is not True
+
+    anyio.run(_run)
