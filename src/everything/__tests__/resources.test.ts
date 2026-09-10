@@ -22,6 +22,7 @@ import {
   setSubscriptionHandlers,
   beginSimulatedResourceUpdates,
   stopSimulatedResourceUpdates,
+  removeSubscriber,
 } from '../resources/subscriptions.js';
 
 describe('Resource Templates', () => {
@@ -322,6 +323,67 @@ describe('Subscriptions', () => {
 
       // If we got here without throwing, the lifecycle works correctly
       expect(true).toBe(true);
+    });
+  });
+
+  describe('removeSubscriber', () => {
+    const flushAsync = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+    it('should stop sending resource update notifications to a removed session', async () => {
+      const notification = vi.fn();
+      const setRequestHandler = vi.fn();
+      const mockServer = {
+        server: { setRequestHandler, notification },
+        sendLoggingMessage: vi.fn(),
+      } as unknown as McpServer;
+
+      setSubscriptionHandlers(mockServer);
+      const subscribeHandler = setRequestHandler.mock.calls[0][1];
+
+      const uri = 'demo://resource/dynamic/text/removeSubscriber-1';
+      await subscribeHandler(
+        { params: { uri } },
+        { sessionId: 'session-removed' }
+      );
+
+      removeSubscriber('session-removed');
+
+      beginSimulatedResourceUpdates(mockServer, 'session-removed');
+      await flushAsync();
+
+      expect(notification).not.toHaveBeenCalled();
+
+      stopSimulatedResourceUpdates('session-removed');
+    });
+
+    it('should leave other sessions subscribed to the same URI unaffected', async () => {
+      const notification = vi.fn();
+      const setRequestHandler = vi.fn();
+      const mockServer = {
+        server: { setRequestHandler, notification },
+        sendLoggingMessage: vi.fn(),
+      } as unknown as McpServer;
+
+      setSubscriptionHandlers(mockServer);
+      const subscribeHandler = setRequestHandler.mock.calls[0][1];
+
+      const uri = 'demo://resource/dynamic/text/removeSubscriber-2';
+      await subscribeHandler({ params: { uri } }, { sessionId: 'session-a' });
+      await subscribeHandler({ params: { uri } }, { sessionId: 'session-b' });
+
+      removeSubscriber('session-a');
+
+      beginSimulatedResourceUpdates(mockServer, 'session-b');
+      await flushAsync();
+
+      expect(notification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'notifications/resources/updated',
+          params: { uri },
+        })
+      );
+
+      stopSimulatedResourceUpdates('session-b');
     });
   });
 });
