@@ -23,5 +23,9 @@
     "@modelcontextprotocol/server-memory": "*",
     "@modelcontextprotocol/server-filesystem": "*",
     "@modelcontextprotocol/server-sequential-thinking": "*"
+  },
+  "overrides": {
+    "qs": ">=6.15.2",
+    "hono": ">=4.12.21"
   }
 }

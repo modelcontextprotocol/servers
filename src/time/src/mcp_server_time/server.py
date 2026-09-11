@@ -131,7 +131,7 @@ async def serve(local_timezone: str | None = None) -> None:
         return [
             Tool(
                 name=TimeTools.GET_CURRENT_TIME.value,
-                description="Get current time in a specific timezones",
+                description="Get current time in a specific timezone",
                 inputSchema={
                     "type": "object",
                     "properties": {
