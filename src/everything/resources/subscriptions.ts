@@ -166,3 +166,21 @@ export const stopSimulatedResourceUpdates = (sessionId?: string) => {
     subsUpdateIntervals.delete(sessionId);
   }
 };
+
+/**
+ * Removes a session from every URI's subscriber set, dropping any URI entry
+ * left with no subscribers. Call this when a session disconnects: nothing
+ * else removes a subscriber from `subscriptions` once its session ends, so
+ * without this the session id would stay in every Set it joined for the
+ * life of the process.
+ *
+ * @param {string} [sessionId]
+ */
+export const removeSubscriber = (sessionId?: string) => {
+  for (const [uri, subscribers] of subscriptions) {
+    subscribers.delete(sessionId);
+    if (subscribers.size === 0) {
+      subscriptions.delete(uri);
+    }
+  }
+};

@@ -22,6 +22,7 @@ import {
   setSubscriptionHandlers,
   beginSimulatedResourceUpdates,
   stopSimulatedResourceUpdates,
+  removeSubscriber,
 } from '../resources/subscriptions.js';
 
 describe('Resource Templates', () => {
@@ -322,6 +323,61 @@ describe('Subscriptions', () => {
 
       // If we got here without throwing, the lifecycle works correctly
       expect(true).toBe(true);
+    });
+  });
+
+  describe('removeSubscriber', () => {
+    const uri = 'demo://resource/dynamic/text/test-remove-subscriber';
+
+    afterEach(() => {
+      stopSimulatedResourceUpdates('remove-subscriber-a');
+      stopSimulatedResourceUpdates('remove-subscriber-b');
+    });
+
+    it('drops a disconnected session from every URI it subscribed to, but leaves other subscribers', async () => {
+      let subscribeHandler:
+        | ((request: unknown, extra: { sessionId: string }) => Promise<unknown>)
+        | undefined;
+      const mockServer = {
+        server: {
+          setRequestHandler: vi.fn((_schema, handler) => {
+            subscribeHandler ??= handler;
+          }),
+          notification: vi.fn(),
+        },
+        sendLoggingMessage: vi.fn(),
+      } as unknown as McpServer;
+
+      setSubscriptionHandlers(mockServer);
+      await subscribeHandler!(
+        { params: { uri } },
+        { sessionId: 'remove-subscriber-a' }
+      );
+      await subscribeHandler!(
+        { params: { uri } },
+        { sessionId: 'remove-subscriber-b' }
+      );
+
+      removeSubscriber('remove-subscriber-a');
+
+      // The removed session gets no notification for a URI it was subscribed to.
+      beginSimulatedResourceUpdates(mockServer, 'remove-subscriber-a');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mockServer.server.notification).not.toHaveBeenCalled();
+
+      // The other subscriber to the same URI is unaffected.
+      beginSimulatedResourceUpdates(mockServer, 'remove-subscriber-b');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mockServer.server.notification).toHaveBeenCalledWith(
+        expect.objectContaining({ params: { uri } })
+      );
+    });
+
+    it('is a no-op for a session with no subscriptions', () => {
+      expect(() => removeSubscriber('never-subscribed')).not.toThrow();
+      expect(() => removeSubscriber(undefined)).not.toThrow();
     });
   });
 });
