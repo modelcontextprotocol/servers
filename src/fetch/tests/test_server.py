@@ -259,7 +259,7 @@ class TestFetchUrl:
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             content, prefix = await fetch_url(
-                "https://api.example.com/data",
+                "https://example.com/data",
                 DEFAULT_USER_AGENT_AUTONOMOUS
             )
 
