@@ -230,5 +230,146 @@ def exogram_search_records(query: str, top_k: int = 5) -> str:
             return f"STATUS: NETWORK FAILURE. Could not reach Exogram Vault: {str(e)}"
 
 
+@mcp.tool()
+def search_vault(query: str, top_k: int = 5) -> str:
+    """
+    Semantic and keyword search across stored personal records, facts, and memories.
+
+    Args:
+        query: What to search for in your private memory vault
+        top_k: Number of results to return (1-20, default 5)
+    """
+    return exogram_search_records(query=query, top_k=top_k)
+
+
+@mcp.tool()
+def store_memory(content: str, namespace: str = "default") -> str:
+    """
+    Anchor a new fact, code convention, or personal memory to your encrypted vault.
+
+    Args:
+        content: The fact or note to store
+        namespace: Logical grouping (default: 'default')
+    """
+    return exogram_store_record(content=content, source="mcp-client", namespace=namespace)
+
+
+@mcp.tool()
+def get_neural_cluster(entity_name: str) -> str:
+    """
+    Look up an entity in Exogram's Layer 2 Knowledge Graph.
+    Returns connected entities and directional relationships.
+
+    Args:
+        entity_name: Name of the entity to query (e.g. 'Next.js', 'Richard Ewing', 'SQLite WAL')
+    """
+    url = f"{API_URL}/api/knowledge-graph"
+    try:
+        headers = get_headers()
+    except ValueError as e:
+        return f"STATUS: CONFIG ERROR. {str(e)}"
+
+    with httpx.Client(timeout=15.0) as client:
+        try:
+            response = client.get(url, headers=headers)
+            if response.status_code == 200:
+                data = cast(dict[str, object], response.json())
+                nodes = cast(list[dict[str, object]], data.get("nodes", []))
+                links = cast(list[dict[str, object]], data.get("links", data.get("edges", [])))
+
+                matched = [
+                    n
+                    for n in nodes
+                    if entity_name.lower() in str(n.get("name", n.get("id", ""))).lower()
+                ]
+                if not matched:
+                    return f"No neural cluster found matching '{entity_name}'."
+
+                target_id = matched[0].get("id", matched[0].get("name"))
+                target_name = matched[0].get("name", target_id)
+
+                connected = []
+                for link in links:
+                    src = link.get("source")
+                    dst = link.get("target")
+                    lbl = link.get("label", link.get("relationship", "connected to"))
+                    if src == target_id:
+                        connected.append(f"  -> [{lbl}] -> {dst}")
+                    elif dst == target_id:
+                        connected.append(f"  <- [{lbl}] <- {src}")
+
+                lines = [f"Neural cluster for '{target_name}':"]
+                lines.extend(connected if connected else ["  (No connected relationships mapped yet)"])
+                return "\n".join(lines)
+            else:
+                return f"STATUS: NEURAL LOOKUP ERROR. Code {response.status_code}: {response.text}"
+        except Exception as e:
+            return f"STATUS: NETWORK FAILURE. Could not reach Exogram Knowledge Graph: {str(e)}"
+
+
+@mcp.tool()
+def list_entities(limit: int = 25) -> str:
+    """
+    Retrieve active entities and topics in the personal knowledge network.
+
+    Args:
+        limit: Maximum number of entities to return (default 25)
+    """
+    url = f"{API_URL}/api/knowledge-graph"
+    try:
+        headers = get_headers()
+    except ValueError as e:
+        return f"STATUS: CONFIG ERROR. {str(e)}"
+
+    with httpx.Client(timeout=15.0) as client:
+        try:
+            response = client.get(url, headers=headers)
+            if response.status_code == 200:
+                data = cast(dict[str, object], response.json())
+                nodes = cast(list[dict[str, object]], data.get("nodes", []))
+                if not nodes:
+                    return "No entities mapped in the knowledge graph yet."
+
+                lines = [f"Mapped Entities in Exogram Knowledge Graph (Top {min(limit, len(nodes))}):"]
+                for i, node in enumerate(nodes[:limit], 1):
+                    name = node.get("name", node.get("id", "Unknown"))
+                    category = node.get("category", node.get("type", "concept"))
+                    lines.append(f"  {i}. {name} ({category})")
+                return "\n".join(lines)
+            else:
+                return f"STATUS: GRAPH ERROR. Code {response.status_code}: {response.text}"
+        except Exception as e:
+            return f"STATUS: NETWORK FAILURE. Could not reach Exogram Knowledge Graph: {str(e)}"
+
+
+@mcp.tool()
+def verify_audit_trail() -> str:
+    """
+    Verify the cryptographic SHA-256 hash chain integrity of the ledger.
+    Detects any altered payloads, broken links, or manual database modifications.
+    """
+    url = f"{API_URL}/v2/verify"
+    try:
+        headers = get_headers()
+    except ValueError as e:
+        return f"STATUS: CONFIG ERROR. {str(e)}"
+
+    with httpx.Client(timeout=15.0) as client:
+        try:
+            response = client.get(url, headers=headers)
+            if response.status_code == 200:
+                data = cast(dict[str, object], response.json())
+                valid = data.get("valid", True)
+                entries = data.get("total_entries", data.get("entries_count", 0))
+                head = data.get("head_hash", "GENESIS")
+                status = "CRYPTOGRAPHICALLY VALID" if valid else "TAMPERING DETECTED"
+                return f"STATUS: {status}. Total Entries: {entries} | Head Hash: {head}"
+            else:
+                return f"STATUS: VERIFICATION ERROR. Code {response.status_code}: {response.text}"
+        except Exception as e:
+            return f"STATUS: NETWORK FAILURE. Could not reach Verification Engine: {str(e)}"
+
+
 if __name__ == "__main__":
     mcp.run()
+
