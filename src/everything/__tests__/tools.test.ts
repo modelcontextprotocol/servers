@@ -17,6 +17,8 @@ import {
   registerTriggerUrlElicitationTool,
   __resetIssuedErrorPathElicitations,
 } from '../tools/trigger-url-elicitation.js';
+import { registerTriggerSamplingRequestAsyncTool } from '../tools/trigger-sampling-request-async.js';
+import { registerTriggerElicitationRequestAsyncTool } from '../tools/trigger-elicitation-request-async.js';
 import { registerGetRootsListTool } from '../tools/get-roots-list.js';
 import { registerGZipFileAsResourceTool } from '../tools/gzip-file-as-resource.js';
 import { registerSimulateResearchQueryTool } from '../tools/simulate-research-query.js';
@@ -708,6 +710,216 @@ describe('Tools', () => {
 
       expect(result.content[0].text).toContain('⚠️');
       expect(result.content[0].text).toContain('cancelled');
+    });
+  });
+
+  describe('trigger-sampling-request-async', () => {
+    const MAX_POLL_ATTEMPTS = 60;
+
+    function registerAsyncSamplingTool() {
+      const handlers: Map<string, Function> = new Map();
+      const mockServer = {
+        registerTool: vi.fn((name: string, config: any, handler: Function) => {
+          handlers.set(name, handler);
+        }),
+        server: {
+          getClientCapabilities: vi.fn(() => ({
+            sampling: {},
+            tasks: { requests: { sampling: { createMessage: {} } } },
+          })),
+        },
+      } as unknown as McpServer;
+
+      registerTriggerSamplingRequestAsyncTool(mockServer);
+      return handlers.get('trigger-sampling-request-async')!;
+    }
+
+    // The client's task stays 'working' and only reaches `finalStatus` on the
+    // very last poll attempt the loop is allowed to make.
+    function createPollingSendRequest(finalStatus: string) {
+      const methods: string[] = [];
+      let polls = 0;
+      const sendRequest = vi.fn(async (request: any) => {
+        methods.push(request.method);
+        if (request.method === 'sampling/createMessage') {
+          return { task: { taskId: 'task-1', status: 'working' } };
+        }
+        if (request.method === 'tasks/get') {
+          polls += 1;
+          return polls >= MAX_POLL_ATTEMPTS
+            ? { status: finalStatus, statusMessage: 'final poll' }
+            : { status: 'working' };
+        }
+        if (request.method === 'tasks/result') {
+          return {
+            role: 'assistant',
+            model: 'mock',
+            content: { type: 'text', text: 'the real answer' },
+          };
+        }
+        throw new Error(`Unexpected method: ${request.method}`);
+      });
+      return { sendRequest, methods, polls: () => polls };
+    }
+
+    it('should return the result when the task completes on the final poll attempt', async () => {
+      vi.useFakeTimers();
+      try {
+        const handler = registerAsyncSamplingTool();
+        const { sendRequest, methods, polls } =
+          createPollingSendRequest('completed');
+
+        const pending = handler(
+          { prompt: 'hello' },
+          { sessionId: 's1', sendRequest }
+        );
+        await vi.runAllTimersAsync();
+        const result = await pending;
+
+        expect(polls()).toBe(MAX_POLL_ATTEMPTS);
+        expect(methods).toContain('tasks/result');
+        expect(result.content[0].text).toContain('[COMPLETED]');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should report failure when the task fails on the final poll attempt', async () => {
+      vi.useFakeTimers();
+      try {
+        const handler = registerAsyncSamplingTool();
+        const { sendRequest, methods, polls } =
+          createPollingSendRequest('failed');
+
+        const pending = handler(
+          { prompt: 'hello' },
+          { sessionId: 's1', sendRequest }
+        );
+        await vi.runAllTimersAsync();
+        const result = await pending;
+
+        expect(polls()).toBe(MAX_POLL_ATTEMPTS);
+        expect(methods).not.toContain('tasks/result');
+        expect(result.content[0].text).toContain('[FAILED]');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should still time out when the task never leaves a non-terminal status', async () => {
+      vi.useFakeTimers();
+      try {
+        const handler = registerAsyncSamplingTool();
+        const methods: string[] = [];
+        const sendRequest = vi.fn(async (request: any) => {
+          methods.push(request.method);
+          if (request.method === 'sampling/createMessage') {
+            return { task: { taskId: 'task-1', status: 'working' } };
+          }
+          if (request.method === 'tasks/get') {
+            return { status: 'working' };
+          }
+          throw new Error(`Unexpected method: ${request.method}`);
+        });
+
+        const pending = handler(
+          { prompt: 'hello' },
+          { sessionId: 's1', sendRequest }
+        );
+        await vi.runAllTimersAsync();
+        const result = await pending;
+
+        expect(
+          methods.filter((method) => method === 'tasks/get')
+        ).toHaveLength(MAX_POLL_ATTEMPTS);
+        expect(result.content[0].text).toContain('[TIMEOUT]');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('trigger-elicitation-request-async', () => {
+    const MAX_POLL_ATTEMPTS = 600;
+
+    function registerAsyncElicitationTool() {
+      const handlers: Map<string, Function> = new Map();
+      const mockServer = {
+        registerTool: vi.fn((name: string, config: any, handler: Function) => {
+          handlers.set(name, handler);
+        }),
+        server: {
+          getClientCapabilities: vi.fn(() => ({
+            elicitation: {},
+            tasks: { requests: { elicitation: { create: {} } } },
+          })),
+        },
+      } as unknown as McpServer;
+
+      registerTriggerElicitationRequestAsyncTool(mockServer);
+      return handlers.get('trigger-elicitation-request-async')!;
+    }
+
+    // The client's task stays 'input_required' and only reaches `finalStatus`
+    // on the very last poll attempt the loop is allowed to make.
+    function createPollingSendRequest(finalStatus: string) {
+      const methods: string[] = [];
+      let polls = 0;
+      const sendRequest = vi.fn(async (request: any) => {
+        methods.push(request.method);
+        if (request.method === 'elicitation/create') {
+          return { task: { taskId: 'task-1', status: 'input_required' } };
+        }
+        if (request.method === 'tasks/get') {
+          polls += 1;
+          return polls >= MAX_POLL_ATTEMPTS
+            ? { status: finalStatus, statusMessage: 'final poll' }
+            : { status: 'input_required' };
+        }
+        if (request.method === 'tasks/result') {
+          return { action: 'accept', content: { name: 'John Doe' } };
+        }
+        throw new Error(`Unexpected method: ${request.method}`);
+      });
+      return { sendRequest, methods, polls: () => polls };
+    }
+
+    it('should return the result when the task completes on the final poll attempt', async () => {
+      vi.useFakeTimers();
+      try {
+        const handler = registerAsyncElicitationTool();
+        const { sendRequest, methods, polls } =
+          createPollingSendRequest('completed');
+
+        const pending = handler({}, { sessionId: 's1', sendRequest });
+        await vi.runAllTimersAsync();
+        const result = await pending;
+
+        expect(polls()).toBe(MAX_POLL_ATTEMPTS);
+        expect(methods).toContain('tasks/result');
+        expect(result.content[0].text).toContain('[COMPLETED]');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should report cancellation when the task is cancelled on the final poll attempt', async () => {
+      vi.useFakeTimers();
+      try {
+        const handler = registerAsyncElicitationTool();
+        const { sendRequest, methods, polls } =
+          createPollingSendRequest('cancelled');
+
+        const pending = handler({}, { sessionId: 's1', sendRequest });
+        await vi.runAllTimersAsync();
+        const result = await pending;
+
+        expect(polls()).toBe(MAX_POLL_ATTEMPTS);
+        expect(methods).not.toContain('tasks/result');
+        expect(result.content[0].text).toContain('[CANCELLED]');
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

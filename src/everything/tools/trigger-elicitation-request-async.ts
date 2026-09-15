@@ -185,7 +185,12 @@ export const registerTriggerElicitationRequestAsyncTool = (
         }
 
         // Check for timeout
-        if (attempts >= MAX_POLL_ATTEMPTS) {
+        if (
+          attempts >= MAX_POLL_ATTEMPTS &&
+          taskStatus !== "completed" &&
+          taskStatus !== "failed" &&
+          taskStatus !== "cancelled"
+        ) {
           return {
             content: [
               {
