@@ -44,6 +44,30 @@ def test_git_checkout_nonexistent_branch(test_repository):
     with pytest.raises(BadName):
         git_checkout(test_repository, "nonexistent-branch")
 
+def test_git_checkout_sha_reports_detached_head(test_repository):
+    """rev_parse accepts a sha, so the reply must not claim a branch switch."""
+    sha = test_repository.head.commit.hexsha
+    result = git_checkout(test_repository, sha)
+
+    assert test_repository.head.is_detached
+    assert "detached" in result
+    assert "Switched to branch" not in result
+
+def test_git_checkout_tag_reports_detached_head(test_repository):
+    test_repository.create_tag("v1")
+    result = git_checkout(test_repository, "v1")
+
+    assert test_repository.head.is_detached
+    assert "detached" in result
+    assert "Switched to branch" not in result
+
+def test_git_checkout_branch_name_still_reports_branch(test_repository):
+    test_repository.git.branch("attached-checkout")
+    result = git_checkout(test_repository, "attached-checkout")
+
+    assert not test_repository.head.is_detached
+    assert result == "Switched to branch 'attached-checkout'"
+
 def test_git_branch_local(test_repository):
     test_repository.git.branch("new-branch-local")
     result = git_branch(test_repository, "local")
