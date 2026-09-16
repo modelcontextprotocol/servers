@@ -53,6 +53,24 @@ def test_git_checkout_sha_reports_detached_head(test_repository):
     assert "detached" in result
     assert "Switched to branch" not in result
 
+@pytest.mark.parametrize("revision", ["HEAD~1", "refs/heads/feature", "origin/main"])
+def test_git_checkout_non_branch_revisions_report_detached_head(
+    test_repository, tmp_path, revision
+):
+    """The revisions an agent is most likely to send: a relative ref, a full ref name, and a
+    remote-tracking ref. None of them is a branch, so none may be reported as a branch switch."""
+    test_repository.git.branch("feature")
+    test_repository.index.commit("second commit")
+    git.Repo.init(tmp_path / "remote.git", bare=True)
+    test_repository.create_remote("origin", str(tmp_path / "remote.git"))
+    test_repository.git.push("origin", "HEAD:refs/heads/main")
+
+    result = git_checkout(test_repository, revision)
+
+    assert test_repository.head.is_detached
+    assert result.startswith("HEAD is now detached at ")
+
+
 def test_git_checkout_tag_reports_detached_head(test_repository):
     test_repository.create_tag("v1")
     result = git_checkout(test_repository, "v1")
