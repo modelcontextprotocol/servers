@@ -38,7 +38,7 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Shows differences between branches or commits
    - Inputs:
      - `repo_path` (string): Path to Git repository
-     - `target` (string): Target branch or commit to compare with
+     - `target` (string): Target branch, commit, or revision range (e.g. `main..feature`) to compare with
      - `context_lines` (number, optional): Number of context lines to show (default: 3)
    - Returns: Diff output comparing current state with target
 

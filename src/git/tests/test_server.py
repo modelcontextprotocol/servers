@@ -393,6 +393,46 @@ def test_git_diff_allows_valid_refs(test_repository):
     assert result is not None
 
 
+def test_git_diff_allows_revision_ranges(test_repository):
+    """git_diff should accept revision ranges such as 'A..B' and 'A...B'."""
+    default_branch = test_repository.active_branch.name
+
+    test_repository.git.checkout("-b", "range-feature")
+    file_path = Path(test_repository.working_dir) / "test.txt"
+    file_path.write_text("first range change")
+    test_repository.index.add(["test.txt"])
+    first_commit = test_repository.index.commit("first range commit")
+    file_path.write_text("second range change")
+    test_repository.index.add(["test.txt"])
+    test_repository.index.commit("second range commit")
+
+    # Branch ranges, in both directions and with both range syntaxes
+    test_repository.git.checkout(default_branch)
+    for target in (
+        f"{default_branch}..range-feature",
+        f"range-feature..{default_branch}",
+        f"{default_branch}...range-feature",
+    ):
+        result = git_diff(test_repository, target)
+        assert "test.txt" in result
+        assert "range change" in result
+
+    # Commit ranges reachable from HEAD
+    test_repository.git.checkout("range-feature")
+    result = git_diff(test_repository, "HEAD~1..HEAD")
+    assert "second range change" in result
+
+    result = git_diff(test_repository, f"{first_commit.hexsha}..HEAD")
+    assert "second range change" in result
+
+    # Endpoints that are not real refs are still rejected
+    with pytest.raises(BadName):
+        git_diff(test_repository, "nonexistent..HEAD")
+
+    with pytest.raises(BadName):
+        git_diff(test_repository, f"{default_branch}..--output=/tmp/evil")
+
+
 def test_git_checkout_allows_valid_branches(test_repository):
     """git_checkout should work normally with valid branch names."""
     # Get the default branch name

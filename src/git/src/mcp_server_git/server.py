@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 from typing import Any, Optional, Sequence
 from mcp.server import Server
@@ -122,7 +123,11 @@ def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_L
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if target.startswith("-"):
         raise BadName(f"Invalid target: '{target}' - cannot start with '-'")
-    repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
+    # target may be a revision range (e.g. 'main..feature' or 'main...feature'),
+    # so validate each endpoint is a real git ref rather than the range as a whole
+    for revision in re.split(r"\.\.\.?", target):
+        if revision:
+            repo.rev_parse(revision)
     return repo.git.diff(f"--unified={context_lines}", target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
