@@ -14,7 +14,7 @@ export interface ThoughtData {
 
 export class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
-  private branches: Record<string, ThoughtData[]> = {};
+  private branches: Record<string, ThoughtData[]> = Object.create(null);
   private disableThoughtLogging: boolean;
 
   constructor() {

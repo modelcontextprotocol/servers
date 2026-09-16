@@ -173,6 +173,30 @@ describe('SequentialThinkingServer', () => {
       expect(data.branches).toContain('branch-a');
       expect(data.branches.length).toBe(1);
     });
+
+    it.each([
+      'constructor',
+      'toString',
+      'valueOf',
+      'hasOwnProperty',
+      '__proto__'
+    ])('should track a branch whose ID is an Object.prototype key: %s', (branchId) => {
+      const input = {
+        thought: 'Branch thought',
+        thoughtNumber: 1,
+        totalThoughts: 1,
+        nextThoughtNeeded: false,
+        branchFromThought: 1,
+        branchId
+      };
+
+      const result = server.processThought(input);
+      expect(result.isError).toBeUndefined();
+
+      const data = JSON.parse(result.content[0].text);
+      expect(data.branches).toContain(branchId);
+      expect(data.thoughtHistoryLength).toBe(1);
+    });
   });
 
   describe('processThought - edge cases', () => {
