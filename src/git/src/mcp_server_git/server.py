@@ -125,9 +125,15 @@ def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_L
         raise BadName(f"Invalid target: '{target}' - cannot start with '-'")
     # target may be a revision range (e.g. 'main..feature' or 'main...feature'),
     # so validate each endpoint is a real git ref rather than the range as a whole
-    for revision in re.split(r"\.\.\.?", target):
-        if revision:
-            repo.rev_parse(revision)
+    revisions = re.split(r"\.\.\.?", target)
+    if len(revisions) > 2:
+        raise BadName(
+            f"Invalid target: '{target}' - expected a revision or a single range"
+        )
+    for revision in revisions:
+        if not revision:
+            raise BadName(f"Invalid target: '{target}' - empty range endpoint")
+        repo.rev_parse(revision)
     return repo.git.diff(f"--unified={context_lines}", target)
 
 def git_commit(repo: git.Repo, message: str) -> str:

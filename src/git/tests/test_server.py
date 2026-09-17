@@ -433,6 +433,24 @@ def test_git_diff_allows_revision_ranges(test_repository):
         git_diff(test_repository, f"{default_branch}..--output=/tmp/evil")
 
 
+def test_git_diff_rejects_ranges_without_two_endpoints(test_repository):
+    """A range has to name two revisions.
+
+    `..target`, `target..` and `...` are ranges with an empty endpoint, and
+    `....` is not a range at all. None of them resolve to two real refs, so
+    they are rejected here rather than reaching `git diff` and failing there
+    with a raw git error.
+    """
+    for target in ("..HEAD", "HEAD..", "...", "...."):
+        with pytest.raises(BadName):
+            git_diff(test_repository, target)
+
+    # A range may not carry more than one separator either
+    default_branch = test_repository.active_branch.name
+    with pytest.raises(BadName):
+        git_diff(test_repository, f"{default_branch}..{default_branch}...HEAD")
+
+
 def test_git_checkout_allows_valid_branches(test_repository):
     """git_checkout should work normally with valid branch names."""
     # Get the default branch name
