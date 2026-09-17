@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Sequence, Optional
+from typing import Any, Optional, Sequence
 from mcp.server import Server
 from mcp.server.session import ServerSession
 from mcp.server.stdio import stdio_server
@@ -163,12 +163,11 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
     if end_timestamp and end_timestamp.startswith("-"):
         raise ValueError(f"Invalid end_timestamp: '{end_timestamp}' - cannot start with '-'")
 
-    # Build kwargs for iter_commits - unified path for both filtered and unfiltered
-    kwargs: dict = {"max_count": max_count}
+    kwargs: dict[str, Any] = {"max_count": max_count}
     if start_timestamp:
-        kwargs["after"] = start_timestamp
+        kwargs["since"] = start_timestamp
     if end_timestamp:
-        kwargs["before"] = end_timestamp
+        kwargs["until"] = end_timestamp
 
     commits = list(repo.iter_commits(**kwargs))
     log = []
@@ -583,4 +582,4 @@ async def serve(repository: Path | None) -> None:
 
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, options, raise_exceptions=True)
+        await server.run(read_stream, write_stream, options)
