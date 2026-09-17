@@ -44,8 +44,8 @@ This is a curated collection of community-built frameworks and resources that si
 
 ## ⚡ Deterministic Simulation & Safety Servers
 
-- **[LOCUS Engine MCP Server](https://github.com/ahmadshady747-create/locus-binaries)** - High-performance Model Context Protocol server providing deterministic AST verification, symbolic range analysis, canonical loop induction proving, flow-sensitive fact stack, and surgical patching in 100% safe Rust.
-- **[GAMA Hyper-Physics MCP Server](https://github.com/ahmadshady747-create/gama-binaries)** - Unified multi-dimensional multiphysics compute engine exposing 44 MCP tools across 2D/3D/4D/5D mechanics, WebGPU compute, relativistic geodesics, and zero-GC kinematic simulation.
+- **[LOCUS Engine MCP Server](https://github.com/ahmadshady747-create/locus-binaries)** - High-performance Model Context Protocol server providing deterministic AST verification, symbolic range analysis, canonical loop induction proving, flow-sensitive fact stack, and surgical patching in 100% safe Rust, exposing 30 deterministic AST safety and context management MCP tools.
+- **[GAMA Hyper-Physics MCP Server](https://github.com/ahmadshady747-create/gama-binaries)** - Unified multi-dimensional multiphysics compute engine exposing 49 verified MCP tools across 2D/3D/4D/5D mechanics, relativistic geodesics, and zero-GC kinematic simulation.
 
 ## 📚 Resources
 
