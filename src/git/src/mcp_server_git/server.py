@@ -118,6 +118,21 @@ def git_diff_unstaged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES
 def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
     return repo.git.diff(f"--unified={context_lines}", "--cached")
 
+def _resolves(repo: git.Repo, revision: str) -> bool:
+    """Whether ``revision`` names a git object, treating every refusal as one.
+
+    ``rev_parse`` raises ``BadName`` for a revision that does not resolve,
+    ``ValueError`` for a spec its own parser cannot tokenize (e.g.
+    ``HEAD~1..HEAD``), and ``KeyError`` when a ``rev:path`` target names a path
+    the tree does not contain. Only the first is a deliberate "not a revision"
+    signal, but all three mean the target is unusable as one.
+    """
+    try:
+        repo.rev_parse(revision)
+    except (BadName, ValueError, KeyError):
+        return False
+    return True
+
 def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
     # Defense in depth: reject targets starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
@@ -127,11 +142,7 @@ def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_L
     # individually: rev_parse rejects 'main..feature' as a whole. Try the target
     # unchanged first, because a single revision is allowed to contain '..'
     # itself, as the commit-message selector ':/fix..bug' does.
-    # rev_parse reports an unresolvable target as BadName, but rejects a spec its
-    # own parser cannot tokenize (e.g. 'HEAD~1..HEAD') with ValueError.
-    try:
-        repo.rev_parse(target)
-    except (BadName, ValueError):
+    if not _resolves(repo, target):
         # Only '..' and '...' separate endpoints, so a run of four or more dots
         # is a malformed range rather than a range with an odd endpoint.
         if re.search(r"\.\.\.\.", target):
@@ -151,7 +162,10 @@ def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_L
             # reaching git's option parser is no safer than the target doing so.
             if revision.startswith("-"):
                 raise BadName(f"Invalid target: '{target}' - cannot start with '-'")
-            repo.rev_parse(revision)
+            if not _resolves(repo, revision):
+                raise BadName(
+                    f"Invalid target: '{target}' - '{revision}' is not a revision"
+                )
     return repo.git.diff(f"--unified={context_lines}", target)
 
 def git_commit(repo: git.Repo, message: str) -> str:

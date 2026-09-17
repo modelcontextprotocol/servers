@@ -492,6 +492,42 @@ def test_git_diff_rejects_ranges_with_more_than_two_endpoints(test_repository):
             git_diff(test_repository, target)
 
 
+def test_git_diff_reports_an_unresolvable_rev_path_as_bad_name(test_repository):
+    """A 'rev:path' target naming a missing path is a BadName, not a KeyError.
+
+    `rev_parse` resolves the revision and then raises `KeyError` from the tree
+    lookup, so probing a target for being a single revision has to treat that
+    the same way as a revision that does not resolve at all.
+    """
+    for target in ("HEAD:missing/path", "HEAD:missing..path"):
+        with pytest.raises(BadName):
+            git_diff(test_repository, target)
+
+    default_branch = test_repository.active_branch.name
+    with pytest.raises(BadName):
+        git_diff(test_repository, f"{default_branch}:missing..path..HEAD")
+
+
+def test_git_diff_accepts_a_peeled_message_selector(test_repository):
+    """'HEAD^{/text}' is one revision; wrapping it in a range is not a range.
+
+    The selector is accepted on its own, and a range naming it is rejected
+    because git cannot parse one either -- it splits on the first '..' too.
+    """
+    file_path = Path(test_repository.working_dir) / "test.txt"
+    file_path.write_text("peeled selector change")
+    test_repository.index.add(["test.txt"])
+    test_repository.index.commit("fix..bug in the subject")
+
+    file_path.write_text("peeled selector change plus worktree edit")
+
+    assert test_repository.rev_parse("HEAD^{/fix..bug}") is not None
+    assert "worktree edit" in git_diff(test_repository, "HEAD^{/fix..bug}")
+
+    with pytest.raises(BadName):
+        git_diff(test_repository, "HEAD^{/fix..bug}..HEAD")
+
+
 def test_git_checkout_allows_valid_branches(test_repository):
     """git_checkout should work normally with valid branch names."""
     # Get the default branch name
