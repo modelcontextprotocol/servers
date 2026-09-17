@@ -123,17 +123,35 @@ def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_L
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if target.startswith("-"):
         raise BadName(f"Invalid target: '{target}' - cannot start with '-'")
-    # target may be a revision range (e.g. 'main..feature' or 'main...feature'),
-    # so validate each endpoint is a real git ref rather than the range as a whole
-    revisions = re.split(r"\.\.\.?", target)
-    if len(revisions) > 2:
-        raise BadName(
-            f"Invalid target: '{target}' - expected a revision or a single range"
-        )
-    for revision in revisions:
-        if not revision:
-            raise BadName(f"Invalid target: '{target}' - empty range endpoint")
-        repo.rev_parse(revision)
+    # target may be a revision range, so the endpoints have to be validated
+    # individually: rev_parse rejects 'main..feature' as a whole. Try the target
+    # unchanged first, because a single revision is allowed to contain '..'
+    # itself, as the commit-message selector ':/fix..bug' does.
+    # rev_parse reports an unresolvable target as BadName, but rejects a spec its
+    # own parser cannot tokenize (e.g. 'HEAD~1..HEAD') with ValueError.
+    try:
+        repo.rev_parse(target)
+    except (BadName, ValueError):
+        # Only '..' and '...' separate endpoints, so a run of four or more dots
+        # is a malformed range rather than a range with an odd endpoint.
+        if re.search(r"\.\.\.\.", target):
+            raise BadName(
+                f"Invalid target: '{target}' - expected a revision or a single "
+                f"'..' or '...' range"
+            )
+        revisions = re.split(r"\.\.\.?", target)
+        if len(revisions) > 2:
+            raise BadName(
+                f"Invalid target: '{target}' - expected a revision or a single range"
+            )
+        for revision in revisions:
+            if not revision:
+                raise BadName(f"Invalid target: '{target}' - empty range endpoint")
+            # Same flag-injection guard as the whole target above: an endpoint
+            # reaching git's option parser is no safer than the target doing so.
+            if revision.startswith("-"):
+                raise BadName(f"Invalid target: '{target}' - cannot start with '-'")
+            repo.rev_parse(revision)
     return repo.git.diff(f"--unified={context_lines}", target)
 
 def git_commit(repo: git.Repo, message: str) -> str:

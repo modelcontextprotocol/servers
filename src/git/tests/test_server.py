@@ -451,6 +451,47 @@ def test_git_diff_rejects_ranges_without_two_endpoints(test_repository):
         git_diff(test_repository, f"{default_branch}..{default_branch}...HEAD")
 
 
+def test_git_diff_allows_single_revisions_containing_dots(test_repository):
+    """A single revision may contain '..' without being a revision range.
+
+    `:/text` matches commit messages, and the text is a regular expression, so
+    a selector such as ':/fix..bug' resolves to one revision. Splitting every
+    target on '..' before resolving it would validate ':/fix' and 'bug'
+    separately and reject a target git accepts, so the whole target is tried
+    first and the range split is only the fallback.
+    """
+    file_path = Path(test_repository.working_dir) / "test.txt"
+    file_path.write_text("dotted selector change")
+    test_repository.index.add(["test.txt"])
+    test_repository.index.commit("fix..bug in the subject")
+
+    # Leave a change behind so the diff against that revision is not empty
+    file_path.write_text("dotted selector change plus worktree edit")
+
+    assert test_repository.rev_parse(":/fix..bug") is not None
+
+    result = git_diff(test_repository, ":/fix..bug")
+    assert "worktree edit" in result
+
+    # A dotted selector is still rejected when it matches no commit
+    with pytest.raises(BadName):
+        git_diff(test_repository, ":/no..such..subject")
+
+
+def test_git_diff_rejects_ranges_with_more_than_two_endpoints(test_repository):
+    """Only '..' and '...' separate endpoints, so extra dots are malformed.
+
+    `HEAD....` splits into `HEAD` and `.`, which is not a range with two real
+    endpoints; it has to be rejected explicitly rather than by whichever
+    endpoint happens to fail to resolve.
+    """
+    default_branch = test_repository.active_branch.name
+
+    for target in ("HEAD....", f"{default_branch}....HEAD", "HEAD.....", "HEAD..--all"):
+        with pytest.raises(BadName):
+            git_diff(test_repository, target)
+
+
 def test_git_checkout_allows_valid_branches(test_repository):
     """git_checkout should work normally with valid branch names."""
     # Get the default branch name
