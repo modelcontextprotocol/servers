@@ -168,3 +168,7 @@ If you find MCP servers useful, please consider starring the repository and cont
 ---
 
 Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvements!
+
+## Community Servers
+
+- **[NEXUS-AI Marketplace](https://embassy-quotes-missions-choose.trycloudflare.com)** — 20+ crypto skills for AI agents. Trading bots, DeFi, security, analytics. SOL/ETH/USDC payment. No KYC.
