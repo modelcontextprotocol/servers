@@ -526,3 +526,62 @@ def test_get_local_tz_various_timezones(mock_get_localzone, timezone_name):
     result = get_local_tz()
     assert str(result) == timezone_name
     assert isinstance(result, ZoneInfo)
+
+
+@pytest.fixture
+def anyio_backend():
+    # The server only ever runs on asyncio; trio is not a dev dependency.
+    return "asyncio"
+
+
+@pytest.mark.anyio
+async def test_call_tool_preserves_mcp_error_for_invalid_timezone():
+    """get_zoneinfo raises McpError(INVALID_PARAMS); the handler must not
+    re-wrap it, which would discard the code and double-prefix the message."""
+    from mcp.shared.memory import create_connected_server_and_client_session
+
+    from mcp_server_time.server import build_server
+
+    async with create_connected_server_and_client_session(build_server()) as session:
+        result = await session.call_tool(
+            "get_current_time", {"timezone": "Invalid/Zone"}
+        )
+
+    assert result.isError
+    text = result.content[0].text
+    assert text.startswith("Invalid timezone:")
+    assert "Error processing mcp-server-time query" not in text
+
+
+@pytest.mark.anyio
+async def test_call_tool_still_wraps_other_errors():
+    """Errors without a specific MCP code keep the existing prefix."""
+    from mcp.shared.memory import create_connected_server_and_client_session
+
+    from mcp_server_time.server import build_server
+
+    async with create_connected_server_and_client_session(build_server()) as session:
+        result = await session.call_tool(
+            "convert_time",
+            {
+                "source_timezone": "UTC",
+                "time": "not-a-time",
+                "target_timezone": "UTC",
+            },
+        )
+
+    assert result.isError
+    assert "Error processing mcp-server-time query" in result.content[0].text
+
+
+@pytest.mark.anyio
+async def test_call_tool_returns_result_for_valid_timezone():
+    from mcp.shared.memory import create_connected_server_and_client_session
+
+    from mcp_server_time.server import build_server
+
+    async with create_connected_server_and_client_session(build_server()) as session:
+        result = await session.call_tool("get_current_time", {"timezone": "UTC"})
+
+    assert not result.isError
+    assert '"timezone": "UTC"' in result.content[0].text
