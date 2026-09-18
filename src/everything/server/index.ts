@@ -12,7 +12,7 @@ import { registerConditionalTools, registerTools } from "../tools/index.js";
 import { registerResources, readInstructions } from "../resources/index.js";
 import { registerPrompts } from "../prompts/index.js";
 import { stopSimulatedLogging } from "./logging.js";
-import { syncRoots } from "./roots.js";
+import { syncRoots, removeRootsSession } from "./roots.js";
 
 // Server Factory response
 export type ServerFactoryResponse = {
@@ -112,6 +112,7 @@ export const createServer: () => ServerFactoryResponse = () => {
       stopSimulatedLogging(sessionId);
       stopSimulatedResourceUpdates(sessionId);
       removeSubscriber(sessionId);
+      removeRootsSession(sessionId);
       // Clean up task store timers
       taskStore.cleanup();
       if (initializeTimeout) clearTimeout(initializeTimeout);
