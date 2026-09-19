@@ -382,7 +382,7 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.DIFF,
-                description="Shows differences between branches or commits",
+                description="Shows differences between branches, commits, or revision ranges",
                 inputSchema=GitDiff.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
