@@ -183,6 +183,15 @@ export class KnowledgeGraphManager {
     // complete old file or the complete new one, never a partial state.
     // The temp file is kept in the same directory so the rename stays on one
     // filesystem — renaming across mount points fails with EXDEV.
+    //
+    // The rename also replaces the target's inode, and the temp file is
+    // created under the process umask, so a memory file an operator narrowed
+    // with chmod would come back 0644. Capture the existing bits and restore
+    // them after the rename, as src/filesystem/lib.ts does for the same
+    // write pattern. A memory file that does not exist yet has nothing to
+    // preserve.
+    const existingStats = await fs.stat(this.memoryFilePath).catch(() => undefined);
+
     const directory = path.dirname(this.memoryFilePath);
     const tempFilePath = path.join(
       directory,
@@ -196,6 +205,11 @@ export class KnowledgeGraphManager {
       // Never leave a stray temp file behind on failure.
       await fs.unlink(tempFilePath).catch(() => {});
       throw error;
+    }
+
+    if (existingStats) {
+      // The data is already durable, so a failed chmod must not fail the save.
+      await fs.chmod(this.memoryFilePath, existingStats.mode & 0o777).catch(() => {});
     }
   }
 
