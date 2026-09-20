@@ -30,7 +30,10 @@ The fetch tool will truncate the response, but by using the `start_index` argume
 
 ## Installation
 
-Optionally: Install node.js, this will cause the fetch server to use a different HTML simplifier that is more robust.
+Optionally: Install Node.js, which enables the fetch server to use ReadabiliPy's JS-based HTML simplifier for higher fidelity.
+
+> [!NOTE]
+> When Node.js is present, ReadabiliPy may install npm packages (`@mozilla/readability` and `jsdom`) on the first HTML conversion call. In restricted network environments with egress allowlisting, ensure `registry.npmjs.org` is reachable, or pre-install dependencies at image build time.
 
 ### Using uv (recommended)
 
