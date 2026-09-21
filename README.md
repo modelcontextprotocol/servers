@@ -160,6 +160,8 @@ This project is licensed under the Apache License, Version 2.0 for new contribut
 ## 💬 Community
 
 - [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
+  **[KindleSMS](https://github.com/lexerAnn/sms)**: Send SMS messages, manage approved Sender IDs, and check SMS credit balances directly inside Claude. ([npm](https://www.npmjs.com/package/kindlesms))
+
 
 ## ⭐ Support
 
