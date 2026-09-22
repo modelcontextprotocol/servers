@@ -184,6 +184,31 @@ class TestCheckMayAutonomouslyFetchUrl:
                 )
 
 
+    @pytest.mark.asyncio
+    async def test_robots_txt_request_uses_timeout(self):
+        """Test that the robots.txt request is issued with a timeout so a slow
+        or unresponsive robots.txt cannot hang the autonomous-fetch check."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "User-agent: *\nAllow: /"
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await check_may_autonomously_fetch_url(
+                "https://example.com/page",
+                DEFAULT_USER_AGENT_AUTONOMOUS
+            )
+
+            # The robots.txt GET must carry an explicit timeout.
+            _, kwargs = mock_client.get.call_args
+            assert "timeout" in kwargs
+            assert kwargs["timeout"] == 30
+
+
 class TestFetchUrl:
     """Tests for fetch_url function."""
 

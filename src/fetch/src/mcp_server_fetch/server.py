@@ -78,6 +78,7 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
                 robot_txt_url,
                 follow_redirects=True,
                 headers={"User-Agent": user_agent},
+                timeout=30,
             )
         except HTTPError:
             raise McpError(ErrorData(
