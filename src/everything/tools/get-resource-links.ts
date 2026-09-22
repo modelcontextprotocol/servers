@@ -72,11 +72,7 @@ export const registerGetResourceLinksTool = (server: McpServer) => {
         type: "resource_link",
         uri: resource.uri,
         name: `${isOdd ? "Text" : "Blob"} Resource ${resourceId}`,
-        description: `Resource ${resourceId}: ${
-          resource.mimeType === "text/plain"
-            ? "plaintext resource"
-            : "binary blob resource"
-        }`,
+        description: `${resource.mimeType === "text/plain" ? "plaintext resource" : "binary blob resource"}`,
         mimeType: resource.mimeType,
       });
     }
