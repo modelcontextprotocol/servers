@@ -225,6 +225,50 @@ describe('Session Resources', () => {
       );
     });
 
+    it('should not evict a resource with the same URI from another server', () => {
+      const firstRegistration = { remove: vi.fn() };
+      const secondRegistration = { remove: vi.fn() };
+      const firstServer = {
+        registerResource: vi.fn(() => firstRegistration),
+      } as unknown as McpServer;
+      const secondServer = {
+        registerResource: vi.fn(() => secondRegistration),
+      } as unknown as McpServer;
+      const resource = {
+        uri: 'demo://resource/session/shared-file',
+        name: 'shared-file',
+        mimeType: 'text/plain',
+      };
+
+      registerSessionResource(firstServer, resource, 'text', 'first session');
+      registerSessionResource(secondServer, resource, 'text', 'second session');
+
+      expect(firstRegistration.remove).not.toHaveBeenCalled();
+      expect(secondRegistration.remove).not.toHaveBeenCalled();
+    });
+
+    it('should replace a resource with the same URI on the same server', () => {
+      const firstRegistration = { remove: vi.fn() };
+      const secondRegistration = { remove: vi.fn() };
+      const server = {
+        registerResource: vi
+          .fn()
+          .mockReturnValueOnce(firstRegistration)
+          .mockReturnValueOnce(secondRegistration),
+      } as unknown as McpServer;
+      const resource = {
+        uri: 'demo://resource/session/replaced-file',
+        name: 'replaced-file',
+        mimeType: 'text/plain',
+      };
+
+      registerSessionResource(server, resource, 'text', 'first payload');
+      registerSessionResource(server, resource, 'text', 'second payload');
+
+      expect(firstRegistration.remove).toHaveBeenCalledOnce();
+      expect(secondRegistration.remove).not.toHaveBeenCalled();
+    });
+
     it('should register blob resource correctly', () => {
       const mockServer = {
         registerResource: vi.fn(),
