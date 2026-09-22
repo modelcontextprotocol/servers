@@ -201,7 +201,12 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
         raise BadName(f"Invalid branch name: '{branch_name}' - cannot start with '-'")
     repo.rev_parse(branch_name)  # Validates branch_name is a real git ref, throws BadName if not
     repo.git.checkout(branch_name)
-    return f"Switched to branch '{branch_name}'"
+    # rev_parse accepts any revision, so branch_name may have been a sha, tag or
+    # remote-tracking ref rather than a branch. Report what actually happened instead of
+    # claiming a branch switch; a detached HEAD is easy to commit onto by mistake.
+    if repo.head.is_detached:
+        return f"HEAD is now detached at {repo.head.commit.hexsha[:7]}"
+    return f"Switched to branch '{repo.active_branch.name}'"
 
 
 
