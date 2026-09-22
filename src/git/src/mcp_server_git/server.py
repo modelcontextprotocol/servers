@@ -223,7 +223,13 @@ def git_show(repo: git.Repo, revision: str) -> str:
     else:
         diff = commit.diff(git.NULL_TREE, create_patch=True)
     for d in diff:
-        output.append(f"\n--- {d.a_path}\n+++ {d.b_path}\n")
+        # GitPython leaves a_path or b_path as None for a file the commit added
+        # or deleted. A unified diff names /dev/null on that side, and an
+        # f-string renders None as the four characters "None", which no patch
+        # tool accepts.
+        a_path = d.a_path or "/dev/null"
+        b_path = d.b_path or "/dev/null"
+        output.append(f"\n--- {a_path}\n+++ {b_path}\n")
         if d.diff is None:
             continue
         if isinstance(d.diff, bytes):
