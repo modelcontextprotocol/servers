@@ -125,7 +125,28 @@ def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_L
     repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
     return repo.git.diff(f"--unified={context_lines}", target)
 
+def _has_staged_changes(repo: git.Repo) -> bool:
+    """Whether the index holds anything git would record as a commit.
+
+    Mirrors `git commit`, which refuses to create an empty commit unless
+    --allow-empty is given, but permits one while a merge is in progress.
+    """
+    if (Path(repo.git_dir) / "MERGE_HEAD").exists():
+        return True
+    if not repo.head.is_valid():
+        # Unborn branch: the first commit, so anything in the index counts.
+        return bool(repo.index.entries)
+    return bool(repo.index.diff(repo.head.commit))
+
 def git_commit(repo: git.Repo, message: str) -> str:
+    # repo.index.commit() writes a tree unconditionally, so without this check
+    # a caller that forgot to stage gets a hash back for an empty commit and no
+    # way to tell it apart from a real one.
+    if not _has_staged_changes(repo):
+        raise ValueError(
+            "No changes staged for commit. Use git_add to stage changes first; "
+            "git_status shows what is currently staged."
+        )
     commit = repo.index.commit(message)
     return f"Changes committed successfully with hash {commit.hexsha}"
 
