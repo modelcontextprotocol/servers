@@ -130,26 +130,23 @@ def git_commit(repo: git.Repo, message: str) -> str:
     return f"Changes committed successfully with hash {commit.hexsha}"
 
 def git_add(repo: git.Repo, files: list[str]) -> str:
-    if files == ["."]:
-        repo.git.add(".")
-    else:
-        # Defense in depth: validate each path resolves within the repository
-        # working tree to prevent path traversal (e.g. '../../etc/passwd' or an
-        # absolute path) from staging files outside repository boundaries.
-        repo_root = Path(repo.working_dir).resolve()
-        for f in files:
-            try:
-                resolved = (repo_root / f).resolve()
-            except (OSError, RuntimeError):
-                raise ValueError(f"Invalid path: '{f}'")
-            try:
-                resolved.relative_to(repo_root)
-            except ValueError:
-                raise ValueError(
-                    f"Path '{f}' is outside the repository '{repo_root}'"
-                )
-        # Use '--' to prevent files starting with '-' from being interpreted as options
-        repo.git.add("--", *files)
+    # Defense in depth: validate each path resolves within the repository
+    # working tree to prevent path traversal (e.g. '../../etc/passwd' or an
+    # absolute path) from staging files outside repository boundaries.
+    repo_root = Path(repo.working_dir).resolve()
+    for f in files:
+        try:
+            resolved = (repo_root / f).resolve()
+        except (OSError, RuntimeError):
+            raise ValueError(f"Invalid path: '{f}'")
+        try:
+            resolved.relative_to(repo_root)
+        except ValueError:
+            raise ValueError(
+                f"Path '{f}' is outside the repository '{repo_root}'"
+            )
+    # Use '--' to prevent files starting with '-' from being interpreted as options
+    repo.git.add("--", *files)
     return "Files staged successfully"
 
 def git_reset(repo: git.Repo) -> str:
