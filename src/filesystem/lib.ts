@@ -301,14 +301,15 @@ export async function applyFileEdits(
         const originalIndent = contentLines[i].match(/^\s*/)?.[0] || '';
         const newLines = normalizedNew.split('\n').map((line, j) => {
           if (j === 0) return originalIndent + line.trimStart();
-          // For subsequent lines, try to preserve relative indentation
-          const oldIndent = oldLines[j]?.match(/^\s*/)?.[0] || '';
+          // For subsequent lines, preserve the indentation relative to the line
+          // being replaced. A line with no leading whitespace has a known indent
+          // of length zero, so the offset is only unknown when there is no old
+          // line to measure against, which is the one case left verbatim.
+          if (j >= oldLines.length) return line;
+          const oldIndent = oldLines[j].match(/^\s*/)?.[0] || '';
           const newIndent = line.match(/^\s*/)?.[0] || '';
-          if (oldIndent && newIndent) {
-            const relativeIndent = newIndent.length - oldIndent.length;
-            return originalIndent + ' '.repeat(Math.max(0, relativeIndent)) + line.trimStart();
-          }
-          return line;
+          const relativeIndent = newIndent.length - oldIndent.length;
+          return originalIndent + ' '.repeat(Math.max(0, relativeIndent)) + line.trimStart();
         });
 
         contentLines.splice(i, oldLines.length, ...newLines);

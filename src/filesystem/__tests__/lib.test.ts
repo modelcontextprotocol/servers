@@ -687,6 +687,28 @@ describe('Lib Functions', () => {
         );
       });
 
+      it('indents a flush-left replacement line to match the block', async () => {
+        // Every line of the block is indented four spaces. oldText and newText
+        // are both written flush left, so the exact-substring fast path misses
+        // and the whitespace-flexible matcher has to work out the replacement's
+        // indentation line by line.
+        mockFs.readFile.mockResolvedValue('function foo() {\n    line1\n    line2\n}');
+
+        const edits = [
+          { oldText: 'line1\nline2', newText: 'lineA\nlineB' }
+        ];
+
+        mockFs.rename.mockResolvedValueOnce(undefined);
+
+        await applyFileEdits('/test/file.js', edits, false);
+
+        expect(mockFs.writeFile).toHaveBeenCalledWith(
+          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
+          'function foo() {\n    lineA\n    lineB\n}',
+          'utf-8'
+        );
+      });
+
       it('handles CRLF line endings in file content', async () => {
         mockFs.readFile.mockResolvedValue('line1\r\nline2\r\nline3\r\n');
         
