@@ -142,7 +142,7 @@ const ListDirectoryWithSizesArgsSchema = z.object({
 
 const DirectoryTreeArgsSchema = z.object({
   path: z.string(),
-  excludePatterns: z.array(z.string()).optional().default([])
+  excludePatterns: z.array(z.string()).optional().default([]).describe('Array of glob patterns to exclude from directory tree (e.g. ["**/node_modules/**", "**/.git/**"])')
 });
 
 const MoveFileArgsSchema = z.object({
@@ -152,8 +152,8 @@ const MoveFileArgsSchema = z.object({
 
 const SearchFilesArgsSchema = z.object({
   path: z.string(),
-  pattern: z.string(),
-  excludePatterns: z.array(z.string()).optional().default([])
+  pattern: z.string().describe('Glob pattern to match files and directories (e.g. "*.ts", "**/*.json")'),
+  excludePatterns: z.array(z.string()).optional().default([]).describe('Array of glob patterns to exclude from search results (e.g. ["**/node_modules/**"])')
 });
 
 const GetFileInfoArgsSchema = z.object({
@@ -553,8 +553,8 @@ server.registerTool(
       "Files have no children array, while directories always have a children array (which may be empty). " +
       "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
     inputSchema: {
-      path: z.string(),
-      excludePatterns: z.array(z.string()).optional().default([])
+      path: z.string().describe("Root directory path to generate tree from"),
+      excludePatterns: z.array(z.string()).optional().default([]).describe("Array of glob patterns to exclude from directory tree (e.g. ['**/node_modules/**', '**/.git/**'])")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false }
@@ -653,9 +653,9 @@ server.registerTool(
       "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
       "Only searches within allowed directories.",
     inputSchema: {
-      path: z.string(),
-      pattern: z.string(),
-      excludePatterns: z.array(z.string()).optional().default([])
+      path: z.string().describe("Path to the directory to search within"),
+      pattern: z.string().describe("Glob pattern to match files and directories (e.g. '*.ts', '**/*.json')"),
+      excludePatterns: z.array(z.string()).optional().default([]).describe("Array of glob patterns to exclude from search results (e.g. ['**/node_modules/**'])")
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false }
