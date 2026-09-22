@@ -266,6 +266,59 @@ describe('Session Resources', () => {
       expect(handlerResult.contents[0].text).toBe('Test content here');
       expect(handlerResult.contents[0].mimeType).toBe('text/plain');
     });
+
+    it('should not remove a resource another session registered under the same URI', () => {
+      const removedFromA: string[] = [];
+      const removedFromB: string[] = [];
+
+      const sessionA = {
+        registerResource: vi.fn((_name, uri) => {
+          return { remove: () => removedFromA.push(String(uri)) };
+        }),
+      } as unknown as McpServer;
+
+      const sessionB = {
+        registerResource: vi.fn((_name, uri) => {
+          return { remove: () => removedFromB.push(String(uri)) };
+        }),
+      } as unknown as McpServer;
+
+      const resource = {
+        uri: 'demo://resource/session/shared.gz',
+        name: 'shared.gz',
+        mimeType: 'application/gzip',
+      };
+
+      registerSessionResource(sessionA, resource, 'blob', 'from-a');
+      registerSessionResource(sessionB, resource, 'blob', 'from-b');
+
+      // Each session must keep serving its own resource.
+      expect(removedFromA).toEqual([]);
+      expect(removedFromB).toEqual([]);
+    });
+
+    it('should still remove its own previous registration for the same URI', () => {
+      const removed: string[] = [];
+
+      const server = {
+        registerResource: vi.fn((_name, uri) => {
+          return { remove: () => removed.push(String(uri)) };
+        }),
+      } as unknown as McpServer;
+
+      const resource = {
+        uri: 'demo://resource/session/retry.gz',
+        name: 'retry.gz',
+        mimeType: 'application/gzip',
+      };
+
+      // A tool called twice with the same output name must not fail with
+      // "Resource already registered"; the earlier registration is replaced.
+      registerSessionResource(server, resource, 'blob', 'first');
+      registerSessionResource(server, resource, 'blob', 'second');
+
+      expect(removed).toEqual(['demo://resource/session/retry.gz']);
+    });
   });
 });
 
