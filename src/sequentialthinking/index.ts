@@ -93,9 +93,13 @@ You should:
       needsMoreThoughts: coercedBoolean.optional().describe("If more thoughts are needed")
     },
     annotations: {
-      readOnlyHint: true,
+      // The server holds mutable thoughtHistory/branches instance state that
+      // every call appends to (see lib.ts), so it is neither read-only nor
+      // idempotent: two calls with identical arguments still each grow
+      // thoughtHistoryLength by one and can each append to a branch.
+      readOnlyHint: false,
       destructiveHint: false,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     },
     outputSchema: {
