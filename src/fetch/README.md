@@ -174,6 +174,30 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
 
+### Customization - Allowed hosts
+
+By default the server can fetch any host (see the security caution above). To restrict which hosts the server may connect to, add the `--allowed-hosts` argument with one or more entries to the `args` list in the configuration:
+
+- `example.com` allows exactly `example.com` (matching is case-insensitive)
+- `*.example.com` allows `example.com` itself and any subdomain, e.g. `api.example.com`
+
+Matching is by hostname only: an entry allows that host on any port, and IPv6 addresses are listed without brackets (e.g. `--allowed-hosts ::1`).
+
+The allowlist is enforced on the initial request, on the `robots.txt` pre-check, and on every redirect hop, so a redirect from an allowed host cannot bounce the fetch to a disallowed host. Requests to any other host fail with an error explaining that the host is not allowlisted.
+
+Note that the allowlist matches hostnames, not the IP addresses they resolve to: an allowlisted domain whose DNS records point at internal addresses can still be fetched (this is what makes it possible to deliberately allowlist internal hosts).
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch", "--allowed-hosts", "example.com", "*.github.com"]
+    }
+  }
+}
+```
+
 ## Windows Configuration
 
 If you're experiencing timeout issues on Windows, you may need to set the `PYTHONIOENCODING` environment variable to ensure proper character encoding:

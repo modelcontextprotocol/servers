@@ -1,5 +1,5 @@
-from typing import Annotated, Tuple
-from urllib.parse import urlparse, urlunparse
+from typing import TYPE_CHECKING, Annotated, Any, Tuple
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import markdownify
 import readabilipy.simple_json
@@ -20,8 +20,148 @@ from mcp.types import (
 from protego import Protego
 from pydantic import BaseModel, Field, AnyUrl
 
+if TYPE_CHECKING:
+    from httpx import AsyncClient, Response
+
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
+
+REDIRECT_STATUS_CODES = frozenset({301, 302, 303, 307, 308})
+MAX_REDIRECTS = 20
+
+
+def _normalize_host(host: str) -> str:
+    """Normalize a hostname or allowlist entry for comparison.
+
+    Lowercases, strips surrounding whitespace, trailing root-label dots and
+    IP-literal brackets, and IDNA-encodes Unicode names (so ``例え.jp`` and
+    its punycode form ``xn--r8jz45g.jp`` compare equal). Anything that fails
+    IDNA encoding is returned as-is; worst case it simply never matches,
+    which fails closed.
+    """
+    host = host.strip().lower().rstrip(".").strip("[]")
+    try:
+        return host.encode("idna").decode("ascii")
+    except (UnicodeError, ValueError):
+        return host
+
+
+def is_host_allowed(hostname: str | None, allowed_hosts: list[str] | None) -> bool:
+    """Check whether a hostname is permitted by the configured allowlist.
+
+    Args:
+        hostname: Hostname taken from the request URL
+        allowed_hosts: Allowlist entries. ``None`` disables the allowlist (every
+            host is allowed). An entry is either an exact host (``example.com``)
+            or a wildcard (``*.example.com``, which matches ``example.com`` itself
+            and any subdomain). Matching is case-insensitive and IDNA-normalized.
+
+    Returns:
+        True if the host may be fetched, False otherwise
+    """
+    if allowed_hosts is None:
+        return True
+    if not hostname:
+        return False
+    hostname = _normalize_host(hostname)
+    for entry in allowed_hosts:
+        wildcard = entry.lstrip().startswith("*.")
+        normalized = _normalize_host(entry.lstrip()[2:] if wildcard else entry)
+        if wildcard:
+            if hostname == normalized or hostname.endswith("." + normalized):
+                return True
+        elif hostname == normalized:
+            return True
+    return False
+
+
+def validate_url_allowed(url: str, allowed_hosts: list[str] | None) -> None:
+    """Validate a URL's host against the allowlist.
+
+    The URL is parsed with httpx — the same parser that will be used to
+    connect — so the validated host is always the host that gets connected.
+
+    Raises:
+        McpError: If the URL has no hostname or its host is not allowlisted
+    """
+    if allowed_hosts is None:
+        return
+    from httpx import URL, InvalidURL
+
+    try:
+        hostname = URL(url).host
+    except InvalidURL:
+        hostname = None
+    if not hostname:
+        raise McpError(ErrorData(
+            code=INVALID_PARAMS,
+            message=f"Invalid URL: could not determine a hostname for {url}",
+        ))
+    if not is_host_allowed(hostname, allowed_hosts):
+        raise McpError(ErrorData(
+            code=INTERNAL_ERROR,
+            message=f"Fetching '{hostname}' is not allowed: this server is configured with a host allowlist (--allowed-hosts) and this host is not on it. The user can adjust the server configuration if this host should be accessible.",
+        ))
+
+
+async def _get_following_redirects(
+    client: "AsyncClient",
+    url: str,
+    *,
+    user_agent: str,
+    allowed_hosts: list[str] | None,
+    timeout: float | None = None,
+) -> "Response":
+    """GET a URL, following redirects manually and re-validating every hop.
+
+    Redirects are followed by hand (instead of httpx's follow_redirects) so that
+    each redirect target is checked against the allowlist before connecting;
+    otherwise a 302 from an allowed host could bounce the fetch to any host.
+
+    Args:
+        client: httpx.AsyncClient to use
+        url: Initial URL to fetch
+        user_agent: User-Agent header value
+        allowed_hosts: Allowlist applied to the initial URL and every redirect hop
+        timeout: Optional per-request timeout in seconds (httpx default if None)
+
+    Returns:
+        The final (non-redirect) httpx.Response
+
+    Raises:
+        McpError: If a hop is not allowlisted or the redirect limit is exceeded
+    """
+    request_kwargs: dict[str, Any] = {"follow_redirects": False, "headers": {"User-Agent": user_agent}}
+    if timeout is not None:
+        request_kwargs["timeout"] = timeout
+
+    current_url = url
+    redirects_remaining = MAX_REDIRECTS
+    while True:
+        validate_url_allowed(current_url, allowed_hosts)
+        response = await client.get(current_url, **request_kwargs)
+        if response.status_code not in REDIRECT_STATUS_CODES:
+            return response
+        location = response.headers.get("location")
+        if location is None:
+            # A redirect status without a Location header is not followable;
+            # the response is used as-is (matches httpx's follow_redirects).
+            return response
+        if redirects_remaining <= 0:
+            raise McpError(ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"Failed to fetch {url}: exceeded the limit of {MAX_REDIRECTS} redirects",
+            ))
+        redirects_remaining -= 1
+        # An empty Location redirects to the same URL (matching httpx), so a
+        # redirect loop — self-inflicted or otherwise — hits the limit above.
+        try:
+            current_url = urljoin(str(response.url), location)
+        except ValueError:
+            raise McpError(ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"Failed to fetch {url}: redirect target {location!r} is not a valid URL",
+            ))
 
 
 def extract_content_from_html(html: str) -> str:
@@ -63,21 +203,23 @@ def get_robots_txt_url(url: str) -> str:
     return robots_url
 
 
-async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url: str | None = None) -> None:
+async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url: str | None = None, allowed_hosts: list[str] | None = None) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
     """
     from httpx import AsyncClient, HTTPError
 
+    validate_url_allowed(url, allowed_hosts)
     robot_txt_url = get_robots_txt_url(url)
 
     async with AsyncClient(proxy=proxy_url) as client:
         try:
-            response = await client.get(
+            response = await _get_following_redirects(
+                client,
                 robot_txt_url,
-                follow_redirects=True,
-                headers={"User-Agent": user_agent},
+                user_agent=user_agent,
+                allowed_hosts=allowed_hosts,
             )
         except HTTPError:
             raise McpError(ErrorData(
@@ -109,19 +251,22 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
 
 
 async def fetch_url(
-    url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None
+    url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None, allowed_hosts: list[str] | None = None
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
     """
     from httpx import AsyncClient, HTTPError
 
+    validate_url_allowed(url, allowed_hosts)
+
     async with AsyncClient(proxy=proxy_url) as client:
         try:
-            response = await client.get(
+            response = await _get_following_redirects(
+                client,
                 url,
-                follow_redirects=True,
-                headers={"User-Agent": user_agent},
+                user_agent=user_agent,
+                allowed_hosts=allowed_hosts,
                 timeout=30,
             )
         except HTTPError as e:
@@ -182,6 +327,7 @@ async def serve(
     custom_user_agent: str | None = None,
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
+    allowed_hosts: list[str] | None = None,
 ) -> None:
     """Run the fetch MCP server.
 
@@ -189,6 +335,8 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        allowed_hosts: Optional host allowlist; when set, only these hosts
+            (exact names or *.example.com wildcards) may be fetched
     """
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
@@ -232,10 +380,10 @@ Although originally you did not have internet access, and were advised to refuse
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
         if not ignore_robots_txt:
-            await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url)
+            await check_may_autonomously_fetch_url(url, user_agent_autonomous, proxy_url, allowed_hosts=allowed_hosts)
 
         content, prefix = await fetch_url(
-            url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url
+            url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url, allowed_hosts=allowed_hosts
         )
         original_length = len(content)
         if args.start_index >= original_length:
@@ -262,7 +410,7 @@ Although originally you did not have internet access, and were advised to refuse
         url = arguments["url"]
 
         try:
-            content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url)
+            content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url, allowed_hosts=allowed_hosts)
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:
             return GetPromptResult(
