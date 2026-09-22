@@ -14,8 +14,8 @@ Follow them to use, extend, and troubleshoot the server safely and effectively.
 
 - `gzip-file-as-resource`: Max fetch size controlled by `GZIP_MAX_FETCH_SIZE` (default 10MB), timeout by `GZIP_MAX_FETCH_TIME_MILLIS` (default 30s), allowed domains by `GZIP_ALLOWED_DOMAINS`
 - Session resources are ephemeral and lost when the session ends
-- Sampling requests (`trigger-sampling-request`) require client sampling capability
-- Elicitation requests (`trigger-elicitation-request`) require client elicitation capability
+- Sampling requests (`trigger-sampling-request`) require the client to declare the `sampling` capability; without it, this tool is absent from the tool catalog
+- Elicitation requests (`trigger-elicitation-request`) require the client to declare the `elicitation` capability; without it, this tool is absent from the tool catalog
 
 ## Operational Patterns
 
