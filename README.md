@@ -168,3 +168,5 @@ If you find MCP servers useful, please consider starring the repository and cont
 ---
 
 Managed by Anthropic, but built together with the community. The Model Context Protocol is open source and we encourage everyone to contribute their own servers and improvements!
+- **[Aries](https://github.com/AZTRA-Inc/aries-service-python/tree/main/packages/aries-mcp/js)** — API testing & coverage. Import an OpenAPI, Swagger, Postman, HAR, or Insomnia file; run test suites; get plain-English rejection rationale — from inside your IDE.
+
