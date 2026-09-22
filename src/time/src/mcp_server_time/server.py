@@ -24,6 +24,7 @@ class TimeResult(BaseModel):
     datetime: str
     day_of_week: str
     is_dst: bool
+    note: str | None = None
 
 
 class TimeConversionResult(BaseModel):
@@ -92,6 +93,22 @@ class TimeServer:
             tzinfo=source_timezone,
         )
 
+        # A local wall-clock time can occur twice on the day a DST fall-back
+        # transition happens (e.g. 1:30 AM in America/New_York on the first
+        # Sunday of November occurs once before the clocks go back and once
+        # after). Attaching tzinfo directly, as above, always resolves to
+        # `fold=0` -- the earlier of the two real offsets -- with no
+        # indication to the caller that a second, equally valid answer
+        # exists. Detect that case by comparing both folds' offsets, and
+        # surface it instead of silently picking one.
+        source_note = None
+        other_fold_offset = source_time.replace(fold=1).utcoffset()
+        if other_fold_offset != source_time.utcoffset():
+            source_note = (
+                f"{parsed_time.strftime('%H:%M')} occurs twice in {source_tz} on this date due to a "
+                "DST transition; this result uses the earlier of the two occurrences."
+            )
+
         target_time = source_time.astimezone(target_timezone)
         source_offset = source_time.utcoffset() or timedelta()
         target_offset = target_time.utcoffset() or timedelta()
@@ -109,6 +126,7 @@ class TimeServer:
                 datetime=source_time.isoformat(timespec="seconds"),
                 day_of_week=source_time.strftime("%A"),
                 is_dst=bool(source_time.dst()),
+                note=source_note,
             ),
             target=TimeResult(
                 timezone=target_tz,
