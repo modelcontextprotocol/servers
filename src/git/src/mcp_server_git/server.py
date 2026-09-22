@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 from typing import Any, Optional, Sequence
 from mcp.server import Server
@@ -117,12 +118,54 @@ def git_diff_unstaged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES
 def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
     return repo.git.diff(f"--unified={context_lines}", "--cached")
 
+def _resolves(repo: git.Repo, revision: str) -> bool:
+    """Whether ``revision`` names a git object, treating every refusal as one.
+
+    ``rev_parse`` raises ``BadName`` for a revision that does not resolve,
+    ``ValueError`` for a spec its own parser cannot tokenize (e.g.
+    ``HEAD~1..HEAD``), and ``KeyError`` when a ``rev:path`` target names a path
+    the tree does not contain. Only the first is a deliberate "not a revision"
+    signal, but all three mean the target is unusable as one.
+    """
+    try:
+        repo.rev_parse(revision)
+    except (BadName, ValueError, KeyError):
+        return False
+    return True
+
 def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
     # Defense in depth: reject targets starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if target.startswith("-"):
         raise BadName(f"Invalid target: '{target}' - cannot start with '-'")
-    repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
+    # target may be a revision range, so the endpoints have to be validated
+    # individually: rev_parse rejects 'main..feature' as a whole. Try the target
+    # unchanged first, because a single revision is allowed to contain '..'
+    # itself, as the commit-message selector ':/fix..bug' does.
+    if not _resolves(repo, target):
+        # Only '..' and '...' separate endpoints, so a run of four or more dots
+        # is a malformed range rather than a range with an odd endpoint.
+        if re.search(r"\.\.\.\.", target):
+            raise BadName(
+                f"Invalid target: '{target}' - expected a revision or a single "
+                f"'..' or '...' range"
+            )
+        revisions = re.split(r"\.\.\.?", target)
+        if len(revisions) > 2:
+            raise BadName(
+                f"Invalid target: '{target}' - expected a revision or a single range"
+            )
+        for revision in revisions:
+            if not revision:
+                raise BadName(f"Invalid target: '{target}' - empty range endpoint")
+            # Same flag-injection guard as the whole target above: an endpoint
+            # reaching git's option parser is no safer than the target doing so.
+            if revision.startswith("-"):
+                raise BadName(f"Invalid target: '{target}' - cannot start with '-'")
+            if not _resolves(repo, revision):
+                raise BadName(
+                    f"Invalid target: '{target}' - '{revision}' is not a revision"
+                )
     return repo.git.diff(f"--unified={context_lines}", target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
@@ -339,7 +382,7 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.DIFF,
-                description="Shows differences between branches or commits",
+                description="Shows differences between branches, commits, or revision ranges",
                 inputSchema=GitDiff.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,

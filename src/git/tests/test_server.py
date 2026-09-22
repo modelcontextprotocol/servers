@@ -393,6 +393,141 @@ def test_git_diff_allows_valid_refs(test_repository):
     assert result is not None
 
 
+def test_git_diff_allows_revision_ranges(test_repository):
+    """git_diff should accept revision ranges such as 'A..B' and 'A...B'."""
+    default_branch = test_repository.active_branch.name
+
+    test_repository.git.checkout("-b", "range-feature")
+    file_path = Path(test_repository.working_dir) / "test.txt"
+    file_path.write_text("first range change")
+    test_repository.index.add(["test.txt"])
+    first_commit = test_repository.index.commit("first range commit")
+    file_path.write_text("second range change")
+    test_repository.index.add(["test.txt"])
+    test_repository.index.commit("second range commit")
+
+    # Branch ranges, in both directions and with both range syntaxes
+    test_repository.git.checkout(default_branch)
+    for target in (
+        f"{default_branch}..range-feature",
+        f"range-feature..{default_branch}",
+        f"{default_branch}...range-feature",
+    ):
+        result = git_diff(test_repository, target)
+        assert "test.txt" in result
+        assert "range change" in result
+
+    # Commit ranges reachable from HEAD
+    test_repository.git.checkout("range-feature")
+    result = git_diff(test_repository, "HEAD~1..HEAD")
+    assert "second range change" in result
+
+    result = git_diff(test_repository, f"{first_commit.hexsha}..HEAD")
+    assert "second range change" in result
+
+    # Endpoints that are not real refs are still rejected
+    with pytest.raises(BadName):
+        git_diff(test_repository, "nonexistent..HEAD")
+
+    with pytest.raises(BadName):
+        git_diff(test_repository, f"{default_branch}..--output=/tmp/evil")
+
+
+def test_git_diff_rejects_ranges_without_two_endpoints(test_repository):
+    """A range has to name two revisions.
+
+    `..target`, `target..` and `...` are ranges with an empty endpoint, and
+    `....` is not a range at all. None of them resolve to two real refs, so
+    they are rejected here rather than reaching `git diff` and failing there
+    with a raw git error.
+    """
+    for target in ("..HEAD", "HEAD..", "...", "...."):
+        with pytest.raises(BadName):
+            git_diff(test_repository, target)
+
+    # A range may not carry more than one separator either
+    default_branch = test_repository.active_branch.name
+    with pytest.raises(BadName):
+        git_diff(test_repository, f"{default_branch}..{default_branch}...HEAD")
+
+
+def test_git_diff_allows_single_revisions_containing_dots(test_repository):
+    """A single revision may contain '..' without being a revision range.
+
+    `:/text` matches commit messages, and the text is a regular expression, so
+    a selector such as ':/fix..bug' resolves to one revision. Splitting every
+    target on '..' before resolving it would validate ':/fix' and 'bug'
+    separately and reject a target git accepts, so the whole target is tried
+    first and the range split is only the fallback.
+    """
+    file_path = Path(test_repository.working_dir) / "test.txt"
+    file_path.write_text("dotted selector change")
+    test_repository.index.add(["test.txt"])
+    test_repository.index.commit("fix..bug in the subject")
+
+    # Leave a change behind so the diff against that revision is not empty
+    file_path.write_text("dotted selector change plus worktree edit")
+
+    assert test_repository.rev_parse(":/fix..bug") is not None
+
+    result = git_diff(test_repository, ":/fix..bug")
+    assert "worktree edit" in result
+
+    # A dotted selector is still rejected when it matches no commit
+    with pytest.raises(BadName):
+        git_diff(test_repository, ":/no..such..subject")
+
+
+def test_git_diff_rejects_ranges_with_more_than_two_endpoints(test_repository):
+    """Only '..' and '...' separate endpoints, so extra dots are malformed.
+
+    `HEAD....` splits into `HEAD` and `.`, which is not a range with two real
+    endpoints; it has to be rejected explicitly rather than by whichever
+    endpoint happens to fail to resolve.
+    """
+    default_branch = test_repository.active_branch.name
+
+    for target in ("HEAD....", f"{default_branch}....HEAD", "HEAD.....", "HEAD..--all"):
+        with pytest.raises(BadName):
+            git_diff(test_repository, target)
+
+
+def test_git_diff_reports_an_unresolvable_rev_path_as_bad_name(test_repository):
+    """A 'rev:path' target naming a missing path is a BadName, not a KeyError.
+
+    `rev_parse` resolves the revision and then raises `KeyError` from the tree
+    lookup, so probing a target for being a single revision has to treat that
+    the same way as a revision that does not resolve at all.
+    """
+    for target in ("HEAD:missing/path", "HEAD:missing..path"):
+        with pytest.raises(BadName):
+            git_diff(test_repository, target)
+
+    default_branch = test_repository.active_branch.name
+    with pytest.raises(BadName):
+        git_diff(test_repository, f"{default_branch}:missing..path..HEAD")
+
+
+def test_git_diff_accepts_a_peeled_message_selector(test_repository):
+    """'HEAD^{/text}' is one revision; wrapping it in a range is not a range.
+
+    The selector is accepted on its own, and a range naming it is rejected
+    because git cannot parse one either -- it splits on the first '..' too.
+    """
+    file_path = Path(test_repository.working_dir) / "test.txt"
+    file_path.write_text("peeled selector change")
+    test_repository.index.add(["test.txt"])
+    test_repository.index.commit("fix..bug in the subject")
+
+    file_path.write_text("peeled selector change plus worktree edit")
+
+    assert test_repository.rev_parse("HEAD^{/fix..bug}") is not None
+    assert "worktree edit" in git_diff(test_repository, "HEAD^{/fix..bug}")
+
+    with pytest.raises(BadName):
+        git_diff(test_repository, "HEAD^{/fix..bug}..HEAD")
+
+
 def test_git_checkout_allows_valid_branches(test_repository):
     """git_checkout should work normally with valid branch names."""
     # Get the default branch name
