@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from typing import Any, Optional, Sequence
+from urllib.request import url2pathname
 from mcp.server import Server
 from mcp.server.session import ServerSession
 from mcp.server.stdio import stdio_server
@@ -19,6 +20,16 @@ from pydantic import BaseModel, Field
 
 # Default number of context lines to show in diff output
 DEFAULT_CONTEXT_LINES = 3
+
+def root_uri_to_path(uri: Any) -> str:
+    """Local filesystem path for a `file://` root URI.
+
+    `AnyUrl.path` keeps the URI percent-encoded, so a repository under a
+    directory with a space in it arrives as `/home/me/my%20repo`, which does
+    not exist on disk. `url2pathname` decodes it, and on Windows also turns
+    `/C:/src/repo` into the `C:\\src\\repo` that git can open.
+    """
+    return url2pathname(uri.path or "")
 
 class GitStatus(BaseModel):
     repo_path: str
@@ -452,11 +463,15 @@ async def serve(repository: Path | None) -> None:
             logger.debug(f"Roots result: {roots_result}")
             repo_paths = []
             for root in roots_result.roots:
-                path = root.uri.path
+                path = root_uri_to_path(root.uri)
                 try:
                     git.Repo(path)
                     repo_paths.append(str(path))
-                except git.InvalidGitRepositoryError:
+                except (git.InvalidGitRepositoryError, git.NoSuchPathError):
+                    # NoSuchPathError is a sibling of InvalidGitRepositoryError
+                    # under GitError, not a subclass, so catching only the
+                    # latter let a root that does not exist abort discovery of
+                    # every other root.
                     pass
             return repo_paths
 

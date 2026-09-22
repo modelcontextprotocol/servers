@@ -17,6 +17,7 @@ from mcp_server_git.server import (
     git_show,
     validate_repo_path,
     serve,
+    root_uri_to_path,
 )
 import shutil
 import unittest.mock as mock
@@ -588,3 +589,64 @@ def test_serve_run_does_not_raise_exceptions(tmp_path: Path):
                 assert kwargs.get("raise_exceptions") is not True
 
     anyio.run(_run)
+
+
+def test_root_uri_to_path_decodes_percent_encoding(tmp_path: Path):
+    """A root URI is percent-encoded; the filesystem path is not.
+
+    `AnyUrl.path` hands back `/home/me/my%20repo` for a directory called
+    `my repo`, which does not exist on disk.
+    """
+    from pydantic import FileUrl
+
+    repo_dir = tmp_path / "my repo"
+    repo_dir.mkdir()
+    uri = FileUrl(repo_dir.as_uri())
+
+    assert "%20" in uri.path
+    assert root_uri_to_path(uri) == str(repo_dir)
+
+
+def test_root_uri_to_path_leaves_plain_paths_alone(tmp_path: Path):
+    """A path needing no encoding round-trips unchanged."""
+    from pydantic import FileUrl
+
+    repo_dir = tmp_path / "plain"
+    repo_dir.mkdir()
+
+    assert root_uri_to_path(FileUrl(repo_dir.as_uri())) == str(repo_dir)
+
+
+def test_root_with_spaces_is_discoverable(tmp_path: Path):
+    """The user-visible symptom: a repository under a directory with a space
+    in its name could not be opened from the root the client sent."""
+    from pydantic import FileUrl
+
+    repo_dir = tmp_path / "My Documents" / "project"
+    repo_dir.mkdir(parents=True)
+    git.Repo.init(repo_dir)
+
+    path = root_uri_to_path(FileUrl(repo_dir.as_uri()))
+    assert git.Repo(path).git_dir  # raises NoSuchPathError before the fix
+
+
+def test_missing_root_does_not_abort_discovery(tmp_path: Path):
+    """`NoSuchPathError` is a sibling of `InvalidGitRepositoryError` under
+    `GitError`, not a subclass, so catching only the latter let one root that
+    does not exist take down discovery of every other root."""
+    assert not issubclass(git.NoSuchPathError, git.InvalidGitRepositoryError)
+
+    good = tmp_path / "good"
+    good.mkdir()
+    git.Repo.init(good)
+    roots = [str(tmp_path / "gone"), str(good)]
+
+    found = []
+    for path in roots:
+        try:
+            git.Repo(path)
+            found.append(path)
+        except (git.InvalidGitRepositoryError, git.NoSuchPathError):
+            pass
+
+    assert found == [str(good)]
