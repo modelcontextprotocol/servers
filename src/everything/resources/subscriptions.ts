@@ -69,13 +69,13 @@ export const setSubscriptionHandlers = (server: McpServer) => {
   server.server.setRequestHandler(
     UnsubscribeRequestSchema,
     async (request, extra) => {
-      // Get the URI to subscribe to
+      // Get the URI to unsubscribe from
       const { uri } = request.params;
 
       // Get the session id (can be undefined for stdio)
       const sessionId = extra.sessionId as string;
 
-      // Acknowledge the subscribe request
+      // Acknowledge the unsubscribe request
       await server.sendLoggingMessage(
         {
           level: "info",
