@@ -8,6 +8,8 @@ import {
   normalizeLineEndings,
   createUnifiedDiff,
   // Security & validation functions
+  PATH_VALIDATION_REASON,
+  PathValidationError,
   validatePath,
   setAllowedDirectories,
   // File operations
@@ -195,8 +197,64 @@ describe('Lib Functions', () => {
 
       it('rejects disallowed paths', async () => {
         const testPath = process.platform === 'win32' ? 'C:\\Windows\\System32\\file.txt' : '/etc/passwd';
-        await expect(validatePath(testPath))
-          .rejects.toThrow('Access denied - path outside allowed directories');
+        let caughtError: unknown;
+        try {
+          await validatePath(testPath);
+        } catch (error) {
+          caughtError = error;
+        }
+
+        expect(caughtError).toBeInstanceOf(PathValidationError);
+        expect(caughtError).toMatchObject({
+          reason: PATH_VALIDATION_REASON.PATH_OUTSIDE_ALLOWED,
+        });
+        expect((caughtError as Error).message).toContain('Access denied - path outside allowed directories');
+      });
+
+      it('rejects symlink targets outside allowed directories with stable reason code', async () => {
+        const linkPath = process.platform === 'win32' ? 'C:\\Users\\test\\link.txt' : '/home/user/link.txt';
+        const escapedTarget = process.platform === 'win32' ? 'C:\\Windows\\secret.txt' : '/etc/secret.txt';
+        mockFs.realpath.mockResolvedValueOnce(escapedTarget);
+
+        let caughtError: unknown;
+        try {
+          await validatePath(linkPath);
+        } catch (error) {
+          caughtError = error;
+        }
+
+        expect(caughtError).toBeInstanceOf(PathValidationError);
+        expect(caughtError).toMatchObject({
+          reason: PATH_VALIDATION_REASON.SYMLINK_TARGET_OUTSIDE_ALLOWED,
+        });
+      });
+
+      it('rejects parent directories outside allowed directories with stable reason code', async () => {
+        const newFilePath = process.platform === 'win32' ? 'C:\\Users\\test\\link\\newfile.txt' : '/home/user/link/newfile.txt';
+        const allowedParent = process.platform === 'win32' ? 'C:\\Users\\test' : '/home/user';
+        const escapedParent = process.platform === 'win32' ? 'C:\\Windows' : '/etc';
+
+        const enoentError = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoentError.code = 'ENOENT';
+
+        mockFs.realpath
+          .mockRejectedValueOnce(enoentError)
+          .mockResolvedValueOnce(allowedParent)
+          .mockResolvedValueOnce(escapedParent);
+        mockFs.readdir.mockResolvedValueOnce(['link']);
+
+        let caughtError: unknown;
+        try {
+          await validatePath(newFilePath);
+        } catch (error) {
+          caughtError = error;
+        }
+
+        expect(caughtError).toBeInstanceOf(PathValidationError);
+        expect(caughtError).toMatchObject({
+          reason: PATH_VALIDATION_REASON.PARENT_OUTSIDE_ALLOWED,
+        });
+        expect((caughtError as Error).message).toContain('parent directory outside allowed directories');
       });
 
       it('handles non-existent files by checking parent directory', async () => {
@@ -243,8 +301,18 @@ describe('Lib Functions', () => {
         // Every ancestor, all the way up to the filesystem root, is missing.
         mockFs.realpath.mockRejectedValue(enoentError);
 
-        await expect(validatePath(newFilePath))
-          .rejects.toThrow('Parent directory does not exist');
+        let caughtError: unknown;
+        try {
+          await validatePath(newFilePath);
+        } catch (error) {
+          caughtError = error;
+        }
+
+        expect(caughtError).toBeInstanceOf(PathValidationError);
+        expect(caughtError).toMatchObject({
+          reason: PATH_VALIDATION_REASON.PARENT_DIRECTORY_NOT_FOUND,
+        });
+        expect((caughtError as Error).message).toContain('Parent directory does not exist');
       });
 
       it('resolves relative paths against allowed directories instead of process.cwd()', async () => {
