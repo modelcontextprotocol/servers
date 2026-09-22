@@ -63,6 +63,7 @@ jobs:
     if: github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '/i-promise-this-is-not-a-new-server')
     runs-on: ubuntu-latest
     permissions:
+      issues: write
       pull-requests: write
     steps:
       - name: Swap labels and minimize comments
@@ -71,6 +72,15 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const prNumber = context.payload.issue.number;
+
+            const association = context.payload.comment.author_association;
+            const trustedAssociations = ['OWNER', 'MEMBER', 'COLLABORATOR'];
+            const commenter = context.payload.comment.user.login;
+            const prAuthor = context.payload.issue.user.login;
+            if (commenter !== prAuthor && !trustedAssociations.includes(association)) {
+              console.log(`Ignoring confirmation from unauthorized commenter ${commenter} (${association})`);
+              return;
+            }
 
             // Check if pending label exists
             const { data: labels } = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number: prNumber });
