@@ -1,0 +1,120 @@
+# Tracks public interface changes to the Everything MCP server.
+# The Everything server is a reference implementation demonstrating all MCP features.
+# This workflow helps reviewers see how tools, resources, prompts, and capabilities
+# evolve over time - useful for SDK compliance validation and catching regressions.
+#
+# See: https://github.com/modelcontextprotocol/inspector/issues/1034
+name: Everything Server MCP Diff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/everything/**'
+    # TypeScript release tags also trigger a run, comparing against the
+    # previous typescript-servers-* tag (auto-detected by mcp-server-diff).
+    # This surfaces the cumulative interface delta for each release.
+    tags:
+      - 'typescript-servers-*'
+  pull_request:
+    paths:
+      - 'src/everything/**'
+  # Manual trigger for comparing any two refs (commits, tags, branches)
+  workflow_dispatch:
+    inputs:
+      compare_ref:
+        description: 'Base ref to compare against (commit SHA, tag, or branch)'
+        required: false
+        default: ''
+      target_ref:
+        description: 'Target ref to compare (defaults to current branch if empty)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mcp-diff:
+    name: Diff Everything Server Interface
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.target_ref || github.ref }}
+
+      - name: Run MCP Server Diff
+        id: mcp_diff
+        uses: SamMorrowDrums/mcp-server-diff@f7e5e58a4b0c4f68a5827adad2292953bb1ab9ef # v2.3.5
+        with:
+          setup_node: 'true'
+          node_version: '22'
+          install_command: cd src/everything && npm ci
+          build_command: cd src/everything && npm run build
+          start_command: node src/everything/dist/index.js stdio
+          compare_ref: ${{ github.event.inputs.compare_ref || '' }}
+          server_timeout: '15'
+
+      - name: Add summary context
+        if: always()
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "ℹ️ **Interpreting Results**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The Everything server is a reference implementation that exercises all MCP features." >> $GITHUB_STEP_SUMMARY
+          echo "Interface changes here may indicate:" >> $GITHUB_STEP_SUMMARY
+          echo "- New MCP protocol features being demonstrated" >> $GITHUB_STEP_SUMMARY
+          echo "- Updated tool schemas or descriptions" >> $GITHUB_STEP_SUMMARY
+          echo "- New resources, prompts, or capabilities" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Review changes to ensure they align with the intended protocol updates." >> $GITHUB_STEP_SUMMARY
+
+      # Post (or update) a sticky PR comment so reviewers can see the diff without
+      # navigating to the Actions tab. The same comment is updated on subsequent
+      # pushes via the `header` key. Skipped for PRs from forks where GITHUB_TOKEN
+      # is read-only — the report is still available in the workflow summary and
+      # as an uploaded artifact.
+      - name: Build PR comment body
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        id: comment_body
+        run: |
+          {
+            echo 'body<<MCP_DIFF_EOF'
+            echo '## 🔍 Everything Server MCP Interface Diff'
+            echo ''
+            if [ "${{ steps.mcp_diff.outputs.status }}" = "passed" ]; then
+              echo '✅ **No interface changes detected** between this PR and its merge-base.'
+            else
+              echo '⚠️ **Interface changes detected** — review below to confirm they are intentional.'
+            fi
+            echo ''
+            if [ -f conformance-report/CONFORMANCE_REPORT.md ]; then
+              echo '<details><summary>Full report</summary>'
+              echo ''
+              tail -n +5 conformance-report/CONFORMANCE_REPORT.md
+              echo ''
+              echo '</details>'
+            else
+              echo '_Report file not found — see the workflow logs for details._'
+            fi
+            echo ''
+            echo "<sub>Updated by [\`${{ github.workflow }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) · commit \`${{ github.event.pull_request.head.sha }}\`</sub>"
+            echo 'MCP_DIFF_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post / update sticky PR comment
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+        with:
+          header: everything-server-mcp-diff
+          message: ${{ steps.comment_body.outputs.body }}
