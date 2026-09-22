@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/servers/main/schema.json",
+  "name": "truecalci",
+  "title": "TrueCalci Deterministic Engine",
+  "description": "24 zero-hallucination deterministic calculation tools for financial schedules, statutory tax brackets, mortgage amortization, and engineering math over Streamable HTTP.",
+  "repository": "https://github.com/truecalci-official/truecalci",
+  "homepage": "https://truecalci.com",
+  "transport": {
+    "type": "streamable-http",
+    "url": "https://truecalci.com/api/v1/mcp"
+  },
+  "tags": ["finance", "tax", "mortgage", "deterministic", "math", "currency"]
+}
