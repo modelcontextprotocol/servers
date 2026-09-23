@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import json
 from typing import Sequence
@@ -91,6 +91,23 @@ class TimeServer:
             parsed_time.minute,
             tzinfo=source_timezone,
         )
+
+        # Attaching ZoneInfo does not validate local wall times. During a
+        # spring-forward transition, times in the skipped interval are silently
+        # assigned the pre-transition offset even though they never occurred.
+        # A UTC round trip normalizes such a value to the first valid local time,
+        # allowing us to reject the invalid input instead of returning a
+        # misleading conversion.
+        round_tripped_source_time = source_time.astimezone(timezone.utc).astimezone(
+            source_timezone
+        )
+        if round_tripped_source_time.replace(tzinfo=None) != source_time.replace(
+            tzinfo=None
+        ):
+            raise ValueError(
+                f"Time {time_str} does not exist in {source_tz} on "
+                f"{source_time.date()} due to a UTC offset transition"
+            )
 
         target_time = source_time.astimezone(target_timezone)
         source_offset = source_time.utcoffset() or timedelta()
