@@ -85,9 +85,19 @@ src/everything
 ### `docs/`
 
 - `architecture.md`
-  - This document.
+  - Describes the server architecture, including transport layers, session initialization, and primitive registration.
+- `extension.md`
+  - Explains how to extend the server with new tools, prompts, resources, or transports.
+- `features.md`
+  - A comprehensive reference listing all implemented prompts, resources, tools, and protocol behaviors.
+- `how-it-works.md`
+  - Explains how SSE and Streamable HTTP transports are set up and how sessions are managed.
 - `instructions.md`
   - Human‑readable instructions intended to be passed to the client/LLM as guidance on server use. Loaded by the server at startup and returned in the initialize exchange.
+- `startup.md`
+  - Describes the server startup sequence, environment checks, and initialization.
+- `structure.md`
+  - This document.
 
 ### `prompts/`
 
