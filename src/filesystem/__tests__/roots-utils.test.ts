@@ -58,6 +58,23 @@ describe('getValidRootDirectories', () => {
       expect(result).toHaveLength(1);
       expect(result[0]).toBe(subDir);
     });
+
+    it('should process VS Code Windows file URIs with encoded drive colons', async () => {
+      if (process.platform !== 'win32') {
+        return;
+      }
+
+      const windowsPath = testDir1.replace(/\\/g, '/');
+      const encodedDrivePath = windowsPath.replace(/^([a-zA-Z]):/, (_, drive: string) => `${drive.toLowerCase()}%3A`);
+      const roots: Root[] = [
+        { uri: `file:///${encodedDrivePath}`, name: 'VS Code workspace root' }
+      ];
+
+      const result = await getValidRootDirectories(roots);
+
+      expect(result).toContain(testDir1);
+      expect(result).toHaveLength(1);
+    });
   });
 
   describe('error handling', () => {
