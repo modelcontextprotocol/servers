@@ -93,9 +93,11 @@ You should:
       needsMoreThoughts: coercedBoolean.optional().describe("If more thoughts are needed")
     },
     annotations: {
-      readOnlyHint: true,
+      // Each call appends to the server's in-memory thought history (and
+      // branch list), so the tool is neither read-only nor idempotent.
+      readOnlyHint: false,
       destructiveHint: false,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     },
     outputSchema: {
