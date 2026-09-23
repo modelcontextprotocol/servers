@@ -375,9 +375,14 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
     let position = fileSize;
     const chunk = Buffer.alloc(CHUNK_SIZE);
     let newlinesFound = 0;
+    let endsWithNewline = false;
+    let isFirstChunk = true;
     
     // Read chunks from the end of the file until we have enough lines
-    while (position > 0 && newlinesFound < numLines) {
+    while (
+      position > 0 &&
+      newlinesFound < numLines + (endsWithNewline ? 1 : 0)
+    ) {
       const size = Math.min(CHUNK_SIZE, position);
       position -= size;
       
@@ -385,6 +390,10 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
       if (!bytesRead) break;
 
       const readData = Buffer.from(chunk.subarray(0, bytesRead));
+      if (isFirstChunk) {
+        endsWithNewline = readData[bytesRead - 1] === 0x0a;
+        isFirstChunk = false;
+      }
       chunks.unshift(readData);
       for (const byte of readData) {
         if (byte === 0x0a) newlinesFound++;
@@ -392,7 +401,9 @@ export async function tailFile(filePath: string, numLines: number): Promise<stri
     }
 
     const text = normalizeLineEndings(Buffer.concat(chunks).toString('utf-8'));
-    return text.split('\n').slice(-numLines).join('\n');
+    const lines = text.split('\n');
+    if (endsWithNewline) lines.pop();
+    return lines.slice(-numLines).join('\n');
   } finally {
     await fileHandle.close();
   }
