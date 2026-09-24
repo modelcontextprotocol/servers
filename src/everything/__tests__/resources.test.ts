@@ -19,9 +19,13 @@ import {
 } from '../resources/session.js';
 import { registerFileResources } from '../resources/files.js';
 import {
+  SubscribeRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+import {
   setSubscriptionHandlers,
   beginSimulatedResourceUpdates,
   stopSimulatedResourceUpdates,
+  removeSubscriber,
 } from '../resources/subscriptions.js';
 
 describe('Resource Templates', () => {
@@ -298,10 +302,87 @@ describe('Subscriptions', () => {
     });
   });
 
+  describe('removeSubscriber', () => {
+    const testUri = 'demo://resource/dynamic/text/1';
+    const sessionId = 'disconnect-test-session';
+
+    let subscribeHandler: (
+      request: { params: { uri: string } },
+      extra: { sessionId: string }
+    ) => Promise<unknown>;
+
+    beforeEach(() => {
+      const handlers = new Map<unknown, typeof subscribeHandler>();
+      const mockServer = {
+        server: {
+          setRequestHandler: vi.fn((schema, handler) => {
+            handlers.set(schema, handler);
+          }),
+          notification: vi.fn(),
+        },
+        sendLoggingMessage: vi.fn(),
+      } as unknown as McpServer;
+
+      setSubscriptionHandlers(mockServer);
+      subscribeHandler = handlers.get(SubscribeRequestSchema)!;
+    });
+
+    afterEach(() => {
+      stopSimulatedResourceUpdates(sessionId);
+      removeSubscriber(sessionId);
+    });
+
+    it('should drop a disconnected session from all subscriptions', async () => {
+      const notification = vi.fn();
+      const mockServer = {
+        server: {
+          notification,
+        },
+      } as unknown as McpServer;
+
+      await subscribeHandler({ params: { uri: testUri } }, { sessionId });
+
+      beginSimulatedResourceUpdates(mockServer, sessionId);
+      expect(notification).toHaveBeenCalled();
+
+      notification.mockClear();
+      removeSubscriber(sessionId);
+      stopSimulatedResourceUpdates(sessionId);
+
+      beginSimulatedResourceUpdates(mockServer, sessionId);
+      expect(notification).not.toHaveBeenCalled();
+    });
+
+    it('should not affect other sessions subscribed to the same URI', async () => {
+      const otherSessionId = 'other-session';
+      const notification = vi.fn();
+      const mockServer = {
+        server: {
+          notification,
+        },
+      } as unknown as McpServer;
+
+      await subscribeHandler({ params: { uri: testUri } }, { sessionId });
+      await subscribeHandler(
+        { params: { uri: testUri } },
+        { sessionId: otherSessionId }
+      );
+
+      removeSubscriber(sessionId);
+
+      beginSimulatedResourceUpdates(mockServer, otherSessionId);
+      expect(notification).toHaveBeenCalled();
+
+      stopSimulatedResourceUpdates(otherSessionId);
+      removeSubscriber(otherSessionId);
+    });
+  });
+
   describe('simulated resource updates lifecycle', () => {
     afterEach(() => {
       // Clean up any intervals
       stopSimulatedResourceUpdates('lifecycle-test-session');
+      removeSubscriber('lifecycle-test-session');
     });
 
     it('should start and stop updates without errors', () => {
