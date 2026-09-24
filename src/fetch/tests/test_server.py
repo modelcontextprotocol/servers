@@ -303,6 +303,48 @@ class TestFetchUrl:
                 )
 
     @pytest.mark.asyncio
+    async def test_fetch_default_timeout(self):
+        """Test that fetch_url uses a 30s timeout by default."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"data": "test"}'
+        mock_response.headers = {"content-type": "application/json"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url("https://example.com/data", DEFAULT_USER_AGENT_AUTONOMOUS)
+
+            _, kwargs = mock_client.get.call_args
+            assert kwargs["timeout"] == 30
+
+    @pytest.mark.asyncio
+    async def test_fetch_custom_timeout(self):
+        """Test that a custom timeout is passed through to the HTTP client."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"data": "test"}'
+        mock_response.headers = {"content-type": "application/json"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                timeout=120,
+            )
+
+            _, kwargs = mock_client.get.call_args
+            assert kwargs["timeout"] == 120
+
+    @pytest.mark.asyncio
     async def test_fetch_with_proxy(self):
         """Test that proxy URL is passed to client."""
         mock_response = MagicMock()
