@@ -174,6 +174,14 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
 
+### Customization - Retries
+
+Transient errors (`429`, `500`, `502`, `503`, `504`, or a network error) are retried with
+exponential backoff, up to 3 attempts by default with an initial 1s delay (doubling each
+retry, capped at 10s). A numeric `Retry-After` header on a `429` response is honored. This
+can be configured with the `FETCH_MAX_RETRIES` and `FETCH_RETRY_DELAY_MS` environment
+variables.
+
 ## Windows Configuration
 
 If you're experiencing timeout issues on Windows, you may need to set the `PYTHONIOENCODING` environment variable to ensure proper character encoding:
