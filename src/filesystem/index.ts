@@ -7,7 +7,7 @@ import {
   type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
-import { createReadStream } from "fs";
+import { createReadStream, realpathSync } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 import { z } from "zod";
@@ -39,33 +39,41 @@ if (args.length === 0) {
   console.error("At least one directory must be provided by EITHER method for the server to operate.");
 }
 
-// Store allowed directories in normalized and resolved form
+/**
+ * Resolves an allowed directory to its on-disk canonical form.
+ * realpathSync.native collapses symlinks and — on Windows — drive-letter and
+ * inner-component casing plus 8.3 short names (GitHub issue #470), so the
+ * containment checks in validate_path compare consistently-cased roots.
+ * Returns null when the path cannot be resolved (e.g. it does not exist yet).
+ */
+function canonicalizeAllowedDirectory(dir: string): string | null {
+  try {
+    return normalizePath(realpathSync.native(dir));
+  } catch {
+    return null;
+  }
+}
+
+// Store allowed directories in normalized and resolved form.
+// Each argv entry is path.resolve()d exactly once at startup, then passed
+// through native realpath canonicalization above.
 // We store BOTH the original path AND the resolved path to handle symlinks correctly
 // This fixes the macOS /tmp -> /private/tmp symlink issue where users specify /tmp
 // but the resolved path is /private/tmp
-let allowedDirectories = (await Promise.all(
-  args.map(async (dir) => {
-    const expanded = expandHome(dir);
-    const absolute = path.resolve(expanded);
-    const normalizedOriginal = normalizePath(absolute);
-    try {
-      // Security: Resolve symlinks in allowed directories during startup
-      // This ensures we know the real paths and can validate against them later
-      const resolved = await fs.realpath(absolute);
-      const normalizedResolved = normalizePath(resolved);
-      // Return both original and resolved paths if they differ
-      // This allows matching against either /tmp or /private/tmp on macOS
-      if (normalizedOriginal !== normalizedResolved) {
-        return [normalizedOriginal, normalizedResolved];
-      }
-      return [normalizedResolved];
-    } catch (error) {
-      // If we can't resolve (doesn't exist), use the normalized absolute path
-      // This allows configuring allowed dirs that will be created later
-      return [normalizedOriginal];
-    }
-  })
-)).flat();
+let allowedDirectories = args.flatMap((dir) => {
+  const expanded = expandHome(dir);
+  const absolute = path.resolve(expanded);
+  const normalizedOriginal = normalizePath(absolute);
+  const canonical = canonicalizeAllowedDirectory(absolute);
+  // Return both original and resolved paths if they differ
+  // This allows matching against either /tmp or /private/tmp on macOS
+  if (canonical && canonical !== normalizedOriginal) {
+    return [normalizedOriginal, canonical];
+  }
+  // If we can't resolve (doesn't exist), use the normalized absolute path
+  // This allows configuring allowed dirs that will be created later
+  return [canonical ?? normalizedOriginal];
+});
 
 // Filter to only accessible directories, warn about inaccessible ones
 const accessibleDirectories: string[] = [];
