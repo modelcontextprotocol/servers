@@ -95,7 +95,8 @@ export class KnowledgeGraphManager {
   private mutationQueue: Promise<unknown> = Promise.resolve();
 
   private async withLock<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.mutationQueue.then(operation, operation);
+    const guarded = () => this.withFileLock(operation);
+    const result = this.mutationQueue.then(guarded, guarded);
     // Always resolve the queue itself, even if this operation failed, so a
     // single failed mutation doesn't permanently wedge every call after it.
     // The failure still propagates normally to whoever awaited `result`.
@@ -104,6 +105,100 @@ export class KnowledgeGraphManager {
       () => undefined,
     );
     return result;
+  }
+
+  // Cross-process exclusion. The queue above serialises this instance's
+  // mutations, but the server is stdio-only, so every client is its own
+  // process: two editor windows or two git worktrees sharing MEMORY_FILE_PATH
+  // each run their own queue and still overwrite each other's load→mutate→save
+  // (#1819, #3286). Measured on this commit: 20 writes split across two
+  // processes keep exactly 10 — each process serialises its own half and the
+  // last one to write the file wins.
+  //
+  // The lock is a sidecar file created with O_EXCL (atomic on POSIX and
+  // Windows, no dependency) that contains the holder's token. Three rules make
+  // it ownership-safe, which a bare unlink-and-retry is not:
+  //   1. A live holder heartbeats the lock's mtime, so a long operation is
+  //      never mistaken for a crashed one.
+  //   2. Stale takeover goes through rename(2), not unlink: of N waiters that
+  //      all saw the same stale lock, exactly one rename succeeds; the others
+  //      get ENOENT and retry against the new holder's lock.
+  //   3. Release removes the lock only if it still holds our token, so a
+  //      holder can never delete a replacement's lock.
+  private static readonly LOCK_STALE_MS = 30_000;
+  private static readonly LOCK_HEARTBEAT_MS = 5_000;
+  private static readonly LOCK_RETRY_MS = 15;
+  private static readonly LOCK_TIMEOUT_MS = 10_000;
+
+  private get lockFilePath(): string {
+    return `${this.memoryFilePath}.lock`;
+  }
+
+  private async withFileLock<T>(operation: () => Promise<T>): Promise<T> {
+    await fs.mkdir(path.dirname(this.memoryFilePath), { recursive: true }).catch(() => {});
+    const token = `${process.pid}:${randomBytes(12).toString('hex')}`;
+    const deadline = Date.now() + KnowledgeGraphManager.LOCK_TIMEOUT_MS;
+    for (;;) {
+      let handle: fs.FileHandle;
+      try {
+        handle = await fs.open(this.lockFilePath, 'wx');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        await this.reclaimIfStale();
+        if (Date.now() > deadline) {
+          throw new Error(`Timed out waiting for lock ${this.lockFilePath}`);
+        }
+        await new Promise(resolve => setTimeout(resolve, KnowledgeGraphManager.LOCK_RETRY_MS));
+        continue;
+      }
+      // Acquired. Record who holds it, then keep it visibly alive.
+      await handle.writeFile(token);
+      await handle.close().catch(() => {});
+      const heartbeat = setInterval(() => {
+        const now = new Date();
+        fs.utimes(this.lockFilePath, now, now).catch(() => {});
+      }, KnowledgeGraphManager.LOCK_HEARTBEAT_MS);
+      try {
+        return await operation();
+      } finally {
+        clearInterval(heartbeat);
+        await this.releaseIfOwned(token);
+      }
+    }
+  }
+
+  // Take over a lock whose holder has stopped heartbeating. rename(2) is the
+  // arbiter: N waiters may all decide the lock is stale, but only the first
+  // rename succeeds; the rest fail with ENOENT and go back to waiting on
+  // whatever lock the winner creates next.
+  private async reclaimIfStale(): Promise<void> {
+    let stat;
+    try {
+      stat = await fs.stat(this.lockFilePath);
+    } catch {
+      return; // released between our open() and stat(); retry immediately
+    }
+    if (Date.now() - stat.mtimeMs <= KnowledgeGraphManager.LOCK_STALE_MS) return;
+    const tomb = `${this.lockFilePath}.stale.${randomBytes(8).toString('hex')}`;
+    try {
+      await fs.rename(this.lockFilePath, tomb);
+    } catch {
+      return; // another waiter won the reclaim; fall through to retry
+    }
+    await fs.unlink(tomb).catch(() => {});
+  }
+
+  // Remove the lock only if it is still ours. If a (wrongly) stale-reclaimed
+  // lock has since been taken by someone else, their token is in the file and
+  // we must leave it alone.
+  private async releaseIfOwned(token: string): Promise<void> {
+    try {
+      const current = await fs.readFile(this.lockFilePath, 'utf8');
+      if (current !== token) return;
+      await fs.unlink(this.lockFilePath);
+    } catch {
+      // already gone, or unreadable: nothing of ours to remove
+    }
   }
 
   private async loadGraph(): Promise<KnowledgeGraph> {
