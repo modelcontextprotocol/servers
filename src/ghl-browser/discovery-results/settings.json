@@ -1,0 +1,107 @@
+{
+  "path": "/settings",
+  "url": "https://app.leadconnectorhq.com/?url=%252Fsettings",
+  "total": 7,
+  "byStatus": {
+    "200": 5,
+    "429": 1,
+    "pending": 1
+  },
+  "endpoints": [
+    "GET /companies/branding",
+    "GET /latest/manifest.json",
+    "GET /localization/en-US/",
+    "POST /api/1723141/envelope/",
+    "POST /j/collect"
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://production.app-manifest.leadconnectorhq.com/latest/manifest.json",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083902465,
+        "finishedAt": 1787083902467
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://o176457.ingest.sentry.io/api/1723141/envelope/?sentry_version=7&sentry_key=c67431ff70d6440fb529c2705792425f&sentry_client=sentry.javascript.vue%2F10.19.0",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083903494,
+        "finishedAt": 1787083903544
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://www.google-analytics.com/j/collect?v=1&_v=j102&a=1607817527&t=pageview&_s=1&dl=https%3A%2F%2Fapp.leadconnectorhq.com%2Fsettings&ul=en-us&sr=1440x900&vp=1440x900&_u=SACAAEABEAAAACAAI~&jid=&gjid=&cid=342809228.1787083827&tid=UA-115177999-2&_gid=178827312.1787083827&_slc=1&z=259036351",
+      "resourceType": "xhr",
+      "status": null,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083903518,
+        "finishedAt": null
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://backend.leadconnectorhq.com/localization/en-US/?module=common,smartList,contactDetail,copilot",
+      "resourceType": "xhr",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083903527,
+        "finishedAt": 1787083903633
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://backend.leadconnectorhq.com/localization/en-US/?module=common",
+      "resourceType": "xhr",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083903711,
+        "finishedAt": 1787083903910
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://backend.leadconnectorhq.com/companies/branding?domain=app.leadconnectorhq.com",
+      "resourceType": "xhr",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083903712,
+        "finishedAt": 1787083903862
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://o176457.ingest.sentry.io/api/1723141/envelope/?sentry_version=7&sentry_key=c67431ff70d6440fb529c2705792425f&sentry_client=sentry.javascript.vue%2F10.19.0",
+      "resourceType": "fetch",
+      "status": 429,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083909065,
+        "finishedAt": 1787083909126
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://o176457.ingest.sentry.io/api/1723141/envelope/?sentry_version=7&sentry_key=c67431ff70d6440fb529c2705792425f&sentry_client=sentry.javascript.vue%2F10.19.0",
+      "resourceType": "fetch",
+      "status": null,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083909606,
+        "finishedAt": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "@qoder/ghl-browser-mcp",
+  "version": "1.7.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser-automation MCP server providing 408 tools covering the full GHL (GoHighLevel) UI: workflows, funnels, pipelines, campaigns, social, blogs, forms, email, pages, proposals, calendars, bookings, reporting, memberships, invoices, reputation, affiliates, settings, triggers, snapshots, conversation AI, media library, tags, custom fields, automation templates, conversations, contacts, documents, payments, ecommerce, events, communities, copilot, custom objects, notifications, voice AI, power dialer, performance AI, agency management, dashboard widgets, SEO, snippets, contact scoring, superagents, AI employees, agent builder, agent studio, industry agents, location settings, ad publishing, bulk actions, chat widget, content AI, gift cards, preference management, reseller, SaaS mode, platform billing, store catalog, WordPress, Yext, template library, QR codes, schema markup, store widgets, payment links, domain connect, client portal, membership settings, brand boards, wallet kit, domain reselling, countdown timers, labs, launchpad, knowledge base, estimates, phone integration, and marketplace",
+  "bin": {
+    "ghl-browser-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "start": "node dist/index.js",
+    "login": "node dist/login.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "playwright": "^1.58.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "typescript": "^5.6.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

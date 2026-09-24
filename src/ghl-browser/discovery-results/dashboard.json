@@ -1,0 +1,97 @@
+{
+  "path": "/dashboard",
+  "url": "https://app.leadconnectorhq.com/dashboard",
+  "total": 7,
+  "byStatus": {
+    "200": 5,
+    "429": 1,
+    "pending": 1
+  },
+  "endpoints": [
+    "GET /latest/manifest.json",
+    "GET /localization/en-US/",
+    "POST /api/1723141/envelope/",
+    "POST /j/collect",
+    "POST /v1/projects/highlevel-backend/installations",
+    "POST /v1/projects/highlevel-backend/namespaces/firebase:fetch"
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://production.app-manifest.leadconnectorhq.com/latest/manifest.json",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083825330,
+        "finishedAt": 1787083825460
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://o176457.ingest.sentry.io/api/1723141/envelope/?sentry_version=7&sentry_key=c67431ff70d6440fb529c2705792425f&sentry_client=sentry.javascript.vue%2F10.19.0",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083827265,
+        "finishedAt": 1787083827375
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://www.google-analytics.com/j/collect?v=1&_v=j102&a=387040325&t=pageview&_s=1&dl=https%3A%2F%2Fapp.leadconnectorhq.com%2Fdashboard&ul=en-us&sr=1440x900&vp=1440x900&_u=aEBAAEABEAAAACAAI~&jid=587890584&gjid=794998388&cid=342809228.1787083827&tid=UA-115177999-2&_gid=178827312.1787083827&_r=1&_slc=1&z=1155182635",
+      "resourceType": "xhr",
+      "status": null,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083827265,
+        "finishedAt": null
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://backend.leadconnectorhq.com/localization/en-US/?module=common,smartList,contactDetail,copilot",
+      "resourceType": "xhr",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083827273,
+        "finishedAt": 1787083827488
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://firebaseinstallations.googleapis.com/v1/projects/highlevel-backend/installations",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083827306,
+        "finishedAt": 1787083827770
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://firebaseremoteconfig.googleapis.com/v1/projects/highlevel-backend/namespaces/firebase:fetch?key=AIzaSyB_w3vXmsI7WeQtrIOkjR6xTRVN5uOieiE",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083827849,
+        "finishedAt": 1787083828043
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://o176457.ingest.sentry.io/api/1723141/envelope/?sentry_version=7&sentry_key=c67431ff70d6440fb529c2705792425f&sentry_client=sentry.javascript.vue%2F10.19.0",
+      "resourceType": "fetch",
+      "status": 429,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787083832303,
+        "finishedAt": 1787083832361
+      }
+    }
+  ]
+}
