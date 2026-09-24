@@ -27,9 +27,9 @@ mcp-server-filesystem /path/to/dir1 /path/to/dir2
 This is the only method that works on every protocol version, so it is the one to use.
 
 ### Method 2: MCP Roots (Deprecated, 2025-era clients only)
-A client that connects with a 2025-era protocol version (the `initialize` handshake) and supports [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories.
+A client that connects with a 2025-era protocol version (the `initialize` handshake) and supports [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories. This remains functional for compatibility, but [the MCP specification deprecates Roots](https://modelcontextprotocol.io/specification/2026-07-28/deprecated) and recommends passing directories through tool parameters, resource URIs, or server configuration. For this server, use command-line arguments for new configurations.
 
-Roots notified by Client to Server, completely replace any server-side Allowed directories when provided.
+Valid Roots provided by the client replace the server's allowed directories, including any set through command-line arguments. They do not add to the command-line directories.
 
 **Important**: If server starts without command-line arguments AND a 2025-era client doesn't support roots protocol, the server fails at initialization: it logs the reason to stderr, closes the connection and exits with status 1. A client that supports roots but provides none (or none that are valid) keeps the connection, with no allowed directories until it sends `roots/list_changed` with valid roots.
 
