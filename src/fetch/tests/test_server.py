@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from mcp.shared.exceptions import McpError
+from pydantic import AnyUrl
 
 from mcp_server_fetch.server import (
     extract_content_from_html,
@@ -10,6 +11,9 @@ from mcp_server_fetch.server import (
     check_may_autonomously_fetch_url,
     fetch_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
+    DEFAULT_TIMEOUT,
+    get_default_timeout,
+    Fetch,
 )
 
 
@@ -86,6 +90,41 @@ class TestExtractContentFromHtml:
         html = ""
         result = extract_content_from_html(html)
         assert "<error>" in result
+
+    def test_ssr_streaming_progressive_fallback(self):
+        """Test that SSR/streaming skeleton pages fall back to markdownifying the source HTML directly when readability produces too little content."""
+        # Simulate an SSR page with hidden elements and progressive skeleton where readability strips hidden elements
+        large_body_content = "\n".join(f"<div class='ssr-content' style='visibility: hidden;'><p>Progressive content chunk {i}: important data</p></div>" for i in range(100))
+        html = f"""
+        <html>
+        <head><title>Next.js SSR Progressive App</title></head>
+        <body>
+            <div id="__next">
+                <div class="skeleton-loader"><p>Loading...</p></div>
+                {large_body_content}
+            </div>
+        </body>
+        </html>
+        """
+        # Readability will return empty or only the small loading shell (< 5% of source HTML)
+        result = extract_content_from_html(html)
+        assert "<error>" not in result
+        assert "Progressive content chunk 0: important data" in result
+        assert "Progressive content chunk 99: important data" in result
+
+    def test_readability_returns_none_content_fallback(self):
+        """Test that if readabilipy returns None content, fallback to markdownify preserves content."""
+        html = "<html><body><section><h1>SSR Single Section</h1><p>Direct section text without article</p></section></body></html>"
+        with patch("readabilipy.simple_json.simple_json_from_html_string", return_value={"content": None, "title": "SSR Single Section"}):
+            result = extract_content_from_html(html)
+            assert "SSR Single Section" in result
+            assert "Direct section text without article" in result
+
+    def test_whitespace_only_returns_error(self):
+        """Test that whitespace-only HTML returns an error."""
+        html = "<html><body>   \n\t  </body></html>"
+        result = extract_content_from_html(html)
+        assert "<error>Page failed to be simplified from HTML</error>" in result
 
 
 class TestCheckMayAutonomouslyFetchUrl:
@@ -182,6 +221,32 @@ class TestCheckMayAutonomouslyFetchUrl:
                     "https://example.com/page",
                     DEFAULT_USER_AGENT_AUTONOMOUS
                 )
+
+    @pytest.mark.asyncio
+    async def test_robots_txt_timeout(self):
+        """Test that timeout parameter is passed to robots.txt request."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "User-agent: *\nAllow: /"
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await check_may_autonomously_fetch_url(
+                "https://example.com/page",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                timeout=12.0,
+            )
+
+            mock_client.get.assert_called_once_with(
+                "https://example.com/robots.txt",
+                follow_redirects=True,
+                headers={"User-Agent": DEFAULT_USER_AGENT_AUTONOMOUS},
+                timeout=12.0,
+            )
 
 
 class TestFetchUrl:
@@ -324,3 +389,157 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+    @pytest.mark.asyncio
+    async def test_fetch_default_timeout(self):
+        """Test that default timeout is passed to client.get."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "test"
+        mock_response.headers = {"content-type": "text/plain"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+            )
+
+            mock_client.get.assert_called_once_with(
+                "https://example.com/data",
+                follow_redirects=True,
+                headers={"User-Agent": DEFAULT_USER_AGENT_AUTONOMOUS},
+                timeout=30.0,
+            )
+
+    @pytest.mark.asyncio
+    async def test_fetch_custom_timeout_param(self):
+        """Test that custom timeout parameter is passed to client.get."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "test"
+        mock_response.headers = {"content-type": "text/plain"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                timeout=15.5,
+            )
+
+            mock_client.get.assert_called_once_with(
+                "https://example.com/data",
+                follow_redirects=True,
+                headers={"User-Agent": DEFAULT_USER_AGENT_AUTONOMOUS},
+                timeout=15.5,
+            )
+
+    @pytest.mark.asyncio
+    async def test_fetch_env_var_timeout(self, monkeypatch):
+        """Test that MCP_FETCH_TIMEOUT environment variable is used."""
+        monkeypatch.setenv("MCP_FETCH_TIMEOUT", "45.0")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "test"
+        mock_response.headers = {"content-type": "text/plain"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+            )
+
+            mock_client.get.assert_called_once_with(
+                "https://example.com/data",
+                follow_redirects=True,
+                headers={"User-Agent": DEFAULT_USER_AGENT_AUTONOMOUS},
+                timeout=45.0,
+            )
+
+    @pytest.mark.asyncio
+    async def test_fetch_param_overrides_env_timeout(self, monkeypatch):
+        """Test that explicit timeout parameter overrides MCP_FETCH_TIMEOUT env var."""
+        monkeypatch.setenv("MCP_FETCH_TIMEOUT", "60.0")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "test"
+        mock_response.headers = {"content-type": "text/plain"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                timeout=10.0,
+            )
+
+            mock_client.get.assert_called_once_with(
+                "https://example.com/data",
+                follow_redirects=True,
+                headers={"User-Agent": DEFAULT_USER_AGENT_AUTONOMOUS},
+                timeout=10.0,
+            )
+
+
+class TestGetDefaultTimeout:
+    """Tests for get_default_timeout helper function."""
+
+    def test_default_without_env(self, monkeypatch):
+        monkeypatch.delenv("MCP_FETCH_TIMEOUT", raising=False)
+        assert DEFAULT_TIMEOUT == 30.0
+        assert get_default_timeout() == DEFAULT_TIMEOUT
+
+    def test_valid_float_env(self, monkeypatch):
+        monkeypatch.setenv("MCP_FETCH_TIMEOUT", "15.5")
+        assert get_default_timeout() == 15.5
+
+    def test_invalid_env_falls_back(self, monkeypatch):
+        monkeypatch.setenv("MCP_FETCH_TIMEOUT", "invalid-timeout")
+        assert get_default_timeout() == 30.0
+
+    def test_negative_env_falls_back(self, monkeypatch):
+        monkeypatch.setenv("MCP_FETCH_TIMEOUT", "-5.0")
+        assert get_default_timeout() == 30.0
+
+    def test_zero_env_falls_back(self, monkeypatch):
+        monkeypatch.setenv("MCP_FETCH_TIMEOUT", "0")
+        assert get_default_timeout() == 30.0
+
+
+class TestFetchModel:
+    """Tests for Fetch pydantic model."""
+
+    def test_fetch_model_defaults(self):
+        fetch = Fetch(url=AnyUrl("https://example.com"))
+        assert str(fetch.url) == "https://example.com/"
+        assert fetch.max_length == 5000
+        assert fetch.start_index == 0
+        assert fetch.raw is False
+        assert fetch.timeout is None
+
+    def test_fetch_model_custom_timeout(self):
+        fetch = Fetch(url=AnyUrl("https://example.com"), timeout=12.5)
+        assert fetch.timeout == 12.5
+
+    def test_fetch_model_invalid_timeout(self):
+        with pytest.raises(Exception):
+            Fetch(url=AnyUrl("https://example.com"), timeout=-1.0)
+

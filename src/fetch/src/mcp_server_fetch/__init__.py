@@ -16,9 +16,22 @@ def main():
         help="Ignore robots.txt restrictions",
     )
     parser.add_argument("--proxy-url", type=str, help="Proxy URL to use for requests")
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        help="Timeout in seconds for fetch requests (default: 30.0, or MCP_FETCH_TIMEOUT env var)",
+    )
 
     args = parser.parse_args()
-    asyncio.run(serve(args.user_agent, args.ignore_robots_txt, args.proxy_url))
+    asyncio.run(
+        serve(
+            args.user_agent,
+            args.ignore_robots_txt,
+            args.proxy_url,
+            timeout=args.timeout,
+        )
+    )
 
 
 if __name__ == "__main__":
