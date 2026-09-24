@@ -126,6 +126,100 @@ describe('Registration Index Files', () => {
     });
   });
 
+  describe('instructions vs. capability-gated tools', () => {
+    // The instructions are read once in the server factory and handed to the
+    // McpServer constructor, before `oninitialized` runs and client capabilities
+    // are known. They are therefore the same string for every client, while the
+    // tools registered by registerConditionalTools are not. These tests pin the
+    // two together.
+
+    // Every capability the conditional tools gate on, so the "all capabilities"
+    // registration below is the full set.
+    const allCapabilities = {
+      roots: {},
+      sampling: {},
+      elicitation: { url: {} },
+      tasks: {
+        requests: {
+          sampling: { createMessage: {} },
+          elicitation: { create: {} },
+        },
+      },
+    };
+
+    const registeredWith = async (capabilities: object): Promise<string[]> => {
+      const { registerConditionalTools } = await import('../tools/index.js');
+      const mockServer = {
+        registerTool: vi.fn(),
+        server: {
+          getClientCapabilities: vi.fn(() => capabilities),
+        },
+        experimental: {
+          tasks: {
+            registerToolTask: vi.fn(),
+          },
+        },
+      } as unknown as McpServer;
+
+      registerConditionalTools(mockServer);
+
+      const viaRegisterTool = (mockServer.registerTool as any).mock.calls.map(
+        (call: any[]) => call[0]
+      );
+      const viaRegisterToolTask = (
+        mockServer.experimental.tasks.registerToolTask as any
+      ).mock.calls.map((call: any[]) => call[0]);
+      return [...viaRegisterTool, ...viaRegisterToolTask];
+    };
+
+    // A tool is capability-gated if declaring the capabilities makes it appear.
+    // Deriving it as a difference rather than hard-coding a list means a tool
+    // that stops being gated drops out of these assertions on its own.
+    const gatedTools = async (): Promise<string[]> => {
+      const withAll = await registeredWith(allCapabilities);
+      const withNone = await registeredWith({});
+      return withAll.filter((name) => !withNone.includes(name)).sort();
+    };
+
+    // The rows of the "Capability-Gated Tools" table, by tool name.
+    const documentedTools = (instructions: string): string[] => {
+      const section = instructions
+        .split(/^## /m)
+        .find((part) => part.startsWith('Capability-Gated Tools'));
+      expect(section, 'instructions.md has no "Capability-Gated Tools" section').toBeDefined();
+      return [...section!.matchAll(/^\|\s*`([a-z0-9-]+)`\s*\|/gm)]
+        .map((match) => match[1])
+        .sort();
+    };
+
+    it('documents exactly the tools that client capabilities gate', async () => {
+      const { readInstructions } = await import('../resources/index.js');
+
+      // A tool registered only when a capability is declared is absent from
+      // tools/list for every other client, so an agent told to use it has
+      // nothing to call. The instructions must name the same set the gates do.
+      expect(documentedTools(readInstructions())).toEqual(await gatedTools());
+    });
+
+    it('never tells an agent to use a capability-gated tool unconditionally', async () => {
+      const { readInstructions } = await import('../resources/index.js');
+      const instructions = readInstructions();
+      const gated = await gatedTools();
+
+      // Lines in the gated section are already qualified by the section itself.
+      const sections = instructions.split(/^## /m);
+      const otherLines = sections
+        .filter((part) => !part.startsWith('Capability-Gated Tools'))
+        .flatMap((part) => part.split('\n'));
+
+      const unconditional = otherLines.filter(
+        (line) => gated.some((name) => line.includes(`\`${name}\``)) && !/\bif\b/i.test(line)
+      );
+
+      expect(unconditional, 'mention a gated tool without saying it may be absent').toEqual([]);
+    });
+  });
+
   describe('resources/index.ts', () => {
     it('should register resource templates', async () => {
       const { registerResources } = await import('../resources/index.js');
