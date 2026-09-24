@@ -138,6 +138,11 @@ async function resolveUnicodeEquivalentPath(absolutePath: string): Promise<strin
 }
 
 export async function validatePath(requestedPath: string): Promise<string> {
+  // Security: reject Windows drive-letter paths on POSIX hosts; treating them as
+  // relative paths would silently create literal files like "C:\Users\me\file" in the allowed root.
+  if (process.platform !== 'win32' && /^[A-Za-z]:(?:[\\/]|$)/.test(requestedPath)) {
+    throw new Error(`Access denied - Windows-style path received on a POSIX host: ${requestedPath}`);
+  }
   const expandedPath = expandHome(requestedPath);
   // Do not silently reinterpret a Windows drive path as a relative POSIX path.
   // This would create a literal filename such as `C:\\Users\\...` inside the
