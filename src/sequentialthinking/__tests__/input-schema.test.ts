@@ -30,6 +30,18 @@ describe.skipIf(!existsSync(distIndexPath))('sequentialthinking input schema', (
     await client?.close();
   });
 
+  it('advertises accurate annotations (stateful and non-idempotent)', async () => {
+    const { tools } = await client.listTools();
+    const tool = tools.find(t => t.name === 'sequentialthinking');
+    expect(tool).toBeDefined();
+    expect(tool!.annotations).toEqual({
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    });
+  });
+
   it('advertises nextThoughtNeeded as required', async () => {
     const { tools } = await client.listTools();
     const tool = tools.find(t => t.name === 'sequentialthinking');
