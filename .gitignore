@@ -303,3 +303,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 .claude/settings.local.json
+
+# mcp-publisher
+.mcpregistry_github_token
+.mcpregistry_registry_token
