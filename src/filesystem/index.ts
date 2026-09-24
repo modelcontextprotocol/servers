@@ -7,12 +7,12 @@ import {
   type Root,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "fs/promises";
-import { createReadStream } from "fs";
+import { createReadStream, realpathSync } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 import { z } from "zod";
 import { minimatch } from "minimatch";
-import { normalizePath, expandHome } from './path-utils.js';
+import { normalizePath, parseAllowedDirectories } from './path-utils.js';
 import { getValidRootDirectories } from './roots-utils.js';
 import {
   // Function imports
@@ -39,19 +39,20 @@ if (args.length === 0) {
   console.error("At least one directory must be provided by EITHER method for the server to operate.");
 }
 
-// Store allowed directories in normalized and resolved form
-// We store BOTH the original path AND the resolved path to handle symlinks correctly
-// This fixes the macOS /tmp -> /private/tmp symlink issue where users specify /tmp
-// but the resolved path is /private/tmp
+// Parse allowed directories from raw argv entries before any validation.
+// Entries coming from claude_desktop_config.json can carry surrounding
+// quotes, stray whitespace, a leading ~, or MSYS/Git-Bash style /c/foo paths;
+// parseAllowedDirectories normalizes each entry into an absolute native path.
 let allowedDirectories = (await Promise.all(
-  args.map(async (dir) => {
-    const expanded = expandHome(dir);
-    const absolute = path.resolve(expanded);
-    const normalizedOriginal = normalizePath(absolute);
+  parseAllowedDirectories(args).map(async (dir) => {
+    const normalizedOriginal = normalizePath(dir);
     try {
       // Security: Resolve symlinks in allowed directories during startup
       // This ensures we know the real paths and can validate against them later
-      const resolved = await fs.realpath(absolute);
+      // realpathSync.native is used so Windows 8.3 short names (e.g. PROGRA~1)
+      // are expanded to their long form; the default JS implementation leaves
+      // short-name segments untouched.
+      const resolved = realpathSync.native(dir);
       const normalizedResolved = normalizePath(resolved);
       // Return both original and resolved paths if they differ
       // This allows matching against either /tmp or /private/tmp on macOS

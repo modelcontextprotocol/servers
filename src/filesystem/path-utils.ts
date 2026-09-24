@@ -123,3 +123,58 @@ export function expandHome(filepath: string): string {
   return filepath;
 }
 
+/**
+ * Parses a single allowed-directory argument as it arrives from argv or a
+ * client config file (e.g. claude_desktop_config.json).
+ *
+ * Config authors commonly quote paths that contain spaces (or wrap them in
+ * shell-style quotes) and may pass MSYS/Git-Bash style paths like /c/Users.
+ * Left unhandled, those entries fail startup validation and the server
+ * disconnects (issue #447). This hardens one entry:
+ *
+ * 1. Strips surrounding double/single quotes
+ * 2. Trims surrounding whitespace
+ * 3. Expands a leading `~` to os.homedir()
+ * 4. Converts MSYS/Git-Bash style /c/foo to C:\foo on win32 only
+ * 5. Resolves to an absolute path via path.resolve()
+ *
+ * @param rawArg The raw argument as received
+ * @returns Absolute, resolved path ready for directory validation
+ */
+export function parseAllowedDirectory(rawArg: string): string {
+  // Strip whitespace first so quote detection sees the actual boundary chars
+  let entry = rawArg.trim();
+
+  // Strip one pair of surrounding double or single quotes
+  if (
+    entry.length >= 2 &&
+    ((entry.startsWith('"') && entry.endsWith('"')) ||
+      (entry.startsWith("'") && entry.endsWith("'")))
+  ) {
+    entry = entry.slice(1, -1);
+    entry = entry.trim();
+  }
+
+  // Expand a leading ~ to the user's home directory
+  entry = expandHome(entry);
+
+  // Convert MSYS/Git-Bash style paths (/c/foo -> C:\foo), win32 only.
+  // The regex does not match WSL-style /mnt/c/... paths, so those are left intact.
+  if (process.platform === 'win32') {
+    entry = entry.replace(/^\/([A-Za-z])\//, (_match, drive: string) => `${drive.toUpperCase()}:\\`);
+  }
+
+  // Resolve relative paths against cwd and normalize separators per platform
+  return path.resolve(entry);
+}
+
+/**
+ * Parses every allowed-directory argument before directory validation runs.
+ * Order is preserved; each entry is hardened by parseAllowedDirectory.
+ * @param rawArgs Raw argv entries for allowed directories
+ * @returns Absolute, resolved paths ready for directory validation
+ */
+export function parseAllowedDirectories(rawArgs: string[]): string[] {
+  return rawArgs.map(parseAllowedDirectory);
+}
+
