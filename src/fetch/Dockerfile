@@ -23,6 +23,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.12-slim-bookworm
 
+RUN if ! id -u app >/dev/null 2>&1; then useradd -rUM -s /usr/sbin/nologin app; fi
+
 WORKDIR /app
  
 COPY --from=uv /root/.local /root/.local
@@ -31,6 +33,8 @@ RUN if ! id -u app >/dev/null 2>&1; then \
       useradd -rUM -s /usr/sbin/nologin app; \
     fi
 COPY --from=uv --chown=app:app /app/.venv /app/.venv
+
+USER app
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
