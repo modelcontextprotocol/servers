@@ -1,0 +1,40 @@
+{
+  "name": "@modelcontextprotocol/example-delegated-user-auth",
+  "version": "0.1.0",
+  "description": "Reference implementation of the MCP delegated-end-user-context extension",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Model Context Protocol a Series of LF Projects, LLC.",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/modelcontextprotocol/servers/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/modelcontextprotocol/servers.git"
+  },
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "demo": "node dist/index.js",
+    "prettier:fix": "prettier --write .",
+    "prettier:check": "prettier --check .",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "jose": "^6.0.11",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^4.1.8",
+    "prettier": "^2.8.8",
+    "typescript": "^5.6.2",
+    "vitest": "^4.1.8"
+  }
+}
