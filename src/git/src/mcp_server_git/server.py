@@ -477,6 +477,12 @@ async def serve(repository: Path | None) -> None:
         # For all commands, we need an existing repo
         repo = git.Repo(repo_path)
 
+        if repository is not None:
+            if repo.working_dir:
+                validate_repo_path(Path(repo.working_dir), repository)
+            if repo.git_dir:
+                validate_repo_path(Path(repo.git_dir), repository)
+
         match name:
             case GitTools.STATUS:
                 status = git_status(repo)
