@@ -1,0 +1,11 @@
+{
+  "actor": {"id": "human-sre", "type": "human", "role": "approver"},
+  "offered_token": "demo-hitl",
+  "request": {
+    "tool": "vpc.delete",
+    "tier": "decommission",
+    "args": {"note": "Decommission requires HITL prove token plus approved true."},
+    "approved": true,
+    "attack_technique": "T1578"
+  }
+}

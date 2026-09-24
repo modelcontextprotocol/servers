@@ -1,0 +1,9 @@
+{
+  "actor": {"id": "agent-sre", "type": "agent"},
+  "request": {
+    "tool": "ticket.create",
+    "tier": "write",
+    "args": {"note": "Open a ticket. Default path is SIMULATE until HITL."},
+    "approved": false
+  }
+}
