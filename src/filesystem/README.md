@@ -15,22 +15,20 @@ Published on npm as [`@modelcontextprotocol/server-filesystem`](https://www.npmj
 
 ## Directory Access Control
 
-The server uses a flexible directory access control system. Directories can be specified via command-line arguments or dynamically via [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots).
+The server restricts filesystem operations to allowed directories. For new configurations, specify those directories with command-line arguments. The server also supports client-provided [MCP Roots](https://modelcontextprotocol.io/specification/2026-07-28/client/roots) for existing integrations, but Roots is deprecated as of MCP `2026-07-28`; new implementations should use explicit configuration instead.
 
-### Method 1: Command-line Arguments
-Specify Allowed directories when starting the server:
+### Method 1: Command-line arguments (recommended)
+Specify allowed directories when starting the server:
 ```bash
 mcp-server-filesystem /path/to/dir1 /path/to/dir2
 ```
 
-### Method 2: MCP Roots (Recommended)
-MCP clients that support [Roots](https://modelcontextprotocol.io/docs/learn/client-concepts#roots) can dynamically update the Allowed directories. 
+### Method 2: MCP Roots (deprecated)
+Existing MCP clients that support Roots can dynamically update the allowed directories. This remains functional for compatibility, but [the MCP specification deprecates Roots](https://modelcontextprotocol.io/specification/2026-07-28/deprecated) and recommends passing directories through tool parameters, resource URIs, or server configuration. For this server, use command-line arguments for new configurations.
 
-Roots notified by Client to Server, completely replace any server-side Allowed directories when provided.
+Valid Roots provided by the client replace the server's allowed directories, including any set through command-line arguments. They do not add to the command-line directories.
 
-**Important**: If server starts without command-line arguments AND client doesn't support roots protocol (or provides empty roots), the server will throw an error during initialization.
-
-This is the recommended method, as this enables runtime directory updates via `roots/list_changed` notifications without server restart, providing a more flexible and modern integration experience.
+**Important**: If the server starts without command-line arguments and the client does not provide valid Roots, the server cannot operate. Existing Roots integrations can update directories at runtime via `notifications/roots/list_changed` without restarting the server.
 
 ### How It Works
 
