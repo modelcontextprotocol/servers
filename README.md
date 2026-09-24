@@ -3,7 +3,7 @@
 This repository is a collection of *reference implementations* for the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), as well as references to community-built servers and additional resources.
 
 > [!IMPORTANT]
-> If you are looking for a list of MCP servers, you can browse published servers on [the MCP Registry](https://registry.modelcontextprotocol.io/). The repository served by this README is dedicated to housing just the small number of reference servers maintained by the MCP steering group.
+> If you are looking for a list of MCP servers, you can browse published servers on [the MCP Registry](https://registry.modelcontextprotocol.io/) or explore community directories like [Glama](https://glama.ai/mcp/servers), [mcp.so](https://mcp.so), and [PulseMCP](https://www.pulsemcp.com). The repository served by this README is dedicated to housing just the small number of reference servers maintained by the MCP steering group.
 
 > [!WARNING]
 > The servers in this repository are intended as **reference implementations** to demonstrate MCP features and SDK usage. They are meant to serve as educational examples for developers building their own MCP servers, not as production-ready solutions. Developers should evaluate their own security requirements and implement appropriate safeguards based on their specific threat model and use case.
@@ -51,6 +51,19 @@ The following reference servers are now archived and can be found at [servers-ar
 - **[Sentry](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/sentry)** - Retrieving and analyzing issues from Sentry.io.
 - **[Slack](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/slack)** - Channel management and messaging capabilities. Now maintained by [Zencoder](https://github.com/zencoderai/slack-mcp-server)
 - **[SQLite](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/sqlite)** - Database interaction and business intelligence capabilities.
+
+## 🌐 Discover MCP Servers
+
+Looking for more MCP servers beyond these reference implementations? Explore the official registry and popular community directories:
+
+- **[Official MCP Registry](https://registry.modelcontextprotocol.io/)** - The official registry for Model Context Protocol servers.
+- **[Model Context Protocol Documentation](https://modelcontextprotocol.io/)** - Official documentation and directory of example servers.
+- **[Glama MCP Servers](https://glama.ai/mcp/servers)** - Community directory and exploration platform for MCP servers.
+- **[mcp.so](https://mcp.so)** - Curated directory of open-source MCP servers and tools.
+- **[PulseMCP](https://www.pulsemcp.com)** - Community hub, directory, and weekly newsletter tracking the MCP ecosystem.
+- **[Smithery](https://smithery.ai/)** - Registry and search engine for discovering and installing MCP servers.
+
+For a broader list of community-built tools, frameworks, and resources, see [ADDITIONAL.md](ADDITIONAL.md).
 
 ## 🚀 Getting Started
 
@@ -130,6 +143,9 @@ Additional examples of using the Claude Desktop as an MCP client might look like
   }
 }
 ```
+
+> [!NOTE]
+> For `server-filesystem`, directory arguments can be omitted if your MCP client supports the MCP Roots protocol (dynamic root delegation). When omitted (argless), the server dynamically receives and manages allowed directories via client roots. See the [Filesystem Server README](src/filesystem/README.md) for details.
 
 On Windows, apply the same wrapper to each `npx`-based entry above by changing `"command"` to `"cmd"` and prepending `"/c", "npx"` to the existing `args`. Leave `uvx` entries unchanged.
 
