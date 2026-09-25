@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.modelcontextprotocol/server-filesystem",
+  "description": "MCP server for filesystem access",
+  "version": "0.6.3",
+  "repository": {
+    "url": "https://github.com/modelcontextprotocol/servers",
+    "source": "github",
+    "subfolder": "src/filesystem"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@modelcontextprotocol/server-filesystem",
+      "version": "0.6.3",
+      "runtimeHint": "npx",
+      "packageArguments": [
+        {
+          "type": "positional",
+          "valueHint": "allowed_directory",
+          "description": "An absolute path the server is allowed to access. Pass one or more.",
+          "format": "filepath",
+          "isRequired": true,
+          "isRepeated": true
+        }
+      ],
+      "transport": { "type": "stdio" }
+    }
+  ]
+}
