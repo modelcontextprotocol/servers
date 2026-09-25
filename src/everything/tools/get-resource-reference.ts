@@ -15,11 +15,12 @@ import {
 const GetResourceReferenceSchema = z.object({
   resourceType: z
     .enum([RESOURCE_TYPE_TEXT, RESOURCE_TYPE_BLOB])
-    .default(RESOURCE_TYPE_TEXT),
+    .default(RESOURCE_TYPE_TEXT)
+    .describe(`Type of resource to fetch. Use '${RESOURCE_TYPE_TEXT}' for plain text resources or '${RESOURCE_TYPE_BLOB}' for binary blob resources.`),
   resourceId: z
     .number()
     .default(1)
-    .describe("ID of the text resource to fetch"),
+    .describe("ID of the resource to fetch"),
 });
 
 // Tool configuration
