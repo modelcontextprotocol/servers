@@ -121,7 +121,10 @@ async def fetch_url(
             response = await client.get(
                 url,
                 follow_redirects=True,
-                headers={"User-Agent": user_agent},
+                headers={
+                    "User-Agent": user_agent,
+                    "Accept": "text/markdown, text/html;q=0.9, */*;q=0.8",
+                },
                 timeout=30,
             )
         except HTTPError as e:
@@ -135,6 +138,11 @@ async def fetch_url(
         page_raw = response.text
 
     content_type = response.headers.get("content-type", "")
+
+    # Server provided markdown directly via content negotiation; skip HTML extraction.
+    if content_type.split(";", 1)[0].strip().lower() == "text/markdown":
+        return page_raw, ""
+
     is_page_html = (
         "<html" in page_raw[:100] or "text/html" in content_type or not content_type
     )
