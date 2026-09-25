@@ -3,7 +3,7 @@ import path from 'path';
 import os from 'os';
 import { normalizePath } from './path-utils.js';
 import type { Root } from '@modelcontextprotocol/sdk/types.js';
-import { fileURLToPath } from "url";
+import { fileURLToPath } from 'url';
 
 /**
  * Converts a root URI to a normalized directory path with basic security validation.
