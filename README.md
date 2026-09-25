@@ -131,7 +131,24 @@ Additional examples of using the Claude Desktop as an MCP client might look like
 }
 ```
 
-On Windows, apply the same wrapper to each `npx`-based entry above by changing `"command"` to `"cmd"` and prepending `"/c", "npx"` to the existing `args`. Leave `uvx` entries unchanged.
+On Windows, apply the same wrapper to each `npx`-based entry above by changing `"command"` to `"cmd"` and prepending `"/c", "npx"` to the existing `args`. Keep `npx` in `args` instead of setting `"command"` to the full `npx.cmd` path; this avoids command-path parsing failures when Node.js is installed under `C:\Program Files\nodejs`.
+
+If you need to use the absolute `npx.cmd` path, quote the executable for `cmd`:
+
+```json
+{
+  "command": "cmd",
+  "args": [
+    "/c",
+    "\"C:\\Program Files\\nodejs\\npx.cmd\"",
+    "-y",
+    "@modelcontextprotocol/server-filesystem",
+    "C:\\Users\\username\\Desktop"
+  ]
+}
+```
+
+Leave interactive `uvx` entries unchanged. If a Windows scheduled task or logon-started client fails to launch a `uvx` server from a WinGet shim path such as `%LOCALAPPDATA%\Microsoft\WinGet\Links\uvx.exe`, point `"command"` at the real `uvx.exe` in the WinGet package directory, or install `uv` with an installer that places a normal executable on `PATH`.
 
 ## 🛠️ Creating Your Own Server
 
