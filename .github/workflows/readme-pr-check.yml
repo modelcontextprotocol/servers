@@ -1,7 +1,10 @@
 name: README PR Check
 
 on:
-  pull_request:
+  # pull_request_target, not pull_request: fork PRs get a read-only token under
+  # pull_request, so the label and comment calls fail with 403. This job only
+  # calls the API and never checks out PR code, so the write token is safe.
+  pull_request_target:
     types: [opened]
     paths:
       - 'README.md'
@@ -10,7 +13,7 @@ on:
 
 jobs:
   check-readme-only:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     permissions:
       contents: read
