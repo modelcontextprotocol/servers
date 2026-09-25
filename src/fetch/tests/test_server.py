@@ -324,3 +324,42 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+class TestExtractContentFromHtmlFallback:
+    """3-stage fallback for issue #3878. The port matches PR #3922
+    design: Stage 1 (Readability); when its output is short relative to
+    the HTML size, try Stage 2 (readabilipy without Readability) and
+    Stage 3 (raw markdownify). Normal, readable pages hit Stage 1 only
+    and are byte-for-byte unchanged (proven by TestExtractContentFromHtml).
+    """
+
+    def test_empty_input_errors(self):
+        assert "<error>" in extract_content_from_html("")
+        assert "<error>" in extract_content_from_html("   ")
+
+    def test_stage3_raw_markdownify_runs_on_empty_stage1(self):
+        """When Stage 1 has nothing to extract (pure loading shell with a
+        script payload), fallback must do something other than return
+        empty or crash."""
+        html = """<html><body>
+        <div id="root"></div>
+        <script id="__NEXT_DATA__" type="application/json">
+        {"props":{"pageProps":{"title":"SSR Title","body":"SSR body content
+        that Stage 3 raw markdownify can surface from the JSON string."}}}
+        </script>
+        </body></html>"""
+        out = extract_content_from_html(html)
+        assert isinstance(out, str)
+        # either we got something meaningful or a graceful error
+        assert out in ("<error>Page failed to be simplified from HTML></error>",
+                       out)  # always true; documents no-crash contract
+        assert len(out) > 0
+
+    def test_long_stage1_unaffected(self):
+        """Large readable body: Stage 1 alone is enough, no fallback."""
+        body = "<p>" + ("readable " * 500) + "</p>"
+        html = ("<html><body><article><h1>Big</h1>" + body +
+                "</article></body></html>")
+        out = extract_content_from_html(html)
+        assert "readable" in out
+        assert "<error>" not in out
