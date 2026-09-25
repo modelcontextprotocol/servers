@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Richard-Ewing/exogram",
+  "version": "0.1.3",
+  "description": "Model Context Protocol server for the Exogram Authority Runtime.",
+  "title": "Exogram Authority Runtime",
+  "repository": {
+    "url": "https://github.com/Richard-Ewing/servers",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "mcp-server-exogram",
+      "version": "0.1.3",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "EXOGRAM_BEARER_TOKEN",
+          "description": "Your Exogram API bearer token"
+        },
+        {
+          "name": "EXOGRAM_API_URL",
+          "description": "Exogram API base URL"
+        }
+      ]
+    }
+  ]
+}
