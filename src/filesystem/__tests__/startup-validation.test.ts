@@ -6,6 +6,15 @@ import * as os from 'os';
 
 const SERVER_PATH = path.join(__dirname, '..', 'dist', 'index.js');
 
+type StartupValidationEvent = {
+  kind: 'filesystem_startup_validation';
+  code: string;
+  source: 'argv' | 'roots';
+  message: string;
+  path?: string;
+  paths?: string[];
+};
+
 /**
  * Spawns the filesystem server with given arguments and returns exit info
  */
@@ -36,6 +45,21 @@ async function spawnServer(args: string[], timeoutMs = 2000): Promise<{ exitCode
   });
 }
 
+function getStructuredEvents(stderr: string): StartupValidationEvent[] {
+  return stderr
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        const parsed = JSON.parse(line) as StartupValidationEvent;
+        return parsed.kind === 'filesystem_startup_validation' ? [parsed] : [];
+      } catch {
+        return [];
+      }
+    });
+}
+
 describe('Startup Directory Validation', () => {
   let testDir: string;
   let accessibleDir: string;
@@ -64,10 +88,18 @@ describe('Startup Directory Validation', () => {
     const nonExistentDir = path.join(testDir, 'non-existent-dir-12345');
 
     const result = await spawnServer([nonExistentDir, accessibleDir]);
+    const events = getStructuredEvents(result.stderr);
 
     // Should warn about inaccessible directory
     expect(result.stderr).toContain('Warning: Cannot access directory');
     expect(result.stderr).toContain(nonExistentDir);
+    expect(events).toContainEqual({
+      kind: 'filesystem_startup_validation',
+      code: 'argv_path_inaccessible',
+      source: 'argv',
+      path: nonExistentDir,
+      message: `Warning: Cannot access directory ${nonExistentDir}, skipping`,
+    });
 
     // Should still start successfully
     expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
@@ -78,10 +110,18 @@ describe('Startup Directory Validation', () => {
     const nonExistent2 = path.join(testDir, 'non-existent-2');
 
     const result = await spawnServer([nonExistent1, nonExistent2]);
+    const events = getStructuredEvents(result.stderr);
 
     // Should exit with error
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('Error: None of the specified directories are accessible');
+    expect(events).toContainEqual({
+      kind: 'filesystem_startup_validation',
+      code: 'argv_no_accessible_directories',
+      source: 'argv',
+      paths: [nonExistent1, nonExistent2],
+      message: 'Error: None of the specified directories are accessible',
+    });
   });
 
   it('should warn when path is not a directory', async () => {
@@ -89,10 +129,18 @@ describe('Startup Directory Validation', () => {
     await fs.writeFile(filePath, 'content');
 
     const result = await spawnServer([filePath, accessibleDir]);
+    const events = getStructuredEvents(result.stderr);
 
     // Should warn about non-directory
     expect(result.stderr).toContain('Warning:');
     expect(result.stderr).toContain('not a directory');
+    expect(events).toContainEqual({
+      kind: 'filesystem_startup_validation',
+      code: 'argv_path_not_directory',
+      source: 'argv',
+      path: filePath,
+      message: `Warning: ${filePath} is not a directory, skipping`,
+    });
 
     // Should still start with the valid directory
     expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
