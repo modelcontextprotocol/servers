@@ -18,6 +18,9 @@ async function spawnServer(args: string[], timeoutMs = 2000): Promise<{ exitCode
     let stderr = '';
     proc.stderr?.on('data', (data) => {
       stderr += data.toString();
+      if (stderr.includes('Secure MCP Filesystem Server running on stdio')) {
+        proc.kill('SIGTERM');
+      }
     });
 
     const timeout = setTimeout(() => {
@@ -66,8 +69,10 @@ describe('Startup Directory Validation', () => {
     const result = await spawnServer([nonExistentDir, accessibleDir]);
 
     // Should warn about inaccessible directory
-    expect(result.stderr).toContain('Warning: Cannot access directory');
+    expect(result.stderr).toContain('Warning: Skipping invalid allowed directory');
     expect(result.stderr).toContain(nonExistentDir);
+    expect(result.stderr).toContain('ENOENT');
+    expect(result.stderr).toContain('no such file or directory');
 
     // Should still start successfully
     expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
@@ -82,6 +87,10 @@ describe('Startup Directory Validation', () => {
     // Should exit with error
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('Error: None of the specified directories are accessible');
+    expect(result.stderr).toContain('Invalid allowed directories:');
+    expect(result.stderr).toContain(nonExistent1);
+    expect(result.stderr).toContain(nonExistent2);
+    expect(result.stderr).toContain('ENOENT');
   });
 
   it('should warn when path is not a directory', async () => {
@@ -91,7 +100,8 @@ describe('Startup Directory Validation', () => {
     const result = await spawnServer([filePath, accessibleDir]);
 
     // Should warn about non-directory
-    expect(result.stderr).toContain('Warning:');
+    expect(result.stderr).toContain('Warning: Skipping invalid allowed directory');
+    expect(result.stderr).toContain(filePath);
     expect(result.stderr).toContain('not a directory');
 
     // Should still start with the valid directory
