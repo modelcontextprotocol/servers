@@ -1,11 +1,20 @@
-
+import re
 from freezegun import freeze_time
 from mcp.shared.exceptions import McpError
 import pytest
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
-from mcp_server_time.server import TimeServer, get_local_tz
+from mcp_server_time.server import (
+    TIMEZONE_NAME_MAX_LENGTH,
+    TIMEZONE_NAME_PATTERN,
+    TIME_24H_PATTERN,
+    TimeServer,
+    convert_time_input_schema,
+    get_current_time_input_schema,
+    get_local_tz,
+    time_24h_schema,
+)
 
 
 @pytest.mark.parametrize(
@@ -89,6 +98,44 @@ def test_get_current_time_with_invalid_timezone():
         match=r"Invalid timezone: 'No time zone found with key Invalid/Timezone'",
     ):
         time_server.get_current_time("Invalid/Timezone")
+
+
+def test_tool_input_schemas_include_string_constraints():
+    current_time_schema = get_current_time_input_schema("UTC")
+    convert_time_schema = convert_time_input_schema("UTC")
+    timezone = current_time_schema["properties"]["timezone"]
+    source_timezone = convert_time_schema["properties"]["source_timezone"]
+    target_timezone = convert_time_schema["properties"]["target_timezone"]
+    time = convert_time_schema["properties"]["time"]
+
+    assert timezone["maxLength"] == TIMEZONE_NAME_MAX_LENGTH
+    assert timezone["pattern"] == TIMEZONE_NAME_PATTERN
+    assert source_timezone["maxLength"] == TIMEZONE_NAME_MAX_LENGTH
+    assert source_timezone["pattern"] == TIMEZONE_NAME_PATTERN
+    assert target_timezone["maxLength"] == TIMEZONE_NAME_MAX_LENGTH
+    assert target_timezone["pattern"] == TIMEZONE_NAME_PATTERN
+    assert time["maxLength"] == 5
+    assert time["pattern"] == TIME_24H_PATTERN
+
+
+@pytest.mark.parametrize("timezone", ["America/New_York", "Etc/GMT+5", "UTC"])
+def test_timezone_schema_pattern_accepts_common_iana_names(timezone):
+    assert re.fullmatch(TIMEZONE_NAME_PATTERN, timezone)
+
+
+@pytest.mark.parametrize("timezone", ["America/New York", "Bad\tZone"])
+def test_timezone_schema_pattern_rejects_whitespace(timezone):
+    assert not re.fullmatch(TIMEZONE_NAME_PATTERN, timezone)
+
+
+@pytest.mark.parametrize("time", ["00:00", "7:30", "23:59"])
+def test_time_schema_pattern_accepts_runtime_compatible_times(time):
+    assert re.fullmatch(time_24h_schema()["pattern"], time)
+
+
+@pytest.mark.parametrize("time", ["24:00", "12:60", "12:345"])
+def test_time_schema_pattern_rejects_invalid_times(time):
+    assert not re.fullmatch(time_24h_schema()["pattern"], time)
 
 
 @pytest.mark.parametrize(
@@ -475,7 +522,7 @@ def test_get_local_tz_with_invalid_override():
         get_local_tz("Invalid/Timezone")
 
 
-@patch('mcp_server_time.server.get_localzone_name')
+@patch("mcp_server_time.server.get_localzone_name")
 def test_get_local_tz_with_valid_iana_name(mock_get_localzone):
     """Test that valid IANA timezone names from tzlocal work correctly."""
     mock_get_localzone.return_value = "Europe/London"
@@ -484,7 +531,7 @@ def test_get_local_tz_with_valid_iana_name(mock_get_localzone):
     assert isinstance(result, ZoneInfo)
 
 
-@patch('mcp_server_time.server.get_localzone_name')
+@patch("mcp_server_time.server.get_localzone_name")
 def test_get_local_tz_when_none_returned(mock_get_localzone):
     """Test default to UTC when tzlocal returns None."""
     mock_get_localzone.return_value = None
@@ -492,10 +539,10 @@ def test_get_local_tz_when_none_returned(mock_get_localzone):
     assert str(result) == "UTC"
 
 
-@patch('mcp_server_time.server.get_localzone_name')
+@patch("mcp_server_time.server.get_localzone_name")
 def test_get_local_tz_handles_windows_timezones(mock_get_localzone):
     """Test that tzlocal properly handles Windows timezone names.
-    
+
     Note: tzlocal should convert Windows names like 'Pacific Standard Time'
     to proper IANA names like 'America/Los_Angeles'.
     """
@@ -510,7 +557,7 @@ def test_get_local_tz_handles_windows_timezones(mock_get_localzone):
     "timezone_name",
     [
         "America/New_York",
-        "Europe/Paris", 
+        "Europe/Paris",
         "Asia/Tokyo",
         "Australia/Sydney",
         "Africa/Cairo",
@@ -519,7 +566,7 @@ def test_get_local_tz_handles_windows_timezones(mock_get_localzone):
         "UTC",
     ],
 )
-@patch('mcp_server_time.server.get_localzone_name')
+@patch("mcp_server_time.server.get_localzone_name")
 def test_get_local_tz_various_timezones(mock_get_localzone, timezone_name):
     """Test various timezone names that tzlocal might return."""
     mock_get_localzone.return_value = timezone_name
