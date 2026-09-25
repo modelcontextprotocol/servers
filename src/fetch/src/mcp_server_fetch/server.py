@@ -41,7 +41,15 @@ def extract_content_from_html(html: str) -> str:
     content = markdownify.markdownify(
         ret["content"],
         heading_style=markdownify.ATX,
-    )
+    ).lstrip()
+    title = ret.get("title")
+    if title:
+        title_markdown = f"# {title.strip()}"
+        # Readability often omits the document title when the article body does
+        # not repeat it. Include it once so callers can identify fetched pages,
+        # while avoiding duplicate headings when the title is already present.
+        if title_markdown.casefold() not in content[: len(title_markdown) + 32].casefold():
+            content = f"{title_markdown}\n\n{content}"
     return content
 
 
