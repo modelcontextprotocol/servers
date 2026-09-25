@@ -16,6 +16,15 @@ app.use(
   })
 );
 
+// Optional token-based authentication middleware
+const API_KEY = process.env.API_KEY;
+app.use((req, res, next) => {
+  if (!API_KEY) { next(); return; }
+  const auth = req.headers.authorization;
+  if (auth === `Bearer ${API_KEY}`) { next(); return; }
+  res.status(401).json({ error: "Unauthorized" });
+});
+
 // Map sessionId to transport for each client
 const transports: Map<string, SSEServerTransport> = new Map<
   string,
