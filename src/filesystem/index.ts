@@ -94,14 +94,33 @@ allowedDirectories = accessibleDirectories;
 setAllowedDirectories(allowedDirectories);
 
 // Schema definitions
+const FilePathDescription =
+  "Path to a file within the allowed directories. Absolute paths are accepted; relative paths are resolved against the first allowed directory.";
+const DirectoryPathDescription =
+  "Path to a directory within the allowed directories. Absolute paths are accepted; relative paths are resolved against the first allowed directory.";
+const FileOrDirectoryPathDescription =
+  "Path to a file or directory within the allowed directories. Absolute paths are accepted; relative paths are resolved against the first allowed directory.";
+const WriteContentDescription =
+  "Complete text content to write to the file. Existing file contents are overwritten.";
+const EditOperationsDescription =
+  "Ordered list of exact text replacements to apply to the file.";
+const SourcePathDescription =
+  "Existing file or directory path to move. Must be within the allowed directories.";
+const DestinationPathDescription =
+  "Destination path for the moved file or directory. Must be within the allowed directories and must not already exist.";
+const SearchPatternDescription =
+  "Glob-style pattern to match file and directory names, such as '*.ts' for the current directory or '**/*.ts' for all subdirectories.";
+const ExcludePatternsDescription =
+  "Optional glob-style patterns to exclude from traversal, such as ['node_modules', '**/.git/**'].";
+
 const ReadTextFileArgsSchema = z.object({
-  path: z.string(),
+  path: z.string().describe(FilePathDescription),
   tail: z.number().optional().describe('If provided, returns only the last N lines of the file'),
   head: z.number().optional().describe('If provided, returns only the first N lines of the file')
 });
 
 const ReadMediaFileArgsSchema = z.object({
-  path: z.string()
+  path: z.string().describe(FilePathDescription)
 });
 
 const ReadMultipleFilesArgsSchema = z.object({
@@ -112,8 +131,8 @@ const ReadMultipleFilesArgsSchema = z.object({
 });
 
 const WriteFileArgsSchema = z.object({
-  path: z.string(),
-  content: z.string(),
+  path: z.string().describe(FilePathDescription),
+  content: z.string().describe(WriteContentDescription),
 });
 
 const EditOperation = z.object({
@@ -122,42 +141,42 @@ const EditOperation = z.object({
 });
 
 const EditFileArgsSchema = z.object({
-  path: z.string(),
-  edits: z.array(EditOperation),
+  path: z.string().describe(FilePathDescription),
+  edits: z.array(EditOperation).describe(EditOperationsDescription),
   dryRun: z.boolean().default(false).describe('Preview changes using git-style diff format')
 });
 
 const CreateDirectoryArgsSchema = z.object({
-  path: z.string(),
+  path: z.string().describe(DirectoryPathDescription),
 });
 
 const ListDirectoryArgsSchema = z.object({
-  path: z.string(),
+  path: z.string().describe(DirectoryPathDescription),
 });
 
 const ListDirectoryWithSizesArgsSchema = z.object({
-  path: z.string(),
+  path: z.string().describe(DirectoryPathDescription),
   sortBy: z.enum(['name', 'size']).optional().default('name').describe('Sort entries by name or size'),
 });
 
 const DirectoryTreeArgsSchema = z.object({
-  path: z.string(),
-  excludePatterns: z.array(z.string()).optional().default([])
+  path: z.string().describe(DirectoryPathDescription),
+  excludePatterns: z.array(z.string()).optional().default([]).describe(ExcludePatternsDescription)
 });
 
 const MoveFileArgsSchema = z.object({
-  source: z.string(),
-  destination: z.string(),
+  source: z.string().describe(SourcePathDescription),
+  destination: z.string().describe(DestinationPathDescription),
 });
 
 const SearchFilesArgsSchema = z.object({
-  path: z.string(),
-  pattern: z.string(),
-  excludePatterns: z.array(z.string()).optional().default([])
+  path: z.string().describe(DirectoryPathDescription),
+  pattern: z.string().describe(SearchPatternDescription),
+  excludePatterns: z.array(z.string()).optional().default([]).describe(ExcludePatternsDescription)
 });
 
 const GetFileInfoArgsSchema = z.object({
-  path: z.string(),
+  path: z.string().describe(FileOrDirectoryPathDescription),
 });
 
 // Server setup
@@ -236,7 +255,7 @@ server.registerTool(
       "the last N lines of a file. Operates on the file as text regardless of extension. " +
       "Only works within allowed directories.",
     inputSchema: {
-      path: z.string(),
+      path: z.string().describe(FilePathDescription),
       tail: z.number().optional().describe("If provided, returns only the last N lines of the file"),
       head: z.number().optional().describe("If provided, returns only the first N lines of the file")
     },
@@ -255,7 +274,7 @@ server.registerTool(
       "Image and audio files are returned as image/audio content; any other file type is " +
       "returned as an embedded resource. Only works within allowed directories.",
     inputSchema: {
-      path: z.string()
+      path: z.string().describe(FilePathDescription)
     },
     outputSchema: {
       content: z.array(z.union([
@@ -364,8 +383,8 @@ server.registerTool(
       "Use with caution as it will overwrite existing files without warning. " +
       "Handles text content with proper encoding. Only works within allowed directories.",
     inputSchema: {
-      path: z.string(),
-      content: z.string()
+      path: z.string().describe(FilePathDescription),
+      content: z.string().describe(WriteContentDescription)
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: true, openWorldHint: false }
@@ -390,11 +409,11 @@ server.registerTool(
       "with new content. Returns a git-style diff showing the changes made. " +
       "Only works within allowed directories.",
     inputSchema: {
-      path: z.string(),
+      path: z.string().describe(FilePathDescription),
       edits: z.array(z.object({
         oldText: z.string().describe("Text to search for - must match exactly"),
         newText: z.string().describe("Text to replace with")
-      })),
+      })).describe(EditOperationsDescription),
       dryRun: z.boolean().default(false).describe("Preview changes using git-style diff format")
     },
     outputSchema: { content: z.string() },
@@ -420,7 +439,7 @@ server.registerTool(
       "this operation will succeed silently. Perfect for setting up directory " +
       "structures for projects or ensuring required paths exist. Only works within allowed directories.",
     inputSchema: {
-      path: z.string()
+      path: z.string().describe(DirectoryPathDescription)
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: false, idempotentHint: true, destructiveHint: false, openWorldHint: false }
@@ -446,7 +465,7 @@ server.registerTool(
       "prefixes. This tool is essential for understanding directory structure and " +
       "finding specific files within a directory. Only works within allowed directories.",
     inputSchema: {
-      path: z.string()
+      path: z.string().describe(DirectoryPathDescription)
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false }
@@ -474,7 +493,7 @@ server.registerTool(
       "prefixes. This tool is useful for understanding directory structure and " +
       "finding specific files within a directory. Only works within allowed directories.",
     inputSchema: {
-      path: z.string(),
+      path: z.string().describe(DirectoryPathDescription),
       sortBy: z.enum(["name", "size"]).optional().default("name").describe("Sort entries by name or size")
     },
     outputSchema: { content: z.string() },
@@ -553,8 +572,8 @@ server.registerTool(
       "Files have no children array, while directories always have a children array (which may be empty). " +
       "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
     inputSchema: {
-      path: z.string(),
-      excludePatterns: z.array(z.string()).optional().default([])
+      path: z.string().describe(DirectoryPathDescription),
+      excludePatterns: z.array(z.string()).optional().default([]).describe(ExcludePatternsDescription)
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false }
@@ -623,8 +642,8 @@ server.registerTool(
       "operation will fail. Works across different directories and can be used " +
       "for simple renaming within the same directory. Both source and destination must be within allowed directories.",
     inputSchema: {
-      source: z.string(),
-      destination: z.string()
+      source: z.string().describe(SourcePathDescription),
+      destination: z.string().describe(DestinationPathDescription)
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false }
@@ -653,9 +672,9 @@ server.registerTool(
       "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
       "Only searches within allowed directories.",
     inputSchema: {
-      path: z.string(),
-      pattern: z.string(),
-      excludePatterns: z.array(z.string()).optional().default([])
+      path: z.string().describe(DirectoryPathDescription),
+      pattern: z.string().describe(SearchPatternDescription),
+      excludePatterns: z.array(z.string()).optional().default([]).describe(ExcludePatternsDescription)
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false }
@@ -681,7 +700,7 @@ server.registerTool(
       "and type. This tool is perfect for understanding file characteristics " +
       "without reading the actual content. Only works within allowed directories.",
     inputSchema: {
-      path: z.string()
+      path: z.string().describe(FileOrDirectoryPathDescription)
     },
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false }
