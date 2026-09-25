@@ -6,7 +6,7 @@ const name = "get-env";
 const config = {
   title: "Print Environment Tool",
   description:
-    "Returns all environment variables, helpful for debugging MCP server configuration",
+    "Returns all environment variables, helpful for debugging MCP server configuration. Warning: values may include secrets (API keys, tokens); only enable this tool in trusted environments.",
   inputSchema: {},
   annotations: {
     readOnlyHint: true,
