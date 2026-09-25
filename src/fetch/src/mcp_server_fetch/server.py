@@ -1,3 +1,4 @@
+import os
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
@@ -63,6 +64,37 @@ def get_robots_txt_url(url: str) -> str:
     return robots_url
 
 
+def normalize_proxy_url(proxy_url: str | None) -> str | None:
+    if proxy_url is None:
+        return None
+
+    if proxy_url.lower().startswith("socks://"):
+        return f"socks5://{proxy_url[len('socks://'):]}"
+
+    return proxy_url
+
+
+def proxy_url_for_request(url: str, proxy_url: str | None = None) -> str | None:
+    if proxy_url:
+        return normalize_proxy_url(proxy_url)
+
+    scheme = urlparse(url).scheme.lower()
+    proxy_keys = []
+    if scheme == "https":
+        proxy_keys.extend(("HTTPS_PROXY", "https_proxy"))
+    elif scheme == "http":
+        proxy_keys.extend(("HTTP_PROXY", "http_proxy"))
+    proxy_keys.extend(("ALL_PROXY", "all_proxy"))
+
+    for key in proxy_keys:
+        env_proxy = os.environ.get(key)
+        normalized = normalize_proxy_url(env_proxy)
+        if normalized != env_proxy:
+            return normalized
+
+    return None
+
+
 async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url: str | None = None) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
@@ -72,7 +104,7 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
 
     robot_txt_url = get_robots_txt_url(url)
 
-    async with AsyncClient(proxy=proxy_url) as client:
+    async with AsyncClient(proxy=proxy_url_for_request(robot_txt_url, proxy_url)) as client:
         try:
             response = await client.get(
                 robot_txt_url,
@@ -116,7 +148,7 @@ async def fetch_url(
     """
     from httpx import AsyncClient, HTTPError
 
-    async with AsyncClient(proxy=proxy_url) as client:
+    async with AsyncClient(proxy=proxy_url_for_request(url, proxy_url)) as client:
         try:
             response = await client.get(
                 url,
