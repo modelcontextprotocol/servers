@@ -1,0 +1,106 @@
+name: New Server PR Check
+
+# Automatically closes PRs that add a new server implementation under src/.
+# Per CONTRIBUTING.md, new servers should be published to the MCP Server Registry
+# instead. Detection is deterministic: any added file that creates a top-level
+# directory under src/ which does not exist on the base branch.
+#
+# Escape hatch: a maintainer removes the `new-server-submission` label and
+# reopens the PR; the workflow will not close it again while the label is absent.
+#
+# Uses pull_request_target for a write-capable token on fork PRs. This is safe
+# because the job only calls the REST API and never checks out or runs PR code.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  close-new-server-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Detect and close new-server PRs
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const prNumber = pr.number;
+            const LABEL = 'new-server-submission';
+            const MARKER = 'not accepting new server implementations';
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: prNumber, per_page: 100,
+            });
+
+            const addedDirs = new Set();
+            for (const f of files) {
+              if (f.status !== 'added') continue;
+              const m = f.filename.match(/^src\/([^/]+)\//);
+              if (m) addedDirs.add(m[1]);
+            }
+            if (addedDirs.size === 0) {
+              console.log('No added files under src/, skipping');
+              return;
+            }
+
+            const { data: baseContents } = await github.rest.repos.getContent({
+              owner, repo, path: 'src', ref: pr.base.ref,
+            });
+            const existingDirs = new Set(baseContents.filter(e => e.type === 'dir').map(e => e.name));
+
+            const newDirs = [...addedDirs].filter(d => !existingDirs.has(d));
+            if (newDirs.length === 0) {
+              console.log('All src/ changes touch existing servers, skipping');
+              return;
+            }
+            console.log(`New server directories detected: ${newDirs.join(', ')}`);
+
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner, repo, issue_number: prNumber,
+            });
+            const hasLabel = labels.some(l => l.name === LABEL);
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: prNumber,
+            });
+            const alreadyCommented = comments.some(c =>
+              c.user.login === 'github-actions[bot]' && c.body.includes(MARKER)
+            );
+
+            if (alreadyCommented) {
+              if (!hasLabel) {
+                // A maintainer removed the label to keep this PR open; leave it alone.
+                console.log('Label removed by a maintainer, skipping');
+                return;
+              }
+              if (pr.state === 'open') {
+                console.log('Re-closing previously closed new-server PR');
+                await github.rest.pulls.update({ owner, repo, pull_number: prNumber, state: 'closed' });
+              }
+              return;
+            }
+
+            await github.rest.issues.addLabels({
+              owner, repo, issue_number: prNumber, labels: [LABEL],
+            });
+
+            const dirList = newDirs.map(d => `\`src/${d}\``).join(', ');
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: prNumber,
+              body: [
+                `Thanks for your contribution. This PR adds a new server implementation (${dirList}). Per [CONTRIBUTING.md](https://github.com/${owner}/${repo}/blob/main/CONTRIBUTING.md), this repository is ${MARKER} — the servers here are a small set of reference implementations.`,
+                '',
+                'To share your server with the community, publish it to the [MCP Server Registry](https://github.com/modelcontextprotocol/registry) instead (see the [quickstart guide](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/quickstart.mdx)). You can browse published servers at [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io/).',
+                '',
+                'This PR is being closed automatically. If you believe this is a mistake, leave a comment and a maintainer can reopen it.',
+              ].join('\n'),
+            });
+
+            await github.rest.pulls.update({ owner, repo, pull_number: prNumber, state: 'closed' });
