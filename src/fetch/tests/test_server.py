@@ -323,4 +323,94 @@ class TestFetchUrl:
             )
 
             # Verify AsyncClient was called with proxy
-            mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+            mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080", verify=True)
+
+
+class TestSSLVerifyConfiguration:
+    """Tests for the MCP_FETCH_SSL_VERIFY environment variable."""
+
+    def _reload_ssl_verify(self, value):
+        """Reload the server module with MCP_FETCH_SSL_VERIFY set to value."""
+        import importlib
+        import os
+        import mcp_server_fetch.server as server_module
+
+        env = {"MCP_FETCH_SSL_VERIFY": value} if value is not None else {}
+        with patch.dict(os.environ, env, clear=False):
+            if value is None:
+                os.environ.pop("MCP_FETCH_SSL_VERIFY", None)
+            importlib.reload(server_module)
+            result = server_module.SSL_VERIFY
+        importlib.reload(server_module)
+        return result
+
+    def test_ssl_verify_enabled_by_default(self):
+        """SSL verification is enabled when the env var is not set."""
+        assert self._reload_ssl_verify(None) is True
+
+    def test_ssl_verify_disabled_by_false(self):
+        """Setting MCP_FETCH_SSL_VERIFY=false disables verification."""
+        assert self._reload_ssl_verify("false") is False
+
+    def test_ssl_verify_disabled_case_insensitive(self):
+        """Value parsing is case-insensitive."""
+        assert self._reload_ssl_verify("FALSE") is False
+
+    def test_ssl_verify_stays_enabled_for_other_values(self):
+        """Fail-secure: any value other than 'false' keeps verification enabled."""
+        for value in ("true", "0", "no", "off", "", "garbage"):
+            assert self._reload_ssl_verify(value) is True
+
+
+class TestSSLErrorHandling:
+    """Tests for SSL error handling in fetch_url."""
+
+    @pytest.mark.asyncio
+    async def test_ssl_error_message_mentions_env_var(self):
+        """SSL errors produce a helpful message pointing to MCP_FETCH_SSL_VERIFY."""
+        import ssl
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(side_effect=ssl.SSLError("certificate verify failed"))
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with pytest.raises(McpError) as exc_info:
+                await fetch_url("https://example.com", DEFAULT_USER_AGENT_AUTONOMOUS)
+
+            assert "MCP_FETCH_SSL_VERIFY" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_connect_error_wrapping_ssl_mentions_env_var(self):
+        """SSL errors wrapped in ConnectError are detected and explained."""
+        from httpx import ConnectError
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(
+                side_effect=ConnectError("certificate verify failed: self-signed certificate")
+            )
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with pytest.raises(McpError) as exc_info:
+                await fetch_url("https://example.com", DEFAULT_USER_AGENT_AUTONOMOUS)
+
+            assert "MCP_FETCH_SSL_VERIFY" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_non_ssl_connect_error_not_misreported(self):
+        """Non-SSL connection errors are not reported as SSL failures."""
+        from httpx import ConnectError
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(side_effect=ConnectError("connection refused"))
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with pytest.raises(McpError) as exc_info:
+                await fetch_url("https://example.com", DEFAULT_USER_AGENT_AUTONOMOUS)
+
+            assert "MCP_FETCH_SSL_VERIFY" not in str(exc_info.value)

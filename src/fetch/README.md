@@ -174,6 +174,29 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
 
+### Customization - SSL Verification
+
+By default, SSL certificate verification is enabled. If you need to fetch content from internal servers that use self-signed certificates, you can disable verification by setting the `MCP_FETCH_SSL_VERIFY` environment variable to `false`:
+
+```json
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "env": {
+        "MCP_FETCH_SSL_VERIFY": "false"
+      }
+    }
+  }
+}
+```
+
+Parsing is fail-secure: any value other than `false` keeps SSL verification enabled.
+
+> [!WARNING]
+> Disabling SSL verification reduces security. Only use this in trusted environments with internal servers that have self-signed certificates.
+
 ## Windows Configuration
 
 If you're experiencing timeout issues on Windows, you may need to set the `PYTHONIOENCODING` environment variable to ensure proper character encoding:
