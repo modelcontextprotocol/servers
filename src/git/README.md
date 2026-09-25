@@ -2,6 +2,8 @@
 
 <!-- mcp-name: io.github.modelcontextprotocol/server-git -->
 
+Source: [modelcontextprotocol/servers/src/git](https://github.com/modelcontextprotocol/servers/tree/main/src/git)
+
 ## Overview
 
 A Model Context Protocol server for Git repository interaction and automation. This server provides tools to read, search, and manipulate Git repositories via Large Language Models.
