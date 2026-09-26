@@ -53,8 +53,8 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Adds file contents to the staging area
    - Inputs:
      - `repo_path` (string): Path to Git repository
-     - `files` (string[]): Array of file paths to stage
-   - Returns: Confirmation of staged files
+     - `files` (string[]): Non-empty array of repository-relative paths to stage; use `["."]` to stage all files
+   - Returns: `Files staged successfully` when the index changes, or `No changes were staged` when the request is a no-op
 
 7. `git_reset`
    - Unstages all staged changes

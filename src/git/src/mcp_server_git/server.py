@@ -42,7 +42,11 @@ class GitCommit(BaseModel):
 
 class GitAdd(BaseModel):
     repo_path: str
-    files: list[str]
+    files: list[str] = Field(
+        ...,
+        min_length=1,
+        description="Non-empty list of repository-relative paths to stage; use [\".\"] to stage all files"
+    )
 
 class GitReset(BaseModel):
     repo_path: str
@@ -129,10 +133,15 @@ def git_commit(repo: git.Repo, message: str) -> str:
     commit = repo.index.commit(message)
     return f"Changes committed successfully with hash {commit.hexsha}"
 
+def _staged_entries(repo: git.Repo, files: list[str]) -> str:
+    # Mode, blob and stage of index entries matching the pathspecs, conflict stages included.
+    return repo.git.ls_files("--stage", "--", *files)
+
 def git_add(repo: git.Repo, files: list[str]) -> str:
-    if files == ["."]:
-        repo.git.add(".")
-    else:
+    if not files:
+        raise ValueError("files must contain at least one path")
+
+    if files != ["."]:
         # Defense in depth: validate each path resolves within the repository
         # working tree to prevent path traversal (e.g. '../../etc/passwd' or an
         # absolute path) from staging files outside repository boundaries.
@@ -148,8 +157,12 @@ def git_add(repo: git.Repo, files: list[str]) -> str:
                 raise ValueError(
                     f"Path '{f}' is outside the repository '{repo_root}'"
                 )
-        # Use '--' to prevent files starting with '-' from being interpreted as options
-        repo.git.add("--", *files)
+
+    before_entries = _staged_entries(repo, files)
+    # Use '--' to prevent files starting with '-' from being interpreted as options
+    repo.git.add("--", *files)
+    if _staged_entries(repo, files) == before_entries:
+        return "No changes were staged"
     return "Files staged successfully"
 
 def git_reset(repo: git.Repo) -> str:
@@ -361,7 +374,7 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.ADD,
-                description="Adds file contents to the staging area",
+                description="Adds file contents to the staging area. Returns 'Files staged successfully' when the index changes, or 'No changes were staged' when the requested files were already staged",
                 inputSchema=GitAdd.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=False,
