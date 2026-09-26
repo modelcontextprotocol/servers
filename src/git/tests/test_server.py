@@ -186,6 +186,56 @@ def test_git_diff(test_repository):
     assert "test.txt" in result
     assert "feature changes" in result
 
+NON_ASCII_FILENAME = "日本語.txt"
+ESCAPED_NON_ASCII_FILENAME = "\346\227\245\346\234\254\350\252\236.txt"
+
+@pytest.fixture
+def quotepath_repository(test_repository):
+    # Pin git's default explicitly so the tests don't depend on the user's global config
+    with test_repository.config_writer() as config:
+        config.set_value("core", "quotepath", "true")
+    return test_repository
+
+def test_git_status_non_ascii_filename(quotepath_repository):
+    Path(quotepath_repository.working_dir, NON_ASCII_FILENAME).write_text("content", encoding="utf-8")
+
+    result = git_status(quotepath_repository)
+
+    assert NON_ASCII_FILENAME in result
+    assert ESCAPED_NON_ASCII_FILENAME not in result
+
+def test_git_diff_unstaged_non_ascii_filename(quotepath_repository):
+    file_path = Path(quotepath_repository.working_dir, NON_ASCII_FILENAME)
+    file_path.write_text("content", encoding="utf-8")
+    quotepath_repository.index.add([NON_ASCII_FILENAME])
+    file_path.write_text("modified content", encoding="utf-8")
+
+    result = git_diff_unstaged(quotepath_repository)
+
+    assert f"a/{NON_ASCII_FILENAME}" in result
+    assert ESCAPED_NON_ASCII_FILENAME not in result
+
+def test_git_diff_staged_non_ascii_filename(quotepath_repository):
+    Path(quotepath_repository.working_dir, NON_ASCII_FILENAME).write_text("content", encoding="utf-8")
+    quotepath_repository.index.add([NON_ASCII_FILENAME])
+
+    result = git_diff_staged(quotepath_repository)
+
+    assert f"b/{NON_ASCII_FILENAME}" in result
+    assert ESCAPED_NON_ASCII_FILENAME not in result
+
+def test_git_diff_non_ascii_filename(quotepath_repository):
+    default_branch = quotepath_repository.active_branch.name
+    quotepath_repository.git.checkout("-b", "feature-non-ascii")
+    Path(quotepath_repository.working_dir, NON_ASCII_FILENAME).write_text("content", encoding="utf-8")
+    quotepath_repository.index.add([NON_ASCII_FILENAME])
+    quotepath_repository.index.commit("add non-ASCII file")
+
+    result = git_diff(quotepath_repository, default_branch)
+
+    assert f"b/{NON_ASCII_FILENAME}" in result
+    assert ESCAPED_NON_ASCII_FILENAME not in result
+
 def test_git_commit(test_repository):
     file_path = Path(test_repository.working_dir) / "commit_test.txt"
     file_path.write_text("content to commit")
