@@ -33,7 +33,12 @@ The fetch tool will truncate the response, but by using the `start_index` argume
 Optionally: Install Node.js, which enables the fetch server to use ReadabiliPy's JS-based HTML simplifier for higher fidelity.
 
 > [!NOTE]
-> When Node.js is present, ReadabiliPy may install npm packages (`@mozilla/readability` and `jsdom`) on the first HTML conversion call. In restricted network environments with egress allowlisting, ensure `registry.npmjs.org` is reachable, or pre-install dependencies at image build time.
+> When Node.js is present in the environment (e.g. when installing via `pip install mcp-server-fetch` which resolves ReadabiliPy 0.3.0+), ReadabiliPy runs `npm install` at runtime to install its JS dependencies (`@mozilla/readability`, `jsdom`, and `minimist`).
+>
+> - **Egress & filesystem requirements:** In restricted environments where `registry.npmjs.org` is unreachable or the package directory is read-only, `npm install` fails with an unhandled `CalledProcessError`, crashing the tool call instead of degrading to pure-Python mode. Failed attempts will retry on every conversion call.
+> - **Stdio interference:** `npm install` outputs to stdout, which can corrupt the JSON-RPC stream when running over stdio transport.
+>
+> In egress-restricted or read-only container environments, either omit Node.js to safely use the pure-Python parser, or ensure `registry.npmjs.org` is reachable and the package directory is writable.
 
 ### Using uv (recommended)
 
