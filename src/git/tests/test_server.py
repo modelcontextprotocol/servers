@@ -111,6 +111,82 @@ def test_git_add_specific_files(test_repository):
     assert "file2.txt" not in staged_files
     assert result == "Files staged successfully"
 
+def test_git_add_rejects_empty_files(test_repository):
+    with mock.patch.object(git.Git, "execute") as execute:
+        with pytest.raises(ValueError, match="files must contain at least one path"):
+            git_add(test_repository, [])
+        execute.assert_not_called()
+
+    assert list(test_repository.index.diff("HEAD")) == []
+
+def test_git_add_clean_tree_reports_no_changes(test_repository):
+    result = git_add(test_repository, ["."])
+
+    assert result == "No changes were staged"
+    assert list(test_repository.index.diff("HEAD")) == []
+
+def test_git_add_reports_no_changes_when_file_is_already_staged(test_repository):
+    file_path = Path(test_repository.working_dir) / "already_staged.txt"
+    file_path.write_text("already staged")
+    test_repository.index.add(["already_staged.txt"])
+
+    result = git_add(test_repository, ["already_staged.txt"])
+
+    assert result == "No changes were staged"
+
+def test_git_add_no_op_ignores_unrelated_index_changes(test_repository):
+    staged_path = Path(test_repository.working_dir) / "staged.txt"
+    staged_path.write_text("staged")
+    test_repository.index.add(["staged.txt"])
+    (Path(test_repository.working_dir) / "other.txt").write_text("other")
+    git_add(test_repository, ["other.txt"])
+
+    result = git_add(test_repository, ["staged.txt"])
+
+    assert result == "No changes were staged"
+
+def test_git_add_glob_pathspec_reports_staged_changes(test_repository):
+    (Path(test_repository.working_dir) / "new.md").write_text("new")
+
+    result = git_add(test_repository, ["*.md"])
+
+    assert result == "Files staged successfully"
+    assert "new.md" in [item.a_path for item in test_repository.index.diff("HEAD")]
+
+def test_git_add_nonexistent_path_still_raises(test_repository):
+    with pytest.raises(git.GitCommandError):
+        git_add(test_repository, ["nope.txt"])
+
+@pytest.mark.parametrize("leave_conflict", [False, True])
+def test_git_add_stages_resolved_merge_conflict(test_repository, leave_conflict):
+    original_branch = test_repository.active_branch.name
+    file_path = Path(test_repository.working_dir) / "test.txt"
+    other_path = Path(test_repository.working_dir) / "other.txt"
+    test_repository.git.checkout("-b", "conflicting")
+    file_path.write_text("branch content")
+    other_path.write_text("branch content")
+    test_repository.index.add(["test.txt", "other.txt"])
+    test_repository.index.commit("branch change")
+    test_repository.git.checkout(original_branch)
+    file_path.write_text("main content")
+    other_path.write_text("main content")
+    test_repository.index.add(["test.txt", "other.txt"])
+    test_repository.index.commit("main change")
+    with pytest.raises(git.GitCommandError):
+        test_repository.git.merge("conflicting")
+    assert test_repository.index.unmerged_blobs()
+    file_path.write_text("resolved content")
+    if not leave_conflict:
+        other_path.write_text("resolved content")
+
+    result = git_add(test_repository, ["test.txt"] if leave_conflict else ["."])
+
+    assert result == "Files staged successfully"
+    assert set(test_repository.index.unmerged_blobs()) == (
+        {"other.txt"} if leave_conflict else set()
+    )
+    assert test_repository.git.show(":test.txt") == "resolved content"
+
 def test_git_add_rejects_path_traversal(test_repository):
     # Security invariant (CVE-2026-27735): a relative path escaping the
     # repository must never be staged. Accept rejection from either the
