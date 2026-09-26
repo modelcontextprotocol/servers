@@ -25,6 +25,10 @@ import unittest.mock as mock
 def test_repository(tmp_path: Path):
     repo_path = tmp_path / "temp_test_repo"
     test_repo = git.Repo.init(repo_path)
+    # CLI merges require an identity even when they stop with conflicts.
+    with test_repo.config_writer() as config:
+        config.set_value("user", "name", "Test User")
+        config.set_value("user", "email", "test@example.com")
 
     Path(repo_path / "test.txt").write_text("test")
     test_repo.index.add(["test.txt"])
@@ -172,7 +176,7 @@ def test_git_add_stages_resolved_merge_conflict(test_repository, leave_conflict)
     other_path.write_text("main content")
     test_repository.index.add(["test.txt", "other.txt"])
     test_repository.index.commit("main change")
-    with pytest.raises(git.GitCommandError):
+    with pytest.raises(git.GitCommandError, match="CONFLICT"):
         test_repository.git.merge("conflicting")
     assert test_repository.index.unmerged_blobs()
     file_path.write_text("resolved content")
