@@ -11,9 +11,8 @@ ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
 # Install the project's dependencies using the lockfile and settings
+COPY uv.lock pyproject.toml ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --locked --no-install-project --no-dev --no-editable
 
 # Then, add the rest of the project source code and install it
@@ -30,6 +29,10 @@ RUN apt-get update && apt-get install -y git git-lfs && rm -rf /var/lib/apt/list
 WORKDIR /app
  
 COPY --from=uv /root/.local /root/.local
+
+RUN if ! id -u app >/dev/null 2>&1; then \
+      useradd -rUM -s /usr/sbin/nologin app; \
+    fi
 COPY --from=uv --chown=app:app /app/.venv /app/.venv
 
 # Place executables in the environment at the front of the path
