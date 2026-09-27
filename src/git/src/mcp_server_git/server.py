@@ -108,14 +108,19 @@ class GitTools(str, Enum):
 
     BRANCH = "git_branch"
 
+def _git_unquoted_paths(repo: git.Repo) -> git.Git:
+    # git's default core.quotepath=true prints non-ASCII paths as octal escapes
+    # (e.g. "\346\227\245.txt"), which clients cannot map back to real files.
+    return repo.git(c="core.quotepath=false")
+
 def git_status(repo: git.Repo) -> str:
-    return repo.git.status()
+    return _git_unquoted_paths(repo).status()
 
 def git_diff_unstaged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
-    return repo.git.diff(f"--unified={context_lines}")
+    return _git_unquoted_paths(repo).diff(f"--unified={context_lines}")
 
 def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
-    return repo.git.diff(f"--unified={context_lines}", "--cached")
+    return _git_unquoted_paths(repo).diff(f"--unified={context_lines}", "--cached")
 
 def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
     # Defense in depth: reject targets starting with '-' to prevent flag injection,
@@ -123,7 +128,7 @@ def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_L
     if target.startswith("-"):
         raise BadName(f"Invalid target: '{target}' - cannot start with '-'")
     repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
-    return repo.git.diff(f"--unified={context_lines}", target)
+    return _git_unquoted_paths(repo).diff(f"--unified={context_lines}", target)
 
 def git_commit(repo: git.Repo, message: str) -> str:
     commit = repo.index.commit(message)
