@@ -105,7 +105,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `board-ops` | `gh project` recipes for two boards; ID tables; resolving option IDs by name; the option-deletion hazard and its recovery | Adapt | One board, #43. Its fields: Status (with **Incoming**), Priority, Size. Hazard and recovery copy unchanged | S5 |
 | `issue-create` | Five-step create flow: version label, type label, milestone, card, Status + Priority; duplicate check across all states | Adapt | Version label is always `v2`. Add a **server-scope label** step (`server-<name>`). Milestone = nearest due v2.x | S5 |
 | `issue-triage` | Two-pass sweep (board as Incoming, then human approval), priority rubric with a score comment, 12-check board audit | Adapt | The **highest-leverage skill here** given the inflow (§3.4). Add spam/registry-redirect classes, server-scope labelling, and outside-PR triage | S7 |
-| `pr-flow` | Assign + In Progress, branch naming, DCO signoff, screenshots, `Closes #N`, `addCloseIssueReferences`, In Review, Copilot loop to exhaustion, per-thread replies, manual close-out | Adapt | Board #43; branch `v2/<type>/<N>-<slug>`. **DCO: N/A**, since no DCO app is installed here (§10). **Screenshots → client evidence**: Inspector/LLM-client transcript in both spec eras (§3.2). The Copilot loop copies unchanged | S6 |
+| `pr-flow` | Assign + In Progress, branch naming, DCO signoff, screenshots, `Closes #N`, `addCloseIssueReferences`, In Review, Copilot loop to exhaustion, per-thread replies, manual close-out | Adapt | Board #43; branch `v2/<type>/<N>-<slug>`. **DCO: N/A**, since no DCO app is installed here (§10). **Screenshots → client evidence**: for a server-facing change, Inspector and LLM-client transcripts in both spec eras; otherwise a targeted probe (§3.2). The Copilot loop copies unchanged | S6 |
 | `pre-push-gate` | Running `local:gate`; diagnosing each stage | Adapt | Rewrite around our stages: TS workspaces, Python per server, per-file coverage both sides | S10 |
 | `project-structure` | Where a file goes; who owns what | Adapt | Per-server layouts (e.g. `everything`'s `tools/`, `resources/`, `prompts/`, `transports/`) | S11 |
 | `local-dev` | Install/run each client; dependency-placement reasoning | Adapt | Workspaces + `uv`; running each server over stdio / Streamable HTTP; `npx`/`uvx` local builds | S11 |
@@ -197,12 +197,16 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 - **Protocol-level client harnesses, in-process**: an SDK `Client` (TS) or
   `ClientSession` (Py) over an in-memory transport, asserting on the wire. This
   is the design of #4854/#4855, and the `testing` skill (S11) documents it.
-- **Client smoke tests in both spec eras**, per #4857: every change is checked
-  against a 2026-07-28 client and a 2025-11-25 client, using the Inspector V2
-  and an LLM client. This replaces the Inspector's screenshot rule. Instead of
-  images, a PR carries **client evidence**: what the Inspector (or an LLM
-  client) was asked to do, and what it returned. That gives the `client-smoke`
-  skill (S11) and the `pr-flow` evidence step (S6).
+- **Client smoke tests in both spec eras**, per #4857: every change to
+  **server behavior** is checked against a 2026-07-28 client and a 2025-11-25
+  client, using **both** the Inspector V2 and an LLM client. This replaces the
+  Inspector's screenshot rule. Instead of images, a server-facing PR carries
+  **client evidence**: what each client was asked to do, and what it returned.
+  A change with no client-observable surface (docs, skills, workflows, gate
+  tooling) instead carries a **targeted probe**, as the Inspector's ledger
+  allows: the thing that proves it, such as a guard made to fire or a
+  before/after run. That gives the `client-smoke` skill (S11) and the
+  `pr-flow` evidence step (S6).
 - **Interface-diff CI** (#4860) gives interface-level evidence that a change
   is transparent. The gate sub-issue (S10) wires it in once #4860 lands.
 
@@ -273,7 +277,7 @@ deleting. Every section goes somewhere:
 | MCP Protocol Reference (`.mcp.json` docs server, schema repo) | `AGENTS.md`: a two-line rule to look protocol questions up via the `mcp-docs` server, with a link to the schema repo | S1 |
 | Key Patterns: `registerTools`/`registerResources`/`registerPrompts` | `AGENTS.md` TS instructions (the rule). Where each server keeps them goes to `project-structure` | S1, S11 |
 | Key Patterns: tool annotations | `AGENTS.md` (rule: set `readOnlyHint`, `idempotentHint`, `destructiveHint` on every tool) | S1 |
-| Key Patterns: transports | `AGENTS.md`: stdio default, Streamable HTTP; **SSE is deprecated** (and removed by the 2026-07-28 spec, #4857) | S1 |
+| Key Patterns: transports | `AGENTS.md`: stdio default, Streamable HTTP; **HTTP+SSE is deprecated** (still deprecated, not removed, in the 2026-07-28 spec, #4857) | S1 |
 | Key Patterns: PR template checklist | `AGENTS.md` Contributing (MCP docs read, security practice, tested with an LLM client). The evidence step goes to `pr-flow` | S1, S6 |
 
 `src/everything/AGENTS.md` (a per-server guide) also exists. S1 decides its
@@ -390,7 +394,7 @@ the Servers V2 board (#43). "After" means the listed issue must merge first.
 ```
 W1  #4859 inception (this doc)
 W2  S1 AGENTS.md · S2 skills harness · S3 TS validate · S4 Py validate
-W3  S5 board-ops + issue-create · S6 pr-flow · S7 issue-triage · S8 contribution model · S9 security-advisory
+W3  S5 board-ops + issue-create · S6 pr-flow · S8 contribution model · S9 security-advisory · then S7 issue-triage (after S5, S8)
 W4  S10 local:gate + coverage + pre-push-gate (after S3, S4, #4854, #4855) · S11 knowledge skills
 W5  #4472 changesets + Release-triggered publish → S12 milestone release flow + release skill
 W6  S13 dependency & SDK sweeps replace Dependabot PRs
@@ -455,10 +459,12 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
 **S5 (#4866). `board-ops` and `issue-create` skills; label taxonomy**
 - Scope: adapt both skills (§6). Create the `chore` label. Decide whether the
   create flow sets Size. Server-scope labels (`server-<name>`) are part of
-  create. Board #43's IDs live **only** in `board-ops`, and option IDs are
+  create **where the issue concerns one server** (repo-wide issues carry
+  none). Board #43's IDs live **only** in `board-ops`, and option IDs are
   resolved by name.
 - Acceptance:
-  - Filing an issue through the skill yields labels (`v2` + type + scope),
+  - Filing an issue through the skill yields labels (`v2` + type, plus a
+    scope label when one applies),
     milestone, card, Status and Priority, verified by a query in the PR.
   - Eval cases pass the threshold.
   - The skills index is updated.
@@ -475,7 +481,8 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
     timeout) documented.
   - Eval cases pass the threshold.
 
-**S7 (#4868). `issue-triage` skill and board audit, for community inflow**
+**S7 (#4868). `issue-triage` skill and board audit, for community inflow** (after
+S5; its outside-PR half after S8)
 - Scope: adapt §6. Two-pass sweep (Incoming → approval), rubric with a posted
   score comment, the board audit. Add triage classes for server submissions,
   README/`ADDITIONAL.md` listing PRs, new-server implementations, duplicate
@@ -539,17 +546,23 @@ S3, S4, #4854, #4855)
 ### Wave 5: release
 
 **#4472. changesets (TS) + GitHub-Release-triggered publishing**: folded in
-unchanged (§7).
+with its scope unchanged (§7). Its two bump PRs are why S12's preparation step
+is more than one PR.
 
 **S12 (#4873). `v2/main` → `main` milestone release flow and `release` skill** (after
 #4472, S10)
 - Scope:
-  - The two-PR shape: PR 1 is the audit report (npm and `uv`/pip) plus the
-    bumps (changesets "Version Packages" for TS; the `prepare-release` CalVer
-    stamp for Python) on `v2/main`. PR 2 is a pure `v2/main` → `main` merge
-    whose tree hash matches `origin/v2/main`, with a release ledger artifact
-    (`local:gate`, per-package `pack:verify`, each milestone issue exercised
-    via `client-smoke`).
+  - The preparation PRs, all on `v2/main`: the audit report (npm and
+    `uv`/pip) with any fixes it forces, plus the bumps. #4472 makes the bumps
+    **two separate PRs**, the changesets "Version Packages" PR for TS and the
+    `prepare-release` CalVer PR for Python, so a milestone touching both
+    ecosystems has up to three preparation PRs rather than the Inspector's
+    one. All of them merge before the merge PR opens.
+  - The merge PR: a pure `v2/main` → `main` merge whose tree hash matches
+    `origin/v2/main`, with a release ledger artifact: `local:gate`,
+    per-package `pack:verify`, each server-facing milestone issue exercised
+    via `client-smoke`, and a targeted probe for each issue with no client
+    surface (§3.2).
   - The maintainer publishes the GitHub Release.
   - Split `release.yml` so build and verify run without `id-token`.
   - The `release` skill (name-only).
@@ -570,11 +583,14 @@ unchanged (§7).
     `v2/main`).
   - Add `sdk-watch` (nightly; TS SDK packages and Python `mcp`), including the
     hardened analysis job's properties unchanged.
-  - Add `verify:action-pins` for `release.yml`'s credentialed jobs.
+  - Add `verify:action-pins` for every credentialed job: `release.yml`'s
+    publish jobs **and** `claude.yml` (`id-token: write`, `ANTHROPIC_API_KEY`).
   - Add the `AGENTS.md` "dependency updates are issue-driven" rules.
 - Acceptance:
   - No Dependabot PRs open after merge.
-  - Each sweep files a correctly labelled, milestoned issue in a dry run.
+  - Each sweep's dry run **writes nothing** and prints the issue payload it
+    would file, with correct labels and milestone. Live filing is exercised
+    by script tests with a mocked `gh`, not against the real tracker.
   - Script tests pass.
 
 ## 10. Open questions for maintainers
