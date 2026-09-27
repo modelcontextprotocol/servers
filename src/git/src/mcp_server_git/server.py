@@ -210,6 +210,13 @@ def git_show(repo: git.Repo, revision: str) -> str:
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if revision.startswith("-"):
         raise BadName(f"Invalid revision: '{revision}' - cannot start with '-'")
+    obj = repo.rev_parse(revision)
+    if isinstance(obj, git.Blob):
+        return obj.data_stream.read().decode("utf-8", errors="replace")
+    if isinstance(obj, git.Tree):
+        return "\n".join(
+            f"{item.name}/" if isinstance(item, git.Tree) else item.name for item in obj
+        )
     commit = repo.commit(revision)
     output = [
         f"Commit: {commit.hexsha!r}\n"
@@ -416,7 +423,7 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.SHOW,
-                description="Shows the contents of a commit",
+                description="Shows the contents of a commit, or of a file or directory given as <revision>:<path>",
                 inputSchema=GitShow.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
