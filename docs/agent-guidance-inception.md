@@ -431,8 +431,9 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
   - The ported verifier keeps its **"no skills found" failure**. Because S2
     lands before any skill, it ships with an explicit, temporary bootstrap
     allowance for an empty `.claude/skills/`, and the **first skill PR
-    removes it** (whichever of S5/S6/S9 lands first). That removal is an
-    acceptance criterion of each of those issues.
+    removes it**: whichever of the skill-adding issues (S5, S6, S9, S10,
+    S11) lands first. That removal is an acceptance criterion of each of
+    them.
   - `npm run verify:skills` fails on a fixture with malformed frontmatter or a
     missing `disable-model-invocation`.
   - `npm run skills:eval` runs against Claude, and against Copilot with
@@ -453,7 +454,8 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
   and `lint` of root files, `verify:format-coverage`,
   `verify:typecheck-coverage`, and the shared-devDependency version guard
   adapted from `verify:dep-lockstep` (§2.3). Add the format/lint/validate
-  rules to `AGENTS.md`.
+  rules to `AGENTS.md`. If S1 hasn't merged yet, hand these rules to S1
+  instead, the same fallback as S2.
 - Acceptance:
   - `npm run validate` passes on a clean checkout, and so does
     `npm run validate -w <package>` for each server.
@@ -469,7 +471,8 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
   with a single per-server `validate`
   entry (a `uv run` chain, or a `scripts/` helper called from the root). A
   root `npm run validate:py` (or equivalent) runs all three. `python.yml` runs
-  ruff. Add the Python rules to `AGENTS.md`.
+  ruff. Add the Python rules to `AGENTS.md`. If S1 hasn't merged yet, hand
+  them to S1 instead, the same fallback as S2.
 - Acceptance:
   - One root command gates all Python servers.
   - CI fails on a ruff or format finding.
@@ -477,8 +480,9 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
 
 ### Wave 3: work-tracking and security skills (after S1, S2)
 
-Whichever of S5, S6 and S9 merges first also removes S2's empty-skills
-bootstrap allowance. That is part of each one's acceptance.
+Whichever skill-adding issue merges first (S5, S6 or S9 here, or S10 or S11
+in Wave 4) also removes S2's empty-skills bootstrap allowance. That is part of
+each one's acceptance.
 
 **S5 (#4866). `board-ops` and `issue-create` skills; label taxonomy**
 - Scope: adapt both skills (§6). Create the `chore` label. Decide whether the
@@ -572,7 +576,8 @@ S2, S3, S4, #4854, #4855)
   path and the web client as the hand-driven one.
 - Acceptance:
   - Four skills merged with eval cases.
-  - A full `skills:eval` re-run shows no regression in the Wave 3 skills.
+  - A full `skills:eval` re-run shows no regression in the skills that
+    already exist.
 
 ### Wave 5: release
 
