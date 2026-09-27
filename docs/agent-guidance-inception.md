@@ -84,7 +84,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | Every PR references an issue | `Closes #N` first line; no issue-less PRs | Transfer | — | S1, S6 |
 | Project Status and Direction | Branch table: `v2/main` develop, `main` release, `v1/main` maintenance | Adapt | No `v1/main` line here. `v2/main` develops and `main` releases (the default branch, and what users see) | S1 |
 | Maintenance rules | Keep READMEs and `AGENTS.md` in sync; procedures change in their skill | Transfer | Plus per-server READMEs and `RELEASING.md` (#4473) | S1 |
-| Maintaining the skills | `verify:skills`, `disable-model-invocation` explicit and defaulting to `false`, eval cases, listing budget, no `paths` | Transfer | — | S2 (rules land with the harness) |
+| Maintaining the skills | `verify:skills`, `disable-model-invocation` explicit and defaulting to `false`, eval cases, listing budget, `paths` only when a skill is useless outside the matched files (with the trade-off stated in the PR) | Transfer | — | S2 (rules land with the harness) |
 | Issue-driven Work Style | Board invariants: real issues only, labels, milestones, Priority, `Incoming` ⇔ unmilestoned, `Done` = shipped, branch naming, Copilot loop, manual close on `v2/main` | Adapt | One board (#43), not two. The version label is always `v2`. Type labels need `chore` (§8). Server-scope labels already exist | S1 (rules), S5–S7 (recipes) |
 | Responding to Code Reviews | Judge against the issue, decline scope creep, reply in each thread, then a PR-level summary | Transfer | — | S1 |
 | Always test new or modified code | Per-file ≥ 90 on all four dimensions, justified `v8 ignore`, test placement | Adapt | The TS half (all four dimensions) comes from #4854. The Python half (per-file lines and branches, the dimensions coverage.py measures) comes from #4855: coverage.py, justified `# pragma: no cover`, per-file script | S10 |
@@ -130,7 +130,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `verify:typecheck-coverage` | Every tracked TS file gets a `tsc` pass | Adapt | Per-workspace `tsconfig` (tests are excluded in some servers today) | S3 |
 | `verify:action-pins` | Credentialed jobs use SHA pins with `# vX.Y.Z` | Transfer | — | S13 |
 | `verify:test-timeouts` | Resolves every Vitest project's budgets; asserts no `retry` | Adapt | Keep the no-retry assertion only. Defer the budgets machinery until a timeout problem shows up | S10 |
-| `verify:dep-lockstep` | One version per install-crossing dependency across 5 installs | N/A | One workspace lockfile for TS; each Python server has its own `uv.lock` and its own deps by design | — |
+| `verify:dep-lockstep` | One version per install-crossing dependency across 5 installs | Adapt | A single workspace lockfile can still resolve different versions per workspace, and the manifests already declare different ranges (e.g. `typescript` `^5.6.2` / `^5.8.2` / `^5.3.3`). The adaptation is a smaller guard: every **shared TS devDependency** (`typescript`, `vitest`, `@vitest/coverage-v8`, `prettier`, `@types/node`) is declared with one range across workspaces, or hoisted to the root. Python servers stay independent by design | S3 |
 | `verify:install-fresh` | `node_modules` matches its lockfile | N/A | Single workspace install; `npm ci` in CI already enforces it | — |
 | `verify:bundle-externals` / `verify:build-gate` | Bundler guards for tsup/Vite output | N/A | Servers compile with plain `tsc` | — |
 | `smoke:*` (launcher/cli/tui/web/engines), `local:storybook` | Built-artifact smokes of the three clients | Adapt | Inverted: a **boot smoke per server over each transport it implements** (stdio for all; SSE and Streamable HTTP for `everything`), from the built `dist/` (TS) and console script (Py): connect, list, call one tool. Only a thin spawn test, per #4854/#4855 | S10, S11 |
@@ -440,13 +440,19 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
   them (`npm run validate --workspaces`) plus any root-only guards.
   `verify:format-coverage` and `verify:typecheck-coverage` adapted.
   `typescript.yml` keeps its per-package matrix, and each leg runs **only its
-  own package's** `validate` rather than the whole monorepo. Add the
-  format/lint/validate rules to `AGENTS.md`.
+  own package's** `validate` rather than the whole monorepo. A separate
+  **root-guards CI job** runs what no package leg covers: the root `format`
+  and `lint` of root files, `verify:format-coverage`,
+  `verify:typecheck-coverage`, and the shared-devDependency version guard
+  adapted from `verify:dep-lockstep` (§2.3). Add the format/lint/validate
+  rules to `AGENTS.md`.
 - Acceptance:
   - `npm run validate` passes on a clean checkout, and so does
     `npm run validate -w <package>` for each server.
-  - Each CI matrix leg gates only its own package.
-  - CI fails a PR with a formatting or lint finding.
+  - Each CI matrix leg gates only its own package, and the root-guards job
+    gates the rest.
+  - CI fails a PR with a formatting or lint finding in a package or a root
+    file, or with a divergent shared devDependency range.
   - `everything`'s per-package Prettier setup is folded into the root one.
 
 **S4 (#4865). Python gate parity**
@@ -598,8 +604,13 @@ is more than one PR.
   - Add `verify:action-pins` for every credentialed job: `release.yml`'s
     publish jobs **and** `claude.yml` (`id-token: write`, `ANTHROPIC_API_KEY`).
   - Add the `AGENTS.md` "dependency updates are issue-driven" rules.
+  - Work down the **existing Dependabot PR backlog** (six open at the time of
+    writing): convert each still-needed bump into an issue for the sweep
+    flow, and close the PR with a pointer to it.
 - Acceptance:
-  - No Dependabot PRs open after merge.
+  - No new Dependabot PRs open after merge.
+  - Every Dependabot PR that was open at merge time is closed, with a pointer
+    to its replacement issue or a reason.
   - Each sweep's dry run **writes nothing** and prints the issue payload it
     would file, with correct labels and milestone. Live filing is exercised
     by script tests with a mocked `gh`, not against the real tracker.
