@@ -366,6 +366,24 @@ Facts discovered while writing this doc. Each is owned by a sub-issue.
 
 ## 9. Proposed sub-issues
 
+The sub-issues now exist under #4858. The S-ids used throughout this doc map to them as follows. #4472 sits in Wave 5, between S11 and S12.
+
+| Id | Issue | Title prefix |
+| --- | --- | --- |
+| S1 | #4862 | Part 2 |
+| S2 | #4863 | Part 3 |
+| S3 | #4864 | Part 4 |
+| S4 | #4865 | Part 5 |
+| S5 | #4866 | Part 6 |
+| S6 | #4867 | Part 7 |
+| S7 | #4868 | Part 8 |
+| S8 | #4869 | Part 9 |
+| S9 | #4870 | Part 10 |
+| S10 | #4871 | Part 11 |
+| S11 | #4872 | Part 12 |
+| S12 | #4873 | Part 13 |
+| S13 | #4874 | Part 14 |
+
 Each targets **`v2/main`**, carries the `v2` label and a milestone, and sits on
 the Servers V2 board (#43). "After" means the listed issue must merge first.
 
@@ -380,7 +398,7 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
 
 ### Wave 2: rules and scaffolding (parallel)
 
-**S1. `AGENTS.md`: the absolute rules; delete `CLAUDE.md`**
+**S1 (#4862). `AGENTS.md`: the absolute rules; delete `CLAUDE.md`**
 - Scope: write `AGENTS.md` from the Inspector's template (§6), holding only
   rules that are **true on the day it merges**. A rule whose machinery doesn't
   exist yet (`validate`, `local:gate`, per-file coverage) is added by the
@@ -396,7 +414,7 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
   - The skills index lists only skills that exist; later skill PRs add their
     own rows.
 
-**S2. Skills infrastructure: `.claude/skills/`, `verify:skills`, `skills:eval`**
+**S2 (#4863). Skills infrastructure: `.claude/skills/`, `verify:skills`, `skills:eval`**
 - Scope: port `verify-skills`, `verify-skills-cli`, `skill-eval` and their
   libs and tests (§6); root npm scripts; `docs/skill-authoring.md`. Add the
   "Maintaining the skills" rules to `AGENTS.md` (or to S1, if S1 hasn't
@@ -408,7 +426,7 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
     `AGENT=copilot`.
   - `verify:skills` runs in CI.
 
-**S3. TypeScript workspace gate: Prettier, ESLint, root `validate`, CI**
+**S3 (#4864). TypeScript workspace gate: Prettier, ESLint, root `validate`, CI**
 - Scope: the #4473 design. Root Prettier config and `format` /
   `format:check`; a root ESLint flat config, type-aware, `--max-warnings 0`,
   `no-floating-promises` at error, build output ignored; a root `validate`
@@ -421,7 +439,7 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
   - CI fails a PR with a formatting or lint finding.
   - `everything`'s per-package Prettier setup is folded into the root one.
 
-**S4. Python gate parity**
+**S4 (#4865). Python gate parity**
 - Scope: for each of `fetch`, `git`, `time`: `ruff check`, `ruff format
   --check`, `pyright`, `pytest`, with a single per-server `validate`
   entry (a `uv run` chain, or a `scripts/` helper called from the root). A
@@ -434,7 +452,7 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
 
 ### Wave 3: work-tracking and security skills (after S1, S2)
 
-**S5. `board-ops` and `issue-create` skills; label taxonomy**
+**S5 (#4866). `board-ops` and `issue-create` skills; label taxonomy**
 - Scope: adapt both skills (§6). Create the `chore` label. Decide whether the
   create flow sets Size. Server-scope labels (`server-<name>`) are part of
   create. Board #43's IDs live **only** in `board-ops`, and option IDs are
@@ -445,7 +463,7 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
   - Eval cases pass the threshold.
   - The skills index is updated.
 
-**S6. `pr-flow` skill**
+**S6 (#4867). `pr-flow` skill**
 - Scope: adapt §6. Branch `v2/<type>/<N>-<slug>` from `origin/v2/main`;
   assign and move to In Progress; the gate; `Closes #N` on the first line;
   `addCloseIssueReferences`; In Review; the Copilot review loop to exhaustion;
@@ -457,7 +475,7 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
     timeout) documented.
   - Eval cases pass the threshold.
 
-**S7. `issue-triage` skill and board audit, for community inflow**
+**S7 (#4868). `issue-triage` skill and board audit, for community inflow**
 - Scope: adapt §6. Two-pass sweep (Incoming → approval), rubric with a posted
   score comment, the board audit. Add triage classes for server submissions,
   README/`ADDITIONAL.md` listing PRs, new-server implementations, duplicate
@@ -469,7 +487,7 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
   - Each spam class has a documented response.
   - Eval cases pass the threshold.
 
-**S8. Contribution model: outside PRs, `CONTRIBUTING.md`, templates, issue forms**
+**S8 (#4869). Contribution model: outside PRs, `CONTRIBUTING.md`, templates, issue forms**
 - Scope: a maintainer decision (§10) on whether outside PRs are still accepted
   or whether the repo moves to issues-only like the Inspector. Then make
   `CONTRIBUTING.md`, the PR template and new issue forms (bug / feature, with
@@ -481,7 +499,7 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
   - Forms are validated against GitHub's schema (they only go live after the
     next milestone merge to `main`).
 
-**S9. `security-advisory` skill; reconcile `SECURITY.md` and the advisory backlog**
+**S9 (#4870). `security-advisory` skill; reconcile `SECURITY.md` and the advisory backlog**
 - Scope: adapt §6: draft `[GHSA-…]` card, ownership check (this server vs the
   SDK), accept/reject, private fork, fix, publish, public tracking. **Accept
   and publish stay human-only.** Rewrite `SECURITY.md` so it matches the
@@ -494,7 +512,7 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
 
 ### Wave 4: quality gate and knowledge skills
 
-**S10. `local:gate`, per-file coverage in CI, `pre-push-gate` skill** (after
+**S10 (#4871). `local:gate`, per-file coverage in CI, `pre-push-gate` skill** (after
 S3, S4, #4854, #4855)
 - Scope: root `local:gate` (under `gate-lease`) chaining the TS and Python
   validate, `verify:skills:cli`, per-file coverage for both languages, a thin
@@ -510,7 +528,7 @@ S3, S4, #4854, #4855)
   - Concurrent gates queue.
   - Skill eval cases pass.
 
-**S11. Knowledge skills: `project-structure`, `local-dev`, `testing`, `client-smoke`**
+**S11 (#4872). Knowledge skills: `project-structure`, `local-dev`, `testing`, `client-smoke`**
 - Scope: adapt §6. `testing` documents the in-process harnesses from
   #4854/#4855. `client-smoke` drives a server with Inspector V2 and an LLM
   client in both spec eras (#4857).
@@ -523,7 +541,7 @@ S3, S4, #4854, #4855)
 **#4472. changesets (TS) + GitHub-Release-triggered publishing**: folded in
 unchanged (§7).
 
-**S12. `v2/main` → `main` milestone release flow and `release` skill** (after
+**S12 (#4873). `v2/main` → `main` milestone release flow and `release` skill** (after
 #4472, S10)
 - Scope:
   - The two-PR shape: PR 1 is the audit report (npm and `uv`/pip) plus the
@@ -543,7 +561,7 @@ unchanged (§7).
 
 ### Wave 6: automation
 
-**S13. Replace Dependabot PRs with issue-filing sweeps; SDK watch; action pins**
+**S13 (#4874). Replace Dependabot PRs with issue-filing sweeps; SDK watch; action pins**
 - Scope:
   - Turn off automated security-fix PRs (a repo setting) and delete
     `dependabot.yml`; keep alerts on.
