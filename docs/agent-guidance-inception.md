@@ -73,9 +73,10 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | --- | --- | --- | --- | --- |
 | Header: rules vs procedures | States that `AGENTS.md` holds the rules and skills hold the recipes | Transfer | — | S1 |
 | Skills index | Table of every skill, what it covers, how it loads | Transfer | Our skill list (§9) | S1, then each skill PR |
-| Project Structure | Annotated tree; each file carries a header comment explaining itself | Adapt | 7 servers × 2 languages; package name and registry for each server | S1 |
+| Project Structure | Annotated tree of the repo | Adapt | 7 servers × 2 languages; package name and registry for each server | S1 |
+| Every file carries a purpose header | Each source file opens with a comment stating its purpose and rationale, so `AGENTS.md` never duplicates it | Adapt | Our source files don't follow this today (e.g. `src/filesystem/index.ts`, `src/time/src/mcp_server_time/server.py`). The adaptation is **no bulk migration**: new files, and files a PR substantially rewrites, get a header. It spreads as the refactor in #4857 touches each server | S1 |
 | Development setup | Root `npm install`, build, dev loop | Adapt | npm workspaces for TS, `uv sync` per Python server. Node 22, Python ≥ 3.10 | S1 |
-| Dependency placement (+ its rationale in `local-dev`) | Rules for a non-workspace multi-install repo: root-only runtime deps, bundler externals, vitest pin trio, lockstep | N/A | This repo **is** an npm workspace, and each server has its own `package.json` and publishes independently. The few general rules survive as S1 rules: pin transitive deps with `overrides`, never `npm audit fix`; one version of a shared devDependency across workspaces | S1 (the survivors), S11 (`local-dev`) |
+| Dependency placement (+ its rationale in `local-dev`) | Rules for a non-workspace multi-install repo: root-only runtime deps, bundler externals, vitest pin trio, lockstep | N/A | This repo **is** an npm workspace for its four TS servers, each with its own `package.json`. The three Python servers use `pyproject.toml`, and every server publishes independently. The few general rules survive as S1 rules: pin transitive deps with `overrides`, never `npm audit fix`; one version of a shared devDependency across workspaces | S1 (the survivors), S11 (`local-dev`) |
 | Dependency updates are issue-driven | Dependabot PRs off; scheduled sweeps file issues | Adapt | npm **and** uv/PyPI **and** Actions ecosystems. Dependabot security-fix PRs are currently **on** here (§8) | S13 |
 | Action pinning (#2484) | SHA-pin actions in credentialed jobs, enforced by `verify:action-pins` | Transfer | `release.yml` holds `id-token: write` in `publish-npm` / `publish-pypi` | S13 |
 | SDK watch (third sweep) | Nightly issue per MCP SDK release we're behind; a hardened LLM-in-CI `analyze` job | Adapt | Two SDKs, two registries (npm `@modelcontextprotocol/*`, PyPI `mcp`). The security posture carries over unchanged | S13 |
@@ -124,6 +125,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `format` / `format:check:*` | Prettier across every scope | Adapt | Root Prettier for TS; `ruff format` for Python | S3, S4 |
 | `lint:*` (`--max-warnings 0`) | ESLint flat config, type-aware | Adapt | Root flat config across workspaces; `ruff check` for Python (not run in CI today) | S3, S4 |
 | `gate-lease.mjs` | Machine-wide FIFO lease so concurrent sessions' gates queue | Transfer | Our gates are cheaper, but concurrent sessions still contend. Also needed if any stage binds a fixed port (HTTP transport tests) | S10 |
+| `lib/workflow-gate.mjs` (+ tests) | Keeps the local gate out of CI: no workflow may invoke a `local:*` script, and `local:gate` stays exactly the lease wrapper | Adapt | Same invariant for our `local:*` namespace; the Inspector's engine-pass specifics drop out | S10 |
 | `verify:skills` / `verify:skills:cli` / `lib/skill-manifest.mjs` | Frontmatter parse, explicit invocation mode, eval cases, listing budget; `claude plugin validate` at a pinned CLI | Transfer | — | S2 |
 | `skills:eval` (`skill-eval.mjs`, `lib/claude-cli.mjs`) | Runs each skill's eval cases headless (Claude or Copilot); trigger rate, chains, negatives | Transfer | — | S2 |
 | `verify:format-coverage` | Every first-party file is format-gated | Adapt | Workspace globs; Python via ruff config | S3 |
@@ -328,6 +330,7 @@ Inspector files that can be copied in as starting points (paths on its
 | `.claude/skills/*/evals/evals.json` | same | Rewrite the prompts in our terms; keep ≥ 5 positives + negatives per model-invoked skill | S2 and each skill PR |
 | `scripts/verify-skills.mjs`, `scripts/verify-skills-cli.mjs`, `scripts/skill-eval.mjs`, `scripts/lib/skill-manifest.mjs`, `scripts/lib/claude-cli.mjs` (+ their `*.test.mjs`) | `scripts/` | Paths and skill list; a budget recomputed for our skill set | S2 |
 | `scripts/gate-lease.mjs` (+ test) | `scripts/` | Env var rename (`SERVERS_SKIP_GATE_LEASE`) | S10 |
+| `scripts/lib/workflow-gate.mjs` (+ test) | `scripts/lib/` | Our workflow list and `local:*` scripts; drop the browser-engine rationale | S10 |
 | `scripts/verify-format-coverage.mjs`, `scripts/verify-typecheck-coverage.mjs` | `scripts/` | Workspace globs instead of `clients/*` | S3 |
 | `scripts/verify-action-pins.mjs` | `scripts/` | Workflow list | S13 |
 | `scripts/dependency-refresh.mjs`, `scripts/dependabot-alerts.mjs`, `scripts/sdk-watch.mjs` + workflows | `scripts/`, `.github/workflows/` | Add the uv/PyPI ecosystem; SDK groups for TS and Python; board #43; labels | S13 |
@@ -425,8 +428,13 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
   "Maintaining the skills" rules to `AGENTS.md` (or to S1, if S1 hasn't
   merged).
 - Acceptance:
-  - `npm run verify:skills` passes on an empty `.claude/skills/`, and fails on
-    a fixture with malformed frontmatter or a missing `disable-model-invocation`.
+  - The ported verifier keeps its **"no skills found" failure**. Because S2
+    lands before any skill, it ships with an explicit, temporary bootstrap
+    allowance for an empty `.claude/skills/`, and the **first skill PR
+    removes it** (whichever of S5/S6/S9 lands first). That removal is an
+    acceptance criterion of each of those issues.
+  - `npm run verify:skills` fails on a fixture with malformed frontmatter or a
+    missing `disable-model-invocation`.
   - `npm run skills:eval` runs against Claude, and against Copilot with
     `AGENT=copilot`.
   - `verify:skills` runs in CI.
@@ -467,6 +475,9 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
   - Existing findings are fixed, not suppressed through config.
 
 ### Wave 3: work-tracking and security skills (after S1, S2)
+
+Whichever of S5, S6 and S9 merges first also removes S2's empty-skills
+bootstrap allowance. That is part of each one's acceptance.
 
 **S5 (#4866). `board-ops` and `issue-create` skills; label taxonomy**
 - Scope: adapt both skills (§6). Create the `chore` label. Decide whether the
@@ -536,7 +547,8 @@ S2, S3, S4, #4854, #4855)
 - Scope: root `local:gate` (under `gate-lease`) chaining the TS and Python
   validate, `verify:skills:cli`, per-file coverage for both languages, a thin
   per-server boot smoke over each transport the server implements (stdio for all seven; SSE and Streamable HTTP for `everything`), and #4860's interface diff
-  once landed. CI runs coverage as a **parallel job** (§7). `timeout-minutes`
+  once landed. `workflow-gate` ported, so no workflow can invoke a
+  `local:*` script. CI runs coverage as a **parallel job** (§7). `timeout-minutes`
   on every job. No test retries (asserted). `docs/quality-gate.md`. The
   `pre-push-gate` skill. The `AGENTS.md` rules: mandatory pre-push gate, and
   the per-file ≥ 90 coverage rule with justified ignores (the carry-over from
@@ -602,7 +614,10 @@ is more than one PR.
   - Add `sdk-watch` (nightly; TS SDK packages and Python `mcp`), including the
     hardened analysis job's properties unchanged.
   - Add `verify:action-pins` for every credentialed job: `release.yml`'s
-    publish jobs **and** `claude.yml` (`id-token: write`, `ANTHROPIC_API_KEY`).
+    publish jobs, `claude.yml` (`id-token: write`, `ANTHROPIC_API_KEY`), **and
+    every job whose artifact a credentialed job downloads** (after S12's
+    package→publish split, the build/pack jobs), as the Inspector's guard
+    treats them.
   - Add the `AGENTS.md` "dependency updates are issue-driven" rules.
   - Work down the **existing Dependabot PR backlog** (six open at the time of
     writing): convert each still-needed bump into an issue for the sweep
