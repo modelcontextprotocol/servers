@@ -75,11 +75,11 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | Skills index | Table of every skill, what it covers, how it loads | Transfer | Our skill list (§9) | S1, then each skill PR |
 | Project Structure | Annotated tree; each file carries a header comment explaining itself | Adapt | 7 servers × 2 languages; package name and registry for each server | S1 |
 | Development setup | Root `npm install`, build, dev loop | Adapt | npm workspaces for TS, `uv sync` per Python server. Node 22, Python ≥ 3.10 | S1 |
-| Dependency placement (+ its rationale in `local-dev`) | Rules for a non-workspace multi-install repo: root-only runtime deps, bundler externals, vitest pin trio, lockstep | N/A (mostly) | This repo **is** an npm workspace, and each server has its own `package.json` and publishes independently. What survives: pin transitive deps with `overrides`, never `npm audit fix`; one version of a shared devDependency across workspaces | S1 (the survivors), S11 (`local-dev`) |
+| Dependency placement (+ its rationale in `local-dev`) | Rules for a non-workspace multi-install repo: root-only runtime deps, bundler externals, vitest pin trio, lockstep | N/A | This repo **is** an npm workspace, and each server has its own `package.json` and publishes independently. The few general rules survive as S1 rules: pin transitive deps with `overrides`, never `npm audit fix`; one version of a shared devDependency across workspaces | S1 (the survivors), S11 (`local-dev`) |
 | Dependency updates are issue-driven | Dependabot PRs off; scheduled sweeps file issues | Adapt | npm **and** uv/PyPI **and** Actions ecosystems. Dependabot security-fix PRs are currently **on** here (§8) | S13 |
 | Action pinning (#2484) | SHA-pin actions in credentialed jobs, enforced by `verify:action-pins` | Transfer | `release.yml` holds `id-token: write` in `publish-npm` / `publish-pypi` | S13 |
 | SDK watch (third sweep) | Nightly issue per MCP SDK release we're behind; a hardened LLM-in-CI `analyze` job | Adapt | Two SDKs, two registries (npm `@modelcontextprotocol/*`, PyPI `mcp`). The security posture carries over unchanged | S13 |
-| Contributing | External contributors file issues, not PRs, including org members with write access | **Open decision** | This repo accepts outside PRs today (316 open). Maintainers decide, see §10 | S8 |
+| Contributing | External contributors file issues, not PRs, including org members with write access | Adapt | Same intent (a clear, enforced contribution policy), but the policy itself is deferred to a maintainer decision: this repo accepts outside PRs today (316 open). See §10 | S8 |
 | Issue forms | Bug and feature forms, blank issues off, security routed to a private advisory | Adapt | Needs a server dropdown (7 servers) and a spec-era/client field. We have no forms today | S8 |
 | Every PR references an issue | `Closes #N` first line; no issue-less PRs | Transfer | — | S1, S6 |
 | Project Status and Direction | Branch table: `v2/main` develop, `main` release, `v1/main` maintenance | Adapt | No `v1/main` line here. `v2/main` develops and `main` releases (the default branch, and what users see) | S1 |
@@ -110,7 +110,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `project-structure` | Where a file goes; who owns what | Adapt | Per-server layouts (e.g. `everything`'s `tools/`, `resources/`, `prompts/`, `transports/`) | S11 |
 | `local-dev` | Install/run each client; dependency-placement reasoning | Adapt | Workspaces + `uv`; running each server over stdio / Streamable HTTP; `npx`/`uvx` local builds | S11 |
 | `testing` | Test placement, commands, tiers, coverage gate, `renderWithMantine` | Adapt | In-process protocol harness (`Client` ↔ server over in-memory transport; `ClientSession` for Python), per #4854/#4855 | S11 |
-| `test-servers` | Picking and running the Inspector's fixture MCP servers | Adapt (inverted) | Here the servers are the product. The equivalent is **driving a server with a client**: Inspector V2 (web/CLI) and an LLM client, in both spec eras (#4857). Proposed name: `client-smoke` | S11 |
+| `test-servers` | Picking and running the Inspector's fixture MCP servers | Adapt | Inverted: here the servers are the product. The equivalent is **driving a server with a client**: Inspector V2 (web/CLI) and an LLM client, in both spec eras (#4857). Proposed name: `client-smoke` | S11 |
 | `release` | Name-only. Two PRs (audit + bump on `v2/main`; milestone merge to `main`), a ledger artifact, then a human-published GitHub Release | Adapt | Two registries, per-package versions, CalVer (Py) vs semver/changesets (TS, #4472), `release` environment approvals | S12 |
 | `security-advisory` | Private advisory flow: draft `[GHSA-…]` card, ownership check, accept, private fork, publish, public tracking. Accept and publish are human-gated | Adapt | One release line. **61 advisories are in `triage`**, and `SECURITY.md` says the repo is ineligible for reports (§8) | S9 |
 
@@ -129,11 +129,11 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `verify:format-coverage` | Every first-party file is format-gated | Adapt | Workspace globs; Python via ruff config | S3 |
 | `verify:typecheck-coverage` | Every tracked TS file gets a `tsc` pass | Adapt | Per-workspace `tsconfig` (tests are excluded in some servers today) | S3 |
 | `verify:action-pins` | Credentialed jobs use SHA pins with `# vX.Y.Z` | Transfer | — | S13 |
-| `verify:test-timeouts` | Resolves every Vitest project's budgets; asserts no `retry` | Adapt (later) | Keep the no-retry assertion only. The budgets machinery can wait until a timeout problem shows up | S10 |
+| `verify:test-timeouts` | Resolves every Vitest project's budgets; asserts no `retry` | Adapt | Keep the no-retry assertion only. Defer the budgets machinery until a timeout problem shows up | S10 |
 | `verify:dep-lockstep` | One version per install-crossing dependency across 5 installs | N/A | One workspace lockfile for TS; each Python server has its own `uv.lock` and its own deps by design | — |
-| `verify:install-fresh` | `node_modules` matches its lockfile | N/A (for now) | Single workspace install; `npm ci` in CI already enforces it | — |
+| `verify:install-fresh` | `node_modules` matches its lockfile | N/A | Single workspace install; `npm ci` in CI already enforces it | — |
 | `verify:bundle-externals` / `verify:build-gate` | Bundler guards for tsup/Vite output | N/A | Servers compile with plain `tsc` | — |
-| `smoke:*` (launcher/cli/tui/web/engines), `local:storybook` | Built-artifact smokes of the three clients | Adapt (inverted) | A **stdio + Streamable HTTP boot smoke per server**, from the built `dist/` (TS) and console script (Py): connect, list, call one tool. Only a thin spawn test, per #4854/#4855 | S10, S11 |
+| `smoke:*` (launcher/cli/tui/web/engines), `local:storybook` | Built-artifact smokes of the three clients | Adapt | Inverted: a **stdio + Streamable HTTP boot smoke per server**, from the built `dist/` (TS) and console script (Py): connect, list, call one tool. Only a thin spawn test, per #4854/#4855 | S10, S11 |
 | `pack:verify` (`pack-and-verify.mjs`) | Installs the exact publish tarball into a throwaway consumer and runs the bin | Adapt | Per package: `npm pack` → install → `npx` boot; `uv build` → install wheel → console-script boot | S12 |
 | `install-clients.mjs`, `install-smoke-browser.mjs`, `run-engine-smokes.mjs`, `docker-healthcheck.mjs` | Inspector-specific install/browser/Docker helpers | N/A | No non-workspace installs, browsers or Docker healthcheck. Our Dockerfiles aren't published by CI | — |
 
@@ -157,7 +157,6 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | Two boards (v2 #28, v1 #11) | One board per release line | Adapt | One board: **Servers V2 (#43)** | S5 |
 | Status: Incoming → Todo → In Progress → In Review → Done | Approval-aware lifecycle | Transfer | #43 already has all five options | S5 |
 | Priority field + rubric | Scored, with a posted comment | Transfer | #43 has Urgent/High/Medium/Low | S7 |
-| Size field | — | This repo only | #43 has XS–XL. Decide whether the create flow sets it | S5 |
 | Version labels `v1`/`v2` | Line routing | Adapt | Only `v2`; it marks work tracked by the factory | S5 |
 | Type labels (5) | Exactly one per issue | Adapt | `bug`/`enhancement`/`documentation`/`question` exist; **`chore` is missing** | S5 |
 | Milestones = release buckets | `Incoming` ⇔ unmilestoned | Transfer | `v2.0.0`, `v2.1.0` exist | S5, S7 |
@@ -168,6 +167,8 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `/goal` session start | Persistent sessions, one per issue | Transfer | Practice, not a file. Documented in the closing factory doc | — |
 | Copilot review loop | Request via `requestReviews` (bot id `BOT_kgDOCnlnWA`), wait, answer, repeat until one clean round | Transfer | — | S6 |
 | `Co-Authored-By` trailer | Attributes agent-authored commits | Transfer | — | S6 |
+
+One element exists only here: board #43 also has a **Size** field (XS–XL) with no Inspector counterpart. S5 decides whether the create flow sets it.
 
 ## 3. What only this repo needs
 
@@ -394,9 +395,9 @@ the Servers V2 board (#43). "After" means the listed issue must merge first.
 ```
 W1  #4859 inception (this doc)
 W2  S1 AGENTS.md · S2 skills harness · S3 TS validate · S4 Py validate
-W3  S5 board-ops + issue-create · S6 pr-flow · S8 contribution model · S9 security-advisory · then S7 issue-triage (after S5, S8)
-W4  S10 local:gate + coverage + pre-push-gate (after S3, S4, #4854, #4855) · S11 knowledge skills
-W5  #4472 changesets + Release-triggered publish → S12 milestone release flow + release skill
+W3  S5 board-ops + issue-create · S8 contribution model · S9 security-advisory · then S6 pr-flow (after S5) and S7 issue-triage (after S5, S8)
+W4  S10 local:gate + coverage + pre-push-gate (after S2, S3, S4, #4854, #4855) · S11 knowledge skills (after S2)
+W5  #4472 changesets + Release-triggered publish → S12 milestone release flow + release skill (after #4472, S10, S11)
 W6  S13 dependency & SDK sweeps replace Dependabot PRs
 ```
 
@@ -469,7 +470,7 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
   - Eval cases pass the threshold.
   - The skills index is updated.
 
-**S6 (#4867). `pr-flow` skill**
+**S6 (#4867). `pr-flow` skill** (after S5, whose `board-ops` it uses)
 - Scope: adapt §6. Branch `v2/<type>/<N>-<slug>` from `origin/v2/main`;
   assign and move to In Progress; the gate; `Closes #N` on the first line;
   `addCloseIssueReferences`; In Review; the Copilot review loop to exhaustion;
@@ -520,7 +521,7 @@ S5; its outside-PR half after S8)
 ### Wave 4: quality gate and knowledge skills
 
 **S10 (#4871). `local:gate`, per-file coverage in CI, `pre-push-gate` skill** (after
-S3, S4, #4854, #4855)
+S2, S3, S4, #4854, #4855)
 - Scope: root `local:gate` (under `gate-lease`) chaining the TS and Python
   validate, `verify:skills:cli`, per-file coverage for both languages, a thin
   per-server stdio and Streamable HTTP boot smoke, and #4860's interface diff
@@ -550,7 +551,7 @@ with its scope unchanged (§7). Its two bump PRs are why S12's preparation step
 is more than one PR.
 
 **S12 (#4873). `v2/main` → `main` milestone release flow and `release` skill** (after
-#4472, S10)
+#4472, S10, S11; the ledger uses S11's `client-smoke`)
 - Scope:
   - The preparation PRs, all on `v2/main`: the audit report (npm and
     `uv`/pip) with any fixes it forces, plus the bumps. #4472 makes the bumps
