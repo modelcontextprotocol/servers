@@ -82,7 +82,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | SDK watch (third sweep) | Nightly issue per MCP SDK release we're behind; a hardened LLM-in-CI `analyze` job | Adapt | Two SDKs, two registries (npm `@modelcontextprotocol/*`, PyPI `mcp`). The security posture carries over unchanged | S13 |
 | Contributing | External contributors file issues, not PRs, including org members with write access | Adapt | Same intent (a clear, enforced contribution policy), but the policy itself is deferred to a maintainer decision: this repo accepts outside PRs today (316 open). See §10 | S8 |
 | Issue forms | Bug and feature forms, blank issues off, security routed to a private advisory | Adapt | Needs a server dropdown (7 servers) and a spec-era/client field. We have no forms today | S8 |
-| Every PR references an issue | `Closes #N` first line; no issue-less PRs | Transfer | — | S1, S6 |
+| Every PR references an issue | `Closes #N` first line; no issue-less PRs | Transfer | Until S13 retires them, Dependabot still opens issue-less PRs. So S1 states the rule with an **explicit temporary exception for Dependabot PRs**, and S13 removes that exception | S1, S6, S13 |
 | Project Status and Direction | Branch table: `v2/main` develop, `main` release, `v1/main` maintenance | Adapt | No `v1/main` line here. `v2/main` develops and `main` releases (the default branch, and what users see) | S1 |
 | Maintenance rules | Keep READMEs and `AGENTS.md` in sync; procedures change in their skill | Transfer | Plus per-server READMEs and `RELEASING.md` (#4473) | S1 |
 | Maintaining the skills | `verify:skills`, `disable-model-invocation` explicit and defaulting to `false`, eval cases, listing budget, `paths` only when a skill is useless outside the matched files (with the trade-off stated in the PR) | Transfer | — | S2 (rules land with the harness) |
@@ -465,7 +465,8 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
 
 **S4 (#4865). Python gate parity**
 - Scope: for each of `fetch`, `git`, `time`: `ruff check`, `ruff format
-  --check`, `pyright`, `pytest`, with a single per-server `validate`
+  --check`, `pyright`, `pytest` and `uv build` (CI already gates the build),
+  with a single per-server `validate`
   entry (a `uv run` chain, or a `scripts/` helper called from the root). A
   root `npm run validate:py` (or equivalent) runs all three. `python.yml` runs
   ruff. Add the Python rules to `AGENTS.md`.
@@ -618,7 +619,9 @@ is more than one PR.
     every job whose artifact a credentialed job downloads** (after S12's
     package→publish split, the build/pack jobs), as the Inspector's guard
     treats them.
-  - Add the `AGENTS.md` "dependency updates are issue-driven" rules.
+  - Add the `AGENTS.md` "dependency updates are issue-driven" rules, and
+    remove S1's temporary Dependabot exception to "every PR references an
+    issue".
   - Work down the **existing Dependabot PR backlog** (six open at the time of
     writing): convert each still-needed bump into an issue for the sweep
     flow, and close the PR with a pointer to it.
