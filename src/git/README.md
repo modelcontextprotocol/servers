@@ -85,11 +85,11 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `branch_name` (string): Name of branch to checkout
    - Returns: Confirmation of branch switch
 11. `git_show`
-   - Shows the contents of a commit
+   - Shows the contents of a commit, or of a file or directory at a revision
    - Inputs:
      - `repo_path` (string): Path to Git repository
-     - `revision` (string): The revision (commit hash, branch name, tag) to show
-   - Returns: Contents of the specified commit
+     - `revision` (string): The revision (commit hash, branch name, tag) or object spec (`HEAD:path/to/file`) to show
+   - Returns: Contents of the specified commit, file content, or directory listing
 
 12. `git_branch`
    - List Git branches
