@@ -87,7 +87,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | Maintaining the skills | `verify:skills`, `disable-model-invocation` explicit and defaulting to `false`, eval cases, listing budget, no `paths` | Transfer | — | S2 (rules land with the harness) |
 | Issue-driven Work Style | Board invariants: real issues only, labels, milestones, Priority, `Incoming` ⇔ unmilestoned, `Done` = shipped, branch naming, Copilot loop, manual close on `v2/main` | Adapt | One board (#43), not two. The version label is always `v2`. Type labels need `chore` (§8). Server-scope labels already exist | S1 (rules), S5–S7 (recipes) |
 | Responding to Code Reviews | Judge against the issue, decline scope creep, reply in each thread, then a PR-level summary | Transfer | — | S1 |
-| Always test new or modified code | Per-file ≥ 90 on all four dimensions, justified `v8 ignore`, test placement | Adapt | The TS half comes from #4854. The Python half comes from #4855: coverage.py, justified `# pragma: no cover`, per-file script | S10 |
+| Always test new or modified code | Per-file ≥ 90 on all four dimensions, justified `v8 ignore`, test placement | Adapt | The TS half (all four dimensions) comes from #4854. The Python half (per-file lines and branches, the dimensions coverage.py measures) comes from #4855: coverage.py, justified `# pragma: no cover`, per-file script | S10 |
 | Test-gate timeouts | Budgets in one place, no `retry`, no fixed sleeps, `timeout-minutes` per CI job | Adapt | Keep **no retry**, **no scaled sleeps** and **`timeout-minutes` on every job**. The shared-budget machinery is sized for 6 Vitest projects and a browser, so defer it | S10 |
 | Mandatory pre-push gate | `npm run format`, then `npm run local:gate`; `validate` is not a substitute; gate lease | Adapt | A two-language gate: TS workspaces plus `uv` per server | S3, S4, S10 |
 | Waiting on long-running work | Arm a notifier; never poll per turn | Transfer | — | S1 |
@@ -133,7 +133,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `verify:dep-lockstep` | One version per install-crossing dependency across 5 installs | N/A | One workspace lockfile for TS; each Python server has its own `uv.lock` and its own deps by design | — |
 | `verify:install-fresh` | `node_modules` matches its lockfile | N/A | Single workspace install; `npm ci` in CI already enforces it | — |
 | `verify:bundle-externals` / `verify:build-gate` | Bundler guards for tsup/Vite output | N/A | Servers compile with plain `tsc` | — |
-| `smoke:*` (launcher/cli/tui/web/engines), `local:storybook` | Built-artifact smokes of the three clients | Adapt | Inverted: a **boot smoke per server over each transport it implements** (stdio for all; Streamable HTTP for `everything`), from the built `dist/` (TS) and console script (Py): connect, list, call one tool. Only a thin spawn test, per #4854/#4855 | S10, S11 |
+| `smoke:*` (launcher/cli/tui/web/engines), `local:storybook` | Built-artifact smokes of the three clients | Adapt | Inverted: a **boot smoke per server over each transport it implements** (stdio for all; SSE and Streamable HTTP for `everything`), from the built `dist/` (TS) and console script (Py): connect, list, call one tool. Only a thin spawn test, per #4854/#4855 | S10, S11 |
 | `pack:verify` (`pack-and-verify.mjs`) | Installs the exact publish tarball into a throwaway consumer and runs the bin | Adapt | Per package: `npm pack` → install → `npx` boot; `uv build` → install wheel → console-script boot | S12 |
 | `install-clients.mjs`, `install-smoke-browser.mjs`, `run-engine-smokes.mjs`, `docker-healthcheck.mjs` | Inspector-specific install/browser/Docker helpers | N/A | No non-workspace installs, browsers or Docker healthcheck. Our Dockerfiles aren't published by CI | — |
 
@@ -163,7 +163,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `docs/ai-software-factory.md` | The overview for humans | Adapt | Write ours once the pieces exist | S12 (closing doc task) |
 | `docs/quality-gate.md` | Canonical CI-vs-local split | Adapt | Two languages | S10 |
 | `docs/skill-authoring.md` | How to write a description that fires; eval-case design | Transfer | — | S2 |
-| `.claude/settings.json` | Enables the Playwright plugin | N/A | No browser work | — |
+| `.claude/settings.json` | Enables the Playwright plugin | Adapt | Not for our own code, which has no UI, but `client-smoke` drives the Inspector V2 **web** client, which needs browser automation. S11 enables the plugin, or documents the Inspector CLI as the scripted path and the web client as the hand-driven one | S11 |
 | `/goal` session start | Persistent sessions, one per issue | Transfer | Practice, not a file. Documented in the closing factory doc | — |
 | Copilot review loop | Request via `requestReviews` (bot id `BOT_kgDOCnlnWA`), wait, answer, repeat until one clean round | Transfer | — | S6 |
 | `Co-Authored-By` trailer | Attributes agent-authored commits | Transfer | — | S6 |
@@ -529,12 +529,15 @@ S5; its outside-PR half after S8)
 S2, S3, S4, #4854, #4855)
 - Scope: root `local:gate` (under `gate-lease`) chaining the TS and Python
   validate, `verify:skills:cli`, per-file coverage for both languages, a thin
-  per-server boot smoke over each transport the server implements (stdio for all seven; Streamable HTTP for `everything`), and #4860's interface diff
+  per-server boot smoke over each transport the server implements (stdio for all seven; SSE and Streamable HTTP for `everything`), and #4860's interface diff
   once landed. CI runs coverage as a **parallel job** (§7). `timeout-minutes`
   on every job. No test retries (asserted). `docs/quality-gate.md`. The
   `pre-push-gate` skill. The `AGENTS.md` rules: mandatory pre-push gate, and
-  the per-file ≥ 90 coverage rule on all four dimensions with justified
-  ignores (the carry-over from #4854/#4855).
+  the per-file ≥ 90 coverage rule with justified ignores (the carry-over from
+  #4854/#4855). For TypeScript that is all four Vitest dimensions (lines,
+  statements, functions, branches). For Python it is the per-file metrics
+  coverage.py measures, **lines and branches**: coverage.py has no native
+  function dimension, so the rule doesn't invent one.
 - Acceptance:
   - `npm run local:gate` runs every check CI runs.
   - A PR dropping any file below 90 fails CI.
@@ -544,7 +547,10 @@ S2, S3, S4, #4854, #4855)
 **S11 (#4872). Knowledge skills: `project-structure`, `local-dev`, `testing`, `client-smoke`**
 - Scope: adapt §6. `testing` documents the in-process harnesses from
   #4854/#4855. `client-smoke` drives a server with Inspector V2 and an LLM
-  client in both spec eras (#4857).
+  client in both spec eras (#4857). Driving the Inspector's **web** client
+  needs browser automation, so this issue also enables the Playwright plugin
+  in `.claude/settings.json`, or documents the Inspector CLI as the scripted
+  path and the web client as the hand-driven one.
 - Acceptance:
   - Four skills merged with eval cases.
   - A full `skills:eval` re-run shows no regression in the Wave 3 skills.
