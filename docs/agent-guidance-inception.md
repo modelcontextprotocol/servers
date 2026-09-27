@@ -78,7 +78,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | Development setup | Root `npm install`, build, dev loop | Adapt | npm workspaces for TS, `uv sync` per Python server. Node 22, Python ≥ 3.10 | S1 |
 | Dependency placement (+ its rationale in `local-dev`) | Rules for a non-workspace multi-install repo: root-only runtime deps, bundler externals, vitest pin trio, lockstep | N/A | This repo **is** an npm workspace for its four TS servers, each with its own `package.json`. The three Python servers use `pyproject.toml`, and every server publishes independently. The few general rules survive as S1 rules: pin transitive deps with `overrides`, never `npm audit fix`; one version of a shared devDependency across workspaces | S1 (the survivors), S11 (`local-dev`) |
 | Dependency updates are issue-driven | Dependabot PRs off; scheduled sweeps file issues | Adapt | npm **and** uv/PyPI **and** Actions ecosystems. Dependabot security-fix PRs are currently **on** here (§8) | S13 |
-| Action pinning (#2484) | SHA-pin actions in credentialed jobs, enforced by `verify:action-pins` | Transfer | `release.yml` holds `id-token: write` in `publish-npm` / `publish-pypi` | S13 |
+| Action pinning (#2484) | SHA-pin actions in credentialed jobs, enforced by `verify:action-pins` | Transfer | `release.yml` holds `id-token: write` in `publish-npm` / `publish-pypi`, and `claude.yml` holds `id-token: write` + `ANTHROPIC_API_KEY`. Lands with the release split, **before** the first milestone release | S12 |
 | SDK watch (third sweep) | Nightly issue per MCP SDK release we're behind; a hardened LLM-in-CI `analyze` job | Adapt | Two SDKs, two registries (npm `@modelcontextprotocol/*`, PyPI `mcp`). The security posture carries over unchanged | S13 |
 | Contributing | External contributors file issues, not PRs, including org members with write access | Adapt | Same intent (a clear, enforced contribution policy), but the policy itself is deferred to a maintainer decision: this repo accepts outside PRs today (316 open). See §10 | S8 |
 | Issue forms | Bug and feature forms, blank issues off, security routed to a private advisory | Adapt | Needs a server dropdown (7 servers) and a spec-era/client field. We have no forms today | S8 |
@@ -130,7 +130,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `skills:eval` (`skill-eval.mjs`, `lib/claude-cli.mjs`) | Runs each skill's eval cases headless (Claude or Copilot); trigger rate, chains, negatives | Transfer | — | S2 |
 | `verify:format-coverage` | Every first-party file is format-gated | Adapt | Workspace globs; Python via ruff config | S3 |
 | `verify:typecheck-coverage` | Every tracked TS file gets a `tsc` pass | Adapt | Per-workspace `tsconfig` (tests are excluded in some servers today) | S3 |
-| `verify:action-pins` | Credentialed jobs use SHA pins with `# vX.Y.Z` | Transfer | — | S13 |
+| `verify:action-pins` | Credentialed jobs use SHA pins with `# vX.Y.Z` | Transfer | — | S12 |
 | `verify:test-timeouts` | Resolves every Vitest project's budgets; asserts no `retry` | Adapt | Keep the no-retry assertion only. Defer the budgets machinery until a timeout problem shows up | S10 |
 | `verify:dep-lockstep` | One version per install-crossing dependency across 5 installs | Adapt | A single workspace lockfile can still resolve different versions per workspace, and the manifests already declare different ranges (e.g. `typescript` `^5.6.2` / `^5.8.2` / `^5.3.3`). The adaptation is a smaller guard: every **shared TS devDependency** (`typescript`, `vitest`, `@vitest/coverage-v8`, `prettier`, `@types/node`) is declared with one range across workspaces, or hoisted to the root. Python servers stay independent by design | S3 |
 | `verify:install-fresh` | `node_modules` matches its lockfile | N/A | Single workspace install; `npm ci` in CI already enforces it | — |
@@ -162,7 +162,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | Version labels `v1`/`v2` | Line routing | Adapt | Only `v2`; it marks work tracked by the factory | S5 |
 | Type labels (5) | Exactly one per issue | Adapt | `bug`/`enhancement`/`documentation`/`question` exist; **`chore` is missing** | S5 |
 | Milestones = release buckets | `Incoming` ⇔ unmilestoned | Transfer | `v2.0.0`, `v2.1.0` exist | S5, S7 |
-| `docs/ai-software-factory.md` | The overview for humans | Adapt | Write ours once the pieces exist | S12 (closing doc task) |
+| `docs/ai-software-factory.md` | The overview for humans | Adapt | Write ours once the pieces exist, after Wave 6's automation lands | S13 (closing doc task) |
 | `docs/quality-gate.md` | Canonical CI-vs-local split | Adapt | Two languages | S10 |
 | `docs/skill-authoring.md` | How to write a description that fires; eval-case design | Transfer | — | S2 |
 | `.claude/settings.json` | Enables the Playwright plugin | Adapt | Not for our own code, which has no UI, but `client-smoke` drives the Inspector V2 **web** client, which needs browser automation. S11 enables the plugin, or documents the Inspector CLI as the scripted path and the web client as the hand-driven one | S11 |
@@ -332,7 +332,7 @@ Inspector files that can be copied in as starting points (paths on its
 | `scripts/gate-lease.mjs` (+ test) | `scripts/` | Env var rename (`SERVERS_SKIP_GATE_LEASE`) | S10 |
 | `scripts/lib/workflow-gate.mjs` (+ test) | `scripts/lib/` | Our workflow list and `local:*` scripts; drop the browser-engine rationale | S10 |
 | `scripts/verify-format-coverage.mjs`, `scripts/verify-typecheck-coverage.mjs` | `scripts/` | Workspace globs instead of `clients/*` | S3 |
-| `scripts/verify-action-pins.mjs` | `scripts/` | Workflow list | S13 |
+| `scripts/verify-action-pins.mjs` | `scripts/` | Workflow list | S12 |
 | `scripts/dependency-refresh.mjs`, `scripts/dependabot-alerts.mjs`, `scripts/sdk-watch.mjs` + workflows | `scripts/`, `.github/workflows/` | Add the uv/PyPI ecosystem; SDK groups for TS and Python; board #43; labels | S13 |
 | `docs/skill-authoring.md` | `docs/` | Paths only | S2 |
 | `docs/quality-gate.md` | `docs/` | Rewrite for two languages; keep the structure (tiers table, local-only steps, lease) | S10 |
@@ -401,7 +401,7 @@ W2  S1 AGENTS.md · S2 skills harness · S3 TS validate · S4 Py validate
 W3  S5 board-ops + issue-create · S8 contribution model · S9 security-advisory · then S6 pr-flow (after S5) and S7 issue-triage (after S5, S8)
 W4  S10 local:gate + coverage + pre-push-gate (after S2, S3, S4, #4854, #4855) · S11 knowledge skills (after S2)
 W5  #4472 changesets + Release-triggered publish → S12 milestone release flow + release skill (after #4472, S10, S11)
-W6  S13 dependency & SDK sweeps replace Dependabot PRs
+W6  S13 dependency & SDK sweeps replace Dependabot PRs; closing factory overview
 ```
 
 ### Wave 2: rules and scaffolding (parallel)
@@ -601,16 +601,23 @@ is more than one PR.
     surface (§3.2).
   - The maintainer publishes the GitHub Release.
   - Split `release.yml` so build and verify run without `id-token`.
+  - **Pin actions in every credentialed job before the first release through
+    this flow**, with `verify:action-pins` enforcing it: `release.yml`'s
+    publish jobs, **every job whose artifact a credentialed job downloads**
+    (the build/pack jobs the split introduces), and `claude.yml`
+    (`id-token: write`, `ANTHROPIC_API_KEY`). Add the `AGENTS.md`
+    SHA-pinning rule.
   - The `release` skill (name-only).
   - `RELEASING.md` rewritten for the merged state.
-  - A closing `docs/ai-software-factory.md` for this repo.
 - Acceptance:
+  - `verify:action-pins` passes, and fails on a tag-pinned action in any
+    credentialed or artifact-producing job.
   - One milestone released end to end through the skill.
   - The ledger is linked from the merge PR.
 
 ### Wave 6: automation
 
-**S13 (#4874). Replace Dependabot PRs with issue-filing sweeps; SDK watch; action pins**
+**S13 (#4874). Replace Dependabot PRs with issue-filing sweeps; SDK watch; the factory overview**
 - Scope:
   - Turn off automated security-fix PRs (a repo setting) and delete
     `dependabot.yml`; keep alerts on.
@@ -619,11 +626,8 @@ is more than one PR.
     `v2/main`).
   - Add `sdk-watch` (nightly; TS SDK packages and Python `mcp`), including the
     hardened analysis job's properties unchanged.
-  - Add `verify:action-pins` for every credentialed job: `release.yml`'s
-    publish jobs, `claude.yml` (`id-token: write`, `ANTHROPIC_API_KEY`), **and
-    every job whose artifact a credentialed job downloads** (after S12's
-    package→publish split, the build/pack jobs), as the Inspector's guard
-    treats them.
+  - Keep S12's SHA pins current: `dependency-refresh` ranks each pin by its
+    `# vX.Y.Z` comment, as the Inspector's sweep does.
   - Add the `AGENTS.md` "dependency updates are issue-driven" rules, and
     remove S1's temporary Dependabot exception to "every PR references an
     issue".
@@ -638,6 +642,8 @@ is more than one PR.
     would file, with correct labels and milestone. Live filing is exercised
     by script tests with a mocked `gh`, not against the real tracker.
   - Script tests pass.
+  - A closing `docs/ai-software-factory.md` for this repo, written once the
+    whole factory, this automation included, has landed.
 
 ## 10. Open questions for maintainers
 
