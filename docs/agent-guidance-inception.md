@@ -105,10 +105,10 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `board-ops` | `gh project` recipes for two boards; ID tables; resolving option IDs by name; the option-deletion hazard and its recovery | Adapt | One board, #43. Its fields: Status (with **Incoming**), Priority, Size. Hazard and recovery copy unchanged | S5 |
 | `issue-create` | Five-step create flow: version label, type label, milestone, card, Status + Priority; duplicate check across all states | Adapt | Version label is always `v2`. Add a **server-scope label** step (`server-<name>`). Milestone = nearest due v2.x | S5 |
 | `issue-triage` | Two-pass sweep (board as Incoming, then human approval), priority rubric with a score comment, 12-check board audit | Adapt | The **highest-leverage skill here** given the inflow (§3.4). Add spam/registry-redirect classes, server-scope labelling, and outside-PR triage | S7 |
-| `pr-flow` | Assign + In Progress, branch naming, DCO signoff, screenshots, `Closes #N`, `addCloseIssueReferences`, In Review, Copilot loop to exhaustion, per-thread replies, manual close-out | Adapt | Board #43; branch `v2/<type>/<N>-<slug>`. **DCO: N/A**, since no DCO app is installed here (§10). **Screenshots → client evidence**: for a server-facing change, Inspector and LLM-client transcripts in both spec eras; otherwise a targeted probe (§3.2). The Copilot loop copies unchanged | S6 |
+| `pr-flow` | Assign + In Progress, branch naming, DCO signoff, screenshots, `Closes #N`, `addCloseIssueReferences`, In Review, Copilot loop to exhaustion, per-thread replies, manual close-out | Adapt | Board #43; branch `v2/<type>/<N>-<slug>`. **DCO: deferred** to a maintainer decision in S6 (§10). No DCO app is installed here, and the recommendation is not to adopt one. **Screenshots → client evidence**: for a server-facing change, Inspector and LLM-client transcripts in both spec eras; otherwise a targeted probe (§3.2). The Copilot loop copies unchanged | S6 |
 | `pre-push-gate` | Running `local:gate`; diagnosing each stage | Adapt | Rewrite around our stages: TS workspaces, Python per server, per-file coverage both sides | S10 |
 | `project-structure` | Where a file goes; who owns what | Adapt | Per-server layouts (e.g. `everything`'s `tools/`, `resources/`, `prompts/`, `transports/`) | S11 |
-| `local-dev` | Install/run each client; dependency-placement reasoning | Adapt | Workspaces + `uv`; running each server over stdio / Streamable HTTP; `npx`/`uvx` local builds | S11 |
+| `local-dev` | Install/run each client; dependency-placement reasoning | Adapt | Workspaces + `uv`; running each server over the transports it implements (stdio for all seven; `everything` also serves SSE and Streamable HTTP); `npx`/`uvx` local builds | S11 |
 | `testing` | Test placement, commands, tiers, coverage gate, `renderWithMantine` | Adapt | In-process protocol harness (`Client` ↔ server over in-memory transport; `ClientSession` for Python), per #4854/#4855 | S11 |
 | `test-servers` | Picking and running the Inspector's fixture MCP servers | Adapt | Inverted: here the servers are the product. The equivalent is **driving a server with a client**: Inspector V2 (web/CLI) and an LLM client, in both spec eras (#4857). Proposed name: `client-smoke` | S11 |
 | `release` | Name-only. Two PRs (audit + bump on `v2/main`; milestone merge to `main`), a ledger artifact, then a human-published GitHub Release | Adapt | Two registries, per-package versions, CalVer (Py) vs semver/changesets (TS, #4472), `release` environment approvals | S12 |
@@ -133,7 +133,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `verify:dep-lockstep` | One version per install-crossing dependency across 5 installs | N/A | One workspace lockfile for TS; each Python server has its own `uv.lock` and its own deps by design | — |
 | `verify:install-fresh` | `node_modules` matches its lockfile | N/A | Single workspace install; `npm ci` in CI already enforces it | — |
 | `verify:bundle-externals` / `verify:build-gate` | Bundler guards for tsup/Vite output | N/A | Servers compile with plain `tsc` | — |
-| `smoke:*` (launcher/cli/tui/web/engines), `local:storybook` | Built-artifact smokes of the three clients | Adapt | Inverted: a **stdio + Streamable HTTP boot smoke per server**, from the built `dist/` (TS) and console script (Py): connect, list, call one tool. Only a thin spawn test, per #4854/#4855 | S10, S11 |
+| `smoke:*` (launcher/cli/tui/web/engines), `local:storybook` | Built-artifact smokes of the three clients | Adapt | Inverted: a **boot smoke per server over each transport it implements** (stdio for all; Streamable HTTP for `everything`), from the built `dist/` (TS) and console script (Py): connect, list, call one tool. Only a thin spawn test, per #4854/#4855 | S10, S11 |
 | `pack:verify` (`pack-and-verify.mjs`) | Installs the exact publish tarball into a throwaway consumer and runs the bin | Adapt | Per package: `npm pack` → install → `npx` boot; `uv build` → install wheel → console-script boot | S12 |
 | `install-clients.mjs`, `install-smoke-browser.mjs`, `run-engine-smokes.mjs`, `docker-healthcheck.mjs` | Inspector-specific install/browser/Docker helpers | N/A | No non-workspace installs, browsers or Docker healthcheck. Our Dockerfiles aren't published by CI | — |
 
@@ -371,7 +371,7 @@ Facts discovered while writing this doc. Each is owned by a sub-issue.
 
 ## 9. Proposed sub-issues
 
-The sub-issues now exist under #4858. The S-ids used throughout this doc map to them as follows. #4472 sits in Wave 5, between S11 and S12.
+The sub-issues now exist under #4858. The S-ids used throughout this doc map to them as follows. #4472 sits in Wave 5, between S11 and S12, as Part 13.
 
 | Id | Issue | Title prefix |
 | --- | --- | --- |
@@ -386,8 +386,8 @@ The sub-issues now exist under #4858. The S-ids used throughout this doc map to 
 | S9 | #4870 | Part 10 |
 | S10 | #4871 | Part 11 |
 | S11 | #4872 | Part 12 |
-| S12 | #4873 | Part 13 |
-| S13 | #4874 | Part 14 |
+| S12 | #4873 | Part 14 |
+| S13 | #4874 | Part 15 |
 
 Each targets **`v2/main`**, carries the `v2` label and a milestone, and sits on
 the Servers V2 board (#43). "After" means the listed issue must merge first.
@@ -434,13 +434,18 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs
 **S3 (#4864). TypeScript workspace gate: Prettier, ESLint, root `validate`, CI**
 - Scope: the #4473 design. Root Prettier config and `format` /
   `format:check`; a root ESLint flat config, type-aware, `--max-warnings 0`,
-  `no-floating-promises` at error, build output ignored; a root `validate`
-  (`format:check` → `lint` → `build` → `test`) across the workspaces;
+  `no-floating-promises` at error, build output ignored. A **per-workspace
+  `validate`** script in each TS server (`format:check` → `lint` → `build` →
+  `test`, for that package only), and a root `validate` that **aggregates**
+  them (`npm run validate --workspaces`) plus any root-only guards.
   `verify:format-coverage` and `verify:typecheck-coverage` adapted.
-  `typescript.yml` runs `validate`, keeping the per-package matrix. Add the
+  `typescript.yml` keeps its per-package matrix, and each leg runs **only its
+  own package's** `validate` rather than the whole monorepo. Add the
   format/lint/validate rules to `AGENTS.md`.
 - Acceptance:
-  - `npm run validate` passes on a clean checkout.
+  - `npm run validate` passes on a clean checkout, and so does
+    `npm run validate -w <package>` for each server.
+  - Each CI matrix leg gates only its own package.
   - CI fails a PR with a formatting or lint finding.
   - `everything`'s per-package Prettier setup is folded into the root one.
 
@@ -524,7 +529,7 @@ S5; its outside-PR half after S8)
 S2, S3, S4, #4854, #4855)
 - Scope: root `local:gate` (under `gate-lease`) chaining the TS and Python
   validate, `verify:skills:cli`, per-file coverage for both languages, a thin
-  per-server stdio and Streamable HTTP boot smoke, and #4860's interface diff
+  per-server boot smoke over each transport the server implements (stdio for all seven; Streamable HTTP for `everything`), and #4860's interface diff
   once landed. CI runs coverage as a **parallel job** (§7). `timeout-minutes`
   on every job. No test retries (asserted). `docs/quality-gate.md`. The
   `pre-push-gate` skill. The `AGENTS.md` rules: mandatory pre-push gate, and
