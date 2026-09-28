@@ -99,10 +99,9 @@ export const setSubscriptionHandlers = (server: McpServer) => {
 /**
  * Sends simulated resource update notifications to the subscribed client.
  *
- * This function iterates through all resource URIs stored in the subscriptions
- * and checks if the specified session ID is subscribed to them. If so, it sends
- * a notification through the provided server. If the session ID is no longer valid
- * (disconnected), it removes the session ID from the list of subscribers.
+ * Iterates the URIs in `subscriptions` and emits a
+ * `notifications/resources/updated` notification for each URI the given
+ * sessionId is subscribed to.
  *
  * @param {McpServer} server - The server instance used to send notifications.
  * @param {string | undefined} sessionId - The session ID of the client to check for subscriptions.
@@ -122,8 +121,6 @@ const sendSimulatedResourceUpdates = async (
         method: "notifications/resources/updated",
         params: { uri },
       });
-    } else {
-      subscribers.delete(sessionId); // subscriber has disconnected
     }
   }
 };
@@ -167,5 +164,24 @@ export const stopSimulatedResourceUpdates = (sessionId?: string) => {
     const subsUpdateInterval = subsUpdateIntervals.get(sessionId);
     clearInterval(subsUpdateInterval);
     subsUpdateIntervals.delete(sessionId);
+  }
+};
+
+/**
+ * Removes a session from every URI's subscriber set, dropping any URI entry
+ * that ends up with no remaining subscribers.
+ *
+ * A session that disconnects without explicitly unsubscribing otherwise stays
+ * in `subscriptions` for the life of the process. Call this from the
+ * transport's `cleanup(sessionId)` when a session ends.
+ *
+ * @param {string} [sessionId]
+ */
+export const removeSubscriber = (sessionId?: string) => {
+  for (const [uri, subscribers] of subscriptions) {
+    subscribers.delete(sessionId);
+    if (subscribers.size === 0) {
+      subscriptions.delete(uri);
+    }
   }
 };

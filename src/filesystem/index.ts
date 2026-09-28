@@ -21,6 +21,7 @@ import {
   getFileStats,
   readFileContent,
   writeFileContent,
+  moveFile,
   searchFilesWithValidation,
   applyFileEdits,
   tailFile,
@@ -631,7 +632,7 @@ server.registerTool(
   async (args: z.infer<typeof MoveFileArgsSchema>) => {
     const validSourcePath = await validatePath(args.source);
     const validDestPath = await validatePath(args.destination);
-    await fs.rename(validSourcePath, validDestPath);
+    await moveFile(validSourcePath, validDestPath);
     const text = `Successfully moved ${args.source} to ${args.destination}`;
     const contentBlock = { type: "text" as const, text };
     return {
