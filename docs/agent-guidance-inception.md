@@ -74,7 +74,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | Header: rules vs procedures | States that `AGENTS.md` holds the rules and skills hold the recipes | Transfer | — | S1 |
 | Skills index | Table of every skill, what it covers, how it loads | Transfer | Our skill list (§9) | S1, then each skill PR |
 | Project Structure | Annotated tree of the repo | Adapt | 7 servers × 2 languages; package name and registry for each server | S1 |
-| Every file carries a purpose header | Each source file opens with a comment stating its purpose and rationale, so `AGENTS.md` never duplicates it | Adapt | Our source files don't follow this today (e.g. `src/filesystem/index.ts`, `src/time/src/mcp_server_time/server.py`). The adaptation is **no bulk migration**: new files, and files a PR substantially rewrites, get a header. It spreads as the refactor in #4857 touches each server | S1 |
+| Every file carries a purpose header | Each source file opens with a comment stating its purpose and rationale, so `AGENTS.md` never duplicates it | Adapt | Our source files don't follow this today (e.g. `src/filesystem/index.ts`, `src/time/src/mcp_server_time/server.py`). The adaptation is **no bulk migration**: new files, and files a PR substantially rewrites, get a header: the first comment in the file, **after any shebang** (`#!/usr/bin/env node` must stay on line 1 of an executable entry point). It spreads as the refactor in #4857 touches each server | S1 |
 | Development setup | Root `npm install`, build, dev loop | Adapt | npm workspaces for TS, `uv sync` per Python server. Node 22, Python ≥ 3.10 | S1 |
 | Dependency placement (+ its rationale in `local-dev`) | Rules for a non-workspace multi-install repo: root-only runtime deps, bundler externals, vitest pin trio, lockstep | N/A | This repo **is** an npm workspace for its four TS servers, each with its own `package.json`. The three Python servers use `pyproject.toml`, and every server publishes independently. The few general rules survive as S1 rules: pin transitive deps with `overrides`, never `npm audit fix`; one version of a shared devDependency across workspaces | S1 (the survivors), S11 (`local-dev`) |
 | Dependency updates are issue-driven | Dependabot PRs off; scheduled sweeps file issues | Adapt | npm **and** uv/PyPI **and** Actions ecosystems. Dependabot security-fix PRs are currently **on** here (§8) | S13 |
@@ -456,7 +456,10 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs; closing factory overview
   `format:check`; a root ESLint flat config, type-aware, `--max-warnings 0`,
   `no-floating-promises` at error, build output ignored. A **per-workspace
   `validate`** script in each TS server (`format:check` → `lint` → `build` →
-  `test`, for that package only), and a root `validate` that **aggregates**
+  `test`, for that package only). Today every TS workspace's `test` runs
+  `vitest run --coverage`, so S3 **splits it**: `test` becomes the fast run,
+  and a separate `coverage` script keeps the instrumented one (#4854 then
+  adds its per-file thresholds to that script). A root `validate` that **aggregates**
   them (`npm run validate --workspaces`) plus any root-only guards.
   `verify:format-coverage` and `verify:typecheck-coverage` adapted.
   `typescript.yml` keeps its per-package matrix, and each leg runs **only its
@@ -613,9 +616,12 @@ is more than one PR.
 #4472, S10, S11; the ledger uses S11's `client-smoke`)
 - Scope:
   - **A release issue per milestone** (`Release vX.Y.Z`), filed through
-    `issue-create`, that every preparation PR and the merge PR reference with
-    `Closes #N` on the first line. It closes by hand once the merge lands on
-    `main` and the Release is published. This is what keeps release PRs
+    `issue-create`. Every preparation PR (on `v2/main`, where closing
+    keywords don't fire) opens with `Closes #N`. The **merge PR targets
+    `main`, the default branch**, where `Closes #N` would auto-close the
+    issue before the Release is published, so it uses a **non-closing
+    reference** (`Part of #N`) instead. The issue closes by hand once the
+    Release is published. This is what keeps release PRs
     inside "every PR references an issue" after S13 removes the Dependabot
     exception. The one bot-authored PR, changesets' "Version Packages", gets
     the reference added to its body after the bot opens it. If the action
@@ -643,8 +649,10 @@ is more than one PR.
   - The `release` skill (name-only).
   - `RELEASING.md` rewritten for the merged state.
 - Acceptance:
-  - `verify:action-pins` passes, and fails on a tag-pinned action in any
-    credentialed or artifact-producing job.
+  - `verify:action-pins` passes, and fails on a tag-pinned action in a
+    credentialed job or in a job whose artifact a credentialed job downloads.
+    Unrelated artifact uploads (e.g. `python.yml`'s CI `dist` upload) stay
+    out of scope, as in the Inspector's guard.
   - One milestone released end to end through the skill.
   - The ledger is linked from the merge PR.
 
