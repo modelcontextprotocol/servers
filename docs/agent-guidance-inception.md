@@ -27,7 +27,7 @@ the Inspector's `v2/main` at the time, not this doc's summary of it.
 7. [Existing issues to reconcile](#7-existing-issues-to-reconcile)
 8. [Findings along the way](#8-findings-along-the-way)
 9. [Proposed sub-issues](#9-proposed-sub-issues)
-10. [Open questions for maintainers](#10-open-questions-for-maintainers)
+10. [Maintainer decisions](#10-maintainer-decisions)
 
 ## 1. What the factory is
 
@@ -126,6 +126,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `lint:*` (`--max-warnings 0`) | ESLint flat config, type-aware | Adapt | Root flat config across workspaces; `ruff check` for Python (not run in CI today) | S3, S4 |
 | `gate-lease.mjs` | Machine-wide FIFO lease so concurrent sessions' gates queue | Transfer | Our gates are cheaper, but concurrent sessions still contend. Also needed if any stage binds a fixed port (HTTP transport tests) | S10 |
 | `lib/workflow-gate.mjs` (+ tests) | Keeps the local gate out of CI: no workflow may invoke a `local:*` script, and `local:gate` stays exactly the lease wrapper | Adapt | Same invariant for our `local:*` namespace; the Inspector's engine-pass specifics drop out | S10 |
+| `test:scripts` | Runs every `scripts/**/*.test.mjs` under `node --test`, inside `validate:guards`, so a regression in a guard script fails the gate | Transfer | Keep the exact `*.test.mjs` naming: `node --test` silently skips a file its glob misses | S2 (adds it), S3 (root-guards job) |
 | `verify:skills` / `verify:skills:cli` / `lib/skill-manifest.mjs` | Frontmatter parse, explicit invocation mode, eval cases, listing budget; `claude plugin validate` at a pinned CLI | Transfer | — | S2 |
 | `skills:eval` (`skill-eval.mjs`, `lib/claude-cli.mjs`) | Runs each skill's eval cases headless (Claude or Copilot); trigger rate, chains, negatives | Transfer | — | S2 |
 | `verify:format-coverage` | Every first-party file is format-gated | Adapt | Workspace globs; Python via ruff config | S3 |
@@ -453,7 +454,8 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs; closing factory overview
   own package's** `validate` rather than the whole monorepo. A separate
   **root-guards CI job** runs what no package leg covers: the root `format`
   and `lint` of root files, `verify:format-coverage`,
-  `verify:typecheck-coverage`, and the shared-devDependency version guard
+  `verify:typecheck-coverage`, `test:scripts` (the guard scripts' own unit
+  tests), and the shared-devDependency version guard
   adapted from `verify:dep-lockstep` (§2.3). Add the format/lint/validate
   rules to `AGENTS.md`. If S1 hasn't merged yet, hand these rules to S1
   instead, the same fallback as S2.
@@ -561,8 +563,9 @@ S5 and S8)
 S2, S3, S4, #4854, #4855)
 - Scope: root `local:gate` (under `gate-lease`) chaining the TS and Python
   validate, `verify:skills:cli`, per-file coverage for both languages, a thin
-  per-server boot smoke over each transport the server implements (stdio for all seven; SSE and Streamable HTTP for `everything`), and #4860's interface diff
-  once landed. `workflow-gate` ported, so no workflow can invoke a
+  per-server boot smoke over each transport the server implements (stdio for all seven; SSE and Streamable HTTP for `everything`), and #4860's interface diff.
+  #4860 is independent, so **whichever of S10 and #4860 lands second** wires
+  the interface diff into `local:gate`, keeping "every check CI runs" true. `workflow-gate` ported, so no workflow can invoke a
   `local:*` script. CI runs coverage as a **parallel job** (§7). `timeout-minutes`
   on every job. No test retries (asserted). `docs/quality-gate.md`. The
   `pre-push-gate` skill. The `AGENTS.md` rules: mandatory pre-push gate, and
