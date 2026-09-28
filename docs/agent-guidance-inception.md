@@ -440,7 +440,16 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs; closing factory overview
     missing `disable-model-invocation`.
   - `npm run skills:eval` runs against Claude, and against Copilot with
     `AGENT=copilot`.
-  - `verify:skills` runs in CI.
+  - `verify:skills` runs in CI, in a new **root-guards job** that S2
+    creates (in `typescript.yml`, or a small repo-level workflow; this repo
+    has no `main.yml`). S3 extends that job. `verify:skills:cli` runs there
+    too, on every PR.
+  - The verifier's **wiring checks** (`checkWiring`) are ported against this
+    repo's real files, not the Inspector's `main.yml`. Two of the links they
+    assert don't exist yet, so each gets an explicit, temporary allowance
+    that a later issue removes: root `validate` reaching
+    `verify:format-coverage` (**S3 removes it**) and `local:gate` reaching
+    `verify:skills:cli` (**S10 removes it**).
 
 **S3 (#4864). TypeScript workspace gate: Prettier, ESLint, root `validate`, CI**
 - Scope: the #4473 design. Root Prettier config and `format` /
@@ -451,8 +460,9 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs; closing factory overview
   them (`npm run validate --workspaces`) plus any root-only guards.
   `verify:format-coverage` and `verify:typecheck-coverage` adapted.
   `typescript.yml` keeps its per-package matrix, and each leg runs **only its
-  own package's** `validate` rather than the whole monorepo. A separate
-  **root-guards CI job** runs what no package leg covers: the root `format`
+  own package's** `validate` rather than the whole monorepo. Removes S2's
+  temporary `verify:format-coverage` wiring allowance. The separate
+  **root-guards CI job** (created by S2) also runs what no package leg covers: the root `format`
   and `lint` of root files, `verify:format-coverage`,
   `verify:typecheck-coverage`, `test:scripts` (the guard scripts' own unit
   tests), and the shared-devDependency version guard
@@ -565,7 +575,8 @@ S2, S3, S4, #4854, #4855)
   validate, `verify:skills:cli`, per-file coverage for both languages, a thin
   per-server boot smoke over each transport the server implements (stdio for all seven; SSE and Streamable HTTP for `everything`), and #4860's interface diff.
   #4860 is independent, so **whichever of S10 and #4860 lands second** wires
-  the interface diff into `local:gate`, keeping "every check CI runs" true. `workflow-gate` ported, so no workflow can invoke a
+  the interface diff into `local:gate`, keeping "every check CI runs" true. Removes S2's temporary `verify:skills:cli` wiring allowance.
+  `workflow-gate` ported, so no workflow can invoke a
   `local:*` script. CI runs coverage as a **parallel job** (§7). `timeout-minutes`
   on every job. No test retries (asserted). `docs/quality-gate.md`. The
   `pre-push-gate` skill. The `AGENTS.md` rules: mandatory pre-push gate, and
@@ -601,6 +612,15 @@ is more than one PR.
 **S12 (#4873). `v2/main` → `main` milestone release flow and `release` skill** (after
 #4472, S10, S11; the ledger uses S11's `client-smoke`)
 - Scope:
+  - **A release issue per milestone** (`Release vX.Y.Z`), filed through
+    `issue-create`, that every preparation PR and the merge PR reference with
+    `Closes #N` on the first line. It closes by hand once the merge lands on
+    `main` and the Release is published. This is what keeps release PRs
+    inside "every PR references an issue" after S13 removes the Dependabot
+    exception. The one bot-authored PR, changesets' "Version Packages", gets
+    the reference added to its body after the bot opens it. If the action
+    overwrites the body on each update, `AGENTS.md` names it as the one
+    standing release-automation exception.
   - The preparation PRs, all on `v2/main`: the audit report (npm and
     `uv`/pip) with any fixes it forces, plus the bumps. #4472 makes the bumps
     **two separate PRs**, the changesets "Version Packages" PR for TS and the
