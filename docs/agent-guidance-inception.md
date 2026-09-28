@@ -334,7 +334,7 @@ Inspector files that can be copied in as starting points (paths on its
 | `scripts/gate-lease.mjs` (+ test) | `scripts/` | Env var rename (`SERVERS_SKIP_GATE_LEASE`). Imports `lib/win-shell-args.mjs`, which S2 already ports | S10 |
 | `scripts/lib/workflow-gate.mjs` (+ test) | `scripts/lib/` | Our workflow list and `local:*` scripts; drop the browser-engine rationale and its `lib/headless-browser.mjs` import | S10 |
 | `scripts/verify-format-coverage.mjs`, `scripts/verify-typecheck-coverage.mjs`, and `scripts/lib/tsc-program.mjs` (+ tests), which the latter imports | `scripts/` | Workspace globs instead of `clients/*`. Both also import S2's `lib/npm-scripts.mjs` | S3 |
-| `scripts/verify-action-pins.mjs` | `scripts/` | Workflow list. It imports `SHA_REF` from `dependency-refresh.mjs`, which doesn't land until S13, so **extract the SHA matcher into `scripts/lib/action-refs.mjs`** in S12; S13's `dependency-refresh` then imports it from there | S12 |
+| `scripts/verify-action-pins.mjs` (+ `verify-action-pins.test.mjs`, covering credential detection, transitive artifact producers and fail-closed workflow parsing) | `scripts/` | Workflow list. It imports `SHA_REF` from `dependency-refresh.mjs`, which doesn't land until S13, so **extract the SHA matcher into `scripts/lib/action-refs.mjs`** in S12; S13's `dependency-refresh` then imports it from there | S12 |
 | `scripts/dependency-refresh.mjs`, `scripts/dependabot-alerts.mjs`, `scripts/sdk-watch.mjs` + workflows | `scripts/`, `.github/workflows/` | Add the uv/PyPI ecosystem; SDK groups for TS and Python; board #43; labels | S13 |
 | `docs/skill-authoring.md` | `docs/` | Paths only | S2 |
 | `docs/quality-gate.md` | `docs/` | Rewrite for two languages; keep the structure (tiers table, local-only steps, lease) | S10 |
@@ -400,9 +400,9 @@ the Servers V2 board (#43). "After" means the listed issue must merge first.
 ```
 W1  #4859 inception (this doc)
 W2  S1 AGENTS.md · S2 skills harness · S4 Py validate · then S3 TS validate (after S2)
-W3  S5 board-ops + issue-create · S8 contribution model · S9 security-advisory · then S6 pr-flow (after S5) and S7 issue-triage (after S5, S8)
+W3  S5 board-ops + issue-create · S8 contribution model · then S6 pr-flow (after S5), S9 security-advisory (after S5) and S7 issue-triage (after S5, S8)
 W4  S10 local:gate + coverage + pre-push-gate (after S2, S3, S4, #4854, #4855) · S11 knowledge skills (after S2)
-W5  #4472 changesets + Release-triggered publish → S12 milestone release flow + release skill (after #4472, S10, S11)
+W5  #4472 changesets + Release-triggered publish → S12 milestone release flow + release skill (after #4472, S5, S10, S11)
 W6  S13 dependency & SDK sweeps replace Dependabot PRs; closing factory overview (after S5, S12)
 ```
 
@@ -561,9 +561,16 @@ S5 and S8)
     next milestone merge to `main`).
 
 **S9 (#4870). `security-advisory` skill; reconcile `SECURITY.md` and the advisory backlog**
+(after S5: the flow uses `board-ops` for the draft card and `issue-create` for
+public tracking)
 - Scope: adapt §6: draft `[GHSA-…]` card, ownership check (this server vs the
   SDK), accept/reject, private fork, fix, publish, public tracking. **Accept
-  and publish stay human-only.** Rewrite `SECURITY.md` so it matches the
+  and publish stay human-only.** Add the two narrow advisory exceptions to
+  `AGENTS.md`'s board rules, as the Inspector does: a `[GHSA-…]` **draft
+  card** is the one allowed non-issue card, and accepting an advisory moves
+  its (necessarily unmilestoned) draft from Incoming to Todo. Give the board
+  audit the matching `[GHSA-` carve-out; **whichever of S7 and S9 lands
+  second** adds it. Rewrite `SECURITY.md` so it matches the
   enabled private reporting. Plan how the 61-advisory triage backlog is worked
   (the plan only, not the triage itself).
 - Acceptance:
@@ -616,7 +623,8 @@ with its scope unchanged (§7). Its two bump PRs are why S12's preparation step
 is more than one PR.
 
 **S12 (#4873). `v2/main` → `main` milestone release flow and `release` skill** (after
-#4472, S10, S11; the ledger uses S11's `client-smoke`)
+#4472, S5, S10, S11; the release issue is filed through S5's `issue-create`,
+and the ledger uses S11's `client-smoke`)
 - Scope:
   - **A release issue per milestone** (`Release vX.Y.Z`), filed through
     `issue-create`. Every preparation PR (on `v2/main`, where closing
