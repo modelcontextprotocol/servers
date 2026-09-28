@@ -134,7 +134,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | `verify:action-pins` | Credentialed jobs use SHA pins with `# vX.Y.Z` | Transfer | — | S12 |
 | `verify:test-timeouts` | Resolves every Vitest project's budgets; asserts no `retry` | Adapt | Keep the no-retry assertion only. Defer the budgets machinery until a timeout problem shows up | S10 |
 | `verify:dep-lockstep` | One version per install-crossing dependency across 5 installs | Adapt | A single workspace lockfile can still resolve different versions per workspace, and the manifests already declare different ranges (e.g. `typescript` `^5.6.2` / `^5.8.2` / `^5.3.3`). The adaptation is a smaller guard: every **shared TS devDependency** (`typescript`, `vitest`, `@vitest/coverage-v8`, `prettier`, `@types/node`) is declared with one range across workspaces, or hoisted to the root. Python servers stay independent by design | S3 |
-| `verify:install-fresh` | `node_modules` matches its lockfile | N/A | Single workspace install; `npm ci` in CI already enforces it | — |
+| `verify:install-fresh` | `node_modules` matches its lockfile | Adapt | Root workspace install only. CI's `npm ci` is always fresh, but a long-lived local checkout can have a `node_modules` older than `package-lock.json`, so `local:gate` would test stale dependencies that CI doesn't. It runs in `local:gate` (and is harmless in CI) | S10 |
 | `verify:bundle-externals` / `verify:build-gate` | Bundler guards for tsup/Vite output | N/A | Servers compile with plain `tsc` | — |
 | `smoke:*` (launcher/cli/tui/web/engines), `local:storybook` | Built-artifact smokes of the three clients | Adapt | Inverted: a **boot smoke per server over each transport it implements** (stdio for all; SSE and Streamable HTTP for `everything`), from the built `dist/` (TS) and console script (Py): connect, list, call one tool. Only a thin spawn test, per #4854/#4855 | S10, S11 |
 | `pack:verify` (`pack-and-verify.mjs`) | Installs the exact publish tarball into a throwaway consumer and runs the bin | Adapt | Per package: `npm pack` → install → `npx` boot; `uv build` → install wheel → console-script boot | S12 |
@@ -403,7 +403,7 @@ W2  S1 AGENTS.md · S2 skills harness · S4 Py validate · then S3 TS validate (
 W3  S5 board-ops + issue-create · S8 contribution model · S9 security-advisory · then S6 pr-flow (after S5) and S7 issue-triage (after S5, S8)
 W4  S10 local:gate + coverage + pre-push-gate (after S2, S3, S4, #4854, #4855) · S11 knowledge skills (after S2)
 W5  #4472 changesets + Release-triggered publish → S12 milestone release flow + release skill (after #4472, S10, S11)
-W6  S13 dependency & SDK sweeps replace Dependabot PRs; closing factory overview
+W6  S13 dependency & SDK sweeps replace Dependabot PRs; closing factory overview (after S5, S12)
 ```
 
 ### Wave 2: rules and scaffolding (S1, S2 and S4 in parallel; S3 after S2)
@@ -580,6 +580,8 @@ S2, S3, S4, #4854, #4855)
   per-server boot smoke over each transport the server implements (stdio for all seven; SSE and Streamable HTTP for `everything`), and #4860's interface diff.
   #4860 is independent, so **whichever of S10 and #4860 lands second** wires
   the interface diff into `local:gate`, keeping "every check CI runs" true. Removes S2's temporary `verify:skills:cli` wiring allowance.
+  `verify:install-fresh` (root workspace install only) runs first, so the gate
+  never tests a stale `node_modules`.
   `workflow-gate` ported, so no workflow can invoke a
   `local:*` script. CI runs coverage as a **parallel job** (§7). `timeout-minutes`
   on every job. No test retries (asserted). `docs/quality-gate.md`. The
@@ -663,6 +665,7 @@ is more than one PR.
 ### Wave 6: automation
 
 **S13 (#4874). Replace Dependabot PRs with issue-filing sweeps; SDK watch; the factory overview**
+(after S5, and S12, whose `scripts/lib/action-refs.mjs` its `dependency-refresh` imports)
 - Scope:
   - Turn off automated security-fix PRs (a repo setting) and delete
     `dependabot.yml`; keep alerts on.
