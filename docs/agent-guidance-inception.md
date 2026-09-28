@@ -80,7 +80,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | Dependency updates are issue-driven | Dependabot PRs off; scheduled sweeps file issues | Adapt | npm **and** uv/PyPI **and** Actions ecosystems. Dependabot security-fix PRs are currently **on** here (§8) | S13 |
 | Action pinning (#2484) | SHA-pin actions in credentialed jobs, enforced by `verify:action-pins` | Transfer | `release.yml` holds `id-token: write` in `publish-npm` / `publish-pypi`, and `claude.yml` holds `id-token: write` + `ANTHROPIC_API_KEY`. Lands with the release split, **before** the first milestone release | S12 |
 | SDK watch (third sweep) | Nightly issue per MCP SDK release we're behind; a hardened LLM-in-CI `analyze` job | Adapt | Two SDKs, two registries (npm `@modelcontextprotocol/*`, PyPI `mcp`). The security posture carries over unchanged | S13 |
-| Contributing | External contributors file issues, not PRs, including org members with write access | Adapt | Same intent (a clear, enforced contribution policy), but the policy itself is deferred to a maintainer decision: this repo accepts outside PRs today (316 open). See §10 | S8 |
+| Contributing | External contributors file issues, not PRs, including org members with write access | Transfer | **Decided (§10): outside PRs are turned off, as in the Inspector.** External contributors, including org members with write access, file issues; maintainers open PRs. The existing backlog (316 open outside PRs) is handled per S8 | S8 |
 | Issue forms | Bug and feature forms, blank issues off, security routed to a private advisory | Adapt | Needs a server dropdown (7 servers) and a spec-era/client field. We have no forms today | S8 |
 | Every PR references an issue | `Closes #N` first line; no issue-less PRs | Transfer | Until S13 retires them, Dependabot still opens issue-less PRs. So S1 states the rule with an **explicit temporary exception for Dependabot PRs**, and S13 removes that exception | S1, S6, S13 |
 | Project Status and Direction | Branch table: `v2/main` develop, `main` release, `v1/main` maintenance | Adapt | No `v1/main` line here. `v2/main` develops and `main` releases (the default branch, and what users see) | S1 |
@@ -103,10 +103,10 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 
 | Skill | What it does | Verdict | Adaptation / reason | Sub-issue |
 | --- | --- | --- | --- | --- |
-| `board-ops` | `gh project` recipes for two boards; ID tables; resolving option IDs by name; the option-deletion hazard and its recovery | Adapt | One board, #43. Its fields: Status (with **Incoming**), Priority, Size. Hazard and recovery copy unchanged | S5 |
+| `board-ops` | `gh project` recipes for two boards; ID tables; resolving option IDs by name; the option-deletion hazard and its recovery | Adapt | One board, #43. Its fields: Status (with **Incoming**) and Priority. Hazard and recovery copy unchanged | S5 |
 | `issue-create` | Five-step create flow: version label, type label, milestone, card, Status + Priority; duplicate check across all states | Adapt | Version label is always `v2`. Add a **server-scope label** step (`server-<name>`). Milestone = nearest due v2.x | S5 |
 | `issue-triage` | Two-pass sweep (board as Incoming, then human approval), priority rubric with a score comment, 12-check board audit | Adapt | The **highest-leverage skill here** given the inflow (§3.4). Add spam/registry-redirect classes, server-scope labelling, and outside-PR triage | S7 |
-| `pr-flow` | Assign + In Progress, branch naming, DCO signoff, screenshots, `Closes #N`, `addCloseIssueReferences`, In Review, Copilot loop to exhaustion, per-thread replies, manual close-out | Adapt | Board #43; branch `v2/<type>/<N>-<slug>`. **DCO: deferred** to a maintainer decision in S6 (§10). No DCO app is installed here, and the recommendation is not to adopt one. **Screenshots → client evidence**: for a server-facing change, Inspector and LLM-client transcripts in both spec eras; otherwise a targeted probe (§3.2). The Copilot loop copies unchanged | S6 |
+| `pr-flow` | Assign + In Progress, branch naming, DCO signoff, screenshots, `Closes #N`, `addCloseIssueReferences`, In Review, Copilot loop to exhaustion, per-thread replies, manual close-out | Adapt | Board #43; branch `v2/<type>/<N>-<slug>`. **DCO: on, as in the Inspector** (decided, §10). S6 installs the DCO app and requires `git commit -s`. **Screenshots → client evidence**: for a server-facing change, Inspector and LLM-client transcripts in both spec eras; otherwise a targeted probe (§3.2). The Copilot loop copies unchanged | S6 |
 | `pre-push-gate` | Running `local:gate`; diagnosing each stage | Adapt | Rewrite around our stages: TS workspaces, Python per server, per-file coverage both sides | S10 |
 | `project-structure` | Where a file goes; who owns what | Adapt | Per-server layouts (e.g. `everything`'s `tools/`, `resources/`, `prompts/`, `transports/`) | S11 |
 | `local-dev` | Install/run each client; dependency-placement reasoning | Adapt | Workspaces + `uv`; running each server over the transports it implements (stdio for all seven; `everything` also serves SSE and Streamable HTTP); `npx`/`uvx` local builds | S11 |
@@ -170,7 +170,7 @@ The **Sub-issue** column points into [§9](#9-proposed-sub-issues).
 | Copilot review loop | Request via `requestReviews` (bot id `BOT_kgDOCnlnWA`), wait, answer, repeat until one clean round | Transfer | — | S6 |
 | `Co-Authored-By` trailer | Attributes agent-authored commits | Transfer | — | S6 |
 
-One element exists only here: board #43 also has a **Size** field (XS–XL) with no Inspector counterpart. S5 decides whether the create flow sets it.
+Board #43 also had a **Size** field (XS–XL) with no Inspector counterpart. It held no values and has been **deleted** (decided, §10).
 
 ## 3. What only this repo needs
 
@@ -244,8 +244,9 @@ classes:
 
 `issue-triage` (S7) needs a class and a canned response for each, plus
 server-scope labelling. The Inspector has neither, because it has no public
-PR inflow. Whether outside PRs keep being accepted is a policy call (S8, §10),
-and the triage recipe depends on the answer.
+PR inflow. Outside PRs are being turned off (S8, §10), so the triage recipe's
+PR half is short: close an outside PR with a pointer to the issue flow, after
+harvesting anything worth doing into an issue.
 
 ### 3.5 Security advisories for servers with real reach
 
@@ -275,7 +276,7 @@ deleting. Every section goes somewhere:
 | Build & Test Commands (Python) | Same as TS: `uv sync --frozen --all-extras --dev`, `uv run pytest` / `pyright` / `ruff check .`. Hatchling / `uv build` go to `local-dev` | S1, S4, S11 |
 | Code Style: TypeScript | `AGENTS.md` **TypeScript instructions**: the Inspector's rules plus our server idioms (ESM `.js` suffixes, Zod input schemas, naming, verb-first kebab-case tool names, import grouping). **2-space / trailing commas** become Prettier config and drop out of prose | S1, S3 |
 | Code Style: Python | `AGENTS.md` **Python instructions**: pyright-clean type hints, ruff, async/await + `pytest-asyncio`, per-server module layout | S1 |
-| Contributing Guidelines (accepted / selective / not accepted) | `AGENTS.md` **Contributing**, linking `CONTRIBUTING.md` rather than duplicating it. Revisited by the policy decision | S1, S8 |
+| Contributing Guidelines (accepted / selective / not accepted) | `AGENTS.md` **Contributing**, linking `CONTRIBUTING.md` rather than duplicating it. Rewritten for the issues-only policy (§10) | S1, S8 |
 | CI/CD Pipeline (dynamic package detection, test → build → publish) | **Dropped** from `AGENTS.md` as derivable: the workflows describe themselves. The CI-vs-local split goes to `docs/quality-gate.md`; release goes to `RELEASING.md` + the `release` skill. (The "publish on release events" line is already stale: `release.yml` is dispatch-only, #4466) | S10, S12 |
 | MCP Protocol Reference (`.mcp.json` docs server, schema repo) | `AGENTS.md`: a two-line rule to look protocol questions up via the `mcp-docs` server, with a link to the schema repo | S1 |
 | Key Patterns: `registerTools`/`registerResources`/`registerPrompts` | `AGENTS.md` TS instructions (the rule). Where each server keeps them goes to `project-structure` | S1, S11 |
@@ -300,7 +301,7 @@ here.
 | Project Structure: annotated `src/` tree with package name + registry | S1 | — |
 | Development setup / build & test commands | S1, S11 | — |
 | Repository & board: repo, base branch, single board #43 | S1 | **Base branch is `v2/main`**, not `main` (#4473 predates the `v2/main` flow) |
-| `gh` recipes + stable-ID table | **S5 (`board-ops`), not `AGENTS.md`** | The Inspector keeps IDs in exactly one place, the skill, and resolves option IDs **by name** at run time, because option IDs change whenever the option list is edited. The #4473 table is also incomplete: it lacks **Incoming** (`9f267269`), **Priority** and **Size** |
+| `gh` recipes + stable-ID table | **S5 (`board-ops`), not `AGENTS.md`** | The Inspector keeps IDs in exactly one place, the skill, and resolves option IDs **by name** at run time, because option IDs change whenever the option list is edited. The #4473 table is also incomplete: it lacks **Incoming** (`9f267269`) and **Priority** |
 | Issue-driven work style (created = labelled + boarded + Status; issues only; no drafts; dedupe; assign; status flow; `Closes #N` first line; new work → new issues) | S1 (rules), S5, S6 (recipes) | On `v2/main`, `Closes #N` does **not** auto-close. Close by hand, move to Done, and link with `addCloseIssueReferences` |
 | Maintenance rules (READMEs, per-server READMEs, `RELEASING.md`, `AGENTS.md`; link, don't duplicate) | S1 | — |
 | Always test new or modified code | S1 (baseline), S10 (the per-file 90 rule) | #4473's "no 90% gate on day one" is superseded by #4854/#4855 |
@@ -320,10 +321,10 @@ Inspector files that can be copied in as starting points (paths on its
 | Inspector file | Copy to | Edits needed | Sub-issue |
 | --- | --- | --- | --- |
 | `AGENTS.md` | `AGENTS.md` | Keep: header, Skills index, Maintenance rules, Maintaining the skills, Issue-driven Work Style, Responding to Code Reviews, Waiting on long-running work, Build output is never a gate target, Lint has no warning tier, TypeScript instructions. Rewrite: Project Structure, Development setup, Project Status (drop `v1/main`), Contributing. Drop: Dependency placement (keep the `overrides` rule), web layout, React, auth token, SDK-watch internals (they belong in the workflow's own comments). Add: Python instructions, MCP server idioms, protocol lookup | S1 |
-| `.claude/skills/board-ops/SKILL.md` | same | Board #43 only; Status/Priority/Size; drop #11 and the dual-Priority-field section; keep the option-deletion hazard and recovery verbatim | S5 |
+| `.claude/skills/board-ops/SKILL.md` | same | Board #43 only; Status/Priority; drop #11 and the dual-Priority-field section; keep the option-deletion hazard and recovery verbatim | S5 |
 | `.claude/skills/issue-create/SKILL.md` | same | `--repo modelcontextprotocol/servers`; no v1 rows; add a server-scope label step; `chore` type | S5 |
 | `.claude/skills/issue-triage/SKILL.md` | same | One board; the rubric's severity axis reworded for servers ("reports something false about the protocol", "escapes an allowed root"); add spam/registry/duplicate-PR classes; audit checks for one board. **Update the total-issue-count `--limit`** (this repo has far more issues than 884) | S7 |
-| `.claude/skills/pr-flow/SKILL.md` | same | Repo, board 43, branch naming; drop DCO (unless adopted) and screenshots; add client evidence; the Copilot loop copies as is | S6 |
+| `.claude/skills/pr-flow/SKILL.md` | same | Repo, board 43, branch naming; keep DCO (adopted, §10); drop screenshots; add client evidence; the Copilot loop copies as is | S6 |
 | `.claude/skills/pre-push-gate/SKILL.md` | same | Rewrite the stage list for our gate; keep "verify by exit code, not by grepping" and "waiting on the lease" | S10 |
 | `.claude/skills/release/SKILL.md` | same | Two registries; per-package versions; changesets / CalVer; the `release` environment approvals; keep the two-PR shape, "bump on `v2/main` first", "never back-merge `main`" and the ledger | S12 |
 | `.claude/skills/security-advisory/SKILL.md` | same | One line (no v1 path); server reach classes; SDK routing | S9 |
@@ -345,7 +346,7 @@ Inspector files that can be copied in as starting points (paths on its
 | Issue | Decision |
 | --- | --- |
 | **#4472**: release Phase 2, changesets (TS) + GitHub-Release-triggered publishing | **Fold in as a sub-issue of #4858, unchanged in scope, in Wave 5.** It is the versioning and publish half of the release flow; the milestone-merge half is new (S12) and depends on it. Two notes to add to #4472: it lands on `v2/main` like everything else, and its `release: [published]` trigger must fire from `main` after a milestone merge. |
-| **#4854 / #4855**: per-file 90% coverage, TS / Python | **Stay under #4857** (they're the refactor's regression net). The factory depends on them and doesn't duplicate them: S10 wires their `coverage` commands into `local:gate` and CI and writes the `AGENTS.md` coverage rule (their carry-over task). **One correction to feed back:** both say the coverage gate stays local "following the Inspector", but the Inspector's CI now runs `coverage` as a parallel job (#2159). S10 recommends the same. |
+| **#4854 / #4855**: per-file 90% coverage, TS / Python | **Stay under #4857** (they're the refactor's regression net). The factory depends on them and doesn't duplicate them: S10 wires their `coverage` commands into `local:gate` and CI and writes the `AGENTS.md` coverage rule (their carry-over task). **One correction to feed back:** both said the coverage gate stays local "following the Inspector", but the Inspector's CI now runs `coverage` as a parallel job (#2159). **Decided (§10): CI enforces coverage here too**, and #4854/#4855 are amended to match. |
 | **#4857**: 2026-07-28 spec refactor tracker | Unchanged. Its "verify against both eras with the Inspector and an LLM client" rule becomes the `client-smoke` skill (S11) and the `pr-flow` evidence step (S6). |
 | **#4860**: interface-diff CI for `everything` | Unchanged. S10 includes it in the gate once it lands. |
 | **#4473**: `AGENTS.md` plan | Closed, superseded by #4859. Every decision is mapped in §5. |
@@ -365,7 +366,7 @@ Facts discovered while writing this doc. Each is owned by a sub-issue.
 4. **No `chore` label.** The five-type taxonomy needs it. → S5.
 5. **No issue forms.** Blank issues are the only path. → S8.
 6. **No DCO app is installed**, so the Inspector's signoff rule has nothing to
-   enforce it. → S6 / §10.
+   enforce it. DCO is adopted (§10). → S6.
 7. **No CI job declares `timeout-minutes`.** → S10.
 8. **`release.yml` builds, installs and publishes in the job holding
    `id-token: write`.** The Inspector split these after #2483. → S12.
@@ -485,8 +486,8 @@ in Wave 4) also removes S2's empty-skills bootstrap allowance. That is part of
 each one's acceptance.
 
 **S5 (#4866). `board-ops` and `issue-create` skills; label taxonomy**
-- Scope: adapt both skills (§6). Create the `chore` label. Decide whether the
-  create flow sets Size. Server-scope labels (`server-<name>`) are part of
+- Scope: adapt both skills (§6). Create the `chore` label. Board #43's Size field
+  is already deleted (§10), so the create flow sets only Status and Priority. Server-scope labels (`server-<name>`) are part of
   create **where the issue concerns one server** (repo-wide issues carry
   none). Board #43's IDs live **only** in `board-ops`, and option IDs are
   resolved by name.
@@ -502,20 +503,24 @@ each one's acceptance.
   assign and move to In Progress; the gate; `Closes #N` on the first line;
   `addCloseIssueReferences`; In Review; the Copilot review loop to exhaustion;
   per-thread replies plus a PR summary; manual close and Done on merge. A
-  **client-evidence** step replaces screenshots (§3.2). Settle DCO (§10).
+  **client-evidence** step replaces screenshots (§3.2). **DCO is on** (§10):
+  install the DCO app, sign off every commit with `git commit -s`, and add the
+  signoff rule to `AGENTS.md` once the app enforces it.
 - Acceptance:
+  - The DCO app is installed and fails a PR with an unsigned commit.
   - A PR taken end to end through the skill.
   - The loop's exits (clean round / out-of-scope only / two silent rounds /
     timeout) documented.
   - Eval cases pass the threshold.
 
 **S7 (#4868). `issue-triage` skill and board audit, for community inflow** (after
-S5; its outside-PR half after S8)
+S5 and S8)
 - Scope: adapt §6. Two-pass sweep (Incoming → approval), rubric with a posted
   score comment, the board audit. Add triage classes for server submissions,
   README/`ADDITIONAL.md` listing PRs, new-server implementations, duplicate
   racing fixes and no-op PRs, each with a canned response and close/label
-  action. Fold in `readme-pr-check.yml`'s behavior.
+  action. With outside PRs off (§10), every outside PR gets the same close
+  with a pointer to the issue flow. Fold in `readme-pr-check.yml`'s behavior.
 - Acceptance:
   - A triage pass over the current open backlog runs, and the audit prints all
     zeros afterwards.
@@ -523,13 +528,18 @@ S5; its outside-PR half after S8)
   - Eval cases pass the threshold.
 
 **S8 (#4869). Contribution model: outside PRs, `CONTRIBUTING.md`, templates, issue forms**
-- Scope: a maintainer decision (§10) on whether outside PRs are still accepted
-  or whether the repo moves to issues-only like the Inspector. Then make
-  `CONTRIBUTING.md`, the PR template and new issue forms (bug / feature, with
-  a server dropdown and spec-era field; security → private advisory;
-  new-server → Registry) match it.
+- Scope: **decided (§10): outside PRs are turned off, as in the Inspector.**
+  External contributors, org members with write access included, file
+  detailed issues (sharing the prompt they used, not a diff), and maintainers
+  open every PR. Make `CONTRIBUTING.md`, `AGENTS.md`'s Contributing section,
+  the PR template (the Inspector's "issues, not PRs" banner) and new issue
+  forms (bug / feature, with a server dropdown and spec-era field; security →
+  private advisory; new-server → Registry) say so. Decide how the open
+  outside-PR backlog is handled (for example, close each with a pointer to the
+  issue flow, filing an issue for any fix worth keeping); S7's triage pass
+  carries it out.
 - Acceptance:
-  - The decision is recorded on the issue by a maintainer.
+  - The decision is recorded on the issue.
   - The docs and templates match it.
   - Forms are validated against GitHub's schema (they only go live after the
     next milestone merge to `main`).
@@ -645,19 +655,19 @@ is more than one PR.
   - A closing `docs/ai-software-factory.md` for this repo, written once the
     whole factory, this automation included, has landed.
 
-## 10. Open questions for maintainers
+## 10. Maintainer decisions
 
-1. **Outside PRs (S8).** The Inspector accepts issues, not PRs. This repo has
-   316 open PRs and a long record of accepted community fixes. Options: keep
-   accepting PRs (and triage them, S7); accept only for bug fixes with a linked
-   issue; or go issues-only. S7 and S8 wait on this.
-2. **DCO (S6).** Adopt the DCO app so `git commit -s` is enforced, or leave
-   signoff out? The recommendation is to leave it out unless outside PRs
-   continue at volume.
-3. **Coverage in CI (S10).** The recommendation is to enforce it in CI as the
-   Inspector now does (§7), which reverses the "local-only" note in
-   #4854/#4855.
-4. **Size field (S5).** Set Size at create time, or leave it for maintainers?
-5. **Milestones.** All sub-issues start in the parent's milestone (`v2.0.0`).
-   Waves 4–6 probably belong in a later bucket; re-milestone them when the
-   release schedule is set.
+These were open questions in the first draft of this doc; the maintainers
+answered them on PR #4861.
+
+1. **Outside PRs (S8): turned off, as in the Inspector.** External
+   contributors file issues; maintainers open PRs. S8 rewrites the policy docs
+   and templates and plans the open backlog; S7 carries it out.
+2. **DCO (S6): on, as in the Inspector.** S6 installs the DCO app and requires
+   `git commit -s` on every commit.
+3. **Coverage in CI (S10): yes.** CI enforces the per-file gate in a parallel
+   job, as the Inspector does. #4854 and #4855 are amended where they said the
+   gate stays local.
+4. **Size field (S5): removed.** Board #43's Size field held no values and has
+   been deleted.
+5. **Milestones: kept as is.** Every sub-issue stays in `v2.0.0`.
