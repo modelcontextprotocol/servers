@@ -1,6 +1,11 @@
+import ipaddress
+import os
+import socket
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
+import httpx
+from httpx import HTTPError
 import markdownify
 import readabilipy.simple_json
 from mcp.shared.exceptions import McpError
@@ -22,6 +27,88 @@ from pydantic import BaseModel, Field, AnyUrl
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
+
+RESTRICTED_METADATA_IPS = {
+    ipaddress.ip_address("169.254.169.254"),
+    ipaddress.ip_address("100.100.100.100"),
+}
+
+
+def _is_restricted_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Check if an IP address is private, loopback, link-local, reserved, multicast, unspecified, or cloud metadata."""
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        if _is_restricted_ip(ip.ipv4_mapped):
+            return True
+
+    if (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    ):
+        return True
+
+    if ip in RESTRICTED_METADATA_IPS:
+        return True
+
+    return False
+
+
+def is_private_or_restricted_host(host: str | None) -> bool:
+    """Check if a host resolves to a private or restricted network address.
+
+    Args:
+        host: Hostname or IP address to check.
+
+    Returns:
+        True if the host is private or restricted, False otherwise.
+    """
+    if not host:
+        return True
+
+    allow_private = os.environ.get("FETCH_ALLOW_PRIVATE_IPS", "").strip().lower()
+    if allow_private in ("1", "true"):
+        return False
+
+    host_clean = host.strip().lower()
+    if host_clean.startswith("[") and host_clean.endswith("]"):
+        host_clean = host_clean[1:-1]
+
+    if host_clean in ("localhost", "0.0.0.0") or host_clean.endswith(".local"):
+        return True
+
+    try:
+        ip = ipaddress.ip_address(host_clean)
+        if _is_restricted_ip(ip):
+            return True
+    except ValueError:
+        pass
+
+    try:
+        addr_infos = socket.getaddrinfo(host_clean, None)
+        for addr in addr_infos:
+            ip_str = addr[4][0]
+            ip = ipaddress.ip_address(ip_str)
+            if _is_restricted_ip(ip):
+                return True
+    except (socket.gaierror, socket.herror):
+        return False
+
+    return False
+
+
+async def _validate_request_host(request: httpx.Request) -> None:
+    """Event hook to validate request destination host against SSRF restrictions."""
+    host = request.url.host
+    if is_private_or_restricted_host(host):
+        raise McpError(
+            ErrorData(
+                code=INVALID_PARAMS,
+                message=f"Access to private or restricted network address '{host}' is prohibited",
+            )
+        )
 
 
 def extract_content_from_html(html: str) -> str:
@@ -68,11 +155,22 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
     """
-    from httpx import AsyncClient, HTTPError
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+    if is_private_or_restricted_host(hostname):
+        raise McpError(
+            ErrorData(
+                code=INVALID_PARAMS,
+                message=f"Access to private or restricted network address '{hostname}' is prohibited",
+            )
+        )
 
     robot_txt_url = get_robots_txt_url(url)
 
-    async with AsyncClient(proxy=proxy_url) as client:
+    async with httpx.AsyncClient(
+        proxy=proxy_url,
+        event_hooks={"request": [_validate_request_host]},
+    ) as client:
         try:
             response = await client.get(
                 robot_txt_url,
@@ -114,9 +212,20 @@ async def fetch_url(
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
     """
-    from httpx import AsyncClient, HTTPError
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+    if is_private_or_restricted_host(hostname):
+        raise McpError(
+            ErrorData(
+                code=INVALID_PARAMS,
+                message=f"Access to private or restricted network address '{hostname}' is prohibited",
+            )
+        )
 
-    async with AsyncClient(proxy=proxy_url) as client:
+    async with httpx.AsyncClient(
+        proxy=proxy_url,
+        event_hooks={"request": [_validate_request_host]},
+    ) as client:
         try:
             response = await client.get(
                 url,
