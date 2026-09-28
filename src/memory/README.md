@@ -62,7 +62,7 @@ Example:
       - `name` (string): Entity identifier
       - `entityType` (string): Type classification
       - `observations` (string[]): Associated observations
-  - Ignores entities with existing names
+  - Ignores entities with existing names, and lists them in `skipped` (use `add_observations` to extend an existing entity)
 
 - **create_relations**
   - Create multiple new relations between entities
