@@ -695,6 +695,29 @@ describe('KnowledgeGraphManager', () => {
       expect(graph.entities).toHaveLength(2);
       expect(graph.entities.map(e => e.name)).toEqual(['Alice', 'Bob']);
     });
+
+    it('keeps lines it cannot read when an unrelated write saves the graph', async () => {
+      const unreadable = [
+        JSON.stringify({ type: 'entity', name: 'Broken', observations: ['missing entityType'] }),
+        JSON.stringify({ type: 'entity', name: 'BadObs', entityType: 'person', observations: ['allergic to penicillin', null] }),
+        '{this is not valid json',
+        JSON.stringify({ type: 'note', text: 'written by another tool' }),
+      ];
+      const lines = [
+        JSON.stringify({ type: 'entity', name: 'Alice', entityType: 'person', observations: [] }),
+        ...unreadable,
+      ];
+      await fs.writeFile(testFilePath, lines.join('\n') + '\n');
+
+      await manager.createEntities([{ name: 'Carol', entityType: 'person', observations: [] }]);
+
+      const saved = (await fs.readFile(testFilePath, 'utf-8')).split('\n');
+      for (const line of unreadable) {
+        expect(saved).toContain(line);
+      }
+      const graph = await manager.readGraph();
+      expect(graph.entities.map(e => e.name)).toEqual(['Alice', 'Carol']);
+    });
   });
 
   describe('concurrent mutations', () => {
