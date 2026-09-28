@@ -327,14 +327,14 @@ Inspector files that can be copied in as starting points (paths on its
 | `.claude/skills/issue-triage/SKILL.md` | same | One board; the rubric's severity axis reworded for servers ("reports something false about the protocol", "escapes an allowed root"); add spam/registry/duplicate-PR classes; audit checks for one board. **Update the total-issue-count `--limit`** (this repo has far more issues than 884) | S7 |
 | `.claude/skills/pr-flow/SKILL.md` | same | Repo, board 43, branch naming; keep DCO (adopted, §10); drop screenshots; add client evidence; the Copilot loop copies as is | S6 |
 | `.claude/skills/pre-push-gate/SKILL.md` | same | Rewrite the stage list for our gate; keep "verify by exit code, not by grepping" and "waiting on the lease" | S10 |
-| `.claude/skills/release/SKILL.md` | same | Two registries; per-package versions; changesets / CalVer; the `release` environment approvals; keep the two-PR shape, "bump on `v2/main` first", "never back-merge `main`" and the ledger | S12 |
+| `.claude/skills/release/SKILL.md` | same | Two registries; per-package versions; changesets / CalVer; the `release` environment approvals; keep the shape of preparation PRs then one pure merge PR (here: audit, TS "Version Packages" and Python CalVer PRs, then the merge; §9 S12), "bump on `v2/main` first", "never back-merge `main`" and the ledger | S12 |
 | `.claude/skills/security-advisory/SKILL.md` | same | One line (no v1 path); server reach classes; SDK routing | S9 |
 | `.claude/skills/*/evals/evals.json` | same | Rewrite the prompts in our terms; keep ≥ 5 positives + negatives per model-invoked skill | S2 and each skill PR |
-| `scripts/verify-skills.mjs`, `scripts/verify-skills-cli.mjs`, `scripts/skill-eval.mjs`, `scripts/lib/skill-manifest.mjs`, `scripts/lib/claude-cli.mjs` (+ their `*.test.mjs`) | `scripts/` | Paths and skill list; a budget recomputed for our skill set | S2 |
-| `scripts/gate-lease.mjs` (+ test) | `scripts/` | Env var rename (`SERVERS_SKIP_GATE_LEASE`) | S10 |
-| `scripts/lib/workflow-gate.mjs` (+ test) | `scripts/lib/` | Our workflow list and `local:*` scripts; drop the browser-engine rationale | S10 |
-| `scripts/verify-format-coverage.mjs`, `scripts/verify-typecheck-coverage.mjs` | `scripts/` | Workspace globs instead of `clients/*` | S3 |
-| `scripts/verify-action-pins.mjs` | `scripts/` | Workflow list | S12 |
+| `scripts/verify-skills.mjs`, `scripts/verify-skills-cli.mjs`, `scripts/skill-eval.mjs`, `scripts/lib/skill-manifest.mjs`, `scripts/lib/claude-cli.mjs`, and the helpers they import, `scripts/lib/npm-scripts.mjs` and `scripts/lib/win-shell-args.mjs` (+ all their `*.test.mjs`) | `scripts/` | Paths and skill list; a budget recomputed for our skill set. S3 and S10 reuse the two helpers | S2 |
+| `scripts/gate-lease.mjs` (+ test) | `scripts/` | Env var rename (`SERVERS_SKIP_GATE_LEASE`). Imports `lib/win-shell-args.mjs`, which S2 already ports | S10 |
+| `scripts/lib/workflow-gate.mjs` (+ test) | `scripts/lib/` | Our workflow list and `local:*` scripts; drop the browser-engine rationale and its `lib/headless-browser.mjs` import | S10 |
+| `scripts/verify-format-coverage.mjs`, `scripts/verify-typecheck-coverage.mjs`, and `scripts/lib/tsc-program.mjs` (+ tests), which the latter imports | `scripts/` | Workspace globs instead of `clients/*`. Both also import S2's `lib/npm-scripts.mjs` | S3 |
+| `scripts/verify-action-pins.mjs` | `scripts/` | Workflow list. It imports `SHA_REF` from `dependency-refresh.mjs`, which doesn't land until S13, so **extract the SHA matcher into `scripts/lib/action-refs.mjs`** in S12; S13's `dependency-refresh` then imports it from there | S12 |
 | `scripts/dependency-refresh.mjs`, `scripts/dependabot-alerts.mjs`, `scripts/sdk-watch.mjs` + workflows | `scripts/`, `.github/workflows/` | Add the uv/PyPI ecosystem; SDK groups for TS and Python; board #43; labels | S13 |
 | `docs/skill-authoring.md` | `docs/` | Paths only | S2 |
 | `docs/quality-gate.md` | `docs/` | Rewrite for two languages; keep the structure (tiers table, local-only steps, lease) | S10 |
@@ -399,14 +399,14 @@ the Servers V2 board (#43). "After" means the listed issue must merge first.
 
 ```
 W1  #4859 inception (this doc)
-W2  S1 AGENTS.md · S2 skills harness · S3 TS validate · S4 Py validate
+W2  S1 AGENTS.md · S2 skills harness · S4 Py validate · then S3 TS validate (after S2)
 W3  S5 board-ops + issue-create · S8 contribution model · S9 security-advisory · then S6 pr-flow (after S5) and S7 issue-triage (after S5, S8)
 W4  S10 local:gate + coverage + pre-push-gate (after S2, S3, S4, #4854, #4855) · S11 knowledge skills (after S2)
 W5  #4472 changesets + Release-triggered publish → S12 milestone release flow + release skill (after #4472, S10, S11)
 W6  S13 dependency & SDK sweeps replace Dependabot PRs; closing factory overview
 ```
 
-### Wave 2: rules and scaffolding (parallel)
+### Wave 2: rules and scaffolding (S1, S2 and S4 in parallel; S3 after S2)
 
 **S1 (#4862). `AGENTS.md`: the absolute rules; delete `CLAUDE.md`**
 - Scope: write `AGENTS.md` from the Inspector's template (§6), holding only
@@ -451,7 +451,8 @@ W6  S13 dependency & SDK sweeps replace Dependabot PRs; closing factory overview
     `verify:format-coverage` (**S3 removes it**) and `local:gate` reaching
     `verify:skills:cli` (**S10 removes it**).
 
-**S3 (#4864). TypeScript workspace gate: Prettier, ESLint, root `validate`, CI**
+**S3 (#4864). TypeScript workspace gate: Prettier, ESLint, root `validate`, CI** (after
+S2, whose root-guards job it extends and whose wiring allowance it removes)
 - Scope: the #4473 design. Root Prettier config and `format` /
   `format:check`; a root ESLint flat config, type-aware, `--max-warnings 0`,
   `no-floating-promises` at error, build output ignored. A **per-workspace
@@ -644,8 +645,11 @@ is more than one PR.
     this flow**, with `verify:action-pins` enforcing it: `release.yml`'s
     publish jobs, **every job whose artifact a credentialed job downloads**
     (the build/pack jobs the split introduces), and `claude.yml`
-    (`id-token: write`, `ANTHROPIC_API_KEY`). Add the `AGENTS.md`
-    SHA-pinning rule.
+    (`id-token: write`, `ANTHROPIC_API_KEY`). Wire `verify:action-pins` into
+    the continuously run chain: root `validate`'s guards, S2's root-guards
+    CI job, and `local:gate`. Extract the SHA matcher into
+    `scripts/lib/action-refs.mjs` (§6), so S12 doesn't depend on S13. Add
+    the `AGENTS.md` SHA-pinning rule.
   - The `release` skill (name-only).
   - `RELEASING.md` rewritten for the merged state.
 - Acceptance:
