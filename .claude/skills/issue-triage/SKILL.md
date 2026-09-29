@@ -310,7 +310,7 @@ gh api "repos/$R/collaborators?per_page=100" --paginate \
 jq -r --slurpfile m "$D/maintainers.json" '
   ["everything","filesystem","memory","sequentialthinking","fetch","git","time"] as $seven
   | .[] | .author.login as $a | [.files[].path] as $p
-  | (if ($a | test("dependabot")) then "dependabot"
+  | (if $a == "app/dependabot" then "dependabot"
      elif ($m[0] | index($a)) then "maintainer"
      elif ($p | length) > 0 and ($p | all(. == "README.md" or . == "ADDITIONAL.md")) then "listing?"
      elif ($p | any(startswith("src/") and ((split("/")[1]) as $d | $seven | index($d) | not))) then "new-server?"
@@ -352,7 +352,7 @@ they fix the same thing:
 ```sh
 # Outside PRs grouped by their exact set of changed files; each line is a candidate group.
 jq -r --slurpfile m "$D/maintainers.json" '
-  [.[] | select((.author.login | test("dependabot")) | not)
+  [.[] | select(.author.login != "app/dependabot")
        | select(.author.login as $a | $m[0] | index($a) | not)
        | {n: .number, key: ([.files[].path] | sort | join(" "))}]
   | group_by(.key)[] | select(length > 1)
@@ -403,6 +403,8 @@ while IFS=$'\t' read -r PR CLASS ISSUE _; do
     security) echo "skipping #$PR: a security fix closes only on a maintainer's call" >&2; continue ;;
     *) echo "unknown class '$CLASS' on #$PR — stopping; fix the manifest" >&2; break ;;
   esac
+  # A missing or unfilled response must never become a close with no explanation.
+  case "$BODY" in ""|*"#ISSUE"*) echo "no usable response for #$PR — stopping" >&2; break ;; esac
   [ -n "$SWEEP_REF" ] && BODY="$BODY"$'\n\n'"This is part of the backlog triage in $SWEEP_REF."
   if [ -n "$SWEEP_LABEL" ]; then
     gh pr edit "$PR" --repo modelcontextprotocol/servers --add-label "$SWEEP_LABEL" </dev/null \
@@ -550,6 +552,7 @@ is read-only.
 | Open, no Priority | Every board item is prioritized | Score it with the rubric |
 | Closed unshipped, still carded | **`Done` means the work shipped** | Delete the card |
 | Open, but carded `Done` | A card in `Done` means its issue is closed | Close the issue, or move the card back |
+| Closed as completed, not in `Done` | Shipped work sits in `Done` | Move the card to `Done` |
 
 ```sh
 D=$(mktemp -d); R=modelcontextprotocol/servers; LIMIT=5000
@@ -601,7 +604,10 @@ jq -nr --slurpfile o "$D/i.json" --slurpfile a "$D/b43.json" --arg R "$R" '
     "closed unshipped, still carded":
                              [$B[] | select(I(.n) != null and (isopen(.n) | not)
                                             and (shipped(.n) | not)) | .n],
-    "open, but carded Done": [$B[] | select(.s == "Done" and isopen(.n)) | .n]
+    "open, but carded Done": [$B[] | select(.s == "Done" and isopen(.n)) | .n],
+    "closed completed, not Done":
+                             [$B[] | select(I(.n) != null and (isopen(.n) | not) and shipped(.n)
+                                            and .s != "Done") | .n]
   } | to_entries[] | "\(.value|length)\t\(.key)\t\(.value[0:10])"'
 ```
 
@@ -630,9 +636,11 @@ What the queries account for:
 - **Count the type labels; don't test for presence.** The invariant is
   _exactly one_, and a presence test passes an issue labeled both `bug` and
   `enhancement`.
-- **`Done` is checked from both sides.** One check catches a card in `Done` for
-  work that never shipped; the other catches an issue still **open** under a
-  `Done` card. Closing keywords do not fire on `v2/main`, so every issue is
+- **`Done` is checked from all sides.** One check catches a card for work that
+  never shipped; one catches an issue still **open** under a `Done` card; and
+  one catches an issue closed as completed whose card never reached `Done`.
+  Priority is checked on open issues only: a closed card's Priority no longer
+  orders any queue. Closing keywords do not fire on `v2/main`, so every issue is
   closed by hand after its PR merges, and forgetting that is the usual way this
   breaks.
 - **`$M` holds closed issues too**, because the last checks read closed issues'

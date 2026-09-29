@@ -176,7 +176,8 @@ this plan:
 - **`readme-pr-check.yml`** invited README-only PRs to continue with
   `/i-promise-this-is-not-a-new-server`, which no longer matched the policy.
   #4868 retired it and folded its behavior into `issue-triage`: a README-only
-  PR is the listing class, answered with the Registry comment.
+  PR pre-classifies as a listing, and reading it decides the class (a fix to an
+  existing entry can still be one to keep).
 - **Automatic closing** of outside PRs (a workflow, as maintainer PR #4528
   proposes for new-server PRs, or a repository setting where GitHub offers one)
   is a maintainer decision about repository settings and workflows.
