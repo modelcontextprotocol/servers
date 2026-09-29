@@ -4,12 +4,31 @@ import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { setAllowedDirectories, validatePath } from "../lib.js";
 
+/** True when this file system stores "café" composed and decomposed as two entries. */
+async function holdsBothNormalizationForms(): Promise<boolean> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mcp-unicode-probe-"));
+  try {
+    await fs.mkdir(path.join(dir, "caf\u00e9"));
+    await fs.mkdir(path.join(dir, "cafe\u0301"));
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
+    throw error;
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}
+
+const distinctForms = await holdsBothNormalizationForms();
+
 describe("Unicode-equivalent filesystem paths", () => {
   let testDirectory: string;
 
   beforeEach(async () => {
-    testDirectory = await fs.mkdtemp(
-      path.join(os.tmpdir(), "mcp-unicode-paths-"),
+    // Realpath the temp directory: on macOS os.tmpdir() is under /var, a
+    // symlink to /private/var, and validatePath compares realpaths.
+    testDirectory = await fs.realpath(
+      await fs.mkdtemp(path.join(os.tmpdir(), "mcp-unicode-paths-")),
     );
     setAllowedDirectories([testDirectory]);
   });
@@ -53,14 +72,19 @@ describe("Unicode-equivalent filesystem paths", () => {
     );
   });
 
-  it("rejects ambiguous canonically equivalent entries", async () => {
-    const composed = "caf\u00e9";
-    const decomposed = "cafe\u0301";
-    await fs.mkdir(path.join(testDirectory, composed));
-    await fs.mkdir(path.join(testDirectory, decomposed));
+  // Normalization-insensitive file systems (APFS, HFS+) treat both spellings as
+  // one name, so the ambiguous state this test asserts on cannot be created.
+  it.skipIf(!distinctForms)(
+    "rejects ambiguous canonically equivalent entries",
+    async () => {
+      const composed = "caf\u00e9";
+      const decomposed = "cafe\u0301";
+      await fs.mkdir(path.join(testDirectory, composed));
+      await fs.mkdir(path.join(testDirectory, decomposed));
 
-    await expect(
-      validatePath(path.join(testDirectory, "cafe\u0341", "file.txt")),
-    ).rejects.toThrow("Ambiguous Unicode path component");
-  });
+      await expect(
+        validatePath(path.join(testDirectory, "cafe\u0341", "file.txt")),
+      ).rejects.toThrow("Ambiguous Unicode path component");
+    },
+  );
 });
