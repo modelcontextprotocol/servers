@@ -81,7 +81,11 @@ one, list them with their classes for a maintainer to confirm, and go on with
 pass 1 for the rest meanwhile.
 
 ```sh
-# Close as not planned, with the class's response (body in a file, so quoting is
+# The run's temp dir; create it once, before the first close, and reuse it.
+D=${D:-$(mktemp -d)}
+# Copy the class's response from Canned responses into "$D/response.md" (the
+# text inside the quote, with #ORIGINAL or the SDK link filled in) first.
+# Close as not planned, with that response (body in a file, so quoting is
 # safe). An empty or missing response stops here instead of closing silently.
 BODY=$(cat "$D/response.md") && [ -n "$BODY" ] \
   && gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned" --comment "$BODY" \
@@ -310,9 +314,12 @@ gh pr list --repo $R --state open --limit 2000 \
   > "$D/prs.json"
 jq -e 'length < 2000' "$D/prs.json" >/dev/null \
   || { echo "PR listing truncated or failed — raise --limit" >&2; rm -f "$D/prs.json"; }
-gh api "repos/$R/collaborators?per_page=100" --paginate \
-  --jq '[.[] | select(.role_name=="admin" or .role_name=="maintain") | .login]' \
-  | jq -s 'add' > "$D/maintainers.json" || rm -f "$D/maintainers.json"
+# Captured first, so a failed page fails the step instead of yielding a short
+# list that would turn maintainers into outside authors.
+RAW=$(gh api "repos/$R/collaborators?per_page=100" --paginate --slurp) \
+  && jq '[.[][] | select(.role_name=="admin" or .role_name=="maintain") | .login]' \
+       <<<"$RAW" > "$D/maintainers.json" \
+  || { echo "maintainer list failed" >&2; rm -f "$D/maintainers.json"; }
 # A first-guess class from the paths alone. It is a HINT for the reading below,
 # never the manifest: a "server change" can be a no-op, a racing duplicate or a
 # security fix, and only reading the diff tells which.
@@ -326,8 +333,9 @@ jq -r --slurpfile m "$D/maintainers.json" '
      elif ($p | any(startswith("src/"))) then "server-change?"
      else "repo-level?" end) as $c
   | [.number, $c, ([.closingIssuesReferences[].number] | map("#\(.)") | join(" ")), .title[0:70]]
-  | @tsv' "$D/prs.json" > "$D/pre.tsv"
-cut -f2 "$D/pre.tsv" | sort | uniq -c
+  | @tsv' "$D/prs.json" > "$D/pre.tsv" \
+  && cut -f2 "$D/pre.tsv" | sort | uniq -c \
+  || { echo "pre-class failed (a missing input above?)" >&2; rm -f "$D/pre.tsv"; }
 ```
 
 `gh pr list` stops early without saying so, so a listing that fills its limit
@@ -403,6 +411,7 @@ it.
 # on a routine pass.
 SWEEP_LABEL=; SWEEP_REF=
 while IFS=$'\t' read -r PR CLASS ISSUE _; do
+  ISSUE=${ISSUE#\#}   # accept "#123" as well as "123"
   case "$CLASS" in
     listing|new-server) BODY=$(cat "$D/responses/registry.md") ;;
     archived) BODY=$(cat "$D/responses/archived.md") ;;
