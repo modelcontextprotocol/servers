@@ -58,7 +58,7 @@ export const registerFileResources = (server: McpServer) => {
             },
           ],
         };
-      }
+      },
     );
   }
 };

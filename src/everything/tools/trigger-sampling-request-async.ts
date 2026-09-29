@@ -118,7 +118,7 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
               model: z.string(),
               stopReason: z.string().optional(),
             }),
-          ])
+          ]),
         );
 
         // Check if client returned CreateTaskResult (has task object)
@@ -133,7 +133,7 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
                 text: `[SYNC] Client executed synchronously:\n${JSON.stringify(
                   samplingResponse,
                   null,
-                  2
+                  2,
                 )}`,
               },
             ],
@@ -168,7 +168,7 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
             z.looseObject({
               status: z.string(),
               statusMessage: z.string().optional(),
-            })
+            }),
           );
 
           taskStatus = pollResult.status;
@@ -176,7 +176,7 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
           statusMessages.push(
             `Poll ${attempts}: ${taskStatus}${
               taskStatusMessage ? ` - ${taskStatusMessage}` : ""
-            }`
+            }`,
           );
         }
 
@@ -187,7 +187,7 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
               {
                 type: "text",
                 text: `[TIMEOUT] Task timed out after ${MAX_POLL_ATTEMPTS} poll attempts\n\nProgress:\n${statusMessages.join(
-                  "\n"
+                  "\n",
                 )}`,
               },
             ],
@@ -214,7 +214,7 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
             method: "tasks/result",
             params: { taskId },
           },
-          z.any()
+          z.any(),
         );
 
         // Return the result with status history
@@ -223,12 +223,12 @@ export const registerTriggerSamplingRequestAsyncTool = (server: McpServer) => {
             {
               type: "text",
               text: `[COMPLETED] Async sampling completed!\n\n**Progress:**\n${statusMessages.join(
-                "\n"
+                "\n",
               )}\n\n**Result:**\n${JSON.stringify(result, null, 2)}`,
             },
           ],
         };
-      }
+      },
     );
   }
 };

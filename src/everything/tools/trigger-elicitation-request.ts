@@ -174,7 +174,7 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
             },
           },
           ElicitResultSchema,
-          { timeout: 10 * 60 * 1000 /* 10 minutes */ }
+          { timeout: 10 * 60 * 1000 /* 10 minutes */ },
         );
 
         // Handle different response actions
@@ -229,7 +229,7 @@ export const registerTriggerElicitationRequestTool = (server: McpServer) => {
         });
 
         return { content };
-      }
+      },
     );
   }
 };

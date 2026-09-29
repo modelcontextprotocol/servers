@@ -13,7 +13,7 @@ app.use(
     methods: "GET,POST",
     preflightContinue: false,
     optionsSuccessStatus: 204,
-  })
+  }),
 );
 
 // Map sessionId to transport for each client
@@ -33,7 +33,7 @@ app.get("/sse", async (req, res) => {
     transport = transports.get(sessionId) as SSEServerTransport;
     console.error(
       "Client Reconnecting? This shouldn't happen; when client has a sessionId, GET /sse should not be called again.",
-      transport.sessionId
+      transport.sessionId,
     );
   } else {
     // Create and store transport for the new session

@@ -76,7 +76,7 @@ export const createServer: () => ServerFactoryResponse = () => {
       instructions,
       taskStore,
       taskMessageQueue,
-    }
+    },
   );
 
   // Register the tools

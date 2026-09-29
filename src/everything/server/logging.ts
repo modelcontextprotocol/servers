@@ -15,7 +15,7 @@ const logsUpdateIntervals: Map<string | undefined, NodeJS.Timeout | undefined> =
  */
 export const beginSimulatedLogging = (
   server: McpServer,
-  sessionId: string | undefined
+  sessionId: string | undefined,
 ) => {
   const maybeAppendSessionId = sessionId ? ` - SessionId ${sessionId}` : "";
   const messages: { level: LoggingLevel; data: string }[] = [
@@ -46,7 +46,7 @@ export const beginSimulatedLogging = (
     // ensure that the client's chosen logging level will be respected
     await server.sendLoggingMessage(
       messages[Math.floor(Math.random() * messages.length)],
-      sessionId
+      sessionId,
     );
   };
 
@@ -58,7 +58,7 @@ export const beginSimulatedLogging = (
     // Send a randomly-leveled log message every 5 seconds
     logsUpdateIntervals.set(
       sessionId,
-      setInterval(() => sendSimulatedLoggingMessage(sessionId), 5000)
+      setInterval(() => sendSimulatedLoggingMessage(sessionId), 5000),
     );
   }
 };
