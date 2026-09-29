@@ -188,8 +188,11 @@ holds for a maintainer's own one-line fix as much as for a feature.
   advisory's temporary private fork (`servers-<ghsa-id>`) links no public
   issue, carries no labels, and is tracked by the advisory's `[GHSA-…]` draft
   card rather than an issue's card, because each of those would disclose the
-  vulnerability before a fix ships. It still targets `v2/main`, and it is
-  reviewed inside the fork. The flow is the `security-advisory` skill.
+  vulnerability before a fix ships. For the same reason the work-start rules
+  on assigning an issue and naming the branch `v2/<type>/<ISSUE_NUMBER>-<slug>`
+  do not apply: its branch is `v2/fix/<ghsa-id>`, with **no descriptive
+  slug**. It still targets `v2/main`, and it is reviewed inside the fork. The
+  flow is the `security-advisory` skill.
 
 No other PR is exempt.
 
