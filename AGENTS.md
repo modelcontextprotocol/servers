@@ -23,6 +23,7 @@ not in advance.
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
 | [`board-ops`](.claude/skills/board-ops/SKILL.md)       | `gh project` recipes and the IDs for the Servers V2 board (#43); resolving option IDs by name; the option-deletion hazard and its recovery               | Model-invoked, or `/board-ops`    |
 | [`issue-create`](.claude/skills/issue-create/SKILL.md) | The create flow: duplicate check, `v2` + type + server-scope labels, milestone, board card, Status + Priority, and the query that verifies them          | Model-invoked, or `/issue-create` |
+| [`pr-flow`](.claude/skills/pr-flow/SKILL.md)           | Issue to PR: branch, DCO signoff and repair, the gate, client evidence, `addCloseIssueReferences`, the Copilot loop and its exits, close-out on merge    | Model-invoked, or `/pr-flow`      |
 
 A PR that adds a skill under `.claude/skills/<name>/SKILL.md` adds its row to
 this table in the same change, and the table never lists a skill that does not
@@ -275,8 +276,10 @@ here.
 - **After opening a PR, run a Copilot review loop to convergence, unprompted.**
   Request a review, wait for the round to post or for Copilot's session to end
   without one, answer every comment, and request again only when you pushed a
-  fix. Stop on the **first** clean round (no confirming round), a round holding
-  only out-of-scope findings, or two rounds in a row that end without a review.
+  fix or the last round ended without a review. Stop on the **first** clean round (no confirming round), a round holding
+  only out-of-scope findings, two rounds in a row that end without a review, or
+  a timeout (the loop's budget is spent while findings keep coming). The recipe
+  is the `pr-flow` skill.
 - **If new tasks are discovered during development, create issues** for them
   and put them on the board, rather than widening the current PR.
 
