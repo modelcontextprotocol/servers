@@ -15,7 +15,7 @@ const logsUpdateIntervals: Map<string | undefined, NodeJS.Timeout | undefined> =
  */
 export const beginSimulatedLogging = (
   server: McpServer,
-  sessionId: string | undefined
+  sessionId: string | undefined,
 ) => {
   const maybeAppendSessionId = sessionId ? ` - SessionId ${sessionId}` : "";
   const messages: { level: LoggingLevel; data: string }[] = [
@@ -46,19 +46,27 @@ export const beginSimulatedLogging = (
     // ensure that the client's chosen logging level will be respected
     await server.sendLoggingMessage(
       messages[Math.floor(Math.random() * messages.length)],
-      sessionId
+      sessionId,
     );
   };
 
   // Set the interval to send later logging messages to this client
   if (!logsUpdateIntervals.has(sessionId)) {
-    // Send once immediately
-    sendSimulatedLoggingMessage(sessionId);
+    // Send once immediately, then every 5 seconds. Fire-and-forget: this
+    // function is synchronous by contract (it starts a background simulation),
+    // so neither send can be awaited. A send that fails (e.g. the transport
+    // closed before `stopSimulatedLogging`) is logged rather than left to
+    // become an unhandled rejection.
+    const send = () =>
+      sendSimulatedLoggingMessage(sessionId).catch((error: unknown) =>
+        console.error("Simulated logging message failed:", error),
+      );
+    void send();
 
     // Send a randomly-leveled log message every 5 seconds
     logsUpdateIntervals.set(
       sessionId,
-      setInterval(() => sendSimulatedLoggingMessage(sessionId), 5000)
+      setInterval(() => void send(), 5000),
     );
   }
 };

@@ -92,7 +92,7 @@ export const registerGetRootsListTool = (server: McpServer) => {
             },
           ],
         };
-      }
+      },
     );
   }
 };

@@ -33,7 +33,7 @@ describe("STEPS", () => {
         "pyright",
         "pytest",
         "build",
-      ]
+      ],
     );
     for (const step of STEPS) assert.equal(step.argv[0], "uv");
   });
@@ -173,14 +173,14 @@ describe("runCommand", () => {
   it("reports a non-zero exit", () => {
     assert.deepEqual(
       runCommand([process.execPath, "-e", "process.exit(3)"], scratch),
-      { ok: false, detail: "exit 3" }
+      { ok: false, detail: "exit 3" },
     );
   });
 
   it("reports a signal", () => {
     const result = runCommand(
       [process.execPath, "-e", "process.kill(process.pid, 'SIGTERM')"],
-      scratch
+      scratch,
     );
     assert.deepEqual(result, { ok: false, detail: "killed by SIGTERM" });
   });

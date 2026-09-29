@@ -58,7 +58,7 @@ export function discoverServers(srcDir) {
     .filter(
       (entry) =>
         entry.isDirectory() &&
-        existsSync(path.join(srcDir, entry.name, "pyproject.toml"))
+        existsSync(path.join(srcDir, entry.name, "pyproject.toml")),
     )
     .map((entry) => entry.name)
     .sort();
@@ -81,7 +81,7 @@ export function selectServers(args, available) {
   if (unknown.length > 0) {
     return {
       error: `not a Python server: ${unknown.join(
-        ", "
+        ", ",
       )} (known: ${available.join(", ")})`,
     };
   }
@@ -166,7 +166,7 @@ export function summarize(results) {
       ? `  PASS  ${r.server}`
       : `  FAIL  ${r.server} — ${r.failedStep}${
           r.detail ? ` (${r.detail})` : ""
-        }`
+        }`,
   );
   const exitCode = results.some((r) => r.failedStep !== undefined) ? 1 : 0;
   return { lines, exitCode };
@@ -175,12 +175,12 @@ export function summarize(results) {
 function main() {
   const repoRoot = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
-    ".."
+    "..",
   );
   const srcDir = path.join(repoRoot, "src");
   const selection = selectServers(
     process.argv.slice(2),
-    discoverServers(srcDir)
+    discoverServers(srcDir),
   );
   if ("error" in selection) {
     console.error(`[validate:py] ${selection.error}`);

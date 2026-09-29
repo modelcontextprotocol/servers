@@ -22,7 +22,13 @@
     "build": "tsc && shx chmod +x dist/*.js",
     "prepare": "npm run build",
     "watch": "tsc --watch",
-    "test": "vitest run --coverage"
+    "test": "vitest run",
+    "format": "prettier --write \"**/*.{ts,mts,cts,js,mjs,cjs}\" --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check \"**/*.{ts,mts,cts,js,mjs,cjs}\" --ignore-path ../../.prettierignore",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "coverage": "vitest run --coverage",
+    "validate": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm run test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

@@ -1,4 +1,7 @@
-import { McpServer, RegisteredResource } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  McpServer,
+  RegisteredResource,
+} from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Resource, ResourceLink } from "@modelcontextprotocol/sdk/types.js";
 
 /**
@@ -33,7 +36,7 @@ export const registerSessionResource = (
   server: McpServer,
   resource: Resource,
   type: "text" | "blob",
-  payload: string
+  payload: string,
 ): ResourceLink => {
   // Destructure resource
   const { uri, name, mimeType, description, title, annotations, icons, _meta } =
@@ -70,7 +73,7 @@ export const registerSessionResource = (
       return {
         contents: [resourceContent],
       };
-    }
+    },
   );
 
   // Track the registered resource for potential future removal

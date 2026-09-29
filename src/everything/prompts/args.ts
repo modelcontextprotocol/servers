@@ -36,6 +36,6 @@ export const registerArgumentsPrompt = (server: McpServer) => {
           },
         ],
       };
-    }
+    },
   );
 };

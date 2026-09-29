@@ -1,16 +1,19 @@
-import path from 'path';
+import path from "path";
 
 /**
  * Checks if an absolute path is within any of the allowed directories.
- * 
+ *
  * @param absolutePath - The absolute path to check (will be normalized)
  * @param allowedDirectories - Array of absolute allowed directory paths (will be normalized)
  * @returns true if the path is within an allowed directory, false otherwise
  * @throws Error if given relative paths after normalization
  */
-export function isPathWithinAllowedDirectories(absolutePath: string, allowedDirectories: string[]): boolean {
+export function isPathWithinAllowedDirectories(
+  absolutePath: string,
+  allowedDirectories: string[],
+): boolean {
   // Type validation
-  if (typeof absolutePath !== 'string' || !Array.isArray(allowedDirectories)) {
+  if (typeof absolutePath !== "string" || !Array.isArray(allowedDirectories)) {
     return false;
   }
 
@@ -20,7 +23,7 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
   }
 
   // Reject null bytes (forbidden in paths)
-  if (absolutePath.includes('\x00')) {
+  if (absolutePath.includes("\x00")) {
     return false;
   }
 
@@ -34,17 +37,17 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
 
   // Verify it's absolute after normalization
   if (!path.isAbsolute(normalizedPath)) {
-    throw new Error('Path must be absolute after normalization');
+    throw new Error("Path must be absolute after normalization");
   }
 
   // Check against each allowed directory
-  return allowedDirectories.some(dir => {
-    if (typeof dir !== 'string' || !dir) {
+  return allowedDirectories.some((dir) => {
+    if (typeof dir !== "string" || !dir) {
       return false;
     }
 
     // Reject null bytes in allowed dirs
-    if (dir.includes('\x00')) {
+    if (dir.includes("\x00")) {
       return false;
     }
 
@@ -58,7 +61,9 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
 
     // Verify allowed directory is absolute after normalization
     if (!path.isAbsolute(normalizedDir)) {
-      throw new Error('Allowed directories must be absolute paths after normalization');
+      throw new Error(
+        "Allowed directories must be absolute paths after normalization",
+      );
     }
 
     // Check if normalizedPath is within normalizedDir
@@ -66,21 +71,24 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
     if (normalizedPath === normalizedDir) {
       return true;
     }
-    
+
     // Special case for root directory to avoid double slash
     // On Windows, we need to check if both paths are on the same drive
     if (normalizedDir === path.sep) {
       return normalizedPath.startsWith(path.sep);
     }
-    
+
     // On Windows, also check for drive root (e.g., "C:\")
-    if (path.sep === '\\' && normalizedDir.match(/^[A-Za-z]:\\?$/)) {
+    if (path.sep === "\\" && normalizedDir.match(/^[A-Za-z]:\\?$/)) {
       // Ensure both paths are on the same drive
       const dirDrive = normalizedDir.charAt(0).toLowerCase();
       const pathDrive = normalizedPath.charAt(0).toLowerCase();
-      return pathDrive === dirDrive && normalizedPath.startsWith(normalizedDir.replace(/\\?$/, '\\'));
+      return (
+        pathDrive === dirDrive &&
+        normalizedPath.startsWith(normalizedDir.replace(/\\?$/, "\\"))
+      );
     }
-    
+
     return normalizedPath.startsWith(normalizedDir + path.sep);
   });
 }

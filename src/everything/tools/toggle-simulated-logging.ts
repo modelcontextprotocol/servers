@@ -55,6 +55,6 @@ export const registerToggleSimulatedLoggingTool = (server: McpServer) => {
       return {
         content: [{ type: "text", text: `${response}` }],
       };
-    }
+    },
   );
 };

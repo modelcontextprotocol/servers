@@ -58,7 +58,7 @@ export const registerGetResourceReferenceTool = (server: McpServer) => {
     const { resourceType } = args;
     if (!RESOURCE_TYPES.includes(resourceType)) {
       throw new Error(
-        `Invalid resourceType: ${args?.resourceType}. Must be ${RESOURCE_TYPE_TEXT} or ${RESOURCE_TYPE_BLOB}.`
+        `Invalid resourceType: ${args?.resourceType}. Must be ${RESOURCE_TYPE_TEXT} or ${RESOURCE_TYPE_BLOB}.`,
       );
     }
 
@@ -70,7 +70,7 @@ export const registerGetResourceReferenceTool = (server: McpServer) => {
       resourceId < 1
     ) {
       throw new Error(
-        `Invalid resourceId: ${args?.resourceId}. Must be a finite positive integer.`
+        `Invalid resourceId: ${args?.resourceId}. Must be a finite positive integer.`,
       );
     }
 

@@ -11,6 +11,36 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Root-level guards: the checks over repo-wide tooling that no per-package
+  # matrix leg covers. Created by #4863 for the skills gates; #4864 extended it
+  # to run the root's whole `validate:guards` — the root tooling's format and
+  # lint, `verify:format-coverage`, `verify:skills`, `verify:typecheck-coverage`,
+  # the shared-devDependency guard `verify:dep-lockstep`, and `test:scripts`
+  # (the guard scripts' own unit tests).
+  # `scripts/verify-skills.mjs` asserts this job keeps running
+  # `verify:skills:cli` unconditionally, so do not gate these steps with `if:`.
+  root-guards:
+    name: Root guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the root guards
+        run: npm run validate:guards
+
+      # The authoritative `claude plugin validate`, at the pinned CLI version
+      # (fetched with npx when not installed). Needs no authentication.
+      - name: Validate skills with the pinned Claude Code CLI
+        run: npm run verify:skills:cli
+
   detect-packages:
     runs-on: ubuntu-latest
     outputs:
@@ -24,12 +54,17 @@ jobs:
           PACKAGES=$(find . -name package.json -not -path "*/node_modules/*" -exec dirname {} \; | sed 's/^\.\///' | jq -R -s -c 'split("\n")[:-1]')
           echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
 
-  test:
+  # One leg per TypeScript server, each running ONLY its own package's
+  # `validate` (format:check -> lint -> typecheck -> build -> test). What no
+  # leg covers — the root tooling and the cross-workspace guards — is the
+  # root-guards job above; together they are the root `npm run validate`.
+  validate:
     needs: [detect-packages]
     strategy:
+      fail-fast: false
       matrix:
         package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
-    name: Test ${{ matrix.package }}
+    name: Validate ${{ matrix.package }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -39,34 +74,13 @@ jobs:
           node-version: 22
           cache: npm
 
+      # This package plus the root: run from a workspace directory, `npm ci`
+      # installs only that workspace's dependencies, and the gate's tools
+      # (Prettier, ESLint) are root devDependencies. A bare root `npm ci` would
+      # instead run every workspace's `prepare` (a build), coupling the legs.
       - name: Install dependencies
+        run: npm ci --workspace src/${{ matrix.package }} --include-workspace-root
+
+      - name: Validate package
         working-directory: src/${{ matrix.package }}
-        run: npm ci
-
-      - name: Run tests
-        working-directory: src/${{ matrix.package }}
-        run: npm test --if-present
-
-  build:
-    needs: [detect-packages, test]
-    strategy:
-      matrix:
-        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
-    name: Build ${{ matrix.package }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        working-directory: src/${{ matrix.package }}
-        run: npm ci
-
-      - name: Build package
-        working-directory: src/${{ matrix.package }}
-        run: npm run build
-
+        run: npm run validate

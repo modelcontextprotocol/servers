@@ -52,7 +52,7 @@ export const setSubscriptionHandlers = (server: McpServer) => {
             sessionId ? `from session ${sessionId}` : ""
           }`,
         },
-        sessionId
+        sessionId,
       );
 
       // Get the subscribers for this URI
@@ -62,7 +62,7 @@ export const setSubscriptionHandlers = (server: McpServer) => {
       subscribers.add(sessionId);
       subscriptions.set(uri, subscribers);
       return {};
-    }
+    },
   );
 
   // Set the unsubscription handler
@@ -83,7 +83,7 @@ export const setSubscriptionHandlers = (server: McpServer) => {
             sessionId ? `from session ${sessionId}` : ""
           }`,
         },
-        sessionId
+        sessionId,
       );
 
       // Remove the subscriber
@@ -92,7 +92,7 @@ export const setSubscriptionHandlers = (server: McpServer) => {
         if (subscribers.has(sessionId)) subscribers.delete(sessionId);
       }
       return {};
-    }
+    },
   );
 };
 
@@ -109,7 +109,7 @@ export const setSubscriptionHandlers = (server: McpServer) => {
  */
 const sendSimulatedResourceUpdates = async (
   server: McpServer,
-  sessionId: string | undefined
+  sessionId: string | undefined,
 ): Promise<void> => {
   // Search all URIs for ones this client is subscribed to
   for (const uri of subscriptions.keys()) {
@@ -135,16 +135,24 @@ const sendSimulatedResourceUpdates = async (
  */
 export const beginSimulatedResourceUpdates = (
   server: McpServer,
-  sessionId: string | undefined
+  sessionId: string | undefined,
 ) => {
   if (!subsUpdateIntervals.has(sessionId)) {
-    // Send once immediately
-    sendSimulatedResourceUpdates(server, sessionId);
+    // Send once immediately, then every 5 seconds. Fire-and-forget: this
+    // function is synchronous by contract (its callers start a background
+    // simulation), so neither send can be awaited. A send that fails (e.g. the
+    // transport closed before the updates were stopped) is logged rather than
+    // left to become an unhandled rejection.
+    const send = () =>
+      sendSimulatedResourceUpdates(server, sessionId).catch((error: unknown) =>
+        console.error("Simulated resource update failed:", error),
+      );
+    void send();
 
     // Set the interval to send later resource update notifications to this client
     subsUpdateIntervals.set(
       sessionId,
-      setInterval(() => sendSimulatedResourceUpdates(server, sessionId), 5000)
+      setInterval(() => void send(), 5000),
     );
   }
 };
