@@ -178,6 +178,7 @@ export function collectCases(only, skillsDir = SKILLS_DIR) {
     } catch (e) {
       throw new Error(
         `${dir}/evals/evals.json is not valid JSON — ${e.message}`,
+        { cause: e },
       );
     }
     files.push({ dir, parsed });
@@ -831,7 +832,6 @@ export function passesThreshold(rate, threshold, strict) {
  */
 export function formatReport(cases, results, ours, opts) {
   const lines = [];
-  let failed = 0;
 
   const group = (members, heading, threshold, strict) => {
     if (members.length === 0) return 0;
@@ -870,7 +870,7 @@ export function formatReport(cases, results, ours, opts) {
     opts.chainThreshold,
     true,
   );
-  failed = directShort + chainedShort;
+  const failed = directShort + chainedShort;
 
   // Two numbers, never one. A hand-off is a second-hop load over many turns and
   // a first-move rate is the model's opening move; summing them would produce a

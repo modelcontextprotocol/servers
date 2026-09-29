@@ -347,21 +347,41 @@ test("the real verifier passes on the repository as it stands", () => {
 
 test("a wiring allowance excuses its link only while the pending script is absent", () => {
   const unwired = {
+    validate: "npm run verify:format-coverage",
+    "verify:format-coverage": "node scripts/verify-format-coverage.mjs",
     "verify:skills": "node scripts/verify-skills.mjs",
     "verify:skills:cli": "node scripts/verify-skills-cli.mjs",
   };
   assert.deepEqual(checkWiring(unwired, WIRED_WORKFLOW, WIRING_ALLOWANCES), []);
-  // Strict by default: the same manifest fails both links without them.
-  assert.equal(checkWiring(unwired, WIRED_WORKFLOW).length, 2);
+  // Strict by default: the same manifest fails the `local:gate` link without it.
+  assert.match(
+    checkWiring(unwired, WIRED_WORKFLOW).join(),
+    /local:gate` no longer runs `verify:skills:cli`/,
+  );
 });
 
 test("a wiring allowance goes stale once its pending script exists", () => {
-  // #4864 adds `verify:format-coverage`; the allowance must then fail the
-  // guard until it is deleted, even if the link itself is wired.
+  // #4871 adds `local:gate`; the allowance must then fail the guard until it
+  // is deleted, even if the link itself is wired.
   const stale = checkWiring(WIRED_SCRIPTS, WIRED_WORKFLOW, WIRING_ALLOWANCES);
-  assert.equal(stale.length, 2, stale.join("\n"));
-  assert.match(stale.join(), /`verify:format-coverage` now exists.*#4864/);
+  assert.equal(stale.length, 1, stale.join("\n"));
   assert.match(stale.join(), /`local:gate` now exists.*#4871/);
+});
+
+test("the format-coverage link has no allowance any more (#4864)", () => {
+  // #4864 built `verify:format-coverage` and removed its temporary allowance,
+  // so a root `validate` that stops running it fails even under the
+  // allowances that remain.
+  const scripts = {
+    validate: "npm run verify:skills",
+    "verify:skills": "node scripts/verify-skills.mjs",
+    "verify:skills:cli": "node scripts/verify-skills-cli.mjs",
+  };
+  assert.ok(!WIRING_ALLOWANCES.some((a) => a.link === "format-coverage"));
+  assert.match(
+    checkWiring(scripts, WIRED_WORKFLOW, WIRING_ALLOWANCES).join(),
+    /no longer runs `verify:format-coverage`/,
+  );
 });
 
 test("an allowance never masks a link that exists but is broken", () => {
@@ -497,11 +517,15 @@ test("the repository's workflow runs the validator unconditionally", () => {
     ciRunsUnconditionally(repoWorkflow(), "npm run verify:skills:cli"),
     true,
   );
-  // And the fast guard beside it, which nothing else in CI would run.
+  // And the fast guard beside it. Since #4864 the root-guards job runs it as
+  // part of the root's `validate:guards`, so assert that link end to end: the
+  // workflow runs `validate:guards` unconditionally, and that chain reaches
+  // `verify:skills`.
   assert.equal(
-    ciRunsUnconditionally(repoWorkflow(), "npm run verify:skills"),
+    ciRunsUnconditionally(repoWorkflow(), "npm run validate:guards"),
     true,
   );
+  assert.ok(scriptChainRuns(repoScripts(), "validate:guards", "verify:skills"));
 });
 
 test("runsCommand matches an exact invocation, not a substring", () => {

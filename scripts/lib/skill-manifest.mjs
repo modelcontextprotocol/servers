@@ -36,8 +36,6 @@ export const DESCRIPTION_CAP = 1536;
  */
 export const LISTING_BUDGET = 4000;
 
-const FRONTMATTER_FENCE = "---";
-
 /**
  * Split a SKILL.md into its raw frontmatter and body the way Claude Code does.
  * Returns `{ error }` rather than throwing, so the caller can report every

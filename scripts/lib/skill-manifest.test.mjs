@@ -15,7 +15,6 @@ import {
   validateEvalCases,
   listingCost,
   parseClaudeVersion,
-  compareVersions,
   PINNED_CLI_VERSION,
   isPinnedVersion,
   formatClaudeVersion,

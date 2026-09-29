@@ -189,28 +189,25 @@ export const GUARDS_WORKFLOW = path.join(
 /**
  * TEMPORARY allowances for wiring links whose other end does not exist yet.
  *
- * `checkWiring` asserts two npm-script links that this repo cannot satisfy on
- * the day the skills harness lands, because the scripts at their far end are
- * built by later sub-issues of #4858:
+ * `checkWiring` asserts npm-script links that this repo could not all satisfy
+ * on the day the skills harness landed, because the scripts at their far end
+ * are built by later sub-issues of #4858. One remains:
  *
- *   - the root `validate` reaching `verify:format-coverage` — #4864 adds both;
  *   - `local:gate` reaching `verify:skills:cli` — #4871 adds `local:gate`.
  *
- * Each allowance is deliberately narrow: it excuses its link only while
+ * (The root `validate` reaching `verify:format-coverage` had one too; #4864
+ * built both ends and removed it, so that link is now enforced strictly.)
+ *
+ * An allowance is deliberately narrow: it excuses its link only while
  * `pendingScript` is ABSENT from the root manifest. The moment the issue that
  * builds that script adds it, the allowance stops excusing anything and
  * `checkWiring` reports it as stale instead — so the later PR cannot land
  * without wiring the link and deleting its entry here, and an allowance can
  * never mask a link that was wired and then broken.
  *
- * @type {ReadonlyArray<{ link: "format-coverage" | "local-gate-cli", pendingScript: string, removedBy: string }>}
+ * @type {ReadonlyArray<{ link: "local-gate-cli", pendingScript: string, removedBy: string }>}
  */
 export const WIRING_ALLOWANCES = [
-  {
-    link: "format-coverage",
-    pendingScript: "verify:format-coverage",
-    removedBy: "#4864",
-  },
   { link: "local-gate-cli", pendingScript: "local:gate", removedBy: "#4871" },
 ];
 
@@ -265,10 +262,7 @@ export function checkWiring(rootScripts, workflowText, allowances = []) {
       );
     }
   }
-  if (
-    !rootReachesScript(rootScripts, "verify:format-coverage") &&
-    !excused("format-coverage")
-  ) {
+  if (!rootReachesScript(rootScripts, "verify:format-coverage")) {
     problems.push(
       "the root `validate` no longer runs `verify:format-coverage` (a sibling guard). Restore it.",
     );
