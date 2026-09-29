@@ -223,8 +223,9 @@ score comment; a rubric nobody may overrule is a rubric people route around.
 ### Trust boundary: who can set what
 
 **Board #43 is private.** Its Status and Priority are visible only to people
-with project access, so a reporter never sees how their issue was scored. It is
-the maintainers' working queue, not a published commitment.
+with project access. It is the maintainers' working queue, not a published
+commitment. The **score comment** below is public, though: it is how the
+reasoning survives, so write it for the reporter to read too.
 
 **Fields → Priority** on the issue page is the opposite: an org-level issue
 field, public, and settable by people outside maintainer triage (the two fields
@@ -405,7 +406,10 @@ while IFS=$'\t' read -r PR CLASS ISSUE _; do
   case "$CLASS" in
     listing|new-server) BODY=$(cat "$D/responses/registry.md") ;;
     archived) BODY=$(cat "$D/responses/archived.md") ;;
-    no-op|duplicate|keep|out-of-scope)
+    duplicate|keep) [ "$ISSUE" != "-" ] \
+        || { echo "#$PR is $CLASS but names no issue — stopping; harvest first" >&2; break; }
+      BODY=$(sed "s/#ISSUE/#$ISSUE/" "$D/responses/general-tracked.md") ;;
+    no-op|out-of-scope)
       if [ "$ISSUE" != "-" ]; then BODY=$(sed "s/#ISSUE/#$ISSUE/" "$D/responses/general-tracked.md")
       else BODY=$(cat "$D/responses/general-untracked.md"); fi ;;
     security) echo "skipping #$PR: a security fix closes only on a maintainer's call" >&2; continue ;;

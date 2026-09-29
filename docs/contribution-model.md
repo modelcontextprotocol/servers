@@ -94,6 +94,7 @@ its paths:
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | **Listing**                    | Adds or promotes a server entry in `README.md` or `ADDITIONAL.md` (a correction to an existing entry is read on its merits)     | No. Close with the Registry comment         |
 | **New server**                 | Adds a server implementation, in or outside `src/`                                                                              | No. Close with the Registry comment         |
+| **Archived server**            | Changes a server that moved to `servers-archived`                                                                               | No. Close with the Archived pointer         |
 | **No-op or spam**              | No effective change, a rename to the same name, unrelated or generated content                                                  | No. Close with the general comment          |
 | **Duplicate**                  | Races another open PR, or an existing issue, for the same fix                                                                   | Once per group, through its best member     |
 | **Security fix**               | Fixes a vulnerability: path traversal, symlink or Roots escape, SSRF, injection, a vulnerable dependency                        | See [Security fixes](#security-fixes)       |
