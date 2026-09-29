@@ -56,10 +56,10 @@ reporter is notified of each one. So:
 
 Read each unboarded issue before sweeping it in. Most are real reports, but some
 belong elsewhere, and boarding one of those would park it in a review queue for
-work this repository does not do. A class other than the last row is closed
+work this repository does not do. A class whose Action is **Close** is closed
 with its [canned response](#canned-responses), gets **no card** (`Done` means
 shipped, and closed-not-planned work never goes on the board), and needs no
-labels.
+labels. A security report is never closed by triage.
 
 | Class | Recognized by | Action | Response |
 | --- | --- | --- | --- |
@@ -328,20 +328,22 @@ is treated as truncated, like the issue listing in pass 1. The
 ### 2. Classify and write the manifest
 
 Read each outside PR (its description, its diff, its linked issues) and give it
-exactly one class. The manifest is a TSV in `$D`: PR number, class, the issue
-its close comment will name (blank when nothing is harvested), and a one-line
-reason.
+exactly one class. The manifest is a TSV in `$D`, four fields per line: PR
+number, the class **slug** from the table, the issue its close comment will
+name **or `-`** when nothing is harvested, and a one-line reason. Every field is
+filled: `read` collapses adjacent tabs, so an empty field would shift the reason
+into the issue column.
 
-| Class | Recognized by | Harvest? | Close with |
-| --- | --- | --- | --- |
-| **Listing** | Adds or edits a server entry in `README.md` or `ADDITIONAL.md` | No | [Registry, PR](#registry-pr) |
-| **New server** | Adds a server implementation, under `src/` or anywhere else | No | [Registry, PR](#registry-pr) |
-| **Archived server** | Changes a server that moved to `servers-archived` (it pre-classifies as `new-server?`, since its directory is gone) | No | [Archived](#archived) |
-| **No-op or spam** | No effective change (a rename to the same name, whitespace, a README "rename" to itself), or unrelated or generated content | No | [General, PR](#general-pr), without a tracking issue |
-| **Duplicate** | Races another open PR, or an existing issue, for the same fix | Once per group, through its best member | [General, PR](#general-pr), naming the group's issue |
-| **Security fix** | Fixes a vulnerability: path traversal, symlink or Roots escape, SSRF, injection, a vulnerable dependency | See [Security reports](#security-reports) first | [General, PR](#general-pr) |
-| **Fix or enhancement to keep** | A bug fix, or an in-scope enhancement (`CONTRIBUTING.md`, "What we act on"), to one of the seven servers or the repository | Yes, unless an open issue already covers it | [General, PR](#general-pr), naming the issue |
-| **Out of scope** | A feature `CONTRIBUTING.md` is selective about and a maintainer would not take, or a fix for behavior already gone on `v2/main` | No | [General, PR](#general-pr), without a tracking issue |
+| Class | Slug | Recognized by | Harvest? | Close with |
+| --- | --- | --- | --- | --- |
+| **Listing** | `listing` | Adds or edits a server entry in `README.md` or `ADDITIONAL.md` | No | [Registry, PR](#registry-pr) |
+| **New server** | `new-server` | Adds a server implementation, under `src/` or anywhere else | No | [Registry, PR](#registry-pr) |
+| **Archived server** | `archived` | Changes a server that moved to `servers-archived` (it pre-classifies as `new-server?`, since its directory is gone) | No | [Archived](#archived) |
+| **No-op or spam** | `no-op` | No effective change (a rename to the same name, whitespace, a README "rename" to itself), or unrelated or generated content | No | [General, PR](#general-pr), without a tracking issue |
+| **Duplicate** | `duplicate` | Races another open PR, or an existing issue, for the same fix | Once per group, through its best member | [General, PR](#general-pr), naming the group's issue |
+| **Security fix** | `security` | Fixes a vulnerability: path traversal, symlink or Roots escape, SSRF, injection, a vulnerable dependency | See [Security reports](#security-reports) first | **Not by the loop**: a maintainer's call |
+| **Fix or enhancement to keep** | `keep` | A bug fix, or an in-scope enhancement (`CONTRIBUTING.md`, "What we act on"), to one of the seven servers or the repository | Yes, unless an open issue already covers it | [General, PR](#general-pr), naming the issue |
+| **Out of scope** | `out-of-scope` | A feature `CONTRIBUTING.md` is selective about and a maintainer would not take, or a fix for behavior already gone on `v2/main` | No | [General, PR](#general-pr), without a tracking issue |
 
 **Finding duplicate groups.** Racing PRs usually share a linked issue or the
 same changed files, so group by those first, then read each group to confirm
@@ -384,22 +386,38 @@ keeps the PR, its branch and its discussion readable; the harvest issue links
 it.
 
 ```sh
-# manifest.tsv: <PR>\t<class>\t<issue or blank>\t<reason>, AFTER maintainer review.
+# manifest.tsv: <PR>\t<slug>\t<issue or ->\t<reason>, AFTER maintainer review.
 # responses/general-tracked.md holds the general comment with "#ISSUE" where the
 # issue goes; general-untracked.md, registry.md and archived.md hold the others.
+# For the backlog sweep only (#4875): set SWEEP_LABEL to the close label it
+# settled on (it must already exist) and SWEEP_REF to "#4875"; leave both empty
+# on a routine pass.
+SWEEP_LABEL=; SWEEP_REF=
 while IFS=$'\t' read -r PR CLASS ISSUE _; do
   case "$CLASS" in
     listing|new-server) BODY=$(cat "$D/responses/registry.md") ;;
     archived) BODY=$(cat "$D/responses/archived.md") ;;
+    no-op|duplicate|keep|out-of-scope)
+      if [ "$ISSUE" != "-" ]; then BODY=$(sed "s/#ISSUE/#$ISSUE/" "$D/responses/general-tracked.md")
+      else BODY=$(cat "$D/responses/general-untracked.md"); fi ;;
     security) echo "skipping #$PR: a security fix closes only on a maintainer's call" >&2; continue ;;
-    *) if [ -n "$ISSUE" ]; then BODY=$(sed "s/#ISSUE/#$ISSUE/" "$D/responses/general-tracked.md")
-       else BODY=$(cat "$D/responses/general-untracked.md"); fi ;;
+    *) echo "unknown class '$CLASS' on #$PR — stopping; fix the manifest" >&2; break ;;
   esac
+  [ -n "$SWEEP_REF" ] && BODY="$BODY"$'\n\n'"This is part of the backlog triage in $SWEEP_REF."
+  if [ -n "$SWEEP_LABEL" ]; then
+    gh pr edit "$PR" --repo modelcontextprotocol/servers --add-label "$SWEEP_LABEL" </dev/null \
+      || { echo "label FAILED on #$PR — stopping" >&2; break; }
+  fi
   gh pr close "$PR" --repo modelcontextprotocol/servers --comment "$BODY" </dev/null \
     || { echo "close FAILED on #$PR — stopping; re-snapshot to see what is left" >&2; break; }
   sleep 5
 done < "$D/manifest.tsv"
 ```
+
+The step 0 issue closes take the same two sweep additions during the backlog
+sweep: the close label (`gh issue edit <N> --add-label`) and the `#4875`
+sentence at the end of the response, in the original comment rather than a
+later edit.
 
 ### 5. Verify
 
