@@ -253,8 +253,10 @@ here.
 - **Every board item is a real GitHub issue.** No draft cards. Before creating an
   issue, search for a matching one in every state; **never create a duplicate**.
   - **The one exception is a private security advisory**, tracked by a **draft
-    card** titled `[GHSA-xxxx-yyyy-zzzz] - <summary>`, because a real issue
-    would disclose the vulnerability before a fix exists. It becomes a public
+    card** titled with the bare id, `[GHSA-xxxx-yyyy-zzzz]`, because a real
+    issue would disclose the vulnerability before a fix exists. The title stays
+    that opaque until publication: board access is wider than advisory access,
+    and a summary can name the server or the attack. It becomes a public
     issue by conversion **once the advisory is published**, never merely once
     the fix ships. The `[GHSA-` prefix is load-bearing: **any other draft card
     is still a defect to delete**. The flow is the `security-advisory` skill.

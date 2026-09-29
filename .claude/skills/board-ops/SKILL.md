@@ -247,9 +247,9 @@ duplicate-of link).
 
 ### Advisory draft cards
 
-A private security advisory is tracked by a **draft card** titled
-`[GHSA-xxxx-yyyy-zzzz] - <summary>`, because a real issue would disclose it
-before a fix exists. What goes on the card, and when it moves, is the
+A private security advisory is tracked by a **draft card** titled with the bare
+id, `[GHSA-xxxx-yyyy-zzzz]`, because a real issue would disclose it before a fix
+exists. No summary goes in the title until the advisory is published. What goes on the card, and when it moves, is the
 `/security-advisory` flow; these are only the mechanics.
 
 ⚠️ **A draft card has no repository and no issue number**, so the issue-side
@@ -280,7 +280,7 @@ PRIORITY_OPT=$(opt Priority "<provisional level>")
 ITEM_ID=
 if [ -n "$STATUS_OPT" ] && [ -n "$PRIORITY_OPT" ]; then
   ITEM_ID=$(gh project item-create 43 --owner modelcontextprotocol \
-    --title "[$GHSA] - <summary>" --body "<link and triage lines only>" \
+    --title "[$GHSA]" --body "<link and triage lines only>" \
     --format json --jq '.id') || ITEM_ID=
 fi
 # Then the two chained item-edit calls from "Add a card and set its fields".

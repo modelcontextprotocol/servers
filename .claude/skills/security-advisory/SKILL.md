@@ -56,10 +56,13 @@ An advisory gets a **draft card**, the one exception to
 [`AGENTS.md`](../../../AGENTS.md#issue-driven-work-style)'s "every board item is
 a real GitHub issue".
 
-- **Title:** `[GHSA-xxxx-yyyy-zzzz] - <advisory summary>`. The `[GHSA-` prefix
-  is not cosmetic: it is the only thing that tells an advisory draft apart from
-  a stray draft card, which is still a defect to delete, so any audit of the
-  board's drafts keys on it. Look a draft up by that bracketed id, never by words from the summary.
+- **Title:** the bare id, `[GHSA-xxxx-yyyy-zzzz]`, and **no summary until the
+  advisory is published**. A summary can name the server or the attack class,
+  and the card is read by a wider audience than the advisory (see the body's
+  warning below). The `[GHSA-` prefix is not cosmetic: it is the only thing
+  that tells an advisory draft apart from a stray draft card, which is still a
+  defect to delete, so any audit of the board's drafts keys on it, and it is
+  the exact lookup key.
 - **Body:** `**Advisory:** <html_url>` on the first line, then the severity the
   reporter claimed, the reported date, and the provisional Priority line below.
   The link comes first because a maintainer reading the card has no other route
@@ -271,16 +274,19 @@ describes a vulnerability the advisory has not disclosed yet.
 at an issue filed separately, so filing by hand and then converting produces two
 issues and two cards.
 
-1. **Convert the draft card to an issue** in `modelcontextprotocol/servers`
+1. **Give the card its public title first**, `[GHSA-xxxx-yyyy-zzzz] - <published
+   summary>` (edit the draft's title on the card), since the issue takes the
+   card's title. Only now, with the advisory public, may the summary appear.
+2. **Convert the draft card to an issue** in `modelcontextprotocol/servers`
    (the card keeps its place and its field values). The recipe is in
    `/board-ops`.
-2. Apply the labels and milestone from `/issue-create` (steps 1 and 2): `v2`,
+3. Apply the labels and milestone from `/issue-create` (steps 1 and 2): `v2`,
    one type label (normally `bug`), the server's scope label, and the milestone
    of the release the fix shipped in. **Skip its board step**: the converted
    card is already on #43.
-3. Replace the body's triage lines with a link to the now-public advisory, and
+4. Replace the body's triage lines with a link to the now-public advisory, and
    **close** the issue: the work shipped before the issue existed.
-4. Move the card to **`Done`**, which is right here because the fix shipped.
+5. Move the card to **`Done`**, which is right here because the fix shipped.
 
 ## API facts worth not re-deriving
 
