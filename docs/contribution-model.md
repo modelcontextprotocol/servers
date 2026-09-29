@@ -179,8 +179,10 @@ The pass is complete when:
   as left open by an issue that owns it;
 - every closed PR marked for harvest points, in its close comment, at an open or
   closed issue that links back to it;
-- every harvest issue carries `v2`, one type label and its scope label, and sits
-  in `Incoming` with no milestone.
+- every harvest issue carries `v2` and exactly one type label, plus its
+  `server-<name>` scope label when it concerns exactly one server (a
+  repository-level or multi-server issue carries none), and sits in `Incoming`
+  with no milestone.
 
 The report lists the counts per class, the harvest issues filed, and the
 maintainer-authored PRs still targeting `main`.

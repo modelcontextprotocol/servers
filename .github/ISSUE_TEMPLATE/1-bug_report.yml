@@ -96,10 +96,11 @@ body:
     attributes:
       label: Protocol era
       description: >
-        Which revision of the MCP specification the client negotiated. Modern
-        is 2026-07-28, the stateless revision with no `initialize` handshake.
-        Legacy is 2025-11-25 or earlier. The client's logs, or the MCP
-        Inspector, show the negotiated version.
+        Which revision of the MCP specification the client spoke. Modern is
+        2026-07-28, the stateless revision: there is no `initialize` handshake,
+        and the protocol version travels with each request. Legacy is
+        2025-11-25 or earlier, where the version is agreed in `initialize`.
+        The client's logs, or the MCP Inspector, show which one was used.
       options:
         - Modern (2026-07-28)
         - Legacy (2025-11-25 or earlier)
