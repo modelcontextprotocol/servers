@@ -83,8 +83,20 @@ a real GitHub issue".
   ownership **before** severity, and a report can look severe right up until
   it turns out to be an SDK's code, or no vulnerability at all. So score what
   the report claims now, and **re-score at the end of step 2**. Until the
-  `issue-triage` rubric lands (#4868), score with the Priority table in
-  `/issue-create` (step 3), and write the result into the body as
+  `issue-triage` rubric lands (#4868), map the advisory's severity with the
+  table below. (`/issue-create`'s Priority table would put every security
+  report at `Urgent`, which leaves the re-score nothing to change.) An
+  unverified claim sits one level below a verified one:
+
+  | Advisory severity | Provisional (step 1, as claimed) | Re-scored (step 2, verified and ours) |
+  | --- | --- | --- |
+  | `critical` | High | Urgent |
+  | `high` | High | Urgent |
+  | `medium` | Medium | High |
+  | `low` | Low | Medium |
+
+  Re-score by the severity you verified, which may differ from the claim.
+  Write the result into the body as
   `Priority <level> (provisional, <YYYY-MM-DD>)`: a draft card has no comments,
   so the body is the only place the score can be recorded. When you re-score,
   keep that line and add the new one under it, so the change of view is
@@ -262,11 +274,23 @@ stop there.
 ⚠️ **Publishing is irreversible and human-only.** It makes the advisory public,
 with no undo. Same rule as accepting: recommend, never perform.
 
-**Before publishing, do the two things publishing will not do:** request a
-**CVE** if one is wanted (optional, and the advisory is the only place to ask),
-and **add the reporter to the credits**. A credit is an explicit addition that
-the person then has to accept, so an unadded reporter is simply never credited,
-and nothing reports that.
+**Before publishing, check what publishing will show**, because a published
+advisory is what users and advisory tooling (Dependabot, `npm audit`,
+`pip-audit`) remediate from:
+
+- **The affected product**: ecosystem (`npm` or `pip`) and package name, as
+  published (`@modelcontextprotocol/server-filesystem`, `mcp-server-git`).
+- **The vulnerable version range**, and the **first patched version**: the
+  version the release actually published, which is known only once that release
+  is out. An advisory with no patched version tells nobody how to remediate.
+- **The severity**, as verified in step 2 rather than as reported.
+- **The credits.** A privately reported advisory already credits its reporter
+  (GitHub adds the credit on submission; it may still be pending the
+  reporter's acceptance), so confirm it is there rather than adding it. An
+  advisory a maintainer opened directly has no credits until someone is
+  added, and an unadded finder is simply never credited.
+- **A CVE**, if one is wanted: optional, and the advisory is the only place to
+  request one.
 
 ### 6. After publication, convert the card into public tracking
 
@@ -304,5 +328,6 @@ issues and two cards.
 | Fork idempotency | Read `.private_fork` first; the POST creates, it does not probe |
 | Fork deletion | Needs the `delete_repo` OAuth scope, which a default `gh` token lacks |
 | Comments | **No API at all**, REST or GraphQL; UI-only |
+| Credits | `credits_detailed` on the advisory; a private report carries the reporter's credit (`type` `reporter`, `state` `pending` or `accepted`) from submission |
 | Board writes | Not automatable from Actions: `GITHUB_TOKEN` cannot hold `organization projects: write` |
 | SDK routing | Both SDK repos have private vulnerability reporting enabled; use their advisory forms |
