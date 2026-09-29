@@ -1,4 +1,3 @@
-
 from freezegun import freeze_time
 from mcp.shared.exceptions import McpError
 import pytest
@@ -475,7 +474,7 @@ def test_get_local_tz_with_invalid_override():
         get_local_tz("Invalid/Timezone")
 
 
-@patch('mcp_server_time.server.get_localzone_name')
+@patch("mcp_server_time.server.get_localzone_name")
 def test_get_local_tz_with_valid_iana_name(mock_get_localzone):
     """Test that valid IANA timezone names from tzlocal work correctly."""
     mock_get_localzone.return_value = "Europe/London"
@@ -484,7 +483,7 @@ def test_get_local_tz_with_valid_iana_name(mock_get_localzone):
     assert isinstance(result, ZoneInfo)
 
 
-@patch('mcp_server_time.server.get_localzone_name')
+@patch("mcp_server_time.server.get_localzone_name")
 def test_get_local_tz_when_none_returned(mock_get_localzone):
     """Test default to UTC when tzlocal returns None."""
     mock_get_localzone.return_value = None
@@ -492,10 +491,10 @@ def test_get_local_tz_when_none_returned(mock_get_localzone):
     assert str(result) == "UTC"
 
 
-@patch('mcp_server_time.server.get_localzone_name')
+@patch("mcp_server_time.server.get_localzone_name")
 def test_get_local_tz_handles_windows_timezones(mock_get_localzone):
     """Test that tzlocal properly handles Windows timezone names.
-    
+
     Note: tzlocal should convert Windows names like 'Pacific Standard Time'
     to proper IANA names like 'America/Los_Angeles'.
     """
@@ -510,7 +509,7 @@ def test_get_local_tz_handles_windows_timezones(mock_get_localzone):
     "timezone_name",
     [
         "America/New_York",
-        "Europe/Paris", 
+        "Europe/Paris",
         "Asia/Tokyo",
         "Australia/Sydney",
         "Africa/Cairo",
@@ -519,7 +518,7 @@ def test_get_local_tz_handles_windows_timezones(mock_get_localzone):
         "UTC",
     ],
 )
-@patch('mcp_server_time.server.get_localzone_name')
+@patch("mcp_server_time.server.get_localzone_name")
 def test_get_local_tz_various_timezones(mock_get_localzone, timezone_name):
     """Test various timezone names that tzlocal might return."""
     mock_get_localzone.return_value = timezone_name
