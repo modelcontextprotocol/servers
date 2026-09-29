@@ -1,0 +1,134 @@
+# Feature request form (GitHub issue forms schema).
+#
+# Asks for the server and a problem statement first, since the servers are
+# reference implementations and a feature is judged by what it demonstrates
+# about the protocol (CONTRIBUTING.md, "What we act on"). The server dropdown is
+# how triage picks the `server-<name>` scope label; `labels:` below is static.
+# `enhancement` is the type label and `v2` the version label: this repository
+# has no v1 line, so every issue is a v2 issue (AGENTS.md).
+#
+# GitHub serves issue forms from the default branch (`main`), so a change here
+# goes live at the next milestone merge from `v2/main`, not when it merges.
+name: Feature request
+description: Suggest an improvement to one of the reference servers
+labels: ["enhancement", "v2"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement.
+
+        **Maintainers do the implementation here**: this repository accepts
+        **issues, not pull requests**
+        ([`CONTRIBUTING.md`](https://github.com/modelcontextprotocol/servers/blob/main/CONTRIBUTING.md)).
+        That makes a sharply stated **problem** the most valuable thing you can
+        give us. It is what we design against, and it survives after a specific
+        solution turns out not to fit.
+
+        These servers are **reference implementations**. We favor changes that
+        show how a part of the protocol is meant to be used (Resources, Prompts
+        and Roots as well as Tools) and are selective about other new features.
+
+        > **New servers are not accepted here.** To publish or list a server,
+        > use the [MCP Server Registry](https://github.com/modelcontextprotocol/registry).
+
+  - type: dropdown
+    id: server
+    attributes:
+      label: Which server?
+      options:
+        - everything (@modelcontextprotocol/server-everything)
+        - filesystem (@modelcontextprotocol/server-filesystem)
+        - memory (@modelcontextprotocol/server-memory)
+        - sequentialthinking (@modelcontextprotocol/server-sequential-thinking)
+        - fetch (mcp-server-fetch)
+        - git (mcp-server-git)
+        - time (mcp-server-time)
+        - More than one, or the repository itself
+    validations:
+      required: true
+
+  - type: dropdown
+    id: spec-era
+    attributes:
+      label: Protocol era
+      description: >
+        Which revision of the MCP specification the request concerns. Modern is
+        2026-07-28, the stateless revision; legacy is 2025-11-25 or earlier.
+      options:
+        - Modern (2026-07-28)
+        - Legacy (2025-11-25 or earlier)
+        - Both, or not era-specific
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: client
+    attributes:
+      label: MCP client
+      description: The client you use the server with, if it matters to the request.
+      placeholder: "Claude Desktop, MCP Inspector, a custom SDK client"
+    validations:
+      required: false
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >
+        What are you trying to do, and what makes it hard or impossible today?
+        Describe the situation, not the feature, including how often you hit it
+        and what you do instead right now.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solution you have in mind (optional)
+      description: >
+        If you have a concrete idea, describe it here. It's fine to leave this
+        blank; the problem above is the part we need.
+    validations:
+      required: false
+
+  - type: textarea
+    id: protocol
+    attributes:
+      label: Which MCP feature does it demonstrate? (optional)
+      description: >
+        If the change would show off a part of the protocol (a resource
+        template, a prompt, Roots, elicitation, and so on), say which, with a
+        link to the specification section if you have one.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds you have tried
+    validations:
+      required: false
+
+  - type: textarea
+    id: prompt
+    attributes:
+      label: Already built it locally?
+      description: >
+        Please don't attach a diff or open a pull request. Share the **exact
+        prompt(s)** you used, the result, and how you verified it. We reproduce
+        the work through our own workflow so it lands with the right
+        conventions, tests and coverage.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This is a request for one of the servers in this repository, not a new server, the MCP specification or an SDK.
+          required: true
