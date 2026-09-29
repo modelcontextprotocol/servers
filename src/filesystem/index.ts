@@ -485,25 +485,21 @@ server.registerTool(
     const entries = await fs.readdir(validPath, { withFileTypes: true });
 
     // Get detailed information for each entry
+    //
+    // A stat that fails is not an entry of size 0: `formatSize` renders that
+    // as "0 B", so an unreadable file and an empty one come out identical, and
+    // the entry's 0 is added to the combined size below. Let it reject, the
+    // way `list_directory` and `directory_tree` already let `readdir` reject.
     const detailedEntries = await Promise.all(
       entries.map(async (entry) => {
         const entryPath = path.join(validPath, entry.name);
-        try {
-          const stats = await fs.stat(entryPath);
-          return {
-            name: entry.name,
-            isDirectory: entry.isDirectory(),
-            size: stats.size,
-            mtime: stats.mtime
-          };
-        } catch (error) {
-          return {
-            name: entry.name,
-            isDirectory: entry.isDirectory(),
-            size: 0,
-            mtime: new Date(0)
-          };
-        }
+        const stats = await fs.stat(entryPath);
+        return {
+          name: entry.name,
+          isDirectory: entry.isDirectory(),
+          size: stats.size,
+          mtime: stats.mtime
+        };
       })
     );
 
