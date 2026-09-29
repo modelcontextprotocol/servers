@@ -81,9 +81,13 @@ one, list them with their classes for a maintainer to confirm, and go on with
 pass 1 for the rest meanwhile.
 
 ```sh
-# Close as not planned, with the class's response (body in a file, so quoting is safe).
-gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned" \
-  --comment "$(cat "$D/response.md")"
+# Close as not planned, with the class's response (body in a file, so quoting is
+# safe). An empty or missing response stops here instead of closing silently.
+BODY=$(cat "$D/response.md") && [ -n "$BODY" ] \
+  && gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned" --comment "$BODY" \
+  || echo "no response or close failed for #<N> — nothing closed, or check it" >&2
+# Spam or empty, the one class with no response:
+gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned"
 ```
 
 ## Pass 1 — sweep onto the board (no approval implied)
@@ -142,8 +146,12 @@ jq -r --slurpfile b "$D/b43.json" --arg R "$R" '
 A failed or truncated listing deletes its file, so the last step fails on the
 missing file instead of reporting every issue as unboarded.
 
-The sweep is idempotent: re-running the finder after an interrupted batch lists
-only what is still unboarded, so resume from its output, never from memory.
+The finder is only half the resume point. An issue whose card was added but
+whose Priority or score comment then failed has left the finder's list, and the
+audit catches a missing Priority but not a missing comment. So after an
+interrupted batch, **finish the last issue you were working on first** (read its
+card back with `board-ops` and check its comments), then resume from the
+finder's output, never from memory.
 
 ## Pass 2 — approve what should ship
 
@@ -336,7 +344,7 @@ into the issue column.
 
 | Class | Slug | Recognized by | Harvest? | Close with |
 | --- | --- | --- | --- | --- |
-| **Listing** | `listing` | Adds or edits a server entry in `README.md` or `ADDITIONAL.md` | No | [Registry, PR](#registry-pr) |
+| **Listing** | `listing` | Adds a server entry to `README.md` or `ADDITIONAL.md`, or promotes one (a correction to an existing entry is read on its merits, and may be `keep`) | No | [Registry, PR](#registry-pr) |
 | **New server** | `new-server` | Adds a server implementation, under `src/` or anywhere else | No | [Registry, PR](#registry-pr) |
 | **Archived server** | `archived` | Changes a server that moved to `servers-archived` (it pre-classifies as `new-server?`, since its directory is gone) | No | [Archived](#archived) |
 | **No-op or spam** | `no-op` | No effective change (a rename to the same name, whitespace, a README "rename" to itself), or unrelated or generated content | No | [General, PR](#general-pr), without a tracking issue |
