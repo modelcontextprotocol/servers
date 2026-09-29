@@ -260,25 +260,29 @@ full listing, checked for truncation, then feed that item id to `item-edit` or
 ```sh
 GHSA=GHSA-xxxx-yyyy-zzzz   # the advisory's real id
 ITEM_ID=   # never let an earlier lookup's id survive a failed one
+LOOKED=    # set only by a lookup over a COMPLETE listing
 BOARD=$(gh project item-list 43 --owner modelcontextprotocol --format json --limit 2000)
 if jq -e '(.items | length) == .totalCount' <<<"$BOARD" >/dev/null; then
   ITEM_ID=$(jq -r --arg p "[$GHSA]" '.items[] | select(.content.type=="DraftIssue")
-        | select(.content.title | startswith($p)) | .id' <<<"$BOARD")
+        | select(.content.title | startswith($p)) | .id' <<<"$BOARD") && LOOKED=1
   [ -n "$ITEM_ID" ] || echo "no draft card titled [$GHSA] on #43" >&2
 else
   echo "item-list incomplete or failed — raise --limit; not concluding anything" >&2
 fi
 ```
 
-**Create** one only after that lookup finds none (a second card for the same
-advisory is a duplicate). It is the add-card recipe with `item-create` in place
-of `item-add`, Status `Incoming`, and the provisional Priority:
+**Create** one only when that lookup ran over a complete listing **and** found
+none (a second card for the same advisory is a duplicate). Run it in the same
+shell, straight after the lookup: it refuses on a missing `LOOKED` or a found
+`ITEM_ID`. It is the add-card recipe with `item-create` in place of `item-add`,
+Status `Incoming`, and the provisional Priority:
 
 ```sh
 STATUS_OPT=$(opt Status "Incoming")
 PRIORITY_OPT=$(opt Priority "<provisional level>")
-ITEM_ID=
-if [ -n "$STATUS_OPT" ] && [ -n "$PRIORITY_OPT" ]; then
+if [ "$LOOKED" != 1 ] || [ -n "$ITEM_ID" ]; then
+  echo "lookup incomplete, or [$GHSA] already has a card ($ITEM_ID) — not creating" >&2
+elif [ -n "$STATUS_OPT" ] && [ -n "$PRIORITY_OPT" ]; then
   ITEM_ID=$(gh project item-create 43 --owner modelcontextprotocol \
     --title "[$GHSA]" --body "<link and triage lines only>" \
     --format json --jq '.id') || ITEM_ID=

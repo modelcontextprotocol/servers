@@ -98,9 +98,10 @@ a real GitHub issue".
   Re-score by the severity you verified, which may differ from the claim.
   Write the result into the body as
   `Priority <level> (provisional, <YYYY-MM-DD>)`: a draft card has no comments,
-  so the body is the only place the score can be recorded. When you re-score,
-  keep that line and add the new one under it, so the change of view is
-  legible. Numbers and level names only; the reasoning behind a score is the
+  so the body is the only place the score can be recorded. When you re-score
+  (step 2), keep that line, add `Priority <level> (verified, <YYYY-MM-DD>)`
+  under it so the change of view is legible, and **set the card's Priority
+  field to the verified level**. Numbers and level names only; the reasoning behind a score is the
   impact, which belongs in the private advisory.
   ⚠️ **Set both fields.** A draft card has no labels and no milestone, so its
   Status and Priority are all the triage state it carries.
@@ -179,7 +180,9 @@ names the symptom rather than the class:
 `memory` writes one file at a configured path, and `everything`'s HTTP
 transports are mostly SDK code (see ownership, above).
 
-**Now re-score the card's Priority**, under the provisional line (step 1).
+**Now re-score the card's Priority**: add the `verified` line under the
+provisional one (step 1), and set the card's Priority field to match with the
+`/board-ops` edit recipe, so the board orders by the verified level.
 This is the first point where severity has anything solid under it: the code is
 ours, it reproduces, and you know which class and which server.
 
