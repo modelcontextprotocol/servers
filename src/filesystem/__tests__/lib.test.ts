@@ -441,6 +441,33 @@ describe('Lib Functions', () => {
         expect(result).toEqual([expectedResult]);
       });
 
+      it('propagates a read failure on a subdirectory instead of returning a short result', async () => {
+        // A directory that cannot be read is a real failure: reporting the
+        // matches found so far as the complete result is how a search silently
+        // misses files. The validation skip above is the only case that stays
+        // quiet.
+        const eacces: NodeJS.ErrnoException = new Error(
+          "EACCES: permission denied, scandir '/allowed/dir/locked'"
+        );
+        eacces.code = 'EACCES';
+
+        mockFs.realpath.mockImplementation(async (path: any) => path.toString());
+        mockFs.readdir.mockImplementation(async (dir: any) => {
+          if (dir.toString().endsWith('locked')) throw eacces;
+          return [
+            { name: 'locked', isDirectory: () => true },
+            { name: 'visible.txt', isDirectory: () => false },
+          ] as any;
+        });
+
+        const testDir = process.platform === 'win32' ? 'C:\\allowed\\dir' : '/allowed/dir';
+        const allowedDirs = process.platform === 'win32' ? ['C:\\allowed'] : ['/allowed'];
+
+        await expect(
+          searchFilesWithValidation(testDir, '*.txt', allowedDirs, {})
+        ).rejects.toThrow('EACCES');
+      });
+
       it('handles validation errors during search', async () => {
         const mockEntries = [
           { name: 'test.txt', isDirectory: () => false },
