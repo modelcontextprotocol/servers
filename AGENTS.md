@@ -56,15 +56,17 @@ A server may carry its own `AGENTS.md` for guidance that only applies inside it
 it reads a file in that directory, not at session start, so **a rule that
 applies repo-wide goes in this file, never only in a nested one.**
 
-### New and rewritten files open with a purpose header
+### New and rewritten source files open with a purpose header
 
-A file you create, or substantially rewrite, opens with a comment stating what
-the file is for and the reasoning behind it: the first comment in the file,
+A source file you create, or substantially rewrite (code, tests, scripts,
+workflows, configuration), opens with a comment stating what the file is for
+and the reasoning behind it: the first comment in the file,
 **after any shebang**. `#!/usr/bin/env node` must stay on line 1 of an
 executable entry point, or the published bin stops working. This is not a bulk
 migration: files you only touch in passing keep their current form. Read that
 header rather than restating its reasoning in this file, since a duplicated
-rationale goes stale silently.
+rationale goes stale silently. A Markdown document states its purpose in its
+opening paragraph instead, as this one does.
 
 ## Development setup
 
@@ -163,8 +165,8 @@ Every PR answers the checklist in
 [`.github/pull_request_template.md`](./.github/pull_request_template.md):
 the MCP documentation was read for the feature touched, the change follows MCP
 security best practices, the server's README is updated, and a **server-facing
-change was tested with an LLM client**, with what was asked and what came back
-recorded in the PR.
+change was tested with an LLM client**, with the scenarios tested named under
+the template's "How Has This Been Tested?" heading.
 
 ## Maintenance rules
 
