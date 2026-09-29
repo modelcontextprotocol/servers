@@ -27,6 +27,8 @@ We don't accept:
 
 When adding or configuring tests for servers implemented in TypeScript, use **vitest** as the test framework. Vitest provides better ESM support, faster test execution, and a more modern testing experience.
 
+Before pushing a change to a TypeScript server, run `npm run format` at the repository root, then `npm run validate`. Each server's `validate` runs its format check, lint (ESLint, where a warning fails like an error), typecheck, build and tests; the root one runs every server's plus the repo-wide guards. `npm run validate -w src/<server>` checks a single server. `npm test` in a server is the fast test run and `npm run coverage` the instrumented one.
+
 ## Documentation
 
 Improvements to existing documentation is welcome - although generally we'd prefer ergonomic improvements than documenting pain points if possible!
