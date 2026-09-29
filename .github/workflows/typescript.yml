@@ -74,12 +74,12 @@ jobs:
           node-version: 22
           cache: npm
 
-      # At the repo root, not in the package: run from a workspace directory,
-      # `npm ci` installs only that workspace's dependencies, and the gate's
-      # tools (Prettier, ESLint) are root devDependencies shared by every
-      # package.
+      # This package plus the root: run from a workspace directory, `npm ci`
+      # installs only that workspace's dependencies, and the gate's tools
+      # (Prettier, ESLint) are root devDependencies. A bare root `npm ci` would
+      # instead run every workspace's `prepare` (a build), coupling the legs.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --workspace src/${{ matrix.package }} --include-workspace-root
 
       - name: Validate package
         working-directory: src/${{ matrix.package }}
