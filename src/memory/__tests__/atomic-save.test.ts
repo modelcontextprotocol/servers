@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
-import { KnowledgeGraphManager, Entity } from "../index.js";
+import { KnowledgeGraphManager } from "../index.js";
 
 /**
  * Regression tests for durable persistence of the knowledge graph.

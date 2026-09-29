@@ -1,9 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
-import os from "os";
 import { randomBytes } from "crypto";
 import { StringDecoder } from "string_decoder";
-import { diffLines, createTwoFilesPatch } from "diff";
+import { createTwoFilesPatch } from "diff";
 import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from "./path-utils.js";
 import { isPathWithinAllowedDirectories } from "./path-validation.js";
@@ -214,6 +213,7 @@ export async function validatePath(requestedPath: string): Promise<string> {
         if ((resolutionError as NodeJS.ErrnoException).code === "ENOENT") {
           throw new Error(
             `Parent directory does not exist: ${path.dirname(absolute)}`,
+            { cause: resolutionError },
           );
         }
         throw resolutionError;
@@ -265,7 +265,9 @@ export async function writeFileContent(
       } catch (renameError) {
         try {
           await fs.unlink(tempPath);
-        } catch {}
+        } catch {
+          // Best-effort cleanup; the rename error below is the one to report.
+        }
         throw renameError;
       }
       // Restore original permission bits since the atomic rename replaces the
@@ -274,7 +276,9 @@ export async function writeFileContent(
       // failure must not fail the write, which has already succeeded.
       try {
         await fs.chmod(filePath, origStats.mode & 0o777);
-      } catch {}
+      } catch {
+        // Deliberately ignored: the write already succeeded (see above).
+      }
     } else {
       throw error;
     }
@@ -398,7 +402,9 @@ export async function applyFileEdits(
     } catch (error) {
       try {
         await fs.unlink(tempPath);
-      } catch {}
+      } catch {
+        // Best-effort cleanup; the write error below is the one to report.
+      }
       throw error;
     }
     // Restore original permission bits since the atomic rename replaces the
@@ -407,7 +413,9 @@ export async function applyFileEdits(
     // failure must not fail the write, which has already succeeded.
     try {
       await fs.chmod(filePath, origStats.mode & 0o777);
-    } catch {}
+    } catch {
+      // Deliberately ignored: the write already succeeded (see above).
+    }
   }
 
   return formattedDiff;

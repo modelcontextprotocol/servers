@@ -280,14 +280,20 @@ describe("Path Validation", () => {
 
     it("handles null and undefined inputs gracefully", () => {
       const allowed = ["/home/user/project"];
+      // `as never` deliberately defeats the parameter types: this test
+      // exercises the runtime guard against callers that bypass TypeScript.
 
       // Should return false, not crash
-      expect(isPathWithinAllowedDirectories(null as any, allowed)).toBe(false);
-      expect(isPathWithinAllowedDirectories(undefined as any, allowed)).toBe(
+      expect(isPathWithinAllowedDirectories(null as never, allowed)).toBe(
         false,
       );
-      expect(isPathWithinAllowedDirectories("/path", null as any)).toBe(false);
-      expect(isPathWithinAllowedDirectories("/path", undefined as any)).toBe(
+      expect(isPathWithinAllowedDirectories(undefined as never, allowed)).toBe(
+        false,
+      );
+      expect(isPathWithinAllowedDirectories("/path", null as never)).toBe(
+        false,
+      );
+      expect(isPathWithinAllowedDirectories("/path", undefined as never)).toBe(
         false,
       );
     });
@@ -637,21 +643,25 @@ describe("Path Validation", () => {
   describe("Edge Cases", () => {
     it("rejects non-string inputs safely", () => {
       const allowed = ["/home/user/project"];
+      // `as never` deliberately defeats the parameter types: this test
+      // exercises the runtime guard against callers that bypass TypeScript.
 
-      expect(isPathWithinAllowedDirectories(123 as any, allowed)).toBe(false);
-      expect(isPathWithinAllowedDirectories({} as any, allowed)).toBe(false);
-      expect(isPathWithinAllowedDirectories([] as any, allowed)).toBe(false);
-      expect(isPathWithinAllowedDirectories(null as any, allowed)).toBe(false);
-      expect(isPathWithinAllowedDirectories(undefined as any, allowed)).toBe(
+      expect(isPathWithinAllowedDirectories(123 as never, allowed)).toBe(false);
+      expect(isPathWithinAllowedDirectories({} as never, allowed)).toBe(false);
+      expect(isPathWithinAllowedDirectories([] as never, allowed)).toBe(false);
+      expect(isPathWithinAllowedDirectories(null as never, allowed)).toBe(
+        false,
+      );
+      expect(isPathWithinAllowedDirectories(undefined as never, allowed)).toBe(
         false,
       );
 
       // Non-string in allowed directories
       expect(
-        isPathWithinAllowedDirectories("/home/user/project", [123 as any]),
+        isPathWithinAllowedDirectories("/home/user/project", [123 as never]),
       ).toBe(false);
       expect(
-        isPathWithinAllowedDirectories("/home/user/project", [{} as any]),
+        isPathWithinAllowedDirectories("/home/user/project", [{} as never]),
       ).toBe(false);
     });
 
@@ -766,7 +776,7 @@ describe("Path Validation", () => {
 
         // Symlink target should be outside allowed directory
         expect(isPathWithinAllowedDirectories(realPath, allowed)).toBe(false);
-      } catch (error) {
+      } catch {
         // Skip if no symlink permissions
       }
     });
@@ -1067,8 +1077,6 @@ describe("Path Validation", () => {
         return;
       }
 
-      const allowed = [allowedDir];
-
       await fs.symlink(targetFile, testPath);
 
       await expect(fs.open(testPath, "wx")).rejects.toThrow(/EEXIST/);
@@ -1187,7 +1195,6 @@ describe("Path Validation", () => {
     });
 
     it("should allow overwrites to legitimate files within allowed directories", async () => {
-      const allowed = [allowedDir];
       const legitFile = path.join(allowedDir, "legit-file.txt");
 
       // Create a legitimate file
@@ -1214,7 +1221,6 @@ describe("Path Validation", () => {
         return;
       }
 
-      const allowed = [allowedDir];
       const targetFile = path.join(allowedDir, "target.txt");
       const symlinkPath = path.join(allowedDir, "symlink.txt");
 
@@ -1322,7 +1328,6 @@ describe("Path Validation", () => {
         return;
       }
 
-      const allowed = [allowedDir];
       const tempFile = path.join(allowedDir, "temp.txt");
       const targetSymlink = path.join(allowedDir, "target-symlink.txt");
       const forbiddenTarget = path.join(forbiddenDir, "forbidden-target.txt");

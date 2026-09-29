@@ -172,7 +172,7 @@ export class KnowledgeGraphManager {
       if (
         error instanceof Error &&
         "code" in error &&
-        (error as any).code === "ENOENT"
+        error.code === "ENOENT"
       ) {
         return { entities: [], relations: [] };
       }
@@ -452,7 +452,13 @@ const resourceSubscribers = new Set<string>();
 // client has not subscribed.
 function notifyGraphUpdated() {
   if (resourceSubscribers.has(RESOURCE_URI)) {
-    server.server.sendResourceUpdated({ uri: RESOURCE_URI });
+    // Fire-and-forget: the tool result must not wait on (or fail because of)
+    // the notification, so a delivery failure is logged rather than thrown.
+    server.server
+      .sendResourceUpdated({ uri: RESOURCE_URI })
+      .catch((error: unknown) => {
+        console.error("Failed to send resource updated notification:", error);
+      });
   }
 }
 

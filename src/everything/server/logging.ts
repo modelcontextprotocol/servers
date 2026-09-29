@@ -52,8 +52,10 @@ export const beginSimulatedLogging = (
 
   // Set the interval to send later logging messages to this client
   if (!logsUpdateIntervals.has(sessionId)) {
-    // Send once immediately
-    sendSimulatedLoggingMessage(sessionId);
+    // Send once immediately. Fire-and-forget: this function is synchronous by
+    // contract (it starts a background simulation), exactly like the interval
+    // callback below, so the caller cannot hold the promise.
+    void sendSimulatedLoggingMessage(sessionId);
 
     // Send a randomly-leveled log message every 5 seconds
     logsUpdateIntervals.set(

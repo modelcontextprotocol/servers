@@ -4,7 +4,6 @@ import * as path from "path";
 import * as os from "os";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 
 /**

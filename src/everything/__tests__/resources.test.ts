@@ -28,6 +28,7 @@ import {
   stopSimulatedResourceUpdates,
   removeSubscriber,
 } from "../resources/subscriptions.js";
+import type { ResourceHandler } from "./helpers.js";
 
 describe("Resource Templates", () => {
   describe("Constants", () => {
@@ -116,32 +117,26 @@ describe("Resource Templates", () => {
       // The completer is a zod schema wrapped with completable
       expect(resourceTypeCompleter).toBeDefined();
       // It should have the zod parse method
-      expect(typeof (resourceTypeCompleter as any).parse).toBe("function");
+      expect(typeof resourceTypeCompleter.parse).toBe("function");
     });
 
     it("should validate string resource types", () => {
       // Test that valid strings pass validation
-      expect(() => (resourceTypeCompleter as any).parse("Text")).not.toThrow();
-      expect(() => (resourceTypeCompleter as any).parse("Blob")).not.toThrow();
+      expect(() => resourceTypeCompleter.parse("Text")).not.toThrow();
+      expect(() => resourceTypeCompleter.parse("Blob")).not.toThrow();
     });
   });
 
   describe("resourceIdForPromptCompleter", () => {
     it("should be defined as a completable schema", () => {
       expect(resourceIdForPromptCompleter).toBeDefined();
-      expect(typeof (resourceIdForPromptCompleter as any).parse).toBe(
-        "function",
-      );
+      expect(typeof resourceIdForPromptCompleter.parse).toBe("function");
     });
 
     it("should validate string IDs", () => {
       // Test that valid strings pass validation
-      expect(() =>
-        (resourceIdForPromptCompleter as any).parse("1"),
-      ).not.toThrow();
-      expect(() =>
-        (resourceIdForPromptCompleter as any).parse("100"),
-      ).not.toThrow();
+      expect(() => resourceIdForPromptCompleter.parse("1")).not.toThrow();
+      expect(() => resourceIdForPromptCompleter.parse("100")).not.toThrow();
     });
   });
 
@@ -162,15 +157,15 @@ describe("Resource Templates", () => {
 
   describe("registerResourceTemplates", () => {
     it("should register text and blob resource templates", () => {
-      const registeredResources: any[] = [];
-
       const mockServer = {
-        registerResource: vi.fn((...args) => {
-          registeredResources.push(args);
-        }),
+        registerResource: vi.fn(),
+        // Partial mock: registerResourceTemplates only calls registerResource,
+        // and McpServer's private members rule out a structural literal.
       } as unknown as McpServer;
 
       registerResourceTemplates(mockServer);
+      const registeredResources = vi.mocked(mockServer.registerResource).mock
+        .calls;
 
       expect(mockServer.registerResource).toHaveBeenCalledTimes(2);
 
@@ -179,7 +174,7 @@ describe("Resource Templates", () => {
         r[0].includes("Text"),
       );
       expect(textRegistration).toBeDefined();
-      expect(textRegistration[1]).toBeInstanceOf(ResourceTemplate);
+      expect(textRegistration?.[1]).toBeInstanceOf(ResourceTemplate);
 
       // Check blob resource registration
       const blobRegistration = registeredResources.find((r) =>
@@ -210,11 +205,8 @@ describe("Session Resources", () => {
 
   describe("registerSessionResource", () => {
     it("should register text resource and return resource link", () => {
-      const registrations: any[] = [];
       const mockServer = {
-        registerResource: vi.fn((...args) => {
-          registrations.push(args);
-        }),
+        registerResource: vi.fn(),
       } as unknown as McpServer;
 
       const resource = {
@@ -270,11 +262,18 @@ describe("Session Resources", () => {
     });
 
     it("should return resource handler that provides correct content", async () => {
-      let capturedHandler: Function | null = null;
+      let capturedHandler: ResourceHandler | null = null;
       const mockServer = {
-        registerResource: vi.fn((_name, _uri, _config, handler) => {
-          capturedHandler = handler;
-        }),
+        registerResource: vi.fn(
+          (
+            _name: string,
+            _uri: string,
+            _config: unknown,
+            handler: ResourceHandler,
+          ) => {
+            capturedHandler = handler;
+          },
+        ),
       } as unknown as McpServer;
 
       const resource = {
@@ -294,8 +293,10 @@ describe("Session Resources", () => {
 
       const handlerResult = await capturedHandler!(new URL(resource.uri));
       expect(handlerResult.contents).toHaveLength(1);
-      expect(handlerResult.contents[0].text).toBe("Test content here");
-      expect(handlerResult.contents[0].mimeType).toBe("text/plain");
+      expect(handlerResult.contents[0]).toMatchObject({
+        text: "Test content here",
+        mimeType: "text/plain",
+      });
     });
   });
 });

@@ -141,7 +141,7 @@ export const blobResourceUri = (resourceId: number) =>
  * @throws {Error} If the resourceId is not a finite positive integer.
  */
 const parseResourceId = (uri: URL, variables: Record<string, unknown>) => {
-  const idxStr = String((variables as any).resourceId ?? "");
+  const idxStr = String(variables.resourceId ?? "");
   const idx = Number(idxStr);
   if (Number.isFinite(idx) && Number.isInteger(idx) && idx > 0) {
     return idx;

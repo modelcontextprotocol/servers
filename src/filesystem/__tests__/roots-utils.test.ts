@@ -9,7 +9,6 @@ import {
 } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import type { Root } from "@modelcontextprotocol/sdk/types.js";
 
 describe("getValidRootDirectories", () => {
   let testDir1: string;

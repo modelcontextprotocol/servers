@@ -138,8 +138,10 @@ export const beginSimulatedResourceUpdates = (
   sessionId: string | undefined,
 ) => {
   if (!subsUpdateIntervals.has(sessionId)) {
-    // Send once immediately
-    sendSimulatedResourceUpdates(server, sessionId);
+    // Send once immediately. Fire-and-forget: this function is synchronous by
+    // contract (its callers start a background simulation), exactly like the
+    // interval callback below, so the caller cannot hold the promise.
+    void sendSimulatedResourceUpdates(server, sessionId);
 
     // Set the interval to send later resource update notifications to this client
     subsUpdateIntervals.set(

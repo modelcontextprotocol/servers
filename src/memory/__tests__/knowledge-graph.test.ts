@@ -2,12 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import {
-  KnowledgeGraphManager,
-  Entity,
-  Relation,
-  KnowledgeGraph,
-} from "../index.js";
+import { KnowledgeGraphManager, Entity, Relation } from "../index.js";
 
 describe("KnowledgeGraphManager", () => {
   let manager: KnowledgeGraphManager;
@@ -26,7 +21,7 @@ describe("KnowledgeGraphManager", () => {
     // Clean up test file
     try {
       await fs.unlink(testFilePath);
-    } catch (error) {
+    } catch (_error) {
       // Ignore errors if file doesn't exist
     }
   });

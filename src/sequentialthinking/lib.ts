@@ -33,8 +33,8 @@ export class SequentialThinkingServer {
       branchId,
     } = thoughtData;
 
-    let prefix = "";
-    let context = "";
+    let prefix: string;
+    let context: string;
 
     if (isRevision) {
       prefix = chalk.yellow("🔄 Revision");

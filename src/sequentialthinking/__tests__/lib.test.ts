@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { SequentialThinkingServer, ThoughtData } from "../lib.js";
+import { SequentialThinkingServer } from "../lib.js";
 
 // Mock chalk to avoid ESM issues
 vi.mock("chalk", () => {

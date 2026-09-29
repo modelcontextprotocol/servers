@@ -64,7 +64,7 @@ let allowedDirectories = (
           return [normalizedOriginal, normalizedResolved];
         }
         return [normalizedResolved];
-      } catch (error) {
+      } catch {
         // If we can't resolve (doesn't exist), use the normalized absolute path
         // This allows configuring allowed dirs that will be created later
         return [normalizedOriginal];
@@ -83,7 +83,7 @@ for (const dir of allowedDirectories) {
     } else {
       console.error(`Warning: ${dir} is not a directory, skipping`);
     }
-  } catch (error) {
+  } catch {
     console.error(`Warning: Cannot access directory ${dir}, skipping`);
   }
 }
@@ -119,7 +119,7 @@ const ReadMediaFileArgsSchema = z.object({
 const ReadMultipleFilesArgsSchema = z.object({
   paths: z
     .array(z.string())
-    .min(1, "At least one file path must be provided")
+    .min(1)
     .describe(
       "Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories.",
     ),
@@ -284,9 +284,7 @@ server.registerTool(
       "Read a file and return it as a base64-encoded content block with its MIME type. " +
       "Image and audio files are returned as image/audio content; any other file type is " +
       "returned as an embedded resource. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-    },
+    inputSchema: ReadMediaFileArgsSchema.shape,
     outputSchema: {
       content: z.array(
         z.union([
@@ -361,14 +359,7 @@ server.registerTool(
       "or compare multiple files. Each file's content is returned with its " +
       "path as a reference. Failed reads for individual files won't stop " +
       "the entire operation. Only works within allowed directories.",
-    inputSchema: {
-      paths: z
-        .array(z.string())
-        .min(1)
-        .describe(
-          "Array of file paths to read. Each path must be a string pointing to a valid file within allowed directories.",
-        ),
-    },
+    inputSchema: ReadMultipleFilesArgsSchema.shape,
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
@@ -402,10 +393,7 @@ server.registerTool(
       "Create a new file or completely overwrite an existing file with new content. " +
       "Use with caution as it will overwrite existing files without warning. " +
       "Handles text content with proper encoding. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      content: z.string(),
-    },
+    inputSchema: WriteFileArgsSchema.shape,
     outputSchema: { content: z.string() },
     annotations: {
       readOnlyHint: false,
@@ -433,21 +421,7 @@ server.registerTool(
       "Make line-based edits to a text file. Each edit replaces exact line sequences " +
       "with new content. Returns a git-style diff showing the changes made. " +
       "Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      edits: z.array(
-        z.object({
-          oldText: z
-            .string()
-            .describe("Text to search for - must match exactly"),
-          newText: z.string().describe("Text to replace with"),
-        }),
-      ),
-      dryRun: z
-        .boolean()
-        .default(false)
-        .describe("Preview changes using git-style diff format"),
-    },
+    inputSchema: EditFileArgsSchema.shape,
     outputSchema: { content: z.string() },
     annotations: {
       readOnlyHint: false,
@@ -475,9 +449,7 @@ server.registerTool(
       "nested directories in one operation. If the directory already exists, " +
       "this operation will succeed silently. Perfect for setting up directory " +
       "structures for projects or ensuring required paths exist. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-    },
+    inputSchema: CreateDirectoryArgsSchema.shape,
     outputSchema: { content: z.string() },
     annotations: {
       readOnlyHint: false,
@@ -506,9 +478,7 @@ server.registerTool(
       "Results clearly distinguish between files and directories with [FILE] and [DIR] " +
       "prefixes. This tool is essential for understanding directory structure and " +
       "finding specific files within a directory. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-    },
+    inputSchema: ListDirectoryArgsSchema.shape,
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
@@ -536,14 +506,7 @@ server.registerTool(
       "Results clearly distinguish between files and directories with [FILE] and [DIR] " +
       "prefixes. This tool is useful for understanding directory structure and " +
       "finding specific files within a directory. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      sortBy: z
-        .enum(["name", "size"])
-        .optional()
-        .default("name")
-        .describe("Sort entries by name or size"),
-    },
+    inputSchema: ListDirectoryWithSizesArgsSchema.shape,
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
@@ -563,7 +526,7 @@ server.registerTool(
             size: stats.size,
             mtime: stats.mtime,
           };
-        } catch (error) {
+        } catch {
           return {
             name: entry.name,
             isDirectory: entry.isDirectory(),
@@ -623,10 +586,7 @@ server.registerTool(
       "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
       "Files have no children array, while directories always have a children array (which may be empty). " +
       "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      excludePatterns: z.array(z.string()).optional().default([]),
-    },
+    inputSchema: DirectoryTreeArgsSchema.shape,
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
@@ -700,10 +660,7 @@ server.registerTool(
       "and rename them in a single operation. If the destination exists, the " +
       "operation will fail. Works across different directories and can be used " +
       "for simple renaming within the same directory. Both source and destination must be within allowed directories.",
-    inputSchema: {
-      source: z.string(),
-      destination: z.string(),
-    },
+    inputSchema: MoveFileArgsSchema.shape,
     outputSchema: { content: z.string() },
     annotations: {
       readOnlyHint: false,
@@ -735,11 +692,7 @@ server.registerTool(
       "Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
       "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
       "Only searches within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-      pattern: z.string(),
-      excludePatterns: z.array(z.string()).optional().default([]),
-    },
+    inputSchema: SearchFilesArgsSchema.shape,
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
@@ -768,9 +721,7 @@ server.registerTool(
       "information including size, creation time, last modified time, permissions, " +
       "and type. This tool is perfect for understanding file characteristics " +
       "without reading the actual content. Only works within allowed directories.",
-    inputSchema: {
-      path: z.string(),
-    },
+    inputSchema: GetFileInfoArgsSchema.shape,
     outputSchema: { content: z.string() },
     annotations: { readOnlyHint: true, openWorldHint: false },
   },

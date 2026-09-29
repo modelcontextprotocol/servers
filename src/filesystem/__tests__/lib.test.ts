@@ -1,7 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import fs from "fs/promises";
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from "vitest";
+import fs, { type FileHandle } from "fs/promises";
+import type { Dirent, PathLike, Stats } from "fs";
 import path from "path";
-import os from "os";
 import {
   // Pure utility functions
   formatSize,
@@ -25,7 +33,28 @@ import {
 
 // Mock fs module
 vi.mock("fs/promises");
-const mockFs = fs as any;
+const mockFs = vi.mocked(fs);
+// fs.readdir is overloaded and vi.mocked types the mock against its last
+// (Buffer) overload; the code under test calls the withFileTypes overload.
+const mockReaddir = vi.mocked(
+  fs.readdir as (
+    path: PathLike,
+    options: { withFileTypes: true },
+  ) => Promise<Dirent[]>,
+);
+
+interface MockFileHandle {
+  read: Mock;
+  close: Mock;
+}
+
+function asFileHandle(handle: MockFileHandle): FileHandle {
+  // Double cast is safe here: tailFile/headFile only ever call read() and
+  // close() on the handle, which this test double provides; FileHandle's
+  // overloaded read() signatures cannot be matched by a vi.fn() mock, so no
+  // single cast or structural type relates the two.
+  return handle as unknown as FileHandle;
+}
 
 function createMockFileHandle(content: Buffer) {
   return {
@@ -214,14 +243,8 @@ describe("Lib Functions", () => {
         ).rejects.toThrow("Windows-style path received on a POSIX host");
       });
 
-      // Use Windows-compatible paths for testing
-      const allowedDirs =
-        process.platform === "win32"
-          ? ["C:\\Users\\test", "C:\\temp"]
-          : ["/home/user", "/tmp"];
-
       beforeEach(() => {
-        mockFs.realpath.mockImplementation(async (path: any) =>
+        mockFs.realpath.mockImplementation(async (path: PathLike) =>
           path.toString(),
         );
       });
@@ -311,7 +334,7 @@ describe("Lib Functions", () => {
         // Mock process.cwd to return a directory outside allowed directories
         const disallowedCwd =
           process.platform === "win32" ? "C:\\Windows\\System32" : "/root";
-        (process as any).cwd = vi.fn(() => disallowedCwd);
+        process.cwd = vi.fn(() => disallowedCwd);
 
         try {
           const result = await validatePath(relativePath);
@@ -345,7 +368,7 @@ describe("Lib Functions", () => {
           mode: 0o644,
         };
 
-        mockFs.stat.mockResolvedValueOnce(mockStats as any);
+        mockFs.stat.mockResolvedValueOnce(mockStats as Stats);
 
         const result = await getFileStats("/test/file.txt");
 
@@ -371,7 +394,7 @@ describe("Lib Functions", () => {
           mode: 0o755,
         };
 
-        mockFs.stat.mockResolvedValueOnce(mockStats as any);
+        mockFs.stat.mockResolvedValueOnce(mockStats as Stats);
 
         const result = await getFileStats("/test/dir");
 
@@ -420,7 +443,7 @@ describe("Lib Functions", () => {
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
         // stat returns executable permissions
-        mockFs.stat.mockResolvedValueOnce({ mode: 0o100755 });
+        mockFs.stat.mockResolvedValueOnce({ mode: 0o100755 } as Stats);
         // Second writeFile (to temp) succeeds
         mockFs.writeFile.mockResolvedValueOnce(undefined);
         mockFs.rename.mockResolvedValueOnce(undefined);
@@ -436,7 +459,7 @@ describe("Lib Functions", () => {
         mockFs.writeFile.mockRejectedValueOnce(
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
-        mockFs.stat.mockResolvedValueOnce({ mode: 0o100755 });
+        mockFs.stat.mockResolvedValueOnce({ mode: 0o100755 } as Stats);
         mockFs.writeFile.mockResolvedValueOnce(undefined);
         mockFs.rename.mockResolvedValueOnce(undefined);
         mockFs.chmod.mockRejectedValueOnce(
@@ -468,7 +491,7 @@ describe("Lib Functions", () => {
 
       it("fails without overwriting when the destination already exists", async () => {
         // lstat resolving means the destination is occupied.
-        mockFs.lstat.mockResolvedValueOnce({} as any);
+        mockFs.lstat.mockResolvedValueOnce({} as Stats);
 
         await expect(
           moveFile("/test/source.txt", "/test/dest.txt"),
@@ -482,7 +505,7 @@ describe("Lib Functions", () => {
   describe("Search & Filtering Functions", () => {
     describe("searchFilesWithValidation", () => {
       beforeEach(() => {
-        mockFs.realpath.mockImplementation(async (path: any) =>
+        mockFs.realpath.mockImplementation(async (path: PathLike) =>
           path.toString(),
         );
       });
@@ -494,7 +517,7 @@ describe("Lib Functions", () => {
           { name: "node_modules", isDirectory: () => true },
         ];
 
-        mockFs.readdir.mockResolvedValueOnce(mockEntries as any);
+        mockReaddir.mockResolvedValueOnce(mockEntries as Dirent[]);
 
         const testDir =
           process.platform === "win32" ? "C:\\allowed\\dir" : "/allowed/dir";
@@ -502,7 +525,7 @@ describe("Lib Functions", () => {
           process.platform === "win32" ? ["C:\\allowed"] : ["/allowed"];
 
         // Mock realpath to return the same path for validation to pass
-        mockFs.realpath.mockImplementation(async (inputPath: any) => {
+        mockFs.realpath.mockImplementation(async (inputPath: PathLike) => {
           const pathStr = inputPath.toString();
           // Return the path as-is for validation
           return pathStr;
@@ -528,10 +551,10 @@ describe("Lib Functions", () => {
           { name: "invalid_file.txt", isDirectory: () => false },
         ];
 
-        mockFs.readdir.mockResolvedValueOnce(mockEntries as any);
+        mockReaddir.mockResolvedValueOnce(mockEntries as Dirent[]);
 
         // Mock validatePath to throw error for invalid_file.txt
-        mockFs.realpath.mockImplementation(async (path: any) => {
+        mockFs.realpath.mockImplementation(async (path: PathLike) => {
           if (path.toString().includes("invalid_file.txt")) {
             throw new Error("Access denied");
           }
@@ -565,7 +588,7 @@ describe("Lib Functions", () => {
           { name: "important_test.js", isDirectory: () => false },
         ];
 
-        mockFs.readdir.mockResolvedValueOnce(mockEntries as any);
+        mockReaddir.mockResolvedValueOnce(mockEntries as Dirent[]);
 
         const testDir =
           process.platform === "win32" ? "C:\\allowed\\dir" : "/allowed/dir";
@@ -596,7 +619,7 @@ describe("Lib Functions", () => {
       beforeEach(() => {
         mockFs.readFile.mockResolvedValue("line1\nline2\nline3\n");
         mockFs.writeFile.mockResolvedValue(undefined);
-        mockFs.stat.mockResolvedValue({ mode: 0o100644 });
+        mockFs.stat.mockResolvedValue({ mode: 0o100644 } as Stats);
         mockFs.chmod.mockResolvedValue(undefined);
       });
 
@@ -690,7 +713,7 @@ describe("Lib Functions", () => {
       });
 
       it("preserves file permissions after applying edits", async () => {
-        mockFs.stat.mockResolvedValue({ mode: 0o100755 });
+        mockFs.stat.mockResolvedValue({ mode: 0o100755 } as Stats);
         const edits = [{ oldText: "line2", newText: "modified line2" }];
 
         mockFs.rename.mockResolvedValueOnce(undefined);
@@ -795,7 +818,7 @@ describe("Lib Functions", () => {
 
     describe("tailFile", () => {
       it("handles empty files", async () => {
-        mockFs.stat.mockResolvedValue({ size: 0 } as any);
+        mockFs.stat.mockResolvedValue({ size: 0 } as Stats);
 
         const result = await tailFile("/test/empty.txt", 5);
 
@@ -804,18 +827,18 @@ describe("Lib Functions", () => {
       });
 
       it("calls stat to check file size", async () => {
-        mockFs.stat.mockResolvedValue({ size: 100 } as any);
+        mockFs.stat.mockResolvedValue({ size: 100 } as Stats);
 
         // Mock file handle with proper typing
         const mockFileHandle = {
           read: vi.fn(),
           close: vi.fn(),
-        } as any;
+        };
 
         mockFileHandle.read.mockResolvedValue({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(mockFileHandle);
+        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
 
         await tailFile("/test/file.txt", 2);
 
@@ -824,12 +847,12 @@ describe("Lib Functions", () => {
       });
 
       it("handles files with content and returns last lines", async () => {
-        mockFs.stat.mockResolvedValue({ size: 50 } as any);
+        mockFs.stat.mockResolvedValue({ size: 50 } as Stats);
 
         const mockFileHandle = {
           read: vi.fn(),
           close: vi.fn(),
-        } as any;
+        };
 
         // Simulate reading file content in chunks
         mockFileHandle.read
@@ -840,9 +863,9 @@ describe("Lib Functions", () => {
           .mockResolvedValueOnce({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(mockFileHandle);
+        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
 
-        const result = await tailFile("/test/file.txt", 2);
+        await tailFile("/test/file.txt", 2);
 
         expect(mockFileHandle.close).toHaveBeenCalled();
       });
@@ -856,8 +879,8 @@ describe("Lib Functions", () => {
         ]);
         const mockFileHandle = createMockFileHandle(content);
 
-        mockFs.stat.mockResolvedValue({ size: content.length } as any);
-        mockFs.open.mockResolvedValue(mockFileHandle);
+        mockFs.stat.mockResolvedValue({ size: content.length } as Stats);
+        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
 
         const result = await tailFile("/test/file.txt", 2);
 
@@ -865,17 +888,17 @@ describe("Lib Functions", () => {
       });
 
       it("handles read errors gracefully", async () => {
-        mockFs.stat.mockResolvedValue({ size: 100 } as any);
+        mockFs.stat.mockResolvedValue({ size: 100 } as Stats);
 
         const mockFileHandle = {
           read: vi.fn(),
           close: vi.fn(),
-        } as any;
+        };
 
         mockFileHandle.read.mockResolvedValue({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(mockFileHandle);
+        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
 
         await tailFile("/test/file.txt", 5);
 
@@ -889,12 +912,12 @@ describe("Lib Functions", () => {
         const mockFileHandle = {
           read: vi.fn(),
           close: vi.fn(),
-        } as any;
+        };
 
         mockFileHandle.read.mockResolvedValue({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(mockFileHandle);
+        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
 
         await headFile("/test/file.txt", 2);
 
@@ -905,7 +928,7 @@ describe("Lib Functions", () => {
         const mockFileHandle = {
           read: vi.fn(),
           close: vi.fn(),
-        } as any;
+        };
 
         // Simulate reading file content with newlines
         mockFileHandle.read
@@ -916,9 +939,9 @@ describe("Lib Functions", () => {
           .mockResolvedValueOnce({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(mockFileHandle);
+        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
 
-        const result = await headFile("/test/file.txt", 2);
+        await headFile("/test/file.txt", 2);
 
         expect(mockFileHandle.close).toHaveBeenCalled();
       });
@@ -930,7 +953,7 @@ describe("Lib Functions", () => {
         ]);
         const mockFileHandle = createMockFileHandle(content);
 
-        mockFs.open.mockResolvedValue(mockFileHandle);
+        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
 
         const result = await headFile("/test/file.txt", 1);
 
@@ -941,7 +964,7 @@ describe("Lib Functions", () => {
         const mockFileHandle = {
           read: vi.fn(),
           close: vi.fn(),
-        } as any;
+        };
 
         // Simulate reading file content without final newline
         mockFileHandle.read
@@ -952,9 +975,9 @@ describe("Lib Functions", () => {
           .mockResolvedValueOnce({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(mockFileHandle);
+        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
 
-        const result = await headFile("/test/file.txt", 5);
+        await headFile("/test/file.txt", 5);
 
         expect(mockFileHandle.close).toHaveBeenCalled();
       });
@@ -963,7 +986,7 @@ describe("Lib Functions", () => {
         const mockFileHandle = {
           read: vi.fn(),
           close: vi.fn(),
-        } as any;
+        };
 
         // Simulate reading exactly the requested number of lines
         mockFileHandle.read
@@ -974,9 +997,9 @@ describe("Lib Functions", () => {
           .mockResolvedValueOnce({ bytesRead: 0 });
         mockFileHandle.close.mockResolvedValue(undefined);
 
-        mockFs.open.mockResolvedValue(mockFileHandle);
+        mockFs.open.mockResolvedValue(asFileHandle(mockFileHandle));
 
-        const result = await headFile("/test/file.txt", 2);
+        await headFile("/test/file.txt", 2);
 
         expect(mockFileHandle.close).toHaveBeenCalled();
       });

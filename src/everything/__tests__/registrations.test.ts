@@ -28,9 +28,9 @@ describe("Registration Index Files", () => {
       expect(mockServer.registerTool).toHaveBeenCalledTimes(12);
 
       // Verify specific tools are registered
-      const registeredTools = (mockServer.registerTool as any).mock.calls.map(
-        (call: any[]) => call[0],
-      );
+      const registeredTools = vi
+        .mocked(mockServer.registerTool)
+        .mock.calls.map((call) => call[0]);
       expect(registeredTools).toContain("echo");
       expect(registeredTools).toContain("get-sum");
       expect(registeredTools).toContain("get-env");
@@ -72,9 +72,9 @@ describe("Registration Index Files", () => {
       // so they are not included in this registerTool count.
       expect(mockServerWithCapabilities.registerTool).toHaveBeenCalledTimes(4);
 
-      const registeredTools = (
-        mockServerWithCapabilities.registerTool as any
-      ).mock.calls.map((call: any[]) => call[0]);
+      const registeredTools = vi
+        .mocked(mockServerWithCapabilities.registerTool)
+        .mock.calls.map((call) => call[0]);
       expect(registeredTools).toContain("get-roots-list");
       expect(registeredTools).toContain("trigger-elicitation-request");
       expect(registeredTools).toContain("trigger-url-elicitation");
@@ -118,9 +118,9 @@ describe("Registration Index Files", () => {
       // Should register 4 prompts
       expect(mockServer.registerPrompt).toHaveBeenCalledTimes(4);
 
-      const registeredPrompts = (
-        mockServer.registerPrompt as any
-      ).mock.calls.map((call: any[]) => call[0]);
+      const registeredPrompts = vi
+        .mocked(mockServer.registerPrompt)
+        .mock.calls.map((call) => call[0]);
       expect(registeredPrompts).toContain("simple-prompt");
       expect(registeredPrompts).toContain("args-prompt");
       expect(registeredPrompts).toContain("completable-prompt");
@@ -137,9 +137,9 @@ describe("Registration Index Files", () => {
 
       // Should register at least the 2 resource templates (text and blob) plus file resources
       expect(mockServer.registerResource).toHaveBeenCalled();
-      const registeredResources = (
-        mockServer.registerResource as any
-      ).mock.calls.map((call: any[]) => call[0]);
+      const registeredResources = vi
+        .mocked(mockServer.registerResource)
+        .mock.calls.map((call) => call[0]);
       expect(registeredResources).toContain("Dynamic Text Resource");
       expect(registeredResources).toContain("Dynamic Blob Resource");
     });

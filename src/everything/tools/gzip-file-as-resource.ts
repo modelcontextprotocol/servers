@@ -162,6 +162,7 @@ function validateDataURI(dataUri: string): URL {
       `Error processing file ${dataUri}: ${
         error instanceof Error ? error.message : String(error)
       }`,
+      { cause: error },
     );
   }
   return url;
@@ -223,7 +224,11 @@ async function fetchSafely(
         totalSize += value.length;
 
         if (totalSize > maxBytes) {
-          reader.cancel();
+          // Not awaited: cancel() adopts the source's promise and may never
+          // settle, and we are about to throw anyway. Swallow its rejection so
+          // it cannot surface as an unhandled one; the thrown size error is
+          // the failure this path reports.
+          reader.cancel().catch(() => {});
           throw new Error(`Response from ${url} exceeds ${maxBytes} bytes`);
         }
 
