@@ -125,7 +125,9 @@ by impact and urgency, and say in one line why:
 | Medium | The default for planned work |
 | Low | Nice to have; nothing waits on it |
 
-A scored rubric replaces this table when the `issue-triage` skill lands (#4868).
+This table is the short form of the scored rubric in `issue-triage`, which is
+how triage prioritizes inflow. When the choice here is not obvious, score it
+with that rubric instead.
 
 ## 4. Create it
 
@@ -186,7 +188,9 @@ well as its number, because project numbers are only unique per owner.
 ## Issues that arrive from elsewhere
 
 An issue opened through the GitHub UI, by an outside reporter or by a
-maintainer, arrives with **no `v2` label, no milestone and no card**. That is
+maintainer, arrives with **no milestone and no card**, and with no labels unless
+it came through an issue form (the forms apply `v2` and `bug` or `enhancement`,
+never a scope label). That is
 normal on arrival, not a defect to fix the moment it lands: it is not approved
 yet, so it enters the board in **Incoming**, unmilestoned, through triage (the
-`issue-triage` skill, #4868), never through this flow.
+`issue-triage` skill), never through this flow.
