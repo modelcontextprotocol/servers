@@ -32,7 +32,9 @@ publication**, never merely after the release (step 6).
 
 ⚠️ **The PR flow does not apply to the fix itself.** It needs a public issue
 and a public PR against `v2/main`, which is the disclosure this flow exists to
-delay. The fix is reviewed inside the private fork (step 4).
+delay. The fix is reviewed inside the private fork (step 4), and `AGENTS.md`
+records that fork PR as an exception to its PR rules (no public issue link, no
+labels, tracked by the draft card).
 
 ## The flow
 

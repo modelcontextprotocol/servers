@@ -183,7 +183,15 @@ holds for a maintainer's own one-line fix as much as for a feature.
   linked issue, no `v2` label and no checklist. They are exempt from the PR rules
   in this file (issue link, base branch, labels, checklist, board) until the
   change that replaces them with issue-filing sweeps lands and removes this
-  exception. No other PR is exempt.
+  exception.
+- **Exception: a security advisory's fix, in its private fork.** A PR in the
+  advisory's temporary private fork (`servers-<ghsa-id>`) links no public
+  issue, carries no labels, and is tracked by the advisory's `[GHSA-…]` draft
+  card rather than an issue's card, because each of those would disclose the
+  vulnerability before a fix ships. It still targets `v2/main`, and it is
+  reviewed inside the fork. The flow is the `security-advisory` skill.
+
+No other PR is exempt.
 
 Every PR answers the checklist in
 [`.github/pull_request_template.md`](./.github/pull_request_template.md):
