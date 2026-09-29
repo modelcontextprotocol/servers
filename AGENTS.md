@@ -44,11 +44,13 @@ servers/
 │   └── time/                 Py  mcp-server-time                                  PyPI  Time and timezone conversion
 ├── .claude/skills/            On-demand procedures (see the Skills index above)
 ├── scripts/                  Release tooling (release.py)
-├── docs/                     Design documents
+├── docs/                     Design documents; contribution-model.md holds the outside-PR backlog plan
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (dispatch-only publish),
 │                             claude.yml (@claude mentions), readme-pr-check.yml
+├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
+├── .github/pull_request_template.md   The "issues, not PRs" banner and the maintainers' PR checklist
 ├── RELEASING.md              How publishing works and how to recover a failed publish
-└── CONTRIBUTING.md           What contributions are accepted
+└── CONTRIBUTING.md           The contribution policy: issues, not PRs; what is accepted
 ```
 
 The four TypeScript servers are **npm workspaces** of the root `package.json`.
@@ -155,8 +157,19 @@ members with write access included, files a detailed issue instead: the problem,
 how to reproduce it, the expected behavior, and, if a fix was prototyped, the
 prompt that produced it rather than a diff. An agent working for someone who is
 not a maintainer produces that issue, not a PR. The maintainers decided this on
-#4861; where `CONTRIBUTING.md` or the PR template still describe the older open
-PR flow, this rule governs.
+#4861. `CONTRIBUTING.md`, the PR template's banner and the issue forms in
+`.github/ISSUE_TEMPLATE/` all say so; a change to the policy changes all of them
+together.
+
+- **An outside PR is closed, not reviewed or merged**, with a pointer to the
+  issue flow. If it holds a fix worth keeping, file an issue for it first and
+  credit the PR's author there. How the open backlog of outside PRs is worked,
+  and the comment to close them with, is in
+  [`docs/contribution-model.md`](./docs/contribution-model.md).
+- **Issue forms are served from the default branch** (`main`), so a change under
+  `.github/ISSUE_TEMPLATE/` goes live at the next milestone merge, not when its
+  PR merges to `v2/main`. The server dropdown in each form does not label the
+  issue; triage applies the `server-<name>` scope label from it.
 
 **Every PR references an issue.** The PR body's first line is
 `Closes #<ISSUE_NUMBER>`. A PR with no linked issue has no board card, so the

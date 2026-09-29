@@ -233,12 +233,12 @@ npx @modelcontextprotocol/inspector uv run mcp-server-fetch
 
 ## Contributing
 
-We encourage contributions to help expand and improve mcp-server-fetch. Whether you want to add new tools, enhance existing functionality, or improve documentation, your input is valuable.
+We encourage contributions to help improve mcp-server-fetch. Bug reports, ideas for new tools, enhancements to existing functionality, and documentation improvements are all valuable.
 
 For examples of other MCP servers and implementation patterns, see:
 https://github.com/modelcontextprotocol/servers
 
-Pull requests are welcome! Feel free to contribute new ideas, bug fixes, or enhancements to make mcp-server-fetch even more powerful and useful.
+Contributions arrive as **issues, not pull requests**: the repository maintainers do the implementation. Open an issue with the [bug report or feature request form](https://github.com/modelcontextprotocol/servers/issues/new/choose), and if you have already prototyped a change, share the prompt you used rather than a diff. See [CONTRIBUTING.md](https://github.com/modelcontextprotocol/servers/blob/main/CONTRIBUTING.md) for the full policy.
 
 ## License
 
