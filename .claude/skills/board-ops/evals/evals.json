@@ -24,6 +24,10 @@
     "chain": ["issue-create", "board-ops"]
   },
   {
+    "prompt": "My fix for issue 4810 is committed and the gate is green. Write out every command I need to run from here until the PR is open and tracked, start to finish. I'll run them myself.",
+    "chain": ["pr-flow", "board-ops"]
+  },
+  {
     "prompt": "Explain the difference between TCP and UDP.",
     "expect": null
   },
