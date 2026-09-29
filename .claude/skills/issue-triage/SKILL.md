@@ -466,7 +466,8 @@ sentence only when the class is right but a detail is not.
 
 <a id="general-pr"></a>
 
-**General, PR** (every PR class except listings and new servers). Keep the
+**General, PR** (every PR class except listings, new servers and archived
+servers). Keep the
 sentence for the case that applies:
 
 > Thank you for this pull request. This repository now accepts **issues, not

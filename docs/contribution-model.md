@@ -92,7 +92,7 @@ its paths:
 
 | Class                          | Recognized by                                                                                                                   | Harvest?                                    |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| **Listing**                    | Adds or edits a server entry in `README.md` or `ADDITIONAL.md`                                                                  | No. Close with the Registry comment         |
+| **Listing**                    | Adds or promotes a server entry in `README.md` or `ADDITIONAL.md` (a correction to an existing entry is read on its merits)     | No. Close with the Registry comment         |
 | **New server**                 | Adds a server implementation, in or outside `src/`                                                                              | No. Close with the Registry comment         |
 | **No-op or spam**              | No effective change, a rename to the same name, unrelated or generated content                                                  | No. Close with the general comment          |
 | **Duplicate**                  | Races another open PR, or an existing issue, for the same fix                                                                   | Once per group, through its best member     |
@@ -146,9 +146,11 @@ and the harvest issue links it.
 The comments are kept in one place, the `issue-triage` skill
 ([Canned responses](../.claude/skills/issue-triage/SKILL.md#canned-responses)),
 so the sweep and later triage passes answer each class the same way: the
-**general** comment for every class except listings and new servers (naming
-the harvest issue where there is one, or asking for an issue where there is
-not), and the **Registry** comment for listings and new servers.
+**general** comment for every class except listings, new servers and
+archived servers (naming the harvest issue where there is one, or asking for an
+issue where there is not), the **Registry** comment for listings and new
+servers, and the **Archived** pointer for a PR against a server that moved to
+`servers-archived`, which the skill adds as a class of its own.
 
 ### 4. Verify
 
