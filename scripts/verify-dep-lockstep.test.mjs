@@ -34,7 +34,7 @@ test("lockstep: one range everywhere passes", () => {
   );
 });
 
-test("lockstep: declared only once (hoisted to the root) passes", () => {
+test("lockstep: a single declaration (e.g. only at the root) passes", () => {
   assert.deepEqual(
     lockstepProblems([
       { dir: ".", pkg: { devDependencies: { prettier: "3.8.4" } } },

@@ -138,15 +138,21 @@ export const beginSimulatedResourceUpdates = (
   sessionId: string | undefined,
 ) => {
   if (!subsUpdateIntervals.has(sessionId)) {
-    // Send once immediately. Fire-and-forget: this function is synchronous by
-    // contract (its callers start a background simulation), exactly like the
-    // interval callback below, so the caller cannot hold the promise.
-    void sendSimulatedResourceUpdates(server, sessionId);
+    // Send once immediately, then every 5 seconds. Fire-and-forget: this
+    // function is synchronous by contract (its callers start a background
+    // simulation), so neither send can be awaited. A send that fails (e.g. the
+    // transport closed before the updates were stopped) is logged rather than
+    // left to become an unhandled rejection.
+    const send = () =>
+      sendSimulatedResourceUpdates(server, sessionId).catch((error: unknown) =>
+        console.error("Simulated resource update failed:", error),
+      );
+    void send();
 
     // Set the interval to send later resource update notifications to this client
     subsUpdateIntervals.set(
       sessionId,
-      setInterval(() => sendSimulatedResourceUpdates(server, sessionId), 5000),
+      setInterval(() => void send(), 5000),
     );
   }
 };

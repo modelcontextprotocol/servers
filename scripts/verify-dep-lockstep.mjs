@@ -15,8 +15,11 @@
 //
 // So the rule is the smaller one §2.3 of docs/agent-guidance-inception.md
 // sets: every SHARED toolchain package is declared with ONE range everywhere it
-// is declared — across the root and every workspace, in any dependency section
-// — or declared only once (hoisted to the root). The shared set is named
+// is declared — across the root and every workspace, in any dependency section.
+// Declaring it in a single manifest (the root, as `prettier` is) is the
+// degenerate case of the same rule: one declaration is one range. Where a
+// package is declared is not this guard's question — only that no two
+// declarations disagree. The shared set is named
 // below. The Python servers are independent by design and have no manifest
 // here, so they are out of scope.
 //
@@ -119,7 +122,7 @@ export function main() {
     );
     for (const p of problems) console.error(`  ${p}`);
     console.error(
-      "\nDeclare each with one identical range everywhere it is declared, or only once at the root.",
+      "\nDeclare each with one identical range everywhere it is declared (or in a single manifest).",
     );
     console.error(
       "Bump it in every manifest in the same change, then `npm install` at the root so the lockfile follows.",

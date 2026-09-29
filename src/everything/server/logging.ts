@@ -52,15 +52,21 @@ export const beginSimulatedLogging = (
 
   // Set the interval to send later logging messages to this client
   if (!logsUpdateIntervals.has(sessionId)) {
-    // Send once immediately. Fire-and-forget: this function is synchronous by
-    // contract (it starts a background simulation), exactly like the interval
-    // callback below, so the caller cannot hold the promise.
-    void sendSimulatedLoggingMessage(sessionId);
+    // Send once immediately, then every 5 seconds. Fire-and-forget: this
+    // function is synchronous by contract (it starts a background simulation),
+    // so neither send can be awaited. A send that fails (e.g. the transport
+    // closed before `stopSimulatedLogging`) is logged rather than left to
+    // become an unhandled rejection.
+    const send = () =>
+      sendSimulatedLoggingMessage(sessionId).catch((error: unknown) =>
+        console.error("Simulated logging message failed:", error),
+      );
+    void send();
 
     // Send a randomly-leveled log message every 5 seconds
     logsUpdateIntervals.set(
       sessionId,
-      setInterval(() => sendSimulatedLoggingMessage(sessionId), 5000),
+      setInterval(() => void send(), 5000),
     );
   }
 };
