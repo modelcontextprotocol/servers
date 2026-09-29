@@ -30,7 +30,9 @@ takes `--owner modelcontextprotocol`. The board is **private**: treat a dump of
 its items as private data (see the snapshot section below).
 
 **Only issues go on the board, never PRs, never draft cards.** A PR is tracked
-through the card of the issue it closes.
+through the card of the issue it closes. The one exception is a security
+advisory's `[GHSA-…]` draft card; see
+[Advisory draft cards](#advisory-draft-cards).
 
 ## IDs
 
@@ -242,6 +244,65 @@ gh api repos/modelcontextprotocol/servers/issues/<N> -X PATCH \
 
 (or "Mark as duplicate" in the web UI, which additionally records a
 duplicate-of link).
+
+### Advisory draft cards
+
+A private security advisory is tracked by a **draft card** titled with the bare
+id, `[GHSA-xxxx-yyyy-zzzz]`, because a real issue would disclose it before a fix
+exists. No summary goes in the title until the advisory is published. What goes on the card, and when it moves, is the
+`/security-advisory` flow; these are only the mechanics.
+
+⚠️ **A draft card has no repository and no issue number**, so the issue-side
+lookup above cannot find one. Look it up by its **bracketed GHSA id** in the
+full listing, checked for truncation, then feed that item id to `item-edit` or
+`item-delete` exactly as usual:
+
+```sh
+GHSA=GHSA-xxxx-yyyy-zzzz   # the advisory's real id
+ITEM_ID=   # never let an earlier lookup's id survive a failed one
+LOOKED=    # set only by a lookup over a COMPLETE listing
+BOARD=$(gh project item-list 43 --owner modelcontextprotocol --format json --limit 2000)
+if jq -e '(.items | length) == .totalCount' <<<"$BOARD" >/dev/null; then
+  ITEM_ID=$(jq -r --arg p "[$GHSA]" '.items[] | select(.content.type=="DraftIssue")
+        | select(.content.title | startswith($p)) | .id' <<<"$BOARD") && LOOKED=1
+  [ -n "$ITEM_ID" ] || echo "no draft card titled [$GHSA] on #43" >&2
+else
+  echo "item-list incomplete or failed — raise --limit; not concluding anything" >&2
+fi
+```
+
+**Create** one only when that lookup ran over a complete listing **and** found
+none (a second card for the same advisory is a duplicate). Run it in the same
+shell, straight after the lookup: it refuses on a missing `LOOKED` or a found
+`ITEM_ID`. It is the add-card recipe with `item-create` in place of `item-add`,
+Status `Incoming`, and the provisional Priority:
+
+```sh
+STATUS_OPT=$(opt Status "Incoming")
+PRIORITY_OPT=$(opt Priority "<provisional level>")
+if [ "$LOOKED" != 1 ] || [ -n "$ITEM_ID" ]; then
+  echo "lookup incomplete, or [$GHSA] already has a card ($ITEM_ID) — not creating" >&2
+elif [ -n "$STATUS_OPT" ] && [ -n "$PRIORITY_OPT" ]; then
+  ITEM_ID=$(gh project item-create 43 --owner modelcontextprotocol \
+    --title "[$GHSA]" --body "<link and triage lines only>" \
+    --format json --jq '.id') || ITEM_ID=
+fi
+# Then the two chained item-edit calls from "Add a card and set its fields".
+```
+
+**Convert** it to an issue only after the advisory is **published**. The web UI
+has "Convert to issue" on the card; the API equivalent is:
+
+```sh
+REPO_ID=$(gh api repos/modelcontextprotocol/servers --jq .node_id) || REPO_ID=
+[ -n "$ITEM_ID" ] && [ -n "$REPO_ID" ] && gh api graphql \
+  -f item="$ITEM_ID" -f repo="$REPO_ID" -f query='mutation($item:ID!,$repo:ID!){
+    convertProjectV2DraftIssueItemToIssue(input:{itemId:$item,repositoryId:$repo}){
+      item{id content{... on Issue{number url}}}}}'
+```
+
+The card keeps its place and its field values; the new issue takes the card's
+title and body.
 
 ## ⚠️ The option-deletion hazard
 

@@ -25,6 +25,7 @@ not in advance.
 | [`issue-create`](.claude/skills/issue-create/SKILL.md) | The create flow: duplicate check, `v2` + type + server-scope labels, milestone, board card, Status + Priority, and the query that verifies them          | Model-invoked, or `/issue-create` |
 | [`pr-flow`](.claude/skills/pr-flow/SKILL.md)           | Issue to PR: branch, DCO signoff and repair, the gate, client evidence, `addCloseIssueReferences`, the Copilot loop and its exits, close-out on merge    | Model-invoked, or `/pr-flow`      |
 | [`issue-triage`](.claude/skills/issue-triage/SKILL.md) | Inflow: the class check and canned responses (listings, new servers, duplicates, outside PRs), pass 1 onto the board as Incoming, the priority rubric and its score comment, the board audit | Model-invoked, or `/issue-triage` |
+| [`security-advisory`](.claude/skills/security-advisory/SKILL.md) | A privately reported vulnerability end to end: the `[GHSA-…]` draft card, server or SDK ownership, the reach classes, accepting, the private fork, publishing, public tracking | Model-invoked, or `/security-advisory` |
 
 A PR that adds a skill under `.claude/skills/<name>/SKILL.md` adds its row to
 this table in the same change, and the table never lists a skill that does not
@@ -182,7 +183,18 @@ holds for a maintainer's own one-line fix as much as for a feature.
   linked issue, no `v2` label and no checklist. They are exempt from the PR rules
   in this file (issue link, base branch, labels, checklist, board) until the
   change that replaces them with issue-filing sweeps lands and removes this
-  exception. No other PR is exempt.
+  exception.
+- **Exception: a security advisory's fix, in its private fork.** A PR in the
+  advisory's temporary private fork (`servers-ghsa-xxxx-yyyy-zzzz`) links no
+  public issue, carries no labels, and is tracked by the advisory's `[GHSA-…]` draft
+  card rather than an issue's card, because each of those would disclose the
+  vulnerability before a fix ships. For the same reason the work-start rules
+  on assigning an issue and naming the branch `v2/<type>/<ISSUE_NUMBER>-<slug>`
+  do not apply: its branch is `v2/fix/<ghsa-id>`, with **no descriptive
+  slug**. It still targets `v2/main`, and it is reviewed inside the fork. The
+  flow is the `security-advisory` skill.
+
+No other PR is exempt.
 
 Every PR answers the checklist in
 [`.github/pull_request_template.md`](./.github/pull_request_template.md):
@@ -251,6 +263,16 @@ here.
 - **Before starting work, check the board for the relevant item.**
 - **Every board item is a real GitHub issue.** No draft cards. Before creating an
   issue, search for a matching one in every state; **never create a duplicate**.
+  - **The one exception is a private security advisory**, tracked by a **draft
+    card** titled with the bare id, `[GHSA-xxxx-yyyy-zzzz]`, because a real
+    issue would disclose the vulnerability before a fix exists. The title stays
+    that opaque until publication: board access is wider than advisory access,
+    and a summary can name the server or the attack. It becomes a public
+    issue by conversion **once the advisory is published**, never merely once
+    the fix ships. The `[GHSA-` prefix is load-bearing: **any other draft card
+    is still a defect to delete**. The flow is the `security-advisory` skill.
+    **Accepting, closing and publishing an advisory, and replying to its
+    reporter, are human-only; never automate or bulk-apply any of them.**
 - **Only issues go on the board, never PRs.** A PR is tracked through its linked
   issue's card.
 - **Label every issue and every PR `v2`**, at create time. It marks work tracked
@@ -271,6 +293,10 @@ here.
   maintainer signed off, so never park an unreviewed issue there. An issue you
   create through the normal flow skips `Incoming`, because filing it was the
   approval.
+  A `[GHSA-` advisory draft is exempt: a draft card cannot carry a milestone,
+  so its approval act is **accepting the advisory**, which moves it
+  `Incoming` → `Todo`. Its milestone arrives with the public issue after
+  publication.
 - **`Done` means the work shipped**: its PR merged, or it is a parent whose last
   sub-issue closed. A duplicate, won't-fix, not-planned or superseded issue
   shipped nothing, so its card is **deleted** rather than moved to Done.
