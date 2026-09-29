@@ -746,3 +746,27 @@ test("scriptChainRuns follows npm's implicit pre/post hooks", () => {
     true,
   );
 });
+
+test("scriptChainRuns does not follow a masked intermediate hop (#4895)", () => {
+  const T = "verify:skills:cli";
+  for (const gate of ["npm run stage || true", "npm run stage | tee log"]) {
+    assert.equal(
+      scriptChainRuns(
+        { "local:gate": gate, stage: `npm run ${T}` },
+        "local:gate",
+        T,
+      ),
+      false,
+      gate,
+    );
+  }
+  // The unmasked hop is still followed.
+  assert.equal(
+    scriptChainRuns(
+      { "local:gate": "npm run stage", stage: `npm run ${T}` },
+      "local:gate",
+      T,
+    ),
+    true,
+  );
+});

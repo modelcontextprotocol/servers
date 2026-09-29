@@ -787,6 +787,15 @@ async function pool(items, n, fn) {
 }
 
 /**
+ * Whether an env-supplied count is usable as a run, turn or worker count.
+ *
+ * @param {number} value
+ */
+export function isPositiveInteger(value) {
+  return Number.isInteger(value) && value > 0;
+}
+
+/**
  * Whether a measured rate clears its bar.
  *
  * The comparison differs by case kind, and the difference is the point. A
@@ -905,6 +914,22 @@ async function main() {
       `skills:eval — THRESHOLD must be a number in [0, 1] (got ${process.env.THRESHOLD ?? THRESHOLD}).`,
     );
     process.exit(1);
+  }
+  // The turn budget is also Copilot's external stop condition, so a non-numeric
+  // value would silently remove the cap on metered calls (`turnOffset >= NaN`
+  // is never true); RUNS and CONCURRENCY fail the same quiet way (Copilot,
+  // #4895).
+  for (const [name, value] of [
+    ["CHAIN_MAX_TURNS", CHAIN_MAX_TURNS],
+    ["RUNS", RUNS],
+    ["CONCURRENCY", CONCURRENCY],
+  ]) {
+    if (!isPositiveInteger(value)) {
+      console.error(
+        `skills:eval — ${name} must be a positive integer (got ${process.env[name] ?? value}).`,
+      );
+      process.exit(1);
+    }
   }
   if (!AGENTS.includes(AGENT)) {
     console.error(

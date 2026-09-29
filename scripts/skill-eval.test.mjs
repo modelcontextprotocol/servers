@@ -1053,3 +1053,11 @@ test("a rejected Copilot run leaves the in-flight set", async () => {
   );
   assert.equal(stopLiveCopilotRuns(), 0);
 });
+
+test("isPositiveInteger accepts only usable counts (#4895)", async () => {
+  const { isPositiveInteger } = await import("./skill-eval.mjs");
+  for (const ok of [1, 3, 14]) assert.equal(isPositiveInteger(ok), true, ok);
+  for (const bad of [0, -1, 1.5, Number.NaN, Number("abc"), Infinity]) {
+    assert.equal(isPositiveInteger(bad), false, String(bad));
+  }
+});

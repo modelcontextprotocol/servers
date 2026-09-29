@@ -153,6 +153,10 @@ export function scriptChainRuns(scripts, entry, target) {
       .map((part) => unwrapGateLease(part.trim()))) {
       if (segment === `npm run ${target}`) return true;
       const tokens = segment.split(/\s+/);
+      // An intermediate hop must be as unmasked as the target itself: in
+      // `npm run stage || true` (or `| tee`) the stage's failure is swallowed,
+      // so a target reached through it gates nothing (Copilot, #4895).
+      if (segment.includes("|")) continue;
       if (tokens[0] === "npm" && tokens[1] === "run" && tokens[2]) {
         queue.push(tokens[2]);
       }
