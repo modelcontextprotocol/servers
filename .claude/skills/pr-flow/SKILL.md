@@ -47,7 +47,9 @@ git switch -c v2/fix/4810-filesystem-symlink-escape origin/v2/main
 ```
 
 `<type>` follows the issue's type label: `bug` → `fix`, `enhancement` → `feat`,
-`documentation` → `docs`, `chore` → `chore`. The `v2/` prefix matches the base
+`documentation` → `docs`, `chore` → `chore`. A `question` has no branch type,
+because answering one ships nothing: if it turns out to need a change, relabel
+the issue with the type that change is, then branch. The `v2/` prefix matches the base
 branch and keeps the work legible in `git branch -a` next to `main`.
 
 **Never cut from `main`.** It is the release line and does not carry `v2/main`'s
@@ -288,8 +290,14 @@ Push the fixes (signed off, step 3) before requesting the next round.
 
 ## 9. Another round, or stop
 
-Request another round (step 7, with `EXPECTED` one higher) **only when you
-pushed a fix** in response to the last one. The loop stops at the **first** of:
+Request another round (step 7) in one of two cases, and no other:
+
+- **You pushed a fix** in response to the last round. Raise `EXPECTED` by one.
+- **The last round was silent** (no review by the poll's deadline). Nothing was
+  reviewed, so request again **without** a push and **without** raising
+  `EXPECTED`: the count you are waiting for has not been reached yet.
+
+The loop stops at the **first** of:
 
 | Exit | When | Then |
 | --- | --- | --- |

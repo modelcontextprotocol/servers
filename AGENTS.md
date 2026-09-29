@@ -276,7 +276,7 @@ here.
 - **After opening a PR, run a Copilot review loop to convergence, unprompted.**
   Request a review, wait for the round to post or for Copilot's session to end
   without one, answer every comment, and request again only when you pushed a
-  fix. Stop on the **first** clean round (no confirming round), a round holding
+  fix or the last round ended without a review. Stop on the **first** clean round (no confirming round), a round holding
   only out-of-scope findings, two rounds in a row that end without a review, or
   a timeout (the loop's budget is spent while findings keep coming). The recipe
   is the `pr-flow` skill.
