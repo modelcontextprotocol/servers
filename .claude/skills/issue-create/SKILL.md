@@ -31,7 +31,8 @@ unlabeled issue appears in no `v2`-filtered query, and an unmilestoned one drops
 out of release planning silently.
 
 **Never create a duplicate.** **Never create a draft card** (a board card with
-no issue number): every board item is a real GitHub issue.
+no issue number): every board item is a real GitHub issue. The one exception, a
+private security advisory's `[GHSA-…]` card, is the `security-advisory` skill's.
 
 ## 0. Check for an existing issue first
 
