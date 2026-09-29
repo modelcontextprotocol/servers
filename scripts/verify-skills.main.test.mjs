@@ -13,13 +13,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -30,8 +27,6 @@ import { MIN_POSITIVE_CASES } from "./lib/skill-manifest.mjs";
 import {
   checkWiring,
   ciRunsUnconditionally,
-  EMPTY_SKILLS_BOOTSTRAP,
-  emptySkillsVerdict,
   GUARDS_WORKFLOW,
   runsCommand,
   WIRING_ALLOWANCES,
@@ -329,7 +324,7 @@ test("the repository as it stands is wired, under its declared allowances", () =
 });
 
 test("the real verifier passes on the repository as it stands", () => {
-  // `main()` itself against the real tree — wiring, the bootstrap allowance and
+  // `main()` itself against the real tree — wiring, the non-empty skill set and
   // every committed skill together, the way CI's root-guards job runs it.
   const res = spawnSync(process.execPath, [SCRIPT], {
     cwd: REPO_ROOT,
@@ -340,10 +335,12 @@ test("the real verifier passes on the repository as it stands", () => {
 
 // --- temporary allowances (#4863) ---------------------------------------------
 //
-// Two wiring links and the non-empty skills directory cannot hold on the day
-// the harness lands. Each gets an allowance that excuses it only while the
-// missing piece is missing, and turns into a failure the moment it arrives —
-// so the later PR has to wire the link and delete the allowance.
+// Wiring links that could not hold on the day the harness landed. Each gets an
+// allowance that excuses it only while the missing piece is missing, and turns
+// into a failure the moment it arrives — so the later PR has to wire the link
+// and delete the allowance. (The empty-skills bootstrap allowance was the other
+// one; #4866 added the first skills and removed it, so an empty skills
+// directory is fatal again — see "fails an empty or missing directory".)
 
 test("a wiring allowance excuses its link only while the pending script is absent", () => {
   const unwired = {
@@ -413,37 +410,6 @@ test("the CI link has no allowance", () => {
     ).join(),
     /has no unconditional step that runs/,
   );
-});
-
-test("the empty-skills bootstrap allowance passes an empty set, with a note", () => {
-  const v = emptySkillsVerdict(0, true);
-  assert.equal(v.fatal, undefined);
-  assert.equal(v.problem, undefined);
-  assert.match(v.note, /bootstrap allowance/);
-});
-
-test("without the allowance an empty set is still fatal", () => {
-  assert.match(emptySkillsVerdict(0, false).fatal, /no skills found/);
-  assert.deepEqual(emptySkillsVerdict(3, false), {});
-});
-
-test("the bootstrap allowance goes stale once a skill exists", () => {
-  assert.match(
-    emptySkillsVerdict(1, true).problem,
-    /EMPTY_SKILLS_BOOTSTRAP allowance is stale/,
-  );
-});
-
-test("the bootstrap allowance is only declared while the skill set is empty", () => {
-  // The live half: the committed flag and the committed tree agree. Whichever
-  // PR adds the first skill must flip it, and this is the test that says so.
-  const dir = path.join(REPO_ROOT, ".claude", "skills");
-  const hasSkills =
-    existsSync(dir) &&
-    readdirSync(dir).some(
-      (n) => !n.startsWith(".") && statSync(path.join(dir, n)).isDirectory(),
-    );
-  assert.equal(EMPTY_SKILLS_BOOTSTRAP, !hasSkills);
 });
 
 test("checkWiring is not satisfied by a mention outside an executable step", () => {
