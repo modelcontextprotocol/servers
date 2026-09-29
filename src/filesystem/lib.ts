@@ -454,26 +454,33 @@ export async function searchFilesWithValidation(
     for (const entry of entries) {
       const fullPath = path.join(currentPath, entry.name);
 
+      // Only the validation is guarded: a path that resolves outside the
+      // allowed roots is skipped, as before. Everything after it is the search
+      // itself, and a failure there (a directory that cannot be read, for
+      // instance) is a real error that has to reach the caller -- otherwise the
+      // result is silently short and the caller cannot tell. `directory_tree`
+      // and `list_directory` in this server already let their `readdir` fail
+      // through to the tool result.
       try {
         await validatePath(fullPath);
-
-        const relativePath = path.relative(rootPath, fullPath);
-        const shouldExclude = excludePatterns.some(excludePattern =>
-          minimatch(relativePath, excludePattern, { dot: true })
-        );
-
-        if (shouldExclude) continue;
-
-        // Use glob matching for the search pattern
-        if (minimatch(relativePath, pattern, { dot: true })) {
-          results.push(fullPath);
-        }
-
-        if (entry.isDirectory()) {
-          await search(fullPath);
-        }
       } catch {
         continue;
+      }
+
+      const relativePath = path.relative(rootPath, fullPath);
+      const shouldExclude = excludePatterns.some(excludePattern =>
+        minimatch(relativePath, excludePattern, { dot: true })
+      );
+
+      if (shouldExclude) continue;
+
+      // Use glob matching for the search pattern
+      if (minimatch(relativePath, pattern, { dot: true })) {
+        results.push(fullPath);
+      }
+
+      if (entry.isDirectory()) {
+        await search(fullPath);
       }
     }
   }
