@@ -85,7 +85,7 @@ pass 1 for the rest meanwhile.
 # safe). An empty or missing response stops here instead of closing silently.
 BODY=$(cat "$D/response.md") && [ -n "$BODY" ] \
   && gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned" --comment "$BODY" \
-  || echo "no response or close failed for #<N> — nothing closed, or check it" >&2
+  || { echo "no response or close failed for #<N> — stop and check it" >&2; false; }
 # Spam or empty, the one class with no response:
 gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned"
 ```
