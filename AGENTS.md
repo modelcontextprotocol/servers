@@ -59,14 +59,16 @@ applies repo-wide goes in this file, never only in a nested one.**
 ### New and rewritten source files open with a purpose header
 
 A source file you create, or substantially rewrite (code, tests, scripts,
-workflows, configuration), opens with a comment stating what the file is for
+workflows, configuration in a format that has comments), opens with a comment
+stating what the file is for
 and the reasoning behind it: the first comment in the file,
 **after any shebang**. `#!/usr/bin/env node` must stay on line 1 of an
 executable entry point, or the published bin stops working. This is not a bulk
 migration: files you only touch in passing keep their current form. Read that
 header rather than restating its reasoning in this file, since a duplicated
 rationale goes stale silently. A Markdown document states its purpose in its
-opening paragraph instead, as this one does.
+opening paragraph instead, as this one does. A format with no comment syntax
+(JSON, such as `package.json`) is exempt.
 
 ## Development setup
 
@@ -156,8 +158,10 @@ PR flow, this rule governs.
 work is invisible to the board. If there is no issue yet, create it first. This
 holds for a maintainer's own one-line fix as much as for a feature.
 
-- **Temporary exception: Dependabot PRs.** Dependabot still opens issue-less PRs
-  (weekly GitHub Actions bumps, and security-fix PRs). They are exempt until the
+- **Temporary exception: Dependabot PRs.** Dependabot still opens its own PRs
+  (weekly GitHub Actions bumps, and security-fix PRs), against `main`, with no
+  linked issue, no `v2` label and no checklist. They are exempt from the PR rules
+  in this file (issue link, base branch, labels, checklist, board) until the
   change that replaces them with issue-filing sweeps lands and removes this
   exception. No other PR is exempt.
 
