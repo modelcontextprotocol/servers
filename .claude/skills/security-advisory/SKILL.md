@@ -217,7 +217,8 @@ reporter is manual, and the thread cannot be read back with `gh`.
 ### 4. The private fork
 
 An accepted advisory is fixed in a **private fork** GitHub creates for it: a
-private repository named `servers-<ghsa-id>` in the org.
+private repository named `servers-ghsa-xxxx-yyyy-zzzz` (the id in lowercase) in
+the org; read the exact name from `.private_fork.full_name`.
 
 ⚠️ **Read `private_fork` FIRST. The POST is not a probe; it CREATES one.**
 Calling it to "check whether a fork exists" makes one, which then needs
@@ -324,7 +325,7 @@ issues and two cards.
 | States | `triage` → `draft` (accepted) → `published`; or `closed` |
 | Accepted? | `submission.accepted` on the advisory object, alongside `state` |
 | Listing | `GET repos/{owner}/{repo}/security-advisories`, 30 per page, so always `--paginate` |
-| Private fork | `POST …/security-advisories/{ghsa_id}/forks` → `202`, a private repo `servers-<ghsa-id>` in the org |
+| Private fork | `POST …/security-advisories/{ghsa_id}/forks` → `202`, a private repo `servers-ghsa-xxxx-yyyy-zzzz` (lowercase) in the org; exact name in `.private_fork.full_name` |
 | Fork idempotency | Read `.private_fork` first; the POST creates, it does not probe |
 | Fork deletion | Needs the `delete_repo` OAuth scope, which a default `gh` token lacks |
 | Comments | **No API at all**, REST or GraphQL; UI-only |

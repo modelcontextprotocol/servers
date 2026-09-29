@@ -185,8 +185,8 @@ holds for a maintainer's own one-line fix as much as for a feature.
   change that replaces them with issue-filing sweeps lands and removes this
   exception.
 - **Exception: a security advisory's fix, in its private fork.** A PR in the
-  advisory's temporary private fork (`servers-<ghsa-id>`) links no public
-  issue, carries no labels, and is tracked by the advisory's `[GHSA-…]` draft
+  advisory's temporary private fork (`servers-ghsa-xxxx-yyyy-zzzz`) links no
+  public issue, carries no labels, and is tracked by the advisory's `[GHSA-…]` draft
   card rather than an issue's card, because each of those would disclose the
   vulnerability before a fix ships. For the same reason the work-start rules
   on assigning an issue and naming the branch `v2/<type>/<ISSUE_NUMBER>-<slug>`
