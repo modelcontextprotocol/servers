@@ -236,7 +236,8 @@ field, public, and settable by people outside maintainer triage (the two fields
 are compared in `board-ops`). A value there is a preference, not an assessment,
 so it earns the flat +1 and nothing more. It can lift an issue at most one band,
 and nothing a reporter sets reaches Urgent by itself, because Urgent needs 12
-and the issue would already sit at 11 on maintainer-assessed axes. **Never copy
+and the issue would already need 11 from the maintainer-assessed axes (at most
+10) plus at least one other bonus. **Never copy
 the value across:** a reporter choosing `Urgent` does not make the card Urgent,
 or the queue would sort by assertiveness instead of impact.
 
