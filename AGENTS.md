@@ -24,6 +24,7 @@ not in advance.
 | [`board-ops`](.claude/skills/board-ops/SKILL.md)       | `gh project` recipes and the IDs for the Servers V2 board (#43); resolving option IDs by name; the option-deletion hazard and its recovery               | Model-invoked, or `/board-ops`    |
 | [`issue-create`](.claude/skills/issue-create/SKILL.md) | The create flow: duplicate check, `v2` + type + server-scope labels, milestone, board card, Status + Priority, and the query that verifies them          | Model-invoked, or `/issue-create` |
 | [`pr-flow`](.claude/skills/pr-flow/SKILL.md)           | Issue to PR: branch, DCO signoff and repair, the gate, client evidence, `addCloseIssueReferences`, the Copilot loop and its exits, close-out on merge    | Model-invoked, or `/pr-flow`      |
+| [`issue-triage`](.claude/skills/issue-triage/SKILL.md) | Inflow: the class check and canned responses (listings, new servers, duplicates, outside PRs), pass 1 onto the board as Incoming, the priority rubric and its score comment, the board audit | Model-invoked, or `/issue-triage` |
 
 A PR that adds a skill under `.claude/skills/<name>/SKILL.md` adds its row to
 this table in the same change, and the table never lists a skill that does not
@@ -46,7 +47,7 @@ servers/
 ├── scripts/                  Release tooling (release.py)
 ├── docs/                     Design documents; contribution-model.md holds the outside-PR backlog plan
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (dispatch-only publish),
-│                             claude.yml (@claude mentions), readme-pr-check.yml
+│                             claude.yml (@claude mentions)
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
 ├── .github/pull_request_template.md   The "issues, not PRs" banner and the maintainers' PR checklist
 ├── RELEASING.md              How publishing works and how to recover a failed publish

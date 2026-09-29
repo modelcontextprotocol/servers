@@ -143,33 +143,12 @@ stop on the first failed call rather than carrying on blind.
 Closing a PR does not delete it: its branch, diff and discussion stay readable,
 and the harvest issue links it.
 
-**The general comment** (every class except listings and new servers):
-
-> Thank you for this pull request. This repository now accepts **issues, not
-> pull requests**, from anyone but its maintainers: design and implementation
-> are done by the maintainers through a prompt-driven workflow, so outside PRs
-> are closed rather than reviewed. The policy is in
-> [`CONTRIBUTING.md`](https://github.com/modelcontextprotocol/servers/blob/v2/main/CONTRIBUTING.md).
->
-> This change is tracked in #NNNN, which links back to this PR and
-> credits you. _(Or, where nothing was harvested:)_ If you'd like this change
-> considered, please open an issue describing the problem, how to reproduce it
-> and the expected behavior, and, if you prototyped the fix, share the prompt you
-> used rather than a diff.
-
-**The Registry comment** (listings and new servers):
-
-> Thank you for this pull request. This repository does not accept new server
-> implementations or server listings, and it now accepts **issues, not pull
-> requests**, from anyone but its maintainers
-> ([`CONTRIBUTING.md`](https://github.com/modelcontextprotocol/servers/blob/v2/main/CONTRIBUTING.md)).
-> To make your server discoverable, publish it to the
-> [MCP Server Registry](https://github.com/modelcontextprotocol/registry) by
-> following its
-> [quickstart guide](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/quickstart.mdx).
-
-`issue-triage` keeps these as its canned responses, so the sweep and later
-triage passes answer each class the same way.
+The comments are kept in one place, the `issue-triage` skill
+([Canned responses](../.claude/skills/issue-triage/SKILL.md#canned-responses)),
+so the sweep and later triage passes answer each class the same way: the
+**general** comment for every class except listings and new servers (naming
+the harvest issue where there is one, or asking for an issue where there is
+not), and the **Registry** comment for listings and new servers.
 
 ### 4. Verify
 
@@ -194,10 +173,10 @@ maintainer decides otherwise, each triage pass handles new ones by the same
 classes and comments. Two related pieces are separate decisions, not part of
 this plan:
 
-- **`readme-pr-check.yml`** still invites README-only PRs to continue with
-  `/i-promise-this-is-not-a-new-server`, which no longer matches the policy.
-  #4868 folds its behavior into `issue-triage` and changes or retires the
-  workflow.
+- **`readme-pr-check.yml`** invited README-only PRs to continue with
+  `/i-promise-this-is-not-a-new-server`, which no longer matched the policy.
+  #4868 retired it and folded its behavior into `issue-triage`: a README-only
+  PR is the listing class, answered with the Registry comment.
 - **Automatic closing** of outside PRs (a workflow, as maintainer PR #4528
   proposes for new-server PRs, or a repository setting where GitHub offers one)
   is a maintainer decision about repository settings and workflows.
