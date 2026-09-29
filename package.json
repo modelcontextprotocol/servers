@@ -16,13 +16,38 @@
     "build": "npm run build --workspaces",
     "watch": "npm run watch --workspaces",
     "publish-all": "npm publish --workspaces --access public",
-    "link-all": "npm link --workspaces"
+    "link-all": "npm link --workspaces",
+    "verify:skills": "node scripts/verify-skills.mjs",
+    "verify:skills:cli": "node scripts/verify-skills-cli.mjs",
+    "skills:eval": "node scripts/skill-eval.mjs",
+    "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
+    "validate": "npm run validate:guards && npm run validate --workspaces",
+    "validate:guards": "npm run format:check:root && npm run lint:root && npm run verify:format-coverage && npm run verify:skills && npm run verify:typecheck-coverage && npm run verify:dep-lockstep && npm run test:scripts",
+    "format": "npm run format:root && npm run format --workspaces",
+    "format:root": "prettier --write \"scripts/**/*.{ts,mts,cts,js,mjs,cjs}\" \"*.{ts,mts,cts,js,mjs,cjs}\" --ignore-path .prettierignore",
+    "format:check": "npm run format:check:root && npm run format:check --workspaces",
+    "format:check:root": "prettier --check \"scripts/**/*.{ts,mts,cts,js,mjs,cjs}\" \"*.{ts,mts,cts,js,mjs,cjs}\" --ignore-path .prettierignore",
+    "lint": "npm run lint:root && npm run lint --workspaces",
+    "lint:root": "eslint scripts \"*.{js,mjs,cjs}\" --max-warnings 0",
+    "test": "npm run test --workspaces",
+    "coverage": "npm run coverage --workspaces",
+    "verify:format-coverage": "node scripts/verify-format-coverage.mjs",
+    "verify:typecheck-coverage": "node scripts/verify-typecheck-coverage.mjs",
+    "verify:dep-lockstep": "node scripts/verify-dep-lockstep.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server-everything": "*",
-    "@modelcontextprotocol/server-memory": "*",
     "@modelcontextprotocol/server-filesystem": "*",
+    "@modelcontextprotocol/server-memory": "*",
     "@modelcontextprotocol/server-sequential-thinking": "*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0",
+    "prettier": "3.8.4",
+    "typescript-eslint": "^8.71.0",
+    "yaml": "^2.9.0"
   },
   "overrides": {
     "qs": ">=6.15.2",

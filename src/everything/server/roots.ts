@@ -50,7 +50,7 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
               logger: "everything-server",
               data: `Roots updated: ${response?.roots?.length} root(s) received from client`,
             },
-            sessionId
+            sessionId,
           );
         } else {
           await server.sendLoggingMessage(
@@ -59,14 +59,14 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
               logger: "everything-server",
               data: "Client returned no roots set",
             },
-            sessionId
+            sessionId,
           );
         }
       } catch (error) {
         console.error(
           `Failed to request roots from client ${sessionId}: ${
             error instanceof Error ? error.message : String(error)
-          }`
+          }`,
         );
       }
     };
@@ -77,7 +77,7 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
       // Set the list changed notification handler
       server.server.setNotificationHandler(
         RootsListChangedNotificationSchema,
-        requestRoots
+        requestRoots,
       );
 
       // Request the initial roots list immediately

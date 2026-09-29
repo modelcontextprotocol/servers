@@ -9,12 +9,12 @@ import {
 
 // Maximum input file size - 10 MB default
 const GZIP_MAX_FETCH_SIZE = Number(
-  process.env.GZIP_MAX_FETCH_SIZE ?? String(10 * 1024 * 1024)
+  process.env.GZIP_MAX_FETCH_SIZE ?? String(10 * 1024 * 1024),
 );
 
 // Maximum fetch time - 30 seconds default.
 const GZIP_MAX_FETCH_TIME_MILLIS = Number(
-  process.env.GZIP_MAX_FETCH_TIME_MILLIS ?? String(30 * 1000)
+  process.env.GZIP_MAX_FETCH_TIME_MILLIS ?? String(30 * 1000),
 );
 
 // Comma-separated list of allowed domains. Empty means all domains are allowed.
@@ -30,13 +30,13 @@ const GZipFileAsResourceSchema = z.object({
     .url()
     .describe("URL or data URI of the file content to compress")
     .default(
-      "https://raw.githubusercontent.com/modelcontextprotocol/servers/refs/heads/main/README.md"
+      "https://raw.githubusercontent.com/modelcontextprotocol/servers/refs/heads/main/README.md",
     ),
   outputType: z
     .enum(["resourceLink", "resource"])
     .default("resourceLink")
     .describe(
-      "How the resulting gzipped file should be returned. 'resourceLink' returns a link to a resource that can be read later, 'resource' returns a full resource object."
+      "How the resulting gzipped file should be returned. 'resourceLink' returns a link to a resource that can be read later, 'resource' returns a full resource object.",
     ),
 });
 
@@ -102,7 +102,7 @@ export const registerGZipFileAsResourceTool = (server: McpServer) => {
       server,
       resource,
       "blob",
-      blob
+      blob,
     );
 
     // Return the resource or a resource link that can be used to access this resource later
@@ -142,7 +142,7 @@ function validateDataURI(dataUri: string): URL {
       url.protocol !== "data:"
     ) {
       throw new Error(
-        `Unsupported URL protocol for ${dataUri}. Only http, https, and data URLs are supported.`
+        `Unsupported URL protocol for ${dataUri}. Only http, https, and data URLs are supported.`,
       );
     }
     if (
@@ -161,7 +161,8 @@ function validateDataURI(dataUri: string): URL {
     throw new Error(
       `Error processing file ${dataUri}: ${
         error instanceof Error ? error.message : String(error)
-      }`
+      }`,
+      { cause: error },
     );
   }
   return url;
@@ -179,15 +180,15 @@ function validateDataURI(dataUri: string): URL {
  */
 async function fetchSafely(
   url: URL,
-  { maxBytes, timeoutMillis }: { maxBytes: number; timeoutMillis: number }
+  { maxBytes, timeoutMillis }: { maxBytes: number; timeoutMillis: number },
 ): Promise<ArrayBuffer> {
   const controller = new AbortController();
   const timeout = setTimeout(
     () =>
       controller.abort(
-        `Fetching ${url} took more than ${timeoutMillis} ms and was aborted.`
+        `Fetching ${url} took more than ${timeoutMillis} ms and was aborted.`,
       ),
-    timeoutMillis
+    timeoutMillis,
   );
 
   try {
@@ -204,7 +205,7 @@ async function fetchSafely(
       const contentLength = parseInt(contentLengthHeader, 10);
       if (contentLength > maxBytes) {
         throw new Error(
-          `Content-Length for ${url} exceeds max of ${maxBytes}: ${contentLength}`
+          `Content-Length for ${url} exceeds max of ${maxBytes}: ${contentLength}`,
         );
       }
     }
@@ -223,7 +224,11 @@ async function fetchSafely(
         totalSize += value.length;
 
         if (totalSize > maxBytes) {
-          reader.cancel();
+          // Not awaited: cancel() adopts the source's promise and may never
+          // settle, and we are about to throw anyway. Swallow its rejection so
+          // it cannot surface as an unhandled one; the thrown size error is
+          // the failure this path reports.
+          reader.cancel().catch(() => {});
           throw new Error(`Response from ${url} exceeds ${maxBytes} bytes`);
         }
 

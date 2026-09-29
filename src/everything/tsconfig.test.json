@@ -1,0 +1,13 @@
+{
+  // The no-emit typecheck program for the whole workspace (#4864). Here the
+  // build `tsconfig.json` already includes the tests; this file exists so every
+  // workspace has the same `tsconfig.test.json` that `npm run typecheck` runs
+  // and the root ESLint config uses as its parser project, so what is linted
+  // and what is typechecked are the same file set in every server.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["node_modules", "dist", "coverage"]
+}

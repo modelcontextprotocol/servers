@@ -20,7 +20,7 @@ class InMemoryEventStore implements EventStore {
 
   async replayEventsAfter(
     lastEventId: string,
-    { send }: { send: (eventId: string, message: unknown) => Promise<void> }
+    { send }: { send: (eventId: string, message: unknown) => Promise<void> },
   ): Promise<string> {
     const entries = Array.from(this.events.entries());
     const startIndex = entries.findIndex(([id]) => id === lastEventId);
@@ -47,7 +47,7 @@ app.use(
     preflightContinue: false,
     optionsSuccessStatus: 204,
     exposedHeaders: ["mcp-session-id", "last-event-id", "mcp-protocol-version"],
-  })
+  }),
 );
 
 // Map sessionId to server transport for each client
@@ -89,7 +89,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
         const sid = transport.sessionId;
         if (sid && transports.has(sid)) {
           console.log(
-            `Transport closed for session ${sid}, removing from transports map`
+            `Transport closed for session ${sid}, removing from transports map`,
           );
           transports.delete(sid);
           cleanup(sid);
@@ -211,7 +211,7 @@ server.on("error", (err: unknown) => {
       : undefined;
   if (code === "EADDRINUSE") {
     console.error(
-      `Failed to start: Port ${PORT} is already in use. Set PORT to a free port or stop the conflicting process.`
+      `Failed to start: Port ${PORT} is already in use. Set PORT to a free port or stop the conflicting process.`,
     );
   } else {
     console.error("HTTP server encountered an error while starting:", err);

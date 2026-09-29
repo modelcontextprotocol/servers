@@ -1,4 +1,4 @@
-import chalk from 'chalk';
+import chalk from "chalk";
 
 export interface ThoughtData {
   thought: string;
@@ -18,28 +18,37 @@ export class SequentialThinkingServer {
   private disableThoughtLogging: boolean;
 
   constructor() {
-    this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
+    this.disableThoughtLogging =
+      (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
   }
 
   private formatThought(thoughtData: ThoughtData): string {
-    const { thoughtNumber, totalThoughts, thought, isRevision, revisesThought, branchFromThought, branchId } = thoughtData;
+    const {
+      thoughtNumber,
+      totalThoughts,
+      thought,
+      isRevision,
+      revisesThought,
+      branchFromThought,
+      branchId,
+    } = thoughtData;
 
-    let prefix = '';
-    let context = '';
+    let prefix: string;
+    let context: string;
 
     if (isRevision) {
-      prefix = chalk.yellow('🔄 Revision');
+      prefix = chalk.yellow("🔄 Revision");
       context = ` (revising thought ${revisesThought})`;
     } else if (branchFromThought) {
-      prefix = chalk.green('🌿 Branch');
+      prefix = chalk.green("🌿 Branch");
       context = ` (from thought ${branchFromThought}, ID: ${branchId})`;
     } else {
-      prefix = chalk.blue('💭 Thought');
-      context = '';
+      prefix = chalk.blue("💭 Thought");
+      context = "";
     }
 
     const header = `${prefix} ${thoughtNumber}/${totalThoughts}${context}`;
-    const border = '─'.repeat(Math.max(header.length, thought.length) + 4);
+    const border = "─".repeat(Math.max(header.length, thought.length) + 4);
 
     return `
 ┌${border}┐
@@ -49,7 +58,10 @@ export class SequentialThinkingServer {
 └${border}┘`;
   }
 
-  public processThought(input: ThoughtData): { content: Array<{ type: "text"; text: string }>; isError?: boolean } {
+  public processThought(input: ThoughtData): {
+    content: Array<{ type: "text"; text: string }>;
+    isError?: boolean;
+  } {
     try {
       // Validation happens at the tool registration layer via Zod
       // Adjust totalThoughts if thoughtNumber exceeds it
@@ -72,27 +84,39 @@ export class SequentialThinkingServer {
       }
 
       return {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            thoughtNumber: input.thoughtNumber,
-            totalThoughts: input.totalThoughts,
-            nextThoughtNeeded: input.nextThoughtNeeded,
-            branches: Object.keys(this.branches),
-            thoughtHistoryLength: this.thoughtHistory.length
-          }, null, 2)
-        }]
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(
+              {
+                thoughtNumber: input.thoughtNumber,
+                totalThoughts: input.totalThoughts,
+                nextThoughtNeeded: input.nextThoughtNeeded,
+                branches: Object.keys(this.branches),
+                thoughtHistoryLength: this.thoughtHistory.length,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
       };
     } catch (error) {
       return {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            error: error instanceof Error ? error.message : String(error),
-            status: 'failed'
-          }, null, 2)
-        }],
-        isError: true
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(
+              {
+                error: error instanceof Error ? error.message : String(error),
+                status: "failed",
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+        isError: true,
       };
     }
   }

@@ -51,7 +51,7 @@ export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
 
       for (let i = 1; i < steps + 1; i++) {
         await new Promise((resolve) =>
-          setTimeout(resolve, stepDuration * 1000)
+          setTimeout(resolve, stepDuration * 1000),
         );
 
         if (progressToken !== undefined) {
@@ -64,7 +64,7 @@ export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
                 progressToken,
               },
             },
-            { relatedRequestId: extra.requestId }
+            { relatedRequestId: extra.requestId },
           );
         }
       }
@@ -77,6 +77,6 @@ export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
           },
         ],
       };
-    }
+    },
   );
 };

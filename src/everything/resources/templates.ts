@@ -28,7 +28,7 @@ export const resourceTypeCompleter = completable(
   z.string().describe("Type of resource to fetch"),
   (value: string) => {
     return RESOURCE_TYPES.filter((t) => t.startsWith(value));
-  }
+  },
 );
 
 /**
@@ -52,7 +52,7 @@ export const resourceIdForPromptCompleter = completable(
   (value: string) => {
     const resourceId = Number(value);
     return Number.isInteger(resourceId) && resourceId > 0 ? [value] : [];
-  }
+  },
 );
 
 /**
@@ -101,7 +101,7 @@ export const textResource = (uri: URL, resourceId: number) => {
 export const blobResource = (uri: URL, resourceId: number) => {
   const timestamp = new Date().toLocaleTimeString();
   const resourceText = Buffer.from(
-    `Resource ${resourceId}: This is a base64 blob created at ${timestamp}`
+    `Resource ${resourceId}: This is a base64 blob created at ${timestamp}`,
   ).toString("base64");
   return {
     uri: uri.toString(),
@@ -141,7 +141,7 @@ export const blobResourceUri = (resourceId: number) =>
  * @throws {Error} If the resourceId is not a finite positive integer.
  */
 const parseResourceId = (uri: URL, variables: Record<string, unknown>) => {
-  const idxStr = String((variables as any).resourceId ?? "");
+  const idxStr = String(variables.resourceId ?? "");
   const idx = Number(idxStr);
   if (Number.isFinite(idx) && Number.isInteger(idx) && idx > 0) {
     return idx;
@@ -181,7 +181,7 @@ export const registerResourceTemplates = (server: McpServer) => {
       return {
         contents: [textResource(uri, resourceId)],
       };
-    }
+    },
   );
 
   // Register the blob resource template
@@ -201,6 +201,6 @@ export const registerResourceTemplates = (server: McpServer) => {
       return {
         contents: [blobResource(uri, resourceId)],
       };
-    }
+    },
   );
 };

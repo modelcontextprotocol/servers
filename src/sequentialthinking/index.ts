@@ -3,18 +3,23 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { SequentialThinkingServer } from './lib.js';
-import { SERVER_VERSION } from './version.js';
+import { SequentialThinkingServer } from "./lib.js";
+import { SERVER_VERSION } from "./version.js";
 
 /** Safe boolean coercion that correctly handles string "false". A union+transform,
  * not z.preprocess (whose input type is `unknown`), so toJSONSchema keeps this required. */
-const coercedBoolean = z.union([z.boolean(), z.string()]).transform((val, ctx) => {
-  if (typeof val === "boolean") return val;
-  if (val.toLowerCase() === "true") return true;
-  if (val.toLowerCase() === "false") return false;
-  ctx.addIssue({ code: "custom", message: `Expected boolean or "true"/"false" string, received "${val}"` });
-  return z.NEVER;
-});
+const coercedBoolean = z
+  .union([z.boolean(), z.string()])
+  .transform((val, ctx) => {
+    if (typeof val === "boolean") return val;
+    if (val.toLowerCase() === "true") return true;
+    if (val.toLowerCase() === "false") return false;
+    ctx.addIssue({
+      code: "custom",
+      message: `Expected boolean or "true"/"false" string, received "${val}"`,
+    });
+    return z.NEVER;
+  });
 
 const server = new McpServer({
   name: "sequential-thinking-server",
@@ -83,14 +88,40 @@ You should:
 11. Only set nextThoughtNeeded to false when truly done and a satisfactory answer is reached`,
     inputSchema: {
       thought: z.string().describe("Your current thinking step"),
-      nextThoughtNeeded: coercedBoolean.describe("Whether another thought step is needed"),
-      thoughtNumber: z.coerce.number().int().min(1).describe("Current thought number (numeric value, e.g., 1, 2, 3)"),
-      totalThoughts: z.coerce.number().int().min(1).describe("Estimated total thoughts needed (numeric value, e.g., 5, 10)"),
-      isRevision: coercedBoolean.optional().describe("Whether this revises previous thinking"),
-      revisesThought: z.coerce.number().int().min(1).optional().describe("Which thought is being reconsidered"),
-      branchFromThought: z.coerce.number().int().min(1).optional().describe("Branching point thought number"),
+      nextThoughtNeeded: coercedBoolean.describe(
+        "Whether another thought step is needed",
+      ),
+      thoughtNumber: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .describe("Current thought number (numeric value, e.g., 1, 2, 3)"),
+      totalThoughts: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .describe(
+          "Estimated total thoughts needed (numeric value, e.g., 5, 10)",
+        ),
+      isRevision: coercedBoolean
+        .optional()
+        .describe("Whether this revises previous thinking"),
+      revisesThought: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .optional()
+        .describe("Which thought is being reconsidered"),
+      branchFromThought: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .optional()
+        .describe("Branching point thought number"),
       branchId: z.string().optional().describe("Branch identifier"),
-      needsMoreThoughts: coercedBoolean.optional().describe("If more thoughts are needed")
+      needsMoreThoughts: coercedBoolean
+        .optional()
+        .describe("If more thoughts are needed"),
     },
     annotations: {
       readOnlyHint: true,
@@ -103,7 +134,7 @@ You should:
       totalThoughts: z.number(),
       nextThoughtNeeded: z.boolean(),
       branches: z.array(z.string()),
-      thoughtHistoryLength: z.number()
+      thoughtHistoryLength: z.number(),
     },
   },
   async (args) => {
@@ -118,9 +149,9 @@ You should:
 
     return {
       content: result.content,
-      structuredContent: parsedContent
+      structuredContent: parsedContent,
     };
-  }
+  },
 );
 
 async function runServer() {

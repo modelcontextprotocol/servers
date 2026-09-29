@@ -38,7 +38,7 @@ const MAX_POLL_ATTEMPTS = 600;
  * @param {McpServer} server - The McpServer instance where the tool will be registered.
  */
 export const registerTriggerElicitationRequestAsyncTool = (
-  server: McpServer
+  server: McpServer,
 ) => {
   // Check client capabilities
   const clientCapabilities = server.server.getClientCapabilities() || {};
@@ -115,7 +115,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
               action: z.string(),
               content: z.any().optional(),
             }),
-          ])
+          ]),
         );
 
         // Check if client returned CreateTaskResult (has task object)
@@ -129,7 +129,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
                 text: `[SYNC] Client executed synchronously:\n${JSON.stringify(
                   elicitResponse,
                   null,
-                  2
+                  2,
                 )}`,
               },
             ],
@@ -164,7 +164,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
             z.looseObject({
               status: z.string(),
               statusMessage: z.string().optional(),
-            })
+            }),
           );
 
           taskStatus = pollResult.status;
@@ -179,7 +179,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
             statusMessages.push(
               `Poll ${attempts}: ${taskStatus}${
                 taskStatusMessage ? ` - ${taskStatusMessage}` : ""
-              }`
+              }`,
             );
           }
         }
@@ -191,7 +191,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
               {
                 type: "text",
                 text: `[TIMEOUT] Task timed out after ${MAX_POLL_ATTEMPTS} poll attempts\n\nProgress:\n${statusMessages.join(
-                  "\n"
+                  "\n",
                 )}`,
               },
             ],
@@ -218,7 +218,7 @@ export const registerTriggerElicitationRequestAsyncTool = (
             method: "tasks/result",
             params: { taskId },
           },
-          z.any()
+          z.any(),
         );
 
         // Format the elicitation result
@@ -258,12 +258,12 @@ export const registerTriggerElicitationRequestAsyncTool = (
         content.push({
           type: "text",
           text: `\nProgress:\n${statusMessages.join(
-            "\n"
+            "\n",
           )}\n\nRaw result: ${JSON.stringify(result, null, 2)}`,
         });
 
         return { content };
-      }
+      },
     );
   }
 };

@@ -1,0 +1,7 @@
+# Build output and installs are never a format target (#4864). Every
+# `prettier` script in the repo passes this file with `--ignore-path`, so the
+# workspaces (which run from their own directories) read the same list as the
+# root. When a build starts writing somewhere new, add it here.
+**/dist/
+**/coverage/
+**/node_modules/
