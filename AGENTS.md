@@ -19,12 +19,15 @@ not in advance.
 
 ## Skills index
 
-| Skill | Covers | How it loads |
-| ----- | ------ | ------------ |
+| Skill                                                  | Covers                                                                                                                                                  | How it loads                      |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| [`board-ops`](.claude/skills/board-ops/SKILL.md)       | `gh project` recipes and the IDs for the Servers V2 board (#43); resolving option IDs by name; the option-deletion hazard and its recovery               | Model-invoked, or `/board-ops`    |
+| [`issue-create`](.claude/skills/issue-create/SKILL.md) | The create flow: duplicate check, `v2` + type + server-scope labels, milestone, board card, Status + Priority, and the query that verifies them          | Model-invoked, or `/issue-create` |
 
-There are no skills in this repository yet. A PR that adds a skill under
-`.claude/skills/<name>/SKILL.md` adds its row to this table in the same change,
-and the table never lists a skill that does not exist.
+A PR that adds a skill under `.claude/skills/<name>/SKILL.md` adds its row to
+this table in the same change, and the table never lists a skill that does not
+exist. How skills are kept reachable is under
+[Maintaining the skills](#maintaining-the-skills).
 
 ## Project structure
 
@@ -38,6 +41,7 @@ servers/
 │   ├── fetch/                Py  mcp-server-fetch                                 PyPI  Fetches web content and converts it for LLMs
 │   ├── git/                  Py  mcp-server-git                                   PyPI  Git repository operations
 │   └── time/                 Py  mcp-server-time                                  PyPI  Time and timezone conversion
+├── .claude/skills/            On-demand procedures (see the Skills index above)
 ├── scripts/                  Release tooling (release.py)
 ├── docs/                     Design documents
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (dispatch-only publish),
@@ -186,9 +190,48 @@ the template's "How Has This Been Tested?" heading.
   two copies of a command sequence or an ID are worse than one, because the stale
   copy is indistinguishable from the live one.
 
+### Maintaining the skills
+
+Skills are conditional: a skill's body loads only when it is invoked, so a skill
+that stops being reachable loses behavior **silently**. Four rules keep that
+from happening. How to write a description that fires, and eval cases that
+measure it, is [`docs/skill-authoring.md`](./docs/skill-authoring.md).
+
+1. **`npm run verify:skills` must pass.** It runs inside `validate:guards`, and
+   CI runs it with `verify:skills:cli` (the authoritative `claude plugin
+   validate`, at a pinned CLI version) on every push and pull request. It parses
+   each `SKILL.md`'s frontmatter the way Claude Code does. Malformed YAML loads
+   the body with an _empty_ description, so `/name` still works while the skill
+   can never auto-fire; an unquoted `#` truncates the description silently.
+   **Quote any description containing `#` or `:`**, and keep the opening `---`
+   on the file's first line.
+2. **Every skill declares `disable-model-invocation` explicitly. Default it to
+   `false`.** Invoking a skill has no side effects (it loads instructions), and
+   work is usually asked for in prose, which a `true` skill can never answer. A
+   `true` skill also cannot be reached from another skill's body. Reserve `true`
+   for a procedure only ever started deliberately by name.
+3. **A model-invoked skill carries committed eval cases** at
+   `.claude/skills/<name>/evals/evals.json`: at least five positives and at
+   least one negative. `npm run skills:eval` runs them (it needs the `claude`
+   CLI, or `copilot` with `AGENT=copilot`, and spends real model calls, so it is
+   **not** in the gate). Run the **whole** suite when adding a skill or editing a
+   description, since a new skill can lower the trigger rate of the others, and
+   aim each case at what only the skill holds, never at something this file
+   already answers.
+4. **Keep the listing inside its budget.** Claude Code truncates the skill
+   listing when it overflows, dropping the least-invoked entries first.
+   `verify:skills` prints this repo's share against the budget in
+   `scripts/lib/skill-manifest.mjs` and fails when it is exceeded. Put the key
+   use case first in each description.
+
+A rule that must never drop out of context stays in this file: in a long
+session, auto-compaction can drop an older skill's body entirely.
+
 ## Issue-driven work style
 
-All work is driven by items on the Servers V2 board (#43).
+All work is driven by items on the Servers V2 board (#43). The _recipes_ for
+the flows below are in the `issue-create` and `board-ops` skills; the rules are
+here.
 
 - **Before starting work, check the board for the relevant item.**
 - **Every board item is a real GitHub issue.** No draft cards. Before creating an
@@ -198,7 +241,7 @@ All work is driven by items on the Servers V2 board (#43).
 - **Label every issue and every PR `v2`**, at create time. It marks work tracked
   by this workflow.
 - **Label every issue with exactly one type label**: `bug`, `enhancement`,
-  `documentation` or `question`. A PR needs no type label; it is classified
+  `documentation`, `chore` or `question`. A PR needs no type label; it is classified
   through the issue it closes.
 - **Label an issue that concerns one server with its scope label**
   (`server-everything`, `server-filesystem`, `server-memory`,

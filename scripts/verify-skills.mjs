@@ -283,50 +283,6 @@ export function checkWiring(rootScripts, workflowText, allowances = []) {
   return problems;
 }
 
-/**
- * TEMPORARY bootstrap allowance for an empty `.claude/skills/` (#4863).
- *
- * The guard's "no skills found" failure is kept: in steady state an empty
- * skills directory means the skill set was deleted, and that must fail loudly.
- * But the harness lands before any skill does, so for now an empty directory
- * passes with a notice instead.
- *
- * **The first PR that adds a skill removes this** — whichever of #4866, #4867,
- * #4870, #4871 or #4872 lands first. It cannot be forgotten: once a skill
- * exists while this is still `true`, `emptySkillsVerdict` fails the guard as a
- * stale allowance.
- */
-export const EMPTY_SKILLS_BOOTSTRAP = true;
-
-/**
- * Decide what an (un)populated skills directory means.
- *
- * @param {number} count Skill directories found.
- * @param {boolean} allowEmpty Whether the bootstrap allowance applies.
- * @returns {{ fatal?: string, problem?: string, note?: string }}
- *   `fatal` stops the run at once, `problem` joins the failure list, `note` is
- *   printed and the run continues.
- */
-export function emptySkillsVerdict(count, allowEmpty) {
-  if (count === 0) {
-    return allowEmpty
-      ? {
-          note:
-            "verify:skills — no skills yet; passing under the temporary bootstrap allowance " +
-            "(EMPTY_SKILLS_BOOTSTRAP). The first skill-adding PR removes it.",
-        }
-      : { fatal: "verify:skills — no skills found; the skill set is gone." };
-  }
-  if (allowEmpty) {
-    return {
-      problem:
-        "a skill now exists, so the temporary EMPTY_SKILLS_BOOTSTRAP allowance is stale. " +
-        "Set it to false (and delete it) in scripts/verify-skills.mjs, and remove .claude/skills/.gitkeep.",
-    };
-  }
-  return {};
-}
-
 function main(argv = process.argv.slice(2)) {
   // An explicit directory is the seam the fixture tests drive; without it this
   // guard could only ever be exercised against the repo's own (green) skills,
@@ -358,18 +314,13 @@ function main(argv = process.argv.slice(2)) {
   }
 
   const dirs = skillDirs(SKILLS_DIR);
-  // The bootstrap allowance is for the real repo only: a fixture run keeps the
-  // steady-state "no skills found" failure, which is what its test pins.
-  const verdict = emptySkillsVerdict(
-    dirs.length,
-    !override && EMPTY_SKILLS_BOOTSTRAP,
-  );
-  if (verdict.fatal) {
-    console.error(verdict.fatal);
+  // An empty skills directory means the skill set was deleted, and that must
+  // fail loudly. (#4863 excused it with a temporary bootstrap allowance until
+  // the first skill landed; #4866 added the first skills and removed it.)
+  if (dirs.length === 0) {
+    console.error("verify:skills — no skills found; the skill set is gone.");
     process.exit(1);
   }
-  if (verdict.problem) failures.push(verdict.problem);
-  if (verdict.note) console.log(verdict.note);
 
   const parsed = [];
   const evalFiles = [];
