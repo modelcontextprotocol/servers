@@ -223,7 +223,7 @@ A chained case names the ordered skills one run should load:
 
 ```json
 {
-  "prompt": "Write an integration test that exercises tool listing against a real server.",
+  "prompt": "Write an integration test that exercises tool listing end to end.",
   "chain": ["testing", "test-servers"]
 }
 ```
