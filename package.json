@@ -16,7 +16,8 @@
     "build": "npm run build --workspaces",
     "watch": "npm run watch --workspaces",
     "publish-all": "npm publish --workspaces --access public",
-    "link-all": "npm link --workspaces"
+    "link-all": "npm link --workspaces",
+    "validate:py": "node scripts/validate-py.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server-everything": "*",
