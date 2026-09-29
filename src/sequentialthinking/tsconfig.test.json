@@ -1,0 +1,13 @@
+{
+  // The typecheck program for the whole workspace (#4864). `tsconfig.json` is
+  // the build config and leaves the tests out, so tsc does not emit them into
+  // `dist/`; this one adds them back without emitting anything. `npm run
+  // typecheck` runs it, and it is the parser project the root ESLint config
+  // uses, so what is linted and what is typechecked are the same file set.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["node_modules", "dist", "coverage"]
+}
