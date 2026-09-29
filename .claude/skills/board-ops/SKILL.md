@@ -118,11 +118,16 @@ the same shell.
 ### Add a card and set its fields
 
 ```sh
-# Prints the item id (PVTI_…); capture it.
-ITEM_ID=$(gh project item-add 43 --owner modelcontextprotocol --url <issue-url> \
-  --format json --jq '.id') || ITEM_ID=
+# Resolve both options FIRST, so a failed field lookup or a renamed option
+# never leaves a card on the board with no Status or Priority.
 STATUS_OPT=$(opt Status "Todo")       # an issue you filed through the create flow is approved by definition
 PRIORITY_OPT=$(opt Priority "Medium")
+ITEM_ID=
+if [ -n "$STATUS_OPT" ] && [ -n "$PRIORITY_OPT" ]; then
+  # Prints the item id (PVTI_…); capture it.
+  ITEM_ID=$(gh project item-add 43 --owner modelcontextprotocol --url <issue-url> \
+    --format json --jq '.id') || ITEM_ID=
+fi
 
 if [ -n "$ITEM_ID" ] && [ -n "$STATUS_OPT" ] && [ -n "$PRIORITY_OPT" ]; then
   # Chained: a failed Status edit stops before Priority, and the failure shows.
@@ -132,7 +137,7 @@ if [ -n "$ITEM_ID" ] && [ -n "$STATUS_OPT" ] && [ -n "$PRIORITY_OPT" ]; then
     --field-id PVTSSF_lADOCt2Azc4BcZgqzhjiM9M --single-select-option-id "$PRIORITY_OPT" \
   || echo "item-edit FAILED — card $ITEM_ID may be half set; read it back" >&2
 else
-  echo "missing item or option id — nothing edited" >&2
+  echo "missing option id (nothing added) or item-add failed — nothing edited" >&2
 fi
 ```
 

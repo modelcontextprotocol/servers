@@ -20,6 +20,10 @@
     "expect": "board-ops"
   },
   {
+    "prompt": "Write out every command I need to run to file an issue, start to finish, for: the time server returns the wrong UTC offset for Australia/Lord_Howe during daylight saving. I'll run them myself.",
+    "chain": ["issue-create", "board-ops"]
+  },
+  {
     "prompt": "Explain the difference between TCP and UDP.",
     "expect": null
   },

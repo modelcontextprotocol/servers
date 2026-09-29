@@ -22,7 +22,9 @@ card does **not** set a Status or a Priority.
 | 7 | **Priority** on that card | Always |
 
 The rules behind each row are in [`AGENTS.md`](../../../AGENTS.md) under
-**Issue-driven work style**; this skill is the procedure.
+**Issue-driven work style**; this skill is the procedure. Rows 5–7 need the
+board's IDs, which only the `board-ops` skill holds, so **load `board-ops`
+before step 5**; it is step 5's first action.
 
 Set the labels and milestone at **create time**, never by backfilling: an
 unlabeled issue appears in no `v2`-filtered query, and an unmilestoned one drops
@@ -49,8 +51,14 @@ error text) before concluding there is none. Also check the board itself, where
 approved work already has a card:
 
 ```sh
-gh project item-list 43 --owner modelcontextprotocol --format json --limit 2000 \
-  | jq -r '.items[] | "\(.content.number)\t\(.status)\t\(.title)"' | grep -i "<keyword>"
+BOARD=$(gh project item-list 43 --owner modelcontextprotocol --format json --limit 2000)
+# --limit truncates silently: trust the listing only when it is complete.
+if jq -e '(.items | length) == .totalCount' <<<"$BOARD" >/dev/null; then
+  jq -r '.items[] | "\(.content.number)\t\(.status)\t\(.title)"' <<<"$BOARD" \
+    | grep -i "<keyword>"
+else
+  echo "board listing incomplete or failed — raise --limit; not concluding anything" >&2
+fi
 ```
 
 ## 1. Pick the labels
@@ -124,12 +132,13 @@ A scored rubric replaces this table when the `issue-triage` skill lands (#4868).
 ```sh
 gh issue create --repo modelcontextprotocol/servers \
   --title "<title>" \
-  --label v2 --label bug --label server-filesystem \
+  --label v2 --label "<type from step 1>" --label "<server-name from step 1>" \
   --milestone "<milestone from step 2>" \
   --body "<body>"
 ```
 
-Drop the `server-…` label for a repository-wide issue. `gh issue create` prints
+Drop the `server-…` label for a repository-wide issue, and repeat it for each
+server when an issue spans a few. `gh issue create` prints
 the new issue's URL; keep it for the next step.
 
 A good body states the problem, how to reproduce it (the server, its
@@ -143,8 +152,9 @@ in **Todo** with its milestone already set, not in `Incoming`, which is the queu
 for issues nobody has evaluated yet. Work you are starting immediately goes
 straight to **In Progress**.
 
-Run the **add-card recipe in `/board-ops`** with the Status and the Priority
-from step 3. The project, field and option IDs live there and only there: an
+**Load the `board-ops` skill now** and run its add-card recipe with the Status
+and the Priority from step 3. This file cannot board the issue on its own: the
+project, field and option IDs live in `board-ops` and only there. An
 option ID is regenerated whenever its field's option list is edited, so a
 second copy here would go stale silently and break issue creation even after
 `board-ops` was fixed.
