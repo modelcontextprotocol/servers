@@ -125,10 +125,12 @@ STATUS_OPT=$(opt Status "Todo")       # an issue you filed through the create fl
 PRIORITY_OPT=$(opt Priority "Medium")
 
 if [ -n "$ITEM_ID" ] && [ -n "$STATUS_OPT" ] && [ -n "$PRIORITY_OPT" ]; then
+  # Chained: a failed Status edit stops before Priority, and the failure shows.
   gh project item-edit --project-id PVT_kwDOCt2Azc4BcZgq --id "$ITEM_ID" \
-    --field-id PVTSSF_lADOCt2Azc4BcZgqzhXCpm0 --single-select-option-id "$STATUS_OPT"
-  gh project item-edit --project-id PVT_kwDOCt2Azc4BcZgq --id "$ITEM_ID" \
-    --field-id PVTSSF_lADOCt2Azc4BcZgqzhjiM9M --single-select-option-id "$PRIORITY_OPT"
+    --field-id PVTSSF_lADOCt2Azc4BcZgqzhXCpm0 --single-select-option-id "$STATUS_OPT" \
+  && gh project item-edit --project-id PVT_kwDOCt2Azc4BcZgq --id "$ITEM_ID" \
+    --field-id PVTSSF_lADOCt2Azc4BcZgqzhjiM9M --single-select-option-id "$PRIORITY_OPT" \
+  || echo "item-edit FAILED — card $ITEM_ID may be half set; read it back" >&2
 else
   echo "missing item or option id — nothing edited" >&2
 fi
@@ -240,7 +242,10 @@ duplicate-of link).
 
 This section and its two subsections are copied verbatim from the MCP
 Inspector's `board-ops`. Only the board number, the IDs, one cross-repo issue
-reference and one link to a skill this repo does not have were changed. The
+reference and one link to a skill this repo does not have were changed, plus
+two fixes to the recovery recipe from this repo's review: step 1 restores only
+cards that held the deleted option, and step 3 stops on a failed edit. The
+closing paragraph also no longer quotes the Inspector's option ids. The
 incidents they describe happened on the Inspector's board; the mechanism is
 GitHub's and applies to #43 unchanged. The option-id tables they mention are
 the Inspector's; here, option ids are resolved by name (see [IDs](#ids)), so
@@ -317,25 +322,36 @@ and pass the Priority field id `PVTSSF_lADOCt2Azc4BcZgqzhjiM9M`.
 # 0. Same temp dir the snapshot went to — keep every dump out of the worktree.
 BOARD_TMP=${BOARD_TMP:-$(mktemp -d)}
 
-# 1. Which cards lost their value, and what did they hold? lost-ids.json is
-#    kept ONLY when the dump is complete AND the snapshot reports what those cards
-#    held — step 3 refuses to run without it, so neither a truncated dump nor a
-#    missing snapshot can turn into a silent no-op or an unconfirmed re-apply.
+# 1. Which cards lost their value? lost-ids.json holds ONLY the cards that are
+#    blank now AND held the deleted option in the snapshot, and it is written
+#    only when both dumps are complete. A card that was already blank, or that
+#    someone cleared by hand, is listed and left alone. Step 3 refuses to run
+#    without the file, so neither a truncated dump nor a missing snapshot can
+#    turn into a silent no-op or an unconfirmed re-apply.
+DELETED="<name of the deleted option>"   # e.g. Done
 rm -f "$BOARD_TMP/lost-ids.json"
 gh project item-list 43 --owner modelcontextprotocol --format json --limit 2000 \
   > "$BOARD_TMP/board-broken.json"
-if jq -e '(.items | length) == .totalCount' "$BOARD_TMP/board-broken.json" >/dev/null; then
-  jq -r '[.items[]|select(.status==null)|.id]' "$BOARD_TMP/board-broken.json" \
-    > "$BOARD_TMP/lost-ids.json" || rm -f "$BOARD_TMP/lost-ids.json"
-  jq -r --slurpfile L "$BOARD_TMP/lost-ids.json" '($L[0]) as $lost
-    | [.items[] | select(.id as $i | $lost|index($i)) | .status // "(none)"]
-    | group_by(.) | map({s:.[0],c:length}) | .[] | "was \(.s): \(.c)"' \
-    "$BOARD_TMP/board-snapshot.json" \
-    || { echo "no usable snapshot — cannot confirm what these cards held; not re-applying" >&2
-         rm -f "$BOARD_TMP/lost-ids.json"; }
-else
+if ! jq -e '(.items | length) == .totalCount' "$BOARD_TMP/board-broken.json" >/dev/null; then
   echo "board-broken.json INCOMPLETE — raise --limit and re-run step 1" >&2
   rm -f "$BOARD_TMP/board-broken.json"
+elif ! jq -e '(.items | length) == .totalCount' "$BOARD_TMP/board-snapshot.json" >/dev/null; then
+  echo "no usable snapshot — cannot confirm what these cards held; not re-applying" >&2
+else
+  jq -n --slurpfile B "$BOARD_TMP/board-broken.json" \
+        --slurpfile S "$BOARD_TMP/board-snapshot.json" --arg d "$DELETED" '
+    ($S[0].items | map({key: .id, value: .status}) | from_entries) as $was
+    | [$B[0].items[] | select(.status == null) | .id] as $blank
+    | {lost:  [$blank[] | select($was[.] == $d)],
+       other: [$blank[] | select($was[.] != $d) | {id: ., was: ($was[.] // "(none)")}]}' \
+    > "$BOARD_TMP/blank.json" || rm -f "$BOARD_TMP/blank.json"
+  if [ -s "$BOARD_TMP/blank.json" ]; then
+    jq -r --arg d "$DELETED" '"to restore to \($d): \(.lost | length)",
+      "blank but NOT restored: \(.other | length)", (.other[] | "  \(.id) was \(.was)")' \
+      "$BOARD_TMP/blank.json"
+    jq '.lost' "$BOARD_TMP/blank.json" > "$BOARD_TMP/lost-ids.json" \
+      || rm -f "$BOARD_TMP/lost-ids.json"
+  fi
 fi
 
 # 2. Recreate the option, echoing every surviving option's id (see above).
@@ -345,7 +361,8 @@ fi
 if [ -s "$BOARD_TMP/lost-ids.json" ]; then
   for id in $(jq -r '.[]' "$BOARD_TMP/lost-ids.json"); do
     gh project item-edit --project-id PVT_kwDOCt2Azc4BcZgq --id "$id" \
-      --field-id PVTSSF_lADOCt2Azc4BcZgqzhXCpm0 --single-select-option-id <NEW_OPTION_ID>
+      --field-id PVTSSF_lADOCt2Azc4BcZgqzhXCpm0 --single-select-option-id <NEW_OPTION_ID> \
+      || { echo "item-edit failed on $id — stopping; re-run step 1 to see what is left" >&2; break; }
     sleep 0.4
   done
 else
@@ -353,14 +370,15 @@ else
 fi
 ```
 
-Step 1's grouping is the safety check: confirm the orphaned set is exactly the
-cards that held the deleted option, so you don't overwrite a card someone
-legitimately moved in the meantime.
+Step 1's join is the safety check: only a card that held the deleted option in
+the snapshot is re-applied, so you don't overwrite a card that was already blank
+or that someone legitimately cleared in the meantime. Read its "NOT restored"
+list before running step 3.
 
-Because the recreated option carries a **new id**, the tables above and every
-reference to it must be updated in the same change — `grep` the old id across
-the repo. The `Done` id has been `248a3910` and is now `259d6aab` for exactly
-this reason.
+Because the recreated option carries a **new id**, every reference to the old
+id must be updated in the same change — `grep` the old id across the repo. This
+skill resolves option ids by name and so holds none, but a script, issue or PR
+that pasted one does.
 
 ## ⚠️ Two different "Priority" fields
 

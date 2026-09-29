@@ -158,18 +158,20 @@ N=<ISSUE_NUMBER>
 gh api graphql -F n="$N" -f query='query($n:Int!){
   repository(owner:"modelcontextprotocol",name:"servers"){issue(number:$n){
     number title milestone{title} labels(first:20){nodes{name}}
-    projectItems(first:100){nodes{project{number}
+    projectItems(first:100){nodes{project{number owner{... on Organization{login}}}
       fieldValues(first:20){nodes{... on ProjectV2ItemFieldSingleSelectValue{
         name field{... on ProjectV2SingleSelectField{name}}}}}}}}}}' \
   --jq '.data.repository.issue | {number, title, milestone: .milestone.title,
         labels: [.labels.nodes[].name],
-        board: [.projectItems.nodes[] | select(.project.number==43)
+        board: [.projectItems.nodes[]
+                | select(.project.number==43 and .project.owner.login=="modelcontextprotocol")
                 | [.fieldValues.nodes[] | select(.field) | {(.field.name): .name}] | add]}'
 ```
 
 The issue is created when `labels` holds `v2`, exactly one type and the scope
 label if one applies, `milestone` is set, and `board` holds exactly one entry
-with both a `Status` and a `Priority`.
+with both a `Status` and a `Priority`. The filter matches the board's owner as
+well as its number, because project numbers are only unique per owner.
 
 ## Issues that arrive from elsewhere
 
