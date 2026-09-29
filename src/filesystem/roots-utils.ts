@@ -5,6 +5,14 @@ import { normalizePath } from './path-utils.js';
 import type { Root } from '@modelcontextprotocol/sdk/types.js';
 import { fileURLToPath } from "url";
 
+export function formatEffectiveAllowedDirectories(
+  directories: readonly string[],
+  source: string
+): string {
+  const entries = directories.length > 0 ? directories.map(directory => `  ${directory}`) : ["  (none)"];
+  return [`Effective allowed directories (source: ${source}):`, ...entries].join("\n");
+}
+
 /**
  * Converts a root URI to a normalized directory path with basic security validation.
  * @param rootUri - File URI (file://...) or plain directory path

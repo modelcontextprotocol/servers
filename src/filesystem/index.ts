@@ -13,7 +13,7 @@ import { pathToFileURL } from "url";
 import { z } from "zod";
 import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from './path-utils.js';
-import { getValidRootDirectories } from './roots-utils.js';
+import { formatEffectiveAllowedDirectories, getValidRootDirectories } from './roots-utils.js';
 import {
   // Function imports
   formatSize,
@@ -89,6 +89,12 @@ if (accessibleDirectories.length === 0 && allowedDirectories.length > 0) {
 }
 
 allowedDirectories = accessibleDirectories;
+
+let allowedDirectoriesSource = allowedDirectories.length > 0 ? "server arguments" : "none";
+
+function logEffectiveAllowedDirectories() {
+  console.error(formatEffectiveAllowedDirectories(allowedDirectories, allowedDirectoriesSource));
+}
 
 // Initialize the global allowedDirectories in lib.ts
 setAllowedDirectories(allowedDirectories);
@@ -726,10 +732,13 @@ async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
   const validatedRootDirs = await getValidRootDirectories(requestedRoots);
   if (validatedRootDirs.length > 0) {
     allowedDirectories = [...validatedRootDirs];
+    allowedDirectoriesSource = "client-provided MCP Roots";
     setAllowedDirectories(allowedDirectories); // Update the global state in lib.ts
     console.error(`Updated allowed directories from MCP roots: ${validatedRootDirs.length} valid directories`);
+    logEffectiveAllowedDirectories();
   } else {
-    console.error("No valid root directories provided by client");
+    console.error("No valid root directories provided by client; retaining current allowed directories");
+    logEffectiveAllowedDirectories();
   }
 }
 
@@ -757,14 +766,18 @@ server.server.oninitialized = async () => {
         await updateAllowedDirectoriesFromRoots(response.roots);
       } else {
         console.error("Client returned no roots set, keeping current settings");
+        logEffectiveAllowedDirectories();
       }
     } catch (error) {
       console.error("Failed to request initial roots from client:", error instanceof Error ? error.message : String(error));
+      logEffectiveAllowedDirectories();
     }
   } else {
     if (allowedDirectories.length > 0) {
-      console.error("Client does not support MCP Roots, using allowed directories set from server args:", allowedDirectories);
+      console.error("Client does not support MCP Roots");
+      logEffectiveAllowedDirectories();
     }else{
+      logEffectiveAllowedDirectories();
       throw new Error(`Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`);
     }
   }
