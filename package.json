@@ -33,7 +33,8 @@
     "coverage": "npm run coverage --workspaces",
     "verify:format-coverage": "node scripts/verify-format-coverage.mjs",
     "verify:typecheck-coverage": "node scripts/verify-typecheck-coverage.mjs",
-    "verify:dep-lockstep": "node scripts/verify-dep-lockstep.mjs"
+    "verify:dep-lockstep": "node scripts/verify-dep-lockstep.mjs",
+    "validate:py": "node scripts/validate-py.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server-everything": "*",

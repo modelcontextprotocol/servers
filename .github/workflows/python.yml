@@ -25,6 +25,19 @@ jobs:
           PACKAGES=$(find . -name pyproject.toml -exec dirname {} \; | sed 's/^\.\///' | jq -R -s -c 'split("\n")[:-1]')
           echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
 
+  script-tests:
+    name: Test the Python gate script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Run node --test
+        run: node --test scripts/validate-py.test.mjs
+
   test:
     needs: [detect-packages]
     strategy:
@@ -43,24 +56,14 @@ jobs:
         with:
           python-version-file: "src/${{ matrix.package }}/.python-version"
 
-      - name: Install dependencies
-        working-directory: src/${{ matrix.package }}
-        run: uv sync --frozen --all-extras --dev
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
 
-      - name: Check if tests exist
-        id: check-tests
-        working-directory: src/${{ matrix.package }}
-        run: |
-          if [ -d "tests" ] || [ -d "test" ] || grep -q "pytest" pyproject.toml; then
-            echo "has-tests=true" >> $GITHUB_OUTPUT
-          else
-            echo "has-tests=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Run tests
-        if: steps.check-tests.outputs.has-tests == 'true'
-        working-directory: src/${{ matrix.package }}
-        run: uv run pytest
+      # The same per-server chain `npm run validate:py` runs locally: locked
+      # sync, ruff check, ruff format --check, pyright, pytest, uv build.
+      - name: Validate
+        run: node scripts/validate-py.mjs ${{ matrix.package }}
 
   build:
     needs: [detect-packages, test]
