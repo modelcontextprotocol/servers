@@ -16,13 +16,20 @@
     "build": "npm run build --workspaces",
     "watch": "npm run watch --workspaces",
     "publish-all": "npm publish --workspaces --access public",
-    "link-all": "npm link --workspaces"
+    "link-all": "npm link --workspaces",
+    "verify:skills": "node scripts/verify-skills.mjs",
+    "verify:skills:cli": "node scripts/verify-skills-cli.mjs",
+    "skills:eval": "node scripts/skill-eval.mjs",
+    "test:scripts": "node --test \"scripts/**/*.test.mjs\""
   },
   "dependencies": {
     "@modelcontextprotocol/server-everything": "*",
     "@modelcontextprotocol/server-memory": "*",
     "@modelcontextprotocol/server-filesystem": "*",
     "@modelcontextprotocol/server-sequential-thinking": "*"
+  },
+  "devDependencies": {
+    "yaml": "^2.9.0"
   },
   "overrides": {
     "qs": ">=6.15.2",

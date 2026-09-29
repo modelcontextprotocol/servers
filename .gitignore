@@ -303,3 +303,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 .claude/settings.local.json
+
+# The Python `lib/` pattern above would swallow the root tooling's shared
+# helpers; `scripts/lib/` is first-party source.
+!scripts/lib/

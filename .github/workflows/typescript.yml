@@ -11,6 +11,33 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Root-level guards: checks over repo-wide tooling that no per-package matrix
+  # leg covers. Created by #4863 for the skills gates; #4864 extends it with the
+  # root format/lint, the coverage guards and `test:scripts`.
+  # `scripts/verify-skills.mjs` asserts this job keeps running
+  # `verify:skills:cli` unconditionally, so do not gate these steps with `if:`.
+  root-guards:
+    name: Root guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify skills
+        run: npm run verify:skills
+
+      # The authoritative `claude plugin validate`, at the pinned CLI version
+      # (fetched with npx when not installed). Needs no authentication.
+      - name: Validate skills with the pinned Claude Code CLI
+        run: npm run verify:skills:cli
+
   detect-packages:
     runs-on: ubuntu-latest
     outputs:
@@ -69,4 +96,3 @@ jobs:
       - name: Build package
         working-directory: src/${{ matrix.package }}
         run: npm run build
-
