@@ -65,8 +65,12 @@ uv run ruff check .
 - Zod schemas for tool input validation
 - 2-space indentation, trailing commas in multi-line objects
 - camelCase for variables/functions, PascalCase for types/classes, UPPER_CASE for constants
-- kebab-case for file names and registered tools/prompts/resources
-- Verb-first tool names (e.g., `get-file-info`, not `file-info`)
+- kebab-case for file names; for registered tools, prompts, and resources, follow
+  the existing public convention of the server you are changing (for example,
+  snake_case in `filesystem` and `memory`, kebab-case in `everything`)
+- Never rename a published tool, prompt, or resource only to change its casing
+- Prefer verb-first tool names in the server's existing style (for example,
+  `get_file_info` in `filesystem` or `get-annotated-message` in `everything`)
 - Imports grouped: external first, then internal
 
 ### Python
