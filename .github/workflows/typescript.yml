@@ -74,8 +74,11 @@ jobs:
           node-version: 22
           cache: npm
 
+      # At the repo root, not in the package: run from a workspace directory,
+      # `npm ci` installs only that workspace's dependencies, and the gate's
+      # tools (Prettier, ESLint) are root devDependencies shared by every
+      # package.
       - name: Install dependencies
-        working-directory: src/${{ matrix.package }}
         run: npm ci
 
       - name: Validate package
