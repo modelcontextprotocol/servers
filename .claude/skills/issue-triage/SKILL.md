@@ -86,7 +86,9 @@ D=${D:-$(mktemp -d)}
 # Copy the class's response from Canned responses into "$D/response.md" (the
 # text inside the quote, with #ORIGINAL or the SDK link filled in) first.
 # Close as not planned, with that response (body in a file, so quoting is
-# safe). An empty or missing response stops here instead of closing silently.
+# safe). NOT for a duplicate: post the Duplicate response with `gh issue
+# comment`, close it with the `board-ops` state_reason=duplicate call, and
+# delete its card if it has one (`board-ops`, Delete a card). An empty or missing response stops here instead of closing silently.
 BODY=$(cat "$D/response.md") && [ -n "$BODY" ] \
   && gh issue close <N> --repo modelcontextprotocol/servers --reason "not planned" --comment "$BODY" \
   || { echo "no response or close failed for #<N> — stop and check it" >&2; false; }
