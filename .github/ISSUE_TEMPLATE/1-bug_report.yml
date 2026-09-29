@@ -45,7 +45,8 @@ body:
         - fetch (mcp-server-fetch)
         - git (mcp-server-git)
         - time (mcp-server-time)
-        - More than one, or the repository itself
+        - More than one server
+        - The repository itself (CI, docs, templates, release tooling)
     validations:
       required: true
 
@@ -55,7 +56,7 @@ body:
       label: Server version
       description: >
         The version you actually ran, not "latest". For an unreleased build,
-        give the commit.
+        give the commit. For a repository-level report, write n/a.
       placeholder: "0.6.3"
     validations:
       required: true
@@ -70,6 +71,7 @@ body:
         - Docker image
         - From a clone of this repository
         - Other (say which below)
+        - Not applicable (a repository-level report)
     validations:
       required: true
 
@@ -85,6 +87,7 @@ body:
         - Streamable HTTP
         - HTTP+SSE (deprecated)
         - Not sure
+        - Not applicable (a repository-level report)
     validations:
       required: true
 
@@ -101,6 +104,7 @@ body:
         - Modern (2026-07-28)
         - Legacy (2025-11-25 or earlier)
         - Not sure
+        - Not applicable (a repository-level report)
     validations:
       required: true
 
@@ -108,7 +112,9 @@ body:
     id: client
     attributes:
       label: MCP client and version
-      description: The client that talked to the server, with its version.
+      description: >
+        The client that talked to the server, with its version. For a
+        repository-level report, write n/a.
       placeholder: "Claude Desktop 1.2.3, MCP Inspector 2.0.0, a custom SDK client"
     validations:
       required: true

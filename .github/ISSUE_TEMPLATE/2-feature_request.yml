@@ -44,7 +44,8 @@ body:
         - fetch (mcp-server-fetch)
         - git (mcp-server-git)
         - time (mcp-server-time)
-        - More than one, or the repository itself
+        - More than one server
+        - The repository itself (CI, docs, templates, release tooling)
     validations:
       required: true
 
@@ -130,5 +131,5 @@ body:
       options:
         - label: I searched existing issues and this is not a duplicate.
           required: true
-        - label: This is a request for one of the servers in this repository, not a new server, the MCP specification or an SDK.
+        - label: This is a request for this repository or one of its servers, not a new server, the MCP specification or an SDK.
           required: true
