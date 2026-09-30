@@ -128,7 +128,19 @@ async function resolveUnicodeEquivalentPath(absolutePath: string): Promise<strin
       return path.join(currentPath, ...relativeParts.slice(index));
     }
 
-    currentPath = await fs.realpath(path.join(currentPath, equivalentMatches[0]));
+    const matchedPath = path.join(currentPath, equivalentMatches[0]);
+    try {
+      currentPath = await fs.realpath(matchedPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        // The entry is in the directory listing but realpath cannot follow it,
+        // so it is a symlink with nothing at the other end. Name that. Left as
+        // a bare ENOENT it reaches validatePath's catch, which reports a
+        // missing parent directory for a directory that is plainly there.
+        throw new Error(`Broken symlink: ${matchedPath}`);
+      }
+      throw error;
+    }
     if (!isPathWithinAllowedDirectories(normalizePath(currentPath), allowedDirectories)) {
       throw new Error(`Access denied - symlink target outside allowed directories: ${currentPath} not in ${allowedDirectories.join(', ')}`);
     }
