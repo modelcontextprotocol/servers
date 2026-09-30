@@ -1,9 +1,16 @@
 """Tests for the fetch MCP server."""
 
+import contextlib
+
 import pytest
+from anyio import create_task_group
 from unittest.mock import AsyncMock, patch, MagicMock
 from mcp.shared.exceptions import McpError
+from mcp.shared.memory import create_client_server_memory_streams
+from mcp.client.session import ClientSession
+from mcp.types import INVALID_PARAMS, TextContent
 
+import mcp_server_fetch.server as server_module
 from mcp_server_fetch.server import (
     extract_content_from_html,
     get_robots_txt_url,
@@ -11,6 +18,31 @@ from mcp_server_fetch.server import (
     fetch_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
 )
+
+
+@contextlib.asynccontextmanager
+async def serve_in_memory():
+    """Run the fetch server over in-memory streams and yield a connected ClientSession.
+
+    serve() opens stdio_server() internally, so patch it to hand out the
+    server side of an in-memory transport instead.
+    """
+    async with create_client_server_memory_streams() as (client_streams, server_streams):
+        client_read, client_write = client_streams
+
+        @contextlib.asynccontextmanager
+        async def fake_stdio_server():
+            yield server_streams
+
+        with patch.object(server_module, "stdio_server", fake_stdio_server):
+            async with create_task_group() as tg:
+                tg.start_soon(server_module.serve)
+                try:
+                    async with ClientSession(client_read, client_write) as session:
+                        await session.initialize()
+                        yield session
+                finally:
+                    tg.cancel_scope.cancel()
 
 
 class TestGetRobotsTxtUrl:
@@ -324,3 +356,48 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+class TestGetPrompt:
+    """Tests for the get_prompt handler reached through a real client session."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_url_raises_invalid_params(self):
+        """An invalid prompt URL must raise McpError with INVALID_PARAMS, not a generic JSON-RPC error."""
+        async with serve_in_memory() as session:
+            with pytest.raises(McpError) as exc_info:
+                await session.get_prompt("fetch", {"url": "http://[::1"})
+            assert exc_info.value.error.code == INVALID_PARAMS
+
+    @pytest.mark.asyncio
+    async def test_valid_url_returns_fetched_content(self):
+        """A valid prompt URL still fetches and returns the page content."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = """
+        <html>
+        <body>
+            <article>
+                <h1>Test Page</h1>
+                <p>Hello from the prompt</p>
+            </article>
+        </body>
+        </html>
+        """
+        mock_response.headers = {"content-type": "text/html"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            async with serve_in_memory() as session:
+                result = await session.get_prompt(
+                    "fetch", {"url": "https://example.com/page"}
+                )
+
+            assert len(result.messages) == 1
+            content = result.messages[0].content
+            assert isinstance(content, TextContent)
+            assert "Hello from the prompt" in content.text
