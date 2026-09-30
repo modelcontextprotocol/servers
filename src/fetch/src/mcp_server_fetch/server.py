@@ -18,7 +18,7 @@ from mcp.types import (
     INTERNAL_ERROR,
 )
 from protego import Protego
-from pydantic import BaseModel, Field, AnyUrl
+from pydantic import BaseModel, Field, AnyUrl, ValidationError
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
@@ -259,7 +259,10 @@ Although originally you did not have internet access, and were advised to refuse
         if not arguments or "url" not in arguments:
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
-        url = arguments["url"]
+        try:
+            url = str(Fetch.model_validate({"url": arguments["url"]}).url)
+        except ValidationError as e:
+            raise McpError(ErrorData(code=INVALID_PARAMS, message=str(e)))
 
         try:
             content, prefix = await fetch_url(url, user_agent_manual, proxy_url=proxy_url)
