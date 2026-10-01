@@ -6,6 +6,7 @@ import express, { Request, Response } from "express";
 import { createServer } from "../server/index.js";
 import { randomUUID } from "node:crypto";
 import cors from "cors";
+import { listenOrExit } from "./listen.js";
 
 // Simple in-memory event store for SSE resumability
 class InMemoryEventStore implements EventStore {
@@ -199,26 +200,7 @@ app.delete("/mcp", async (req: Request, res: Response) => {
 
 // Start the server
 const PORT = process.env.PORT || 3001;
-const server = app.listen(PORT, () => {
-  console.error(`MCP Streamable HTTP Server listening on port ${PORT}`);
-});
-
-// Handle server errors
-server.on("error", (err: unknown) => {
-  const code =
-    typeof err === "object" && err !== null && "code" in err
-      ? (err as { code?: unknown }).code
-      : undefined;
-  if (code === "EADDRINUSE") {
-    console.error(
-      `Failed to start: Port ${PORT} is already in use. Set PORT to a free port or stop the conflicting process.`,
-    );
-  } else {
-    console.error("HTTP server encountered an error while starting:", err);
-  }
-  // Ensure a non-zero exit so npm reports the failure instead of silently exiting
-  process.exit(1);
-});
+listenOrExit(app, PORT, `MCP Streamable HTTP Server listening on port ${PORT}`);
 
 // Handle server shutdown
 process.on("SIGINT", async () => {

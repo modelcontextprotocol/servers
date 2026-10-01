@@ -40,8 +40,8 @@
  * 3001, so the smoke does not collide with a server the developer has running.
  * That port is not reserved between the probe and the server's own `listen`,
  * so a launch whose server reports the port taken is relaunched on a fresh
- * one. Streamable HTTP reports it; HTTP+SSE does not yet (#4923: it prints
- * "Server is running" either way), so there a lost port is a failed smoke.
+ * one. Both HTTP transports report it (`listenOrExit` in `everything`'s
+ * `transports/listen.ts`).
  *
  * One server failing does not stop the rest: the run reports every target's
  * verdict and exits non-zero if any failed, so one run shows the whole picture.
