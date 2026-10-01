@@ -129,21 +129,28 @@ the URL. The transport is inferred from the path: `/mcp` is Streamable HTTP,
 `/sse` is HTTP+SSE.
 
 ```sh
-PORT=3917 node src/everything/dist/index.js streamableHttp &
-SERVER_PID=$!
-# Wait for the listener: the server answers before the CLI is pointed at it.
-until curl -s -o /dev/null http://localhost:3917/mcp; do sleep 0.2; done
-$INSPECT http://localhost:3917/mcp \
-  --method tools/call --tool-name echo --tool-arg message=over-http --format json
-kill "$SERVER_PID"    # this server, by pid; `kill %1` would hit whatever job 1 is
+(
+  PORT=3917 node src/everything/dist/index.js streamableHttp >/dev/null 2>&1 &
+  SERVER_PID=$!
+  trap 'kill "$SERVER_PID" 2>/dev/null' EXIT    # stops it however the subshell ends
+  for _ in $(seq 50); do                         # at most ten seconds
+    curl -s -o /dev/null http://localhost:3917/mcp && break
+    kill -0 "$SERVER_PID" 2>/dev/null || { echo "server exited before listening" >&2; exit 1; }
+    sleep 0.2
+  done
+  $INSPECT http://localhost:3917/mcp \
+    --method tools/call --tool-name echo --tool-arg message=over-http --format json
+)
 ```
 
-Stop the server even when the CLI call fails; a listener left on the port
-makes the next run talk to the old build.
-
-Without the wait, the CLI can reach the port before the server is listening
-and fail with a refused connection. In a separate terminal the equivalent is
-waiting for the `listening on port` line on stderr.
+Each part of that is there for a failure it prevents. Without the wait, the CLI
+can reach the port before the server is listening and exit 4. The wait is
+bounded and checks that the server is still alive, so a server that fails to
+bind (the port is taken, the build is missing) ends the run instead of hanging
+it. The subshell's `EXIT` trap stops the server by pid even when the CLI call
+fails; a listener left on the port makes the next run talk to the old build.
+By hand in two terminals, the equivalent is waiting for the `listening on
+port` line and stopping the server with Ctrl-C.
 
 A change to a tool, resource or prompt of `everything` is checked over stdio
 and Streamable HTTP. Check HTTP+SSE as well when the change touches transport
