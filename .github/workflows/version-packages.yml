@@ -1,0 +1,55 @@
+# Keeps the rolling changesets "Version Packages" PR open against `v2/main`
+# (#4472). It runs on every push there: when `.changeset/` holds pending
+# changesets it runs `npm run version-packages` (`changeset version`, then a
+# lockfile refresh, since the lockfile records each workspace's version) and
+# creates or updates one PR carrying the version bumps and the CHANGELOG
+# entries. With no pending changesets it does nothing.
+#
+# It targets `v2/main`, not `main`: the bump is part of the milestone's work,
+# so it has to exist on the develop branch before the milestone merge carries
+# it to `main`. A bump made downstream of `v2/main` would never flow back.
+#
+# This workflow only ever opens a PR. It gives the action no publish script, so
+# it never publishes, tags or creates a Release; that is `release.yml`, on a
+# maintainer-published GitHub Release.
+
+name: Version Packages
+
+on:
+  push:
+    branches: [v2/main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  version:
+    timeout-minutes: 10
+    if: github.repository_owner == 'modelcontextprotocol'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # Versioning needs the changesets CLI, not a build, so the workspaces'
+      # `prepare` scripts are skipped.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Create or update the Version Packages PR
+        uses: changesets/action@v2
+        with:
+          version-script: npm run version-packages
+          pr-title: "chore: version packages"
+          commit-message: "chore: version packages"
+        env:
+          # Read by @changesets/changelog-github to link PRs and authors in
+          # the CHANGELOG entries. The action itself authenticates through its
+          # `github-token` input, which defaults to this same token.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

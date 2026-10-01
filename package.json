@@ -17,6 +17,8 @@
     "watch": "npm run watch --workspaces",
     "publish-all": "npm publish --workspaces --access public",
     "link-all": "npm link --workspaces",
+    "changeset": "changeset",
+    "version-packages": "changeset version && npm install --package-lock-only --ignore-scripts",
     "verify:skills": "node scripts/verify-skills.mjs",
     "verify:skills:cli": "node scripts/verify-skills-cli.mjs",
     "skills:eval": "node scripts/skill-eval.mjs",
@@ -48,6 +50,8 @@
     "@modelcontextprotocol/server-sequential-thinking": "*"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^1.0.1",
+    "@changesets/cli": "^3.0.3",
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "eslint": "^10.11.0",
