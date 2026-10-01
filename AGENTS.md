@@ -30,6 +30,7 @@ not in advance.
 | [`project-structure`](.claude/skills/project-structure/SKILL.md) | What is inside each server: the TypeScript and Python layouts, where each server registers its features, and where a new file goes | Model-invoked, or `/project-structure` |
 | [`local-dev`](.claude/skills/local-dev/SKILL.md) | Install, build and run each server from the checkout over the transports it implements; local `npx`/`uvx` and client-config runs; stale builds and fresh worktrees; the `overrides`, lockstep and `uv.lock` procedures | Model-invoked, or `/local-dev` |
 | [`testing`](.claude/skills/testing/SKILL.md) | The harness each server has today, in-process and stdio protocol-level test recipes, test placement, the commands per suite, and `test` versus `coverage` | Model-invoked, or `/testing` |
+| [`release`](.claude/skills/release/SKILL.md) | A milestone release end to end: the release issue, the preparation PRs on `v2/main` (audit, Version Packages, Python CalVer), the pure `v2/main` → `main` merge PR, the release ledger, and what a maintainer publishes | **Name-only**: `/release` |
 | [`client-smoke`](.claude/skills/client-smoke/SKILL.md) | Driving a built server with the Inspector CLI (the scripted path), the Inspector web UI (by hand) and an LLM client; the CLI's argument split and exit codes; protocol eras and what can be exercised today | Model-invoked, or `/client-smoke` |
 
 A PR that adds a skill under `.claude/skills/<name>/SKILL.md` adds its row to
@@ -52,7 +53,8 @@ servers/
 ├── .claude/skills/            On-demand procedures (see the Skills index above)
 ├── .changeset/               Pending changesets for the TypeScript servers, and the changesets config
 ├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py), its guards (verify-*),
-│                             the skills tooling, and release tooling (npm-publish-guard, prepare-python-release)
+│                             the skills tooling, and release tooling (npm-publish-guard, prepare-python-release,
+│                             pack-and-verify)
 ├── docs/                     Design documents; quality-gate.md is the gate's reference (stages, CI vs local, the lease);
 │                             contribution-model.md holds the outside-PR backlog plan
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),
@@ -138,11 +140,34 @@ diagnosing a red stage is the `pre-push-gate` skill.
 - **No test may retry.** A retry reports a test that sometimes fails as
   passing. `verify:no-test-retries` fails on Vitest's `retry` and on pytest's
   rerun plugins; fix what makes the test fail.
+- **`npm run pack:verify` is not a gate stage.** It installs each package's
+  publish artifact into an empty directory and boots it, which needs the
+  network. `release.yml` runs it before anything publishes, and the `release`
+  skill runs it by hand for the ledger.
 - **`local:*` scripts never run in a workflow, and every CI job declares
   `timeout-minutes`.** The script tests enforce both
   (`scripts/lib/workflow-gate.mjs`). A check added to CI is added to
   `local:gate:stages` in the same change, so the first sentence of this section
   stays true.
+
+### Credentialed workflow jobs
+
+A workflow job **holds a credential** when it can mint an OIDC token or push a
+package (`id-token: write`, `packages: write`), or is handed any secret other
+than `GITHUB_TOKEN`. Today that is `release.yml`'s publish jobs and
+`claude.yml`.
+
+- **Every action in a credentialed job is pinned to a full commit SHA, with the
+  release it was resolved from in a trailing comment**:
+  `uses: actions/checkout@<40-hex sha> # v6.1.0`. A tag can be moved, and a
+  moved tag runs new code next to the credential with no change in this
+  repository. The same holds for **a job whose artifact a credentialed job
+  downloads**, since what it builds is what gets published.
+  `verify:action-pins` enforces both. Other jobs keep moving major tags.
+- **A job that holds a publish credential does not install dependencies or
+  build.** `release.yml` builds, tests and verifies each package in a job
+  with no `id-token`, and the publish job only downloads that artifact and
+  hands it to the registry.
 
 ### Dependencies
 
@@ -165,7 +190,8 @@ diagnosing a red stage is the `pre-push-gate` skill.
 | `main`    | **Release.** The default branch, and what users see. Not a development branch. | **No**, it only receives milestone merges from `v2/main` |
 
 Cut feature branches from **`origin/v2/main`**. **Never open a PR against
-`main`.** There is no `v1` line in this repository.
+`main`**, with one exception: a milestone's merge PR, which the `release`
+skill opens. There is no `v1` line in this repository.
 
 - **Repo**: https://github.com/modelcontextprotocol/servers
 - **Project board**: [Servers V2 (#43)](https://github.com/orgs/modelcontextprotocol/projects/43)
@@ -241,6 +267,15 @@ holds for a maintainer's own one-line fix as much as for a feature.
   slug**. It still targets `v2/main`, and it is reviewed inside the fork. The
   flow is the `security-advisory` skill.
 
+- **Exception: a milestone's merge PR.** It is the one PR that targets `main`.
+  It is a pure merge of `v2/main` (its tree hash equals `origin/v2/main`'s,
+  and it has no commits of its own), and its body's first line is
+  **`Part of #N`** for the milestone's release issue, not `Closes #N`: on the
+  default branch a closing keyword would close that issue at merge, before
+  anything is published. The release issue is closed by hand once the Release
+  is published. In place of the checklist it links the **release ledger**. It
+  is merged with a merge commit, never squashed. The flow is the `release`
+  skill.
 - **Exception: the two version PRs that automation opens.** Each changes
   version metadata only, so neither answers the template checklist, and each
   is tied to its milestone's **release issue** rather than to an issue of its

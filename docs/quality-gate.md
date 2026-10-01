@@ -83,6 +83,7 @@ covers: the repo-wide tooling and the guards that keep the gate itself honest.
 | `verify:typecheck-coverage` | A tracked TypeScript file lands in no `tsc` program |
 | `verify:dep-lockstep` | Two workspaces declare different ranges of a shared toolchain package |
 | `verify:no-test-retries` | A test declares a retry (Vitest's `retry`, a pytest rerun plugin or marker) |
+| `verify:action-pins` | A job that holds a credential (`id-token: write`, a secret other than `GITHUB_TOKEN`), or whose artifact such a job downloads, uses an action that is not pinned to a commit SHA with a `# vX.Y.Z` comment |
 | `test:scripts` | A guard's own unit tests fail. These include the workflow guard: a workflow invokes a `local:*` script, a CI job has no `timeout-minutes`, or `local:gate` is no longer exactly the lease wrapper around stages that include every check above |
 
 ## What is in neither tier
@@ -94,10 +95,19 @@ covers: the repo-wide tooling and the guards that keep the gate itself honest.
   prints a report. No threshold is enforced today. Per-file coverage thresholds,
   and their stages in the gate and in CI, arrive with #4854 (TypeScript) and
   #4855 (Python).
+- **`npm run pack:verify`** builds each package's publish artifact (the npm
+  tarball, the wheel), installs it into an empty directory and boots the
+  installed server. It catches what the boot smoke cannot, since the smoke
+  runs the checkout: a file missing from the tarball, a dependency that only
+  resolves inside the workspace. It needs the network, so it is not a gate
+  stage. `release.yml` runs it before anything publishes, and the `release`
+  skill runs it by hand for the release ledger.
 - **`npm run format`** rewrites files, so it is something you run, not
   something the gate does. The gate only checks.
 - **Publishing** (`release.yml`) runs only when a maintainer publishes a
-  GitHub Release, and the two workflows that open version PRs
+  GitHub Release. Before it publishes anything it re-runs each package's
+  tests and `pack:verify` on the released commit, in jobs that hold no
+  credential. The two workflows that open version PRs
   (`version-packages.yml`, `prepare-python-release.yml`) check nothing. See
   [`RELEASING.md`](../RELEASING.md).
 

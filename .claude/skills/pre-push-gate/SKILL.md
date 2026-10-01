@@ -99,6 +99,25 @@ The guard matches spellings, not semantics, so an unrelated `retry:` property
 in server source trips it too. Rename the property, or restructure so the key
 is not written as `retry:` at the start of an expression.
 
+### `verify:action-pins`
+
+A job that holds a credential, or one whose artifact such a job downloads, uses
+an action by a tag (`actions/checkout@v6`) or by a SHA with no exact-version
+comment. The finding names the workflow, the job and the `uses:` value. Pin it
+as `owner/repo@<40-hex sha> # vX.Y.Z`, resolving both from one lookup:
+
+```sh
+ACTION=actions/checkout TAG=v6.1.0
+echo "uses: $ACTION@$(gh api "repos/$ACTION/commits/$TAG" --jq .sha) # $TAG"
+```
+
+If the job should not have become credentialed, that is the real fix: the
+guard counts `id-token: write` or `packages: write` (the job's own, or the
+workflow's when the job declares none), any secret other than `GITHUB_TOKEN`,
+and an `upload-artifact` that a credentialed job `needs` and downloads. A YAML
+alias in such a job is reported too; spell the ref out. The rule is in
+`AGENTS.md` **Credentialed workflow jobs**.
+
 ### `test:scripts`
 
 A guard's own unit test failed. Two of these are about the gate itself and
@@ -198,6 +217,8 @@ The details of the lease are in
 
 ## Not part of the gate
 
-`npm run skills:eval` (real model calls) and `npm run coverage` (a report; no
-threshold is enforced yet) are separate commands. Run the eval suite when you
+`npm run skills:eval` (real model calls), `npm run coverage` (a report; no
+threshold is enforced yet) and `npm run pack:verify` (installs each package's
+publish artifact and boots it; needs the network, and belongs to the release
+flow) are separate commands. Run the eval suite when you
 add a skill or change a description.

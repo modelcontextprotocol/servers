@@ -45,11 +45,20 @@ node scripts/prepare-python-release.mjs    # prints one "name: old -> new" line 
 
 Publishing is triggered by a maintainer **publishing a GitHub Release** whose tag is on `main`. There is no scheduled or merge-triggered release. The release tag is only a label: it carries no version, and nothing compares it with one. What the workflow does check is where the tag points: a Release whose commit is not on `main` fails before any publish job can start, since `main` only receives reviewed milestone merges.
 
-[`release.yml`](.github/workflows/release.yml) runs on `release: published`, gated by the `release` environment (a required reviewer must approve each deployment). It runs every package as an independent matrix job (`fail-fast: false`, so one package's failure never blocks another), checked out at the release tag. Each job: registry-diff guard → install → **run the package's tests** (plus `pyright` for Python) → build → publish.
+[`release.yml`](.github/workflows/release.yml) runs on `release: published`, checked out at the release tag. It handles every package as its own pair of jobs, a build and a publish (`fail-fast: false`, so one package's failure never blocks another):
+
+| Job | Holds | Does |
+| --- | --- | --- |
+| **Build** (`build-npm`, `build-pypi`) | No `id-token`, no environment | Installs dependencies, **runs the package's tests** (for Python, the whole `validate:py` chain: ruff, pyright, pytest), then runs **`pack:verify`**: it builds the tarball or wheel, installs it into an empty directory and boots the installed server. Uploads that verified artifact |
+| **Publish** (`publish-npm`, `publish-pypi`) | `id-token: write` and the `release` environment (a required reviewer must approve each deployment) | Downloads the artifact and hands it to the registry. No checkout, no dependency install, no build |
+
+The split is about what runs next to the publish credential. Installing dependencies runs their lifecycle scripts, and a build runs a toolchain; in a job that can mint an OIDC token, any of that code could publish. Here the token only ever sits beside the registry client and SHA-pinned actions. Every action in the build and publish jobs is pinned to a commit SHA, enforced by `npm run verify:action-pins`.
+
+The build jobs finish before the publish jobs ask for approval, so **approve the `release` environment only once the build jobs are green**. Their logs say what each package will do.
 
 The **registry-diff guard** is what makes a release idempotent and self-healing. A package whose version is already on the registry is **skipped, not failed**:
 
-- **npm**: [`scripts/npm-publish-guard.mjs`](scripts/npm-publish-guard.mjs) asks the registry whether the version exists. A package the registry has never seen counts as "publish it", so a new server's first release works. An answer the guard cannot read fails the job rather than guessing.
+- **npm**: [`scripts/npm-publish-guard.mjs`](scripts/npm-publish-guard.mjs) asks the registry whether the version exists, in the build job. For a published version the job builds nothing and uploads a `SKIP` marker, and the publish job exits cleanly on it. A package the registry has never seen counts as "publish it", so a new server's first release works. An answer the guard cannot read fails the job rather than guessing.
 - **PyPI**: `skip-existing` on the upload action.
 
 So a release publishes exactly the packages whose version moved, and a package whose publish failed is picked up by the next release with nothing to clean up.
@@ -63,15 +72,24 @@ Because of those bindings, the publish jobs must stay in `release.yml` and keep 
 
 ## Cutting a release
 
-1. **Get the version bumps onto `v2/main`.** Merge the **Version Packages** PR (TypeScript), the **Prepare Python Release** PR (Python), or both. CI validates them like any other PR, once it has been started (see the note above).
-2. **Merge `v2/main` into `main`.** `main` is the release branch and only receives these milestone merges.
-3. **Publish a GitHub Release** targeting `main`: Releases → Draft a new release → create a tag → Generate release notes → Publish. Any tag name works, since it is a label and not a version; naming it for the milestone (`v2.0.0`) keeps the list readable.
-4. **Approve the `release` environment deployments** when prompted.
-5. Each package publishes if its version is not on the registry yet; the rest skip cleanly.
+A release ships one **milestone**. The step-by-step procedure, with its commands, is the [`release` skill](.claude/skills/release/SKILL.md) (`/release`); this is its shape.
+
+1. **A release issue**, `Release vX.Y.Z`, is filed for the milestone. Every PR below references it, and it stays open until the Release is published.
+2. **Preparation PRs land on `v2/main`**, each starting with `Closes #<release issue>`:
+   - the **audit** (`npm audit`, and `pip-audit` over each Python server's locked requirements): the report goes on the release issue, and any fix it forces is its own commit in a PR;
+   - the **Version Packages** PR (TypeScript), which references the release issue in a comment instead, because the changesets action rewrites its body;
+   - the **Prepare Python Release** PR (Python).
+
+   A milestone that touches both languages and needs an audit fix has all three. They are merged before the next step starts.
+3. **The merge PR** takes `v2/main` into `main`. It is a pure merge: it has no commits of its own, and its tree hash equals `origin/v2/main`'s. Its body starts with `Part of #<release issue>`, not `Closes`, because `main` is the default branch and a closing keyword there would close the issue before anything is published. It is merged with a merge commit, never squashed.
+4. **The release ledger** is linked from the merge PR. It records, for the merge branch's tree: `npm run local:gate`; `npm run pack:verify` for each package; each server-facing issue in the milestone exercised through a client; and a targeted probe for each issue with no client surface. The maintainers approve the merge on it. A finding is fixed on `v2/main` and merged in again, never committed to the merge branch.
+5. **A maintainer publishes a GitHub Release** targeting `main`: Releases → Draft a new release → create a tag named for the milestone (`vX.Y.Z`) → Generate release notes → Publish. The tag is a label, not a version.
+6. **The build jobs run, then the maintainer approves the `release` environment deployments.** Each package publishes if its version is not on the registry yet; the rest skip cleanly.
+7. **The release issue is closed by hand**, and its card moves to Done.
 
 ## When a publish fails
 
-A failed matrix leg means that one package did not publish; everything that succeeded stays published.
+A failed matrix leg means that one package did not publish; everything that succeeded stays published. When a package's **build** job fails, its publish job still asks for approval and then fails at the download step, having published nothing: there is no artifact for it to publish.
 
 **A transient failure (a registry hiccup, a runner fault): re-run the failed jobs on the same run.**
 
@@ -80,7 +98,7 @@ gh run rerun <run-id> --failed --repo modelcontextprotocol/servers
 ```
 
 - A re-run is still a `release.yml` run in the `release` environment, so it satisfies the trusted-publisher binding.
-- It re-runs only the failed legs, checked out at the original release tag. It publishes exactly the released code, and the registry-diff guard keeps already-published packages safe.
+- It re-runs only the failed legs, at the original release tag. It publishes exactly the released code, and the registry-diff guard keeps already-published packages safe. If the failed leg was a build job, re-run it together with its publish job.
 - It needs a fresh `release` environment approval, and the run must be complete first (approve or reject any pending deployments).
 - GitHub's re-run window is about 30 days from the original run.
 
