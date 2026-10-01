@@ -50,7 +50,7 @@ Publishing is triggered by a maintainer **publishing a GitHub Release** whose ta
 | Job | Holds | Does |
 | --- | --- | --- |
 | **Build** (`build-npm`, `build-pypi`) | No `id-token`, no environment | Installs dependencies, **runs the package's tests** (for Python, the whole `validate:py` chain: ruff, pyright, pytest), then runs **`pack:verify`**: it builds the tarball or wheel, installs it into an empty directory and boots the installed server. Uploads that verified artifact |
-| **Publish** (`publish-npm`, `publish-pypi`) | `id-token: write` and the `release` environment (a required reviewer must approve each deployment) | Downloads the artifact and hands it to the registry. No checkout, no dependency install, no build |
+| **Publish** (`publish-npm`, `publish-pypi`) | `id-token: write` and the `release` environment (a required reviewer must approve each deployment) | Downloads the artifact, checks that its name and version are the ones the released commit declares for that package, and hands it to the registry. No checkout, no dependency install, no build |
 
 The split is about what runs next to the publish credential. Installing dependencies runs their lifecycle scripts, and a build runs a toolchain; in a job that can mint an OIDC token, any of that code could publish. Here the token only ever sits beside the registry client and SHA-pinned actions. Every action in the build and publish jobs is pinned to a commit SHA, enforced by `npm run verify:action-pins`.
 

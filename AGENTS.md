@@ -54,7 +54,7 @@ servers/
 ├── .changeset/               Pending changesets for the TypeScript servers, and the changesets config
 ├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py), its guards (verify-*),
 │                             the skills tooling, and release tooling (npm-publish-guard, prepare-python-release,
-│                             pack-and-verify)
+│                             pack-and-verify, release-manifest)
 ├── docs/                     Design documents; quality-gate.md is the gate's reference (stages, CI vs local, the lease);
 │                             contribution-model.md holds the outside-PR backlog plan
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),

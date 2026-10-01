@@ -70,6 +70,8 @@ jobs:
     outputs:
       npm_packages: ${{ steps.find-packages.outputs.npm_packages }}
       pypi_packages: ${{ steps.find-packages.outputs.pypi_packages }}
+      npm_expected: ${{ steps.expected.outputs.npm_expected }}
+      pypi_expected: ${{ steps.expected.outputs.pypi_expected }}
     steps:
       # On a release event the default ref is the release's tag: the exact
       # commit the maintainer released. Full history, for the check below.
@@ -97,6 +99,14 @@ jobs:
           PYPI=$(find . -name pyproject.toml -exec dirname {} \; | sed 's/^\.\///' | jq -R -s -c 'split("\n")[:-1]')
           echo "npm_packages=$NPM" >> "$GITHUB_OUTPUT"
           echo "pypi_packages=$PYPI" >> "$GITHUB_OUTPUT"
+
+      # Each package's name and version, read from the released commit before
+      # any dependency code has run. The publish jobs compare the artifact
+      # they are handed with these; the reasoning is in the script's header.
+      # It imports nothing outside Node, so nothing is installed for it.
+      - name: Record what each package should be published as
+        id: expected
+        run: node scripts/release-manifest.mjs
 
   build-npm:
     timeout-minutes: 15
@@ -213,6 +223,8 @@ jobs:
       - name: Publish package
         env:
           NPM_CONFIG_PROVENANCE: "true"
+          EXPECTED_NAME: ${{ fromJson(needs.detect-packages.outputs.npm_expected)[matrix.package].name }}
+          EXPECTED_VERSION: ${{ fromJson(needs.detect-packages.outputs.npm_expected)[matrix.package].version }}
         run: |
           if [ -e release-artifact/SKIP ]; then
             echo "This version is already on npm; nothing to publish."
@@ -231,7 +243,12 @@ jobs:
           # `publishConfig` into its own config before the OIDC exchange, so an
           # injected registry or proxy could redirect this job's credential
           # flow. No package here declares one, so any present is refused, and
-          # the registry is named on the command line as well.
+          # the registry is named on the command line as well. For the same
+          # reason its name and version are compared with what the released
+          # commit declares (recorded by `detect-packages`, before any
+          # dependency code ran): every package here trusts this workflow, so
+          # a tampered build could otherwise publish as another of them, or at
+          # a version nobody reviewed.
           # The check fails closed: a tarball that cannot be read, or a
           # manifest that does not parse, stops the job. Only a manifest that
           # was read and has no `publishConfig` goes on to `npm publish`.
@@ -239,12 +256,22 @@ jobs:
             echo "Refusing to publish: could not read package/package.json from $1"
             exit 1
           }
-          VERDICT="$(printf '%s' "$MANIFEST" | node -e "console.log('publishConfig' in JSON.parse(require('fs').readFileSync(0, 'utf8')) ? 'declared' : 'clean')")" || {
+          VERDICT="$(printf '%s' "$MANIFEST" | node -e "
+            const m = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+            if ('publishConfig' in m) console.log('declares publishConfig');
+            else if (m.name !== process.env.EXPECTED_NAME) console.log('is named ' + m.name + ', expected ' + process.env.EXPECTED_NAME);
+            else if (m.version !== process.env.EXPECTED_VERSION) console.log('is version ' + m.version + ', expected ' + process.env.EXPECTED_VERSION);
+            else console.log('clean');
+          ")" || {
             echo "Refusing to publish: the tarball's package.json does not parse"
             exit 1
           }
+          if [ -z "$EXPECTED_NAME" ] || [ -z "$EXPECTED_VERSION" ]; then
+            echo "Refusing to publish: no expected name or version was recorded for this package"
+            exit 1
+          fi
           if [ "$VERDICT" != "clean" ]; then
-            echo "Refusing to publish: the tarball's package.json declares publishConfig"
+            echo "Refusing to publish: the tarball's package.json $VERDICT"
             exit 1
           fi
           npm publish "$1" --access public --registry https://registry.npmjs.org/
@@ -323,6 +350,35 @@ jobs:
         with:
           name: pypi-${{ matrix.package }}
           path: dist
+
+      # The artifact is untrusted input here, as in `publish-npm`: all three
+      # PyPI projects trust this workflow, so each file must be a wheel or an
+      # sdist of THIS project at the version the released commit declares.
+      # PyPI itself rejects a file whose name disagrees with its metadata, so
+      # the name is the thing to check.
+      - name: Check the distributions are this package's
+        env:
+          STEM: ${{ fromJson(needs.detect-packages.outputs.pypi_expected)[matrix.package].stem }}
+        run: |
+          if [ -z "$STEM" ]; then
+            echo "Refusing to publish: no expected name and version were recorded for this package"
+            exit 1
+          fi
+          found=0
+          for f in dist/* dist/.[!.]*; do
+            [ -e "$f" ] || continue
+            case "$(basename "$f")" in
+              "$STEM.tar.gz" | "$STEM"-*.whl) found=$((found + 1)) ;;
+              *)
+                echo "Refusing to publish: $(basename "$f") is not a distribution of $STEM"
+                exit 1
+                ;;
+            esac
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "Refusing to publish: no distribution of $STEM in the artifact"
+            exit 1
+          fi
 
       # `skip-existing` is the PyPI side of the registry-diff guard: an
       # already-published version is skipped, not failed.

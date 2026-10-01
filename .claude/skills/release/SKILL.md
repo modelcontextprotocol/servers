@@ -143,7 +143,10 @@ rather than assuming it, since a TypeScript change merged without its changeset
 releases nothing:
 
 ```sh
-ls .changeset/*.md | grep -v README.md        # the pending changesets
+# Refresh first, and read the REMOTE tree: the checkout may be a preparation
+# branch cut before another PR merged.
+git fetch origin main v2/main --tags
+git ls-tree --name-only origin/v2/main .changeset/ | grep '\.md$' | grep -v README.md   # the pending changesets
 git log --oneline "$(git describe --tags --abbrev=0 origin/main)"..origin/v2/main -- \
   src/everything src/filesystem src/memory src/sequentialthinking
 ```
