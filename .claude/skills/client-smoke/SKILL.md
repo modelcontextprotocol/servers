@@ -64,9 +64,11 @@ $INSPECT uv --directory src/git run mcp-server-git --repository "$PWD" -- \
   --method tools/list --format json
 ```
 
-`--format json` prints one JSON object on stdout, `{"result": …}` or
-`{"error": …}`, which is the form to paste into a PR. The server's own stderr
-(its startup banner) still passes through, so capture stdout alone.
+`--format json` prints a result as one JSON object, `{"result": …}`, on
+**stdout**, and a failure as `{"error": …}` on **stderr**. The server's own
+stderr (its startup banner) passes through on stderr too. So capture stdout
+alone for the result, never `2>&1` into a JSON parser: a tool error produces
+both objects, one on each stream (see the table below).
 
 ### How the command line is split
 
@@ -103,16 +105,16 @@ $INSPECT node src/memory/dist/index.js \
 
 The exit code is the verdict, so check it rather than reading the text:
 
-| Outcome | stdout | Exit |
-| --- | --- | --- |
-| The request succeeded | `{"result": …}` | 0 |
-| The tool ran and returned `isError: true` | The result, then `{"error":{"code":"tool_is_error", …}}` | 5 |
-| No such tool | `{"error":{"code":"tool_not_found", …}}` | 5 |
-| Could not connect, or bad arguments | `{"error":{"code":"error", …}}` | 1 |
+| Outcome | stdout | stderr | Exit |
+| --- | --- | --- | --- |
+| The request succeeded | `{"result": …}` | | 0 |
+| The tool ran and returned `isError: true` | `{"result": …, "isError": true}` | `{"error":{"code":"tool_is_error", …}}` | 5 |
+| No such tool | | `{"error":{"code":"tool_not_found", …}}` | 5 |
+| Could not connect, or bad arguments | | `{"error":{"code":"error", …}}` | 1 |
 
 A tool error is a **successful protocol exchange**: the result object is still
-printed, and it is what to quote when the change is about an error a tool
-returns.
+printed on stdout, and it is what to quote when the change is about an error a
+tool returns.
 
 ### `everything` over HTTP
 

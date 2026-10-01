@@ -169,8 +169,8 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-def test_get_current_time_over_stdio():
-    async def _run():
+def test_get_current_time_over_stdio() -> None:
+    async def _run() -> None:
         params = StdioServerParameters(
             command=sys.executable, args=["-m", "mcp_server_time"]
         )

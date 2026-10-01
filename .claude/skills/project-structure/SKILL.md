@@ -74,9 +74,12 @@ src/<server>/
 `server.py` holds the Pydantic input models, the functions that do the work,
 and `serve()`. `serve()` constructs the `Server`, declares the tools (and, in
 `fetch`, the prompts) with the `@server.list_tools()` / `@server.call_tool()`
-decorators inside its body, and then runs it over stdio. So a new tool is three
-edits in `server.py`: its input model, its entry in `list_tools`, and its
-branch in `call_tool`. The `Server` object is local to `serve()` and not
+decorators inside its body, and then runs it over stdio. So a new tool is a
+set of edits in `server.py`: its input model, its entry in `list_tools`, and
+its branch in `call_tool`. In `git` and `time` there is a fourth: tool names
+are members of an enum (`GitTools`, `TimeTools`) that `list_tools` and
+`call_tool` both dispatch on, so the new name is added there first. `fetch`
+has one tool and no enum. The `Server` object is local to `serve()` and not
 importable.
 
 ## Where to put a new file
@@ -87,7 +90,7 @@ importable.
 | A transport for `everything` | `src/everything/transports/`, plus a `case` in `src/everything/index.ts` and a `start:…` script |
 | A tool for `filesystem`, `memory` or `sequentialthinking` | A `server.registerTool(...)` call in that server's `index.ts`; the logic it calls goes in `lib.ts` (or the class it extends) so a test can reach it |
 | A helper module for a TypeScript server | A kebab-case `.ts` file at the workspace root, imported with the `.js` extension |
-| A tool for a Python server | `server.py`: model, `list_tools` entry, `call_tool` branch |
+| A tool for a Python server | `server.py`: the tool-name enum member (`git`, `time`), the model, the `list_tools` entry, the `call_tool` branch |
 | A command-line flag for a Python server | `__init__.py`, passed into `serve()` |
 | A test | `/testing` |
 | Root tooling (a guard, a release helper) | `scripts/<name>.mjs`, with a sibling `<name>.test.mjs` when it has logic worth testing; shared helpers in `scripts/lib/` |
