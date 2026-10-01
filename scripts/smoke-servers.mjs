@@ -39,7 +39,9 @@
  * on a port the OS reported free a moment earlier, not the server's default
  * 3001, so the smoke does not collide with a server the developer has running.
  * That port is not reserved between the probe and the server's own `listen`,
- * so a launch that loses it to another process is relaunched on a fresh one.
+ * so a launch whose server reports the port taken is relaunched on a fresh
+ * one. Streamable HTTP reports it; HTTP+SSE does not yet (#4923: it prints
+ * "Server is running" either way), so there a lost port is a failed smoke.
  *
  * One server failing does not stop the rest: the run reports every target's
  * verdict and exits non-zero if any failed, so one run shows the whole picture.
@@ -295,12 +297,17 @@ async function exercise(client, server, ctx) {
     );
 }
 
-/** A port the OS says is free right now. */
+/**
+ * A port the OS says is free right now. Probed on the wildcard address, the
+ * way the servers bind it (`app.listen(PORT)`): a port held on one interface
+ * only can be bound again on the wildcard without an error, and the client
+ * would then reach the holder, not the server.
+ */
 function freePort() {
   return new Promise((resolve, reject) => {
     const probe = createNetServer();
     probe.once("error", reject);
-    probe.listen(0, "127.0.0.1", () => {
+    probe.listen(0, () => {
       const { port } = probe.address();
       probe.close(() => resolve(port));
     });
@@ -395,8 +402,12 @@ async function smokeOne(server, transport, ctx) {
 
   // The probe port is free when probed, not reserved: another process can take
   // it before the server binds. Only that one failure is relaunched, on a fresh
-  // port; anything else the server says on its way down is the result.
+  // port; anything else the server says on its way down is the result. The
+  // check sits in the outer catch because the loss can surface at either step:
+  // the listen probe can reach the OTHER process on that port before our child
+  // has exited, and then it is the MCP connection that fails.
   for (let attempt = 1; ; attempt += 1) {
+    const httpClient = new Client({ name: "boot-smoke", version: "0.0.0" });
     const port = await freePort();
     let output = "";
     const child = spawn(spec.command, spec.args, {
@@ -412,12 +423,7 @@ async function smokeOne(server, transport, ctx) {
         child.once("error", reject);
         child.once("spawn", resolve);
       });
-      try {
-        await waitForListen(port, child, tail);
-      } catch (err) {
-        if (attempt < PORT_ATTEMPTS && isPortTaken(output)) continue;
-        throw err;
-      }
+      await waitForListen(port, child, tail);
       const url = new URL(
         `http://127.0.0.1:${port}${TRANSPORT_ENDPOINT[transport]}`,
       );
@@ -426,13 +432,17 @@ async function smokeOne(server, transport, ctx) {
           ? new SSEClientTransport(url)
           : new StreamableHTTPClientTransport(url);
       try {
-        await client.connect(clientTransport, options);
-        await exercise(client, server, ctx);
+        await httpClient.connect(clientTransport, options);
+        await exercise(httpClient, server, ctx);
       } finally {
-        await client.close().catch(() => {});
+        await httpClient.close().catch(() => {});
       }
       return;
     } catch (err) {
+      // Give a child that is on its way down a moment to say why.
+      if (child.exitCode === null && child.signalCode === null)
+        await delay(200);
+      if (attempt < PORT_ATTEMPTS && isPortTaken(output)) continue;
       throw new Error(
         `${err?.message ?? err}${tail() ? `\n--- server output ---\n${tail()}` : ""}`,
         { cause: err },

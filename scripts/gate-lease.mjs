@@ -464,10 +464,28 @@ export function spawnSpec(command, args, platform = process.platform) {
 
 /**
  * Send `signal` to the child's whole process group (it was spawned as a group
- * leader), falling back to the child alone where groups are unavailable or the
- * group is already gone.
+ * leader); on Windows, end its process tree with `taskkill`. Falls back to the
+ * child alone where neither works or the group is already gone.
  */
 function signalTree(child, signal) {
+  if (process.platform === "win32") {
+    // No process groups, and `child.kill` ends only the `cmd.exe` the gate was
+    // started through: the builds and tests under it would run on after the
+    // lease is released, beside the next gate. `taskkill /T` takes the tree
+    // (as `killTree` in scripts/skill-eval.mjs does); `/F` because Windows has
+    // no graceful signal to offer a console tree anyway.
+    try {
+      const killer = spawn(
+        "taskkill",
+        ["/pid", String(child.pid), "/T", "/F"],
+        { stdio: "ignore" },
+      );
+      killer.on("error", () => child.kill(signal));
+      return;
+    } catch {
+      // Fall through to the child alone.
+    }
+  }
   try {
     if (process.platform !== "win32") {
       process.kill(-child.pid, signal);
