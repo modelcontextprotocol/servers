@@ -324,7 +324,23 @@ The loop stops at the **first** of:
 | **Clean round** | A review with no findings. No confirming round is needed | Stop |
 | **Out of scope only** | Every finding in the round was declined as outside the issue | Reply in each thread, stop. Nothing was pushed, so there is nothing new to review |
 | **Two silent rounds** | Two requests in a row end with no review: the poll's deadline passed, or Copilot's session ended without posting | Stop, and say so in the summary |
-| **Timeout** | The loop's overall budget is spent: about ten rounds, or the session is ending, while findings keep coming | Stop, and list what is still open in the summary so a human can pick it up |
+
+**There is no round cap.** A loop ends for one of the three reasons above,
+never because of how many rounds it has run: stopping on a count leaves known
+findings open with nothing but a number to explain why.
+
+⚠️ **What keeps a loop short is the scope rule, not a limit.** Copilot does not
+converge on its own, and every fix it talks you into beyond the issue is fresh
+surface for the next round, so accepting scope creep is what makes a review
+cycle protracted. When a loop runs long, look at what the last rounds asked
+for. A defect in what the PR added is fixed, however many rounds that takes.
+Pre-existing behavior, a new capability, or hardening the issue did not ask
+for is declined with a reason in the thread (step 8), and a round holding only
+those is the **Out of scope only** exit.
+
+If the session has to end while a round is still pending, say so in the
+PR-level summary and in your reply: the request stays open, and whoever picks
+the PR up reads that round rather than requesting a new one.
 
 A round that posted nothing new is still reported in the PR-level summary, so
 the PR shows why the loop ended.
