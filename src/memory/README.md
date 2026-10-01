@@ -328,7 +328,7 @@ On Windows, use:
 ```
 
 - `MEMORY_FILE_PATH`: Path to the memory storage JSONL file (default: `memory.jsonl` in the server directory)
-- `MEMORY_REQUEST_TIMEOUT_MS`: Per-request budget in milliseconds, covering queueing, lease acquisition and processing (default: `30000`). Must be a positive integer; invalid values stop startup. The default fits the TypeScript SDK's 60-second client timeout, so no client change is needed; see [Request lifetime](#request-lifetime).
+- `MEMORY_REQUEST_TIMEOUT_MS`: Per-request budget in milliseconds, covering queueing, lease acquisition and processing (default: `30000`). Must be an integer between 1 and 2147483647 inclusive; invalid values stop startup. The default fits the TypeScript SDK's 60-second client timeout, so no client change is needed; see [Request lifetime](#request-lifetime).
 
 # VS Code Installation Instructions
 
