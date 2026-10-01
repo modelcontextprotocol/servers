@@ -132,14 +132,14 @@ the URL. The transport is inferred from the path: `/mcp` is Streamable HTTP,
 (
   URL=http://localhost:3917/mcp
   # Refuse a port something already answers on: it would be tested instead of this build.
-  curl -s -o /dev/null "$URL" && { echo "port 3917 is already in use" >&2; exit 1; }
+  curl -s -m 2 -o /dev/null "$URL" && { echo "port 3917 is already in use" >&2; exit 1; }
   PORT=3917 node src/everything/dist/index.js streamableHttp >/dev/null 2>&1 &
   SERVER_PID=$!
   trap 'kill "$SERVER_PID" 2>/dev/null' EXIT    # stops it however the subshell ends
   READY=
   for _ in $(seq 50); do                         # at most ten seconds
     kill -0 "$SERVER_PID" 2>/dev/null || { echo "server exited before listening" >&2; exit 1; }
-    curl -s -o /dev/null "$URL" && { READY=1; break; }
+    curl -s -m 2 -o /dev/null "$URL" && { READY=1; break; }
     sleep 0.2
   done
   [ -n "$READY" ] || { echo "server did not listen within ten seconds" >&2; exit 1; }

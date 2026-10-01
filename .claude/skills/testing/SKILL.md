@@ -133,10 +133,16 @@ const transport = new StdioClientTransport({
   stderr: "pipe",
 });
 const client = new Client({ name: "test-client", version: "0.0.0" });
-await client.connect(transport);
-// … assert …
-await client.close(); // this is what stops the child process
+try {
+  await client.connect(transport);
+  // … assert …
+} finally {
+  await client.close(); // this is what stops the child process
+}
 ```
+
+Closing in `finally` (or in `afterEach`, as the `filesystem` tests do) matters:
+a failed assertion that skips `close()` leaves the spawned server running.
 
 `src/sequentialthinking/__tests__/input-schema.test.ts` is the reference.
 `stderr: "pipe"` keeps the server's startup banner off the console.
