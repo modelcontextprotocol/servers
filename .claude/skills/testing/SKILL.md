@@ -8,9 +8,9 @@ disable-model-invocation: false
 
 The **rules** are in [`AGENTS.md`](../../../AGENTS.md) under **Always test new
 or modified code**: new behavior comes with tests, test at the protocol level
-where you can, and keep expected error output off the console. This skill is
-which harness each server has **today**, how to write a test with it, and which
-command runs what.
+where you can, and keep expected error output off the console. This skill
+explains which harness each server has **today**, how to write a test with it,
+and which command runs what.
 
 Driving a running server by hand, with the Inspector or an LLM client, is
 `/client-smoke`. It is evidence for a PR, not a substitute for a test.
@@ -139,10 +139,16 @@ await client.close(); // this is what stops the child process
 ```
 
 `src/sequentialthinking/__tests__/input-schema.test.ts` is the reference.
-`stderr: "pipe"` keeps the server's startup banner off the console. Pass a
-server's configuration with the transport's `env` option: the child inherits
-only the SDK's default safelist (`PATH`, `HOME`, `USER` and the like), not the
-other variables of the test process.
+`stderr: "pipe"` keeps the server's startup banner off the console.
+
+Give the server what it needs to start. `filesystem` takes its allowed
+directories as arguments (`args: [distIndexPath, testDir]`, with `testDir` a
+`realpath`-resolved temporary directory, as
+`src/filesystem/__tests__/structured-content.test.ts` does); with none, and a
+client that offers no Roots, every file operation is refused. Environment
+variables such as `MEMORY_FILE_PATH` go in the transport's `env` option: the
+child inherits only the SDK's default safelist (`PATH`, `HOME`, `USER` and the
+like), not the other variables of the test process.
 
 ⚠️ **These tests run the last build, not your edit.** `npm test` does not build.
 A test that spawns `dist/index.js` passes or fails on whatever `tsc` last

@@ -62,7 +62,7 @@ server from them. `/testing` covers what that means for a new test.
 
 ```
 src/<server>/
-├── pyproject.toml            dependencies, the console script, pytest config
+├── pyproject.toml            dependencies, the console script; pytest config in `fetch` and `git`
 ├── uv.lock, .python-version
 ├── src/mcp_server_<name>/
 │   ├── __init__.py           main(): the command-line flags, then asyncio.run(serve(...))
@@ -89,7 +89,8 @@ importable.
 | A tool, resource or prompt for `everything` | Its own kebab-case file in `tools/`, `resources/` or `prompts/`, exporting a `register…` function, wired into that directory's `index.ts` |
 | A transport for `everything` | `src/everything/transports/`, plus a `case` in `src/everything/index.ts` and a `start:…` script |
 | A tool for `filesystem`, `memory` or `sequentialthinking` | A `server.registerTool(...)` call in that server's `index.ts`; the logic it calls goes in `lib.ts` (or the class it extends) so a test can reach it |
-| A helper module for a TypeScript server | A kebab-case `.ts` file at the workspace root, imported with the `.js` extension |
+| A helper module for `everything` | A kebab-case `.ts` file in the feature area it supports, beside its users (`server/logging.ts`, `server/roots.ts`, `resources/session.ts`), imported with the `.js` extension |
+| A helper module for `filesystem`, `memory` or `sequentialthinking` | A kebab-case `.ts` file at the workspace root, imported with the `.js` extension |
 | A tool for a Python server | `server.py`: the tool-name enum member (`git`, `time`), the model, the `list_tools` entry, the `call_tool` branch |
 | A command-line flag for a Python server | `__init__.py`, passed into `serve()` |
 | A test | `/testing` |
@@ -110,6 +111,7 @@ file matches no `prettier --check` glob. Both run in `npm run validate:guards`.
 If one fires on a file you added, the fix is to bring the file into the
 existing config, not to exclude it.
 
-When a file or directory is added, removed or renamed, the entries that
-describe it change in the same PR: the tree in `AGENTS.md`, the server's
-`README.md`, and for `everything`, `docs/structure.md`.
+When a file or directory is added, removed, renamed or given a different
+purpose, every entry that describes it changes in the same PR (`AGENTS.md`,
+**Maintenance rules**): the root `README.md`, the server's own `README.md`,
+the tree in `AGENTS.md`, and for `everything`, `docs/structure.md`.
