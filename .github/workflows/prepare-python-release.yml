@@ -8,12 +8,21 @@
 # published until a maintainer publishes a GitHub Release (`release.yml`).
 #
 # The PR targets the branch the workflow was dispatched on, which is `v2/main`
-# in the normal flow.
+# in the normal flow. It is one of a release's preparation PRs, so it follows
+# the same rules as any other PR here: its body opens with `Closes #N` for the
+# milestone's release issue (the `issue` input), its branch is named for that
+# issue, and it is labeled `v2`. The link is only a cross-reference on
+# `v2/main`; the release issue stays open until the Release is published.
 
 name: Prepare Python Release
 
 on:
   workflow_dispatch:
+    inputs:
+      issue:
+        description: "The release issue this PR belongs to (its number, e.g. 4930)"
+        required: true
+        type: string
 
 jobs:
   prepare:
@@ -56,9 +65,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BASE: ${{ github.ref_name }}
+          ISSUE: ${{ inputs.issue }}
         run: |
+          # The input is free text; only a bare issue number may reach the
+          # branch name and the PR body.
+          case "$ISSUE" in
+            '' | *[!0-9]*) echo "issue must be a number, got: '$ISSUE'" >&2; exit 1 ;;
+          esac
           DATE=$(date -u +%Y.%-m.%-d)
-          BRANCH="release/python-$DATE"
+          BRANCH="v2/chore/$ISSUE-python-calver-$DATE"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
@@ -66,6 +81,8 @@ jobs:
           git commit -m "chore: stamp Python CalVer versions for $DATE"
           git push --force origin "$BRANCH"
           {
+            echo "Closes #$ISSUE"
+            echo
             echo "Stamps today's CalVer date onto the Python packages that changed since their last version bump:"
             echo
             sed 's/^/- /' "$RUNNER_TEMP/stamped.txt"

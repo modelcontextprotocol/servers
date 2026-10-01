@@ -28,7 +28,7 @@ The semver line starts at **`1.0.0`** for all four packages. Their earlier relea
 
 `fetch`, `git` and `time` use **CalVer** (`2026.8.1`). pip and uv have no dist-tags and always install the numerically highest version, so the existing `2026.x` line on PyPI has to keep climbing.
 
-A maintainer dispatches the **Prepare Python Release** workflow ([`prepare-python-release.yml`](.github/workflows/prepare-python-release.yml)) on `v2/main`. It runs [`scripts/prepare-python-release.mjs`](scripts/prepare-python-release.mjs), which stamps today's date onto each Python package with a shipped change since its last version bump, refreshes its `uv.lock`, and opens a normal PR. A package with no such change is left alone.
+A maintainer dispatches the **Prepare Python Release** workflow ([`prepare-python-release.yml`](.github/workflows/prepare-python-release.yml)) on `v2/main`, giving it the number of the milestone's release issue. It runs [`scripts/prepare-python-release.mjs`](scripts/prepare-python-release.mjs), which stamps today's date onto each Python package with a shipped change since its last version bump, refreshes its `uv.lock`, and opens a PR whose body starts with `Closes #<release issue>`. A package with no such change is left alone.
 
 GitHub only lists a `workflow_dispatch` workflow that exists on the default branch (`main`). Until the first milestone merge carries this one there, run the same script locally on a branch cut from `origin/v2/main` and open the PR by hand:
 
@@ -39,11 +39,11 @@ node scripts/prepare-python-release.mjs    # prints one "name: old -> new" line 
 ### PRs opened by these workflows
 
 > [!NOTE]
-> Both workflows open their PR with the workflow token, and GitHub does not start CI for a PR opened that way. Close and reopen the PR to run CI before merging. The repository setting **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests** must be on, or the workflows fail at the step that opens the PR.
+> Both workflows open their PR with the workflow token, and GitHub does not start CI for a PR opened that way. Close and reopen the PR to run CI before merging. The Version Packages PR's body is rewritten on every push to `v2/main`, so it is tied to the release issue by a comment (`Part of #N`) instead of a body line. The repository setting **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests** must be on, or the workflows fail at the step that opens the PR.
 
 ## How publishing works
 
-Publishing is triggered by a maintainer **publishing a GitHub Release** whose tag is on `main`. There is no scheduled or merge-triggered release. The release tag is only a label: it carries no version, and nothing compares it with one.
+Publishing is triggered by a maintainer **publishing a GitHub Release** whose tag is on `main`. There is no scheduled or merge-triggered release. The release tag is only a label: it carries no version, and nothing compares it with one. What the workflow does check is where the tag points: a Release whose commit is not on `main` fails before any publish job can start, since `main` only receives reviewed milestone merges.
 
 [`release.yml`](.github/workflows/release.yml) runs on `release: published`, gated by the `release` environment (a required reviewer must approve each deployment). It runs every package as an independent matrix job (`fail-fast: false`, so one package's failure never blocks another), checked out at the release tag. Each job: registry-diff guard → install → **run the package's tests** (plus `pyright` for Python) → build → publish.
 

@@ -23,6 +23,11 @@
 # registry tokens. Each trusted publisher is bound to this workflow's filename
 # (`release.yml`) and the `release` environment, so the publish jobs must stay
 # in this file and keep that environment.
+#
+# Only a commit that is on `main` is published. A Release can be created for
+# any tag on any commit, and the environment approval shows a reviewer a tag
+# name, not what it points at, so `detect-packages` checks the released commit
+# against `main` and every publish job needs it.
 
 name: Release
 
@@ -40,8 +45,22 @@ jobs:
       pypi_packages: ${{ steps.find-packages.outputs.pypi_packages }}
     steps:
       # On a release event the default ref is the release's tag: the exact
-      # commit the maintainer released.
+      # commit the maintainer released. Full history, for the check below.
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # `main` only receives reviewed milestone merges, so "on main" is what
+      # makes the released code reviewed code. A tag cut from `v2/main`, a
+      # feature branch or a fork's commit fails here, before any publish job
+      # is eligible to run.
+      - name: Refuse a release whose commit is not on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+            echo "::error::The released commit $GITHUB_SHA is not on main. Publish the Release from a tag on main (see RELEASING.md)."
+            exit 1
+          fi
 
       - name: Find all packages
         id: find-packages

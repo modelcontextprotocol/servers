@@ -9,6 +9,11 @@
 # so it has to exist on the develop branch before the milestone merge carries
 # it to `main`. A bump made downstream of `v2/main` would never flow back.
 #
+# The action rewrites the PR's title and body on every run, so that PR cannot
+# carry a `Closes #N` line the way every other PR here does; `AGENTS.md` names
+# it as an exception and says how it is tied to its release issue instead. The
+# `v2` label does survive an update, and this workflow applies it.
+#
 # This workflow only ever opens a PR. It gives the action no publish script, so
 # it never publishes, tags or creates a Release; that is `release.yml`, on a
 # maintainer-published GitHub Release.
@@ -43,6 +48,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Create or update the Version Packages PR
+        id: changesets
         uses: changesets/action@v2
         with:
           version-script: npm run version-packages
@@ -53,3 +59,12 @@ jobs:
           # the CHANGELOG entries. The action itself authenticates through its
           # `github-token` input, which defaults to this same token.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Every PR in this repository is labeled `v2`. Adding a label that is
+      # already there is a no-op, so this runs on every update.
+      - name: Label the Version Packages PR
+        if: steps.changesets.outputs.pr-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ steps.changesets.outputs.pr-number }}
+        run: gh pr edit "$PR" --add-label v2

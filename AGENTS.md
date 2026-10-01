@@ -241,6 +241,20 @@ holds for a maintainer's own one-line fix as much as for a feature.
   slug**. It still targets `v2/main`, and it is reviewed inside the fork. The
   flow is the `security-advisory` skill.
 
+- **Exception: the two version PRs that automation opens.** Each changes
+  version metadata only, so neither answers the template checklist, and each
+  is tied to its milestone's **release issue** rather than to an issue of its
+  own.
+  - The **Prepare Python Release** PR follows the rest of the rules: the
+    workflow takes the release issue's number, writes `Closes #N` as the
+    body's first line, names the branch `v2/chore/<N>-python-calver-<date>`
+    and labels it `v2`.
+  - The changesets **"Version Packages"** PR cannot carry a `Closes` line: the
+    action rewrites its body on every push to `v2/main`, and its branch is the
+    action's own (`changeset-release/v2/main`). The workflow labels it `v2`.
+    Tie it to the release issue with a **comment** (`Part of #N`), which an
+    update does not overwrite.
+
 No other PR is exempt.
 
 Every PR answers the checklist in
