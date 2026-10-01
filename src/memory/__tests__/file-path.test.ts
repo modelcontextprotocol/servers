@@ -2,21 +2,23 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
-import { fileURLToPath } from 'url';
 import { ensureMemoryFilePath, defaultMemoryPath, expandHome } from '../index.js';
 
 describe('ensureMemoryFilePath', () => {
-  const testDir = path.dirname(fileURLToPath(import.meta.url));
-  const oldMemoryPath = path.join(testDir, '..', 'memory.json');
-  const newMemoryPath = path.join(testDir, '..', 'memory.jsonl');
-
   let originalEnv: string | undefined;
+  let testDir: string;
+  let oldMemoryPath: string;
+  let newMemoryPath: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Save original environment variable
     originalEnv = process.env.MEMORY_FILE_PATH;
     // Delete environment variable
     delete process.env.MEMORY_FILE_PATH;
+
+    testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcp-memory-file-path-'));
+    oldMemoryPath = path.join(testDir, 'memory.json');
+    newMemoryPath = path.join(testDir, 'memory.jsonl');
   });
 
   afterEach(async () => {
@@ -27,25 +29,15 @@ describe('ensureMemoryFilePath', () => {
       delete process.env.MEMORY_FILE_PATH;
     }
 
-    // Clean up test files
-    try {
-      await fs.unlink(oldMemoryPath);
-    } catch {
-      // Ignore if file doesn't exist
-    }
-    try {
-      await fs.unlink(newMemoryPath);
-    } catch {
-      // Ignore if file doesn't exist
-    }
+    await fs.rm(testDir, { recursive: true, force: true });
   });
 
   describe('with MEMORY_FILE_PATH environment variable', () => {
     it('should return absolute path when MEMORY_FILE_PATH is absolute', async () => {
-      const absolutePath = '/tmp/custom-memory.jsonl';
+      const absolutePath = path.join(testDir, 'custom-memory.jsonl');
       process.env.MEMORY_FILE_PATH = absolutePath;
 
-      const result = await ensureMemoryFilePath();
+      const result = await ensureMemoryFilePath(testDir);
 
       expect(result).toBe(absolutePath);
     });
@@ -54,17 +46,17 @@ describe('ensureMemoryFilePath', () => {
       const relativePath = 'custom-memory.jsonl';
       process.env.MEMORY_FILE_PATH = relativePath;
 
-      const result = await ensureMemoryFilePath();
+      const result = await ensureMemoryFilePath(testDir);
 
       expect(path.isAbsolute(result)).toBe(true);
-      expect(result).toContain('custom-memory.jsonl');
+      expect(result).toBe(path.join(testDir, relativePath));
     });
 
     it('should handle Windows absolute paths', async () => {
       const windowsPath = 'C:\\temp\\memory.jsonl';
       process.env.MEMORY_FILE_PATH = windowsPath;
 
-      const result = await ensureMemoryFilePath();
+      const result = await ensureMemoryFilePath(testDir);
 
       // On Windows, should return as-is; on Unix, will be treated as relative
       if (process.platform === 'win32') {
@@ -77,7 +69,7 @@ describe('ensureMemoryFilePath', () => {
     it('should expand a leading "~/" to the home directory', async () => {
       process.env.MEMORY_FILE_PATH = '~/custom-memory.jsonl';
 
-      const result = await ensureMemoryFilePath();
+      const result = await ensureMemoryFilePath(testDir);
 
       expect(result).toBe(path.join(os.homedir(), 'custom-memory.jsonl'));
       expect(path.isAbsolute(result)).toBe(true);
@@ -86,9 +78,9 @@ describe('ensureMemoryFilePath', () => {
 
   describe('without MEMORY_FILE_PATH environment variable', () => {
     it('should return default path when no files exist', async () => {
-      const result = await ensureMemoryFilePath();
+      const result = await ensureMemoryFilePath(testDir);
 
-      expect(result).toBe(defaultMemoryPath);
+      expect(result).toBe(newMemoryPath);
     });
 
     it('should migrate from memory.json to memory.jsonl when only old file exists', async () => {
@@ -97,9 +89,9 @@ describe('ensureMemoryFilePath', () => {
 
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      const result = await ensureMemoryFilePath();
+      const result = await ensureMemoryFilePath(testDir);
 
-      expect(result).toBe(defaultMemoryPath);
+      expect(result).toBe(newMemoryPath);
 
       // Verify migration happened
       const newFileExists = await fs.access(newMemoryPath).then(() => true).catch(() => false);
@@ -126,9 +118,9 @@ describe('ensureMemoryFilePath', () => {
 
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      const result = await ensureMemoryFilePath();
+      const result = await ensureMemoryFilePath(testDir);
 
-      expect(result).toBe(defaultMemoryPath);
+      expect(result).toBe(newMemoryPath);
 
       // Verify no migration happened (both files should still exist)
       const newFileExists = await fs.access(newMemoryPath).then(() => true).catch(() => false);
@@ -147,7 +139,7 @@ describe('ensureMemoryFilePath', () => {
       const testContent = '{"entities": [{"name": "test", "type": "person"}]}';
       await fs.writeFile(oldMemoryPath, testContent);
 
-      await ensureMemoryFilePath();
+      await ensureMemoryFilePath(testDir);
 
       const migratedContent = await fs.readFile(newMemoryPath, 'utf-8');
       expect(migratedContent).toBe(testContent);
