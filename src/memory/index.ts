@@ -14,11 +14,12 @@ import { randomBytes } from "crypto";
 import { fileURLToPath } from "url";
 import { SERVER_VERSION } from "./version.js";
 
+// The package directory: where the default graph file lives, and what a
+// relative MEMORY_FILE_PATH resolves against.
+const defaultMemoryDir = path.dirname(fileURLToPath(import.meta.url));
+
 // Define memory file path using environment variable with fallback
-export const defaultMemoryPath = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "memory.jsonl",
-);
+export const defaultMemoryPath = path.join(defaultMemoryDir, "memory.jsonl");
 
 // Expand a leading "~" to the user's home directory. MCP clients pass
 // MEMORY_FILE_PATH from JSON config, where no shell performs tilde expansion,
@@ -32,23 +33,25 @@ export function expandHome(filepath: string): string {
   return filepath;
 }
 
-// Handle backward compatibility: migrate memory.json to memory.jsonl if needed
-export async function ensureMemoryFilePath(): Promise<string> {
+// Handle backward compatibility: migrate memory.json to memory.jsonl if needed.
+// baseDir is the directory the default files live in. The server never passes
+// it; it exists so tests can run the migration in a temporary directory rather
+// than in the package directory, which every importer of this module shares.
+export async function ensureMemoryFilePath(
+  baseDir: string = defaultMemoryDir,
+): Promise<string> {
   if (process.env.MEMORY_FILE_PATH) {
     // Custom path provided. Expand a leading "~" first, then resolve relative
     // paths against the package directory (absolute paths are used as-is).
     const customPath = expandHome(process.env.MEMORY_FILE_PATH);
     return path.isAbsolute(customPath)
       ? customPath
-      : path.join(path.dirname(fileURLToPath(import.meta.url)), customPath);
+      : path.join(baseDir, customPath);
   }
 
   // No custom path set, check for backward compatibility migration
-  const oldMemoryPath = path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "memory.json",
-  );
-  const newMemoryPath = defaultMemoryPath;
+  const oldMemoryPath = path.join(baseDir, "memory.json");
+  const newMemoryPath = path.join(baseDir, "memory.jsonl");
 
   try {
     // Check if old file exists and new file doesn't
