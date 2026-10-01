@@ -191,7 +191,7 @@ def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None 
     else:
         base = repo.active_branch
 
-    repo.create_head(branch_name, base)
+    repo.create_head(branch_name, base.commit.hexsha)
     return f"Created branch '{branch_name}' from '{base.name}'"
 
 def git_checkout(repo: git.Repo, branch_name: str) -> str:

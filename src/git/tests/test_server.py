@@ -270,6 +270,15 @@ def test_git_show(test_repository):
     assert "show test commit" in result
     assert "show_test.txt" in result
 
+def test_git_create_branch_from_annotated_tag(test_repository):
+    test_repository.create_tag("v1", message="release v1")
+
+    git_create_branch(test_repository, "from-tag", "v1")
+
+    branch = test_repository.heads["from-tag"]
+    assert branch.object.type == "commit"
+    assert branch.commit == test_repository.tags["v1"].commit
+
 def test_git_show_initial_commit(test_repository):
     initial_commit = list(test_repository.iter_commits())[-1]
 
