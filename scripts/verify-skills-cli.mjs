@@ -13,7 +13,8 @@
 // "never runs", which made the acceptance criterion aspirational (Copilot).
 //
 // So the authoritative check gets its own step — in CI's `root-guards` job
-// today, and in `local:gate` once #4871 builds it — and it does NOT skip: an already-installed CLI is used only when it matches the
+// and in `local:gate` — and it does NOT skip: an already-installed CLI is used
+// only when it matches the
 // pin EXACTLY, and otherwise the pinned package is fetched with `npx -y`.
 // Pinned rather than @latest because a validator that moves on its own can start
 // failing a PR that changed nothing, which is how a gate loses its credibility —

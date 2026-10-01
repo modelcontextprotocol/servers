@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   detect-packages:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.find-packages.outputs.packages }}
@@ -26,6 +27,7 @@ jobs:
           echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
 
   script-tests:
+    timeout-minutes: 5
     name: Test the Python gate script
     runs-on: ubuntu-latest
     steps:
@@ -39,6 +41,7 @@ jobs:
         run: node --test scripts/validate-py.test.mjs
 
   test:
+    timeout-minutes: 15
     needs: [detect-packages]
     strategy:
       matrix:
@@ -66,6 +69,7 @@ jobs:
         run: node scripts/validate-py.mjs ${{ matrix.package }}
 
   build:
+    timeout-minutes: 10
     needs: [detect-packages, test]
     strategy:
       matrix:

@@ -347,7 +347,7 @@ Inspector files that can be copied in as starting points (paths on its
 | Issue | Decision |
 | --- | --- |
 | **#4472**: release Phase 2, changesets (TS) + GitHub-Release-triggered publishing | **Fold in as a sub-issue of #4858, unchanged in scope, in Wave 5.** It is the versioning and publish half of the release flow; the milestone-merge half is new (S12) and depends on it. Two notes to add to #4472: it lands on `v2/main` like everything else, and its `release: [published]` trigger must fire from `main` after a milestone merge. |
-| **#4854 / #4855**: per-file 90% coverage, TS / Python | **Stay under #4857** (they're the refactor's regression net). The factory depends on them and doesn't duplicate them: S10 wires their `coverage` commands into `local:gate` and CI and writes the `AGENTS.md` coverage rule (their carry-over task). **One correction to feed back:** both said the coverage gate stays local "following the Inspector", but the Inspector's CI now runs `coverage` as a parallel job (#2159). **Decided (§10): CI enforces coverage here too**, and #4854/#4855 are amended to match. |
+| **#4854 / #4855**: per-file 90% coverage, TS / Python | **Stay under #4857** (they're the refactor's regression net). The factory depends on them and doesn't duplicate them: S10 wires their `coverage` commands into `local:gate` and CI and writes the `AGENTS.md` coverage rule (their carry-over task). **One correction to feed back:** both said the coverage gate stays local "following the Inspector", but the Inspector's CI now runs `coverage` as a parallel job (#2159). **Decided (§10): CI enforces coverage here too**, and #4854/#4855 are amended to match. **Amended when S10 was built:** the wiring moved to #4854/#4855 themselves, so S10 does not wait on them; see the note under S10 in §9. |
 | **#4857**: 2026-07-28 spec refactor tracker | Unchanged. Its "verify against both eras with the Inspector and an LLM client" rule becomes the `client-smoke` skill (S11) and the `pr-flow` evidence step (S6). |
 | **#4860**: interface-diff CI for `everything` | Unchanged. S10 includes it in the gate once it lands. |
 | **#4473**: `AGENTS.md` plan | Closed, superseded by #4859. Every decision is mapped in §5. |
@@ -401,7 +401,7 @@ the Servers V2 board (#43). "After" means the listed issue must merge first.
 W1  #4859 inception (this doc)
 W2  S1 AGENTS.md · S2 skills harness · S4 Py validate · then S3 TS validate (after S2)
 W3  S5 board-ops + issue-create · S8 contribution model · then S6 pr-flow (after S5), S9 security-advisory (after S5) and S7 issue-triage (after S5, S8)
-W4  S10 local:gate + coverage + pre-push-gate (after S2, S3, S4, #4854, #4855) · S11 knowledge skills (after S2)
+W4  S10 local:gate + pre-push-gate (after S2, S3, S4; coverage moved to #4854, #4855) · S11 knowledge skills (after S2)
 W5  #4472 changesets + Release-triggered publish → S12 milestone release flow + release skill (after #4472, S5, S10, S11)
 W6  S13 dependency & SDK sweeps replace Dependabot PRs; closing factory overview (after S5, S12)
 ```
@@ -582,6 +582,18 @@ public tracking)
 
 **S10 (#4871). `local:gate`, per-file coverage in CI, `pre-push-gate` skill** (after
 S2, S3, S4, #4854, #4855)
+
+> **Amended when S10 was built (#4871).** The plan below put the whole gate
+> behind #4854 and #4855, for the sake of one piece: per-file coverage cannot
+> be enforced until their test suites exist. Nothing else in S10 depends on
+> them, so that piece moved out. S10 shipped `local:gate`, the lease, the
+> guards, the boot smoke, `docs/quality-gate.md`, the `pre-push-gate` skill and
+> the pre-push rule, with **no coverage stage and no coverage rule**. #4854
+> (TypeScript) and #4855 (Python) each add their thresholds, their parallel CI
+> coverage job, their stage in `local:gate`, and their half of the `AGENTS.md`
+> coverage rule. The scope and acceptance lines below are the original plan,
+> kept for the record; where they mention coverage, read #4854/#4855.
+
 - Scope: root `local:gate` (under `gate-lease`) chaining the TS and Python
   validate, `verify:skills:cli`, per-file coverage for both languages, a thin
   per-server boot smoke over each transport the server implements (stdio for all seven; SSE and Streamable HTTP for `everything`), and #4860's interface diff.

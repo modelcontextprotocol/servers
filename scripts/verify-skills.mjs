@@ -187,31 +187,6 @@ export const GUARDS_WORKFLOW = path.join(
 );
 
 /**
- * TEMPORARY allowances for wiring links whose other end does not exist yet.
- *
- * `checkWiring` asserts npm-script links that this repo could not all satisfy
- * on the day the skills harness landed, because the scripts at their far end
- * are built by later sub-issues of #4858. One remains:
- *
- *   - `local:gate` reaching `verify:skills:cli` — #4871 adds `local:gate`.
- *
- * (The root `validate` reaching `verify:format-coverage` had one too; #4864
- * built both ends and removed it, so that link is now enforced strictly.)
- *
- * An allowance is deliberately narrow: it excuses its link only while
- * `pendingScript` is ABSENT from the root manifest. The moment the issue that
- * builds that script adds it, the allowance stops excusing anything and
- * `checkWiring` reports it as stale instead — so the later PR cannot land
- * without wiring the link and deleting its entry here, and an allowance can
- * never mask a link that was wired and then broken.
- *
- * @type {ReadonlyArray<{ link: "local-gate-cli", pendingScript: string, removedBy: string }>}
- */
-export const WIRING_ALLOWANCES = [
-  { link: "local-gate-cli", pendingScript: "local:gate", removedBy: "#4871" },
-];
-
-/**
  * Assert the two skill gates are still WIRED, not merely present.
  *
  * A gate that stops being invoked fails silently and every fixture test stays
@@ -239,38 +214,23 @@ export const WIRING_ALLOWANCES = [
  *     on the job or the step disqualifies it: this guard cannot evaluate an
  *     expression, and "runs sometimes" is not the property being asserted.
  *
- * The workflow link has no allowance: the `root-guards` job exists from the
- * day this guard does.
+ * Every link is enforced strictly. Two of them once had a temporary allowance,
+ * because the script at the far end was built by a later sub-issue of #4858:
+ * #4864 built `verify:format-coverage` and #4871 built `local:gate`, and each
+ * removed its allowance, so the mechanism is gone with its last entry.
  *
  * @param {Record<string, string>} rootScripts
  * @param {string} workflowText
- * @param {typeof WIRING_ALLOWANCES} [allowances] Strict (none) by default;
- *   `main` passes `WIRING_ALLOWANCES`.
  * @returns {string[]} problems
  */
-export function checkWiring(rootScripts, workflowText, allowances = []) {
+export function checkWiring(rootScripts, workflowText) {
   const problems = [];
-  const has = (name) => typeof rootScripts?.[name] === "string";
-  const excused = (link) =>
-    allowances.some((a) => a.link === link && !has(a.pendingScript));
-
-  for (const a of allowances) {
-    if (has(a.pendingScript)) {
-      problems.push(
-        `\`${a.pendingScript}\` now exists, so the temporary \`${a.link}\` wiring allowance is stale. ` +
-          `Wire the link and delete its entry from WIRING_ALLOWANCES in scripts/verify-skills.mjs (${a.removedBy}).`,
-      );
-    }
-  }
   if (!rootReachesScript(rootScripts, "verify:format-coverage")) {
     problems.push(
       "the root `validate` no longer runs `verify:format-coverage` (a sibling guard). Restore it.",
     );
   }
-  if (
-    !scriptChainRuns(rootScripts, "local:gate", "verify:skills:cli") &&
-    !excused("local-gate-cli")
-  ) {
+  if (!scriptChainRuns(rootScripts, "local:gate", "verify:skills:cli")) {
     problems.push(
       "`npm run local:gate` no longer runs `verify:skills:cli`, so the authoritative validator never runs locally. Restore it.",
     );
@@ -297,11 +257,7 @@ function main(argv = process.argv.slice(2)) {
       readFileSync(path.join(ROOT, "package.json"), "utf8"),
     ).scripts;
     const workflow = readFileSync(path.join(ROOT, GUARDS_WORKFLOW), "utf8");
-    for (const problem of checkWiring(
-      rootScripts,
-      workflow,
-      WIRING_ALLOWANCES,
-    )) {
+    for (const problem of checkWiring(rootScripts, workflow)) {
       failures.push(problem);
     }
   }
@@ -401,7 +357,7 @@ function main(argv = process.argv.slice(2)) {
   // The authoritative parse, when it is available — strictly a bonus, and only
   // from the EXACT pinned CLI.
   //
-  // Once #4871 builds it, `local:gate` runs this before the pinned
+  // `local:gate` runs this (inside `validate:guards`) before the pinned
   // `verify:skills:cli` step, so a local CLI on any other version could reject
   // skills that CI's pinned validator accepts — and the gate would exit here,
   // never reaching the reproducible step (Copilot). Accepting merely "new enough"

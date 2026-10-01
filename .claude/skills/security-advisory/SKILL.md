@@ -244,8 +244,8 @@ undone; it takes a re-scoped token or an admin in the UI. That asymmetry is the
 reason for the read-first rule.
 
 Fix and review inside the fork. The fix follows the rules in `AGENTS.md` like
-any other change: a regression test that fails before the fix, and the checks
-under **Before pushing** for the server it touches. Name the branch
+any other change: a regression test that fails before the fix, and the gate
+under **Before pushing**. Name the branch
 `v2/fix/<ghsa-id>` (lowercase, **no descriptive slug**, since a branch name
 outlives the fork once merged), and keep commit messages equally opaque until
 publication. **The fork's PR targets `v2/main`**, never `main`: check its base

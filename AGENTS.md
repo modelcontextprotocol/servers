@@ -25,6 +25,7 @@ not in advance.
 | [`issue-create`](.claude/skills/issue-create/SKILL.md) | The create flow: duplicate check, `v2` + type + server-scope labels, milestone, board card, Status + Priority, and the query that verifies them          | Model-invoked, or `/issue-create` |
 | [`pr-flow`](.claude/skills/pr-flow/SKILL.md)           | Issue to PR: branch, DCO signoff and repair, the gate, client evidence, `addCloseIssueReferences`, the Copilot loop and its exits, close-out on merge    | Model-invoked, or `/pr-flow`      |
 | [`issue-triage`](.claude/skills/issue-triage/SKILL.md) | Inflow: the class check and canned responses (listings, new servers, duplicates, outside PRs), pass 1 onto the board as Incoming, the priority rubric and its score comment, the board audit | Model-invoked, or `/issue-triage` |
+| [`pre-push-gate`](.claude/skills/pre-push-gate/SKILL.md) | Running `npm run local:gate` and reading its result; what each stage checks and how to fix it when it fails; waiting on the gate lease | Model-invoked, or `/pre-push-gate` |
 | [`security-advisory`](.claude/skills/security-advisory/SKILL.md) | A privately reported vulnerability end to end: the `[GHSA-…]` draft card, server or SDK ownership, the reach classes, accepting, the private fork, publishing, public tracking | Model-invoked, or `/security-advisory` |
 | [`project-structure`](.claude/skills/project-structure/SKILL.md) | What is inside each server: the TypeScript and Python layouts, where each server registers its features, and where a new file goes | Model-invoked, or `/project-structure` |
 | [`local-dev`](.claude/skills/local-dev/SKILL.md) | Install, build and run each server from the checkout over the transports it implements; local `npx`/`uvx` and client-config runs; stale builds and fresh worktrees; the `overrides`, lockstep and `uv.lock` procedures | Model-invoked, or `/local-dev` |
@@ -49,8 +50,10 @@ servers/
 │   ├── git/                  Py  mcp-server-git                                   PyPI  Git repository operations
 │   └── time/                 Py  mcp-server-time                                  PyPI  Time and timezone conversion
 ├── .claude/skills/            On-demand procedures (see the Skills index above)
-├── scripts/                  Release tooling (release.py)
-├── docs/                     Design documents; contribution-model.md holds the outside-PR backlog plan
+├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py), its guards (verify-*),
+│                             the skills tooling, and release tooling (release.py)
+├── docs/                     Design documents; quality-gate.md is the gate's reference (stages, CI vs local, the lease);
+│                             contribution-model.md holds the outside-PR backlog plan
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (dispatch-only publish),
 │                             claude.yml (@claude mentions)
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
@@ -102,21 +105,42 @@ uv run pytest
 uv run --frozen pyright
 uv run ruff check .
 uv build
+
+# Both languages: the pre-push gate (see Before pushing)
+npm run local:gate
 ```
 
 ### Before pushing
 
-For every package your change touches, run the checks CI runs for it and make
-sure they pass:
+**Run `npm run local:gate` before every push, and push only when it exits 0.**
+It runs every check CI runs, for both languages, in one command:
+`verify:install-fresh`, the root `validate` (the guards, then each TypeScript
+workspace's format check, lint, typecheck, build and tests), `validate:py`
+(each Python server's locked sync, `ruff check`, `ruff format --check`,
+pyright, pytest and build), `verify:skills:cli`, and `smoke` (every server
+booted over each transport it implements). The stage-by-stage reference, and
+what CI runs where, is [`docs/quality-gate.md`](./docs/quality-gate.md);
+diagnosing a red stage is the `pre-push-gate` skill.
 
-- **TypeScript**: `npm test` and `npm run build` in that workspace
-  (`.github/workflows/typescript.yml`).
-- **Python**: `uv run pytest`, `uv run --frozen pyright` and `uv build` in that
-  server (`.github/workflows/python.yml`).
-
-Also run `uv run ruff check .` in each Python server you touch. CI does not run
-it yet, so nothing but you keeps it clean; every server passes it today, and a
-change must not add a finding.
+- **`npm run validate` and the per-package commands above are the inner loop,
+  not a substitute.** They skip the other language, the pinned skills validator
+  and the boot smoke.
+- **Format before committing**: `npm run format` at the root (TypeScript), and
+  `uv run --frozen ruff format .` in a Python server you changed. The gate only
+  checks formatting; it never rewrites files.
+- **Judge the gate by its exit code**, not by reading its output: a Prettier
+  failure prints `[warn]` lines that look like nothing.
+- **The gate runs under a machine-wide lease**, so a second gate started in
+  another worktree queues behind the first instead of contending with it. A
+  "waiting" line is normal; do not bypass it to save time.
+- **No test may retry.** A retry reports a test that sometimes fails as
+  passing. `verify:no-test-retries` fails on Vitest's `retry` and on pytest's
+  rerun plugins; fix what makes the test fail.
+- **`local:*` scripts never run in a workflow, and every CI job declares
+  `timeout-minutes`.** The script tests enforce both
+  (`scripts/lib/workflow-gate.mjs`). A check added to CI is added to
+  `local:gate:stages` in the same change, so the first sentence of this section
+  stays true.
 
 ### Dependencies
 
