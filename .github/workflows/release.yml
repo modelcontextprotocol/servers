@@ -274,7 +274,15 @@ jobs:
             echo "Refusing to publish: the tarball's package.json $VERDICT"
             exit 1
           fi
-          npm publish "$1" --access public --registry https://registry.npmjs.org/
+          # `--tag latest` is explicit on purpose. npm 11 refuses to apply
+          # `latest` implicitly when the registry already holds a HIGHER
+          # version, and it does: the date-stamped releases (2026.8.31) sort
+          # above every semver version these packages will carry. Without the
+          # flag the first 1.0.0 publish fails with "Cannot implicitly apply
+          # the latest tag". The cost is that a prerelease would take `latest`
+          # too; none is published from here, and one that is needs its own
+          # tag chosen before this line runs.
+          npm publish "$1" --access public --tag latest --registry https://registry.npmjs.org/
 
   build-pypi:
     timeout-minutes: 15
