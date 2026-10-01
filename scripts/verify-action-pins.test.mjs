@@ -331,8 +331,11 @@ test("a credentialed reusable-workflow call must pin its own ref", () => {
     "      id-token: write",
     "    uses: ./.github/workflows/publish.yml",
   );
+  // The local call is refused as well: the workflow it names is not read, so
+  // what runs under this job's credential is unknown.
   assert.deepEqual(unpinnedRefs(yaml), [
     { job: "release", uses: "org/repo/.github/workflows/publish.yml@main" },
+    { job: "local", uses: "./.github/workflows/publish.yml" },
   ]);
 });
 
@@ -372,10 +375,37 @@ test("a version comment must name an exact release", () => {
   );
   // A major-only comment is not what the SHA was resolved from, and the sweep
   // would compare it at major precision only — the moving-tag behavior again.
+  // The local composite action is refused too: its steps are not read.
   assert.deepEqual(unpinnedRefs(yaml), [
     { job: "publish", uses: `actions/setup-node@${SHA}` },
     { job: "publish", uses: `actions/cache@${SHA}` },
+    { job: "publish", uses: "./.github/actions/local" },
   ]);
+});
+
+test("a local action in a job that holds no credential is left alone", () => {
+  const yaml = wf(
+    "jobs:",
+    "  lint:",
+    "    steps:",
+    "      - uses: ./.github/actions/local",
+  );
+  assert.deepEqual(unpinnedRefs(yaml), []);
+});
+
+test("a quoted }} inside an expression does not hide the secret after it", () => {
+  const yaml = wf(
+    "jobs:",
+    "  tricky:",
+    "    steps:",
+    "      - env:",
+    "          KEY: ${{ format('}}{0}', secrets.DEPLOY_TOKEN) }}",
+    "  default-only:",
+    "    steps:",
+    "      - env:",
+    "          KEY: ${{ format('}}{0}', secrets.GITHUB_TOKEN) }}",
+  );
+  assert.deepEqual([...credentialedJobs(yaml)], ["tricky"]);
 });
 
 function withWorkflows(files, fn) {

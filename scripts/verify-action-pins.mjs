@@ -55,11 +55,13 @@
 // seen without the network. Resolve both from the same lookup when bumping
 // (the `release` skill has the command).
 //
-// ⚠️ Local `./…` actions and reusable workflows are skipped, not traced: the
-// remote `uses:` INSIDE one runs under its caller's credentials but is not
-// associated with the caller here, and composite-action files are not read at
-// all. None exists in this repo; adding the first one to a credentialed job
-// means extending this guard to follow it, or it is a silent bypass.
+// ⚠️ Local `./…` actions and reusable workflows are REFUSED in a credentialed
+// job, not skipped. The remote `uses:` INSIDE one runs under its caller's
+// credentials, and this guard reads neither composite-action files nor called
+// workflows, so a local definition could carry a tag-pinned action past it.
+// None exists in this repo. Adding the first one to a credentialed job means
+// teaching this guard to follow it; until then it is a finding (the Inspector's
+// guard skips them with a warning, which leaves the bypass open).
 
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -77,7 +79,14 @@ const repoRoot = path.resolve(
 // index included, still reads as a secret.
 const DEFAULT_TOKEN =
   /\bsecrets\s*(?:\.\s*GITHUB_TOKEN\b|\[\s*(['"])GITHUB_TOKEN\1\s*\])/g;
-const EXPRESSION = /\$\{\{([\s\S]*?)\}\}/g;
+// Where the first expression in a string opens. Everything from there on is
+// searched, rather than each `${{ … }}` body: finding where an expression ENDS
+// needs a parser, since a quoted string inside one may itself contain `}}`
+// (`${{ format('}}{0}', secrets.X) }}`), and a body cut short at that point
+// hides the secret after it. Searching the tail cannot be fooled that way. It
+// can over-count a string that mentions `secrets` in prose after an
+// expression, which errs toward requiring a pin.
+const EXPRESSION_OPEN = "${{";
 
 /** Does this `permissions:` value let the job mint a token or push a package? */
 function mints(permissions) {
@@ -104,11 +113,13 @@ function handedSecret(job, inherited) {
   // `inherit` hands over every secret with no expression to scan. A mapping
   // is scanned below with everything else.
   if (job.secrets === "inherit") return true;
-  return stringsIn([job, inherited]).some((text) =>
-    [...text.matchAll(EXPRESSION)].some(([, body]) =>
-      /\bsecrets\b/.test(body.replace(DEFAULT_TOKEN, "")),
-    ),
-  );
+  return stringsIn([job, inherited]).some((text) => {
+    const open = text.indexOf(EXPRESSION_OPEN);
+    return (
+      open !== -1 &&
+      /\bsecrets\b/.test(text.slice(open).replace(DEFAULT_TOKEN, ""))
+    );
+  });
 }
 
 const needsOf = (job) =>
@@ -206,8 +217,8 @@ export function credentialedJobs(yaml, file) {
 /**
  * Every `uses:` in a credentialed job that is not a 40-hex SHA followed by a
  * `# vX.Y.Z` comment: each step's, and the job's own when it calls a reusable
- * workflow, whose ref is just as mutable. Local (`./…`) actions and workflows
- * are repository code, not a ref.
+ * workflow, whose ref is just as mutable. A local (`./…`) action or workflow
+ * is a finding too: what it runs is not read here (see the header).
  *
  * A YAML alias anywhere in a credentialed job is itself a finding. Resolving it
  * here would accept a pin that a line-oriented reader (a reviewer, or a sweep
@@ -246,9 +257,8 @@ export function unpinnedRefs(yaml, file) {
     for (const node of nodes) {
       if (!isScalar(node) || typeof node.value !== "string") continue;
       const uses = node.value;
-      if (uses.startsWith("./")) continue;
-      // A value with no `@ref` at all, or a container image, is not pinned
-      // either: `parseUses` returns null for both and `isPinned` rejects it.
+      // A local definition, a value with no `@ref` at all, and a container
+      // image are not pins either: `parseUses` returns null for all three.
       if (parseUses(uses) === null || !isPinned(uses, node.comment))
         problems.push({ job: name, uses });
     }
@@ -274,6 +284,8 @@ export function main(root = repoRoot) {
         "\n\nA job holding `id-token`/`packages: write`, a non-default secret, or building an" +
         "\nartifact such a job consumes runs only immutable refs. Pin each as" +
         "\n  uses: owner/repo@<40-hex sha> # vX.Y.Z" +
+        "\nA local `./…` action or workflow is refused there as well: this guard does not" +
+        "\nread what it runs. Inline its steps, or extend the guard to follow it." +
         "\nresolving the SHA and the exact release from the same tag lookup. The comment" +
         "\nnames the release the SHA came from, for a reviewer and for the dependency sweep.",
     );
