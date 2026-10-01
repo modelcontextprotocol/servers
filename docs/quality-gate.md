@@ -96,7 +96,9 @@ covers: the repo-wide tooling and the guards that keep the gate itself honest.
   #4855 (Python).
 - **`npm run format`** rewrites files, so it is something you run, not
   something the gate does. The gate only checks.
-- **Publishing** (`release.yml`) runs on `workflow_dispatch` only. See
+- **Publishing** (`release.yml`) runs only when a maintainer publishes a
+  GitHub Release, and the two workflows that open version PRs
+  (`version-packages.yml`, `prepare-python-release.yml`) check nothing. See
   [`RELEASING.md`](../RELEASING.md).
 
 ## Keeping the two tiers in step

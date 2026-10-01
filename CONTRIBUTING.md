@@ -158,4 +158,11 @@ While iterating, `npm run validate -w src/<server>` checks a single TypeScript
 server and `npm run validate:py -- <server>` a single Python one; neither
 replaces the gate.
 
+A pull request that changes what a TypeScript server publishes also carries a
+**changeset** (`npm run changeset`), which is how that server's next version
+and its CHANGELOG entry are decided; [`.changeset/README.md`](./.changeset/README.md)
+says when one is needed and which bump to pick. The Python servers are versioned
+by date instead. [`RELEASING.md`](./RELEASING.md) describes both, and how a
+release is published.
+
 Thank you for helping make the MCP servers better for everyone!

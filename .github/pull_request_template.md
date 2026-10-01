@@ -74,6 +74,7 @@ Closes #<ISSUE_NUMBER>
 - [ ] I have read the [MCP Protocol Documentation](https://modelcontextprotocol.io)
 - [ ] My changes follows MCP security best practices
 - [ ] I have updated the server's README accordingly
+- [ ] I have added a changeset (`npm run changeset`) if this changes what a TypeScript server publishes
 - [ ] I have tested this with an LLM client
 - [ ] My code follows the repository's style guidelines
 - [ ] New and existing tests pass locally

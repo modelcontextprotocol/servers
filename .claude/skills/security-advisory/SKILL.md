@@ -270,9 +270,9 @@ The time between merge and publish is not a period of secrecy; it is a period
 of **exposure to anyone reading commits**, so keep it short: merge close to the
 release, and publish as soon as the release is out.
 
-The release itself is a maintainer action (`release.yml` runs on
-`workflow_dispatch` only, behind the `release` environment's approval; see
-[`RELEASING.md`](../../../RELEASING.md)). Say which server needs a release and
+The release itself is a maintainer action (`release.yml` runs only when a
+maintainer publishes a GitHub Release, behind the `release` environment's
+approval; see [`RELEASING.md`](../../../RELEASING.md)). Say which server needs a release and
 stop there.
 
 ⚠️ **Publishing is irreversible and human-only.** It makes the advisory public,

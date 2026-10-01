@@ -50,15 +50,17 @@ servers/
 │   ├── git/                  Py  mcp-server-git                                   PyPI  Git repository operations
 │   └── time/                 Py  mcp-server-time                                  PyPI  Time and timezone conversion
 ├── .claude/skills/            On-demand procedures (see the Skills index above)
+├── .changeset/               Pending changesets for the TypeScript servers, and the changesets config
 ├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py), its guards (verify-*),
-│                             the skills tooling, and release tooling (release.py)
+│                             the skills tooling, and release tooling (npm-publish-guard, prepare-python-release)
 ├── docs/                     Design documents; quality-gate.md is the gate's reference (stages, CI vs local, the lease);
 │                             contribution-model.md holds the outside-PR backlog plan
-├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (dispatch-only publish),
+├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),
+│                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
 │                             claude.yml (@claude mentions)
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
 ├── .github/pull_request_template.md   The "issues, not PRs" banner and the maintainers' PR checklist
-├── RELEASING.md              How publishing works and how to recover a failed publish
+├── RELEASING.md              How packages are versioned and published, and how to recover a failed publish
 └── CONTRIBUTING.md           The contribution policy: issues, not PRs; what is accepted
 ```
 
@@ -168,9 +170,26 @@ Cut feature branches from **`origin/v2/main`**. **Never open a PR against
 - **Repo**: https://github.com/modelcontextprotocol/servers
 - **Project board**: [Servers V2 (#43)](https://github.com/orgs/modelcontextprotocol/projects/43)
 
-Publishing is described in [`RELEASING.md`](./RELEASING.md). It is a deliberate
-maintainer action (`release.yml` runs on `workflow_dispatch` only), never a side
-effect of a merge.
+Versioning and publishing are described in [`RELEASING.md`](./RELEASING.md).
+Publishing is a deliberate maintainer action (`release.yml` runs only when a
+maintainer publishes a GitHub Release), never a side effect of a merge.
+
+### Versions
+
+- **A version changes only in a version PR, never by hand and never at release
+  time.** The TypeScript servers are semver, bumped by the changesets
+  "Version Packages" PR; the Python servers are CalVer, stamped by the
+  "Prepare Python Release" PR. No workflow computes a version, and a release
+  publishes whatever version it finds that the registry does not have.
+- **A PR that changes what a TypeScript server publishes carries a changeset**
+  (`npm run changeset`): patch for a fix; minor for a new tool, prompt, resource
+  or option; major for a breaking change (a tool removed or renamed, a schema
+  change that breaks clients, a protocol or Node floor bump). A change with no
+  effect on a published TypeScript package (docs, skills, workflows, scripts,
+  tests, a Python server) carries none.
+- **A TypeScript server reports its version from its `package.json`** (the
+  `SERVER_VERSION` its `version.ts` exports), never from a literal in the
+  source: the version PR edits `package.json` only.
 
 ## Contributing
 
