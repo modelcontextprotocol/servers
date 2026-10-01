@@ -268,8 +268,12 @@ function packTs(server, artifactDir, consumer) {
   const manifest = JSON.parse(
     readFileSync(path.join(pkgDir, "package.json"), "utf8"),
   );
-  // `npm pack` runs the package's `prepare` script, which builds it: the
-  // tarball holds a fresh build, never whatever `dist/` was lying around.
+  // `npm pack` runs the package's `prepare` script, which builds it. But
+  // `tsc` only writes: it never removes the output of a source file that was
+  // deleted or renamed, so a checkout that was built before can pack files a
+  // fresh release checkout would not have. The build output is removed first,
+  // so the tarball is built from the current source and nothing else.
+  rmSync(path.join(pkgDir, "dist"), { recursive: true, force: true });
   const [packed] = JSON.parse(
     run("npm", ["pack", "--json", "--pack-destination", artifactDir], pkgDir),
   );

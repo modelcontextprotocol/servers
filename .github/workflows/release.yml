@@ -274,15 +274,65 @@ jobs:
             echo "Refusing to publish: the tarball's package.json $VERDICT"
             exit 1
           fi
-          # `--tag latest` is explicit on purpose. npm 11 refuses to apply
-          # `latest` implicitly when the registry already holds a HIGHER
-          # version, and it does: the date-stamped releases (2026.8.31) sort
-          # above every semver version these packages will carry. Without the
-          # flag the first 1.0.0 publish fails with "Cannot implicitly apply
-          # the latest tag". The cost is that a prerelease would take `latest`
-          # too; none is published from here, and one that is needs its own
-          # tag chosen before this line runs.
-          npm publish "$1" --access public --tag latest --registry https://registry.npmjs.org/
+          # The dist-tag is chosen here, at publish time, and always passed
+          # explicitly.
+          #
+          # Explicitly, because npm 11 refuses to apply `latest` on its own
+          # when the registry already holds a HIGHER version, and it does: the
+          # date-stamped releases (2026.8.31) sort above every semver version
+          # these packages will carry. Without a tag the first 1.0.0 publish
+          # fails with "Cannot implicitly apply the latest tag".
+          #
+          # Chosen, because `latest` must never move BACKWARD. A failed leg of
+          # an older release can be re-run after a newer version has
+          # published; the registry-diff guard rightly lets the missing older
+          # version through, and tagging it `latest` would make every `npx`
+          # serve the older release. So:
+          #   - the registry's `latest` is date-stamped (major >= 2000), or
+          #     the package was never published: `latest`. This is the
+          #     one-time move from 2026.x to 1.x.
+          #   - this version is higher than the registry's `latest`: `latest`.
+          #   - otherwise: `backfill`. The version is published and
+          #     installable by number, and `latest` stays where it is.
+          # It is asked of the registry now, not when the run started: a
+          # re-run reuses the original run's job outputs. A registry answer
+          # that cannot be read, or a version that is not plain x.y.z (a
+          # prerelease needs its tag chosen by a person), stops the job.
+          ENCODED="$(printf '%s' "$EXPECTED_NAME" | sed 's|/|%2F|')"
+          CODE="$(curl -sS -o registry.json -w '%{http_code}' \
+            -H 'Accept: application/vnd.npm.install-v1+json' \
+            "https://registry.npmjs.org/$ENCODED")" || {
+            echo "Refusing to publish: could not reach the registry to read the current latest"
+            exit 1
+          }
+          case "$CODE" in
+            200) ;;
+            404) echo '{}' > registry.json ;;
+            *)
+              echo "Refusing to publish: the registry answered $CODE when asked for the current latest"
+              exit 1
+              ;;
+          esac
+          TAG="$(node -e "
+            const num = (s, what) => {
+              const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(s);
+              if (!m) throw new Error(what + ' ' + JSON.stringify(s) + ' is not a plain x.y.z version');
+              return m.slice(1).map(Number);
+            };
+            const candidate = num(process.env.EXPECTED_VERSION, 'the version to publish');
+            const doc = JSON.parse(require('fs').readFileSync('registry.json', 'utf8'));
+            const latest = (doc['dist-tags'] || {}).latest;
+            if (typeof latest !== 'string') { console.log('latest'); process.exit(0); }
+            const current = num(latest, 'the registry latest');
+            let order = 0;
+            for (let i = 0; i < 3 && order === 0; i += 1) order = Math.sign(candidate[i] - current[i]);
+            console.log(current[0] >= 2000 || order > 0 ? 'latest' : 'backfill');
+          ")" || {
+            echo "Refusing to publish: could not choose a dist-tag (see the error above)"
+            exit 1
+          }
+          echo "Publishing $EXPECTED_NAME@$EXPECTED_VERSION with dist-tag $TAG"
+          npm publish "$1" --access public --tag "$TAG" --registry https://registry.npmjs.org/
 
   build-pypi:
     timeout-minutes: 15
