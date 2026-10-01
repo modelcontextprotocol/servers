@@ -172,6 +172,20 @@ test("main fails when a manifest declares what the lockfile does not", (t) => {
   );
 });
 
+test("main fails on a workspace the lockfile has never seen", (t) => {
+  const { root, write } = fixture(t);
+  t.mock.method(console, "log", () => {});
+  const error = t.mock.method(console, "error", () => {});
+  write("node_modules/sdk/package.json", { version: "2.1.0" });
+  write("package.json", { name: "root", workspaces: ["src/*"] });
+  write("src/newserver/package.json", { name: "newserver" });
+  assert.equal(main(root), 1);
+  assert.match(
+    error.mock.calls[0].arguments[0],
+    /src\/newserver\/package\.json: a workspace the lockfile has no entry for/,
+  );
+});
+
 function fixture(t) {
   const root = mkdtempSync(path.join(tmpdir(), "install-fresh-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));

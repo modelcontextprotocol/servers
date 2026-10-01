@@ -102,7 +102,26 @@ export function findRetries(file, text) {
   const rules = RULES.filter((r) => r.files.test(file));
   if (rules.length === 0) return [];
   const findings = [];
-  text.split("\n").forEach((lineText, index) => {
+  const lines = text.split("\n");
+  lines.forEach((physical, index) => {
+    // A shell command continued with a trailing backslash is one command: the
+    // runner can be on one line and its retry flag on the next. Each line is
+    // therefore read together with its continuation lines, and a finding is
+    // reported at the line the command starts on. Only a line that does not
+    // itself continue a previous one starts a command, so a continued command
+    // is reported once.
+    let lineText = physical;
+    if (/\\\s*$/.test(physical)) {
+      if (index > 0 && /\\\s*$/.test(lines[index - 1])) return;
+      let end = index;
+      while (end < lines.length - 1 && /\\\s*$/.test(lines[end])) end += 1;
+      lineText = lines
+        .slice(index, end + 1)
+        .map((l) => l.replace(/\\\s*$/, " "))
+        .join("");
+    } else if (index > 0 && /\\\s*$/.test(lines[index - 1])) {
+      return;
+    }
     for (const rule of rules) {
       if (rule.pattern.test(lineText))
         findings.push({
@@ -110,7 +129,7 @@ export function findRetries(file, text) {
           line: index + 1,
           rule: rule.id,
           why: rule.why,
-          text: lineText.trim(),
+          text: lineText.trim().replace(/\s+/g, " "),
         });
     }
   });

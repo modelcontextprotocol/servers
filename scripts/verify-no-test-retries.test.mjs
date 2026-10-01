@@ -100,6 +100,23 @@ for (const [file, text, rules] of cases) {
   });
 }
 
+test("a flag on a continuation line is found, at the line the command starts", () => {
+  const found = findRetries(
+    ".github/workflows/python.yml",
+    [
+      "      - run: |",
+      "          uv run pytest \\",
+      "            -q \\",
+      "            --reruns 3",
+      "          echo done",
+    ].join("\n"),
+  );
+  assert.deepEqual(
+    found.map((f) => [f.rule, f.line, f.text]),
+    [["workflow-retry-flag", 2, "uv run pytest -q --reruns 3"]],
+  );
+});
+
 test("a finding carries its file, line and the offending text", () => {
   const [finding] = findRetries(
     "src/a/vitest.config.ts",

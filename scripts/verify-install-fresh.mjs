@@ -47,6 +47,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { workspaceDirs } from "./lib/workspaces.mjs";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -164,6 +165,21 @@ export function main(root = repoRoot) {
       ? JSON.parse(readFileSync(manifest, "utf8"))
       : undefined;
   });
+  // A workspace added since the last install has a manifest and no lockfile
+  // entry at all, so the comparison above (which walks the lockfile) never
+  // reaches it. Found from the root manifest's `workspaces`, not the lockfile.
+  const rootManifestPath = path.join(root, "package.json");
+  const workspaces = existsSync(rootManifestPath)
+    ? JSON.parse(readFileSync(rootManifestPath, "utf8")).workspaces
+    : undefined;
+  if (Array.isArray(workspaces) && workspaces.length > 0) {
+    for (const { dir, hasManifest } of workspaceDirs(root, workspaces)) {
+      if (hasManifest && lock.packages?.[dir] === undefined)
+        problems.push(
+          `  ${dir}/package.json: a workspace the lockfile has no entry for`,
+        );
+    }
+  }
   for (const d of drift)
     problems.push(
       `  ${path.posix.join(d.dir || ".", "package.json")} ${d.section}.${d.name}: manifest ${d.manifest ?? "(absent)"}, lockfile ${d.lock ?? "(absent)"}`,
