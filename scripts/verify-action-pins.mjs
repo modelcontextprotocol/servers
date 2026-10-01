@@ -134,6 +134,13 @@ const mayUploadArtifact = (job) =>
   typeof job.uses === "string" || stepsUsing(job, "actions/upload-artifact@");
 
 /**
+ * Can this job download an artifact? The same reasoning, the other way round:
+ * a called workflow's jobs can download anything uploaded earlier in the run.
+ */
+const mayDownloadArtifact = (job) =>
+  typeof job.uses === "string" || stepsUsing(job, "actions/download-artifact@");
+
+/**
  * @param {string} yaml raw contents of a workflow file
  * @param {string} [file] only for the parse-error message
  */
@@ -184,8 +191,7 @@ export function credentialedJobs(yaml, file) {
   for (let grew = true; grew; ) {
     grew = false;
     for (const [name, job] of jobs) {
-      if (!held.has(name) || !stepsUsing(job, "actions/download-artifact@"))
-        continue;
+      if (!held.has(name) || !mayDownloadArtifact(job)) continue;
       for (const producer of upstreamOf(name)) {
         if (!held.has(producer) && mayUploadArtifact(workflow.jobs[producer])) {
           held.add(producer);

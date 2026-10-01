@@ -261,6 +261,26 @@ test("an upstream reusable-workflow call counts as an artifact producer", () => 
   ]);
 });
 
+test("a credentialed reusable-workflow call counts as an artifact downloader", () => {
+  const yaml = wf(
+    "jobs:",
+    "  package:",
+    "    steps:",
+    "      - uses: actions/upload-artifact@v7",
+    "  publish:",
+    "    needs: package",
+    "    permissions:",
+    "      id-token: write",
+    `    uses: org/repo/.github/workflows/publish.yml@${SHA} # v1.2.3`,
+  );
+  // The called workflow can download what `package` uploaded, and is not read
+  // here, so `package` is held to the pin although `publish` has no steps.
+  assert.deepEqual([...credentialedJobs(yaml)].sort(), ["package", "publish"]);
+  assert.deepEqual(unpinnedRefs(yaml), [
+    { job: "package", uses: "actions/upload-artifact@v7" },
+  ]);
+});
+
 test("an upload is not credentialed when the consumer downloads nothing", () => {
   const yaml = wf(
     "jobs:",

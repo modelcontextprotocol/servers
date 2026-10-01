@@ -100,7 +100,7 @@ gh run rerun <run-id> --failed --repo modelcontextprotocol/servers
 - A re-run is still a `release.yml` run in the `release` environment, so it satisfies the trusted-publisher binding.
 - It re-runs only the failed legs, at the original release tag. It publishes exactly the released code, and the registry-diff guard keeps already-published packages safe. If the failed leg was a build job, re-run it together with its publish job.
 - It needs a fresh `release` environment approval, and the run must be complete first (approve or reject any pending deployments).
-- GitHub's re-run window is about 30 days from the original run.
+- The build jobs' artifacts are kept for **7 days**. Within that time, re-running a failed publish leg alone works, because the artifact it downloads is still there. After that (GitHub allows re-runs for about 30 days), re-run the package's build leg together with its publish leg, or the whole run (`gh run rerun <run-id>`): the build recreates the artifact, and the registry-diff guard skips whatever already published.
 
 **A defect in the released code or in the workflow: fix it and release again.** A release event runs the workflow as it is at the tag, so a re-run repeats the same broken step. Fix it on `v2/main` through an ordinary PR, merge `v2/main` into `main`, and publish a new Release. The guard publishes whatever never reached the registry and skips the rest: no stranded versions, and no version edits to force it.
 
