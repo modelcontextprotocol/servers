@@ -129,34 +129,80 @@ function binEntries(manifest) {
 }
 
 /**
- * Where an installed package's command lives inside its consumer directory.
+ * How to start an installed package's command from its consumer directory:
+ * the executable, and any arguments that come before the server's own.
+ *
+ * On POSIX that is the file the installer put on the path (npm's `.bin`
+ * symlink, the venv's console script), which is what a user runs. On Windows
+ * npm's entry is a `.cmd` shim, and a `.cmd` cannot be spawned without a
+ * shell, which the HTTP transports' launch does not use. So there the
+ * installed package's own bin file is handed to node, as the boot smoke does
+ * for the checkout. The venv's console script is a real `.exe` and needs no
+ * such step.
  *
  * @param {"ts" | "py"} language
  * @param {string} consumer the directory the artifact was installed into
- * @param {string} command the bin or console-script name
+ * @param {{ command: string, packageName?: string, target?: string }} bin
+ *   the bin or console-script name; for npm, also the package and the file
+ *   its `bin` points at
  * @param {string} [platform]
- * @returns {string}
+ * @param {string} [node] the node executable, for the Windows npm case
+ * @returns {{ command: string, args: string[] }}
  */
-export function installedCommand(
+export function installedLaunch(
   language,
   consumer,
-  command,
+  bin,
   platform = process.platform,
+  node = process.execPath,
 ) {
   const win = platform === "win32";
-  return language === "ts"
-    ? path.join(
-        consumer,
-        "node_modules",
-        ".bin",
-        win ? `${command}.cmd` : command,
-      )
-    : path.join(
+  if (language === "py")
+    return {
+      command: path.join(
         consumer,
         ".venv",
         win ? "Scripts" : "bin",
-        win ? `${command}.exe` : command,
-      );
+        win ? `${bin.command}.exe` : bin.command,
+      ),
+      args: [],
+    };
+  if (win)
+    return {
+      command: node,
+      args: [
+        path.join(
+          consumer,
+          "node_modules",
+          ...bin.packageName.split("/"),
+          bin.target,
+        ),
+      ],
+    };
+  return {
+    command: path.join(consumer, "node_modules", ".bin", bin.command),
+    args: [],
+  };
+}
+
+/**
+ * Why `dir` cannot be used as a server's artifact directory, or `null` when it
+ * can. It must not exist, or be empty: this script writes the artifact there
+ * and the release workflow uploads the directory whole, so anything already
+ * in it would either be uploaded with the artifact or have to be deleted, and
+ * a path given by mistake (`--out src` resolves to `src/<server>`) must never
+ * be deleted.
+ *
+ * @param {string} dir
+ * @returns {string | null}
+ */
+export function artifactDirProblem(dir) {
+  if (!existsSync(dir)) return null;
+  if (!statSync(dir).isDirectory())
+    return `${dir} exists and is not a directory`;
+  if (readdirSync(dir).length > 0)
+    return `${dir} already exists and is not empty. Choose a fresh --out directory, or clear that one yourself; pack:verify does not delete what it did not create.`;
+  return null;
 }
 
 /** Is this file name something PyPI accepts: a wheel or an sdist? */
@@ -183,7 +229,7 @@ function run(command, args, cwd) {
 /**
  * Pack a TypeScript server and install the tarball into `consumer`.
  *
- * @returns {{ command: string, artifacts: string[] }}
+ * @returns {{ launch: { command: string, args: string[] }, artifacts: string[] }}
  */
 function packTs(server, artifactDir, consumer) {
   const pkgDir = path.join(repoRoot, "src", server.name);
@@ -207,9 +253,13 @@ function packTs(server, artifactDir, consumer) {
     JSON.stringify({ name: "pack-verify-consumer", private: true }),
   );
   run("npm", ["install", "--no-audit", "--no-fund", tarball], consumer);
-  const [command] = binEntries(manifest)[0];
+  const [command, target] = binEntries(manifest)[0];
   return {
-    command: installedCommand("ts", consumer, command),
+    launch: installedLaunch("ts", consumer, {
+      command,
+      packageName: manifest.name,
+      target,
+    }),
     artifacts: [tarball],
   };
 }
@@ -218,7 +268,7 @@ function packTs(server, artifactDir, consumer) {
  * Build a Python server and install its wheel into a fresh environment in
  * `consumer`.
  *
- * @returns {{ command: string, artifacts: string[] }}
+ * @returns {{ launch: { command: string, args: string[] }, artifacts: string[] }}
  */
 function packPy(server, artifactDir, consumer) {
   const pkgDir = path.join(repoRoot, "src", server.name);
@@ -243,7 +293,9 @@ function packPy(server, artifactDir, consumer) {
   run("uv", ["venv", "--python", python, venv], consumer);
   run("uv", ["pip", "install", "--python", venv, wheels[0]], consumer);
   return {
-    command: installedCommand("py", consumer, `mcp-server-${server.name}`),
+    launch: installedLaunch("py", consumer, {
+      command: `mcp-server-${server.name}`,
+    }),
     artifacts: built,
   };
 }
@@ -277,18 +329,20 @@ export async function main(argv = process.argv.slice(2)) {
         : path.join(work, "artifact");
       const started = Date.now();
       try {
-        // A leftover artifact from an earlier run must not be mistaken for
-        // this run's, or uploaded next to it.
-        rmSync(artifactDir, { recursive: true, force: true });
+        const problem = artifactDirProblem(artifactDir);
+        if (problem) throw new Error(problem);
         mkdirSync(artifactDir, { recursive: true });
         mkdirSync(consumer);
-        const { command, artifacts } =
+        const { launch, artifacts } =
           server.language === "ts"
             ? packTs(server, artifactDir, consumer)
             : packPy(server, artifactDir, consumer);
-        if (!existsSync(command))
+        // The file the install was supposed to create: the command itself,
+        // or on Windows the bin file handed to node.
+        const entry = launch.args[0] ?? launch.command;
+        if (!existsSync(entry))
           throw new Error(
-            `the install did not create ${path.relative(work, command)}`,
+            `the install did not create ${path.relative(work, entry)}`,
           );
         for (const transport of server.transports) {
           const dir = mkdtempSync(path.join(work, "run-"));
@@ -297,11 +351,14 @@ export async function main(argv = process.argv.slice(2)) {
             transport,
             { dir, pageUrl: page.url },
             {
-              command,
-              args: serverArguments(server, transport, {
-                dir,
-                pageUrl: page.url,
-              }),
+              command: launch.command,
+              args: [
+                ...launch.args,
+                ...serverArguments(server, transport, {
+                  dir,
+                  pageUrl: page.url,
+                }),
+              ],
               // Not the checkout: a relative path that only resolves there
               // must not resolve here.
               cwd: consumer,

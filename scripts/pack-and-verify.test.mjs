@@ -6,9 +6,18 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  installedCommand,
+  artifactDirProblem,
+  installedLaunch,
   isDistribution,
   main,
   parseArgs,
@@ -61,24 +70,81 @@ test("the string form of bin is read, and a missing bin is a problem", () => {
   ]);
 });
 
-test("installedCommand finds the bin where each installer puts it", () => {
+test("installedLaunch runs what each installer put in place", () => {
   const c = path.join("tmp", "consumer");
-  assert.equal(
-    installedCommand("ts", c, "mcp-server-memory", "linux"),
-    path.join(c, "node_modules", ".bin", "mcp-server-memory"),
+  const bin = {
+    command: "mcp-server-memory",
+    packageName: "@modelcontextprotocol/server-memory",
+    target: "dist/index.js",
+  };
+  assert.deepEqual(installedLaunch("ts", c, bin, "linux"), {
+    command: path.join(c, "node_modules", ".bin", "mcp-server-memory"),
+    args: [],
+  });
+  assert.deepEqual(
+    installedLaunch("py", c, { command: "mcp-server-time" }, "darwin"),
+    { command: path.join(c, ".venv", "bin", "mcp-server-time"), args: [] },
   );
-  assert.equal(
-    installedCommand("ts", c, "mcp-server-memory", "win32"),
-    path.join(c, "node_modules", ".bin", "mcp-server-memory.cmd"),
+  assert.deepEqual(
+    installedLaunch("py", c, { command: "mcp-server-time" }, "win32"),
+    {
+      command: path.join(c, ".venv", "Scripts", "mcp-server-time.exe"),
+      args: [],
+    },
   );
-  assert.equal(
-    installedCommand("py", c, "mcp-server-time", "darwin"),
-    path.join(c, ".venv", "bin", "mcp-server-time"),
+});
+
+test("installedLaunch hands node the bin file on Windows, not the .cmd shim", () => {
+  const c = path.join("tmp", "consumer");
+  // A `.cmd` cannot be spawned without a shell, and the HTTP transports are
+  // launched without one.
+  assert.deepEqual(
+    installedLaunch(
+      "ts",
+      c,
+      {
+        command: "mcp-server-everything",
+        packageName: "@modelcontextprotocol/server-everything",
+        target: "dist/index.js",
+      },
+      "win32",
+      "node.exe",
+    ),
+    {
+      command: "node.exe",
+      args: [
+        path.join(
+          c,
+          "node_modules",
+          "@modelcontextprotocol",
+          "server-everything",
+          "dist/index.js",
+        ),
+      ],
+    },
   );
-  assert.equal(
-    installedCommand("py", c, "mcp-server-time", "win32"),
-    path.join(c, ".venv", "Scripts", "mcp-server-time.exe"),
-  );
+});
+
+test("an artifact directory must be absent or empty; nothing is deleted", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "pack-out-"));
+  try {
+    assert.equal(artifactDirProblem(path.join(root, "absent")), null);
+    const empty = path.join(root, "empty");
+    mkdirSync(empty);
+    assert.equal(artifactDirProblem(empty), null);
+    const full = path.join(root, "full");
+    mkdirSync(full);
+    writeFileSync(path.join(full, "index.ts"), "source");
+    assert.match(artifactDirProblem(full), /already exists and is not empty/);
+    assert.match(
+      artifactDirProblem(path.join(full, "index.ts")),
+      /is not a directory/,
+    );
+    // The refusal is the whole behavior: the file is still there.
+    assert.equal(existsSync(path.join(full, "index.ts")), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("only wheels and sdists are distributions", () => {

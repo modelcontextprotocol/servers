@@ -82,10 +82,18 @@ npm audit --audit-level=high
 
 # Python: each server has its own lockfile. `uv` has no audit of its own in the
 # version pinned here, so the locked requirements go through pip-audit.
+# Exported to a file first, and stopped on a failed export: piped straight in,
+# a failed `uv export` hands pip-audit empty input, which it reports as clean.
 for s in fetch git time; do
   echo "== $s"
-  (cd "src/$s" && uv export --frozen --no-emit-project --format requirements-txt \
-    | uvx pip-audit --require-hashes --disable-pip -r /dev/stdin)
+  REQ=$(mktemp)
+  if (cd "src/$s" && uv export --frozen --no-emit-project --format requirements-txt) > "$REQ" \
+      && [ -s "$REQ" ]; then
+    uvx pip-audit --require-hashes --disable-pip -r "$REQ"
+  else
+    echo "EXPORT FAILED for $s: nothing was audited" >&2
+  fi
+  rm -f "$REQ"
 done
 ```
 
