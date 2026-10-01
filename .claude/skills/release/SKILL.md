@@ -360,8 +360,11 @@ A maintainer does this, through the GitHub UI, after the merge PR has merged:
 
 Publishing the Release starts `release.yml`. Its build jobs run first, without
 credentials: tests, then `pack:verify`. The publish jobs then wait for the
-`release` environment's approval. **Approve only after the build jobs are
-green**; the list of what each leg will publish or skip is in their logs.
+`release` environment's approval. **Wait for every build leg to finish before
+approving**, and read their logs: each says what its package will publish or
+skip. Approve the packages whose build leg passed. One failed build leg does
+not hold the others back; that package is handled as a failed publish
+(`RELEASING.md` **When a publish fails**).
 
 ## 6. After it publishes
 

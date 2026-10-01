@@ -54,7 +54,7 @@ Publishing is triggered by a maintainer **publishing a GitHub Release** whose ta
 
 The split is about what runs next to the publish credential. Installing dependencies runs their lifecycle scripts, and a build runs a toolchain; in a job that can mint an OIDC token, any of that code could publish. Here the token only ever sits beside the registry client and SHA-pinned actions. Every action in the build and publish jobs is pinned to a commit SHA, enforced by `npm run verify:action-pins`.
 
-The build jobs finish before the publish jobs ask for approval, so **approve the `release` environment only once the build jobs are green**. Their logs say what each package will do.
+The build jobs finish before the publish jobs ask for approval, so **wait for every build leg to finish before approving the `release` environment**, and read their logs: they say what each package will do. A package whose build leg passed is safe to approve. One failed build leg does not hold the others back: approve the healthy packages, and handle the failed one as described under [When a publish fails](#when-a-publish-fails).
 
 The **registry-diff guard** is what makes a release idempotent and self-healing. A package whose version is already on the registry is **skipped, not failed**:
 

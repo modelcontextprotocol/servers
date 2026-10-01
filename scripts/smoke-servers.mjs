@@ -375,9 +375,9 @@ async function stop(child) {
 }
 
 /** The environment a server is launched with: ours, plus its own extras. */
-function envFor(server, ctx, extra = {}) {
+function envFor(server, ctx, extra = {}, base = process.env) {
   const env = {};
-  for (const [key, value] of Object.entries(process.env))
+  for (const [key, value] of Object.entries(base))
     if (typeof value === "string") env[key] = value;
   return { ...env, ...(server.env?.(ctx) ?? {}), ...extra };
 }
@@ -394,7 +394,9 @@ function envFor(server, ctx, extra = {}) {
  * @param {(typeof SERVERS)[number]} server
  * @param {string} transport
  * @param {{ dir: string, pageUrl: string }} ctx
- * @param {{ command: string, args: string[], cwd: string }} [installed]
+ * @param {{ command: string, args: string[], cwd: string, env?: NodeJS.ProcessEnv }} [installed]
+ *   `env`, when given, replaces this process's environment as the base the
+ *   server's own variables are added to
  */
 export async function smokeOne(server, transport, ctx, installed) {
   const spec = installed ?? launchSpec(server, transport, ctx);
@@ -421,7 +423,7 @@ export async function smokeOne(server, transport, ctx, installed) {
       command: spec.command,
       args: spec.args,
       cwd: spec.cwd,
-      env: envFor(server, ctx),
+      env: envFor(server, ctx, {}, installed?.env),
       stderr: "pipe",
     });
     clientTransport.stderr?.on("data", (chunk) => (stderr += chunk));
@@ -452,7 +454,7 @@ export async function smokeOne(server, transport, ctx, installed) {
     let output = "";
     const child = spawn(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: envFor(server, ctx, { PORT: String(port) }),
+      env: envFor(server, ctx, { PORT: String(port) }, installed?.env),
       stdio: ["ignore", "pipe", "pipe"],
     });
     child.stdout.on("data", (chunk) => (output += chunk));

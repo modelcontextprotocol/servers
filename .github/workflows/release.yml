@@ -232,7 +232,18 @@ jobs:
           # injected registry or proxy could redirect this job's credential
           # flow. No package here declares one, so any present is refused, and
           # the registry is named on the command line as well.
-          if tar -xOzf "$1" package/package.json | node -e "process.exit('publishConfig' in JSON.parse(require('fs').readFileSync(0, 'utf8')) ? 0 : 1)"; then
+          # The check fails closed: a tarball that cannot be read, or a
+          # manifest that does not parse, stops the job. Only a manifest that
+          # was read and has no `publishConfig` goes on to `npm publish`.
+          MANIFEST="$(tar -xOzf "$1" package/package.json)" || {
+            echo "Refusing to publish: could not read package/package.json from $1"
+            exit 1
+          }
+          VERDICT="$(printf '%s' "$MANIFEST" | node -e "console.log('publishConfig' in JSON.parse(require('fs').readFileSync(0, 'utf8')) ? 'declared' : 'clean')")" || {
+            echo "Refusing to publish: the tarball's package.json does not parse"
+            exit 1
+          }
+          if [ "$VERDICT" != "clean" ]; then
             echo "Refusing to publish: the tarball's package.json declares publishConfig"
             exit 1
           fi

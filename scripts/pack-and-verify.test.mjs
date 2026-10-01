@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   artifactDirProblem,
+  consumerEnv,
   installedLaunch,
   isDistribution,
   main,
@@ -145,6 +146,24 @@ test("an artifact directory must be absent or empty; nothing is deleted", () => 
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("consumerEnv drops what would lend the server code from outside its install", () => {
+  const env = consumerEnv({
+    PATH: "/usr/bin",
+    HOME: "/home/u",
+    PYTHONPATH: "/checkout/src",
+    VIRTUAL_ENV: "/checkout/.venv",
+    NODE_PATH: "/checkout/node_modules",
+    NODE_OPTIONS: "--require ./hook.js",
+    Pythonpath: "windows-spelling",
+    HTTPS_PROXY: "http://proxy",
+  });
+  assert.deepEqual(env, {
+    PATH: "/usr/bin",
+    HOME: "/home/u",
+    HTTPS_PROXY: "http://proxy",
+  });
 });
 
 test("only wheels and sdists are distributions", () => {

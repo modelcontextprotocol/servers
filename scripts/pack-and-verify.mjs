@@ -205,6 +205,38 @@ export function artifactDirProblem(dir) {
   return null;
 }
 
+/**
+ * Variables that let a launched server find code OUTSIDE its install: module
+ * search paths, an activated environment, preloaded options. With any of them
+ * inherited, a dependency the package forgot to declare can still resolve
+ * from the developer's shell, and the check passes on a package that fails
+ * for a user.
+ */
+export const LEAKY_ENV = [
+  "PYTHONPATH",
+  "PYTHONHOME",
+  "PYTHONSTARTUP",
+  "VIRTUAL_ENV",
+  "CONDA_PREFIX",
+  "NODE_PATH",
+  "NODE_OPTIONS",
+];
+
+/**
+ * The environment an installed server is launched with: the caller's, minus
+ * the variables in `LEAKY_ENV`. Everything else (PATH, HOME, proxy settings,
+ * the temp directory) is kept, since the server needs a working system.
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {NodeJS.ProcessEnv}
+ */
+export function consumerEnv(env = process.env) {
+  const leaky = new Set(LEAKY_ENV);
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !leaky.has(key.toUpperCase())),
+  );
+}
+
 /** Is this file name something PyPI accepts: a wheel or an sdist? */
 export function isDistribution(file) {
   return file.endsWith(".whl") || file.endsWith(".tar.gz");
@@ -360,8 +392,10 @@ export async function main(argv = process.argv.slice(2)) {
                 }),
               ],
               // Not the checkout: a relative path that only resolves there
-              // must not resolve here.
+              // must not resolve here, and neither must a module the shell's
+              // environment would lend it.
               cwd: consumer,
+              env: consumerEnv(),
             },
           );
         }
