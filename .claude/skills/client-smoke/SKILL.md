@@ -92,7 +92,8 @@ That rule produces the three failures people actually hit:
 
 ### Environment variables
 
-The spawned server does **not** inherit your shell's environment. Setting
+The spawned server gets only the SDK's default safelist from your shell
+(`PATH`, `HOME`, `USER` and the like), not the variables you set. Setting
 `MEMORY_FILE_PATH=… npx …` has no effect on the server; pass it with `-e`:
 
 ```sh

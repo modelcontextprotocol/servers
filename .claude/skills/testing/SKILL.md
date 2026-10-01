@@ -140,8 +140,9 @@ await client.close(); // this is what stops the child process
 
 `src/sequentialthinking/__tests__/input-schema.test.ts` is the reference.
 `stderr: "pipe"` keeps the server's startup banner off the console. Pass a
-server's environment with the transport's `env` option; the child does not
-inherit the test process's variables.
+server's configuration with the transport's `env` option: the child inherits
+only the SDK's default safelist (`PATH`, `HOME`, `USER` and the like), not the
+other variables of the test process.
 
 ⚠️ **These tests run the last build, not your edit.** `npm test` does not build.
 A test that spawns `dist/index.js` passes or fails on whatever `tsc` last
