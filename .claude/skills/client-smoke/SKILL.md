@@ -130,24 +130,29 @@ the URL. The transport is inferred from the path: `/mcp` is Streamable HTTP,
 
 ```sh
 (
+  URL=http://localhost:3917/mcp
+  # Refuse a port something already answers on: it would be tested instead of this build.
+  curl -s -o /dev/null "$URL" && { echo "port 3917 is already in use" >&2; exit 1; }
   PORT=3917 node src/everything/dist/index.js streamableHttp >/dev/null 2>&1 &
   SERVER_PID=$!
   trap 'kill "$SERVER_PID" 2>/dev/null' EXIT    # stops it however the subshell ends
+  READY=
   for _ in $(seq 50); do                         # at most ten seconds
-    curl -s -o /dev/null http://localhost:3917/mcp && break
     kill -0 "$SERVER_PID" 2>/dev/null || { echo "server exited before listening" >&2; exit 1; }
+    curl -s -o /dev/null "$URL" && { READY=1; break; }
     sleep 0.2
   done
-  $INSPECT http://localhost:3917/mcp \
-    --method tools/call --tool-name echo --tool-arg message=over-http --format json
+  [ -n "$READY" ] || { echo "server did not listen within ten seconds" >&2; exit 1; }
+  $INSPECT "$URL" --method tools/call --tool-name echo --tool-arg message=over-http --format json
 )
 ```
 
-Each part of that is there for a failure it prevents. Without the wait, the CLI
-can reach the port before the server is listening and exit 4. The wait is
-bounded and checks that the server is still alive, so a server that fails to
-bind (the port is taken, the build is missing) ends the run instead of hanging
-it. The subshell's `EXIT` trap stops the server by pid even when the CLI call
+Each part of that is there for a failure it prevents. The first check refuses
+a port that already answers, because a stale listener there would be the
+server under test. Without the wait, the CLI can reach the port before the
+server is listening and exit 4. The wait is bounded and checks that this
+server is still alive, so one that fails to bind (the build is missing, the
+port was taken in between) ends the run instead of hanging it. The subshell's `EXIT` trap stops the server by pid even when the CLI call
 fails; a listener left on the port makes the next run talk to the old build.
 By hand in two terminals, the equivalent is waiting for the `listening on
 port` line and stopping the server with Ctrl-C.
