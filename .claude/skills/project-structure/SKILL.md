@@ -28,8 +28,8 @@ includes the tests) and `vitest.config.ts`.
 
 | Server | Layout | Where its features are registered |
 | --- | --- | --- |
-| `everything` | `index.ts` picks a transport from `argv`; `server/` holds the factory; `tools/`, `resources/`, `prompts/` hold one file per feature plus an `index.ts`; `transports/` holds one file per transport; `docs/` is shipped | Each feature file exports a `register…` function, wired into its area's `index.ts` (`registerTools`, `registerResources`, `registerPrompts`), which `server/index.ts` calls from `createServer()` |
-| `filesystem` | `index.ts` is the server; `lib.ts` holds the file operations and path validation; `path-utils.ts`, `path-validation.ts` and `roots-utils.ts` are focused helpers | Inline in `index.ts`, with `server.registerTool(...)` |
+| `everything` | `index.ts` picks a transport from `argv`; `server/` holds the factory; `tools/`, `resources/`, `prompts/` hold one file per feature plus an `index.ts`; `transports/` holds one file per transport; `version.ts` reads the package version; `docs/` is shipped | Each feature file exports a `register…` function, wired into its area's `index.ts` (`registerTools`, `registerResources`, `registerPrompts`), which `server/index.ts` calls from `createServer()` |
+| `filesystem` | `index.ts` is the server; `lib.ts` holds the file operations and path validation; `path-utils.ts`, `path-validation.ts` and `roots-utils.ts` are focused helpers; `version.ts` reads the package version | Inline in `index.ts`, with `server.registerTool(...)` |
 | `memory` | `index.ts` is the server and the `KnowledgeGraphManager`; `version.ts` reads the package version | Inline in `index.ts`; the resource and its subscription handlers are exported `register…` functions in the same file |
 | `sequentialthinking` | `index.ts` is the server; `lib.ts` holds `SequentialThinkingServer`, the logic; `version.ts` reads the package version | Inline in `index.ts` |
 

@@ -99,6 +99,29 @@ The guard matches spellings, not semantics, so an unrelated `retry:` property
 in server source trips it too. Rename the property, or restructure so the key
 is not written as `retry:` at the start of an expression.
 
+### `verify:action-pins`
+
+A job that holds a credential, one whose artifact such a job downloads, or one
+whose outputs such a job reads, uses an action by a tag (`actions/checkout@v6`) or by a SHA with no exact-version
+comment. The finding names the workflow, the job and the `uses:` value. Pin it
+as `owner/repo@<40-hex sha> # vX.Y.Z`, resolving both from one lookup:
+
+```sh
+ACTION=actions/checkout TAG=v6.1.0
+echo "uses: $ACTION@$(gh api "repos/$ACTION/commits/$TAG" --jq .sha) # $TAG"
+```
+
+If the job should not have become credentialed, that is the real fix: the
+guard counts `id-token: write` or `packages: write` (the job's own, or the
+workflow's when the job declares none); any secret other than `GITHUB_TOKEN`;
+an `upload-artifact` in a job that a credentialed downloader has anywhere in
+its `needs` chain; a reusable-workflow call in that position; and any job
+whose outputs a credentialed job reads (`needs.<job>.outputs`), which is why
+`release.yml`'s `detect-packages` is pinned although it holds no credential
+itself. A local `./…` action or workflow in such a job is reported as well. A YAML
+alias in such a job is reported too; spell the ref out. The rule is in
+`AGENTS.md` **Credentialed workflow jobs**.
+
 ### `test:scripts`
 
 A guard's own unit test failed. Two of these are about the gate itself and
@@ -198,6 +221,8 @@ The details of the lease are in
 
 ## Not part of the gate
 
-`npm run skills:eval` (real model calls) and `npm run coverage` (a report; no
-threshold is enforced yet) are separate commands. Run the eval suite when you
+`npm run skills:eval` (real model calls), `npm run coverage` (a report; no
+threshold is enforced yet) and `npm run pack:verify` (installs each package's
+publish artifact and boots it; needs the network, and belongs to the release
+flow) are separate commands. Run the eval suite when you
 add a skill or change a description.
