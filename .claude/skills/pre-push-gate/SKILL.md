@@ -74,7 +74,8 @@ unquoted `#` or `:` in a `description`.
 
 `verify:skills:cli` is the authoritative validator. It fetches the pinned
 Claude Code CLI with `npx` when the installed one is a different version, so it
-is the one stage that **fails offline**.
+**fails offline**. (`validate:py`'s `sync` step is the other stage that can:
+`uv sync --locked` downloads when a server's environment is missing or stale.)
 
 ### `verify:typecheck-coverage`
 

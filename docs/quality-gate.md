@@ -52,8 +52,11 @@ Notes on the stages:
   three verdicts, and exits non-zero if any failed. Within a server it stops
   at the first failing step.
 - **`verify:skills:cli` needs the network** when the pinned Claude Code CLI is
-  not the one installed: it fetches it with `npx`. It is the one stage that
-  fails offline.
+  not the one installed: it fetches it with `npx`. `validate:py` needs it too
+  when a server's environment is missing or behind its lockfile, since
+  `uv sync --locked` then downloads packages (and the pinned interpreter, if
+  `uv` does not have it). With warm caches those are the only two stages that
+  can fail offline.
 - **`smoke` launches what a user launches**: the built `dist/index.js` for a
   TypeScript server, the console script through `uv run --no-sync` for a Python
   one. stdio for all seven; HTTP+SSE and Streamable HTTP as well for

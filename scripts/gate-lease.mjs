@@ -95,8 +95,6 @@ import { hostname, constants as osConstants, tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-// CJS-only package; a default import is the shape every loader agrees on.
-import properLockfile from "proper-lockfile";
 import { winShellArgs } from "./lib/win-shell-args.mjs";
 
 /** Set (to anything but `0` or empty) to run without taking the lease. */
@@ -514,6 +512,21 @@ function signalTree(child, signal) {
  * call reported such a run as having waited (inspector#2369).
  */
 async function acquireLease({ dir, fs, log, pollMs, progressMs, maxWaitMs }) {
+  // Loaded here, not at the top of the file. The gate's first stage is the
+  // check that says "your install is stale, run npm install", and this
+  // package is part of that install: a static import would end the wrapper
+  // with ERR_MODULE_NOT_FOUND before that stage could run. Without the
+  // library there is no lease, so the gate runs unleased and says why.
+  let properLockfile;
+  try {
+    // CJS-only package; the default export is the shape every loader agrees on.
+    ({ default: properLockfile } = await import("proper-lockfile"));
+  } catch (err) {
+    log(
+      `gate-lease: could not load proper-lockfile (${err?.code ?? err?.message ?? err}); running without the lease. Run \`npm install\` at the repo root.`,
+    );
+    return null;
+  }
   const target = leaseTarget(dir);
   const startedWaiting = Date.now();
   let lastProgress = startedWaiting;
