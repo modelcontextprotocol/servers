@@ -56,6 +56,18 @@ const transports: Map<string, StreamableHTTPServerTransport> = new Map<
   StreamableHTTPServerTransport
 >();
 
+// The spec requires 404 for a session ID the server does not know (or has terminated).
+const sendSessionNotFound = (req: Request, res: Response) => {
+  res.status(404).json({
+    jsonrpc: "2.0",
+    error: {
+      code: -32001,
+      message: "Session not found",
+    },
+    id: req?.body?.id,
+  });
+};
+
 // Handle POST requests for client messages
 app.post("/mcp", async (req: Request, res: Response) => {
   console.log("Received MCP POST request");
@@ -102,15 +114,8 @@ app.post("/mcp", async (req: Request, res: Response) => {
       await transport.handleRequest(req, res);
       return;
     } else {
-      // Invalid request - no session ID or not initialization request
-      res.status(400).json({
-        jsonrpc: "2.0",
-        error: {
-          code: -32000,
-          message: "Bad Request: No valid session ID provided",
-        },
-        id: req?.body?.id,
-      });
+      // Unknown or terminated session: 404 tells the client to re-initialize
+      sendSessionNotFound(req, res);
       return;
     }
 
@@ -137,7 +142,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
 app.get("/mcp", async (req: Request, res: Response) => {
   console.log("Received MCP GET request");
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  if (!sessionId || !transports.has(sessionId)) {
+  if (!sessionId) {
     res.status(400).json({
       jsonrpc: "2.0",
       error: {
@@ -146,6 +151,10 @@ app.get("/mcp", async (req: Request, res: Response) => {
       },
       id: req?.body?.id,
     });
+    return;
+  }
+  if (!transports.has(sessionId)) {
+    sendSessionNotFound(req, res);
     return;
   }
 
@@ -164,7 +173,7 @@ app.get("/mcp", async (req: Request, res: Response) => {
 // Handle DELETE requests for session termination
 app.delete("/mcp", async (req: Request, res: Response) => {
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  if (!sessionId || !transports.has(sessionId)) {
+  if (!sessionId) {
     res.status(400).json({
       jsonrpc: "2.0",
       error: {
@@ -173,6 +182,10 @@ app.delete("/mcp", async (req: Request, res: Response) => {
       },
       id: req?.body?.id,
     });
+    return;
+  }
+  if (!transports.has(sessionId)) {
+    sendSessionNotFound(req, res);
     return;
   }
 
