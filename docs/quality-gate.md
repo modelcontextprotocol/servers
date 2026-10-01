@@ -83,7 +83,7 @@ covers: the repo-wide tooling and the guards that keep the gate itself honest.
 | `verify:typecheck-coverage` | A tracked TypeScript file lands in no `tsc` program |
 | `verify:dep-lockstep` | Two workspaces declare different ranges of a shared toolchain package |
 | `verify:no-test-retries` | A test declares a retry (Vitest's `retry`, a pytest rerun plugin or marker) |
-| `verify:action-pins` | A job that holds a credential (`id-token: write`, a secret other than `GITHUB_TOKEN`), or whose artifact such a job downloads, uses an action that is not pinned to a commit SHA with a `# vX.Y.Z` comment |
+| `verify:action-pins` | A job that holds a credential (`id-token: write`, `packages: write`, a secret other than `GITHUB_TOKEN`), or whose artifact such a job downloads, uses an action that is not pinned to a commit SHA with a `# vX.Y.Z` comment |
 | `test:scripts` | A guard's own unit tests fail. These include the workflow guard: a workflow invokes a `local:*` script, a CI job has no `timeout-minutes`, or `local:gate` is no longer exactly the lease wrapper around stages that include every check above |
 
 ## What is in neither tier

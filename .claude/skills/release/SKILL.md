@@ -82,22 +82,31 @@ npm audit --audit-level=high
 
 # Python: each server has its own lockfile. `uv` has no audit of its own in the
 # version pinned here, so the locked requirements go through pip-audit.
-# Exported to a file first, and stopped on a failed export: piped straight in,
-# a failed `uv export` hands pip-audit empty input, which it reports as clean.
-for s in fetch git time; do
-  echo "== $s"
-  REQ=$(mktemp)
-  if (cd "src/$s" && uv export --frozen --no-emit-project --format requirements-txt) > "$REQ" \
-      && [ -s "$REQ" ]; then
-    uvx pip-audit --require-hashes --disable-pip -r "$REQ"
-  else
-    echo "EXPORT FAILED for $s: nothing was audited" >&2
-  fi
-  rm -f "$REQ"
-done
+# Exported to a file first: piped straight in, a failed `uv export` hands
+# pip-audit empty input, which it reports as clean. The block runs in a
+# subshell that exits non-zero if any server could not be exported, so an
+# unaudited server cannot pass as an audited one.
+(
+  unaudited=
+  for s in fetch git time; do
+    echo "== $s"
+    REQ=$(mktemp)
+    if (cd "src/$s" && uv export --frozen --no-emit-project --format requirements-txt) > "$REQ" \
+        && [ -s "$REQ" ]; then
+      uvx pip-audit --require-hashes --disable-pip -r "$REQ"
+    else
+      echo "EXPORT FAILED for $s: nothing was audited" >&2
+      unaudited="$unaudited $s"
+    fi
+    rm -f "$REQ"
+  done
+  [ -z "$unaudited" ] || { echo "NOT AUDITED:$unaudited" >&2; exit 1; }
+); echo "python audit complete: EXIT=$?"
 ```
 
-**This step is a report.** Read it; do not let a tool rewrite the tree.
+**This step is a report.** Read it; do not let a tool rewrite the tree. The
+`EXIT=` line says whether every Python server was audited, not whether the
+audit was clean: `pip-audit`'s findings are in the output above it.
 
 ⚠️ **Never `npm audit fix`**, with or without `--force`. `AGENTS.md`
 **Dependencies** rules it out: it resolves an advisory that has no upward
