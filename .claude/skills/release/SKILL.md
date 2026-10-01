@@ -179,22 +179,30 @@ then open the PR through `/pr-flow`, body starting `Closes #N`.
 
 Open it only when every preparation PR has merged.
 
+The merge branch is `v2/main` under another name: cut from `origin/v2/main`,
+with nothing added. The merge itself is made by GitHub when the PR merges, so
+`main` gets exactly one merge commit and the PR has no commit of its own.
+(Merging locally first would put a merge commit on the branch, and merging the
+PR would then add a second.)
+
 ```sh
 git fetch origin main v2/main
-git switch -c "v2/chore/$N-release-$MILESTONE" origin/main
-git merge --no-ff origin/v2/main -m "Merge v2/main into main for $MILESTONE"
+git switch -c "v2/chore/$N-release-$MILESTONE" origin/v2/main
 ```
 
-**The merge branch's tree is the release candidate. Prove it is `v2/main`'s:**
+**The merge's result is the release candidate. Prove it will be `v2/main`'s
+tree before opening the PR:**
 
 ```sh
 git rev-parse 'origin/v2/main^{tree}'
-git rev-parse 'HEAD^{tree}'              # must print the same hash
+git merge-tree --write-tree origin/main HEAD     # must print the same hash, and nothing else
 ```
 
-A different hash means the merge resolved a conflict or carries a commit of its
-own. Either is a change that exists only downstream of `v2/main`. Stop and find
-out which, rather than pushing it.
+`git merge-tree` computes the tree the merge into `main` would produce,
+without touching the checkout. A different hash, or conflict output, means
+`main` holds a change `v2/main` does not. That is a change that exists only
+downstream of the develop branch. Stop and find out what it is, rather than
+pushing.
 
 Open the PR against **`main`**, labeled `v2`. Its body's first line is
 **`Part of #N`**, not `Closes #N`:
@@ -205,7 +213,7 @@ cat > "$BODY" <<EOF
 Part of #$N
 
 Milestone merge for $MILESTONE: \`v2/main\` → \`main\`. No commits of its own;
-the tree is \`origin/v2/main\`'s (\`$(git rev-parse --short 'HEAD^{tree}')\`).
+the merged tree is \`origin/v2/main\`'s (\`$(git rev-parse --short 'HEAD^{tree}')\`).
 
 Release ledger: <link, added in step 4>
 EOF
@@ -228,11 +236,13 @@ is in flight; that is the normal state.
 
 ## 4. Verify the release candidate, and write the ledger
 
-Work from a **dedicated worktree** of the merge branch with its own install,
-so nothing stale from another branch is tested:
+Work from a **dedicated worktree** with its own install, so nothing stale from
+another branch is tested. It is added **detached** at the pushed merge branch:
+the branch itself is still checked out where step 3 created it, and git
+refuses to check one branch out twice.
 
 ```sh
-git worktree add ../servers-release "v2/chore/$N-release-$MILESTONE"
+git worktree add --detach ../servers-release "origin/v2/chore/$N-release-$MILESTONE"
 cd ../servers-release && npm ci
 ```
 
@@ -296,8 +306,9 @@ A row that says "verified" without saying what was run is not a ledger entry.
 
 **4e. When verification finds something, the fix goes on `v2/main`, never on
 the merge branch.** File the issue (`/issue-create`), fix it through an
-ordinary PR, then merge `origin/v2/main` into the merge branch again, so the
-fix arrives the way everything else did and the two trees stay identical.
+ordinary PR, then fast-forward the merge branch to the new `origin/v2/main`
+(`git merge --ff-only origin/v2/main`, then push), so the fix arrives the way
+everything else did and the branch is still `v2/main` with nothing added.
 Re-run what the fix touches and update the ledger. If the fix changed a
 package, its version PR (2b or 2c) runs again first.
 

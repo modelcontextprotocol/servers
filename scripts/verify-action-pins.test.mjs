@@ -191,6 +191,35 @@ test("the artifact rule follows a multi-hop chain regardless of job order", () =
   ]);
 });
 
+test("a producer behind a job that neither downloads nor uploads still counts", () => {
+  const yaml = wf(
+    "jobs:",
+    "  source:",
+    "    steps:",
+    "      - uses: actions/upload-artifact@v7",
+    "  bridge:",
+    "    needs: source",
+    "    steps:",
+    "      - uses: actions/checkout@v7",
+    "  unrelated:",
+    "    steps:",
+    "      - uses: actions/upload-artifact@v7",
+    "  publish:",
+    "    needs: bridge",
+    "    permissions:",
+    "      id-token: write",
+    "    steps:",
+    "      - uses: actions/download-artifact@v8",
+  );
+  // Artifacts are run-scoped, so `publish` can download what `source`
+  // uploaded. `bridge` handles no artifact, and `unrelated` is not upstream.
+  assert.deepEqual([...credentialedJobs(yaml)].sort(), ["publish", "source"]);
+  assert.deepEqual(unpinnedRefs(yaml), [
+    { job: "source", uses: "actions/upload-artifact@v7" },
+    { job: "publish", uses: "actions/download-artifact@v8" },
+  ]);
+});
+
 test("an upload is not credentialed when the consumer downloads nothing", () => {
   const yaml = wf(
     "jobs:",

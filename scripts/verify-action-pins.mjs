@@ -26,9 +26,10 @@
 //      call's `secrets: inherit` (a `secrets:` mapping is read like any other
 //      expression, so one passing only `GITHUB_TOKEN` does not count). Here
 //      that is `claude.yml` again, for `ANTHROPIC_API_KEY`; or
-//   3. uploads an artifact that a credentialed job downloads and `needs`,
-//      transitively, so every hop of a `source → package → publish` chain
-//      counts, not only the last. Here that is `release.yml`'s two build jobs:
+//   3. uploads an artifact that a credentialed job downloads and has anywhere
+//      in its transitive `needs` (an artifact is scoped to the run, so a job
+//      can download from any job that finished before it), so every producer
+//      in a `source → package → publish` chain counts, not only the last. Here that is `release.yml`'s two build jobs:
 //      each builds the tarball or wheel its publish job hands to the registry
 //      under provenance, so a moved tag in the build job publishes as surely
 //      as one in the publish job would. (The build was split out of the
@@ -146,19 +147,33 @@ export function credentialedJobs(yaml, file) {
       "permissions" in job ? job.permissions : workflow.permissions;
     if (mints(permissions) || handedSecret(job, workflow.env)) held.add(name);
   }
-  // To a fixed point: marking a producer credentialed can make ITS producers
-  // credentialed, and job order in the file says nothing about the chain.
+  // Artifacts are scoped to the run, not to a `needs` edge: a job can download
+  // what ANY job that finished before it uploaded, which is every job in its
+  // transitive `needs`. So for `source (uploads) → bridge → publish
+  // (downloads)`, `source` counts although `bridge` neither downloads nor
+  // re-uploads. To a fixed point, because marking a producer credentialed
+  // makes its own downloads count, and job order in the file says nothing
+  // about the chain.
+  const upstreamOf = (name) => {
+    const seen = new Set();
+    const queue = [...needsOf(workflow.jobs[name])];
+    while (queue.length > 0) {
+      const next = queue.pop();
+      if (seen.has(next) || !workflow.jobs[next]) continue;
+      seen.add(next);
+      queue.push(...needsOf(workflow.jobs[next]));
+    }
+    return seen;
+  };
   for (let grew = true; grew; ) {
     grew = false;
     for (const [name, job] of jobs) {
       if (!held.has(name) || !stepsUsing(job, "actions/download-artifact@"))
         continue;
-      for (const producer of needsOf(job)) {
-        const upstream = workflow.jobs[producer];
+      for (const producer of upstreamOf(name)) {
         if (
-          upstream &&
           !held.has(producer) &&
-          stepsUsing(upstream, "actions/upload-artifact@")
+          stepsUsing(workflow.jobs[producer], "actions/upload-artifact@")
         ) {
           held.add(producer);
           grew = true;

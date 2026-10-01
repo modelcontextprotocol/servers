@@ -268,8 +268,8 @@ holds for a maintainer's own one-line fix as much as for a feature.
   flow is the `security-advisory` skill.
 
 - **Exception: a milestone's merge PR.** It is the one PR that targets `main`.
-  It is a pure merge of `v2/main` (its tree hash equals `origin/v2/main`'s,
-  and it has no commits of its own), and its body's first line is
+  It is a pure merge of `v2/main` (its branch is `origin/v2/main` with no
+  commits of its own, and the merged tree equals `origin/v2/main`'s), and its body's first line is
   **`Part of #N`** for the milestone's release issue, not `Closes #N`: on the
   default branch a closing keyword would close that issue at merge, before
   anything is published. The release issue is closed by hand once the Release
