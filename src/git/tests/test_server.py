@@ -236,6 +236,27 @@ def test_git_log_default(test_repository):
     assert len(result) >= 1
     assert "initial commit" in result[0]
 
+def test_git_commit_concludes_a_merge(test_repository):
+    main = test_repository.active_branch
+    test_repository.git.checkout("-b", "feature")
+    Path(test_repository.working_dir, "test.txt").write_text("feature")
+    test_repository.index.add(["test.txt"])
+    feature_commit = test_repository.index.commit("feature change")
+    main.checkout()
+    Path(test_repository.working_dir, "test.txt").write_text("main")
+    test_repository.index.add(["test.txt"])
+    main_commit = test_repository.index.commit("main change")
+    with pytest.raises(git.GitCommandError):
+        test_repository.git.merge("feature")
+
+    Path(test_repository.working_dir, "test.txt").write_text("resolved")
+    test_repository.git.add("test.txt")
+    git_commit(test_repository, "merge feature")
+
+    merge_commit = test_repository.head.commit
+    assert merge_commit.parents == (main_commit, feature_commit)
+    assert not Path(test_repository.git_dir, "MERGE_HEAD").exists()
+
 def test_git_create_branch(test_repository):
     result = git_create_branch(test_repository, "new-feature-branch")
 
