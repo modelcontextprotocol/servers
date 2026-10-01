@@ -386,6 +386,48 @@ done
 A freshly published npm version can take a few minutes to appear. Query the
 exact version, as above, never `dist-tags`.
 
+### The first semver release only: deprecate the date-stamped versions
+
+The TypeScript packages were published with date-stamped versions (`2025.x`,
+`2026.x`) before they resumed semver at `1.0.0`. Once `1.0.0` is live, those
+old versions are deprecated so that anyone pinned to one is told where the
+package went. This is done **once**, after the release that first publishes
+`1.0.0`, and never again.
+
+⚠️ **Only after `latest` has moved.** The range covers the version users were
+getting before the release. Deprecating it while it is still `latest` warns
+every `npx` user toward a version that does not exist yet. Check first, and
+go on only when all four lines show a `1.x` `latest` and no deprecation:
+
+```sh
+for p in everything filesystem memory sequential-thinking; do
+  n="@modelcontextprotocol/server-$p"
+  echo "$n latest=$(npm view "$n" dist-tags.latest) deprecated=$(npm view "$n@2026.8.31" deprecated)"
+done
+```
+
+**A maintainer of the `@modelcontextprotocol` npm scope runs it**, from a
+shell logged in to npm (`npm whoami`). There is no npm token in this
+repository or its workflows, by design, so an agent's shell cannot, and the
+warning is public the moment it lands. Prepare the command and the check;
+do not attempt the login.
+
+```sh
+MSG="Date-based versions are no longer published. This package has resumed semantic versioning at 1.0.0: install the latest version."
+for p in everything filesystem memory sequential-thinking; do
+  npm deprecate "@modelcontextprotocol/server-$p@>=2025.0.0 <2027.0.0" "$MSG"
+done
+```
+
+npm may ask for a one-time password for each package. Re-run the check above:
+`latest` is unchanged, and `deprecated` now prints the message. The semver
+versions are outside the range and stay undeprecated.
+
+It can be undone by running the same command with an empty message (`""`).
+The Python packages need nothing: they stay on the date-stamped line.
+
+### Close out
+
 Then close out, by hand, since nothing closed the release issue:
 
 ```sh

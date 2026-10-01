@@ -22,7 +22,7 @@ Semver policy:
 | **minor** | A new tool, prompt, resource or option |
 | **major** | A breaking change: a tool removed or renamed, a schema change that breaks clients, a protocol or Node floor bump |
 
-The semver line starts at **`1.0.0`** for all four packages. Their earlier releases were date-stamped (`2025.x`, `2026.x`), which sorts above any semver number, but `npm install` and `npx` resolve the `latest` dist-tag rather than the highest number, so publishing `1.x` is what users get. npm will not move `latest` to a lower version implicitly, so `release.yml` publishes with an explicit `--tag latest`.
+The semver line starts at **`1.0.0`** for all four packages. Their earlier releases were date-stamped (`2025.x`, `2026.x`), which sorts above any semver number, but `npm install` and `npx` resolve the `latest` dist-tag rather than the highest number, so publishing `1.x` is what users get. npm will not move `latest` to a lower version implicitly, so `release.yml` publishes with an explicit `--tag latest`. Once `1.0.0` is live, a scope maintainer deprecates the date-stamped range (`>=2025.0.0 <2027.0.0`) by hand, once; the `release` skill has the command and the check to run first.
 
 ### Python servers: CalVer
 
