@@ -43,6 +43,9 @@
       - **DELETE** (termination)
     - Uses an event store for resumability and stores transports by `sessionId`.
     - Calls `cleanup(sessionId)` on **DELETE**.
+- Binds the HTTP port for **SSE** and **Streamable HTTP** through `startHttpServer()` in `transports/http-server.ts`.
+  - A bind failure (`EADDRINUSE`, `EACCES`) is reported on stderr and exits non-zero instead of leaving the process up on no port.
+  - The listening message is printed only once the socket is actually bound.
 
 ## 3. The Server Factory
 

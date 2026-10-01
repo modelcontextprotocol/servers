@@ -57,10 +57,11 @@ src/everything
      │   ├── trigger-sampling-request.ts
      │   ├── trigger-sampling-request-async.ts
      │   └── trigger-url-elicitation.ts
-     └── transports
-         ├── sse.ts
-         ├── stdio.ts
-         └── streamableHttp.ts
+└── transports
+        ├── http-server.ts
+        ├── sse.ts
+        ├── stdio.ts
+        └── streamableHttp.ts
 ```
 
 # Project Contents
@@ -188,6 +189,10 @@ src/everything
 
 ### `transports/`
 
+- `http-server.ts`
+  - `startHttpServer(app, { port, listeningMessage })` binds an Express app for the HTTP-based transports and owns the startup failure path.
+  - Uses `http.createServer(app)` instead of `app.listen(port, onListening)`: Express registers the callback for `error` as well as `listening`, so a failed bind would otherwise print the listening message while the transport is bound to nothing.
+  - Reports a conflicting port via the `Failed to start: Port N is already in use.` message and exits non-zero so the caller sees the failure.
 - `stdio.ts`
   - Starts a `StdioServerTransport`, created the server via `createServer()`, and connects it.
   - Handles `SIGINT` to close cleanly and calls `cleanup()` to remove any live intervals.
@@ -198,7 +203,9 @@ src/everything
   - Manages multiple connected clients via a transport map.
   - Starts an `SSEServerTransport`, created the server via `createServer()`, and connects it to a new transport.
   - On server disconnect, calls `cleanup()` to remove any live intervals.
+  - Binds through `startHttpServer()`, so a port conflict reports the port and exits non-zero rather than printing a false listening line.
 - `streamableHttp.ts`
   - Express server exposing a single `/mcp` endpoint for POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `StreamableHTTPServerTransport`.
   - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`.
   - Connects a fresh server instance on initialization POST and reuses the transport for subsequent requests.
+  - Binds through `startHttpServer()`, the same owner as the SSE transport.
