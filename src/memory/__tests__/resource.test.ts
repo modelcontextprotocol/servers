@@ -38,13 +38,13 @@ describe('knowledge-graph resource', () => {
     registerKnowledgeGraphResource(mockServer, manager);
 
     const handler = (mockServer.registerResource as ReturnType<typeof vi.fn>).mock.calls[0][3];
-    const result = await handler(new URL('memory://knowledge-graph'));
+    const result = await handler(new URL('memory://knowledge-graph'), { signal: new AbortController().signal });
 
     expect(result.contents).toHaveLength(1);
     expect(result.contents[0].uri).toBe('memory://knowledge-graph');
     expect(result.contents[0].mimeType).toBe('application/json');
     expect(JSON.parse(result.contents[0].text)).toEqual(fakeGraph);
-    expect(manager.readGraph).toHaveBeenCalledOnce();
+    expect(manager.readGraph).toHaveBeenCalledExactlyOnceWith(expect.any(AbortSignal));
   });
 });
 

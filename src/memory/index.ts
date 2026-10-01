@@ -10,6 +10,15 @@ import os from 'os';
 import { randomBytes } from 'crypto';
 import { fileURLToPath } from 'url';
 import { SERVER_VERSION } from './version.js';
+import { withDirectoryLock } from './file-lock.js';
+import {
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  MemoryRequestError,
+  parseRequestTimeout,
+  validateLimit,
+} from './request-lifecycle.js';
+
+export { MemoryRequestError } from './request-lifecycle.js';
 
 // Define memory file path using environment variable with fallback
 export const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.jsonl');
@@ -82,27 +91,96 @@ export interface KnowledgeGraph {
   relations: Relation[];
 }
 
+export interface KnowledgeGraphManagerOptions {
+  // Default budget for mutation calls that do not supply their own signal.
+  requestTimeoutMs?: number;
+  // Mutations admitted but not yet drained, including the executing one.
+  // Bounds bookkeeping, not latency or payload bytes.
+  maxPendingMutations?: number;
+}
+
+export const DEFAULT_MAX_PENDING_MUTATIONS = 256;
+
+// The only way to replace the graph file: ownership, then the caller's
+// lifetime, then a synchronously dispatched rename.
+type Publish = (tempFilePath: string) => Promise<void>;
+
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
 export class KnowledgeGraphManager {
-  constructor(private memoryFilePath: string) {}
+  private readonly requestTimeoutMs: number;
+  private readonly maxPendingMutations: number;
 
-  // Serializes all read-modify-write graph mutations behind a single queue.
-  // Without this, concurrent tool calls (e.g. multiple mutations dispatched
-  // from one LLM turn) each independently load the graph, mutate their own
-  // copy, and write it back — so whichever write lands last silently
-  // overwrites the other's changes, and interleaved writes to the same file
-  // can corrupt it outright. See #1819.
-  private mutationQueue: Promise<unknown> = Promise.resolve();
-
-  private async withLock<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.mutationQueue.then(operation, operation);
-    // Always resolve the queue itself, even if this operation failed, so a
-    // single failed mutation doesn't permanently wedge every call after it.
-    // The failure still propagates normally to whoever awaited `result`.
-    this.mutationQueue = result.then(
-      () => undefined,
-      () => undefined,
+  constructor(private memoryFilePath: string, options: KnowledgeGraphManagerOptions = {}) {
+    this.requestTimeoutMs = validateLimit(options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS, 'request timeout');
+    this.maxPendingMutations = validateLimit(
+      options.maxPendingMutations ?? DEFAULT_MAX_PENDING_MUTATIONS,
+      'pending mutation capacity',
+      Number.MAX_SAFE_INTEGER,
     );
+  }
+
+  // Manager-local FIFO preserves this instance's mutation order and reduces
+  // contention on the directory lease, which is what actually protects the
+  // shared read-modify-write transaction. See #1819.
+  private mutationQueue: Promise<unknown> = Promise.resolve();
+  // Entries enqueued but not yet drained, including the executing one.
+  private pendingMutations = 0;
+
+  // The single transaction entry for all six mutations. `change` performs the
+  // in-memory validation/transformation only; this method owns admission,
+  // queueing, lease acquisition, loading, publication and draining. The
+  // caller awaits the real execution, so outcomes come from throw sites:
+  // `NOT_COMMITTED` before the rename is dispatched, `COMMIT_UNKNOWN` when
+  // the rename itself rejects, and business errors from `change` unchanged.
+  private mutateGraph<R>(
+    change: (graph: KnowledgeGraph) => R,
+    signal: AbortSignal = AbortSignal.timeout(this.requestTimeoutMs),
+  ): Promise<R> {
+    if (this.pendingMutations >= this.maxPendingMutations) {
+      return Promise.reject(new MemoryRequestError('NOT_COMMITTED', 'memory write queue is full; retry later'));
+    }
+    this.pendingMutations++;
+    let businessError = false;
+    const run = async (): Promise<R> => {
+      try {
+        signal.throwIfAborted();
+        return await withDirectoryLock(this.memoryFilePath, async assertOwned => {
+          const graph = await this.loadGraph();
+          signal.throwIfAborted();
+          let result: R;
+          try {
+            result = change(graph);
+          } catch (error) {
+            businessError = true;
+            throw error;
+          }
+          await this.saveGraph(graph, async tempFilePath => {
+            await assertOwned(); // Detects lease loss; not storage-side fencing.
+            signal.throwIfAborted(); // No await between this check and the rename.
+            try {
+              await fs.rename(tempFilePath, this.memoryFilePath);
+            } catch (error) {
+              throw new MemoryRequestError('COMMIT_UNKNOWN', 'graph publication failed; read the graph before retrying', { cause: error });
+            }
+          });
+          return result;
+        }, { signal });
+      } catch (error) {
+        // Business errors from `change` propagate unchanged. Every other
+        // failure happened before the rename was dispatched: queueing, lease
+        // acquisition or loss, loading, or writing the temporary file.
+        if (businessError || error instanceof MemoryRequestError) throw error;
+        throw new MemoryRequestError(
+          'NOT_COMMITTED',
+          signal.aborted ? 'request was cancelled or expired before the graph was changed' : 'graph was not changed',
+          { cause: error },
+        );
+      }
+    };
+    const result = this.mutationQueue.then(run, run);
+    // Drain the counter on either outcome; a failed job must not wedge the queue.
+    const drain = () => { this.pendingMutations--; };
+    this.mutationQueue = result.then(drain, drain);
     return result;
   }
 
@@ -159,7 +237,7 @@ export class KnowledgeGraphManager {
     }
   }
 
-  private async saveGraph(graph: KnowledgeGraph): Promise<void> {
+  private async saveGraph(graph: KnowledgeGraph, publish: Publish): Promise<void> {
     const lines = [
       ...graph.entities.map(e => JSON.stringify({
         type: "entity",
@@ -191,7 +269,7 @@ export class KnowledgeGraphManager {
 
     try {
       await fs.writeFile(tempFilePath, lines.join("\n") + "\n");
-      await fs.rename(tempFilePath, this.memoryFilePath);
+      await publish(tempFilePath);
     } catch (error) {
       // Never leave a stray temp file behind on failure.
       await fs.unlink(tempFilePath).catch(() => {});
@@ -199,23 +277,20 @@ export class KnowledgeGraphManager {
     }
   }
 
-  async createEntities(entities: Entity[]): Promise<Entity[]> {
-    return this.withLock(async () => {
-      const graph = await this.loadGraph();
+  async createEntities(entities: Entity[], signal?: AbortSignal): Promise<Entity[]> {
+    return this.mutateGraph(graph => {
       const newEntities = entities.filter((e, index) =>
         !graph.entities.some(existingEntity => existingEntity.name === e.name) &&
         // Also skip duplicates appearing earlier in this same batch
         !entities.slice(0, index).some(earlier => earlier.name === e.name)
       );
       graph.entities.push(...newEntities);
-      await this.saveGraph(graph);
       return newEntities;
-    });
+    }, signal);
   }
 
-  async createRelations(relations: Relation[]): Promise<Relation[]> {
-    return this.withLock(async () => {
-      const graph = await this.loadGraph();
+  async createRelations(relations: Relation[], signal?: AbortSignal): Promise<Relation[]> {
+    return this.mutateGraph(graph => {
       const entityNames = new Set(graph.entities.map(e => e.name));
 
       relations.forEach(r => {
@@ -237,14 +312,15 @@ export class KnowledgeGraphManager {
         !relations.slice(0, index).some(earlier => isSameRelation(earlier, r))
       );
       graph.relations.push(...newRelations);
-      await this.saveGraph(graph);
       return newRelations;
-    });
+    }, signal);
   }
 
-  async addObservations(observations: { entityName: string; contents: string[] }[]): Promise<{ entityName: string; addedObservations: string[] }[]> {
-    return this.withLock(async () => {
-      const graph = await this.loadGraph();
+  async addObservations(
+    observations: { entityName: string; contents: string[] }[],
+    signal?: AbortSignal,
+  ): Promise<{ entityName: string; addedObservations: string[] }[]> {
+    return this.mutateGraph(graph => {
       const results = observations.map(o => {
         const entity = graph.entities.find(e => e.name === o.entityName);
         if (!entity) {
@@ -254,27 +330,26 @@ export class KnowledgeGraphManager {
         entity.observations.push(...newObservations);
         return { entityName: o.entityName, addedObservations: newObservations };
       });
-      await this.saveGraph(graph);
       return results;
-    });
+    }, signal);
   }
 
-  async deleteEntities(entityNames: string[]): Promise<{ deleted: string[]; notFound: string[] }> {
-    return this.withLock(async () => {
-      const graph = await this.loadGraph();
+  async deleteEntities(entityNames: string[], signal?: AbortSignal): Promise<{ deleted: string[]; notFound: string[] }> {
+    return this.mutateGraph(graph => {
       const present = new Set(graph.entities.map(e => e.name));
       const deleted = entityNames.filter(name => present.has(name));
       const notFound = entityNames.filter(name => !present.has(name));
       graph.entities = graph.entities.filter(e => !entityNames.includes(e.name));
       graph.relations = graph.relations.filter(r => !entityNames.includes(r.from) && !entityNames.includes(r.to));
-      await this.saveGraph(graph);
       return { deleted, notFound };
-    });
+    }, signal);
   }
 
-  async deleteObservations(deletions: { entityName: string; observations: string[] }[]): Promise<{ deletedCount: number; missingEntities: string[] }> {
-    return this.withLock(async () => {
-      const graph = await this.loadGraph();
+  async deleteObservations(
+    deletions: { entityName: string; observations: string[] }[],
+    signal?: AbortSignal,
+  ): Promise<{ deletedCount: number; missingEntities: string[] }> {
+    return this.mutateGraph(graph => {
       let deletedCount = 0;
       const missingEntities: string[] = [];
       deletions.forEach(d => {
@@ -287,32 +362,33 @@ export class KnowledgeGraphManager {
           missingEntities.push(d.entityName);
         }
       });
-      await this.saveGraph(graph);
       return { deletedCount, missingEntities };
-    });
+    }, signal);
   }
 
-  async deleteRelations(relations: Relation[]): Promise<{ deletedCount: number }> {
-    return this.withLock(async () => {
-      const graph = await this.loadGraph();
+  async deleteRelations(relations: Relation[], signal?: AbortSignal): Promise<{ deletedCount: number }> {
+    return this.mutateGraph(graph => {
       const before = graph.relations.length;
       graph.relations = graph.relations.filter(r => !relations.some(delRelation => 
         r.from === delRelation.from && 
         r.to === delRelation.to && 
         r.relationType === delRelation.relationType
       ));
-      await this.saveGraph(graph);
       return { deletedCount: before - graph.relations.length };
-    });
+    }, signal);
   }
 
-  async readGraph(): Promise<KnowledgeGraph> {
-    return this.loadGraph();
+  // Reads are lock-free snapshots. A supplied signal only discards work.
+  async readGraph(signal?: AbortSignal): Promise<KnowledgeGraph> {
+    signal?.throwIfAborted();
+    const graph = await this.loadGraph();
+    signal?.throwIfAborted();
+    return graph;
   }
 
   // Very basic search function
-  async searchNodes(query: string): Promise<KnowledgeGraph> {
-    const graph = await this.loadGraph();
+  async searchNodes(query: string, signal?: AbortSignal): Promise<KnowledgeGraph> {
+    const graph = await this.readGraph(signal);
     
     // Filter entities
     const filteredEntities = graph.entities.filter(e => 
@@ -338,8 +414,8 @@ export class KnowledgeGraphManager {
     return filteredGraph;
   }
 
-  async openNodes(names: string[]): Promise<KnowledgeGraph> {
-    const graph = await this.loadGraph();
+  async openNodes(names: string[], signal?: AbortSignal): Promise<KnowledgeGraph> {
+    const graph = await this.readGraph(signal);
     
     // Filter entities
     const filteredEntities = graph.entities.filter(e => names.includes(e.name));
@@ -398,6 +474,15 @@ function notifyGraphUpdated() {
   }
 }
 
+// Validated at startup; see MEMORY_REQUEST_TIMEOUT_MS in the README.
+let requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
+
+// One signal per tool/resource callback: the SDK's cancellation signal
+// combined with the server's request budget.
+function requestSignal(extra: { signal: AbortSignal }): AbortSignal {
+  return AbortSignal.any([extra.signal, AbortSignal.timeout(requestTimeoutMs)]);
+}
+
 // Register create_entities tool
 server.registerTool(
   "create_entities",
@@ -417,8 +502,8 @@ server.registerTool(
       openWorldHint: false,
     }
   },
-  async ({ entities }) => {
-    const result = await knowledgeGraphManager.createEntities(entities);
+  async ({ entities }, extra) => {
+    const result = await knowledgeGraphManager.createEntities(entities, requestSignal(extra));
     notifyGraphUpdated();
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
@@ -446,8 +531,8 @@ server.registerTool(
       openWorldHint: false,
     }
   },
-  async ({ relations }) => {
-    const result = await knowledgeGraphManager.createRelations(relations);
+  async ({ relations }, extra) => {
+    const result = await knowledgeGraphManager.createRelations(relations, requestSignal(extra));
     notifyGraphUpdated();
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
@@ -481,8 +566,8 @@ server.registerTool(
       openWorldHint: false,
     }
   },
-  async ({ observations }) => {
-    const result = await knowledgeGraphManager.addObservations(observations);
+  async ({ observations }, extra) => {
+    const result = await knowledgeGraphManager.addObservations(observations, requestSignal(extra));
     notifyGraphUpdated();
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
@@ -511,8 +596,8 @@ server.registerTool(
       openWorldHint: false,
     }
   },
-  async ({ entityNames }) => {
-    const { deleted, notFound } = await knowledgeGraphManager.deleteEntities(entityNames);
+  async ({ entityNames }, extra) => {
+    const { deleted, notFound } = await knowledgeGraphManager.deleteEntities(entityNames, requestSignal(extra));
     notifyGraphUpdated();
     const message = notFound.length === 0
       ? "Entities deleted successfully"
@@ -547,8 +632,8 @@ server.registerTool(
       openWorldHint: false,
     }
   },
-  async ({ deletions }) => {
-    const { deletedCount, missingEntities } = await knowledgeGraphManager.deleteObservations(deletions);
+  async ({ deletions }, extra) => {
+    const { deletedCount, missingEntities } = await knowledgeGraphManager.deleteObservations(deletions, requestSignal(extra));
     notifyGraphUpdated();
     const requested = deletions.reduce((total, d) => total + d.observations.length, 0);
     const message = deletedCount === requested
@@ -582,8 +667,8 @@ server.registerTool(
       openWorldHint: false,
     }
   },
-  async ({ relations }) => {
-    const { deletedCount } = await knowledgeGraphManager.deleteRelations(relations);
+  async ({ relations }, extra) => {
+    const { deletedCount } = await knowledgeGraphManager.deleteRelations(relations, requestSignal(extra));
     notifyGraphUpdated();
     const message = deletedCount === relations.length
       ? "Relations deleted successfully"
@@ -613,8 +698,8 @@ server.registerTool(
       openWorldHint: false,
     }
   },
-  async () => {
-    const graph = await knowledgeGraphManager.readGraph();
+  async (_args, extra) => {
+    const graph = await knowledgeGraphManager.readGraph(requestSignal(extra));
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }
@@ -649,8 +734,8 @@ server.registerTool(
       openWorldHint: false,
     }
   },
-  async ({ query }) => {
-    const graph = await knowledgeGraphManager.searchNodes(query);
+  async ({ query }, extra) => {
+    const graph = await knowledgeGraphManager.searchNodes(query, requestSignal(extra));
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }
@@ -678,8 +763,8 @@ server.registerTool(
       openWorldHint: false,
     }
   },
-  async ({ names }) => {
-    const graph = await knowledgeGraphManager.openNodes(names);
+  async ({ names }, extra) => {
+    const graph = await knowledgeGraphManager.openNodes(names, requestSignal(extra));
     return {
       content: [{ type: "text" as const, text: JSON.stringify(graph, null, 2) }],
       structuredContent: { ...graph }
@@ -699,8 +784,8 @@ export function registerKnowledgeGraphResource(
       description: "The full knowledge graph with all entities and relations",
       mimeType: "application/json",
     },
-    async (uri) => {
-      const graph = await manager.readGraph();
+    async (uri, extra) => {
+      const graph = await manager.readGraph(requestSignal(extra));
       return {
         contents: [
           {
@@ -729,8 +814,9 @@ export function registerKnowledgeGraphSubscriptions(server: McpServer) {
 }
 
 async function main() {
+  requestTimeoutMs = parseRequestTimeout(process.env.MEMORY_REQUEST_TIMEOUT_MS);
   MEMORY_FILE_PATH = await ensureMemoryFilePath();
-  knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_FILE_PATH);
+  knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_FILE_PATH, { requestTimeoutMs });
   registerKnowledgeGraphResource(server, knowledgeGraphManager);
   registerKnowledgeGraphSubscriptions(server);
 
