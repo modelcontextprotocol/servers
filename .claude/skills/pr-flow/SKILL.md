@@ -111,20 +111,23 @@ _someone else's_ certification never is.
 
 ## 4. Run the gate
 
-Run what CI runs for everything the change touches, and fix what fails before
-pushing:
+Format, then run the pre-push gate, and fix what fails before pushing:
 
-| Change touches | Command |
+```sh
+npm run format                    # TypeScript; in a Python server: uv run --frozen ruff format .
+npm run local:gate; echo "EXIT=$?"
+```
+
+`local:gate` runs every check CI runs, for both languages, whatever the change
+touched. Verify by the exit code, not by grepping the output. What each stage
+checks and how to fix a red one is `/pre-push-gate`; the stage list is
+[`docs/quality-gate.md`](../../../docs/quality-gate.md).
+
+One thing the gate deliberately leaves out:
+
+| Change touches | Also run |
 | --- | --- |
-| Anything (always) | `npm run validate:guards` (CI's "Root guards" job: root format and lint, the coverage guards, `verify:skills`, the script tests) |
-| A TypeScript server | `npm run validate -w src/<server>` (format check, lint, typecheck, build, test) |
-| A Python server | `npm run validate:py -- <server>` (locked sync, ruff, ruff format, pyright, pytest, build) |
-| Anything under `.claude/skills/` | `npm run verify:skills:cli` (the pinned `claude plugin validate` that CI's "Root guards" job also runs; `validate:guards` only runs the in-repo `verify:skills`) |
-| A skill's description, or a new skill | `npm run skills:eval` for the **whole** suite (spends model calls; not in CI). See `AGENTS.md` **Maintaining the skills** |
-
-Verify by exit code, not by grepping the output. Formatting failures are fixed
-with `npm run format` at the root (TypeScript), or `uv run --frozen ruff format .`
-in the server's directory (Python).
+| A skill's description, or a new skill | `npm run skills:eval` for the **whole** suite (spends model calls; not in the gate or CI). See `AGENTS.md` **Maintaining the skills** |
 
 ## 5. Client evidence
 

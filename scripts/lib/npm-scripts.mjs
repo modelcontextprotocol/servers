@@ -55,9 +55,9 @@ export function reachableScripts(scripts, entry = "validate") {
 }
 
 /**
- * The lease wrapper `local:gate` runs under (inspector#2339). `scripts/gate-lease.mjs`
- * arrives with #4871; the vouch helpers look through it already so that
- * `local:gate` can be written in its final shape the day it lands.
+ * The lease wrapper `local:gate` runs under: `scripts/gate-lease.mjs` (#4871,
+ * from inspector#2339). The vouch helpers look through it, so a question about
+ * what `local:gate` runs is answered from the stages behind the wrapper.
  */
 export const GATE_LEASE_WRAPPER = "node scripts/gate-lease.mjs ";
 
