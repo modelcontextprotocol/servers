@@ -123,6 +123,18 @@ export function compareManifests(lock, readManifest) {
     if (isInstalledCopy(dir) || entry?.link) continue;
     const manifest = readManifest(dir);
     if (manifest === undefined) continue;
+    // The root's `workspaces` patterns are mirrored too: narrowing or removing
+    // one without reinstalling leaves the old workspace links in place.
+    const declaredWs = JSON.stringify(manifest.workspaces ?? null);
+    const lockedWs = JSON.stringify(entry.workspaces ?? null);
+    if (declaredWs !== lockedWs)
+      drift.push({
+        dir,
+        section: "workspaces",
+        name: "patterns",
+        manifest: declaredWs,
+        lock: lockedWs,
+      });
     for (const section of MANIFEST_SECTIONS) {
       const declared = manifest[section] ?? {};
       const locked = entry[section] ?? {};

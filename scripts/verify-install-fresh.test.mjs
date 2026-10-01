@@ -159,6 +159,26 @@ test("compareManifests: an added, removed or re-ranged dependency is drift", () 
   );
 });
 
+test("compareManifests: a changed workspaces declaration is drift", () => {
+  const lock = { packages: { "": { workspaces: ["src/*"] } } };
+  assert.deepEqual(
+    compareManifests(lock, () => ({ workspaces: ["src/*"] })),
+    [],
+  );
+  assert.deepEqual(
+    compareManifests(lock, () => ({ workspaces: ["src/everything"] })),
+    [
+      {
+        dir: "",
+        section: "workspaces",
+        name: "patterns",
+        manifest: '["src/everything"]',
+        lock: '["src/*"]',
+      },
+    ],
+  );
+});
+
 test("main fails when a manifest declares what the lockfile does not", (t) => {
   const { root, write } = fixture(t);
   t.mock.method(console, "log", () => {});

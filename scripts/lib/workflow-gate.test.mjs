@@ -357,6 +357,19 @@ describe("the gate's name", () => {
     );
   });
 
+  it("has no npm lifecycle hooks around it", () => {
+    // npm runs `pre<name>` and `post<name>` implicitly. A hook on `local:gate`
+    // would run outside the lease, and one on `local:gate:stages` would be a
+    // stage that the stage list does not show.
+    for (const hook of [
+      "prelocal:gate",
+      "postlocal:gate",
+      "prelocal:gate:stages",
+      "postlocal:gate:stages",
+    ])
+      assert.equal(scripts[hook], undefined, `${hook} must not exist`);
+  });
+
   it("checks the install before anything is tested against it", () => {
     assert.match(
       scripts["local:gate:stages"],
