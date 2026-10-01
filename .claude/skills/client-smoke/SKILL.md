@@ -108,7 +108,7 @@ The exit code is the verdict, so check it rather than reading the text:
 | Outcome | stdout | stderr | Exit |
 | --- | --- | --- | --- |
 | The request succeeded | `{"result": …}` | | 0 |
-| The tool ran and returned `isError: true` | `{"result": …, "isError": true}` | `{"error":{"code":"tool_is_error", …}}` | 5 |
+| The tool ran and returned `isError: true` | `{"result":{"content": …, "isError": true}}` | `{"error":{"code":"tool_is_error", …}}` | 5 |
 | No such tool | | `{"error":{"code":"tool_not_found", …}}` | 5 |
 | Could not connect, or bad arguments | | `{"error":{"code":"error", …}}` | 1 |
 

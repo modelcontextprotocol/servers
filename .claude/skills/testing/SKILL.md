@@ -203,7 +203,7 @@ than adding a dependency for one test.
 | Every TypeScript server | `npm test` at the root |
 | One TypeScript server's whole chain | `npm run validate -w src/<server>` (format check, lint, typecheck, build, test) |
 | One Python server | `uv run pytest` in `src/<server>` |
-| One Python test | `uv run pytest tests/test_server.py::<name>` |
+| One Python test | `uv run pytest <path to the test file>::<name>` in `src/<server>` (for example `tests/test_server.py::test_git_checkout_existing_branch`, or `test/time_server_test.py::…` in `time`) |
 | One Python server's whole chain | `npm run validate:py -- <server>` |
 | Root tooling | `npm run test:scripts` |
 
