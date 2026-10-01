@@ -344,10 +344,19 @@ here.
 - **After opening a PR, run a Copilot review loop to convergence, unprompted.**
   Request a review, wait for the round to post or for Copilot's session to end
   without one, answer every comment, and request again only when you pushed a
-  fix or the last round ended without a review. Stop on the **first** clean round (no confirming round), a round holding
-  only out-of-scope findings, two rounds in a row that end without a review, or
-  a timeout (the loop's budget is spent while findings keep coming). The recipe
-  is the `pr-flow` skill.
+  fix or the last round ended without a review. Stop on the **first** clean
+  round (no confirming round), a round holding only out-of-scope findings, or
+  two rounds in a row that end without a review. **There is no round cap**: a
+  loop ends for one of those reasons, never because of how many rounds it has
+  run. The recipe is the `pr-flow` skill.
+  - ⚠️ **Copilot does not converge on its own.** Every fix it talks you into
+    beyond the issue is fresh surface for the next round, so accepting scope
+    creep is what makes a review cycle protracted. **Weigh each finding against
+    the issue the PR closes and decline scope expansion**: pre-existing
+    behavior, new capabilities, and hardening the issue did not ask for. A
+    declined finding that is worth doing gets its own issue, linked in the
+    reply. The rule is under
+    [Responding to code reviews](#responding-to-code-reviews).
 - **If new tasks are discovered during development, create issues** for them
   and put them on the board, rather than widening the current PR.
 
