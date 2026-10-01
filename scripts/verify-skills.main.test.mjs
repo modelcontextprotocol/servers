@@ -29,7 +29,6 @@ import {
   ciRunsUnconditionally,
   GUARDS_WORKFLOW,
   runsCommand,
-  WIRING_ALLOWANCES,
 } from "./verify-skills.mjs";
 import { GATE_LEASE_WRAPPER, scriptChainRuns } from "./lib/npm-scripts.mjs";
 
@@ -315,12 +314,9 @@ const repoScripts = () =>
 const repoWorkflow = () =>
   readFileSync(path.join(REPO_ROOT, GUARDS_WORKFLOW), "utf8");
 
-test("the repository as it stands is wired, under its declared allowances", () => {
+test("the repository as it stands is wired", () => {
   // The live assertion: fixtures can drift from what the repo actually does.
-  assert.deepEqual(
-    checkWiring(repoScripts(), repoWorkflow(), WIRING_ALLOWANCES),
-    [],
-  );
+  assert.deepEqual(checkWiring(repoScripts(), repoWorkflow()), []);
 });
 
 test("the real verifier passes on the repository as it stands", () => {
@@ -333,82 +329,24 @@ test("the real verifier passes on the repository as it stands", () => {
   assert.equal(res.status, 0, (res.stdout ?? "") + (res.stderr ?? ""));
 });
 
-// --- temporary allowances (#4863) ---------------------------------------------
+// --- no allowances -------------------------------------------------------------
 //
-// Wiring links that could not hold on the day the harness landed. Each gets an
-// allowance that excuses it only while the missing piece is missing, and turns
-// into a failure the moment it arrives — so the later PR has to wire the link
-// and delete the allowance. (The empty-skills bootstrap allowance was the other
-// one; #4866 added the first skills and removed it, so an empty skills
-// directory is fatal again — see "fails an empty or missing directory".)
+// #4863 excused two wiring links, and an empty skills directory, with temporary
+// allowances for pieces later sub-issues of #4858 would build. All three are
+// gone: #4866 added the first skills, #4864 built `verify:format-coverage`, and
+// #4871 built `local:gate`. Every link is strict (the tests above cover a link
+// that is present but broken; this one covers a manifest with no gate at all).
 
-test("a wiring allowance excuses its link only while the pending script is absent", () => {
+test("a manifest with no local:gate fails the local-gate link", () => {
   const unwired = {
     validate: "npm run verify:format-coverage",
     "verify:format-coverage": "node scripts/verify-format-coverage.mjs",
     "verify:skills": "node scripts/verify-skills.mjs",
     "verify:skills:cli": "node scripts/verify-skills-cli.mjs",
   };
-  assert.deepEqual(checkWiring(unwired, WIRED_WORKFLOW, WIRING_ALLOWANCES), []);
-  // Strict by default: the same manifest fails the `local:gate` link without it.
   assert.match(
     checkWiring(unwired, WIRED_WORKFLOW).join(),
     /local:gate` no longer runs `verify:skills:cli`/,
-  );
-});
-
-test("a wiring allowance goes stale once its pending script exists", () => {
-  // #4871 adds `local:gate`; the allowance must then fail the guard until it
-  // is deleted, even if the link itself is wired.
-  const stale = checkWiring(WIRED_SCRIPTS, WIRED_WORKFLOW, WIRING_ALLOWANCES);
-  assert.equal(stale.length, 1, stale.join("\n"));
-  assert.match(stale.join(), /`local:gate` now exists.*#4871/);
-});
-
-test("the format-coverage link has no allowance any more (#4864)", () => {
-  // #4864 built `verify:format-coverage` and removed its temporary allowance,
-  // so a root `validate` that stops running it fails even under the
-  // allowances that remain.
-  const scripts = {
-    validate: "npm run verify:skills",
-    "verify:skills": "node scripts/verify-skills.mjs",
-    "verify:skills:cli": "node scripts/verify-skills-cli.mjs",
-  };
-  assert.ok(!WIRING_ALLOWANCES.some((a) => a.link === "format-coverage"));
-  assert.match(
-    checkWiring(scripts, WIRED_WORKFLOW, WIRING_ALLOWANCES).join(),
-    /no longer runs `verify:format-coverage`/,
-  );
-});
-
-test("an allowance never masks a link that exists but is broken", () => {
-  // `local:gate` present but not running the validator: the allowance is
-  // stale AND the link is reported — it does not excuse a real regression.
-  const scripts = {
-    "verify:skills:cli": "node scripts/verify-skills-cli.mjs",
-    "local:gate": "npm run coverage",
-  };
-  const problems = checkWiring(scripts, WIRED_WORKFLOW, [
-    WIRING_ALLOWANCES.find((a) => a.link === "local-gate-cli"),
-  ]);
-  assert.match(
-    problems.join(),
-    /temporary `local-gate-cli` wiring allowance is stale/,
-  );
-  assert.match(
-    problems.join(),
-    /local:gate` no longer runs `verify:skills:cli`/,
-  );
-});
-
-test("the CI link has no allowance", () => {
-  assert.match(
-    checkWiring(
-      {},
-      "on:\n  push:\njobs:\n  build:\n    steps:\n      - run: npm run validate\n",
-      WIRING_ALLOWANCES,
-    ).join(),
-    /has no unconditional step that runs/,
   );
 });
 

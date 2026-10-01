@@ -148,11 +148,14 @@ All participation is governed by the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 The rules for maintainers and the agents working for them are in
 [`AGENTS.md`](./AGENTS.md), and the procedures are in the skills it indexes. Before
-pushing a change to a TypeScript server, run `npm run format` at the repository
-root, then `npm run validate`. Each server's `validate` runs its format check,
-lint (ESLint, where a warning fails like an error), typecheck, build and tests;
-the root one runs every server's plus the repo-wide guards.
-`npm run validate -w src/<server>` checks a single server. For a Python server,
-run `npm run validate:py`, or the per-server `uv` commands in `AGENTS.md`.
+pushing, run `npm run format` at the repository root and then
+**`npm run local:gate`**, which runs every check CI runs for both languages:
+the repo-wide guards, each TypeScript server's `validate` (format check, lint
+where a warning fails like an error, typecheck, build, tests), each Python
+server's `validate:py` chain, the skills validator, and a boot smoke of every
+server. [`docs/quality-gate.md`](./docs/quality-gate.md) describes each stage.
+While iterating, `npm run validate -w src/<server>` checks a single TypeScript
+server and `npm run validate:py -- <server>` a single Python one; neither
+replaces the gate.
 
 Thank you for helping make the MCP servers better for everyone!

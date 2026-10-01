@@ -5,6 +5,7 @@ on:
 
 jobs:
   create-metadata:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     if: github.repository_owner == 'modelcontextprotocol'
     outputs:
@@ -63,6 +64,7 @@ jobs:
           echo "npm_packages=$NPM" >> $GITHUB_OUTPUT
 
   update-packages:
+    timeout-minutes: 10
     needs: [create-metadata]
     if: ${{ needs.create-metadata.outputs.npm_packages != '[]' || needs.create-metadata.outputs.pypi_packages != '[]' }}
     runs-on: ubuntu-latest
@@ -104,6 +106,7 @@ jobs:
           fi
 
   publish-pypi:
+    timeout-minutes: 15
     needs: [update-packages, create-metadata]
     if: ${{ needs.create-metadata.outputs.pypi_packages != '[]' && needs.create-metadata.outputs.pypi_packages != '' }}
     strategy:
@@ -156,6 +159,7 @@ jobs:
           skip-existing: true # re-runs tolerate already-uploaded files
 
   publish-npm:
+    timeout-minutes: 15
     needs: [update-packages, create-metadata]
     if: ${{ needs.create-metadata.outputs.npm_packages != '[]' && needs.create-metadata.outputs.npm_packages != '' }}
     strategy:
@@ -215,6 +219,7 @@ jobs:
           NPM_CONFIG_PROVENANCE: "true"
 
   create-release:
+    timeout-minutes: 10
     needs: [update-packages, create-metadata, publish-pypi, publish-npm]
     if: |
       always() &&
