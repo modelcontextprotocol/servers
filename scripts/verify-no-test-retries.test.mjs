@@ -148,6 +148,19 @@ for (const [file, text, rules] of cases) {
   });
 }
 
+test("pytest flags passed through a workflow's PYTEST_ADDOPTS are found", () => {
+  const rulesFor = (env) =>
+    findRetries(
+      ".github/workflows/python.yml",
+      step(`        run: uv run pytest\n        env:\n          ${env}`),
+    ).map((f) => f.rule);
+  assert.deepEqual(rulesFor('PYTEST_ADDOPTS: "--reruns 3"'), [
+    "workflow-retry-flag",
+  ]);
+  assert.deepEqual(rulesFor('PYTEST_ADDOPTS: "-q"'), []);
+  assert.deepEqual(rulesFor('CURL_OPTS: "--retry 3"'), []);
+});
+
 test("a flag on a continuation line is found", () => {
   const found = findRetries(
     ".github/workflows/python.yml",

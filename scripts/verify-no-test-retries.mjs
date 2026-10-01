@@ -114,11 +114,18 @@ export function findRetries(file, text) {
   // and only a YAML parse knows that. Every other file is searched line by
   // line.
   const units = rules.some((r) => r.commands)
-    ? extractExecutableRegions(text, file)
-        .filter((region) => region.kind === "run")
-        .flatMap((region) =>
-          logicalLines(region.text).map((l) => ({ ...l, line: region.line })),
-        )
+    ? extractExecutableRegions(text, file).flatMap((region) => {
+        if (region.kind === "run")
+          return logicalLines(region.text).map((l) => ({
+            ...l,
+            line: region.line,
+          }));
+        // pytest also takes its flags from the environment, so an `env:` entry
+        // is read as the command line it becomes.
+        if (region.kind === "env" && region.name === "PYTEST_ADDOPTS")
+          return [{ line: region.line, text: `pytest ${region.value}` }];
+        return [];
+      })
     : logicalLines(text);
   const findings = [];
   for (const unit of units) {
