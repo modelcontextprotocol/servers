@@ -35,7 +35,13 @@
 // versions on disk can all match the lockfile while that is true, so the first
 // comparison alone would pass it.
 //
-// What it does NOT do is look for packages that are installed but absent from
+// It does not check `overrides`. npm writes the result of an override into the
+// lockfile (the version each package resolved to) but not the override itself,
+// so an `overrides` entry edited without re-running `npm install` cannot be
+// seen by comparing files; it would take re-resolving the tree, which is what
+// `npm install` is for.
+//
+// What it also does NOT do is look for packages that are installed but absent from
 // the lockfile. That needs a walk of `node_modules`, the Inspector's guard does
 // not do it either, and the failure it would catch (source importing a leftover
 // package) fails CI's build on a fresh install rather than passing silently.

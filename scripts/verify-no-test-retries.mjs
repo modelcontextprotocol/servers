@@ -21,8 +21,10 @@
 // not semantics, so the patterns below are the ones each runner documents:
 //
 //   Vitest   `retry:` in a config or a test's options; `--retry` on the CLI
-//   pytest   the `pytest-rerunfailures` / `flaky` plugins, their `--reruns`
-//            flag, and the `@pytest.mark.flaky` / `@flaky` decorators
+//   pytest   the `pytest-rerunfailures`, `pytest-retry` and `flaky` plugins,
+//            their `--reruns` / `--retries` flags and `retries` ini option,
+//            and the `@pytest.mark.flaky` / `@flaky` / `@pytest.mark.retries`
+//            decorators
 //
 // A match inside a comment or an ordinary string is still a match: this guard
 // cannot parse two languages, and a false positive costs one reworded comment
@@ -71,25 +73,26 @@ export const RULES = [
     // Matched against each command of the workflow's `run:` steps.
     commands: true,
     files: /(?:^|\/)\.github\/workflows\/[^/]+\.ya?ml$/,
-    pattern: /\b(?:vitest|pytest)\b.*--(?:retry|reruns|force-flaky)\b/,
+    pattern: /\b(?:vitest|pytest)\b.*--(?:retry|retries|reruns|force-flaky)\b/,
     why: "a test runner's retry flag in a workflow",
   },
   {
     id: "pytest-rerun-plugin",
     files: /(?:^|\/)(?:pyproject\.toml|uv\.lock)$/,
-    pattern: /\b(?:pytest-rerunfailures|flaky)\b/,
+    pattern: /\b(?:pytest-rerunfailures|pytest-retry|flaky)\b/,
     why: "a pytest rerun plugin",
   },
   {
     id: "pytest-reruns-flag",
     files: /(?:^|\/)(?:pyproject\.toml|pytest\.ini|setup\.cfg|tox\.ini)$/,
-    pattern: /--reruns\b|--force-flaky\b/,
+    // The flags, and pytest-retry's `retries = N` ini option.
+    pattern: /--reruns\b|--retries\b|--force-flaky\b|^\s*retries\s*=/,
     why: "pytest's rerun flag",
   },
   {
     id: "pytest-flaky-marker",
     files: /\.py$/,
-    pattern: /@(?:pytest\.mark\.)?flaky\b/,
+    pattern: /@(?:pytest\.mark\.)?flaky\b|@pytest\.mark\.retries\b/,
     why: "pytest's flaky marker",
   },
 ];

@@ -94,6 +94,20 @@ const cases = [
     ["pytest-rerun-plugin"],
   ],
   ["src/b/pyproject.toml", 'dev = ["flaky>=3"]', ["pytest-rerun-plugin"]],
+  [
+    "src/b/pyproject.toml",
+    'dev = ["pytest-retry>=1.6"]',
+    ["pytest-rerun-plugin"],
+  ],
+  ["src/b/pyproject.toml", 'addopts = "--retries 2"', ["pytest-reruns-flag"]],
+  ["src/b/pyproject.toml", "retries = 2", ["pytest-reruns-flag"]],
+  ["src/b/pyproject.toml", "max_retries = 2", []],
+  ["src/b/tests/test_x.py", "@pytest.mark.retries(2)", ["pytest-flaky-marker"]],
+  [
+    ".github/workflows/python.yml",
+    step("        run: uv run pytest --retries 2"),
+    ["workflow-retry-flag"],
+  ],
   ["src/b/uv.lock", 'name = "pytest-rerunfailures"', ["pytest-rerun-plugin"]],
   ["src/b/pyproject.toml", 'addopts = "--reruns 3"', ["pytest-reruns-flag"]],
   [
