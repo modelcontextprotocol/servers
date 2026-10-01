@@ -36,9 +36,11 @@ anything else; the first `uv run` in a Python server builds its environment.
 
 ## Run a server
 
-Every server speaks stdio. A stdio server started by hand prints a banner on
-stderr and then waits for JSON-RPC on stdin, so on its own this only shows
-that it boots; to send it requests, use `/client-smoke`.
+Every server speaks stdio. A stdio server started by hand waits for JSON-RPC
+on stdin, so on its own this only shows that it boots; to send it requests,
+use `/client-smoke`. The TypeScript servers print a startup banner on stderr
+first. The Python servers print nothing at the default log level, so a silent
+terminal is a running server, not a hung one.
 
 | Server | From the repo root | Arguments and environment |
 | --- | --- | --- |

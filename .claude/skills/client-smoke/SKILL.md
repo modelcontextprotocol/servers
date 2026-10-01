@@ -130,12 +130,16 @@ the URL. The transport is inferred from the path: `/mcp` is Streamable HTTP,
 
 ```sh
 PORT=3917 node src/everything/dist/index.js streamableHttp &
+SERVER_PID=$!
 # Wait for the listener: the server answers before the CLI is pointed at it.
 until curl -s -o /dev/null http://localhost:3917/mcp; do sleep 0.2; done
 $INSPECT http://localhost:3917/mcp \
   --method tools/call --tool-name echo --tool-arg message=over-http --format json
-kill %1
+kill "$SERVER_PID"    # this server, by pid; `kill %1` would hit whatever job 1 is
 ```
+
+Stop the server even when the CLI call fails; a listener left on the port
+makes the next run talk to the old build.
 
 Without the wait, the CLI can reach the port before the server is listening
 and fail with a refused connection. In a separate terminal the equivalent is
