@@ -136,6 +136,103 @@ Example:
   - Returns the same shape as `read_graph` (entities and relations)
   - Mutation tools (`create_entities`, `create_relations`, `add_observations`, `delete_entities`, `delete_observations`, `delete_relations`) emit `notifications/resources/updated` for this URI, so subscribed clients see live changes
 
+## Concurrent access and recovery
+
+Multiple server processes can share the same memory file. Mutations first queue
+within each process, then acquire the adjacent `<memory-file>.lock` directory
+before loading, changing, and atomically replacing the graph. Read-only tools
+continue to read complete snapshots without taking the write lease. No additional
+locking dependency is required.
+
+A writer prepares a private directory containing a uniquely named owner marker,
+then atomically renames that nonempty directory to `<memory-file>.lock`.
+Publication cannot replace another nonempty generation. Recovery and release
+unlink only the observed generation's marker before removing the empty directory;
+a delayed remover cannot remove a successor's nonempty directory. Ownership
+checks use the writer's own marker, not a snapshot adopted from the shared path.
+
+The holder refreshes its owner marker's modification time every 10 seconds. A lease
+with no visible refresh for 60 seconds can be reclaimed by another writer, so a
+crashed or forcibly killed holder does not require manual lock cleanup. Contenders
+use randomized exponential backoff, capped at 250 milliseconds. Acquisition
+timeout or cancellation fails the mutation instead of writing unlocked.
+
+### Request lifetime
+
+Each tool call and resource read gets one request budget
+(`MEMORY_REQUEST_TIMEOUT_MS`, default 30 seconds). The budget starts when the call
+enters the server. Queueing, lease acquisition, loading and preparing the new
+graph all spend it, and it is never restarted. Client cancellation, including the
+client's own request timeout, also ends the request. The default is below the
+TypeScript SDK's 60-second client timeout, so clients need no timeout
+configuration.
+
+The caller awaits the real execution of its mutation. Outcomes are labelled at
+the throw site, so success means success and failure means failure:
+
+- Resolved: the graph file was replaced. A signal that aborts after the final
+  pre-rename check does not recall the rename; the call resolves with the real
+  result, although an MCP client that already cancelled never receives it (see
+  below).
+- `NOT_COMMITTED`: the graph file was definitely not replaced, so retrying is
+  safe. Causes: a full write queue, cancellation or expiry before or while
+  queued, lock acquisition timeout or abort, lease loss detected before the
+  rename, or an I/O failure before the rename (load, temporary-file write).
+- `COMMIT_UNKNOWN`: only when the rename itself rejects. Read the graph before
+  retrying.
+- Business errors (for example `Entity with name X not found`) propagate
+  unchanged and unlabelled.
+
+After a killed lease holder, early calls return `NOT_COMMITTED` and a retry
+succeeds once the 60-second stale threshold passes; the AI's retries complete
+recovery, so no call needs to wait through it. A call whose client cancelled or
+timed out receives no response at all (the MCP SDK drops it), so the AI should
+read the graph before replaying it. A caller queued behind a writer stuck in
+issued I/O can wait past its budget, and only its client timeout ends that wait.
+A dispatched replacement is not recalled: the lease stays held and renewed until
+issued I/O settles, and the next queued mutation starts only afterwards. Each
+process admits up to 256 pending mutations; further mutations fail immediately
+with `NOT_COMMITTED` until the queue drains.
+
+If the operation already resolved (the rename succeeded after a passing
+ownership check), a lease loss or cleanup failure found at release is logged and
+the successful result is returned.
+
+Before publishing a new graph, the server checks that it still owns the lease.
+Detected lease loss fails the operation. This is a cooperative, time-based lease,
+**not storage-enforced fencing**: checking ownership and renaming the data file
+are separate operations. Arbitrarily long process pauses, network partitions,
+or delayed I/O can therefore permit an old writer to resume after takeover.
+Atomic replacement does not eliminate that limitation, and a failed/timed-out
+call must not be assumed to have rolled back an already submitted filesystem
+operation.
+
+All writers must use this generation-based lock protocol, the same data/lock
+directory, and the same timing policy. Do not mix it with older non-locking servers
+or empty-directory lock implementations. Writers need permission to create,
+inspect, update, and delete both lock directories and their owner markers; shared
+Unix deployments need compatible ownership/group permissions. Do not manually
+delete or touch a live lease. Access through different symlink aliases is not
+supported. Stable wall clocks are required even locally: a large forward clock
+adjustment can make a live lease appear expired.
+
+A crash before publication may leave an unused `<memory-file>.lock.<random>.tmp`
+candidate directory. It does not block later acquisitions and is not the active
+lock. Normal completion and handled failures clean up their candidates; crash-only
+orphans can be removed after all writers have stopped.
+
+NFS/SMB deployments additionally require atomic directory renames that reject a
+nonempty destination, coherent data and metadata visibility (including owner
+markers), working timestamp updates, sufficiently synchronized client clocks,
+and cache/latency bounds comfortably below the stale interval. The stale timeout
+alone is not an NFS/SMB safety guarantee. Validate the actual client, server,
+protocol and mount settings with independent clients before relying on this
+mode. The bundled local multi-process tests do **not** validate NFS/SMB, and no
+network-filesystem configuration has been validated by this change. FUSE is
+outside the supported scope. Resource-update notifications remain local to the
+server process performing the mutation; leases do not broadcast notifications
+between processes.
+
 # Usage with Claude Desktop
 
 ### Setup
@@ -231,6 +328,7 @@ On Windows, use:
 ```
 
 - `MEMORY_FILE_PATH`: Path to the memory storage JSONL file (default: `memory.jsonl` in the server directory)
+- `MEMORY_REQUEST_TIMEOUT_MS`: Per-request budget in milliseconds, covering queueing, lease acquisition and processing (default: `30000`). Must be a positive integer; invalid values stop startup. The default fits the TypeScript SDK's 60-second client timeout, so no client change is needed; see [Request lifetime](#request-lifetime).
 
 # VS Code Installation Instructions
 
