@@ -76,10 +76,11 @@ const repoRoot = path.resolve(
 export const FETCH_MARKER = "boot-smoke-marker";
 
 /**
- * How long one request may take. Generous on purpose: the first `uv run` in a
- * fresh checkout creates the server's environment before the server can answer
- * `initialize`. A boot smoke that flakes on a cold cache teaches people to
- * re-run it, which is the habit a gate must not create.
+ * How long one request may take, process start and the `initialize` handshake
+ * included. Generous on purpose: a Python server imports its dependencies
+ * before it can answer, and on a loaded machine or a cold disk cache that takes
+ * seconds, not milliseconds. A boot smoke that flakes under load teaches people
+ * to re-run it, which is the habit a gate must not create.
  */
 export const REQUEST_TIMEOUT_MS = 120_000;
 
@@ -348,6 +349,10 @@ async function waitForListen(port, child, output) {
 
 /** Stop a child and wait for it, escalating if it ignores SIGTERM. */
 async function stop(child) {
+  // A child that never started (ENOENT, EACCES on a bin that lost its
+  // executable bit) emits `error` and never `exit`: waiting for one would hang
+  // until the job's timeout instead of reporting the launch failure.
+  if (child.pid === undefined) return;
   if (child.exitCode !== null || child.signalCode !== null) return;
   const exited = new Promise((resolve) => child.once("exit", resolve));
   child.kill("SIGTERM");

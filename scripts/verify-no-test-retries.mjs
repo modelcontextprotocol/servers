@@ -36,6 +36,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { extractExecutableRegions } from "./lib/workflow-gate.mjs";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -67,6 +68,8 @@ export const RULES = [
     // Tied to the runner's name on the same line: `--retry` alone is also a
     // curl flag, which a workflow may use legitimately.
     id: "workflow-retry-flag",
+    // Matched against each command of the workflow's `run:` steps.
+    commands: true,
     files: /(?:^|\/)\.github\/workflows\/[^/]+\.ya?ml$/,
     pattern: /\b(?:vitest|pytest)\b.*--(?:retry|reruns|force-flaky)\b/,
     why: "a test runner's retry flag in a workflow",
@@ -101,39 +104,55 @@ export const RULES = [
 export function findRetries(file, text) {
   const rules = RULES.filter((r) => r.files.test(file));
   if (rules.length === 0) return [];
+  // A workflow is searched by the commands it runs, not by its lines: a folded
+  // scalar (`run: >`) joins its lines into one command before Actions runs it,
+  // and only a YAML parse knows that. Every other file is searched line by
+  // line.
+  const units = rules.some((r) => r.commands)
+    ? extractExecutableRegions(text, file)
+        .filter((region) => region.kind === "run")
+        .flatMap((region) =>
+          logicalLines(region.text).map((l) => ({ ...l, line: region.line })),
+        )
+    : logicalLines(text);
   const findings = [];
-  const lines = text.split("\n");
-  lines.forEach((physical, index) => {
-    // A shell command continued with a trailing backslash is one command: the
-    // runner can be on one line and its retry flag on the next. Each line is
-    // therefore read together with its continuation lines, and a finding is
-    // reported at the line the command starts on. Only a line that does not
-    // itself continue a previous one starts a command, so a continued command
-    // is reported once.
-    let lineText = physical;
-    if (/\\\s*$/.test(physical)) {
-      if (index > 0 && /\\\s*$/.test(lines[index - 1])) return;
-      let end = index;
-      while (end < lines.length - 1 && /\\\s*$/.test(lines[end])) end += 1;
-      lineText = lines
-        .slice(index, end + 1)
-        .map((l) => l.replace(/\\\s*$/, " "))
-        .join("");
-    } else if (index > 0 && /\\\s*$/.test(lines[index - 1])) {
-      return;
-    }
+  for (const unit of units) {
     for (const rule of rules) {
-      if (rule.pattern.test(lineText))
+      if (rule.pattern.test(unit.text))
         findings.push({
           file,
-          line: index + 1,
+          line: unit.line,
           rule: rule.id,
           why: rule.why,
-          text: lineText.trim().replace(/\s+/g, " "),
+          text: unit.text.trim().replace(/\s+/g, " "),
         });
     }
-  });
+  }
   return findings;
+}
+
+/**
+ * The lines of `text`, with a shell command continued by a trailing backslash
+ * joined into one: the runner can be on one line and its retry flag on the
+ * next. Each entry carries the 1-based line it starts on.
+ *
+ * @param {string} text
+ * @returns {{ line: number, text: string }[]}
+ */
+function logicalLines(text) {
+  const continues = (l) => /\\\s*$/.test(l);
+  const lines = text.split("\n");
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const start = i;
+    let joined = lines[i];
+    while (continues(lines[i]) && i < lines.length - 1) {
+      i += 1;
+      joined = joined.replace(/\\\s*$/, " ") + lines[i];
+    }
+    out.push({ line: start + 1, text: joined });
+  }
+  return out;
 }
 
 /** Tracked files the rules could apply to, as repo-relative POSIX paths. */

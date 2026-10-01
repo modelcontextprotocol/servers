@@ -12,6 +12,10 @@ import { findRetries, main } from "./verify-no-test-retries.mjs";
 
 const rulesOf = (file, text) => findRetries(file, text).map((f) => f.rule);
 
+/** A schema-valid workflow around one step's keys (indented eight spaces). */
+const step = (keys) =>
+  `on: push\njobs:\n  build:\n    steps:\n      -\n${keys}\n`;
+
 const cases = [
   // Vitest
   ["src/a/vitest.config.ts", "  test: { retry: 2 },", ["vitest-retry-option"]],
@@ -50,17 +54,37 @@ const cases = [
   // A workflow step
   [
     ".github/workflows/typescript.yml",
-    "        run: npx vitest run --retry=2",
+    step("        run: npx vitest run --retry=2"),
     ["workflow-retry-flag"],
   ],
   [
     ".github/workflows/python.yml",
-    "        run: uv run pytest --reruns 3",
+    step("        run: uv run pytest --reruns 3"),
     ["workflow-retry-flag"],
   ],
   [
+    // A folded scalar: Actions joins these lines into one command.
+    ".github/workflows/python.yml",
+    step("        run: >\n          uv run pytest\n          --reruns 3"),
+    ["workflow-retry-flag"],
+  ],
+  [
+    // A literal block: two commands, and the flag is not the runner's.
+    ".github/workflows/python.yml",
+    step("        run: |\n          uv run pytest\n          curl --retry 3 x"),
+    [],
+  ],
+  [
     ".github/workflows/release.yml",
-    "        run: curl --retry 3 https://example.com",
+    step("        run: curl --retry 3 https://example.com"),
+    [],
+  ],
+  [
+    // A step name runs nothing.
+    ".github/workflows/python.yml",
+    step(
+      "        name: pytest --reruns 3 is forbidden\n        run: uv run pytest",
+    ),
     [],
   ],
   // pytest
@@ -100,20 +124,23 @@ for (const [file, text, rules] of cases) {
   });
 }
 
-test("a flag on a continuation line is found, at the line the command starts", () => {
+test("a flag on a continuation line is found", () => {
   const found = findRetries(
     ".github/workflows/python.yml",
-    [
-      "      - run: |",
-      "          uv run pytest \\",
-      "            -q \\",
-      "            --reruns 3",
-      "          echo done",
-    ].join("\n"),
+    step(
+      [
+        "        run: |",
+        "          uv run pytest \\",
+        "            -q \\",
+        "            --reruns 3",
+        "          echo done",
+      ].join("\n"),
+    ),
   );
+  // Reported at the step's `run:` line: a block scalar is one region.
   assert.deepEqual(
     found.map((f) => [f.rule, f.line, f.text]),
-    [["workflow-retry-flag", 2, "uv run pytest -q --reruns 3"]],
+    [["workflow-retry-flag", 6, "uv run pytest -q --reruns 3"]],
   );
 });
 
