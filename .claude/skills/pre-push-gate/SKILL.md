@@ -101,8 +101,8 @@ is not written as `retry:` at the start of an expression.
 
 ### `verify:action-pins`
 
-A job that holds a credential, or one whose artifact such a job downloads, uses
-an action by a tag (`actions/checkout@v6`) or by a SHA with no exact-version
+A job that holds a credential, one whose artifact such a job downloads, or one
+whose outputs such a job reads, uses an action by a tag (`actions/checkout@v6`) or by a SHA with no exact-version
 comment. The finding names the workflow, the job and the `uses:` value. Pin it
 as `owner/repo@<40-hex sha> # vX.Y.Z`, resolving both from one lookup:
 
@@ -113,8 +113,12 @@ echo "uses: $ACTION@$(gh api "repos/$ACTION/commits/$TAG" --jq .sha) # $TAG"
 
 If the job should not have become credentialed, that is the real fix: the
 guard counts `id-token: write` or `packages: write` (the job's own, or the
-workflow's when the job declares none), any secret other than `GITHUB_TOKEN`,
-and an `upload-artifact` that a credentialed job `needs` and downloads. A YAML
+workflow's when the job declares none); any secret other than `GITHUB_TOKEN`;
+an `upload-artifact` in a job that a credentialed downloader has anywhere in
+its `needs` chain; a reusable-workflow call in that position; and any job
+whose outputs a credentialed job reads (`needs.<job>.outputs`), which is why
+`release.yml`'s `detect-packages` is pinned although it holds no credential
+itself. A local `./…` action or workflow in such a job is reported as well. A YAML
 alias in such a job is reported too; spell the ref out. The rule is in
 `AGENTS.md` **Credentialed workflow jobs**.
 

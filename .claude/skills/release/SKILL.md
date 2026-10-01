@@ -581,8 +581,8 @@ publishes only what never arrived.
 
 ## Bumping a pinned action
 
-Every action in a job that holds a credential, or that builds what such a job
-publishes, is pinned to a commit SHA with its release in a trailing comment
+Every action in a job that holds a credential, that builds what such a job
+publishes, or whose outputs such a job reads, is pinned to a commit SHA with its release in a trailing comment
 (`AGENTS.md` **Credentialed workflow jobs**; `verify:action-pins` enforces it).
 Resolve the SHA and the version **from the same lookup**, so the comment cannot
 name a release the SHA is not:
