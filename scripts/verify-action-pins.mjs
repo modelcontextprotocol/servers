@@ -36,7 +36,12 @@
 //      under provenance, so a moved tag in the build job publishes as surely
 //      as one in the publish job would. (The build was split out of the
 //      publish job to keep the OIDC token away from dependency installs; this
-//      keeps a moving tag out of what gets published.)
+//      keeps a moving tag out of what gets published.); or
+//   4. has outputs that a credentialed job reads (`needs.<job>.outputs.…`).
+//      The reader acts on them next to its credential. Here that is
+//      `release.yml`'s `detect-packages`: the publish jobs take from it the
+//      name and version an artifact must match before it is published, so a
+//      moved tag there could approve a tampered artifact.
 //
 // `GITHUB_TOKEN` alone does not count: every job holds one, so counting it
 // would turn this into "pin everything", which #4873 does not ask. That is why
@@ -199,10 +204,35 @@ export function credentialedJobs(yaml, file) {
     }
     return seen;
   };
+  // The jobs whose outputs a job reads: every `needs.<job>.outputs` anywhere
+  // in it. `needs.*.outputs` and a dynamic index name no job, so they count
+  // every job it needs.
+  const outputsReadBy = (job) => {
+    const read = new Set();
+    for (const text of stringsIn(job)) {
+      if (!text.includes(EXPRESSION_OPEN)) continue;
+      for (const m of text.matchAll(
+        /\bneeds\s*(?:\.\s*([\w-]+|\*)|\[\s*(?:'([^']*)'|"([^"]*)"|[^\]]*)\s*\])\s*(?:\.\s*outputs\b|\[\s*['"]outputs['"]\s*\])/g,
+      )) {
+        const named = m[1] ?? m[2] ?? m[3];
+        if (named === undefined || named === "*")
+          for (const n of needsOf(job)) read.add(n);
+        else read.add(named);
+      }
+    }
+    return read;
+  };
   for (let grew = true; grew; ) {
     grew = false;
     for (const [name, job] of jobs) {
-      if (!held.has(name) || !mayDownloadArtifact(job)) continue;
+      if (!held.has(name)) continue;
+      for (const source of outputsReadBy(job)) {
+        if (workflow.jobs[source] && !held.has(source)) {
+          held.add(source);
+          grew = true;
+        }
+      }
+      if (!mayDownloadArtifact(job)) continue;
       for (const producer of upstreamOf(name)) {
         if (!held.has(producer) && mayUploadArtifact(workflow.jobs[producer])) {
           held.add(producer);
@@ -284,10 +314,10 @@ export function main(root = repoRoot) {
         "\n\nA job holding `id-token`/`packages: write`, a non-default secret, or building an" +
         "\nartifact such a job consumes runs only immutable refs. Pin each as" +
         "\n  uses: owner/repo@<40-hex sha> # vX.Y.Z" +
-        "\nA local `./…` action or workflow is refused there as well: this guard does not" +
-        "\nread what it runs. Inline its steps, or extend the guard to follow it." +
-        "\nresolving the SHA and the exact release from the same tag lookup. The comment" +
-        "\nnames the release the SHA came from, for a reviewer and for the dependency sweep.",
+        "\nResolve the SHA and the exact release from the same tag lookup. The comment" +
+        "\nnames the release the SHA came from, for a reviewer and for the dependency sweep." +
+        "\n\nA local `./…` action or workflow is refused in such a job as well: this guard" +
+        "\ndoes not read what it runs. Inline its steps, or extend the guard to follow it.",
     );
     return 1;
   }

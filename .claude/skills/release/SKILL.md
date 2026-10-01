@@ -83,22 +83,28 @@ npm audit --audit-level=high
 # Python: each server has its own lockfile. `uv` has no audit of its own in the
 # version pinned here, so the locked requirements go through pip-audit.
 # Exported to a file first: piped straight in, a failed `uv export` hands
-# pip-audit empty input, which it reports as clean. The block runs in a
-# subshell that exits non-zero if any server could not be exported, so an
-# unaudited server cannot pass as an audited one.
+# pip-audit empty input, which it reports as clean. And pip-audit exits
+# non-zero both when it finds something and when it could not run, so a
+# server counts as audited only when its output holds a verdict. The block
+# runs in a subshell that exits non-zero if any server was not audited.
 (
   unaudited=
   for s in fetch git time; do
     echo "== $s"
-    REQ=$(mktemp)
+    REQ=$(mktemp) OUT=$(mktemp)
     if (cd "src/$s" && uv export --frozen --no-emit-project --format requirements-txt) > "$REQ" \
         && [ -s "$REQ" ]; then
-      uvx pip-audit --require-hashes --disable-pip -r "$REQ"
+      uvx pip-audit --require-hashes --disable-pip -r "$REQ" > "$OUT" 2>&1
+      cat "$OUT"
+      grep -qE 'No known vulnerabilities found|Found [0-9]+ known vulnerabilit' "$OUT" || {
+        echo "AUDIT DID NOT RUN for $s: no verdict in its output" >&2
+        unaudited="$unaudited $s"
+      }
     else
       echo "EXPORT FAILED for $s: nothing was audited" >&2
       unaudited="$unaudited $s"
     fi
-    rm -f "$REQ"
+    rm -f "$REQ" "$OUT"
   done
   [ -z "$unaudited" ] || { echo "NOT AUDITED:$unaudited" >&2; exit 1; }
 ); echo "python audit complete: EXIT=$?"
@@ -146,7 +152,7 @@ releases nothing:
 # Refresh first, and read the REMOTE tree: the checkout may be a preparation
 # branch cut before another PR merged.
 git fetch origin main v2/main --tags
-git ls-tree --name-only origin/v2/main .changeset/ | grep '\.md$' | grep -v README.md   # the pending changesets
+git ls-tree -r --name-only origin/v2/main .changeset/ | grep '\.md$' | grep -vx '.changeset/README.md'   # the pending changesets
 # Since the latest published Release, asked of GitHub: this repo's tags do not
 # sort into release order (see 5a).
 PREV=$(gh release view --repo modelcontextprotocol/servers --json tagName --jq .tagName)

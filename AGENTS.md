@@ -162,7 +162,8 @@ than `GITHUB_TOKEN`. Today that is `release.yml`'s publish jobs and
   `uses: actions/checkout@<40-hex sha> # v6.1.0`. A tag can be moved, and a
   moved tag runs new code next to the credential with no change in this
   repository. The same holds for **a job whose artifact a credentialed job
-  downloads**, since what it builds is what gets published.
+  downloads**, since what it builds is what gets published, and for **a job
+  whose outputs a credentialed job reads**, since the reader acts on them.
   `verify:action-pins` enforces both. Other jobs keep moving major tags.
 - **A job that holds a publish credential does not install dependencies or
   build.** `release.yml` builds, tests and verifies each package in a job

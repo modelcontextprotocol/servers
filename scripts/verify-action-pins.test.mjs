@@ -281,6 +281,75 @@ test("a credentialed reusable-workflow call counts as an artifact downloader", (
   ]);
 });
 
+test("a job whose outputs a credentialed job reads is credentialed", () => {
+  const yaml = wf(
+    "jobs:",
+    "  detect:",
+    "    steps:",
+    "      - uses: actions/checkout@v7",
+    "  lint:",
+    "    steps:",
+    "      - uses: actions/checkout@v7",
+    "  publish:",
+    "    needs: [detect, lint]",
+    "    permissions:",
+    "      id-token: write",
+    "    steps:",
+    "      - env:",
+    "          EXPECTED: ${{ fromJson(needs.detect.outputs.expected)[matrix.package].name }}",
+    "        run: publish",
+  );
+  // `lint` is needed but nothing of its is read, so it gates the job without
+  // feeding it.
+  assert.deepEqual([...credentialedJobs(yaml)].sort(), ["detect", "publish"]);
+  assert.deepEqual(unpinnedRefs(yaml), [
+    { job: "detect", uses: "actions/checkout@v7" },
+  ]);
+});
+
+test("outputs read in a job's if, matrix or bracket form count too", () => {
+  const yaml = wf(
+    "jobs:",
+    "  a:",
+    "    runs-on: x",
+    "  b:",
+    "    runs-on: x",
+    "  c:",
+    "    runs-on: x",
+    "  publish:",
+    "    needs: [a, b, c]",
+    "    if: ${{ needs.a.outputs.go == 'true' }}",
+    "    permissions:",
+    "      id-token: write",
+    "    strategy:",
+    "      matrix:",
+    "        package: ${{ fromJson(needs['b'].outputs.packages) }}",
+    "  unrelated:",
+    "    needs: [c]",
+    "    steps:",
+    "      - run: echo ${{ needs.c.outputs.x }}",
+  );
+  // `c` is read only by a job that holds no credential.
+  assert.deepEqual([...credentialedJobs(yaml)].sort(), ["a", "b", "publish"]);
+});
+
+test("needs.*.outputs counts every job the reader needs", () => {
+  const yaml = wf(
+    "jobs:",
+    "  a:",
+    "    runs-on: x",
+    "  b:",
+    "    runs-on: x",
+    "  publish:",
+    "    needs: [a, b]",
+    "    permissions:",
+    "      id-token: write",
+    "    steps:",
+    "      - run: echo ${{ join(needs.*.outputs.v) }}",
+  );
+  assert.deepEqual([...credentialedJobs(yaml)].sort(), ["a", "b", "publish"]);
+});
+
 test("an upload is not credentialed when the consumer downloads nothing", () => {
   const yaml = wf(
     "jobs:",

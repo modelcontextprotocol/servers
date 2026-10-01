@@ -57,6 +57,16 @@ on:
   release:
     types: [published]
 
+# One release at a time, and never cancelled. Each publish leg reads the
+# registry's `latest`, chooses a dist-tag from it and publishes; two runs doing
+# that at once could each see the old `latest` and then publish out of order,
+# leaving the lower version tagged `latest`. Queuing the second run behind the
+# first makes its read see what the first published. Never cancelled, because
+# a run stopped between packages leaves a release half published.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 # Nothing in this workflow needs more than read access by default; the two
 # publish jobs add `id-token: write` for themselves.
 permissions:
