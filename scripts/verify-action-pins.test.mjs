@@ -350,6 +350,57 @@ test("needs.*.outputs counts every job the reader needs", () => {
   assert.deepEqual([...credentialedJobs(yaml)].sort(), ["a", "b", "publish"]);
 });
 
+test("the needs context serialized whole counts as reading its outputs", () => {
+  const all = wf(
+    "jobs:",
+    "  a:",
+    "    runs-on: x",
+    "  b:",
+    "    runs-on: x",
+    "  publish:",
+    "    needs: [a, b]",
+    "    permissions:",
+    "      id-token: write",
+    "    steps:",
+    "      - env:",
+    "          NEEDS: ${{ toJSON(needs) }}",
+    "        run: publish",
+  );
+  assert.deepEqual([...credentialedJobs(all)].sort(), ["a", "b", "publish"]);
+  const one = wf(
+    "jobs:",
+    "  a:",
+    "    runs-on: x",
+    "  b:",
+    "    runs-on: x",
+    "  publish:",
+    "    needs: [a, b]",
+    "    permissions:",
+    "      id-token: write",
+    "    steps:",
+    "      - env:",
+    "          A: ${{ toJSON(needs.a) }}",
+    "        run: publish",
+  );
+  assert.deepEqual([...credentialedJobs(one)].sort(), ["a", "publish"]);
+});
+
+test("reading only a needed job's result does not make it credentialed", () => {
+  const yaml = wf(
+    "jobs:",
+    "  detect:",
+    "    runs-on: x",
+    "  build:",
+    "    runs-on: x",
+    "  publish:",
+    "    needs: [detect, build]",
+    "    if: ${{ !cancelled() && needs.detect.result == 'success' && needs['build'].result != 'failure' }}",
+    "    permissions:",
+    "      id-token: write",
+  );
+  assert.deepEqual([...credentialedJobs(yaml)], ["publish"]);
+});
+
 test("an upload is not credentialed when the consumer downloads nothing", () => {
   const yaml = wf(
     "jobs:",

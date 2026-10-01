@@ -37,7 +37,9 @@
 //      as one in the publish job would. (The build was split out of the
 //      publish job to keep the OIDC token away from dependency installs; this
 //      keeps a moving tag out of what gets published.); or
-//   4. has outputs that a credentialed job reads (`needs.<job>.outputs.…`).
+//   4. has outputs that a credentialed job reads: `needs.<job>.outputs.…`, or
+//      the `needs` context handed over whole (`toJSON(needs)`). Reading only
+//      a job's `.result` does not count.
 //      The reader acts on them next to its credential. Here that is
 //      `release.yml`'s `detect-packages`: the publish jobs take from it the
 //      name and version an artifact must match before it is published, so a
@@ -204,17 +206,23 @@ export function credentialedJobs(yaml, file) {
     }
     return seen;
   };
-  // The jobs whose outputs a job reads: every `needs.<job>.outputs` anywhere
-  // in it. `needs.*.outputs` and a dynamic index name no job, so they count
-  // every job it needs.
+  // The jobs whose outputs a job reads. Any use of the `needs` context counts
+  // except a job's `.result`, which carries nothing the producer chose:
+  // `needs.<job>.outputs.x`, but also `toJSON(needs.<job>)` and
+  // `toJSON(needs)`, which hand the outputs over whole for a step to parse. A
+  // reference that names no job (bare `needs`, `needs.*`, a dynamic index)
+  // counts every job the reader needs.
+  const NEEDS_USE =
+    /\bneeds\b\s*(\.\s*([\w-]+|\*)|\[\s*(?:'([^']*)'|"([^"]*)"|[^\]]*)\s*\])?\s*(?:\.\s*(\w+)|\[\s*['"](\w+)['"]\s*\])?/g;
   const outputsReadBy = (job) => {
     const read = new Set();
     for (const text of stringsIn(job)) {
-      if (!text.includes(EXPRESSION_OPEN)) continue;
-      for (const m of text.matchAll(
-        /\bneeds\s*(?:\.\s*([\w-]+|\*)|\[\s*(?:'([^']*)'|"([^"]*)"|[^\]]*)\s*\])\s*(?:\.\s*outputs\b|\[\s*['"]outputs['"]\s*\])/g,
-      )) {
-        const named = m[1] ?? m[2] ?? m[3];
+      const open = text.indexOf(EXPRESSION_OPEN);
+      if (open === -1) continue;
+      for (const m of text.slice(open).matchAll(NEEDS_USE)) {
+        const named = m[2] ?? m[3] ?? m[4];
+        const property = m[5] ?? m[6];
+        if (m[1] !== undefined && property === "result") continue;
         if (named === undefined || named === "*")
           for (const n of needsOf(job)) read.add(n);
         else read.add(named);

@@ -386,6 +386,13 @@ REPO=modelcontextprotocol/servers
 NOTES=$(mktemp -d)
 git fetch origin main --tags
 
+# The commit being released is the merge PR's merge commit, by SHA. `main` is
+# a moving name: if anything else landed on it since, "main" would be a tree
+# the ledger never saw. Everything below targets the SHA.
+MERGE_SHA=$(gh pr view <MERGE_PR> --repo "$REPO" --json mergeCommit --jq .mergeCommit.oid) || MERGE_SHA=
+[ -n "$MERGE_SHA" ] || echo "the merge PR has no merge commit: stop" >&2
+git rev-parse "$MERGE_SHA^{tree}"     # must be the tree hash the ledger recorded
+
 # The previous release is the latest PUBLISHED Release, asked of GitHub rather
 # than sorted out of the tag list: this repo's tags mix date stamps
 # (2026.8.31), milestone names (vX.Y.Z) and older per-package tags, and no
@@ -422,7 +429,7 @@ echo "$PREV → $MILESTONE"                                 # sanity-check both
 
 # 2. What's Changed, exactly as the UI generates it.
 gh api "repos/$REPO/releases/generate-notes" -f tag_name="$MILESTONE" \
-  -f target_commitish=main -f previous_tag_name="$PREV" --jq .body > "$NOTES/changed.md"
+  -f target_commitish="$MERGE_SHA" -f previous_tag_name="$PREV" --jq .body > "$NOTES/changed.md"
 
 # 5. Reporter credit: the author of every issue a listed PR closes, minus
 #    maintainers (admin/maintain/write) and bots.
@@ -447,9 +454,9 @@ cat "$NOTES/packages.md" <(echo) "$NOTES/changed.md" "$NOTES/thanks.md" > "$NOTE
 echo "$NOTES/release-notes.md"
 ```
 
-Run the Packages step from a checkout of `origin/main` (the verification
-worktree, once it is moved to the merged `main`, will do), since it reads the
-manifests on disk.
+Run the Packages step from a checkout of `$MERGE_SHA` (the verification
+worktree, moved there with `git switch --detach "$MERGE_SHA"`, will do), since
+it reads the manifests on disk.
 
 Then add the ledger line and any known issue, and **read the result before
 handing it over**. The rules behind the recipe:
@@ -477,18 +484,20 @@ handing it over**. The rules behind the recipe:
 
 **A maintainer does this**, after the merge PR has merged. Through the GitHub
 UI: *Releases → Draft a new release → Choose a tag → type the milestone's name
-(`vX.Y.Z`) → Create new tag on publish*, with **Target: `main`**, then paste
-the notes from 5a and publish.
+(`vX.Y.Z`) → Create new tag on publish*. For **Target**, pick the merge commit
+(`$MERGE_SHA` from 5a) under *Recent Commits*, not the branch `main`, then
+paste the notes from 5a and publish.
 
 The same thing from the CLI, with the notes file from 5a:
 
 ```sh
 gh release create "$MILESTONE" --repo modelcontextprotocol/servers \
-  --target main --title "$MILESTONE" --notes-file "$NOTES/release-notes.md" --latest
+  --target "$MERGE_SHA" --title "$MILESTONE" --notes-file "$NOTES/release-notes.md" --latest
 ```
 
-`--target main` gives the right commit by construction: the tag is created on
-`main`'s head at that moment, which is the merge commit.
+The target is the SHA, so the tag lands on the commit the ledger verified,
+whatever has reached `main` since. `release.yml` only checks that the tagged
+commit is on `main`; it cannot know which commit was verified.
 
 - **The tag is a label, not a version.** Seven packages publish at seven
   versions; none is compared with the tag. Naming it for the milestone is what

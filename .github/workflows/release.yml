@@ -57,15 +57,21 @@ on:
   release:
     types: [published]
 
-# One release at a time, and never cancelled. Each publish leg reads the
+# One release at a time, and none dropped. Each publish leg reads the
 # registry's `latest`, chooses a dist-tag from it and publishes; two runs doing
 # that at once could each see the old `latest` and then publish out of order,
-# leaving the lower version tagged `latest`. Queuing the second run behind the
-# first makes its read see what the first published. Never cancelled, because
-# a run stopped between packages leaves a release half published.
+# leaving the lower version tagged `latest`. Queuing a run behind the one in
+# progress makes its read see what that one published.
+#
+# `queue: max` keeps every waiting run (up to 100). The default keeps only
+# ONE pending run per group and cancels it when another arrives, which would
+# silently drop a release whose packages then never publish at its versions.
+# `cancel-in-progress` is left at its default, false: a run stopped between
+# packages leaves a release half published, and GitHub rejects `queue: max`
+# together with `cancel-in-progress: true`.
 concurrency:
   group: release
-  cancel-in-progress: false
+  queue: max
 
 # Nothing in this workflow needs more than read access by default; the two
 # publish jobs add `id-token: write` for themselves.
