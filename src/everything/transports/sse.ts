@@ -2,6 +2,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
 import { createServer } from "../server/index.js";
 import cors from "cors";
+import { listenOrExit } from "./listen.js";
 
 console.error("Starting SSE server...");
 
@@ -72,6 +73,4 @@ app.post("/message", async (req, res) => {
 
 // Start the express server
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.error(`Server is running on port ${PORT}`);
-});
+listenOrExit(app, PORT, `Server is running on port ${PORT}`);

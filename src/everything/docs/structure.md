@@ -58,6 +58,7 @@ src/everything
      │   ├── trigger-sampling-request-async.ts
      │   └── trigger-url-elicitation.ts
      └── transports
+         ├── listen.ts
          ├── sse.ts
          ├── stdio.ts
          └── streamableHttp.ts
@@ -188,6 +189,9 @@ src/everything
 
 ### `transports/`
 
+- `listen.ts`
+  - `listenOrExit(app, port, listeningMessage)`: binds an Express app to its port for both HTTP transports.
+  - Prints the listening message only once the port is bound; on a bind failure (such as a port already in use) prints why and exits non-zero.
 - `stdio.ts`
   - Starts a `StdioServerTransport`, created the server via `createServer()`, and connects it.
   - Handles `SIGINT` to close cleanly and calls `cleanup()` to remove any live intervals.
