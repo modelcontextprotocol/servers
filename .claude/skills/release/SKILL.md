@@ -147,7 +147,10 @@ releases nothing:
 # branch cut before another PR merged.
 git fetch origin main v2/main --tags
 git ls-tree --name-only origin/v2/main .changeset/ | grep '\.md$' | grep -v README.md   # the pending changesets
-git log --oneline "$(git describe --tags --abbrev=0 origin/main)"..origin/v2/main -- \
+# Since the latest published Release, asked of GitHub: this repo's tags do not
+# sort into release order (see 5a).
+PREV=$(gh release view --repo modelcontextprotocol/servers --json tagName --jq .tagName)
+git log --oneline "$PREV"..origin/v2/main -- \
   src/everything src/filesystem src/memory src/sequentialthinking
 ```
 
@@ -347,19 +350,146 @@ package, its version PR (2b or 2c) runs again first.
 
 ## 5. The Release
 
-A maintainer does this, through the GitHub UI, after the merge PR has merged:
-*Releases → Draft a new release → Choose a tag → type the milestone's name
-(`vX.Y.Z`) → Create new tag on publish*, with **Target: `main`**, then
-*Generate release notes* and publish.
+### 5a. Draft the release notes
+
+Draft these once the merge PR has merged, so `main` holds what is being
+released. Drafting creates nothing on GitHub; the maintainer publishes (5b).
+
+The notes have five parts, in this order:
+
+1. **Packages.** What this release publishes and at which version. The tag is
+   the milestone's name, not a version, and seven packages carry seven
+   versions, so the notes are where a reader finds them.
+2. **What's Changed.** GitHub's generated list of every PR since the previous
+   release.
+3. **The release-ledger line**, linking the artifact from 4d.
+4. **`## Known issues`**, only when there is one. It names the issue, who is
+   affected and the workaround. What counts as a known issue is a maintainer's
+   judgment, so it is written by hand, never generated.
+5. **`## Thanks for helping us improve`.** Credit to the community members
+   whose issues the release addresses. GitHub adds everyone `@`-mentioned in a
+   release body to that release's **Contributors** strip, so the people
+   credited here appear there too.
+
+The generated list comes from the same API the UI's *Generate release notes*
+button uses, so it can be produced without creating anything. The recipe below
+builds parts 1, 2 and 5, in a scratch directory outside the checkout.
+
+```sh
+REPO=modelcontextprotocol/servers
+NOTES=$(mktemp -d)
+git fetch origin main --tags
+
+# The previous release is the latest PUBLISHED Release, asked of GitHub rather
+# than sorted out of the tag list: this repo's tags mix date stamps
+# (2026.8.31), milestone names (vX.Y.Z) and older per-package tags, and no
+# sort orders them correctly.
+PREV=$(gh release view --repo "$REPO" --json tagName --jq .tagName) || PREV=
+[ -n "$PREV" ] || echo "no previous release found: stop, do not guess one" >&2
+echo "$PREV → $MILESTONE"                                 # sanity-check both
+
+# 1. Packages: each one's name and version on main, and whether this release
+#    publishes it. (HTTP 200 from the registry means that version is already
+#    there, so this release skips it.)
+{
+  echo "## Packages"
+  echo
+  echo "| Package | Version | Registry | In this release |"
+  echo "| --- | --- | --- | --- |"
+  node scripts/release-manifest.mjs | jq -r '
+    (.npm  | to_entries[] | [.value.name, .value.version, "npm"]),
+    (.pypi | to_entries[] | [.value.name, .value.version, "PyPI"]) | @tsv' \
+  | while IFS=$'\t' read -r name version registry; do
+      case "$registry" in
+        npm)  url="https://registry.npmjs.org/$(printf %s "$name" | sed 's|/|%2F|')/$version" ;;
+        PyPI) url="https://pypi.org/pypi/$name/$version/json" ;;
+      esac
+      code=$(curl -s -o /dev/null -w '%{http_code}' "$url")
+      case "$code" in
+        200) state="unchanged" ;;
+        404) state="**published**" ;;
+        *)   state="UNKNOWN (HTTP $code): check by hand" ;;
+      esac
+      echo "| \`$name\` | \`$version\` | $registry | $state |"
+    done
+} > "$NOTES/packages.md"
+
+# 2. What's Changed, exactly as the UI generates it.
+gh api "repos/$REPO/releases/generate-notes" -f tag_name="$MILESTONE" \
+  -f target_commitish=main -f previous_tag_name="$PREV" --jq .body > "$NOTES/changed.md"
+
+# 5. Reporter credit: the author of every issue a listed PR closes, minus
+#    maintainers (admin/maintain/write) and bots.
+for pr in $(grep -oE 'pull/[0-9]+' "$NOTES/changed.md" | cut -d/ -f2 | sort -un); do
+  gh api graphql -F n="$pr" -f query='query($n:Int!){repository(owner:"modelcontextprotocol",name:"servers"){pullRequest(number:$n){body closingIssuesReferences(first:20){nodes{number}}}}}' \
+    --jq '.data.repository.pullRequest | ([.closingIssuesReferences.nodes[].number] + ([.body | scan("(?i)(?:closes|fixes|resolves) #([0-9]+)") | .[0] | tonumber])) | .[]'
+done | sort -un | while read -r n; do
+  gh api graphql -F n="$n" -f query='query($n:Int!){repository(owner:"modelcontextprotocol",name:"servers"){issueOrPullRequest(number:$n){... on Issue{number author{login __typename}}}}}' \
+    --jq '.data.repository.issueOrPullRequest | select(.number and .author.__typename == "User") | "\(.author.login) \(.number)"'
+done | while read -r who n; do
+  perm=$(gh api "repos/$REPO/collaborators/$who/permission" --jq .permission 2>/dev/null || echo none)
+  case "$perm" in admin|maintain|write) ;; *) echo "$who $n" ;; esac
+done | awk '{ c[$1]++; l[$1] = l[$1] (l[$1] ? ", " : "") "#" $2 }
+  END { for (u in c) printf "%d\t%s\t%s\n", c[u], u, l[u] }' \
+  | sort -t$'\t' -k1,1nr -k2,2f | awk -F'\t' '{ print "* @" $2 " (" $3 ")" }' > "$NOTES/thanks.txt"
+
+: > "$NOTES/thanks.md"                 # truncate first, so a rerun never keeps a stale section
+[ -s "$NOTES/thanks.txt" ] && { printf '\n## Thanks for helping us improve\n\nThis release addresses issues reported by these community members. Thank you for taking the time to file them:\n\n'; cat "$NOTES/thanks.txt"; } >> "$NOTES/thanks.md"
+
+# Assemble. Parts 3 and 4 are added by hand, between changed.md and thanks.md.
+cat "$NOTES/packages.md" <(echo) "$NOTES/changed.md" "$NOTES/thanks.md" > "$NOTES/release-notes.md"
+echo "$NOTES/release-notes.md"
+```
+
+Run the Packages step from a checkout of `origin/main` (the verification
+worktree, once it is moved to the merged `main`, will do), since it reads the
+manifests on disk.
+
+Then add the ledger line and any known issue, and **read the result before
+handing it over**. The rules behind the recipe:
+
+- **An issue counts when a listed PR closes it**, through either the explicit
+  closing link (`closingIssuesReferences`, which every PR here gets from
+  `addCloseIssueReferences`) or a `Closes / Fixes / Resolves #N` in the PR
+  body. So an issue older than the release still counts when this release
+  closed it.
+- **Maintainers and bots are excluded by permission, not by name.** A
+  maintainer is anyone with `admin`, `maintain` or `write` on the repo. Bot
+  authors are dropped. On a public repo, anyone without a role reads as
+  `read`, so they are credited.
+- **Outside PRs are credited through their issue.** This repo closes an
+  outside PR and files an issue for a fix worth keeping, crediting the PR's
+  author in that issue. The recipe credits the issue's *author*, who is then a
+  maintainer and is excluded. Read the milestone's issues for such credits and
+  add those people to the Thanks section by hand.
+- **"Addresses", not "fixes."** The credited issues include feature requests.
+- **Leave the section out** when no community reporter remains.
+- **`UNKNOWN` in the Packages table is a stop**, not a row to publish: a
+  registry that did not answer says nothing about what will be released.
+
+### 5b. Tag and publish
+
+**A maintainer does this**, after the merge PR has merged. Through the GitHub
+UI: *Releases → Draft a new release → Choose a tag → type the milestone's name
+(`vX.Y.Z`) → Create new tag on publish*, with **Target: `main`**, then paste
+the notes from 5a and publish.
+
+The same thing from the CLI, with the notes file from 5a:
+
+```sh
+gh release create "$MILESTONE" --repo modelcontextprotocol/servers \
+  --target main --title "$MILESTONE" --notes-file "$NOTES/release-notes.md" --latest
+```
+
+`--target main` gives the right commit by construction: the tag is created on
+`main`'s head at that moment, which is the merge commit.
 
 - **The tag is a label, not a version.** Seven packages publish at seven
   versions; none is compared with the tag. Naming it for the milestone is what
   ties the Release to the board.
-- **Add the ledger link** to the notes, and a `## Known issues` section when
-  there is one. What counts as a known issue is a maintainer's call, written by
-  hand.
 - **Editing a published Release's notes is safe.** `release.yml` runs on
-  `published` only, so an edit never re-runs publishing.
+  `published` only, so an edit never re-runs publishing. Fixing a typo or
+  adding a known issue afterwards needs no ceremony.
 
 Publishing the Release starts `release.yml`. Its build jobs run first, without
 credentials: tests, then `pack:verify`. The publish jobs then wait for the
