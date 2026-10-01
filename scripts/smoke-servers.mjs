@@ -242,24 +242,32 @@ export function selectTargets(names, servers = SERVERS) {
  * @param {string} transport
  * @param {{ dir: string, pageUrl: string }} ctx
  * @param {string} [root]
- * @returns {{ command: string, args: string[], cwd: string }}
+ * @param {string} [platform]
+ * @returns {{ command: string, args: string[], cwd: string, bin?: string }}
  */
-export function launchSpec(server, transport, ctx, root = repoRoot) {
+export function launchSpec(
+  server,
+  transport,
+  ctx,
+  root = repoRoot,
+  platform = process.platform,
+) {
   const cwd = path.join(root, "src", server.name);
   const serverArgs = server.args?.(ctx) ?? [];
   if (server.language === "ts") {
     // `everything` picks its transport from its first argument; the others
     // are stdio-only and take none.
     const transportArg = server.transports.length > 1 ? [transport] : [];
-    return {
-      command: process.execPath,
-      args: [
-        path.join(cwd, "dist", "index.js"),
-        ...transportArg,
-        ...serverArgs,
-      ],
-      cwd,
-    };
+    const bin = path.join(cwd, "dist", "index.js");
+    const rest = [...transportArg, ...serverArgs];
+    // The published `bin` is the file itself, run through its shebang, so that
+    // is what is executed: `node dist/index.js` would still work with the
+    // shebang or the executable bit lost, and the installed command would not.
+    // Windows has neither (npm generates a `.cmd` shim that calls node), so
+    // there the file is handed to node.
+    return platform === "win32"
+      ? { command: process.execPath, args: [bin, ...rest], cwd, bin }
+      : { command: bin, args: rest, cwd, bin };
   }
   return {
     command: "uv",
@@ -362,9 +370,9 @@ function envFor(server, ctx, extra = {}) {
  */
 async function smokeOne(server, transport, ctx) {
   const spec = launchSpec(server, transport, ctx);
-  if (server.language === "ts" && !existsSync(spec.args[0]))
+  if (server.language === "ts" && !existsSync(spec.bin))
     throw new Error(
-      `${path.relative(repoRoot, spec.args[0])} does not exist — build first (\`npm run build -w src/${server.name}\`).`,
+      `${path.relative(repoRoot, spec.bin)} does not exist — build first (\`npm run build -w src/${server.name}\`).`,
     );
   if (server.language === "py" && !existsSync(path.join(spec.cwd, ".venv")))
     throw new Error(

@@ -317,6 +317,52 @@ export function findJobsWithoutTimeout(text, file = "<workflow>") {
 }
 
 /**
+ * What one workflow runs, for the CI-parity assertion: the npm scripts and the
+ * `scripts/*.mjs` files its steps invoke, and whether it runs on a push or a
+ * pull request at all (a dispatch-only workflow, such as the release, is not a
+ * check on a change).
+ *
+ * Read from the same executable regions the rules above scan, so a step
+ * `name:` or a comment that mentions a script is not counted. `node --test`
+ * invocations are left out: they run test files, which the gate reaches
+ * through `test:scripts`'s glob rather than by name.
+ *
+ * @param {string} text
+ * @param {string} [file]
+ * @returns {{ onChange: boolean, npmScripts: string[], nodeScripts: string[] }}
+ */
+export function workflowCommands(text, file = "<workflow>") {
+  const npmScripts = new Set();
+  const nodeScripts = new Set();
+  for (const region of extractExecutableRegions(text, file)) {
+    if (region.kind !== "run") continue;
+    const script = region.text
+      .split("\n")
+      .filter((l) => !l.trimStart().startsWith("#"))
+      .join("\n");
+    for (const m of script.matchAll(
+      /\bnpm run(?:-script)? ([a-z0-9][\w:.-]*)/gi,
+    ))
+      npmScripts.add(m[1]);
+    for (const m of script.matchAll(/\bnode (scripts\/[\w./-]+\.mjs)\b/g))
+      nodeScripts.add(m[1]);
+  }
+  const [doc] = parseAllDocuments(text);
+  const on = doc?.toJS()?.on;
+  const triggers =
+    typeof on === "string"
+      ? [on]
+      : Array.isArray(on)
+        ? on
+        : Object.keys(on ?? {});
+  return {
+    onChange: triggers.some((t) => t === "push" || t === "pull_request"),
+    npmScripts: [...npmScripts].sort(),
+    nodeScripts: [...nodeScripts].sort(),
+  };
+}
+
+/**
  * Render findings as a single message, for an assertion failure or a CLI.
  *
  * @param {ReturnType<typeof findWorkflowViolations>} findings

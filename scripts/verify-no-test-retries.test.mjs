@@ -47,6 +47,22 @@ const cases = [
     ["vitest-retry-flag"],
   ],
   ["package.json", '"test": "vitest run --retry 2"', ["vitest-retry-flag"]],
+  // A workflow step
+  [
+    ".github/workflows/typescript.yml",
+    "        run: npx vitest run --retry=2",
+    ["workflow-retry-flag"],
+  ],
+  [
+    ".github/workflows/python.yml",
+    "        run: uv run pytest --reruns 3",
+    ["workflow-retry-flag"],
+  ],
+  [
+    ".github/workflows/release.yml",
+    "        run: curl --retry 3 https://example.com",
+    [],
+  ],
   // pytest
   [
     "src/b/pyproject.toml",

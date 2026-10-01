@@ -102,8 +102,12 @@ The claim "the gate runs every check CI runs" is only worth something if it
 cannot go stale quietly, so the script tests hold it in place:
 
 - **A check added to CI is added to `local:gate:stages` in the same change.**
-  `scripts/lib/workflow-gate.test.mjs` asserts the gate still reaches each of
-  the stages above; a new CI job gets a line in that list.
+  `scripts/lib/workflow-gate.test.mjs` derives this from the workflows: every
+  npm script and every `scripts/*.mjs` that a push or pull-request workflow
+  runs must be reached by `local:gate`, so a check added to CI alone fails the
+  script tests. It reads script names, so a check written as a bare command in
+  a workflow step (not behind an npm script) is outside what it can see; put
+  new checks behind a script.
 - **No workflow invokes a `local:*` script.** The prefix means local-only. CI
   runs the same checks as separate jobs, and a workflow that ran the gate
   itself would queue on a lease nothing else shares and collapse the parallel
@@ -139,8 +143,9 @@ gate-lease: pid 12345 in /path/to/other-worktree, running for 40s holds the gate
   waiter then names the path when it gives up.
 - **A waiter gives up after 45 minutes** in total, with a message naming the
   holder. That budget is not reset as the queue ahead drains.
-- **The lease never fails the gate.** If the lease directory cannot be created
-  or written, the gate runs without it and says so.
+- **A lease that cannot be set up does not fail the gate.** If the lease
+  directory cannot be created or written, the gate runs without it and says
+  so. A waiter that gives up (above) is the one way the lease ends a run.
 - **`SERVERS_SKIP_GATE_LEASE=1`** runs without the lease. It does not get a
   result sooner than waiting would: an overlapped run is slower than a queued
   one. `SERVERS_GATE_LEASE_DIR` moves the lease directory, which lives under

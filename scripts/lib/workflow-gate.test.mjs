@@ -23,8 +23,13 @@ import {
   findJobsWithoutTimeout,
   findWorkflowViolations,
   formatWorkflowViolations,
+  workflowCommands,
 } from "./workflow-gate.mjs";
-import { GATE_LEASE_WRAPPER, scriptChainRuns } from "./npm-scripts.mjs";
+import {
+  GATE_LEASE_WRAPPER,
+  reachableScripts,
+  scriptChainRuns,
+} from "./npm-scripts.mjs";
 
 const repoRoot = join(import.meta.dirname, "..", "..");
 const workflowDir = join(repoRoot, ".github", "workflows");
@@ -297,6 +302,46 @@ describe("findJobsWithoutTimeout", () => {
   });
 });
 
+describe("workflowCommands", () => {
+  it("collects the scripts a workflow's steps run, and its triggers", () => {
+    const cmds = workflowCommands(
+      [
+        "on:",
+        "  push:",
+        "  pull_request:",
+        "jobs:",
+        "  build:",
+        "    steps:",
+        "      - name: npm run not-a-command",
+        "        run: |",
+        "          # npm run commented-out",
+        "          npm run validate:guards && npm run smoke",
+        "      - run: node scripts/validate-py.mjs ${{ matrix.package }}",
+        "      - run: node --test scripts/validate-py.test.mjs",
+      ].join("\n"),
+    );
+    assert.deepEqual(cmds, {
+      onChange: true,
+      npmScripts: ["smoke", "validate:guards"],
+      nodeScripts: ["scripts/validate-py.mjs"],
+    });
+  });
+
+  it("a dispatch-only workflow is not a check on a change", () => {
+    for (const on of ["on: workflow_dispatch", "on: [workflow_dispatch]"])
+      assert.equal(
+        workflowCommands(`${on}\njobs:\n  a:\n    steps:\n      - run: x\n`)
+          .onChange,
+        false,
+      );
+    assert.equal(
+      workflowCommands("on: push\njobs:\n  a:\n    steps:\n      - run: x\n")
+        .onChange,
+      true,
+    );
+  });
+});
+
 describe("the gate's name", () => {
   const { scripts } = JSON.parse(
     readFileSync(join(repoRoot, "package.json"), "utf8"),
@@ -319,9 +364,9 @@ describe("the gate's name", () => {
     );
   });
 
-  // Every check CI runs, by the script CI runs it through. A stage dropped
-  // from the gate would leave "local:gate runs every check CI runs" false
-  // with nothing red.
+  // The stages by name. The CI-parity test under `.github/workflows` derives
+  // the same requirement from what the workflows actually run; this list also
+  // pins the stage that has no CI counterpart (`verify:install-fresh`).
   for (const stage of [
     "verify:install-fresh",
     "validate",
@@ -360,6 +405,41 @@ describe(".github/workflows", () => {
       findings,
       [],
       `GitHub CI must not run a local-only script:\n${formatWorkflowViolations(findings)}`,
+    );
+  });
+
+  it("runs no check on a change that local:gate does not also run", () => {
+    // "local:gate runs every check CI runs", derived rather than listed: every
+    // npm script and every `scripts/*.mjs` a push/pull-request workflow invokes
+    // must be reached by the gate. A check added to CI alone fails here.
+    const { scripts } = JSON.parse(
+      readFileSync(join(repoRoot, "package.json"), "utf8"),
+    );
+    const reached = reachableScripts(scripts, "local:gate");
+    const reachedBodies = [...reached].map((n) => scripts[n] ?? "");
+    const missing = [];
+    let checked = 0;
+    for (const file of files) {
+      const cmds = workflowCommands(read(file), file);
+      if (!cmds.onChange) continue;
+      for (const name of cmds.npmScripts) {
+        checked += 1;
+        if (!reached.has(name)) missing.push(`${file}: npm run ${name}`);
+      }
+      for (const script of cmds.nodeScripts) {
+        checked += 1;
+        if (!reachedBodies.some((body) => body.includes(`node ${script}`)))
+          missing.push(`${file}: node ${script}`);
+      }
+    }
+    assert.ok(
+      checked > 0,
+      "found no CI commands, so parity would hold vacuously",
+    );
+    assert.deepEqual(
+      missing,
+      [],
+      `CI runs these and \`npm run local:gate\` does not. Add each to local:gate:stages:\n  ${missing.join("\n  ")}`,
     );
   });
 

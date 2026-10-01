@@ -29,7 +29,8 @@
 // while a false negative costs the rule. A finding names the file and line.
 //
 // Scope: tracked files under `src/`, plus every `package.json` (root included)
-// for the CLI flag. Build output is never tracked, so it never appears.
+// and every workflow for the CLI flags (`npx vitest --retry=2` in a step would
+// otherwise pass both this guard and the workflow guard). Build output is never tracked, so it never appears.
 
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -61,6 +62,14 @@ export const RULES = [
     files: /(?:^|\/)package\.json$/,
     pattern: /--retry\b/,
     why: "Vitest's `--retry` flag",
+  },
+  {
+    // Tied to the runner's name on the same line: `--retry` alone is also a
+    // curl flag, which a workflow may use legitimately.
+    id: "workflow-retry-flag",
+    files: /(?:^|\/)\.github\/workflows\/[^/]+\.ya?ml$/,
+    pattern: /\b(?:vitest|pytest)\b.*--(?:retry|reruns|force-flaky)\b/,
+    why: "a test runner's retry flag in a workflow",
   },
   {
     id: "pytest-rerun-plugin",
@@ -112,7 +121,7 @@ export function findRetries(file, text) {
 function trackedFiles(root) {
   const res = spawnSync(
     "git",
-    ["ls-files", "-z", "--", "src", "package.json"],
+    ["ls-files", "-z", "--", "src", "package.json", ".github/workflows"],
     { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );
   if (res.error) throw res.error;

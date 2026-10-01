@@ -82,17 +82,30 @@ test("selectTargets: an unknown name throws rather than selecting nothing", () =
 });
 
 test("launchSpec: a TypeScript server runs its built bin, with the transport where it takes one", () => {
-  const everything = launchSpec(byName("everything"), "sse", ctx, "/repo");
-  assert.equal(everything.command, process.execPath);
-  assert.deepEqual(everything.args, [
-    path.join("/repo", "src", "everything", "dist", "index.js"),
+  const bin = (name) => path.join("/repo", "src", name, "dist", "index.js");
+  // POSIX: the bin itself, through its shebang, as the installed command is.
+  const everything = launchSpec(
+    byName("everything"),
     "sse",
-  ]);
-  const filesystem = launchSpec(byName("filesystem"), "stdio", ctx, "/repo");
-  assert.deepEqual(filesystem.args, [
-    path.join("/repo", "src", "filesystem", "dist", "index.js"),
-    "/tmp/x",
-  ]);
+    ctx,
+    "/repo",
+    "linux",
+  );
+  assert.equal(everything.command, bin("everything"));
+  assert.deepEqual(everything.args, ["sse"]);
+  const filesystem = launchSpec(
+    byName("filesystem"),
+    "stdio",
+    ctx,
+    "/repo",
+    "darwin",
+  );
+  assert.equal(filesystem.command, bin("filesystem"));
+  assert.deepEqual(filesystem.args, ["/tmp/x"]);
+  // Windows has no shebang: the file is handed to node.
+  const win = launchSpec(byName("everything"), "sse", ctx, "/repo", "win32");
+  assert.equal(win.command, process.execPath);
+  assert.deepEqual(win.args, [bin("everything"), "sse"]);
 });
 
 test("isPortTaken: only a lost port is relaunched", () => {
