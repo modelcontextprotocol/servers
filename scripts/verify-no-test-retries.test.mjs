@@ -104,6 +104,16 @@ const cases = [
   ["src/b/pyproject.toml", "max_retries = 2", []],
   ["src/b/tests/test_x.py", "@pytest.mark.retries(2)", ["pytest-flaky-marker"]],
   [
+    "src/b/tests/test_x.py",
+    "pytestmark = pytest.mark.flaky(reruns=2)",
+    ["pytest-flaky-marker"],
+  ],
+  [
+    "src/b/tests/test_x.py",
+    "pytest.param(1, marks=pytest.mark.retries(2)),",
+    ["pytest-flaky-marker"],
+  ],
+  [
     ".github/workflows/python.yml",
     step("        run: uv run pytest --retries 2"),
     ["workflow-retry-flag"],
