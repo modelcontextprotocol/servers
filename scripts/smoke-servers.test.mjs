@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import {
   SERVERS,
   findUnlistedServers,
+  isPortTaken,
   launchSpec,
   selectTargets,
 } from "./smoke-servers.mjs";
@@ -94,12 +95,21 @@ test("launchSpec: a TypeScript server runs its built bin, with the transport whe
   ]);
 });
 
-test("launchSpec: a Python server runs its console script through uv, frozen", () => {
+test("isPortTaken: only a lost port is relaunched", () => {
+  assert.ok(isPortTaken("Error: listen EADDRINUSE: address already in use"));
+  assert.ok(
+    isPortTaken("Failed to start: Port 3001 is already in use. Set PORT…"),
+  );
+  assert.ok(!isPortTaken("Error: Cannot find module './x.js'"));
+  assert.ok(!isPortTaken(""));
+});
+
+test("launchSpec: a Python server runs its console script through uv, without syncing", () => {
   const git = launchSpec(byName("git"), "stdio", ctx, "/repo");
   assert.equal(git.command, "uv");
   assert.deepEqual(git.args, [
     "run",
-    "--frozen",
+    "--no-sync",
     "mcp-server-git",
     "--repository",
     "/tmp/x",

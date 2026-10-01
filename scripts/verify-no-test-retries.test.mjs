@@ -22,6 +22,26 @@ const cases = [
   ],
   ["src/a/__tests__/x.test.ts", "  retry : 1,", ["vitest-retry-option"]],
   [
+    "src/a/vitest.config.ts",
+    '  test: { "retry": 2 },',
+    ["vitest-retry-option"],
+  ],
+  [
+    "src/a/vitest.config.ts",
+    "  test: { 'retry': 2 },",
+    ["vitest-retry-option"],
+  ],
+  [
+    "src/a/vitest.config.ts",
+    '  test: { ["retry"]: 2 },',
+    ["vitest-retry-option"],
+  ],
+  [
+    "src/a/vitest.config.ts",
+    "  test: { [ `retry` ]: 2 },",
+    ["vitest-retry-option"],
+  ],
+  [
     "src/a/package.json",
     '"test": "vitest run --retry=2"',
     ["vitest-retry-flag"],
@@ -49,6 +69,7 @@ const cases = [
     [],
   ],
   ["src/a/lib.ts", "const maxRetry: number = 3;", []],
+  ["src/a/lib.ts", 'const o = { "maxRetry": 3, "retryAfter": 1 };', []],
   ["src/a/lib.ts", "options.retry = 2;", []],
   ["src/a/lib.ts", "client.retry: nope", []],
   ["src/b/server.py", "retry: int = 3", []],

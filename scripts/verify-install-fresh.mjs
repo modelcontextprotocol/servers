@@ -27,6 +27,19 @@
 // hidden lockfile (`node_modules/.package-lock.json`), which records what npm
 // last wrote, not what is on disk now.
 //
+// It also compares each manifest (the root's and every workspace's) against
+// the copy of it the lockfile records. A dependency added to, removed from or
+// re-ranged in a `package.json` without re-running `npm install` leaves the
+// lockfile describing a different project, which is the checkout `npm ci`
+// refuses in CI with "package.json and package-lock.json are not in sync". The
+// versions on disk can all match the lockfile while that is true, so the first
+// comparison alone would pass it.
+//
+// What it does NOT do is look for packages that are installed but absent from
+// the lockfile. That needs a walk of `node_modules`, the Inspector's guard does
+// not do it either, and the failure it would catch (source importing a leftover
+// package) fails CI's build on a fresh install rather than passing silently.
+//
 // CI installs from scratch on every run, so this never fires there. The Python
 // servers need no counterpart: `validate:py` starts each one with
 // `uv sync --locked`, which brings the environment to its lockfile.
@@ -80,6 +93,50 @@ export function compareInstall(lock, readInstalledVersion) {
   return { stale, missing };
 }
 
+/** The sections of a manifest that the lockfile mirrors, and `npm ci` compares. */
+const MANIFEST_SECTIONS = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+];
+
+/**
+ * Compare the lockfile's record of each manifest against the manifest itself.
+ *
+ * The lockfile mirrors the root manifest at `packages[""]` and each workspace's
+ * at `packages["<dir>"]`. `readManifest(dir)` returns the parsed `package.json`
+ * there (`""` is the root), or `undefined` when there is none. Returns one
+ * `{ dir, section, name, manifest, lock }` per declared range that differs;
+ * a side that does not declare the package is `undefined`.
+ */
+export function compareManifests(lock, readManifest) {
+  const drift = [];
+  for (const [dir, entry] of Object.entries(lock?.packages ?? {})) {
+    if (isInstalledCopy(dir) || entry?.link) continue;
+    const manifest = readManifest(dir);
+    if (manifest === undefined) continue;
+    for (const section of MANIFEST_SECTIONS) {
+      const declared = manifest[section] ?? {};
+      const locked = entry[section] ?? {};
+      for (const name of new Set([
+        ...Object.keys(declared),
+        ...Object.keys(locked),
+      ])) {
+        if (declared[name] !== locked[name])
+          drift.push({
+            dir,
+            section,
+            name,
+            manifest: declared[name],
+            lock: locked[name],
+          });
+      }
+    }
+  }
+  return drift;
+}
+
 /** The installed version at `<dir>/<entryPath>/package.json`, or `undefined`. */
 function installedVersionReader(dir) {
   return (entryPath) => {
@@ -101,6 +158,16 @@ export function main(root = repoRoot) {
   const lock = JSON.parse(readFileSync(lockPath, "utf8"));
   const { stale, missing } = compareInstall(lock, installedVersionReader(root));
   const problems = [];
+  const drift = compareManifests(lock, (dir) => {
+    const manifest = path.join(root, dir, "package.json");
+    return existsSync(manifest)
+      ? JSON.parse(readFileSync(manifest, "utf8"))
+      : undefined;
+  });
+  for (const d of drift)
+    problems.push(
+      `  ${path.posix.join(d.dir || ".", "package.json")} ${d.section}.${d.name}: manifest ${d.manifest ?? "(absent)"}, lockfile ${d.lock ?? "(absent)"}`,
+    );
   // A never-installed tree would list every package; one line says it better.
   if (missing.length > 0 && !existsSync(path.join(root, "node_modules"))) {
     problems.push("  no node_modules at all");
@@ -114,12 +181,13 @@ export function main(root = repoRoot) {
   }
   if (problems.length > 0) {
     console.error(
-      `verify:install-fresh — the install disagrees with package-lock.json (${problems.length}):\n` +
+      `verify:install-fresh — the install, lockfile and manifests disagree (${problems.length}):\n` +
         problems.join("\n") +
-        "\n\nnode_modules is older than the lockfile beside it — usually a `git pull` that" +
-        "\nbrought in a dependency bump. Run `npm install` at the repo root (one install" +
-        "\ncovers every workspace). Tests run against a stale install report the OLD" +
-        "\ndependency's behavior as a product failure.",
+        "\n\nThe install, the lockfile and the manifests are out of step — usually a" +
+        "\n`git pull` that brought in a dependency bump, or a `package.json` edited by" +
+        "\nhand. Run `npm install` at the repo root (one install covers every workspace)" +
+        "\nand commit the lockfile if it changed. Tests run against a stale install report" +
+        "\nthe OLD dependency's behavior as a product failure.",
     );
     return 1;
   }

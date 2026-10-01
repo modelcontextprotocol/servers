@@ -116,5 +116,14 @@ jobs:
       - name: Install dependencies and build
         run: npm ci
 
+      # The smoke launches the Python servers with `uv run --no-sync`: it tests
+      # an environment, it does not create one. This is the sync `validate:py`
+      # does before the smoke in the local gate.
+      - name: Sync the Python servers
+        run: |
+          for server in fetch git time; do
+            (cd "src/$server" && uv sync --locked --all-extras --dev)
+          done
+
       - name: Boot every server
         run: npm run smoke

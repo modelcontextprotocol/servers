@@ -8,7 +8,11 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { compareInstall, main } from "./verify-install-fresh.mjs";
+import {
+  compareInstall,
+  compareManifests,
+  main,
+} from "./verify-install-fresh.mjs";
 
 const lockOf = (packages) => ({
   lockfileVersion: 3,
@@ -94,6 +98,77 @@ test("a copy nested under a workspace is compared too", () => {
       ],
       missing: [],
     },
+  );
+});
+
+test("compareManifests: a manifest the lockfile mirrors exactly reports nothing", () => {
+  const lock = {
+    packages: {
+      "": { devDependencies: { yaml: "^2.9.0" } },
+      "src/server": { dependencies: { zod: "^3.0.0" } },
+      "node_modules/zod": { version: "3.1.0", dependencies: { x: "1" } },
+      "node_modules/@scope/server": { resolved: "src/server", link: true },
+    },
+  };
+  const manifests = {
+    "": { devDependencies: { yaml: "^2.9.0" } },
+    "src/server": { dependencies: { zod: "^3.0.0" } },
+  };
+  assert.deepEqual(
+    compareManifests(lock, (dir) => manifests[dir]),
+    [],
+  );
+});
+
+test("compareManifests: an added, removed or re-ranged dependency is drift", () => {
+  const lock = {
+    packages: {
+      "": { devDependencies: { yaml: "^2.9.0", gone: "^1.0.0" } },
+      "src/server": { dependencies: { zod: "^3.0.0" } },
+    },
+  };
+  const manifests = {
+    "": { devDependencies: { yaml: "^2.9.0", added: "^1.0.0" } },
+    "src/server": { dependencies: { zod: "^4.0.0" } },
+  };
+  assert.deepEqual(
+    compareManifests(lock, (dir) => manifests[dir]),
+    [
+      {
+        dir: "",
+        section: "devDependencies",
+        name: "added",
+        manifest: "^1.0.0",
+        lock: undefined,
+      },
+      {
+        dir: "",
+        section: "devDependencies",
+        name: "gone",
+        manifest: undefined,
+        lock: "^1.0.0",
+      },
+      {
+        dir: "src/server",
+        section: "dependencies",
+        name: "zod",
+        manifest: "^4.0.0",
+        lock: "^3.0.0",
+      },
+    ],
+  );
+});
+
+test("main fails when a manifest declares what the lockfile does not", (t) => {
+  const { root, write } = fixture(t);
+  t.mock.method(console, "log", () => {});
+  const error = t.mock.method(console, "error", () => {});
+  write("node_modules/sdk/package.json", { version: "2.1.0" });
+  write("package.json", { name: "root", dependencies: { added: "^1.0.0" } });
+  assert.equal(main(root), 1);
+  assert.match(
+    error.mock.calls[0].arguments[0],
+    /package\.json dependencies\.added: manifest \^1\.0\.0, lockfile \(absent\)/,
   );
 });
 

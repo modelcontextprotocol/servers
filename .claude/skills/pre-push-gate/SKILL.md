@@ -47,9 +47,10 @@ Each heading is a stage or guard name as it appears in the output.
 
 ### `verify:install-fresh`
 
-An installed package's version disagrees with `package-lock.json`:
-`node_modules` is older than the tree you pulled. **Run `npm install` at the
-repo root** and re-run. It is the first stage because a stale install otherwise
+An installed package's version disagrees with `package-lock.json`
+(`node_modules` is older than the tree you pulled), or a `package.json`
+declares a dependency the lockfile does not record. **Run `npm install` at the
+repo root**, commit the lockfile if it changed, and re-run. It is the first stage because a stale install otherwise
 passes every static check and fails later as a test reporting the _old_
 dependency's behavior. Do not "fix" that test.
 
@@ -155,6 +156,8 @@ of the server's stderr. Re-run a subset with
 - **"dist/index.js does not exist — build first"**: you ran the smoke on its
   own before building. `npm run build -w src/<server>`. Inside the gate this
   cannot happen, since `validate` builds first.
+- **".venv does not exist — sync first"**: the same for a Python server. The
+  smoke never creates an environment; `npm run validate:py -- <server>` does.
 - **The server exited before answering**: the stderr tail shows why. This is
   what the smoke is for: the unit tests import the source, so a wrong `bin`
   path, a file missing from `dist/`, or an import that only resolves under the

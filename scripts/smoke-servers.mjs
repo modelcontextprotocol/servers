@@ -22,15 +22,24 @@
  *
  * Why one Node script for both languages: the smoke is a client, and the
  * question it asks is the same whatever the server is written in. The Python
- * servers are launched through `uv run --frozen`, never pip, like every other
- * Python step here.
+ * servers are launched through `uv run --no-sync`, never pip.
  *
- * Nothing touches the network or the user's files. `fetch` is pointed at an
- * HTTP server this script starts on the loopback interface; `git` and
- * `filesystem` get a throwaway directory; `memory` gets a throwaway graph file.
- * The HTTP transports listen on a port the OS hands out, not the server's
- * default 3001, so the smoke cannot collide with a server the developer has
- * running, nor two smokes with each other.
+ * `--no-sync` because the smoke tests an environment, it does not build one. A
+ * plain `uv run` (even `--frozen`, which only stops the lockfile being
+ * rewritten) creates the server's `.venv` and downloads into it when it is
+ * missing or stale, which would make this stage a second, unannounced install
+ * step. So each Python server must already be synced: `validate:py` does that
+ * in the gate just before the smoke, and CI's smoke job has a sync step. A
+ * server with no `.venv` is reported as that.
+ *
+ * The servers themselves are given nothing outside the machine to talk to, and
+ * none of the user's files. `fetch` is pointed at an HTTP server this script
+ * starts on the loopback interface; `git` and `filesystem` get a throwaway
+ * directory; `memory` gets a throwaway graph file. The HTTP transports listen
+ * on a port the OS reported free a moment earlier, not the server's default
+ * 3001, so the smoke does not collide with a server the developer has running.
+ * That port is not reserved between the probe and the server's own `listen`,
+ * so a launch that loses it to another process is relaunched on a fresh one.
  *
  * One server failing does not stop the rest: the run reports every target's
  * verdict and exits non-zero if any failed, so one run shows the whole picture.
@@ -71,6 +80,14 @@ export const FETCH_MARKER = "boot-smoke-marker";
  * re-run it, which is the habit a gate must not create.
  */
 export const REQUEST_TIMEOUT_MS = 120_000;
+
+/** How many ports an HTTP launch may try before a taken port is the result. */
+export const PORT_ATTEMPTS = 3;
+
+/** Whether a server's output says it lost its port to another process. */
+export function isPortTaken(output) {
+  return /EADDRINUSE|already in use/i.test(output);
+}
 
 /** How long an HTTP server gets to start listening. */
 export const LISTEN_TIMEOUT_MS = 30_000;
@@ -244,7 +261,7 @@ export function launchSpec(server, transport, ctx, root = repoRoot) {
   }
   return {
     command: "uv",
-    args: ["run", "--frozen", `mcp-server-${server.name}`, ...serverArgs],
+    args: ["run", "--no-sync", `mcp-server-${server.name}`, ...serverArgs],
     cwd,
   };
 }
@@ -342,6 +359,10 @@ async function smokeOne(server, transport, ctx) {
     throw new Error(
       `${path.relative(repoRoot, spec.args[0])} does not exist — build first (\`npm run build -w src/${server.name}\`).`,
     );
+  if (server.language === "py" && !existsSync(path.join(spec.cwd, ".venv")))
+    throw new Error(
+      `src/${server.name}/.venv does not exist — sync first (\`npm run validate:py -- ${server.name}\`, or \`uv sync --locked --all-extras --dev\` in src/${server.name}). The smoke does not create environments.`,
+    );
   server.prepare?.(ctx);
 
   const client = new Client({ name: "boot-smoke", version: "0.0.0" });
@@ -372,42 +393,53 @@ async function smokeOne(server, transport, ctx) {
     return;
   }
 
-  const port = await freePort();
-  let output = "";
-  const child = spawn(spec.command, spec.args, {
-    cwd: spec.cwd,
-    env: envFor(server, ctx, { PORT: String(port) }),
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  child.stdout.on("data", (chunk) => (output += chunk));
-  child.stderr.on("data", (chunk) => (output += chunk));
-  const tail = () => output.trim().split("\n").slice(-15).join("\n");
-  try {
-    await new Promise((resolve, reject) => {
-      child.once("error", reject);
-      child.once("spawn", resolve);
+  // The probe port is free when probed, not reserved: another process can take
+  // it before the server binds. Only that one failure is relaunched, on a fresh
+  // port; anything else the server says on its way down is the result.
+  for (let attempt = 1; ; attempt += 1) {
+    const port = await freePort();
+    let output = "";
+    const child = spawn(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: envFor(server, ctx, { PORT: String(port) }),
+      stdio: ["ignore", "pipe", "pipe"],
     });
-    await waitForListen(port, child, tail);
-    const url = new URL(
-      `http://127.0.0.1:${port}${TRANSPORT_ENDPOINT[transport]}`,
-    );
-    const clientTransport =
-      transport === "sse"
-        ? new SSEClientTransport(url)
-        : new StreamableHTTPClientTransport(url);
+    child.stdout.on("data", (chunk) => (output += chunk));
+    child.stderr.on("data", (chunk) => (output += chunk));
+    const tail = () => output.trim().split("\n").slice(-15).join("\n");
     try {
-      await client.connect(clientTransport, options);
-      await exercise(client, server, ctx);
+      await new Promise((resolve, reject) => {
+        child.once("error", reject);
+        child.once("spawn", resolve);
+      });
+      try {
+        await waitForListen(port, child, tail);
+      } catch (err) {
+        if (attempt < PORT_ATTEMPTS && isPortTaken(output)) continue;
+        throw err;
+      }
+      const url = new URL(
+        `http://127.0.0.1:${port}${TRANSPORT_ENDPOINT[transport]}`,
+      );
+      const clientTransport =
+        transport === "sse"
+          ? new SSEClientTransport(url)
+          : new StreamableHTTPClientTransport(url);
+      try {
+        await client.connect(clientTransport, options);
+        await exercise(client, server, ctx);
+      } finally {
+        await client.close().catch(() => {});
+      }
+      return;
+    } catch (err) {
+      throw new Error(
+        `${err?.message ?? err}${tail() ? `\n--- server output ---\n${tail()}` : ""}`,
+        { cause: err },
+      );
     } finally {
-      await client.close().catch(() => {});
+      await stop(child);
     }
-  } catch (err) {
-    throw new Error(
-      `${err?.message ?? err}${tail() ? `\n--- server output ---\n${tail()}` : ""}`,
-      { cause: err },
-    );
-  } finally {
-    await stop(child);
   }
 }
 

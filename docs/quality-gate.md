@@ -33,7 +33,7 @@ in this order, and the first failure stops the run.
 
 | # | Stage | What it checks | CI counterpart |
 | --- | --- | --- | --- |
-| 1 | `verify:install-fresh` | Every package in `node_modules` is at the version `package-lock.json` records | None needed: CI installs with `npm ci` |
+| 1 | `verify:install-fresh` | Every package in `node_modules` is at the version `package-lock.json` records, and every `package.json` declares what the lockfile says it does | None needed: CI installs with `npm ci` |
 | 2 | `validate` → `validate:guards` | The root guards, listed [below](#the-root-guards) | `typescript.yml` → **Root guards** |
 | 3 | `validate` → each workspace's `validate` | Per TypeScript server: `format:check`, `lint` (`--max-warnings 0`), `typecheck`, `build`, `test` | `typescript.yml` → **Validate \<server\>** (one leg each) |
 | 4 | `validate:py` | Per Python server: `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `pytest`, `uv build` | `python.yml` → **Test \<server\>** (one leg each) |
@@ -55,12 +55,14 @@ Notes on the stages:
   not the one installed: it fetches it with `npx`. It is the one stage that
   fails offline.
 - **`smoke` launches what a user launches**: the built `dist/index.js` for a
-  TypeScript server, the console script through `uv run --frozen` for a Python
+  TypeScript server, the console script through `uv run --no-sync` for a Python
   one. stdio for all seven; HTTP+SSE and Streamable HTTP as well for
-  `everything`. It touches neither the network nor your files: `fetch` is
-  pointed at a page the smoke serves on the loopback interface, and the HTTP
-  transports listen on ports the OS hands out. It runs after `validate`
-  because it needs the build.
+  `everything`. The servers are given nothing outside the machine to talk to
+  and none of your files: `fetch` is pointed at a page the smoke serves on the
+  loopback interface, and the HTTP transports listen on a free port rather
+  than the default 3001. It runs after `validate` and `validate:py` because it
+  needs the build and each Python server's synced environment; it creates
+  neither.
 - `python.yml` also has a **Build \<server\>** job per server that re-runs
   pyright and `uv build` and uploads the built distribution. It checks nothing
   stage 4 does not.

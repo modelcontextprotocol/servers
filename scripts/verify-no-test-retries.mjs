@@ -43,15 +43,17 @@ const repoRoot = path.resolve(
 
 /**
  * The spellings of a retry, each with the files it applies to.
- * `\bretry\s*:` is anchored on a non-identifier character before it so that a
- * property named `maxRetry:` or a word like `noretry:` is not read as Vitest's
- * option.
+ * The Vitest option is matched as an object key in each way one can be
+ * written: bare (`retry:`), quoted (`"retry":`) and computed (`["retry"]:`).
+ * The bare form is anchored on a non-identifier character before it so that a
+ * property named `maxRetry:` or a member access like `client.retry:` is not
+ * read as the option.
  */
 export const RULES = [
   {
     id: "vitest-retry-option",
     files: /\.(?:[cm]?[jt]s|[jt]sx)$/,
-    pattern: /(?<![\w$.])retry\s*:/,
+    pattern: /(?<![\w$.])(?:retry|(["'`])retry\1|\[\s*(["'`])retry\2\s*\])\s*:/,
     why: "Vitest's `retry` option",
   },
   {
