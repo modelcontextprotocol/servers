@@ -26,6 +26,10 @@ not in advance.
 | [`pr-flow`](.claude/skills/pr-flow/SKILL.md)           | Issue to PR: branch, DCO signoff and repair, the gate, client evidence, `addCloseIssueReferences`, the Copilot loop and its exits, close-out on merge    | Model-invoked, or `/pr-flow`      |
 | [`issue-triage`](.claude/skills/issue-triage/SKILL.md) | Inflow: the class check and canned responses (listings, new servers, duplicates, outside PRs), pass 1 onto the board as Incoming, the priority rubric and its score comment, the board audit | Model-invoked, or `/issue-triage` |
 | [`security-advisory`](.claude/skills/security-advisory/SKILL.md) | A privately reported vulnerability end to end: the `[GHSA-…]` draft card, server or SDK ownership, the reach classes, accepting, the private fork, publishing, public tracking | Model-invoked, or `/security-advisory` |
+| [`project-structure`](.claude/skills/project-structure/SKILL.md) | What is inside each server: the TypeScript and Python layouts, where each server registers its features, and where a new file goes | Model-invoked, or `/project-structure` |
+| [`local-dev`](.claude/skills/local-dev/SKILL.md) | Install, build and run each server from the checkout over the transports it implements; local `npx`/`uvx` and client-config runs; stale builds and fresh worktrees; the `overrides`, lockstep and `uv.lock` procedures | Model-invoked, or `/local-dev` |
+| [`testing`](.claude/skills/testing/SKILL.md) | The harness each server has today, in-process and stdio protocol-level test recipes, test placement, the commands per suite, and `test` versus `coverage` | Model-invoked, or `/testing` |
+| [`client-smoke`](.claude/skills/client-smoke/SKILL.md) | Driving a built server with the Inspector CLI (the scripted path), the Inspector web UI (by hand) and an LLM client; the CLI's argument split and exit codes; protocol eras and what can be exercised today | Model-invoked, or `/client-smoke` |
 
 A PR that adds a skill under `.claude/skills/<name>/SKILL.md` adds its row to
 this table in the same change, and the table never lists a skill that does not

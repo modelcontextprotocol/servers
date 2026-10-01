@@ -1,0 +1,34 @@
+[
+  {
+    "prompt": "How do I write a test that drives the everything server through a real MCP client without spawning a process?",
+    "expect": "testing"
+  },
+  {
+    "prompt": "How do I write a protocol-level test for one of the Python servers?",
+    "expect": "testing"
+  },
+  {
+    "prompt": "Some sequentialthinking tests show as skipped on my machine. How do I diagnose that?",
+    "expect": "testing"
+  },
+  {
+    "prompt": "My filesystem test still passes after I broke the tool it covers. How do I diagnose that?",
+    "expect": "testing"
+  },
+  {
+    "prompt": "Which command gives me a coverage report for one of the Python servers?",
+    "expect": "testing"
+  },
+  {
+    "prompt": "For a new tool in the memory server, should my test call the handler directly or connect a client?",
+    "expect": "testing"
+  },
+  {
+    "prompt": "Translate 'good morning' into French.",
+    "expect": null
+  },
+  {
+    "prompt": "What is the boiling point of water at sea level in Fahrenheit?",
+    "expect": null
+  }
+]
