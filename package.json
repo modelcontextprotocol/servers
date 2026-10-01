@@ -24,7 +24,7 @@
     "skills:eval": "node scripts/skill-eval.mjs",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "validate": "npm run validate:guards && npm run validate --workspaces",
-    "validate:guards": "npm run format:check:root && npm run lint:root && npm run verify:format-coverage && npm run verify:skills && npm run verify:typecheck-coverage && npm run verify:dep-lockstep && npm run verify:no-test-retries && npm run test:scripts",
+    "validate:guards": "npm run format:check:root && npm run lint:root && npm run verify:format-coverage && npm run verify:skills && npm run verify:typecheck-coverage && npm run verify:dep-lockstep && npm run verify:no-test-retries && npm run verify:action-pins && npm run test:scripts",
     "format": "npm run format:root && npm run format --workspaces",
     "format:root": "prettier --write \"scripts/**/*.{ts,mts,cts,js,mjs,cjs}\" \"*.{ts,mts,cts,js,mjs,cjs}\" --ignore-path .prettierignore",
     "format:check": "npm run format:check:root && npm run format:check --workspaces",
@@ -39,7 +39,9 @@
     "validate:py": "node scripts/validate-py.mjs",
     "verify:install-fresh": "node scripts/verify-install-fresh.mjs",
     "verify:no-test-retries": "node scripts/verify-no-test-retries.mjs",
+    "verify:action-pins": "node scripts/verify-action-pins.mjs",
     "smoke": "node scripts/smoke-servers.mjs",
+    "pack:verify": "node scripts/pack-and-verify.mjs",
     "local:gate": "node scripts/gate-lease.mjs npm run local:gate:stages",
     "local:gate:stages": "npm run verify:install-fresh && npm run validate && npm run validate:py && npm run verify:skills:cli && npm run smoke"
   },

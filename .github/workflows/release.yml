@@ -1,5 +1,6 @@
 # Publishes every package whose version the registry does not have yet, when a
-# maintainer publishes a GitHub Release (#4472). The procedure is RELEASING.md.
+# maintainer publishes a GitHub Release (#4472, #4873). The procedure is
+# RELEASING.md, and the `release` skill.
 #
 # No job here computes, stamps or tags a version. The version in each
 # package.json / pyproject.toml on the released ref is the source of truth: it
@@ -8,11 +9,32 @@
 # release tag is only a label on tested code. So a tag can never disagree with
 # a version, and there is nothing to push back to a branch.
 #
+# BUILD AND PUBLISH ARE SEPARATE JOBS, per package:
+#
+#   build-*    checks out the tag, installs dependencies, runs the tests, and
+#              runs `pack:verify`: it builds the tarball or wheel, installs it
+#              into an empty directory and boots the installed server. Holds no
+#              `id-token` and no environment. Uploads the verified artifact.
+#   publish-*  downloads that artifact and hands it to the registry. Holds
+#              `id-token: write` and the `release` environment. No checkout,
+#              no dependency install, no build.
+#
+# The split is about what runs next to the OIDC token. Installing dependencies
+# runs their lifecycle scripts, and a build runs the toolchain; in a job that
+# can mint a publish credential, any of that code can publish. Here the only
+# things that run with the token are a pinned action or two and the registry
+# client. And since what is published is the artifact the build job uploaded,
+# every action in BOTH jobs is pinned to a commit SHA: `verify:action-pins`
+# enforces that for any job holding a credential and any job whose artifact
+# such a job downloads.
+#
 # Every package is a matrix leg, and each leg decides for itself: a version
 # already on the registry is SKIPPED, not failed. That makes a release
 # idempotent and self-healing. A package whose publish failed is picked up by
 # the next release with no special handling, and one that did not change costs
-# a skipped leg.
+# a skipped leg. For npm the build leg decides (`npm-publish-guard.mjs`) and
+# uploads a `SKIP` marker instead of a tarball; for PyPI the registry decides
+# at upload (`skip-existing`).
 #
 # The trigger is `release: published` and nothing else, so editing a
 # published Release's notes never re-runs publishing. A release event runs the
@@ -27,13 +49,18 @@
 # Only a commit that is on `main` is published. A Release can be created for
 # any tag on any commit, and the environment approval shows a reviewer a tag
 # name, not what it points at, so `detect-packages` checks the released commit
-# against `main` and every publish job needs it.
+# against `main` and every job after it needs it.
 
 name: Release
 
 on:
   release:
     types: [published]
+
+# Nothing in this workflow needs more than read access by default; the two
+# publish jobs add `id-token: write` for themselves.
+permissions:
+  contents: read
 
 jobs:
   detect-packages:
@@ -46,14 +73,14 @@ jobs:
     steps:
       # On a release event the default ref is the release's tag: the exact
       # commit the maintainer released. Full history, for the check below.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
       # `main` only receives reviewed milestone merges, so "on main" is what
       # makes the released code reviewed code. A tag cut from `v2/main`, a
-      # feature branch or a fork's commit fails here, before any publish job
-      # is eligible to run.
+      # feature branch or a fork's commit fails here, before any build or
+      # publish job is eligible to run.
       - name: Refuse a release whose commit is not on main
         run: |
           git fetch --no-tags origin main
@@ -71,7 +98,7 @@ jobs:
           echo "npm_packages=$NPM" >> "$GITHUB_OUTPUT"
           echo "pypi_packages=$PYPI" >> "$GITHUB_OUTPUT"
 
-  publish-npm:
+  build-npm:
     timeout-minutes: 15
     needs: [detect-packages]
     if: ${{ needs.detect-packages.outputs.npm_packages != '[]' }}
@@ -79,35 +106,29 @@ jobs:
       fail-fast: false
       matrix:
         package: ${{ fromJson(needs.detect-packages.outputs.npm_packages) }}
-    name: Publish ${{ matrix.package }} (npm)
-    environment: release
-    permissions:
-      contents: read
-      id-token: write # Required for npm trusted publishing (OIDC)
+    name: Build ${{ matrix.package }} (npm)
     runs-on: ubuntu-latest
+    env:
+      PACKAGE: ${{ matrix.package }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
-          registry-url: "https://registry.npmjs.org"
-
-      # OIDC trusted publishing requires npm >=11.5.1; Node 22's bundled npm is 10.x.
-      - name: Ensure npm CLI supports OIDC trusted publishing
-        run: npm install -g npm@^11.5.1
 
       # The registry-diff guard: skip (not fail) a version that is already
       # published, and treat a never-published package as "publish it".
       - name: Check whether this version is already on npm
         id: guard
-        run: node scripts/npm-publish-guard.mjs "src/${{ matrix.package }}"
+        run: node scripts/npm-publish-guard.mjs "src/$PACKAGE"
 
+      # This package plus the root, as in CI: `pack:verify` is a root script
+      # and its MCP client is a root devDependency.
       - name: Install dependencies
         if: steps.guard.outputs.skip != 'true'
-        working-directory: src/${{ matrix.package }}
-        run: npm ci
+        run: npm ci --workspace "src/$PACKAGE" --include-workspace-root
 
       # Defense in depth: CI already validated the branch, but this tests the
       # exact ref being published, whatever path the tag took to get here.
@@ -116,21 +137,108 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: npm test --if-present
 
-      - name: Build package
+      # Packs the tarball (which builds it), installs it into an empty
+      # directory and boots the installed server. The tarball it leaves in
+      # `release-artifact/<package>/` is the one that gets published.
+      - name: Pack, install and boot the tarball
         if: steps.guard.outputs.skip != 'true'
-        working-directory: src/${{ matrix.package }}
-        run: npm run build
+        run: npm run pack:verify -- "$PACKAGE" --out release-artifact
 
-      # Authenticates via OIDC trusted publishing (no token): each package's
-      # npm trusted publisher is bound to this workflow + the release environment.
+      # An artifact is uploaded either way, so the publish leg always has
+      # something to download; the marker is how it learns there is nothing
+      # to publish.
+      - name: Mark an already-published version as skipped
+        if: steps.guard.outputs.skip == 'true'
+        run: |
+          mkdir -p "release-artifact/$PACKAGE"
+          touch "release-artifact/$PACKAGE/SKIP"
+
+      - name: Upload the artifact for the publish job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-${{ matrix.package }}
+          path: release-artifact/${{ matrix.package }}/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-npm:
+    timeout-minutes: 10
+    needs: [detect-packages, build-npm]
+    # `!cancelled()` rather than the default `success()`: `build-npm` is one
+    # job with a leg per package, so one package's failed build would
+    # otherwise skip every package's publish. Each publish leg stands on its
+    # own artifact instead, and the leg whose build failed has none to
+    # download, so it fails there, before anything is published.
+    if: ${{ !cancelled() && needs.detect-packages.result == 'success' && needs.detect-packages.outputs.npm_packages != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.npm_packages) }}
+    name: Publish ${{ matrix.package }} (npm)
+    # The trusted-publisher binding keys off this workflow file and this
+    # environment, so the environment stays on the job that publishes.
+    # `build-npm` deliberately does not take it.
+    environment: release
+    permissions:
+      # Required for npm trusted publishing (OIDC) and provenance. This job
+      # runs no dependency code: see the header.
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      # No `cache: npm`: there is no checkout, so no lockfile to key it on, and
+      # nothing here installs dependencies to cache.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+
+      # OIDC trusted publishing requires npm >= 11.5.1; Node 22's bundled npm
+      # is 10.x. Pinned EXACTLY, not to a range: this install runs in the job
+      # that holds `id-token: write`, so it is the one package this job
+      # trusts, and a range would let whatever 11.x is current at release time
+      # into it. `--ignore-scripts` keeps even its lifecycle scripts out.
+      - name: Install the pinned npm CLI (OIDC trusted publishing)
+        run: npm install -g --ignore-scripts npm@11.20.0
+
+      - name: Download the artifact built by the build job
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-${{ matrix.package }}
+          path: release-artifact
+
+      # Publishes the tarball `build-npm` verified: a file argument, so npm
+      # runs no lifecycle scripts and builds nothing here. There is
+      # deliberately no `NODE_AUTH_TOKEN`: publishing is tokenless, and an
+      # empty token in `.npmrc` makes npm fail before it ever tries OIDC.
       - name: Publish package
-        if: steps.guard.outputs.skip != 'true'
-        working-directory: src/${{ matrix.package }}
-        run: npm publish --access public
         env:
           NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          if [ -e release-artifact/SKIP ]; then
+            echo "This version is already on npm; nothing to publish."
+            exit 0
+          fi
+          # `./` is load-bearing: `npm publish` reads a bare `dir/file`
+          # argument as a GitHub `owner/repo` shorthand and tries to clone it
+          # instead of publishing the local tarball.
+          set -- ./release-artifact/*.tgz
+          if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+            echo "Expected exactly one tarball in release-artifact/, found: $*"
+            exit 1
+          fi
+          # The tarball was built after dependency install scripts ran, so its
+          # manifest is untrusted input here. npm merges a manifest's
+          # `publishConfig` into its own config before the OIDC exchange, so an
+          # injected registry or proxy could redirect this job's credential
+          # flow. No package here declares one, so any present is refused, and
+          # the registry is named on the command line as well.
+          if tar -xOzf "$1" package/package.json | node -e "process.exit('publishConfig' in JSON.parse(require('fs').readFileSync(0, 'utf8')) ? 0 : 1)"; then
+            echo "Refusing to publish: the tarball's package.json declares publishConfig"
+            exit 1
+          fi
+          npm publish "$1" --access public --registry https://registry.npmjs.org/
 
-  publish-pypi:
+  build-pypi:
     timeout-minutes: 15
     needs: [detect-packages]
     if: ${{ needs.detect-packages.outputs.pypi_packages != '[]' }}
@@ -138,50 +246,77 @@ jobs:
       fail-fast: false
       matrix:
         package: ${{ fromJson(needs.detect-packages.outputs.pypi_packages) }}
-    name: Publish ${{ matrix.package }} (PyPI)
-    environment: release
-    permissions:
-      contents: read
-      id-token: write # Required for trusted publishing
+    name: Build ${{ matrix.package }} (PyPI)
     runs-on: ubuntu-latest
+    env:
+      PACKAGE: ${{ matrix.package }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: "src/${{ matrix.package }}/.python-version"
 
-      - name: Install dependencies
-        working-directory: src/${{ matrix.package }}
-        run: uv sync --frozen --all-extras --dev
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
 
-      - name: Run pyright
-        working-directory: src/${{ matrix.package }}
-        run: uv run --frozen pyright
+      # Defense in depth: the same per-server chain CI and the gate run
+      # (locked sync, ruff, pyright, pytest, build), on the exact ref being
+      # published.
+      - name: Validate
+        run: node scripts/validate-py.mjs "$PACKAGE"
 
-      # Defense in depth: CI already validated the branch, but this tests the
-      # exact ref being published, whatever path the tag took to get here.
-      - name: Run tests
-        working-directory: src/${{ matrix.package }}
-        run: |
-          if [ -d "tests" ] || [ -d "test" ]; then
-            uv run --frozen pytest
-          else
-            echo "No tests directory, skipping"
-          fi
+      # `pack:verify` is a root script and its MCP client is a root
+      # devDependency. `--ignore-scripts` skips the TypeScript workspaces'
+      # `prepare` builds, which a Python package has no use for.
+      - name: Install the root tooling
+        run: npm ci --ignore-scripts
 
-      - name: Build package
-        working-directory: src/${{ matrix.package }}
-        run: uv build
+      # Builds the wheel and sdist, installs the wheel into an empty
+      # environment and boots the installed console script. The distributions
+      # it leaves in `release-artifact/<package>/` are the ones published.
+      - name: Build, install and boot the wheel
+        run: npm run pack:verify -- "$PACKAGE" --out release-artifact
+
+      - name: Upload the artifact for the publish job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pypi-${{ matrix.package }}
+          path: release-artifact/${{ matrix.package }}/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-pypi:
+    timeout-minutes: 10
+    needs: [detect-packages, build-pypi]
+    # See `publish-npm`: one package's failed build must not block the rest.
+    if: ${{ !cancelled() && needs.detect-packages.result == 'success' && needs.detect-packages.outputs.pypi_packages != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.pypi_packages) }}
+    name: Publish ${{ matrix.package }} (PyPI)
+    environment: release
+    permissions:
+      id-token: write # Required for trusted publishing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the artifact built by the build job
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pypi-${{ matrix.package }}
+          path: dist
 
       # `skip-existing` is the PyPI side of the registry-diff guard: an
       # already-published version is skipped, not failed.
       - name: Publish package to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
-          packages-dir: src/${{ matrix.package }}/dist
+          packages-dir: dist
           skip-existing: true

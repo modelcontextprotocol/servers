@@ -254,13 +254,9 @@ export function launchSpec(
   platform = process.platform,
 ) {
   const cwd = path.join(root, "src", server.name);
-  const serverArgs = server.args?.(ctx) ?? [];
+  const rest = serverArguments(server, transport, ctx);
   if (server.language === "ts") {
-    // `everything` picks its transport from its first argument; the others
-    // are stdio-only and take none.
-    const transportArg = server.transports.length > 1 ? [transport] : [];
     const bin = path.join(cwd, "dist", "index.js");
-    const rest = [...transportArg, ...serverArgs];
     // The published `bin` is the file itself, run through its shebang, so that
     // is what is executed: `node dist/index.js` would still work with the
     // shebang or the executable bit lost, and the installed command would not.
@@ -272,9 +268,26 @@ export function launchSpec(
   }
   return {
     command: "uv",
-    args: ["run", "--no-sync", `mcp-server-${server.name}`, ...serverArgs],
+    args: ["run", "--no-sync", `mcp-server-${server.name}`, ...rest],
     cwd,
   };
+}
+
+/**
+ * The arguments a server is started with, whatever launches it: the transport
+ * where the server takes one, then its own. Shared with `pack:verify`, which
+ * starts the same servers from an installed package instead of the checkout.
+ *
+ * @param {(typeof SERVERS)[number]} server
+ * @param {string} transport
+ * @param {{ dir: string, pageUrl: string }} ctx
+ * @returns {string[]}
+ */
+export function serverArguments(server, transport, ctx) {
+  // `everything` picks its transport from its first argument; the others are
+  // stdio-only and take none.
+  const transportArg = server.transports.length > 1 ? [transport] : [];
+  return [...transportArg, ...(server.args?.(ctx) ?? [])];
 }
 
 /** Text content of a tool result, joined. */
@@ -372,14 +385,28 @@ function envFor(server, ctx, extra = {}) {
 /**
  * Smoke one server over one transport. Resolves when it passes; rejects with
  * the reason when it does not. Always stops what it started.
+ *
+ * `installed` replaces the checkout's launch command with another one
+ * (`pack:verify` passes the bin of a package it installed from the publish
+ * artifact). The checkout preconditions below are about the checkout, so they
+ * are skipped for it.
+ *
+ * @param {(typeof SERVERS)[number]} server
+ * @param {string} transport
+ * @param {{ dir: string, pageUrl: string }} ctx
+ * @param {{ command: string, args: string[], cwd: string }} [installed]
  */
-async function smokeOne(server, transport, ctx) {
-  const spec = launchSpec(server, transport, ctx);
-  if (server.language === "ts" && !existsSync(spec.bin))
+export async function smokeOne(server, transport, ctx, installed) {
+  const spec = installed ?? launchSpec(server, transport, ctx);
+  if (!installed && server.language === "ts" && !existsSync(spec.bin))
     throw new Error(
       `${path.relative(repoRoot, spec.bin)} does not exist — build first (\`npm run build -w src/${server.name}\`).`,
     );
-  if (server.language === "py" && !existsSync(path.join(spec.cwd, ".venv")))
+  if (
+    !installed &&
+    server.language === "py" &&
+    !existsSync(path.join(spec.cwd, ".venv"))
+  )
     throw new Error(
       `src/${server.name}/.venv does not exist — sync first (\`npm run validate:py -- ${server.name}\`, or \`uv sync --locked --all-extras --dev\` in src/${server.name}). The smoke does not create environments.`,
     );
@@ -467,7 +494,7 @@ async function smokeOne(server, transport, ctx) {
 }
 
 /** The loopback page `fetch` is pointed at, with a permissive robots.txt. */
-function startPage() {
+export function startPage() {
   return new Promise((resolve, reject) => {
     const server = createServer((req, res) => {
       if (req.url === "/robots.txt") {
