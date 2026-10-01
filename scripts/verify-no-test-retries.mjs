@@ -92,7 +92,9 @@ export const RULES = [
   {
     id: "pytest-flaky-marker",
     files: /\.py$/,
-    pattern: /@(?:pytest\.mark\.)?flaky\b|@pytest\.mark\.retries\b/,
+    // `pytest.mark.<x>` anywhere, since a mark is also applied without a
+    // decorator (`pytestmark = …`, `marks=…`); the bare `@flaky` import form.
+    pattern: /\bpytest\.mark\.(?:flaky|retries)\b|@flaky\b/,
     why: "pytest's flaky marker",
   },
 ];
