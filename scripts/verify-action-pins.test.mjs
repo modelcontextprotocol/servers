@@ -220,6 +220,47 @@ test("a producer behind a job that neither downloads nor uploads still counts", 
   ]);
 });
 
+test("action names are matched without regard to case, as GitHub resolves them", () => {
+  const yaml = wf(
+    "jobs:",
+    "  package:",
+    "    steps:",
+    "      - uses: Actions/Upload-Artifact@v7",
+    "  publish:",
+    "    needs: package",
+    "    permissions:",
+    "      id-token: write",
+    "    steps:",
+    `      - uses: Actions/Download-Artifact@${SHA} # v8.0.1`,
+  );
+  assert.deepEqual([...credentialedJobs(yaml)].sort(), ["package", "publish"]);
+  assert.deepEqual(unpinnedRefs(yaml), [
+    { job: "package", uses: "Actions/Upload-Artifact@v7" },
+  ]);
+});
+
+test("an upstream reusable-workflow call counts as an artifact producer", () => {
+  const yaml = wf(
+    "jobs:",
+    "  build:",
+    "    uses: org/repo/.github/workflows/build.yml@v1",
+    "  lint:",
+    "    uses: org/repo/.github/workflows/lint.yml@v1",
+    "  publish:",
+    "    needs: build",
+    "    permissions:",
+    "      id-token: write",
+    "    steps:",
+    `      - uses: actions/download-artifact@${SHA} # v8.0.1`,
+  );
+  // The called workflow can upload into this run and is not read here, so the
+  // call upstream of the downloader is held to the pin. `lint` is not upstream.
+  assert.deepEqual([...credentialedJobs(yaml)].sort(), ["build", "publish"]);
+  assert.deepEqual(unpinnedRefs(yaml), [
+    { job: "build", uses: "org/repo/.github/workflows/build.yml@v1" },
+  ]);
+});
+
 test("an upload is not credentialed when the consumer downloads nothing", () => {
   const yaml = wf(
     "jobs:",

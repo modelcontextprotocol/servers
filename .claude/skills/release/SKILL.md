@@ -314,9 +314,22 @@ A row that says "verified" without saying what was run is not a ledger entry.
 
 **4e. When verification finds something, the fix goes on `v2/main`, never on
 the merge branch.** File the issue (`/issue-create`), fix it through an
-ordinary PR, then fast-forward the merge branch to the new `origin/v2/main`
-(`git merge --ff-only origin/v2/main`, then push), so the fix arrives the way
-everything else did and the branch is still `v2/main` with nothing added.
+ordinary PR, then fast-forward the merge branch to the new `origin/v2/main`,
+so the fix arrives the way everything else did and the branch is still
+`v2/main` with nothing added. The verification worktree is detached, so a
+merge and a plain `git push` there would move nothing. Update the remote
+branch by name, then move the worktree onto it:
+
+```sh
+git fetch origin v2/main
+# A fast-forward only: the push is refused if the branch holds anything
+# v2/main does not.
+git push origin "origin/v2/main:refs/heads/v2/chore/$N-release-$MILESTONE"
+git fetch origin
+git switch --detach "origin/v2/chore/$N-release-$MILESTONE" && npm ci
+```
+
+Then repeat step 3's `git merge-tree` check.
 Re-run what the fix touches and update the ledger. If the fix changed a
 package, its version PR (2b or 2c) runs again first.
 

@@ -29,7 +29,9 @@
 //   3. uploads an artifact that a credentialed job downloads and has anywhere
 //      in its transitive `needs` (an artifact is scoped to the run, so a job
 //      can download from any job that finished before it), so every producer
-//      in a `source → package → publish` chain counts, not only the last. Here that is `release.yml`'s two build jobs:
+//      in a `source → package → publish` chain counts, not only the last. A
+//      job that calls a reusable workflow counts as a producer too, since the
+//      called workflow can upload into the same run and is not read here. Here that is `release.yml`'s two build jobs:
 //      each builds the tarball or wheel its publish job hands to the registry
 //      under provenance, so a moved tag in the build job publishes as surely
 //      as one in the publish job would. (The build was split out of the
@@ -112,10 +114,24 @@ function handedSecret(job, inherited) {
 const needsOf = (job) =>
   job.needs == null ? [] : [job.needs].flat().map(String);
 
+// GitHub resolves an action's owner and repository without regard to case, so
+// `Actions/Upload-Artifact@v7` is the same action and must be recognized.
 const stepsUsing = (job, action) =>
   (job.steps ?? []).some(
-    (step) => typeof step?.uses === "string" && step.uses.startsWith(action),
+    (step) =>
+      typeof step?.uses === "string" &&
+      step.uses.toLowerCase().startsWith(action),
   );
+
+/**
+ * Can this job have produced an artifact? It can when one of its steps
+ * uploads one, and also when it CALLS A REUSABLE WORKFLOW: the called
+ * workflow's jobs upload into the same run, and this guard does not read
+ * them. So a workflow call upstream of a credentialed downloader is counted
+ * rather than assumed harmless, which makes its own ref subject to the pin.
+ */
+const mayUploadArtifact = (job) =>
+  typeof job.uses === "string" || stepsUsing(job, "actions/upload-artifact@");
 
 /**
  * @param {string} yaml raw contents of a workflow file
@@ -171,10 +187,7 @@ export function credentialedJobs(yaml, file) {
       if (!held.has(name) || !stepsUsing(job, "actions/download-artifact@"))
         continue;
       for (const producer of upstreamOf(name)) {
-        if (
-          !held.has(producer) &&
-          stepsUsing(workflow.jobs[producer], "actions/upload-artifact@")
-        ) {
+        if (!held.has(producer) && mayUploadArtifact(workflow.jobs[producer])) {
           held.add(producer);
           grew = true;
         }
