@@ -175,12 +175,20 @@ describe('mutation transaction lifetime', () => {
     await manager.createEntities([entity('Alice')]);
     const controller = new AbortController();
     const writeFile = fs.writeFile;
+    let prepared = false;
     vi.spyOn(fs, 'writeFile').mockImplementation(async (...args) => {
-      controller.abort();
-      return writeFile(...args);
+      const result = await writeFile(...args);
+      // Abort only once the graph .tmp write has settled, so this covers the
+      // window between preparing the graph and publishing it.
+      if (String(args[0]).endsWith('.tmp')) {
+        prepared = true;
+        controller.abort();
+      }
+      return result;
     });
     await expect(manager.createEntities([entity('Bob')], controller.signal))
       .rejects.toBeInstanceOf(MemoryRequestError);
+    expect(prepared).toBe(true);
     vi.restoreAllMocks();
     // A following job runs only after the cancelled one drained its temp file.
     await manager.createEntities([entity('Marker')]);

@@ -150,7 +150,8 @@ export async function withDirectoryLock<T>(
     throw new Error('Invalid memory file lock timing');
   }
   const lockPath = `${path.resolve(file)}.lock`;
-  const acquired = await acquireGeneration(lockPath, timing, performance.now() + timeoutMs, signal);
+  const deadline = performance.now() + timeoutMs;
+  const acquired = await acquireGeneration(lockPath, timing, deadline, signal);
   const ownerPath = acquired.ownerPath;
   let snapshot = acquired.snapshot;
   let lost: Error | undefined;
@@ -222,6 +223,11 @@ export async function withDirectoryLock<T>(
   try {
     await assertOwned();
     signal?.throwIfAborted();
+    // Acquisition can be issued inside the budget but resolve past it; the
+    // finally below still releases that generation before rejecting.
+    if (performance.now() >= deadline) {
+      throw new Error(`Timed out waiting for memory file lock: ${lockPath}`);
+    }
     result = await operation(assertOwned);
   } finally {
     stopped = true;

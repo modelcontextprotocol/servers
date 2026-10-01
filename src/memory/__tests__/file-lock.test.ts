@@ -167,6 +167,29 @@ describe('memory directory leases', () => {
     expect(overlapped).toBe(false);
   });
 
+  it('does not run the operation when publication resolves after the deadline', async () => {
+    const lockPath = `${file}.lock`;
+    const rename = fs.rename;
+    const realNow = performance.now.bind(performance);
+    let clock = 0;
+    let entered = false;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock || realNow());
+    // Model a publish that started inside the budget but resolved past it.
+    vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      const result = await rename(from, to);
+      if (String(to) === lockPath) clock = realNow() + 60000;
+      return result;
+    });
+    await expect(withDirectoryLock(file, async () => { entered = true; }, { timeoutMs: 30000 }))
+      .rejects.toThrow('Timed out waiting');
+    expect(entered).toBe(false);
+    // The rejected generation released itself; nothing is left behind.
+    expect(await fs.readdir(directory)).toEqual([]);
+    vi.restoreAllMocks();
+    // The next contender is not blocked by the rejected generation.
+    await expect(withDirectoryLock(file, async () => 'next', { timeoutMs: 1000 })).resolves.toBe('next');
+  });
+
   it('recovers an abandoned lease without requiring the data file to exist', async () => {
     await abandonLease();
 
