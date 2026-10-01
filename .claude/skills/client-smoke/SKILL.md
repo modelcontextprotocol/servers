@@ -168,11 +168,14 @@ newest protocol version is 2025-11-25. None implements `server/discover`. So:
   connection and proves nothing about 2026-07-28.
 
 The both-eras check that `/pr-flow` asks for (#4857) therefore has one half
-that can pass today. For a server still on a v1 SDK, record the legacy run,
-and say in the PR that the server does not yet speak 2026-07-28 rather than
-leaving the modern era unmentioned. Once a server is migrated under #4857, run
-every command twice, with `--protocol-era legacy` and `--protocol-era modern`,
-and expect both to succeed. Do not use `auto` for evidence in either case: it
+that can pass today. For a server that does not yet serve the modern era,
+record the legacy run, and say in the PR that the server does not yet speak
+2026-07-28 rather than leaving the modern era unmentioned. Moving a server to
+a v2 SDK (#4856 for TypeScript, #4851 for Python) does not change that by
+itself: those keep the legacy wire behavior. Modern-era support arrives with
+#4852 (TypeScript) and #4853 (Python). Once a server has it, run every command
+twice, with `--protocol-era legacy` and `--protocol-era modern`, and expect
+both to succeed. Do not use `auto` for evidence in either case: it
 does not say which era answered.
 
 ## The Inspector web UI
