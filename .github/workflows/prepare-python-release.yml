@@ -33,6 +33,16 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      # The ref this was dispatched on becomes the PR's base, and every PR
+      # targets `v2/main`. A run from `main` would open a version PR straight
+      # against the release branch, around the milestone merge.
+      - name: Refuse a dispatch from any branch but v2/main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/v2/main" ]; then
+            echo "::error::Dispatch this workflow on v2/main, not $GITHUB_REF."
+            exit 1
+          fi
+
       # Full history: the script finds each package's last version bump with
       # `git log`, and a shallow clone would make every package look new.
       - uses: actions/checkout@v6
@@ -92,8 +102,13 @@ jobs:
             echo "> [!NOTE]"
             echo "> A PR opened with the workflow token does not trigger CI. Close and reopen this PR to run it."
           } > "$RUNNER_TEMP/pr-body.md"
-          if [ "$(gh pr list --head "$BRANCH" --state open --json number --jq length)" != "0" ]; then
-            echo "A PR for $BRANCH is already open; its branch was updated"
+          # A second run on the same day force-updates the branch, and may
+          # stamp a different set of packages; the open PR's body is rewritten
+          # to match what the branch now holds.
+          EXISTING=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh pr edit "$EXISTING" --body-file "$RUNNER_TEMP/pr-body.md"
+            echo "PR #$EXISTING for $BRANCH was already open; its branch and body were updated"
           else
             gh pr create \
               --base "$BASE" \

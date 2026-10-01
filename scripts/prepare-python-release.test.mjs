@@ -51,6 +51,9 @@ test("shipsInPackage counts what a user installs, not the tests", () => {
     "src/mcp_server_git/py.typed",
     "README.md",
     "pyproject.toml",
+    "LICENSE",
+    "LICENSE.txt",
+    "licence",
   ])
     assert.equal(shipsInPackage(file), true, file);
   for (const file of [
@@ -58,6 +61,7 @@ test("shipsInPackage counts what a user installs, not the tests", () => {
     "test/time_server_test.py",
     "uv.lock",
     "Dockerfile",
+    "src/mcp_server_git/licenses.json",
     ".python-version",
   ])
     assert.equal(shipsInPackage(file), false, file);

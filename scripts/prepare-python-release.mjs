@@ -21,8 +21,8 @@
 //      version and is installed `--locked` in CI.
 //
 // "Ships in the package" is read off the path: Python sources, the `py.typed`
-// marker, Markdown (the README is the sdist's long description) and
-// `pyproject.toml` itself (a dependency change). A test-only change does not
+// marker, Markdown (the README is the sdist's long description), a license
+// file, and `pyproject.toml` itself (a dependency change). A test-only change does not
 // count: nothing a user installs is different. Over-stamping would be harmless
 // anyway, since the registry guard in `release.yml` decides what publishes;
 // under-stamping is the failure that matters, because a changed package whose
@@ -66,7 +66,12 @@ export function shipsInPackage(file) {
   const parts = file.split("/");
   if (parts.some((p) => p === "tests" || p === "test")) return false;
   const name = parts.at(-1) ?? "";
-  return name === "pyproject.toml" || /\.(?:py|md|typed)$/.test(name);
+  return (
+    name === "pyproject.toml" ||
+    /\.(?:py|md|typed)$/.test(name) ||
+    // Hatchling puts a license file in both distributions.
+    /^(?:LICEN[CS]E|COPYING|NOTICE)(?:\.|$)/i.test(name)
+  );
 }
 
 /**
