@@ -319,8 +319,8 @@ export function findJobsWithoutTimeout(text, file = "<workflow>") {
 /**
  * What one workflow runs, for the CI-parity assertion: the npm scripts and the
  * `scripts/*.mjs` files its steps invoke, and whether it runs on a push or a
- * pull request at all (a dispatch-only workflow, such as the release, is not a
- * check on a change).
+ * pull request at all (a workflow that runs only on a dispatch or a published
+ * Release, such as the release itself, is not a check on a change).
  *
  * Read from the same executable regions the rules above scan, so a step
  * `name:` or a comment that mentions a script is not counted. `node --test`
