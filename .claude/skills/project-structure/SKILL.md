@@ -46,7 +46,7 @@ Three things about `everything` that the table cannot hold:
   `docs/instructions.md` is returned as the server's `instructions`. A file
   added there becomes a resource a client can list.
 - **Its own maps are `src/everything/docs/structure.md` and
-  `docs/extension.md`.** A change to the server's files updates
+  `src/everything/docs/extension.md`.** A change to the server's files updates
   `structure.md`, and `src/everything/AGENTS.md` holds the rules that apply
   only inside that directory.
 

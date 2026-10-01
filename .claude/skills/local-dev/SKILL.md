@@ -70,7 +70,10 @@ PORT=3917 node src/everything/dist/index.js streamableHttp
 Both HTTP transports listen on `PORT`, default `3001`, so they cannot run side
 by side without setting it. Streamable HTTP serves POST, GET and DELETE on
 `/mcp`. HTTP+SSE serves `GET /sse` and `POST /message`; it is deprecated, kept
-working, and never the transport to recommend. Both log to stderr.
+working, and never the transport to recommend. The two log to different
+streams: HTTP+SSE writes everything to stderr, while Streamable HTTP writes its
+request and session messages to stdout and its `listening on port` line and
+errors to stderr.
 
 ## Run the local package the way a user would
 

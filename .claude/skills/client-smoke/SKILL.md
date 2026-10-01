@@ -111,7 +111,12 @@ The exit code is the verdict, so check it rather than reading the text:
 | The request succeeded | `{"result": …}` | | 0 |
 | The tool ran and returned `isError: true` | `{"result":{"content": …, "isError": true}}` | `{"error":{"code":"tool_is_error", …}}` | 5 |
 | No such tool | | `{"error":{"code":"tool_not_found", …}}` | 5 |
-| Could not connect, or bad arguments | | `{"error":{"code":"error", …}}` | 1 |
+| An HTTP server could not be reached (refused, DNS, timeout) | | `{"error":{"code":"unreachable", …}}` | 4 |
+| Bad arguments, a failed version negotiation, or a stdio server that exited | | `{"error":{"code":"error", …}}` | 1 |
+
+These are the codes observed on 2.9.0 for the cases this repo's servers
+produce; the CLI defines others (schema and skill checks, authentication)
+that its `--help` describes.
 
 A tool error is a **successful protocol exchange**: the result object is still
 printed on stdout, and it is what to quote when the change is about an error a
@@ -231,9 +236,12 @@ addressed as `mcp__<server name in the config>__<tool name>`, and only the
 tools listed in `--allowedTools` can be called without a prompt. Keep the
 config file outside the worktree.
 
-An LLM client does not report which protocol version it negotiated, and offers
-no era switch. Record the client and its version; do not present an LLM run as
-evidence for a particular era.
+Claude Code, run this way, has no era switch and does not print the protocol
+version it negotiated. `/pr-flow` asks for the LLM client in both eras as well;
+where the client gives no way to choose, record the client and its version and
+say that the era could not be selected, rather than labelling the run with an
+era it was not shown to use. Against a v1-SDK server the connection is legacy
+whatever the client prefers, for the reason given under Protocol eras.
 
 ## What to write down
 
