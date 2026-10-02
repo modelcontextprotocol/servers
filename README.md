@@ -160,6 +160,7 @@ This project is licensed under the Apache License, Version 2.0 for new contribut
 ## 💬 Community
 
 - [GitHub Discussions](https://github.com/orgs/modelcontextprotocol/discussions)
+- [MemTether](https://github.com/MemTether/MemTether): Cross-client AI memory hub - SQLite + FTS5 + Bi-temporal + Source Attribution. Local-first, no cloud. 23 client adapters.
 
 ## ⭐ Support
 
