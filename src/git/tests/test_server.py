@@ -237,6 +237,9 @@ def test_git_log_default(test_repository):
     assert "initial commit" in result[0]
 
 def test_git_commit_concludes_a_merge(test_repository):
+    with test_repository.config_writer() as config:
+        config.set_value("user", "name", "Test User")
+        config.set_value("user", "email", "test@example.com")
     main = test_repository.active_branch
     test_repository.git.checkout("-b", "feature")
     Path(test_repository.working_dir, "test.txt").write_text("feature")
