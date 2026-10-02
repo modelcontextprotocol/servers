@@ -271,6 +271,9 @@ def test_git_show(test_repository):
     assert "show_test.txt" in result
 
 def test_git_create_branch_from_annotated_tag(test_repository):
+    with test_repository.config_writer() as config:
+        config.set_value("user", "name", "Test User")
+        config.set_value("user", "email", "test@example.com")
     test_repository.create_tag("v1", message="release v1")
 
     git_create_branch(test_repository, "from-tag", "v1")
