@@ -1,3 +1,4 @@
+import http from 'node:http';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerEchoTool, EchoSchema } from '../tools/echo.js';
@@ -1216,6 +1217,67 @@ describe('Tools', () => {
       await expect(
         handler!({ name: 'test.gz', data: 'ftp://example.com/file.txt', outputType: 'resource' })
       ).rejects.toThrow('Unsupported URL protocol');
+    });
+
+    it('should reject HTTP error responses instead of compressing the error page', async () => {
+      const mockServer = {
+        registerTool: vi.fn(),
+        registerResource: vi.fn(),
+      } as unknown as McpServer;
+
+      let handler: Function | null = null;
+      (mockServer.registerTool as any).mockImplementation(
+        (name: string, config: any, h: Function) => {
+          handler = h;
+        }
+      );
+
+      registerGZipFileAsResourceTool(mockServer);
+
+      const httpServer = http.createServer((req, res) => {
+        if (req.url === '/ok.txt') {
+          res.writeHead(200, { 'content-type': 'text/plain' });
+          res.end('real file contents');
+          return;
+        }
+        const status = req.url === '/boom.txt' ? 500 : 404;
+        res.writeHead(status, { 'content-type': 'text/plain' });
+        res.end(`error body for ${status}`);
+      });
+      await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+      const address = httpServer.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('expected a TCP address');
+      }
+
+      try {
+        const ok = await handler!({
+          name: 'ok.txt.gz',
+          data: `http://127.0.0.1:${address.port}/ok.txt`,
+          outputType: 'resource',
+        });
+        expect(ok.content[0].type).toBe('resource');
+
+        await expect(
+          handler!({
+            name: 'missing.txt.gz',
+            data: `http://127.0.0.1:${address.port}/missing.txt`,
+            outputType: 'resource',
+          })
+        ).rejects.toThrow('status 404');
+
+        await expect(
+          handler!({
+            name: 'boom.txt.gz',
+            data: `http://127.0.0.1:${address.port}/boom.txt`,
+            outputType: 'resource',
+          })
+        ).rejects.toThrow('status 500');
+      } finally {
+        await new Promise<void>((resolve, reject) =>
+          httpServer.close((err) => (err ? reject(err) : resolve()))
+        );
+      }
     });
   });
 });
