@@ -475,10 +475,23 @@ export class KnowledgeGraphManager {
     // bits before the rename, as src/filesystem/lib.ts preserves them for
     // the same write pattern. A graph file that does not exist yet has
     // nothing to preserve.
+    //
+    // Resolve symlinks so the rename replaces the link's target, not the link.
+    const targetPath = await fs
+      .realpath(this.memoryFilePath)
+      .catch(async () => {
+        const link = await fs
+          .readlink(this.memoryFilePath)
+          .catch(() => undefined);
+        return link
+          ? path.resolve(path.dirname(this.memoryFilePath), link)
+          : this.memoryFilePath;
+      });
+
     let mode: number | undefined;
     try {
-      await fs.access(this.memoryFilePath, fs.constants.W_OK);
-      mode = (await fs.stat(this.memoryFilePath)).mode & 0o777;
+      await fs.access(targetPath, fs.constants.W_OK);
+      mode = (await fs.stat(targetPath)).mode & 0o777;
     } catch (error) {
       if (
         !(error instanceof Error && "code" in error && error.code === "ENOENT")
@@ -487,10 +500,10 @@ export class KnowledgeGraphManager {
       }
     }
 
-    const directory = path.dirname(this.memoryFilePath);
+    const directory = path.dirname(targetPath);
     const tempFilePath = path.join(
       directory,
-      `${path.basename(this.memoryFilePath)}.${randomBytes(16).toString("hex")}.tmp`,
+      `${path.basename(targetPath)}.${randomBytes(16).toString("hex")}.tmp`,
     );
 
     try {
@@ -506,7 +519,7 @@ export class KnowledgeGraphManager {
       if (mode !== undefined) {
         await fs.chmod(tempFilePath, mode);
       }
-      await fs.rename(tempFilePath, this.memoryFilePath);
+      await fs.rename(tempFilePath, targetPath);
     } catch (error) {
       // Never leave a stray temp file behind on failure.
       await fs.unlink(tempFilePath).catch(() => {});
