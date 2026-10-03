@@ -114,6 +114,37 @@ describe('KnowledgeGraphManager persistence durability', () => {
     expect(await fs.readdir(testDir)).toEqual(['memory.jsonl']);
   });
 
+  it('writes through a symlinked memory file instead of replacing the link', async () => {
+    const targetDir = path.join(testDir, 'synced');
+    await fs.mkdir(targetDir);
+    const targetPath = path.join(targetDir, 'memory.jsonl');
+    await fs.writeFile(targetPath, '');
+    await fs.symlink(targetPath, testFilePath);
+
+    const manager = new KnowledgeGraphManager(testFilePath);
+    await manager.createEntities([
+      { name: 'Alice', entityType: 'person', observations: ['works at Acme Corp'] },
+    ]);
+
+    expect((await fs.lstat(testFilePath)).isSymbolicLink()).toBe(true);
+    expect(await fs.readFile(targetPath, 'utf-8')).toContain('Alice');
+    expect(await fs.readdir(targetDir)).toEqual(['memory.jsonl']);
+  });
+
+  it('creates the target of a symlinked memory file that does not exist yet', async () => {
+    const targetDir = path.join(testDir, 'synced');
+    await fs.mkdir(targetDir);
+    await fs.symlink(path.join('synced', 'memory.jsonl'), testFilePath);
+
+    const manager = new KnowledgeGraphManager(testFilePath);
+    await manager.createEntities([
+      { name: 'Alice', entityType: 'person', observations: ['works at Acme Corp'] },
+    ]);
+
+    expect((await fs.lstat(testFilePath)).isSymbolicLink()).toBe(true);
+    expect(await fs.readFile(path.join(targetDir, 'memory.jsonl'), 'utf-8')).toContain('Alice');
+  });
+
   it('still persists graph contents correctly across reloads', async () => {
     const manager = new KnowledgeGraphManager(testFilePath);
     await manager.createEntities([
