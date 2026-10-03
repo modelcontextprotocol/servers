@@ -100,7 +100,7 @@ dependencies are managed with **`uv`, never `pip`**.
 # TypeScript: one install at the root covers all four workspaces
 npm install
 npm run build                           # every workspace
-npm test -w src/<server>                # one workspace (vitest, with coverage)
+npm test -w src/<server>                # one workspace (vitest)
 
 # Python: per server
 cd src/<server>
@@ -177,8 +177,8 @@ than `GITHUB_TOKEN`. Today that is `release.yml`'s publish jobs and
   upward escape by silently downgrading.
 - **When you bump a devDependency that several TypeScript workspaces declare**
   (`typescript`, `vitest`, `@vitest/coverage-v8`, `@types/node`, …), bump it in
-  every workspace that declares it. Their ranges already differ; do not widen the
-  skew.
+  every workspace that declares it. Declare it with one identical range
+  everywhere — the `verify:dep-lockstep` guard enforces this.
 - **A Python dependency change updates that server's `uv.lock`** in the same
   commit (`uv lock`). CI installs with `--frozen` / `--locked` and fails on a
   stale lockfile.
