@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from importlib.metadata import version
 from enum import Enum
 import json
 from typing import Sequence
@@ -20,6 +21,11 @@ from mcp.types import (
 from mcp.shared.exceptions import McpError
 
 from pydantic import BaseModel
+
+# The version this server reports in serverInfo, read from the installed
+# distribution's metadata (pyproject.toml) so it cannot drift from the
+# published version (#360). Without it the SDK reports its own `mcp` version.
+SERVER_VERSION = version("mcp-server-time")
 
 
 class TimeTools(str, Enum):
@@ -131,7 +137,7 @@ class TimeServer:
 
 
 async def serve(local_timezone: str | None = None) -> None:
-    server = Server("mcp-time")
+    server = Server("mcp-time", version=SERVER_VERSION)
     time_server = TimeServer()
     local_tz = str(get_local_tz(local_timezone))
 
