@@ -56,8 +56,8 @@ you used, because those are the facts triage needs first.
 
 GitHub serves the issue chooser from the repository's **default branch**
 (`main`), and development happens on `v2/main`, which reaches `main` at milestone
-releases. So the forms appear in the chooser from the first milestone release
-that contains them; until then, open a blank issue and give the same details.
+releases. So a change to the forms goes live at the next milestone merge, not
+when it merges into `v2/main`.
 
 The chooser also links to the private security-advisory form and to the MCP
 Server Registry. **Never report a security vulnerability in a public issue**; use
