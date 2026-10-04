@@ -64,13 +64,13 @@ in-process harness.
 
 ```
 src/<server>/
-├── pyproject.toml            dependencies, the console script; pytest config in `fetch` and `git`
+├── pyproject.toml            dependencies, the console script, pytest and coverage config
 ├── uv.lock, .python-version
 ├── src/mcp_server_<name>/
 │   ├── __init__.py           main(): the command-line flags, then asyncio.run(serve(...))
 │   ├── __main__.py           python -m mcp_server_<name>
 │   └── server.py             everything else
-└── tests/                    test/ in `time`
+└── tests/                    pytest suite, driving serve() in-process
 ```
 
 `server.py` holds the Pydantic input models, the functions that do the work,
