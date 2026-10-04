@@ -89,6 +89,12 @@ test("output that is not the JSON report is an error, never a pass", () => {
   assert.equal(classify(JSON.stringify({ results: [] })).status, "error");
 });
 
+test("a CLI crash before the report carries its stderr as the reason", () => {
+  const v = classify("", "Fatal error: Error: spawn node ENOENT");
+  assert.equal(v.status, "error");
+  assert.match(v.error, /no JSON report[\s\S]*spawn node ENOENT/);
+});
+
 test("fenceFor outruns any backticks in the content", () => {
   assert.equal(fenceFor("plain"), "```");
   assert.equal(fenceFor("a ``` b"), "````");

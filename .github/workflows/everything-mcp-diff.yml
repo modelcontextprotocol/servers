@@ -88,7 +88,9 @@ jobs:
           # The base is built from history, so all of it is needed, tags
           # included (the release base is the previous Release's tag).
           fetch-depth: 0
-          ref: ${{ inputs.target_ref || github.ref }}
+          # The event's own commit (the merge commit for a PR), not a branch
+          # ref that a later push could move before this step runs.
+          ref: ${{ inputs.target_ref || github.sha }}
           persist-credentials: false
 
       - uses: actions/setup-node@v7

@@ -101,18 +101,24 @@ export function parseArgs(argv) {
  * its exit code cannot tell a change from a broken check; the JSON can.
  *
  * @param {string} stdout what `mcp-server-diff -o json -q` printed
+ * @param {string} [stderr] what it printed to stderr: a fatal error before the
+ *   report goes there, so it is the reason when no report came out
  * @returns {{ status: "unchanged" | "changed" | "error", error?: string,
  *   diffs: { endpoint: string, diff: string }[],
  *   baseCounts?: object, headCounts?: object }}
  */
-export function classify(stdout) {
+export function classify(stdout, stderr = "") {
   let parsed;
   try {
     parsed = JSON.parse(stdout);
   } catch {
     return {
       status: "error",
-      error: `mcp-server-diff printed no JSON report:\n${stdout.trim().slice(0, 2000)}`,
+      error: `mcp-server-diff printed no JSON report:\n${[stderr, stdout]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join("\n")
+        .slice(0, 2000)}`,
       diffs: [],
     };
   }
@@ -321,7 +327,7 @@ export async function main(argv = process.argv.slice(2)) {
       { cwd: repoRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
     );
     if (res.error) throw res.error;
-    verdict = classify(res.stdout);
+    verdict = classify(res.stdout, res.stderr);
   } catch (err) {
     verdict = { status: "error", error: err.message, diffs: [] };
   } finally {
