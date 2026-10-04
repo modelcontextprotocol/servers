@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta
 from enum import Enum
 import json
+import sys
 from typing import Sequence
 
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from tzlocal import get_localzone_name  # ← returns "Europe/Paris", etc.
 
 from mcp.server import Server
@@ -133,6 +134,18 @@ class TimeServer:
 async def serve(local_timezone: str | None = None) -> None:
     server = Server("mcp-time")
     time_server = TimeServer()
+    if local_timezone:
+        # Fail before the transport opens, with one line naming the bad value
+        # rather than a traceback. zoneinfo raises a different type per kind of
+        # bad key (unknown name, a tzdata directory, a path, a null byte), and
+        # its messages can carry a filesystem path, so none of them is shown.
+        try:
+            ZoneInfo(local_timezone)
+        except (ZoneInfoNotFoundError, ValueError, OSError):
+            sys.exit(
+                f"Error: invalid --local-timezone {local_timezone!r}: "
+                "not a known IANA timezone name"
+            )
     local_tz = str(get_local_tz(local_timezone))
 
     @server.list_tools()
