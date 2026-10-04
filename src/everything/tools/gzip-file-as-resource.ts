@@ -193,6 +193,10 @@ async function fetchSafely(
   try {
     // Fetch the data
     const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      throw new Error(`Failed to fetch ${url}: status ${response.status}`);
+    }
     if (!response.body) {
       throw new Error("No response body");
     }
