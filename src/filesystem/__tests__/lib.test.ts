@@ -14,6 +14,7 @@ import {
   // Pure utility functions
   formatSize,
   normalizeLineEndings,
+  detectLineEnding,
   createUnifiedDiff,
   // Security & validation functions
   validatePath,
@@ -185,6 +186,26 @@ describe("Lib Functions", () => {
 
       it("handles empty string", () => {
         expect(normalizeLineEndings("")).toBe("");
+      });
+    });
+
+    describe("detectLineEnding", () => {
+      it("detects CRLF", () => {
+        expect(detectLineEnding("line1\r\nline2\r\n")).toBe("\r\n");
+      });
+
+      it("detects LF", () => {
+        expect(detectLineEnding("line1\nline2\n")).toBe("\n");
+      });
+
+      it("picks the predominant ending of a mixed file", () => {
+        expect(detectLineEnding("a\r\nb\r\nc\n")).toBe("\r\n");
+        expect(detectLineEnding("a\r\nb\nc\n")).toBe("\n");
+      });
+
+      it("defaults to LF for a file with no line breaks", () => {
+        expect(detectLineEnding("")).toBe("\n");
+        expect(detectLineEnding("line1")).toBe("\n");
       });
     });
 
@@ -901,7 +922,7 @@ describe("Lib Functions", () => {
         await applyFileEdits("/test/file.txt", edits, false);
 
         expect(handle.writeFile).toHaveBeenCalledWith(
-          "line1\nmodified line2\nline3\n",
+          "line1\r\nmodified line2\r\nline3\r\n",
           "utf-8",
         );
       });

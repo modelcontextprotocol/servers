@@ -106,7 +106,8 @@ The server's directory access control follows this flow:
     - Line-based and multi-line content matching
     - Whitespace normalization with indentation preservation
     - Multiple simultaneous edits with correct positioning
-    - Indentation style detection and preservation
+    - Indentation style detection and preservation: when only whitespace differs, each replacement line takes the indentation of the line it replaces
+    - Preserves the file's line endings (LF or CRLF)
     - Git-style diff output with context
     - Preview changes with dry run mode
   - Inputs:
