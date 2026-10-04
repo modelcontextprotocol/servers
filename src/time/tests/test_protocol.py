@@ -120,6 +120,7 @@ def handler_error(message: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+# KNOWN BUG #360: pins current (wrong) behavior; the fix changes this assertion.
 async def test_initialize_reports_server_info_and_capabilities() -> None:
     async with serving("UTC") as session:
         init = wire(await session.initialize())
@@ -234,6 +235,7 @@ async def test_empty_local_timezone_override_is_treated_as_absent() -> None:
     assert result == {"tools": expected_tools("Africa/Cairo")}
 
 
+# KNOWN BUG (no issue): an invalid --local-timezone crashes serve() with a traceback instead of a clean error; the fix changes this assertion.
 async def test_invalid_local_timezone_fails_before_the_transport_opens() -> None:
     # An unknown `--local-timezone` raises out of `serve()` itself, before
     # stdio is opened: the process dies with a traceback instead of starting.
@@ -707,6 +709,7 @@ async def test_convert_time_anchors_to_today_in_the_source_timezone() -> None:
     assert result["target"]["datetime"] == "2024-01-02T00:00:00+00:00"
 
 
+# KNOWN BUG (no issue): a nonexistent (spring-forward) local time is converted as if valid, with no warning; the fix changes this assertion.
 async def test_convert_time_into_a_nonexistent_local_time() -> None:
     # 02:30 on 2024-03-10 does not exist in New York (clocks jump 02:00 ->
     # 03:00). With fold=0 zoneinfo uses the pre-transition offset (EST), so
@@ -808,6 +811,7 @@ async def test_convert_time_ignores_extra_arguments() -> None:
     assert result["target"]["timezone"] == "UTC"
 
 
+# KNOWN BUG (no issue): an empty source_timezone surfaces zoneinfo's raw message, unlike get_current_time's "Missing required argument"; the fix changes this assertion.
 @pytest.mark.parametrize(
     "arguments,expected",
     [
