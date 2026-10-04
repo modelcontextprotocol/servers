@@ -5,9 +5,10 @@ import {
 import { Resource, ResourceLink } from "@modelcontextprotocol/sdk/types.js";
 
 /**
- * Tracks registered session resources by URI to allow updating/removing on re-registration.
- * This prevents "Resource already registered" errors when a tool creates a resource
- * with the same URI multiple times during a session.
+ * Tracks registered session resources per server, by URI, to allow updating/removing on
+ * re-registration. This prevents "Resource already registered" errors when a tool creates
+ * a resource with the same URI multiple times during a session, without touching another
+ * session's server that registered the same URI (#4808).
  */
 const registeredResources = new WeakMap<
   McpServer,
