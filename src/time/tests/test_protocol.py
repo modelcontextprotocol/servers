@@ -709,14 +709,13 @@ async def test_convert_time_anchors_to_today_in_the_source_timezone() -> None:
     assert result["target"]["datetime"] == "2024-01-02T00:00:00+00:00"
 
 
-# KNOWN BUG #5002: a nonexistent (spring-forward) local time is converted as if valid, with no warning; the fix changes this assertion.
 async def test_convert_time_into_a_nonexistent_local_time() -> None:
     # 02:30 on 2024-03-10 does not exist in New York (clocks jump 02:00 ->
-    # 03:00). With fold=0 zoneinfo uses the pre-transition offset (EST), so
-    # the server reports a wall-clock time that never happened, unflagged.
+    # 03:00), so the conversion is rejected rather than reporting a
+    # wall-clock time that never happened (#5002).
     async with connected() as session:
         with frozen_at("2024-03-10 12:00:00+00:00"):
-            result = await call_json(
+            result = await call(
                 session,
                 "convert_time",
                 {
@@ -725,21 +724,10 @@ async def test_convert_time_into_a_nonexistent_local_time() -> None:
                     "target_timezone": "UTC",
                 },
             )
-    assert result == {
-        "source": {
-            "timezone": "America/New_York",
-            "datetime": "2024-03-10T02:30:00-05:00",
-            "day_of_week": "Sunday",
-            "is_dst": False,
-        },
-        "target": {
-            "timezone": "UTC",
-            "datetime": "2024-03-10T07:30:00+00:00",
-            "day_of_week": "Sunday",
-            "is_dst": False,
-        },
-        "time_difference": "+5.0h",
-    }
+    assert result == handler_error(
+        "Invalid time: 02:30 does not exist in America/New_York on 2024-03-10 "
+        "(skipped by a daylight saving time change)"
+    )
 
 
 async def test_convert_time_at_an_ambiguous_local_time() -> None:
