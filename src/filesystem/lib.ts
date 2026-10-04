@@ -311,13 +311,51 @@ interface FileEdit {
   newText: string;
 }
 
+/**
+ * The line ending a file predominantly uses: CRLF when more of its line breaks
+ * are CRLF than bare LF, otherwise LF. A file with mixed endings is written
+ * back with its predominant one.
+ */
+export function detectLineEnding(text: string): "\r\n" | "\n" {
+  const crlf = text.match(/\r\n/g)?.length ?? 0;
+  const lf = (text.match(/\n/g)?.length ?? 0) - crlf;
+  return crlf > lf ? "\r\n" : "\n";
+}
+
+function leadingWhitespace(line: string): string {
+  return line.slice(0, line.length - line.trimStart().length);
+}
+
+/**
+ * Reindents one replacement line for the whitespace-tolerant matcher: it gets
+ * the indentation of `fileLine` (the file line it replaces), plus or minus the
+ * difference between its own indentation and `oldLine`'s (the oldText line
+ * that matched `fileLine`). A dedent never goes below no indentation. A blank
+ * line is kept as given.
+ */
+function reindentLine(line: string, fileLine: string, oldLine: string): string {
+  const body = line.trimStart();
+  if (body === "") return line;
+  const fileIndent = leadingWhitespace(fileLine);
+  const newIndent = leadingWhitespace(line);
+  const delta = newIndent.length - leadingWhitespace(oldLine).length;
+  const indent =
+    delta >= 0
+      ? fileIndent + newIndent.slice(newIndent.length - delta)
+      : fileIndent.slice(0, Math.max(0, fileIndent.length + delta));
+  return indent + body;
+}
+
 export async function applyFileEdits(
   filePath: string,
   edits: FileEdit[],
   dryRun: boolean = false,
 ): Promise<string> {
-  // Read file content and normalize line endings
-  const content = normalizeLineEndings(await fs.readFile(filePath, "utf-8"));
+  // Read file content and normalize line endings, remembering which ending
+  // the file uses so the edited file is written back with it (#4991).
+  const rawContent = await fs.readFile(filePath, "utf-8");
+  const eol = detectLineEnding(rawContent);
+  const content = normalizeLineEndings(rawContent);
 
   // Apply edits sequentially
   let modifiedContent = content;
@@ -349,22 +387,13 @@ export async function applyFileEdits(
       });
 
       if (isMatch) {
-        // Preserve original indentation of first line
-        const originalIndent = contentLines[i].match(/^\s*/)?.[0] || "";
+        // Each replacement line takes the indentation of the file line it
+        // replaces, shifted by however much the edit indents or dedents it
+        // relative to the matching oldText line (#4990). Lines beyond
+        // oldText's length are placed relative to its last line.
         const newLines = normalizedNew.split("\n").map((line, j) => {
-          if (j === 0) return originalIndent + line.trimStart();
-          // For subsequent lines, try to preserve relative indentation
-          const oldIndent = oldLines[j]?.match(/^\s*/)?.[0] || "";
-          const newIndent = line.match(/^\s*/)?.[0] || "";
-          if (oldIndent && newIndent) {
-            const relativeIndent = newIndent.length - oldIndent.length;
-            return (
-              originalIndent +
-              " ".repeat(Math.max(0, relativeIndent)) +
-              line.trimStart()
-            );
-          }
-          return line;
+          const k = Math.min(j, oldLines.length - 1);
+          return reindentLine(line, potentialMatch[k], oldLines[k]);
         });
 
         contentLines.splice(i, oldLines.length, ...newLines);
@@ -381,6 +410,11 @@ export async function applyFileEdits(
 
   // Create unified diff
   const diff = createUnifiedDiff(content, modifiedContent, filePath);
+
+  // Write the file back with the line ending it was read with (#4991).
+  if (eol === "\r\n") {
+    modifiedContent = modifiedContent.replace(/\n/g, "\r\n");
+  }
 
   // Format diff with appropriate number of backticks
   let numBackticks = 3;
