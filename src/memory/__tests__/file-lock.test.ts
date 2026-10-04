@@ -147,7 +147,7 @@ describe("withFileLock", () => {
       .mockImplementationOnce((async () => {
         await fs.writeFile(lockPath, "fresh");
         return "fresh";
-      }) as typeof fs.readFile);
+      }) as unknown as typeof fs.readFile);
 
     await expect(
       withFileLock(lockPath, async () => "ran", fast),
