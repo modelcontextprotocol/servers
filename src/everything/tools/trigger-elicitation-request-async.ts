@@ -22,8 +22,12 @@ const config = {
 // Poll interval in milliseconds
 const POLL_INTERVAL = 1000;
 
-// Maximum poll attempts before timeout (10 minutes for user input)
-const MAX_POLL_ATTEMPTS = 600;
+// Time-to-live requested for the client's task (10 minutes for user input)
+const TASK_TTL = 600000;
+
+// Stop polling this long before the TTL runs out, so the last tasks/get
+// reaches the client while it still holds the task
+const TTL_SAFETY_MARGIN = 5000;
 
 /**
  * Registers the 'trigger-elicitation-request-async' tool.
@@ -59,13 +63,18 @@ export const registerTriggerElicitationRequestAsyncTool = (
       name,
       config,
       async (args, extra): Promise<CallToolResult> => {
+        // Polling must end before the client may expire the task. The client
+        // starts the TTL when it creates the task, after this point, so a
+        // deadline measured from here is conservative.
+        const pollDeadline = Date.now() + TASK_TTL - TTL_SAFETY_MARGIN;
+
         // Create the elicitation request WITH task metadata
         // Using z.any() schema to avoid complex type matching with _meta
         const request = {
           method: "elicitation/create" as const,
           params: {
             task: {
-              ttl: 600000, // 10 minutes (user input may take a while)
+              ttl: TASK_TTL, // 10 minutes (user input may take a while)
             },
             message:
               "Please provide inputs for the following fields (async task demo):",
@@ -144,13 +153,19 @@ export const registerTriggerElicitationRequestAsyncTool = (
         let attempts = 0;
         let taskStatus = elicitResponse.task.status;
         let taskStatusMessage: string | undefined;
+        let timedOut = false;
 
         while (
           taskStatus !== "completed" &&
           taskStatus !== "failed" &&
-          taskStatus !== "cancelled" &&
-          attempts < MAX_POLL_ATTEMPTS
+          taskStatus !== "cancelled"
         ) {
+          // Give up rather than poll past the TTL the task was created with
+          if (Date.now() + POLL_INTERVAL > pollDeadline) {
+            timedOut = true;
+            break;
+          }
+
           // Wait before polling
           await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
           attempts++;
@@ -185,12 +200,14 @@ export const registerTriggerElicitationRequestAsyncTool = (
         }
 
         // Check for timeout
-        if (attempts >= MAX_POLL_ATTEMPTS) {
+        if (timedOut) {
           return {
             content: [
               {
                 type: "text",
-                text: `[TIMEOUT] Task timed out after ${MAX_POLL_ATTEMPTS} poll attempts\n\nProgress:\n${statusMessages.join(
+                text: `[TIMEOUT] Task timed out after ${attempts} poll attempts, before its ${
+                  TASK_TTL / 60000
+                }-minute TTL expired\n\nProgress:\n${statusMessages.join(
                   "\n",
                 )}`,
               },
