@@ -57,7 +57,7 @@ body:
       description: >
         The version you actually ran, not "latest". For an unreleased build,
         give the commit. For a repository-level report, write n/a.
-      placeholder: "0.6.3"
+      placeholder: "1.0.0 (npm) or 2026.8.1 (PyPI)"
     validations:
       required: true
 
