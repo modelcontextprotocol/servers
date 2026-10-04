@@ -83,7 +83,7 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of branch to checkout
-   - Returns: Confirmation of branch switch
+   - Returns: Confirmation of branch switch, or `HEAD is now detached at <short sha>` when `branch_name` is not a branch (a sha, tag or other revision)
 11. `git_show`
    - Shows the contents of a commit
    - Inputs:
