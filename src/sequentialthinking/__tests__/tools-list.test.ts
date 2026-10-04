@@ -52,15 +52,14 @@ describe("sequentialthinking: initialize and tools/list", () => {
     expect(tool.title).toBe("Sequential Thinking");
   });
 
-  // KNOWN BUG #4721: pins current (wrong) behavior; the fix changes this assertion.
   // #4721: the server keeps a thought history and branch map that every call
-  // mutates, so readOnlyHint: true and idempotentHint: true are wrong for it.
-  // Pinned as they are today; the fix changes this assertion on purpose.
-  it("carries today's annotations (#4721: read-only and idempotent, though the tool is stateful)", () => {
+  // mutates, so the tool is neither read-only nor idempotent. It is still not
+  // destructive (it only appends) and not open-world.
+  it("advertises the tool as stateful: not read-only, not idempotent, not destructive, closed-world", () => {
     expect(tool.annotations).toEqual({
-      readOnlyHint: true,
+      readOnlyHint: false,
       destructiveHint: false,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     });
   });
