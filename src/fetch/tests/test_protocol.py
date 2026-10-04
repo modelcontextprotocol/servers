@@ -451,18 +451,23 @@ async def test_html_without_node_falls_back_to_pure_python(web: FakeWeb) -> None
     assert "https://example.com/x" not in text
 
 
-# KNOWN BUG #4989: an empty page without Node reports "No more content available" at start_index 0 instead of a simplification failure; the fix changes this assertion.
 @pytest.mark.usefixtures("python_readability")
-async def test_empty_html_without_node_reads_as_no_more_content(web: FakeWeb) -> None:
-    # The pure-Python extractor never returns empty content, so the
-    # "failed to be simplified" message is not reached; the page converts to
-    # an empty string and the pagination check reports it as exhausted.
+async def test_empty_html_without_node_cannot_be_simplified(web: FakeWeb) -> None:
+    # The pure-Python extractor returns "<div></div>" for an empty page, which
+    # converts to an empty string. It reports the same simplification failure
+    # as the Node path, not "No more content available" at start_index 0.
     web.add(PAGE, html("<html><body></body></html>"))
     async with connect(ignore_robots_txt=True) as (session, _):
         result = await call(session, {"url": PAGE})
-    assert text_of(result) == (
-        f"Contents of {PAGE}:\n<error>No more content available.</error>"
-    )
+    assert wire(result) == {
+        "content": [
+            {
+                "type": "text",
+                "text": f"Contents of {PAGE}:\n<error>Page failed to be simplified from HTML</error>",
+            }
+        ],
+        "isError": False,
+    }
 
 
 async def test_raw_returns_html_unsimplified(web: FakeWeb) -> None:
