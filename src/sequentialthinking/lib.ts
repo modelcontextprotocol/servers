@@ -14,7 +14,9 @@ export interface ThoughtData {
 
 export class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
-  private branches: Record<string, ThoughtData[]> = {};
+  // Null prototype, so any string branchId (even "constructor" or "__proto__")
+  // is an ordinary own key rather than an inherited Object.prototype member.
+  private branches: Record<string, ThoughtData[]> = Object.create(null);
   private disableThoughtLogging: boolean;
 
   constructor() {
@@ -69,6 +71,12 @@ export class SequentialThinkingServer {
         input.totalThoughts = input.thoughtNumber;
       }
 
+      // Do the work that can throw before touching any state, so a failed
+      // call leaves thoughtHistory and branches as they were.
+      const formattedThought = this.disableThoughtLogging
+        ? undefined
+        : this.formatThought(input);
+
       this.thoughtHistory.push(input);
 
       if (input.branchFromThought && input.branchId) {
@@ -78,8 +86,7 @@ export class SequentialThinkingServer {
         this.branches[input.branchId].push(input);
       }
 
-      if (!this.disableThoughtLogging) {
-        const formattedThought = this.formatThought(input);
+      if (formattedThought !== undefined) {
         console.error(formattedThought);
       }
 

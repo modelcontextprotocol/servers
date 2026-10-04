@@ -156,13 +156,14 @@ describe("sequentialthinking thought logging", () => {
       expect(logged()).toEqual([]);
     });
 
-    // KNOWN BUG #4813: pins current (wrong) behavior; the fix changes this assertion.
-    // #4813: the push throws before the box is drawn.
-    it("logs nothing for a #4813 branch-id collision", async () => {
+    // #4813: a branchId that names an Object.prototype key is an ordinary branch.
+    it("draws the Branch box for a branchId that names an Object.prototype key", async () => {
       await conn!.think(
         thought({ branchFromThought: 1, branchId: "constructor" }),
       );
-      expect(logged()).toEqual([]);
+      expect(logged()).toEqual([
+        box("🌿 Branch 1/3 (from thought 1, ID: constructor)", "a thought"),
+      ]);
     });
   });
 
