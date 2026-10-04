@@ -132,17 +132,54 @@ async function readFileAsBase64Stream(filePath: string): Promise<string> {
 }
 
 /**
+ * Why the server cannot operate when it has no allowed directories from either
+ * the command line or the client's Roots (#4992).
+ */
+export const NO_ALLOWED_DIRECTORIES_ERROR =
+  "Server cannot operate: No allowed directories available. Server was started without command-line directories and client does not support MCP roots protocol. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.";
+
+export interface ServerOptions {
+  /**
+   * Called after the server has closed the connection because it cannot
+   * operate: no directories were given and the client does not support
+   * Roots (#4992). The stdio entry point exits the process from here.
+   */
+  onCannotOperate?: (error: Error) => void;
+}
+
+/**
  * Build a filesystem server that may touch only `initialAllowedDirectories`
  * (already resolved and normalized by the caller) until the client's Roots
  * replace them.
  */
-export function createServer(initialAllowedDirectories: string[]): McpServer {
+export function createServer(
+  initialAllowedDirectories: string[],
+  options: ServerOptions = {},
+): McpServer {
   let allowedDirectories = [...initialAllowedDirectories];
 
   const server = new McpServer({
     name: "secure-filesystem-server",
     version: SERVER_VERSION,
   });
+
+  // Settles once the post-initialize setup (fetching the client's initial
+  // roots) has finished, successfully or not; it never rejects. Every tool call
+  // waits for it, so a call that arrives while the initial roots/list is still
+  // outstanding is checked against the client's roots rather than against the
+  // command-line directories (#3204). It is replaced in oninitialized, which
+  // the SDK runs before any request sent after notifications/initialized.
+  let initialization: Promise<void> = Promise.resolve();
+  const registerTool = server.registerTool.bind(server);
+  server.registerTool = ((
+    name: string,
+    config: Parameters<typeof registerTool>[1],
+    handler: (...args: unknown[]) => unknown,
+  ) =>
+    registerTool(name, config, (async (...args: unknown[]) => {
+      await initialization;
+      return handler(...args);
+    }) as never)) as typeof server.registerTool;
 
   // Tool registrations
 
@@ -739,8 +776,13 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
     },
   );
 
-  // Handles post-initialization setup, specifically checking for and fetching MCP roots.
-  server.server.oninitialized = async () => {
+  // Handles post-initialization setup, specifically checking for and fetching
+  // MCP roots. Tool calls wait for it (see `initialization` above).
+  server.server.oninitialized = () => {
+    initialization = initialize();
+  };
+
+  async function initialize(): Promise<void> {
     const clientCapabilities = server.server.getClientCapabilities();
 
     if (clientCapabilities?.roots) {
@@ -767,12 +809,17 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
           allowedDirectories,
         );
       } else {
-        throw new Error(
-          `Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`,
-        );
+        // Nothing could ever be allowed in this session, so fail visibly
+        // rather than serve every call with "Access denied" (#4992): log the
+        // reason and close the connection. Throwing here would only reach the
+        // SDK's onerror, which the client never sees.
+        const error = new Error(NO_ALLOWED_DIRECTORIES_ERROR);
+        console.error(`Error: ${error.message}`);
+        await server.close();
+        options.onCannotOperate?.(error);
       }
     }
-  };
+  }
 
   return server;
 }

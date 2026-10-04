@@ -28,7 +28,7 @@ MCP clients that support [Roots](https://modelcontextprotocol.io/docs/learn/clie
 
 Roots notified by Client to Server, completely replace any server-side Allowed directories when provided.
 
-**Important**: If server starts without command-line arguments AND client doesn't support roots protocol (or provides empty roots), the server will throw an error during initialization.
+**Important**: If server starts without command-line arguments AND client doesn't support roots protocol, the server fails at initialization: it logs the reason to stderr, closes the connection and exits with status 1. A client that supports roots but provides none (or none that are valid) keeps the connection, with no allowed directories until it sends `roots/list_changed` with valid roots.
 
 This is the recommended method, as this enables runtime directory updates via `roots/list_changed` notifications without server restart, providing a more flexible and modern integration experience.
 
@@ -48,12 +48,14 @@ The server's directory access control follows this flow:
    - **On initialization**: Server requests roots from client via `roots/list`
    - Client responds with its configured roots
    - Server replaces ALL allowed directories with client's roots
+   - Tool calls that arrive before the initial roots are loaded wait for them, so they are checked against the client's roots
    - **On runtime updates**: Client can send `notifications/roots/list_changed`
    - Server requests updated roots and replaces allowed directories again
 
 4. **Fallback Behavior** (if client doesn't support roots)
    - Server continues using command-line directories only
    - No dynamic updates possible
+   - With no command-line directories either, the server logs an error, closes the connection and exits with status 1
 
 5. **Access Control**
    - All filesystem operations are restricted to allowed directories
