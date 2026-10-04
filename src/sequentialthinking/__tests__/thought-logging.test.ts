@@ -98,7 +98,7 @@ describe("sequentialthinking thought logging", () => {
       ]);
     });
 
-    // KNOWN BUG (no issue): the header reads "revising thought undefined" when revisesThought is unset; the fix changes this assertion.
+    // KNOWN BUG #5000: the header reads "revising thought undefined" when revisesThought is unset; the fix changes this assertion.
     it("prints 'undefined' for a revision with no revisesThought", async () => {
       await conn!.think(thought({ thought: "x", isRevision: true }));
       expect(logged()).toEqual([
@@ -115,7 +115,7 @@ describe("sequentialthinking thought logging", () => {
       ]);
     });
 
-    // KNOWN BUG (no issue): a branchFromThought with no branchId draws a Branch header reading "ID: undefined"; the fix changes this assertion.
+    // KNOWN BUG #5000: a branchFromThought with no branchId draws a Branch header reading "ID: undefined"; the fix changes this assertion.
     it("draws a branch header even when no branch is recorded (no branchId)", async () => {
       await conn!.think(thought({ thought: "fork", branchFromThought: 2 }));
       expect(logged()).toEqual([
@@ -166,7 +166,7 @@ describe("sequentialthinking thought logging", () => {
     });
   });
 
-  // KNOWN BUG (no issue): the border counts the header's colour escape codes, so the box is drawn wider than its text; the fix changes this assertion.
+  // KNOWN BUG #5000: the border counts the header's colour escape codes, so the box is drawn wider than its text; the fix changes this assertion.
   // The border is sized from header.length, and the header carries chalk's
   // escape codes, so when colour is on the box is wider than its visible text.
   it("sizes the border from the coloured header, escape codes included", async () => {
