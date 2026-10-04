@@ -149,19 +149,51 @@ describe("server identity and tool list", () => {
     });
   });
 
-  // KNOWN BUG #4841: pins current (wrong) behavior; the fix changes this assertion.
-  // #4841: every schema declares the draft-07 dialect, from the SDK's default
-  // zod-to-JSON-Schema target. Strict 2020-12 validators reject it.
-  it("declares the draft-07 $schema on every input and output schema (#4841)", async () => {
+  // #4841: the SDK 1.x tools/list handler stamps draft-07 on every schema it
+  // renders, which validators that accept only JSON Schema 2020-12 reject. The
+  // server declares 2020-12 instead.
+  it("declares the 2020-12 $schema on every input and output schema (#4841)", async () => {
     const { tools } = await client.listTools();
+    expect(tools).toHaveLength(TOOL_NAMES.length);
     for (const tool of tools) {
       expect(tool.inputSchema.$schema).toBe(
-        "http://json-schema.org/draft-07/schema#",
+        "https://json-schema.org/draft/2020-12/schema",
       );
       expect(tool.outputSchema?.$schema).toBe(
-        "http://json-schema.org/draft-07/schema#",
+        "https://json-schema.org/draft/2020-12/schema",
       );
     }
+  });
+
+  // #4841: the schemas are still rendered with zod's draft-07 rules, so the
+  // 2020-12 label holds only while they use no keyword whose meaning differs
+  // between the two dialects: array-form (tuple) items, additionalItems, and
+  // definitions rather than $defs.
+  it("advertises no draft-07-only keyword under the 2020-12 label (#4841)", async () => {
+    const { tools } = await client.listTools();
+    const draft07Only: string[] = [];
+    const walk = (node: unknown, at: string): void => {
+      if (Array.isArray(node)) {
+        node.forEach((item, i) => walk(item, `${at}[${i}]`));
+        return;
+      }
+      if (node === null || typeof node !== "object") return;
+      for (const [key, value] of Object.entries(node)) {
+        if (
+          (key === "items" && Array.isArray(value)) ||
+          key === "additionalItems" ||
+          key === "definitions"
+        ) {
+          draft07Only.push(`${at}.${key}`);
+        }
+        walk(value, `${at}.${key}`);
+      }
+    };
+    for (const tool of tools) {
+      walk(tool.inputSchema, `${tool.name}.inputSchema`);
+      walk(tool.outputSchema, `${tool.name}.outputSchema`);
+    }
+    expect(draft07Only).toEqual([]);
   });
 
   it("pins the input schemas a client is shown", async () => {
