@@ -110,6 +110,35 @@ def test_git_add_specific_files(test_repository):
     assert result == "Files staged successfully"
 
 
+def test_git_add_rejects_an_empty_file_list(test_repository):
+    # #4763: `git add --` with no pathspec is a no-op that exits 0.
+    with pytest.raises(ValueError, match="No files provided to stage"):
+        git_add(test_repository, [])
+
+
+def test_git_add_clean_tree_reports_nothing_staged(test_repository):
+    result = git_add(test_repository, ["."])
+
+    assert result.startswith("No changes were staged")
+    assert not test_repository.index.diff(test_repository.head.commit)
+
+
+def test_git_add_already_staged_file_reports_nothing_staged(test_repository):
+    # A change staged earlier must not make a no-op call read as a success.
+    Path(test_repository.working_dir, "staged.txt").write_text("staged")
+    test_repository.index.add(["staged.txt"])
+
+    assert git_add(test_repository, ["staged.txt"]).startswith("No changes were staged")
+    assert git_add(test_repository, ["."]).startswith("No changes were staged")
+
+
+def test_git_add_reports_a_staged_deletion(test_repository):
+    Path(test_repository.working_dir, "test.txt").unlink()
+
+    assert git_add(test_repository, ["test.txt"]) == "Files staged successfully"
+    assert "test.txt" not in [path for path, _stage in test_repository.index.entries]
+
+
 def test_git_add_rejects_path_traversal(test_repository):
     # Security invariant (CVE-2026-27735): a relative path escaping the
     # repository must never be staged. Accept rejection from either the
