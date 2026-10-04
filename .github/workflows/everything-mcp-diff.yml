@@ -70,10 +70,11 @@ on:
 permissions:
   contents: read
 
-# Superseded runs on the same PR are cancelled; pushes and releases each keep
-# their own run.
+# Superseded runs on the same PR are cancelled. Every other run gets a group
+# of its own: a group holds one running and one pending run, so a shared group
+# would drop a push's run when two more queued behind it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
