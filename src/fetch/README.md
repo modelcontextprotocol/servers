@@ -231,6 +231,25 @@ cd path/to/servers/src/fetch
 npx @modelcontextprotocol/inspector uv run mcp-server-fetch
 ```
 
+## Development
+
+From `src/fetch`:
+
+```
+uv sync --frozen --all-extras --dev
+uv run --frozen pytest
+```
+
+The tests drive `serve()` through an MCP `ClientSession` in-process, with HTTP mocked, so they need no network. The HTML extraction tests need Node.js on `PATH` (readabilipy uses Readability.js when Node is present and a pure-Python fallback when it is not).
+
+Coverage, measured per file with branch coverage:
+
+```
+uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json
+```
+
+This writes `coverage.json` (git-ignored). Every file under `src/mcp_server_fetch` is held to at least 90% of lines and 90% of branches.
+
 ## Contributing
 
 We encourage contributions to help improve mcp-server-fetch. Bug reports, ideas for new tools, enhancements to existing functionality, and documentation improvements are all valuable.

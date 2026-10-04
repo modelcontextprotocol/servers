@@ -37,8 +37,21 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv]
-dev-dependencies = ["pyright>=1.1.389", "ruff>=0.7.3", "pytest>=8.0.0", "pytest-asyncio>=0.21.0"]
+dev-dependencies = [
+    "pyright>=1.1.389",
+    "ruff>=0.7.3",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=7.1.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.coverage.run]
+branch = true
+source = ["src/mcp_server_fetch"]
+
+[tool.coverage.report]
+show_missing = true

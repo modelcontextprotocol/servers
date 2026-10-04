@@ -240,8 +240,6 @@ Although originally you did not have internet access, and were advised to refuse
             raise McpError(ErrorData(code=INVALID_PARAMS, message=str(e)))
 
         url = str(args.url)
-        if not url:
-            raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
         if not ignore_robots_txt:
             await check_may_autonomously_fetch_url(
@@ -255,21 +253,19 @@ Although originally you did not have internet access, and were advised to refuse
         if args.start_index >= original_length:
             content = "<error>No more content available.</error>"
         else:
+            # Never empty: start_index < original_length and max_length > 0.
             truncated_content = content[
                 args.start_index : args.start_index + args.max_length
             ]
-            if not truncated_content:
-                content = "<error>No more content available.</error>"
-            else:
-                content = truncated_content
-                actual_content_length = len(truncated_content)
-                remaining_content = original_length - (
-                    args.start_index + actual_content_length
-                )
-                # Only add the prompt to continue fetching if there is still remaining content
-                if actual_content_length == args.max_length and remaining_content > 0:
-                    next_start = args.start_index + actual_content_length
-                    content += f"\n\n<error>Content truncated. Call the fetch tool with a start_index of {next_start} to get more content.</error>"
+            content = truncated_content
+            actual_content_length = len(truncated_content)
+            remaining_content = original_length - (
+                args.start_index + actual_content_length
+            )
+            # Only add the prompt to continue fetching if there is still remaining content
+            if actual_content_length == args.max_length and remaining_content > 0:
+                next_start = args.start_index + actual_content_length
+                content += f"\n\n<error>Content truncated. Call the fetch tool with a start_index of {next_start} to get more content.</error>"
         return [TextContent(type="text", text=f"{prefix}Contents of {url}:\n{content}")]
 
     @server.get_prompt()
