@@ -72,7 +72,7 @@ async def test_serve_returns_early_for_non_repository(
     assert f"{tmp_path} is not a valid Git repository" in caplog.text
 
 
-# KNOWN BUG (no issue): a nonexistent --repository escapes serve() as NoSuchPathError instead of a logged error; the fix changes this assertion.
+# KNOWN BUG #4993: a nonexistent --repository escapes serve() as NoSuchPathError instead of a logged error; the fix changes this assertion.
 async def test_serve_raises_for_nonexistent_repository(tmp_path: Path):
     # Characterization: serve() catches only InvalidGitRepositoryError, so a
     # nonexistent path escapes as NoSuchPathError and kills the server with a
@@ -167,7 +167,7 @@ def test_python_dash_m_calls_main():
     fake_main.assert_called_once_with()
 
 
-# KNOWN BUG (no issue): a nonexistent --repository kills the server with a Python traceback instead of a one-line error; the fix changes this assertion.
+# KNOWN BUG #4993: a nonexistent --repository kills the server with a Python traceback instead of a one-line error; the fix changes this assertion.
 def test_console_script_nonexistent_repository_exits_with_traceback(tmp_path: Path):
     # The one subprocess test: the installed entry point, end to end. A
     # nonexistent --repository is not caught (see
