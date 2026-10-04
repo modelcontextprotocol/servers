@@ -206,7 +206,7 @@ describe("trigger-long-running-operation", () => {
 });
 
 describe("get-resource-links", () => {
-  // KNOWN BUG (no issue): blobResource() labels blob content text/plain instead of a binary MIME type; the fix changes this assertion.
+  // KNOWN BUG #4984: blobResource() labels blob content text/plain instead of a binary MIME type; the fix changes this assertion.
   it("returns three links by default, blob for odd ids and text for even", async () => {
     const result = await call("get-resource-links");
     const content = contentOf(result);
@@ -271,7 +271,7 @@ describe("get-resource-reference", () => {
     );
   });
 
-  // KNOWN BUG (no issue): blobResource() labels blob content text/plain instead of a binary MIME type; the fix changes this assertion.
+  // KNOWN BUG #4984: blobResource() labels blob content text/plain instead of a binary MIME type; the fix changes this assertion.
   it("returns an embedded blob resource", async () => {
     const result = await call("get-resource-reference", {
       resourceType: "Blob",

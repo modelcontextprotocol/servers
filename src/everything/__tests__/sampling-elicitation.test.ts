@@ -388,7 +388,7 @@ describe("trigger-elicitation-request", () => {
     expect(texts[0]).toBe("⚠️ User cancelled the elicitation dialog.");
   });
 
-  // KNOWN BUG (no issue): trigger-elicitation-request is listed for a URL-only elicitation client, whose call then fails; the fix changes this assertion.
+  // KNOWN BUG #4985: trigger-elicitation-request is listed for a URL-only elicitation client, whose call then fails; the fix changes this assertion.
   it("is listed for a URL-only client, which then cannot answer its form request", async () => {
     // Characterization: the tool is gated on `elicitation` alone, so a
     // client that declared only URL mode sees it and the call fails.

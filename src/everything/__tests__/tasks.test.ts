@@ -422,7 +422,7 @@ describe("trigger-sampling-request-async", () => {
     );
   });
 
-  // KNOWN BUG (no issue): trigger-sampling-request-async drops the status message of a task that is already finished when created; the fix changes this assertion.
+  // KNOWN BUG #4987: trigger-sampling-request-async drops the status message of a task that is already finished when created; the fix changes this assertion.
   it("does not poll a client task that is already finished when it is created", async () => {
     // Characterization: the status message is only read from polls, so a
     // task that fails before it is returned is reported with "No message".
@@ -586,7 +586,7 @@ describe("trigger-elicitation-request-async", () => {
     );
   });
 
-  // KNOWN BUG (no issue): trigger-elicitation-request-async polls for longer than the 10-minute TTL it requests for its task; the fix changes this assertion.
+  // KNOWN BUG #4986: trigger-elicitation-request-async polls for longer than the 10-minute TTL it requests for its task; the fix changes this assertion.
   it("fails on the last poll instead when the client honors the 10-minute TTL", async () => {
     // Characterization: 600 one-second polls outlast the 600000 ms TTL the
     // tool asks for, so a client that expires the task on time answers the

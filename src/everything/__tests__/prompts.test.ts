@@ -96,7 +96,7 @@ describe("resource-prompt", () => {
     });
   });
 
-  // KNOWN BUG (no issue): blobResource() labels blob content text/plain instead of a binary MIME type; the fix changes this assertion.
+  // KNOWN BUG #4984: blobResource() labels blob content text/plain instead of a binary MIME type; the fix changes this assertion.
   it("embeds a blob resource", async () => {
     const result = await session.client.getPrompt({
       name: "resource-prompt",
