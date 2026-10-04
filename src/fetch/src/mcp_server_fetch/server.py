@@ -234,6 +234,8 @@ Although originally you did not have internet access, and were advised to refuse
 
     @server.call_tool()
     async def call_tool(name, arguments: dict) -> list[TextContent]:
+        if name != "fetch":
+            raise ValueError(f"Unknown tool: {name}")
         try:
             args = Fetch(**arguments)
         except ValueError as e:
@@ -270,6 +272,10 @@ Although originally you did not have internet access, and were advised to refuse
 
     @server.get_prompt()
     async def get_prompt(name: str, arguments: dict | None) -> GetPromptResult:
+        if name != "fetch":
+            raise McpError(
+                ErrorData(code=INVALID_PARAMS, message=f"Unknown prompt: {name}")
+            )
         if not arguments or "url" not in arguments:
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 

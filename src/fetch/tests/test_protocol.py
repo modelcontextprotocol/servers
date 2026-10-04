@@ -218,29 +218,27 @@ async def test_invalid_url_is_rejected_by_pydantic(web: FakeWeb, url: str) -> No
     assert web.requests == []
 
 
-# KNOWN BUG #4988: call_tool ignores the tool name and runs fetch for any name; the fix changes this assertion.
-async def test_call_tool_never_checks_the_tool_name(web: FakeWeb) -> None:
-    # Characterizes call_tool ignoring `name`: an unknown tool name is not
-    # rejected, the SDK skips schema validation for it (the tool is not
-    # listed), and the URL is fetched as if `fetch` had been called.
+async def test_unknown_tool_name_is_rejected_without_fetching(web: FakeWeb) -> None:
+    # The SDK skips schema validation for a tool it has not listed, so the
+    # name check in call_tool is what stops an unknown name from fetching.
     web.add(ROBOTS, plain("", status=404))
     web.add(PAGE, plain("fetched anyway"))
     async with connect() as (session, _):
         result = await session.call_tool("nope", {"url": PAGE})
-    assert wire(result)["isError"] is False
-    assert text_of(result).endswith("fetched anyway")
-    assert web.urls() == [ROBOTS, PAGE]
+    assert wire(result)["isError"] is True
+    assert text_of(result) == "Unknown tool: nope"
+    assert web.requests == []
 
 
-# KNOWN BUG #4988: call_tool ignores the tool name and runs fetch for any name; the fix changes this assertion.
-async def test_unknown_tool_name_still_validates_through_pydantic(
+async def test_unknown_tool_name_is_rejected_before_argument_validation(
     web: FakeWeb,
 ) -> None:
+    # An unknown name is reported as such, not as a missing `url` argument.
     async with connect() as (session, _):
         result = await session.call_tool("nope", {})
     assert wire(result)["isError"] is True
-    assert "url" in text_of(result)
-    assert "Field required" in text_of(result)
+    assert text_of(result) == "Unknown tool: nope"
+    assert web.requests == []
 
 
 # --------------------------------------------------------------------------
@@ -785,13 +783,21 @@ async def test_get_prompt_without_url_is_a_jsonrpc_error(
     assert web.requests == []
 
 
-# KNOWN BUG #4988: get_prompt ignores the prompt name and serves fetch for any name; the fix changes this assertion.
-async def test_get_prompt_never_checks_the_prompt_name(web: FakeWeb) -> None:
-    # Like call_tool, get_prompt ignores `name`.
+@pytest.mark.parametrize("arguments", [{"url": PAGE}, None])
+async def test_get_prompt_with_unknown_name_is_a_jsonrpc_error(
+    web: FakeWeb, arguments: dict[str, str] | None
+) -> None:
+    # The name is checked first, so an unknown prompt is reported as such
+    # whether or not a URL was given, and nothing is fetched.
     web.add(PAGE, plain("ok"))
     async with connect() as (session, _):
-        result = await session.get_prompt("nope", {"url": PAGE})
-    assert wire(result)["description"] == f"Contents of {PAGE}"
+        with pytest.raises(McpError) as excinfo:
+            await session.get_prompt("nope", arguments)
+    assert wire(excinfo.value.error) == {
+        "code": INVALID_PARAMS,
+        "message": "Unknown prompt: nope",
+    }
+    assert web.requests == []
 
 
 async def test_get_prompt_does_not_validate_the_url(
