@@ -331,11 +331,21 @@ async def serve(repository: Path | None) -> None:
 
     if repository is not None:
         try:
-            git.Repo(repository)
-            logger.info(f"Using repository at {repository}")
+            # Walk up to the enclosing working tree, like `git rev-parse
+            # --show-toplevel`, so `--repository .` works from a subdirectory.
+            root = Path(
+                git.Repo(repository, search_parent_directories=True).working_dir
+            )
+        except git.NoSuchPathError:
+            logger.error(f"{repository} does not exist")
+            raise SystemExit(1)
         except git.InvalidGitRepositoryError:
             logger.error(f"{repository} is not a valid Git repository")
             return
+        if root != repository:
+            logger.info(f"Resolved --repository {repository} to repository root {root}")
+        repository = root
+        logger.info(f"Using repository at {repository}")
 
     server = Server("mcp-git")
 
