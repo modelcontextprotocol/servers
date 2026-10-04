@@ -29,9 +29,9 @@ includes the tests) and `vitest.config.ts`.
 | Server | Layout | Where its features are registered |
 | --- | --- | --- |
 | `everything` | `index.ts` picks a transport from `argv`; `server/` holds the factory; `tools/`, `resources/`, `prompts/` hold one file per feature plus an `index.ts`; `transports/` holds one file per transport; `version.ts` reads the package version; `docs/` is shipped | Each feature file exports a `register…` function, wired into its area's `index.ts` (`registerTools`, `registerResources`, `registerPrompts`), which `server/index.ts` calls from `createServer()` |
-| `filesystem` | `index.ts` is the server; `lib.ts` holds the file operations and path validation; `path-utils.ts`, `path-validation.ts` and `roots-utils.ts` are focused helpers; `version.ts` reads the package version | Inline in `index.ts`, with `server.registerTool(...)` |
-| `memory` | `index.ts` is the server and the `KnowledgeGraphManager`; `version.ts` reads the package version | Inline in `index.ts`; the resource and its subscription handlers are exported `register…` functions in the same file |
-| `sequentialthinking` | `index.ts` is the server; `lib.ts` holds `SequentialThinkingServer`, the logic; `version.ts` reads the package version | Inline in `index.ts` |
+| `filesystem` | `index.ts` is the stdio entry point (argv → allowed directories, `main()`); `server.ts` exports `createServer(allowedDirectories)`; `lib.ts` holds the file operations and path validation, with the allow-list passed in rather than held globally; `path-utils.ts`, `path-validation.ts` and `roots-utils.ts` are focused helpers; `version.ts` reads the package version | Inline in `createServer()` in `server.ts`, with `server.registerTool(...)` |
+| `memory` | `index.ts` holds the `KnowledgeGraphManager`, `createServer(memoryFilePath)` and the stdio `main()`; `version.ts` reads the package version | Inline in `createServer()`; the resource and its subscription handlers are exported `register…` functions in the same file |
+| `sequentialthinking` | `index.ts` holds `createServer()` and the stdio `main()`; `lib.ts` holds `SequentialThinkingServer`, the logic; `version.ts` reads the package version | Inline in `createServer()` |
 
 Three things about `everything` that the table cannot hold:
 
@@ -50,11 +50,13 @@ Three things about `everything` that the table cannot hold:
   `structure.md`, and `src/everything/AGENTS.md` holds the rules that apply
   only inside that directory.
 
-`filesystem`, `memory` and `sequentialthinking` run on import: each `index.ts`
-builds the server at module scope and connects stdio at the bottom of the
-file. That is why their logic lives in a separate module (`lib.ts`) or is
-exported from `index.ts` for the tests, and why a test cannot import a ready
-server from them. `/testing` covers what that means for a new test.
+**No server starts on import.** Each one builds its server in a
+`createServer(...)` factory, and its entry file connects a transport only when
+it is the process entry point (an `isEntryPoint()` or `isMainModule()` check
+that compares real paths, so the npm bin symlink still starts it). Keep it that
+way: a module that binds a port, connects stdio or installs a signal handler at
+import cannot be driven in-process by the tests. `/testing` covers the
+in-process harness.
 
 ## The Python servers
 
@@ -88,7 +90,7 @@ importable.
 | --- | --- |
 | A tool, resource or prompt for `everything` | Its own kebab-case file in `tools/`, `resources/` or `prompts/`, exporting a `register…` function, wired into that directory's `index.ts` |
 | A transport for `everything` | `src/everything/transports/`, plus a `case` in `src/everything/index.ts` and a `start:…` script |
-| A tool for `filesystem`, `memory` or `sequentialthinking` | A `server.registerTool(...)` call in that server's `index.ts`; the logic it calls goes in `lib.ts` (or the class it extends) so a test can reach it |
+| A tool for `filesystem`, `memory` or `sequentialthinking` | A `server.registerTool(...)` call inside that server's `createServer()` (`server.ts` in `filesystem`, `index.ts` in the other two); the logic it calls goes in `lib.ts` (or the class it extends) |
 | A helper module for `everything` | A kebab-case `.ts` file in the feature area it supports, beside its users (`server/logging.ts`, `server/roots.ts`, `resources/session.ts`), imported with the `.js` extension |
 | A helper module for `filesystem`, `memory` or `sequentialthinking` | A kebab-case `.ts` file at the workspace root, imported with the `.js` extension |
 | A tool for a Python server | `server.py`: the tool-name enum member (`git`, `time`), the model, the `list_tools` entry, the `call_tool` branch |
