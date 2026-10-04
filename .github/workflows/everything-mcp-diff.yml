@@ -48,7 +48,9 @@ on:
       - "scripts/interface-diff.mjs"
       - ".github/workflows/everything-mcp-diff.yml"
   # A published Release (a milestone, tagged vX.Y.Z on main; see RELEASING.md)
-  # surfaces the cumulative interface delta since the previous release's tag.
+  # surfaces the cumulative interface delta since the previous Release. This
+  # replaces #3260's `typescript-servers-*` tag trigger: those tags stopped in
+  # 2024, and no release since has used them.
   release:
     types: [published]
   # Manual trigger for comparing any two refs (commits, tags, branches)
@@ -84,7 +86,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           # The base is built from history, so all of it is needed, tags
-          # included (the release base is the previous tag).
+          # included (the release base is the previous Release's tag).
           fetch-depth: 0
           ref: ${{ inputs.target_ref || github.ref }}
           persist-credentials: false
@@ -106,6 +108,9 @@ jobs:
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           BEFORE: ${{ github.event.before }}
           INPUT_BASE: ${{ inputs.compare_ref }}
+          TAG: ${{ github.event.release.tag_name }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           case "$EVENT" in
             # The checkout is the PR's merge commit, so its base tip is
@@ -118,7 +123,14 @@ jobs:
               else
                 base=$(git rev-parse HEAD^)
               fi ;;
-            release) base=$(git describe --tags --abbrev=0 HEAD^) ;;
+            # The previous published Release's tag. Not `git describe`: the
+            # date-stamped releases tagged commits that never reached main, so
+            # the nearest ancestor tag is years older than the last release.
+            release)
+              base=$(gh release list --repo "$REPO" --exclude-drafts --exclude-pre-releases --limit 50 \
+                --json tagName,publishedAt \
+                --jq "map(select(.tagName != \"$TAG\")) | sort_by(.publishedAt) | last | .tagName // empty")
+              if [ -z "$base" ]; then echo "no earlier Release to compare against" >&2; exit 1; fi ;;
             workflow_dispatch)
               if [ -n "$INPUT_BASE" ]; then
                 base="$INPUT_BASE"
