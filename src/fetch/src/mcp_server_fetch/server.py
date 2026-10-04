@@ -1,6 +1,10 @@
+import asyncio
+import ipaddress
+import socket
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
+import httpx
 import markdownify
 import readabilipy.simple_json
 from mcp.shared.exceptions import McpError
@@ -22,6 +26,57 @@ from pydantic import BaseModel, Field, AnyUrl
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
+
+
+async def _resolve_host(host: str) -> list[str]:
+    """Resolve ``host`` to every address the OS would hand the connector.
+
+    getaddrinfo also parses IP literals, including the shorthand forms such as
+    ``2130706433`` and ``127.1`` that a connector accepts as loopback.
+    """
+    infos = await asyncio.get_running_loop().getaddrinfo(host, None)
+    return [str(info[4][0]) for info in infos]
+
+
+def _is_public_address(address: str) -> bool:
+    """True when ``address`` is a globally routable unicast address.
+
+    ``is_global`` is False for loopback, RFC 1918, link-local (169.254.0.0/16,
+    which holds most cloud metadata endpoints), shared address space
+    (100.64.0.0/10, which holds Alibaba Cloud's 100.100.100.200), unique local
+    IPv6 (AWS's fd00:ec2::254), unspecified and reserved ranges.
+    """
+    ip = ipaddress.ip_address(address)
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return ip.is_global and not ip.is_multicast
+
+
+async def _refuse_private_destination(request: httpx.Request) -> None:
+    """httpx request hook: refuse a request whose host is not a public address.
+
+    httpx runs request hooks before every request it sends, redirect hops
+    included, so a public URL cannot bounce the fetch to an internal one.
+    """
+    host = request.url.host
+    if not host:
+        return  # httpx rejects a URL with no host itself.
+    try:
+        addresses = await _resolve_host(host)
+    except socket.gaierror:
+        # Unresolvable here: a direct connection fails on its own, and a proxy
+        # resolves the name on its side.
+        return
+    for address in addresses:
+        if not _is_public_address(address):
+            raise McpError(
+                ErrorData(
+                    code=INVALID_PARAMS,
+                    message=f"Refused to fetch {request.url}: {host} resolves to {address}, "
+                    "which is not a public address. Start the server with "
+                    "--allow-private-ips to allow private, loopback and link-local addresses.",
+                )
+            )
 
 
 def extract_content_from_html(html: str) -> str:
@@ -64,7 +119,10 @@ def get_robots_txt_url(url: str) -> str:
 
 
 async def check_may_autonomously_fetch_url(
-    url: str, user_agent: str, proxy_url: str | None = None
+    url: str,
+    user_agent: str,
+    proxy_url: str | None = None,
+    allow_private_ips: bool = False,
 ) -> None:
     """
     Check if the URL can be fetched by the user agent according to the robots.txt file.
@@ -75,6 +133,8 @@ async def check_may_autonomously_fetch_url(
     robot_txt_url = get_robots_txt_url(url)
 
     async with AsyncClient(proxy=proxy_url) as client:
+        if not allow_private_ips:
+            client.event_hooks = {"request": [_refuse_private_destination]}
         try:
             response = await client.get(
                 robot_txt_url,
@@ -117,7 +177,11 @@ async def check_may_autonomously_fetch_url(
 
 
 async def fetch_url(
-    url: str, user_agent: str, force_raw: bool = False, proxy_url: str | None = None
+    url: str,
+    user_agent: str,
+    force_raw: bool = False,
+    proxy_url: str | None = None,
+    allow_private_ips: bool = False,
 ) -> Tuple[str, str]:
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
@@ -125,6 +189,8 @@ async def fetch_url(
     from httpx import AsyncClient, HTTPError
 
     async with AsyncClient(proxy=proxy_url) as client:
+        if not allow_private_ips:
+            client.event_hooks = {"request": [_refuse_private_destination]}
         try:
             response = await client.get(
                 url,
@@ -194,6 +260,7 @@ async def serve(
     custom_user_agent: str | None = None,
     ignore_robots_txt: bool = False,
     proxy_url: str | None = None,
+    allow_private_ips: bool = False,
 ) -> None:
     """Run the fetch MCP server.
 
@@ -201,6 +268,8 @@ async def serve(
         custom_user_agent: Optional custom User-Agent string to use for requests
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
+        allow_private_ips: Allow fetching private, loopback and link-local
+            addresses, which are refused by default
     """
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
@@ -243,11 +312,15 @@ Although originally you did not have internet access, and were advised to refuse
 
         if not ignore_robots_txt:
             await check_may_autonomously_fetch_url(
-                url, user_agent_autonomous, proxy_url
+                url, user_agent_autonomous, proxy_url, allow_private_ips
             )
 
         content, prefix = await fetch_url(
-            url, user_agent_autonomous, force_raw=args.raw, proxy_url=proxy_url
+            url,
+            user_agent_autonomous,
+            force_raw=args.raw,
+            proxy_url=proxy_url,
+            allow_private_ips=allow_private_ips,
         )
         original_length = len(content)
         if args.start_index >= original_length:
@@ -277,7 +350,10 @@ Although originally you did not have internet access, and were advised to refuse
 
         try:
             content, prefix = await fetch_url(
-                url, user_agent_manual, proxy_url=proxy_url
+                url,
+                user_agent_manual,
+                proxy_url=proxy_url,
+                allow_private_ips=allow_private_ips,
             )
             # TODO: after SDK bug is addressed, don't catch the exception
         except McpError as e:
