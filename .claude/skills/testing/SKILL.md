@@ -18,8 +18,9 @@ Driving a running server by hand, with the Inspector or an LLM client, is
 
 ⚠️ **The TypeScript and Python harnesses differ.** All four TypeScript servers
 are tested in-process, a real `Client` linked to the server over an in-memory
-transport (#4854). The Python servers' tests call their functions directly,
-and those servers have no coverage gate yet (#4855).
+transport (#4854). Of the Python servers, `time` drives `serve()` in-process;
+`fetch` and `git` call their functions directly. No Python server has a coverage
+gate yet (#4855).
 
 ## Where a test goes
 
@@ -40,9 +41,10 @@ connection harness does (`__tests__/harness.ts` in `everything`,
 | Server | How its tests reach the code |
 | --- | --- |
 | `everything`, `filesystem`, `memory`, `sequentialthinking` | An SDK `Client` connected to the server's `createServer()` over `InMemoryTransport`, in the vitest process, through the server's own harness, plus unit tests of helper modules such as `lib.ts`. `everything` drives its stdio, SSE and Streamable HTTP transports in-process too; the other three have one thin spawn smoke of the built `dist/index.js` |
-| `fetch`, `git`, `time` | Direct calls on the functions in `server.py`, with `unittest.mock` |
+| `fetch`, `git` | Direct calls on the functions in `server.py`, with `unittest.mock` |
+| `time` | A `ClientSession` against `serve()` in-process, over in-memory streams (`tests/test_protocol.py`); direct calls on the helpers in `server.py` (`tests/test_server.py`) |
 
-No Python test opens a `ClientSession` yet.
+Of the Python servers, only `time` opens a `ClientSession` in its tests.
 
 ## Choosing a harness for a new test
 
@@ -164,8 +166,11 @@ like).
 ### Python: `ClientSession` over stdio
 
 Each Python server constructs its `Server` inside `serve()`, so it cannot be
-handed to an in-memory session. A protocol-level test spawns the module and
-talks to it through the SDK's stdio client:
+handed to an in-memory session directly. `time` drives it in-process anyway, by
+patching `stdio_server` to yield the server side of
+`create_client_server_memory_streams()`; see the `serving()` helper in
+`src/time/tests/test_protocol.py`. The other route spawns the module and talks
+to it through the SDK's stdio client:
 
 ```python
 import sys
@@ -195,8 +200,8 @@ def test_get_current_time_over_stdio() -> None:
 and the install there is editable, so this runs your edit with no build step.
 
 How an async test is written differs by server, because the dev dependencies
-do: `fetch` has `pytest-asyncio` with `asyncio_mode = "auto"`, so an
-`async def test_…` just works. `git` and `time` do not have it; wrap the
+do: `fetch` and `time` have `pytest-asyncio` with `asyncio_mode = "auto"`,
+so an `async def test_…` just works. `git` does not have it; wrap the
 coroutine in `anyio.run(...)` as above (`git`'s `serve()` test does), rather
 than adding a dependency for one test.
 
