@@ -290,7 +290,24 @@ help you debug any issues.
 
 ## Development
 
-If you are doing local development, there are two ways to test your changes:
+### Tests and coverage
+
+The test suite drives `serve()` in-process through an MCP `ClientSession`
+(see `tests/conftest.py`). From `src/git`:
+
+```bash
+uv run --frozen pytest                 # the tests
+uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json
+```
+
+The second command adds branch coverage of `src/mcp_server_git`, printed per
+file and written to `coverage.json` (ignored by git). Every file must stay at
+or above 90% of its lines and 90% of its branches. Code that cannot be reached
+is marked `# pragma: no cover  # <reason>` rather than lowering that bar.
+
+### Trying changes in a client
+
+There are two ways to try your changes in a client:
 
 1. Run the MCP inspector to test your changes. See [Debugging](#debugging) for run instructions.
 

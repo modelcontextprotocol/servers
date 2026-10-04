@@ -22,5 +22,7 @@ def main(repository: Path | None, verbose: bool) -> None:
     asyncio.run(serve(repository))
 
 
-if __name__ == "__main__":
+if (
+    __name__ == "__main__"
+):  # pragma: no cover  # `python -m` runs __main__.py; running this file directly fails on the relative import
     main()

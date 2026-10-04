@@ -274,6 +274,31 @@ npx @modelcontextprotocol/inspector uv run mcp-server-time
 3. "When it's 4 PM in New York, what time is it in London?"
 4. "Convert 9:30 AM Tokyo time to New York time"
 
+## Development
+
+Run the tests from `src/time`. They live in `tests/`: `test_protocol.py` drives
+the server through an MCP `ClientSession` in-process, `test_entrypoints.py`
+covers `main()`, `python -m mcp_server_time` and the console script, and
+`test_server.py` unit-tests the time helpers.
+
+```bash
+cd src/time
+uv run pytest
+```
+
+Coverage is a separate command. It measures line and branch coverage of
+`src/mcp_server_time`, prints the missing lines, and writes `coverage.json`
+(ignored by git):
+
+```bash
+cd src/time
+uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json
+```
+
+Every file must reach 90% of its lines and 90% of its branches. Code that
+cannot be reached is marked `# pragma: no cover  # <reason>`, always with the
+reason, rather than lowering the bar.
+
 ## Build
 
 Docker build:

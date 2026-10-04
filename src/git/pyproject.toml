@@ -34,10 +34,25 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-dev = ["pyright>=1.1.407", "ruff>=0.7.3", "pytest>=8.0.0"]
+dev = [
+    "pyright>=1.1.407",
+    "ruff>=0.7.3",
+    "pytest>=8.0.0",
+    "pytest-cov>=7.1.0",
+    "pytest-asyncio>=1.4.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+branch = true
+source = ["src/mcp_server_git"]
+
+[tool.coverage.report]
+show_missing = true

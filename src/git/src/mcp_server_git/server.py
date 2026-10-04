@@ -1,15 +1,11 @@
 import logging
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Optional
 from mcp.server import Server
-from mcp.server.session import ServerSession
 from mcp.server.stdio import stdio_server
 from mcp.types import (
-    ClientCapabilities,
     TextContent,
     Tool,
-    ListRootsResult,
-    RootsCapability,
     ToolAnnotations,
 )
 from enum import Enum
@@ -259,10 +255,10 @@ def git_show(repo: git.Repo, revision: str) -> str:
     for d in diff:
         output.append(f"\n--- {d.a_path}\n+++ {d.b_path}\n")
         if d.diff is None:
-            continue
+            continue  # pragma: no cover  # with create_patch=True GitPython always assigns the patch as bytes
         if isinstance(d.diff, bytes):
             output.append(d.diff.decode("utf-8"))
-        else:
+        else:  # pragma: no cover  # with create_patch=True GitPython always assigns the patch as bytes
             output.append(d.diff)
     return "".join(output)
 
@@ -479,39 +475,6 @@ async def serve(repository: Path | None) -> None:
                 ),
             ),
         ]
-
-    async def list_repos() -> Sequence[str]:
-        async def by_roots() -> Sequence[str]:
-            if not isinstance(server.request_context.session, ServerSession):
-                raise TypeError(
-                    "server.request_context.session must be a ServerSession"
-                )
-
-            if not server.request_context.session.check_client_capability(
-                ClientCapabilities(roots=RootsCapability())
-            ):
-                return []
-
-            roots_result: ListRootsResult = (
-                await server.request_context.session.list_roots()
-            )
-            logger.debug(f"Roots result: {roots_result}")
-            repo_paths = []
-            for root in roots_result.roots:
-                path = root.uri.path
-                try:
-                    git.Repo(path)
-                    repo_paths.append(str(path))
-                except git.InvalidGitRepositoryError:
-                    pass
-            return repo_paths
-
-        def by_commandline() -> Sequence[str]:
-            return [str(repository)] if repository is not None else []
-
-        cmd_repos = by_commandline()
-        root_repos = await by_roots()
-        return [*root_repos, *cmd_repos]
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
