@@ -172,8 +172,8 @@ is where the structure lives:
 - **Breaking Changes**: whether users must change their client configuration.
 - **Types of changes**: tick each that applies: bug fix, new feature, breaking
   change, documentation update.
-- **Checklist**: tick each that holds, and mark one that does not apply as
-  "(not applicable: <why>)" rather than leaving it blank:
+- **Checklist**: answer every item. Tick each that holds, and tick and mark
+  each that does not apply "(not applicable: <why>)"; leave none blank:
   - [ ] I have read the [MCP Protocol Documentation](https://modelcontextprotocol.io)
   - [ ] My changes follow MCP security best practices
   - [ ] I have updated the server's README accordingly
