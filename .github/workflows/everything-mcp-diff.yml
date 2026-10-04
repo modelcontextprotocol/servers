@@ -111,6 +111,7 @@ jobs:
           BEFORE: ${{ github.event.before }}
           INPUT_BASE: ${{ inputs.compare_ref }}
           TAG: ${{ github.event.release.tag_name }}
+          PUBLISHED: ${{ github.event.release.published_at }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -125,13 +126,15 @@ jobs:
               else
                 base=$(git rev-parse HEAD^)
               fi ;;
-            # The previous published Release's tag. Not `git describe`: the
-            # date-stamped releases tagged commits that never reached main, so
-            # the nearest ancestor tag is years older than the last release.
+            # The Release published just before this one (so a re-run of an
+            # older Release still compares against ITS predecessor). Not
+            # `git describe`: the date-stamped releases tagged commits that
+            # never reached main, so the nearest ancestor tag is years older
+            # than the last release.
             release)
               base=$(gh release list --repo "$REPO" --exclude-drafts --exclude-pre-releases --limit 50 \
                 --json tagName,publishedAt \
-                --jq "map(select(.tagName != \"$TAG\")) | sort_by(.publishedAt) | last | .tagName // empty")
+                --jq "map(select(.tagName != \"$TAG\" and .publishedAt < \"$PUBLISHED\")) | sort_by(.publishedAt) | last | .tagName // empty")
               if [ -z "$base" ]; then echo "no earlier Release to compare against" >&2; exit 1; fi ;;
             workflow_dispatch)
               if [ -n "$INPUT_BASE" ]; then
