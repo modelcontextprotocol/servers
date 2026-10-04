@@ -57,15 +57,14 @@ on:
   # 2024, and no release since has used them.
   release:
     types: [published]
-  # Manual trigger for comparing any two refs (commits, tags, branches)
+  # Manual trigger: the branch chosen in "Use workflow from" is the head, and
+  # `compare_ref` any base. #3260 also took a `target_ref`, but a target that
+  # predates the interface-diff script has no `npm run interface-diff` to run,
+  # so the head is the dispatched branch instead.
   workflow_dispatch:
     inputs:
       compare_ref:
         description: "Base ref to compare against (commit SHA, tag, or branch; defaults to the merge-base with v2/main)"
-        required: false
-        default: ""
-      target_ref:
-        description: "Target ref to compare (defaults to the ref the workflow runs on)"
         required: false
         default: ""
 
@@ -95,7 +94,7 @@ jobs:
           fetch-depth: 0
           # The event's own commit (the merge commit for a PR), not a branch
           # ref that a later push could move before this step runs.
-          ref: ${{ inputs.target_ref || github.sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - uses: actions/setup-node@v7

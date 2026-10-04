@@ -203,6 +203,12 @@ export function renderReport(verdict, { base, head }) {
   return lines.join("\n");
 }
 
+/** The last lines of a stream, for an error message; empty stays empty. */
+const tail = (text) => {
+  const lines = (text ?? "").trim();
+  return lines ? `${lines.split("\n").slice(-25).join("\n")}\n` : "";
+};
+
 /**
  * Run a command to completion; throw with its output when it fails. Only
  * `npm` needs a shell, and only on Windows (it is a `.cmd` shim there); its
@@ -220,7 +226,7 @@ function run(command, args, cwd, env) {
   if (res.error) throw res.error;
   if (res.status !== 0)
     throw new Error(
-      `\`${command} ${args.join(" ")}\` exited ${res.status}:\n${(res.stderr || res.stdout).trim().split("\n").slice(-25).join("\n")}`,
+      `\`${command} ${args.join(" ")}\` exited ${res.status}:\n${tail(res.stdout)}${tail(res.stderr)}`,
     );
   return res.stdout;
 }
