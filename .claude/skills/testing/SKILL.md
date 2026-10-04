@@ -201,6 +201,31 @@ do: `fetch` has `pytest-asyncio` with `asyncio_mode = "auto"`, so an
 coroutine in `anyio.run(...)` as above (`git`'s `serve()` test does), rather
 than adding a dependency for one test.
 
+## Tests that pin a known bug
+
+The suites are characterization tests: each asserts what the server does
+today, so a migration that changes behavior fails a test. Most of what they pin
+is intended. Some of it is a bug, pinned as it is so that the fix has to change
+the assertion visibly. Every test of that kind carries one marker, directly
+above the test (or above its `describe`/class when the whole block pins the
+same bug):
+
+```ts
+// KNOWN BUG #4808: pins current (wrong) behavior; the fix changes this assertion.
+```
+
+In Python the same text follows `#`. A bug with no issue yet reads
+`KNOWN BUG (no issue): <what is wrong>; …`, which also marks it for filing.
+
+- `git grep "KNOWN BUG"` lists every test that pins a bug. A test without the
+  marker pins intended behavior, or guards a fixed bug against regression.
+- **Fixing the bug** means changing that test's assertion to the correct
+  behavior and removing the marker, in the fix PR.
+- **Pinning a newly found bug**: write the test against what the code does,
+  add the marker, and file the issue (`/issue-create`), then cite it.
+- A pin of current design that a feature request wants changed is not a bug
+  and gets no marker.
+
 ## Running them
 
 | Scope | Command |
