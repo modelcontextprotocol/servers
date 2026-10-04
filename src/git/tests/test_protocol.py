@@ -4,7 +4,8 @@ Each test runs the real `serve()` in-process (see `conftest.connect`) and
 asserts on what a client receives: the wire JSON of the tool list and of each
 tool result. They pin the server's *current* behavior on `mcp` 1.x, bugs
 included, as the regression net for the SDK v2 port (#4851). A test that pins a
-known bug says so and cites the issue; fixing the bug means changing that test.
+known bug says so and cites the issue (or says "no issue"); fixing the bug
+means changing that test.
 """
 
 import json
@@ -57,6 +58,7 @@ def staged_paths(repo: git.Repo) -> set[str]:
 # --------------------------------------------------------------------------
 
 
+# KNOWN BUG #360: pins current (wrong) behavior; the fix changes this assertion.
 async def test_initialize_reports_sdk_version_as_server_version(repo: git.Repo):
     # Pins #360: serverInfo.version is the `mcp` SDK's version, not this
     # package's, because serve() builds `Server("mcp-git")` without a version.
@@ -113,6 +115,7 @@ async def test_unknown_tool_is_error(repo: git.Repo):
     ) == text_result("Unknown tool: git_nope", is_error=True)
 
 
+# KNOWN BUG (no issue): an unknown tool called without repo_path reports the KeyError repr "'repo_path'" instead of "Unknown tool"; the fix changes this assertion.
 async def test_unknown_tool_without_repo_path_reports_the_key_error():
     # An unlisted tool skips schema validation, so call_tool's
     # `arguments["repo_path"]` raises KeyError and its repr is the message.
@@ -267,6 +270,7 @@ async def test_git_diff_unknown_target_is_error(repo: git.Repo):
     ) == text_result("Ref 'nope' did not resolve to an object", is_error=True)
 
 
+# KNOWN BUG (no issue): the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_diff_rejects_flag_injection(repo: git.Repo):
     assert await call(
         None,
@@ -295,6 +299,7 @@ async def test_git_commit_records_staged_changes(repo: git.Repo):
     assert "new.txt" in head.stats.files
 
 
+# KNOWN BUG #4762: pins current (wrong) behavior; the fix changes this assertion.
 async def test_git_commit_with_nothing_staged_creates_empty_commit(repo: git.Repo):
     # Pins #4762: with nothing staged, git_commit still writes a commit (whose
     # tree equals its parent's) and reports success. `git commit` would refuse
@@ -367,6 +372,7 @@ async def test_git_add_file_starting_with_dash_is_a_path(repo: git.Repo):
     assert staged_paths(repo) == {"-n"}
 
 
+# KNOWN BUG #4763: pins current (wrong) behavior; the fix changes this assertion.
 async def test_git_add_empty_list_reports_success_but_stages_nothing(
     repo: git.Repo,
 ):
@@ -379,6 +385,7 @@ async def test_git_add_empty_list_reports_success_but_stages_nothing(
     assert staged_paths(repo) == set()
 
 
+# KNOWN BUG #4763: pins current (wrong) behavior; the fix changes this assertion.
 async def test_git_add_dot_on_clean_tree_reports_success(repo: git.Repo):
     # Pins #4763: nothing to stage, success reported anyway.
     result = await call(
@@ -596,6 +603,7 @@ async def test_git_create_branch_unknown_base_is_error(repo: git.Repo):
     ) == text_result("No item found with id nope", is_error=True)
 
 
+# KNOWN BUG (no issue): git_create_branch reports "Created branch" for an existing branch already at the base commit; the fix changes this assertion.
 async def test_git_create_branch_existing_name_at_same_commit_reports_success(
     repo: git.Repo,
 ):
@@ -624,6 +632,7 @@ async def test_git_create_branch_existing_name_at_other_commit_is_error(
     assert "already exist" in result["content"][0]["text"]
 
 
+# KNOWN BUG (no issue): the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_create_branch_rejects_flag_injection(repo: git.Repo):
     root = str(root_of(repo))
     assert await call(
@@ -652,6 +661,7 @@ async def test_git_checkout_branch(repo: git.Repo):
     assert repo.active_branch.name == "feature"
 
 
+# KNOWN BUG #4804: pins current (wrong) behavior; the fix changes this assertion.
 @pytest.mark.parametrize("revision", ["sha", "tag", "HEAD~1", "refs/heads/feature"])
 async def test_git_checkout_non_branch_detaches_head_but_claims_switch(
     repo: git.Repo, revision: str
@@ -682,6 +692,7 @@ async def test_git_checkout_unknown_branch_is_error(repo: git.Repo):
     assert repo.active_branch.name == "main"
 
 
+# KNOWN BUG (no issue): the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_checkout_rejects_flag_injection(repo: git.Repo):
     assert await call(
         None,
@@ -717,6 +728,7 @@ def show_header(commit: git.Commit) -> str:
     )
 
 
+# KNOWN BUG (no issue): git_show prints Python reprs (quoted sha, <git.Actor>, datetime with a memory address) instead of git's format; the fix changes this assertion.
 async def test_git_show_commit_with_parent(repo: git.Repo):
     root = root_of(repo)
     (root / "test.txt").write_text("line 1\nline 2\nSHOWN\nline 4\nline 5\n")
@@ -737,6 +749,7 @@ async def test_git_show_commit_with_parent(repo: git.Repo):
     assert "Message: 'show me'\n" in text
 
 
+# KNOWN BUG (no issue): git_show prints Python reprs (with a memory address) and "--- None" where git prints /dev/null; the fix changes this assertion.
 async def test_git_show_initial_commit_diffs_against_empty_tree(repo: git.Repo):
     # With no parent the commit is diffed against NULL_TREE. An added file has
     # no a_path, so the header prints Python's `None` where git prints
@@ -752,6 +765,7 @@ async def test_git_show_initial_commit_diffs_against_empty_tree(repo: git.Repo):
     )
 
 
+# KNOWN BUG (no issue): git_show prints Python reprs (quoted sha, <git.Actor>, datetime with a memory address) instead of git's format; the fix changes this assertion.
 async def test_git_show_rename_only_commit_has_header_and_no_patch(repo: git.Repo):
     # A pure rename yields a diff entry whose patch is empty bytes.
     repo.index.move(["test.txt", "renamed.txt"])
@@ -764,6 +778,7 @@ async def test_git_show_rename_only_commit_has_header_and_no_patch(repo: git.Rep
     )
 
 
+# KNOWN BUG (no issue): git_show prints Python reprs (quoted sha, <git.Actor>, datetime with a memory address) instead of git's format; the fix changes this assertion.
 async def test_git_show_binary_commit(repo: git.Repo):
     root = root_of(repo)
     (root / "blob.bin").write_bytes(bytes(range(256)))
@@ -777,6 +792,7 @@ async def test_git_show_binary_commit(repo: git.Repo):
     )
 
 
+# KNOWN BUG (no issue): git_show decodes the patch as strict UTF-8, so a Latin-1 file fails the whole call; the fix changes this assertion.
 async def test_git_show_non_utf8_patch_is_decode_error(repo: git.Repo):
     # Characterization: the patch bytes are decoded as strict UTF-8, so a
     # Latin-1 text file makes the whole call fail.
@@ -789,8 +805,9 @@ async def test_git_show_non_utf8_patch_is_decode_error(repo: git.Repo):
     assert "codec can't decode byte 0xe9" in result["content"][0]["text"]
 
 
+# KNOWN BUG #1682: pins current (wrong) behavior; the fix changes this assertion.
 async def test_git_show_revision_path_syntax_is_error(repo: git.Repo):
-    # Regression guard for #1682: `<rev>:<path>` names a blob, not a commit,
+    # Pins #1682's current error: `<rev>:<path>` names a blob, not a commit,
     # and repo.commit() appends `^0`, so the call fails with this message
     # rather than crashing the server.
     result = await call(
@@ -809,6 +826,7 @@ async def test_git_show_unknown_revision_is_error(repo: git.Repo):
     ) == text_result("Ref 'nope' did not resolve to an object", is_error=True)
 
 
+# KNOWN BUG (no issue): the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_show_rejects_flag_injection(repo: git.Repo):
     assert await call(
         None, "git_show", {"repo_path": str(root_of(repo)), "revision": "--format=x"}
@@ -867,6 +885,7 @@ async def test_git_branch_contains_and_not_contains(repo: git.Repo):
     assert not_contains == text_result("* main")
 
 
+# KNOWN BUG (no issue): git_branch returns an unknown branch_type as a successful result, not an error; the fix changes this assertion.
 async def test_git_branch_unknown_type_is_not_an_error(repo: git.Repo):
     # Characterization: an unknown branch_type is reported in the text of a
     # *successful* result (isError false), so a client cannot tell it apart
@@ -876,6 +895,7 @@ async def test_git_branch_unknown_type_is_not_an_error(repo: git.Repo):
     ) == text_result("Invalid branch type: bogus")
 
 
+# KNOWN BUG (no issue): the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_branch_rejects_flag_injection(repo: git.Repo):
     root = str(root_of(repo))
     assert await call(
