@@ -4,11 +4,17 @@ Behavior a client can observe is tested through the protocol in
 test_protocol.py.
 """
 
+import os
+
+import httpx
 import pytest
 
 from mcp_server_fetch.server import (
+    PROXY_ENV_VARS,
     extract_content_from_html,
     get_robots_txt_url,
+    normalize_proxy_env,
+    normalize_proxy_url,
 )
 
 
@@ -86,3 +92,42 @@ class TestExtractContentFromHtml:
         html = ""
         result = extract_content_from_html(html)
         assert "<error>" in result
+
+
+class TestNormalizeProxyUrl:
+    """Tests for normalize_proxy_url and normalize_proxy_env (#767)."""
+
+    @pytest.mark.parametrize(
+        ("given", "expected"),
+        [
+            ("socks://127.0.0.1:2080/", "socks5://127.0.0.1:2080/"),
+            ("SOCKS://127.0.0.1:2080", "socks5://127.0.0.1:2080"),
+            ("socks5://127.0.0.1:2080", "socks5://127.0.0.1:2080"),
+            ("http://proxy.example.com:8080", "http://proxy.example.com:8080"),
+            ("ftp://proxy.example.com", "ftp://proxy.example.com"),
+        ],
+    )
+    def test_only_the_socks_alias_is_rewritten(self, given, expected):
+        assert normalize_proxy_url(given) == expected
+
+    def test_environment_socks_alias_is_rewritten(self, monkeypatch):
+        for name in PROXY_ENV_VARS:
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv("ALL_PROXY", "socks://127.0.0.1:2080/")
+        monkeypatch.setenv("https_proxy", "http://proxy.example.com:8080")
+        normalize_proxy_env()
+        assert os.environ["ALL_PROXY"] == "socks5://127.0.0.1:2080/"
+        assert os.environ["https_proxy"] == "http://proxy.example.com:8080"
+        assert "HTTP_PROXY" not in os.environ
+
+    def test_normalized_socks_environment_builds_a_client(self, monkeypatch):
+        # #767 and #1401 together: httpx rejects socks:// outright, and a
+        # socks5:// proxy needs socksio, which httpx[socks] now installs.
+        for name in PROXY_ENV_VARS:
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv("ALL_PROXY", "socks://127.0.0.1:2080/")
+        with pytest.raises(ValueError, match="Unknown scheme for proxy URL"):
+            httpx.AsyncClient()
+        normalize_proxy_env()
+        httpx.AsyncClient()
+        httpx.AsyncClient(proxy="socks5://127.0.0.1:2080/")

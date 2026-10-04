@@ -1,4 +1,5 @@
-from typing import Annotated, Tuple
+import os
+from typing import TYPE_CHECKING, Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
 import markdownify
@@ -19,6 +20,9 @@ from mcp.types import (
 )
 from protego import Protego
 from pydantic import BaseModel, Field, AnyUrl
+
+if TYPE_CHECKING:
+    from httpx import AsyncClient
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
@@ -63,6 +67,57 @@ def get_robots_txt_url(url: str) -> str:
     return robots_url
 
 
+PROXY_ENV_VARS = (
+    "HTTP_PROXY",
+    "http_proxy",
+    "HTTPS_PROXY",
+    "https_proxy",
+    "ALL_PROXY",
+    "all_proxy",
+)
+
+
+def normalize_proxy_url(proxy_url: str) -> str:
+    """Rewrite the ``socks://`` alias, which httpx rejects, to ``socks5://``.
+
+    Desktop proxy settings often export ``socks://host:port``; httpx only
+    accepts ``socks5://``. Every other value is returned unchanged.
+    """
+    if proxy_url.lower().startswith("socks://"):
+        return "socks5://" + proxy_url[len("socks://") :]
+    return proxy_url
+
+
+def normalize_proxy_env() -> None:
+    """Apply ``normalize_proxy_url`` to the proxy variables httpx reads."""
+    for name in PROXY_ENV_VARS:
+        value = os.environ.get(name)
+        if value:
+            os.environ[name] = normalize_proxy_url(value)
+
+
+def make_client(proxy_url: str | None) -> "AsyncClient":
+    """Build the httpx client, turning a bad proxy setting into a tool error.
+
+    httpx validates the proxy (``--proxy-url`` or the proxy environment
+    variables) when the client is constructed, before any request, so this
+    failure is not an ``HTTPError``.
+    """
+    from httpx import AsyncClient
+
+    try:
+        return AsyncClient(proxy=proxy_url)
+    except (ValueError, ImportError) as e:
+        raise McpError(
+            ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"Failed to set up the HTTP client, check the proxy "
+                f"configuration (--proxy-url or the HTTP_PROXY, HTTPS_PROXY and "
+                f"ALL_PROXY environment variables): {e}",
+            )
+        )
+
+
 async def check_may_autonomously_fetch_url(
     url: str, user_agent: str, proxy_url: str | None = None
 ) -> None:
@@ -70,11 +125,11 @@ async def check_may_autonomously_fetch_url(
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
     """
-    from httpx import AsyncClient, HTTPError
+    from httpx import HTTPError
 
     robot_txt_url = get_robots_txt_url(url)
 
-    async with AsyncClient(proxy=proxy_url) as client:
+    async with make_client(proxy_url) as client:
         try:
             response = await client.get(
                 robot_txt_url,
@@ -122,9 +177,9 @@ async def fetch_url(
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
     """
-    from httpx import AsyncClient, HTTPError
+    from httpx import HTTPError
 
-    async with AsyncClient(proxy=proxy_url) as client:
+    async with make_client(proxy_url) as client:
         try:
             response = await client.get(
                 url,
@@ -202,6 +257,9 @@ async def serve(
         ignore_robots_txt: Whether to ignore robots.txt restrictions
         proxy_url: Optional proxy URL to use for requests
     """
+    if proxy_url:
+        proxy_url = normalize_proxy_url(proxy_url)
+    normalize_proxy_env()
     server = Server("mcp-fetch")
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
     user_agent_manual = custom_user_agent or DEFAULT_USER_AGENT_MANUAL
