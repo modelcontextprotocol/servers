@@ -2,8 +2,8 @@
 // the command-line directories after initialize, how roots/list_changed
 // updates them, and what happens when roots are invalid, fail or are not
 // offered. Driven by a real Client that answers the server's roots/list
-// requests over the in-memory transport. Known bugs are pinned with their
-// issue numbers (#3602, #3204).
+// requests over the in-memory transport. Pins #3204 as a known bug, and
+// #3602's roots-replace-the-command-line behavior as the README documents it.
 
 import fs from "fs/promises";
 import path from "path";
@@ -157,6 +157,7 @@ describe("initial roots", () => {
     expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
   });
 
+  // KNOWN BUG #3204: pins current (wrong) behavior; the fix changes this assertion.
   // #3204: the server does not wait for the initial roots before serving
   // tool calls. A call that arrives while roots/list is outstanding is
   // checked against the command-line directories (here, none).
@@ -246,6 +247,7 @@ describe("a client without the roots capability", () => {
     );
   });
 
+  // KNOWN BUG (no issue): with no directories and no Roots, the initialization error the README promises is swallowed and the session stays up with nothing allowed; the fix changes this assertion.
   // With no directories from either source, oninitialized throws. The SDK
   // routes a notification handler's rejection to the server's onerror, which
   // the server leaves unset, so the error is invisible to the client: the

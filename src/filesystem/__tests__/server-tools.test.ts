@@ -149,6 +149,7 @@ describe("server identity and tool list", () => {
     });
   });
 
+  // KNOWN BUG #4841: pins current (wrong) behavior; the fix changes this assertion.
   // #4841: every schema declares the draft-07 dialect, from the SDK's default
   // zod-to-JSON-Schema target. Strict 2020-12 validators reject it.
   it("declares the draft-07 $schema on every input and output schema (#4841)", async () => {
@@ -495,6 +496,7 @@ describe("write_file", () => {
     );
   });
 
+  // KNOWN BUG #4512: pins current (wrong) behavior; the fix changes this assertion.
   // #4512: an overwrite goes through a temp file and a rename, so the file
   // gets a new inode (and loses its birthtime and hard links) every time.
   it("replaces the inode on overwrite, keeping the permission bits (#4512)", async () => {
@@ -509,6 +511,7 @@ describe("write_file", () => {
     expect(after.mode & 0o777).toBe(0o640);
   });
 
+  // KNOWN BUG #4512: pins current (wrong) behavior; the fix changes this assertion.
   it("severs a hard link on overwrite (#4512)", async () => {
     const file = path.join(dir, "linked.txt");
     const hardLink = path.join(dir, "hardlink.txt");
@@ -528,6 +531,7 @@ describe("write_file", () => {
     expect((await fs.lstat(link)).isSymbolicLink()).toBe(true);
   });
 
+  // KNOWN BUG #3199: pins current (wrong) behavior; the fix changes this assertion.
   // #3199: on Windows a rename over a locked file fails with EPERM. The
   // server reports it and removes its temp file; it does not fall back to an
   // in-place write. The rename is mocked, so this runs on every platform.
@@ -687,6 +691,7 @@ describe("edit_file", () => {
     expect(text.endsWith("`````\n\n")).toBe(true);
   });
 
+  // KNOWN BUG (no issue): any edit silently converts a CRLF file's line endings to LF; the fix changes this assertion.
   // The CRLF in the file is normalized away by any edit, dry run aside.
   it("rewrites a CRLF file with LF line endings", async () => {
     await fs.writeFile(file, "a\r\nb\r\n");
@@ -701,6 +706,7 @@ describe("edit_file", () => {
   // with leading and trailing whitespace trimmed, and reindents the
   // replacement. These pin its current reindentation rules.
   describe("whitespace-tolerant matcher (#2034)", () => {
+    // KNOWN BUG (no issue): lines after the first lose the file's indentation when oldText's line has none; the fix changes this assertion.
     it("matches lines whose indentation differs from oldText", async () => {
       await call(client, "edit_file", {
         path: file,
@@ -718,6 +724,7 @@ describe("edit_file", () => {
       );
     });
 
+    // KNOWN BUG (no issue): a replacement line whose oldText line has no indent ignores the file's indentation; the fix changes this assertion.
     it("keeps relative indentation when both old and new lines are indented", async () => {
       await fs.writeFile(file, "    if (a) {\n        b();\n    }\n");
       await call(client, "edit_file", {
@@ -764,6 +771,7 @@ describe("edit_file", () => {
     });
   });
 
+  // KNOWN BUG #4512: pins current (wrong) behavior; the fix changes this assertion.
   it("replaces the inode on edit, keeping the permission bits (#4512)", async () => {
     await fs.chmod(file, 0o600);
     const before = await fs.stat(file);
@@ -776,6 +784,7 @@ describe("edit_file", () => {
     expect(after.mode & 0o777).toBe(0o600);
   });
 
+  // KNOWN BUG #3199: pins current (wrong) behavior; the fix changes this assertion.
   it("reports a failed rename and removes the temp file (#3199)", async () => {
     vi.spyOn(fs, "rename").mockRejectedValueOnce(new Error("EPERM rename"));
     vi.spyOn(fs, "unlink").mockRejectedValueOnce(new Error("EPERM unlink"));

@@ -85,6 +85,7 @@ describe("isPathWithinAllowedDirectories on win32", () => {
     ).toBe(true);
   });
 
+  // KNOWN BUG #3527: pins current (wrong) behavior; the fix changes this assertion.
   // #3527: path.resolve keeps a UNC root's trailing backslash, and the prefix
   // check appends another, so nothing below the share matches.
   it("refuses a subdirectory of a UNC share allowed directory (#3527)", () => {

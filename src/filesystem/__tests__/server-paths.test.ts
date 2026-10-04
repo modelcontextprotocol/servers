@@ -269,6 +269,7 @@ describe("Unicode normalization", () => {
     },
   );
 
+  // KNOWN BUG #1970: pins current (wrong) behavior; the fix changes this assertion.
   // #1970: when the allowed directory's own name is NFD, an NFC spelling of
   // it fails the allow-list prefix check (a string comparison) before the
   // Unicode walk starts, on any file system.
