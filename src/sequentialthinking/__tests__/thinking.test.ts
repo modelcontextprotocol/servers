@@ -284,6 +284,7 @@ describe("sequentialthinking thought processing", () => {
   // the failed call still advances thoughtHistoryLength. PR #4814 fixes this;
   // these assertions change with it.
   describe("#4813: branchId colliding with an Object.prototype key", () => {
+    // KNOWN BUG #4813: pins current (wrong) behavior; the fix changes this assertion.
     it.each(["constructor", "__proto__", "toString", "hasOwnProperty"])(
       "fails the call for branchId %j",
       async (branchId) => {
@@ -309,6 +310,7 @@ describe("sequentialthinking thought processing", () => {
       },
     );
 
+    // KNOWN BUG #4813: pins current (wrong) behavior; the fix changes this assertion.
     it("still counts the failed thought in the history and does not list the branch", async () => {
       await conn.think(thought({ branchFromThought: 1, branchId: "alt" }));
       const failed = await conn.think(
