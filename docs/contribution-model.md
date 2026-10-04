@@ -33,10 +33,9 @@ Where the policy is stated:
 | `src/fetch/README.md`, `src/time/README.md` | Their Contributing sections, which are published to PyPI                                                                                                |
 
 ⚠️ **GitHub serves the issue forms and `config.yml` from the default branch**
-(`main`). Development happens on `v2/main`, so the forms go live at the first
-milestone merge that contains them. Until then the chooser offers a blank issue,
-and the close comments below point at the policy on `v2/main`, where it already
-applies.
+(`main`). Development happens on `v2/main`, so a change to them goes live at
+the next milestone merge, not when it merges into `v2/main`. The close comments
+below point at the policy on `v2/main`, where a change to it lands first.
 
 ## The backlog at the time of writing
 
