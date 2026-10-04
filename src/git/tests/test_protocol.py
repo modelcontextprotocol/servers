@@ -299,23 +299,21 @@ async def test_git_commit_records_staged_changes(repo: git.Repo):
     assert "new.txt" in head.stats.files
 
 
-# KNOWN BUG #4762: pins current (wrong) behavior; the fix changes this assertion.
-async def test_git_commit_with_nothing_staged_creates_empty_commit(repo: git.Repo):
-    # Pins #4762: with nothing staged, git_commit still writes a commit (whose
-    # tree equals its parent's) and reports success. `git commit` would refuse
-    # with "no changes added to commit". Fixing #4762 changes this test.
+async def test_git_commit_with_nothing_staged_is_refused(repo: git.Repo):
+    # #4762: with nothing staged, git_commit refuses, as `git commit` does
+    # without --allow-empty, instead of writing an empty commit.
     root = root_of(repo)
     (root / "test.txt").write_text("edited but not staged\n")
     before = repo.head.commit
     result = await call(
         None, "git_commit", {"repo_path": str(root), "message": "claims a fix"}
     )
-    after = repo.head.commit
     assert result == text_result(
-        f"Changes committed successfully with hash {after.hexsha}"
+        "No changes staged for commit. Use git_add to stage changes first; "
+        "git_status shows what is currently staged.",
+        is_error=True,
     )
-    assert after.parents == (before,)
-    assert after.tree.hexsha == before.tree.hexsha
+    assert repo.head.commit == before
     assert repo.is_dirty()
 
 
