@@ -131,8 +131,8 @@ One thing the gate deliberately leaves out:
 
 ## 5. Client evidence
 
-A PR shows the change working, as the PR template's **How Has This Been
-Tested?** section asks. Here that means evidence from clients, not screenshots.
+A PR shows the change working, under the body's **How Has This Been Tested?**
+section (step 6). Here that means evidence from clients, not screenshots.
 
 **A change to server behavior** (a tool, resource, prompt, capability,
 transport or error it returns) records, for **both** the Inspector V2 and an
@@ -159,6 +159,33 @@ Put the evidence in the PR body under **How Has This Been Tested?**.
 Base **`v2/main`** (or the lower branch, when stacked). **Never `main`.** Label
 it `v2`. The body's **first line is `Closes #<N>`**.
 
+The body carries these sections, in order. `.github/pull_request_template.md`
+is only the "issues, not PRs" banner that turns outside PRs away, so this list
+is where the structure lives:
+
+- **Description**: what changed and why.
+- **Server Details**: the server (or "none (repository-wide)") and what in it
+  changed (tools, resources, prompts, docs, …).
+- **Motivation and Context**: the problem it solves; usually a pointer to the
+  issue.
+- **How Has This Been Tested?**: the evidence from step 5.
+- **Breaking Changes**: whether users must change their client configuration.
+- **Types of changes**: tick each that applies: bug fix, new feature, breaking
+  change, documentation update.
+- **Checklist**: tick each that holds, and mark one that does not apply as
+  "(not applicable: <why>)" rather than leaving it blank:
+  - [ ] I have read the [MCP Protocol Documentation](https://modelcontextprotocol.io)
+  - [ ] My changes follow MCP security best practices
+  - [ ] I have updated the server's README accordingly
+  - [ ] I have added a changeset (`npm run changeset`) if this changes what a
+        TypeScript server publishes
+  - [ ] I have tested this with an LLM client
+  - [ ] My code follows the repository's style guidelines
+  - [ ] New and existing tests pass locally
+  - [ ] I have added appropriate error handling
+  - [ ] I have documented all environment variables and configuration options
+- **Additional context** (optional): implementation notes or design decisions.
+
 Write the body to a file and pass it with `--body-file`. A body passed inline
 in double quotes goes through the shell, so every backtick in its Markdown runs
 as a command substitution and `$VAR` expands. Keep the file outside the
@@ -169,7 +196,7 @@ BODY=$(mktemp)
 cat > "$BODY" <<'EOF'
 Closes #<N>
 
-<what changed and why, then the template's sections, with the evidence>
+<the sections above, with the evidence>
 EOF
 gh pr create --repo modelcontextprotocol/servers \
   --base v2/main --label v2 --title "<title>" --body-file "$BODY"

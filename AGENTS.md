@@ -61,7 +61,7 @@ servers/
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
 │                             claude.yml (@claude mentions)
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
-├── .github/pull_request_template.md   The "issues, not PRs" banner and the maintainers' PR checklist
+├── .github/pull_request_template.md   The "issues, not PRs" banner that turns outside PRs away
 ├── RELEASING.md              How packages are versioned and published, and how to recover a failed publish
 └── CONTRIBUTING.md           The contribution policy: issues, not PRs; what is accepted
 ```
@@ -278,7 +278,7 @@ holds for a maintainer's own one-line fix as much as for a feature.
   is merged with a merge commit, never squashed. The flow is the `release`
   skill.
 - **Exception: the two version PRs that automation opens.** Each changes
-  version metadata only, so neither answers the template checklist, and each
+  version metadata only, so neither answers the PR checklist below, and each
   is tied to its milestone's **release issue** rather than to an issue of its
   own.
   - The **Prepare Python Release** PR follows the rest of the rules: the
@@ -293,12 +293,13 @@ holds for a maintainer's own one-line fix as much as for a feature.
 
 No other PR is exempt.
 
-Every PR answers the checklist in
-[`.github/pull_request_template.md`](./.github/pull_request_template.md):
-the MCP documentation was read for the feature touched, the change follows MCP
-security best practices, the server's README is updated, and a **server-facing
-change was tested with an LLM client**, with the scenarios tested named under
-the template's "How Has This Been Tested?" heading.
+Every PR answers the PR checklist in its body: the MCP documentation was read
+for the feature touched, the change follows MCP security best practices, the
+server's README is updated, and a **server-facing change was tested with an LLM
+client**, with the scenarios tested named under the body's "How Has This Been
+Tested?" heading. The body's sections and the full checklist are in the
+`pr-flow` skill. [`.github/pull_request_template.md`](./.github/pull_request_template.md)
+is only the "issues, not PRs" banner; it does not carry them.
 
 ## Maintenance rules
 
