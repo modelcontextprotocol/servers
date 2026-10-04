@@ -36,9 +36,10 @@ in this order, and the first failure stops the run.
 | 1 | `verify:install-fresh` | Every package in `node_modules` is at the version `package-lock.json` records, and every `package.json` declares what the lockfile says it does | None needed: CI installs with `npm ci` |
 | 2 | `validate` → `validate:guards` | The root guards, listed [below](#the-root-guards) | `typescript.yml` → **Root guards** |
 | 3 | `validate` → each workspace's `validate` | Per TypeScript server: `format:check`, `lint` (`--max-warnings 0`), `typecheck`, `build`, `test` | `typescript.yml` → **Validate \<server\>** (one leg each) |
-| 4 | `validate:py` | Per Python server: `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `pytest`, `uv build` | `python.yml` → **Test \<server\>** (one leg each) |
-| 5 | `verify:skills:cli` | `claude plugin validate` on `.claude/skills`, at the pinned CLI version | `typescript.yml` → **Root guards** |
-| 6 | `smoke` | Every server boots over each transport it implements and answers one tool call | `typescript.yml` → **Boot smoke** |
+| 4 | `coverage` | Per TypeScript server: `vitest run --coverage`, failing when any file is below 90% on lines, statements, functions or branches | `typescript.yml` → **Coverage \<server\>** (one leg each) |
+| 5 | `validate:py` | Per Python server: `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `pytest`, `uv build` | `python.yml` → **Test \<server\>** (one leg each) |
+| 6 | `verify:skills:cli` | `claude plugin validate` on `.claude/skills`, at the pinned CLI version | `typescript.yml` → **Root guards** |
+| 7 | `smoke` | Every server boots over each transport it implements and answers one tool call | `typescript.yml` → **Boot smoke** |
 
 Notes on the stages:
 
@@ -46,8 +47,17 @@ Notes on the stages:
   `npm ci`, so a checkout whose `node_modules` predates a pulled dependency
   bump would be tested against dependencies CI does not use, and the failure
   would show up later as a test reporting the old dependency's behavior. The
-  Python servers need no counterpart: stage 4 begins each server with
+  Python servers need no counterpart: stage 5 begins each server with
   `uv sync --locked`, which brings its environment to its lockfile.
+- **`coverage` is the TypeScript test suite run a second time, instrumented.**
+  It is a separate command from `test` and `validate` so the inner loop stays
+  fast, and a separate CI job so it gets its own runner. The 90% per-file
+  thresholds are set in each server's `vitest.config.ts`
+  (`coverage.thresholds`, `perFile: true`), not on the command line, so
+  `npm run coverage -w src/<server>` enforces exactly what the gate does. The
+  root `npm run coverage` runs every workspace even after one fails, and exits
+  non-zero if any did, so the failing workspace's report is not necessarily
+  the last thing printed.
 - **`validate:py` carries on after a failing server**, so one run reports all
   three verdicts, and exits non-zero if any failed. Within a server it stops
   at the first failing step.
@@ -68,7 +78,7 @@ Notes on the stages:
   neither.
 - `python.yml` also has a **Build \<server\>** job per server that re-runs
   pyright and `uv build` and uploads the built distribution. It checks nothing
-  stage 4 does not.
+  stage 5 does not.
 
 ### The root guards
 
@@ -91,10 +101,9 @@ covers: the repo-wide tooling and the guards that keep the gate itself honest.
 - **`npm run skills:eval`** spends real model calls and is non-deterministic,
   so it is in neither the gate nor CI. Run the whole suite when adding a skill
   or editing a description ([`skill-authoring.md`](./skill-authoring.md)).
-- **`npm run coverage`** runs each TypeScript server's tests instrumented and
-  prints a report. No threshold is enforced today. Per-file coverage thresholds,
-  and their stages in the gate and in CI, arrive with #4854 (TypeScript) and
-  #4855 (Python).
+- **Coverage of the Python servers.** The TypeScript per-file gate is stage 4
+  above. The Python servers' counterpart, with its own stage and CI job,
+  arrives with #4855.
 - **`npm run pack:verify`** builds each package's publish artifact (the npm
   tarball, the wheel), installs it into an empty directory and boots the
   installed server. It catches what the boot smoke cannot, since the smoke

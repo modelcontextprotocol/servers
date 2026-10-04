@@ -43,7 +43,7 @@
     "smoke": "node scripts/smoke-servers.mjs",
     "pack:verify": "node scripts/pack-and-verify.mjs",
     "local:gate": "node scripts/gate-lease.mjs npm run local:gate:stages",
-    "local:gate:stages": "npm run verify:install-fresh && npm run validate && npm run validate:py && npm run verify:skills:cli && npm run smoke"
+    "local:gate:stages": "npm run verify:install-fresh && npm run validate && npm run coverage && npm run validate:py && npm run verify:skills:cli && npm run smoke"
   },
   "dependencies": {
     "@modelcontextprotocol/server-everything": "*",

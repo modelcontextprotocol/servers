@@ -379,11 +379,13 @@ describe("the gate's name", () => {
 
   // The stages by name. The CI-parity test under `.github/workflows` derives
   // the same requirement from what the workflows actually run; this list also
-  // pins the stage that has no CI counterpart (`verify:install-fresh`).
+  // pins the stage that has no CI counterpart (`verify:install-fresh`), and the
+  // root `coverage` (#4854), whose CI legs run each workspace's `coverage`.
   for (const stage of [
     "verify:install-fresh",
     "validate",
     "validate:guards",
+    "coverage",
     "validate:py",
     "verify:skills:cli",
     "smoke",

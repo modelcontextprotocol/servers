@@ -7,19 +7,19 @@ disable-model-invocation: false
 # Testing
 
 The **rules** are in [`AGENTS.md`](../../../AGENTS.md) under **Always test new
-or modified code**: new behavior comes with tests, test at the protocol level
-where you can, and keep expected error output off the console. This skill
-explains which harness each server has **today**, how to write a test with it,
-and which command runs what.
+or modified code**: new behavior comes with tests, every TypeScript file clears
+the per-file coverage gate, test at the protocol level where you can, and keep
+expected error output off the console. This skill explains the harness each
+server has, how to write a test with it, which command runs what, and how to
+clear the per-file coverage gate.
 
 Driving a running server by hand, with the Inspector or an LLM client, is
 `/client-smoke`. It is evidence for a PR, not a substitute for a test.
 
-⚠️ **The harnesses are uneven, and this page describes them as they are.** Only
-`everything` can be driven in-process today. A shared in-process harness for
-every server, and a per-file coverage threshold, are the work of #4854
-(TypeScript) and #4855 (Python); neither exists yet, and this skill changes
-when they land. Do not write a test that assumes them.
+⚠️ **The TypeScript and Python harnesses differ.** All four TypeScript servers
+are tested in-process, a real `Client` linked to the server over an in-memory
+transport (#4854). The Python servers' tests call their functions directly,
+and those servers have no coverage gate yet (#4855).
 
 ## Where a test goes
 
@@ -35,18 +35,14 @@ anywhere else in a workspace is never run and reports nothing. Shared test
 helpers go in `__tests__/` without the `.test` suffix, as
 `src/everything/__tests__/helpers.ts` does.
 
-## What each server's tests do today
+## What each server's tests do
 
 | Server | How its tests reach the code |
 | --- | --- |
-| `everything` | Call a `register…` function with a mocked `McpServer`, capture the handler it registered, and invoke the handler directly. `__tests__/helpers.ts` types the captured handlers |
-| `filesystem` | Unit tests of `lib.ts` and the path helpers, plus an SDK `Client` over `StdioClientTransport` that spawns the built `dist/index.js` |
-| `sequentialthinking` | Unit tests of `lib.ts`, plus an SDK `Client` over stdio against `dist/index.js` |
-| `memory` | Direct calls on the exported `KnowledgeGraphManager` and `register…` functions, with a mocked server |
+| `everything`, `filesystem`, `memory`, `sequentialthinking` | An SDK `Client` connected to the server's `createServer()` over `InMemoryTransport`, in the vitest process; unit tests of the helper modules beside them; at most a thin spawn-based smoke of the built `dist/index.js` |
 | `fetch`, `git`, `time` | Direct calls on the functions in `server.py`, with `unittest.mock` |
 
-No test in the repo uses an in-memory transport yet, and no Python test opens
-a `ClientSession`.
+No Python test opens a `ClientSession` yet.
 
 ## Choosing a harness for a new test
 
@@ -59,16 +55,27 @@ Ask what the test must prove.
   error result, a capability, a notification): drive the server through a
   client. A handler called directly skips the SDK's input validation, output
   schema validation and error mapping, which is where the wire-level bugs in
-  this repo have been. The regression tests in `filesystem` and
-  `sequentialthinking` that go through a `Client` exist for exactly that
-  reason.
+  this repo have been.
 
-Which client harness is available depends on the server.
+Which client harness is available depends on the language.
 
-### `everything`: in-process, over an in-memory transport
+### TypeScript: in-process, over an in-memory transport
 
-`src/everything/server/index.ts` exports `createServer()`, so a test can link a
-real `Client` to a real server with no process and no build:
+Each TypeScript server exports a `createServer(…)` factory and starts its
+transport only from a guarded `main()`, so importing it starts nothing and a
+test can link a real `Client` to a real server with no process and no build:
+
+| Server | Factory | Takes |
+| --- | --- | --- |
+| `everything` | `server/index.ts` | nothing; returns `{ server, cleanup }` |
+| `filesystem` | `server.ts` | the allowed directories |
+| `memory` | `index.ts` | the graph file's path |
+| `sequentialthinking` | `index.ts` | nothing |
+
+Each server's `__tests__/` already has a shared helper that does the
+connecting (and, where the server needs one, the temporary directory or file).
+**Use it** rather than writing the linking by hand again. What it does, shown
+for `everything`:
 
 ```ts
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -112,61 +119,36 @@ describe("echo, over the protocol", () => {
 });
 ```
 
-Call `cleanup()` in `afterEach`: `createServer()` starts timers (the roots sync
-after `initialize`, the task store) that otherwise outlive the test. A tool
-registered by `registerConditionalTools` appears only when the `Client`
-declares the matching capability (`roots`, `sampling`, `elicitation`) in its
-constructor options.
+Close the client (and, for `everything`, call `cleanup()`) in `afterEach`:
+`everything`'s `createServer()` starts timers (the roots sync after
+`initialize`, the task store) that otherwise outlive the test. A tool
+`everything` registers in `registerConditionalTools` appears only when the
+`Client` declares the matching capability (`roots`, `sampling`,
+`elicitation`) in its constructor options.
 
-### `filesystem`, `memory`, `sequentialthinking`: a client over stdio, against the build
+Assert on what the client receives (tool, resource and prompt lists, call
+results, errors, notifications), never on SDK internals or a handler's context
+object: the SDK v2 migration (#4856) must be able to update these tests with
+import and type changes alone.
 
-These three build their server at module scope and connect stdio when
-`index.ts` is imported, so there is no factory to call and the in-memory
-recipe above does not apply to them. A protocol-level test spawns the built
-server instead:
+### TypeScript: the spawn smoke of the built binary
 
-```ts
-const distIndexPath = path.join(packageRoot, "dist", "index.js");
-const transport = new StdioClientTransport({
-  command: process.execPath,
-  args: [distIndexPath],
-  stderr: "pipe",
-});
-const client = new Client({ name: "test-client", version: "0.0.0" });
-try {
-  await client.connect(transport);
-  // … assert …
-} finally {
-  await client.close(); // this is what stops the child process
-}
-```
+What only the published entry point can show (that `dist/index.js` starts,
+reads its arguments and serves over stdio) is checked by a thin test that
+spawns it with `StdioClientTransport`. Everything else is tested in-process.
+Two hazards apply to that kind of test, and only to it:
 
-Closing in `finally` (or in `afterEach`, as the `filesystem` tests do) matters:
-a failed assertion that skips `close()` leaves the spawned server running.
+- ⚠️ **It runs the last build, not your edit.** `npm test` does not build. Build
+  first, or run `npm run validate -w src/<server>`, which builds before it
+  tests.
+- ⚠️ **A spawn test guarded with `skipIf(!existsSync(distIndexPath))` is
+  reported as skipped with no build**, and the run stays green having tested
+  nothing over stdio. A skipped test in this repo usually means "not built".
 
-`src/sequentialthinking/__tests__/input-schema.test.ts` is the reference.
-`stderr: "pipe"` keeps the server's startup banner off the console.
-
-Give the server what it needs to start. `filesystem` takes its allowed
-directories as arguments (`args: [distIndexPath, testDir]`, with `testDir` a
-`realpath`-resolved temporary directory, as
-`src/filesystem/__tests__/structured-content.test.ts` does); with none, and a
-client that offers no Roots, every file operation is refused. Environment
-variables such as `MEMORY_FILE_PATH` go in the transport's `env` option: the
-child inherits only the SDK's default safelist (`PATH`, `HOME`, `USER` and the
-like), not the other variables of the test process.
-
-⚠️ **These tests run the last build, not your edit.** `npm test` does not build.
-A test that spawns `dist/index.js` passes or fails on whatever `tsc` last
-wrote, so after changing a server's source, build before trusting the result,
-or run `npm run validate -w src/<server>`, which builds before it tests.
-
-⚠️ **A missing `dist/` is handled two ways.** The `sequentialthinking` tests
-wrap themselves in `skipIf(!existsSync(distIndexPath))`, so with no build they
-are reported as **skipped**, and the run stays green having tested nothing over
-the wire. The `filesystem` stdio tests and `memory`'s dist-layout test have no
-such guard and **fail**. A skipped test in this repo usually means "not
-built".
+Close the client in `finally` or `afterEach`: that is what stops the child
+process. Pipe its stderr (`stderr: "pipe"`), and pass environment variables
+in the transport's `env` option, since the child inherits only the SDK's
+default safelist (`PATH`, `HOME`, `USER` and the like).
 
 ### Python: `ClientSession` over stdio
 
@@ -214,6 +196,7 @@ than adding a dependency for one test.
 | One TypeScript server | `npm test -w src/<server>` |
 | One file, or one test | `npm test -w src/<server> -- __tests__/<file>.test.ts -t "<name>"` |
 | Every TypeScript server | `npm test` at the root |
+| One TypeScript server's coverage gate | `npm run coverage -w src/<server>` (see below) |
 | One TypeScript server's whole chain | `npm run validate -w src/<server>` (format check, lint, typecheck, build, test) |
 | One Python server | `uv run pytest` in `src/<server>` |
 | One Python test | `uv run pytest <path to the test file>::<name>` in `src/<server>` (for example `tests/test_server.py::test_git_checkout_existing_branch`, or `test/time_server_test.py::…` in `time`) |
@@ -226,26 +209,43 @@ files in `filesystem`, `memory` and `sequentialthinking`: their build
 
 ## `test` versus `coverage`
 
-`test` is `vitest run`. `coverage` is `vitest run --coverage`: the same suite,
-plus a v8 coverage report over the workspace's `**/*.ts` (tests and `dist/`
-excluded), written to the terminal and to the ignored `coverage/` directory.
+`test` is `vitest run`, the fast loop, and part of `validate`. `coverage` is
+`vitest run --coverage`: the same suite, instrumented, with a v8 report over
+the workspace's `**/*.ts` (tests and `dist/` excluded) written to the terminal
+and to the ignored `coverage/` directory (`coverage/index.html` has the
+line-by-line view).
 
 ```sh
 npm run coverage -w src/<server>    # one server
 npm run coverage                    # all four
 ```
 
-Today the report is **informational**. No vitest config sets a threshold, so
-`coverage` fails only when a test fails, and neither `validate` nor CI runs it.
-The Python servers have no coverage tooling at all: `pytest-cov` is not a dev
-dependency of any of them. Read the report to find what a change left
-untested; do not describe it as a gate.
+**`coverage` is a gate.** Each server's `vitest.config.ts` sets
+`coverage.thresholds` to 90 on lines, statements, functions and branches with
+`perFile: true`, so the command fails when any one file is below 90 on any
+one of them, even if the totals are above. CI runs it as its own job
+(`typescript.yml` → **Coverage \<server\>**) and `npm run local:gate` as its own
+stage. `test` and `validate` never measure coverage, so a change can pass
+them and still fail here: run `coverage` on the server you changed before you
+push.
+
+Clearing a red file:
+
+- The `Uncovered Line #s` column is the to-do list. A branch shortfall with no
+  uncovered line is the untaken side of a condition, `??`, `?.` or default
+  parameter: write the test that takes it.
+- Only code that **cannot** run gets an ignore, at the source and with its
+  reason: `/* v8 ignore next -- <reason> */`, or `/* v8 ignore start -- <reason> */`
+  … `/* v8 ignore stop */` around a block. "Hard to test" is not a reason.
+- Never lower a threshold, drop `perFile`, or add a file to the coverage
+  `exclude` to get green.
 
 ⚠️ **A spawned server is invisible to the report.** v8 coverage measures the
-vitest process, not a child it starts, so code reached only through a stdio
-test reads as uncovered: `sequentialthinking`'s `index.ts` reports 0% while its
-stdio tests exercise it. A low number on an entry file is not, by itself,
-missing tests.
+vitest process, not a child it starts, so code reached only through the spawn
+smoke reads as uncovered. That is why behavior is tested in-process: a file
+whose only test spawns it cannot clear the gate.
+
+The Python servers have no coverage tooling yet (#4855).
 
 ## Error output
 

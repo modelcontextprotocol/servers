@@ -24,6 +24,10 @@
     "expect": "pre-push-gate"
   },
   {
+    "prompt": "The coverage stage of my gate run went red, but the last report it printed was all green. How do I find what failed and fix it?",
+    "expect": "pre-push-gate"
+  },
+  {
     "prompt": "What is 17 multiplied by 23?",
     "expect": null
   },
