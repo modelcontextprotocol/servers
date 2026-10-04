@@ -95,6 +95,10 @@ The server's directory access control follows this flow:
   - Inputs:
     - `path` (string): File location
     - `content` (string): File content
+  - An existing file is overwritten in place, so it keeps its inode, creation
+    time, hard links and permissions (`edit_file` writes the same way). The
+    overwrite is not crash-atomic: a crash mid-write can leave the file partly
+    written
 
 - **edit_file**
   - Make selective edits using advanced pattern matching and formatting

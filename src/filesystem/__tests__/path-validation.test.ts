@@ -1275,8 +1275,8 @@ describe("Path Validation", () => {
       const realPath = await fs.realpath(legitFile);
       expect(isPathWithinAllowedDirectories(realPath, allowed)).toBe(false);
 
-      // With atomic rename, symlinks are replaced not followed
-      // So this test now demonstrates the protection
+      // The server's write path refuses a symlink rather than following it
+      // (lstat, O_NOFOLLOW and an inode check in lib.ts's overwriteInPlace)
 
       // Verify content remains unchanged
       const targetContent = await fs.readFile(targetFile, "utf-8");
