@@ -37,8 +37,11 @@ test("parseArgs refuses an unknown flag or a missing value", () => {
   assert.throws(() => parseArgs(["--base="]), /--base needs a value/);
 });
 
-test("main exits 2 on a bad command line, before building anything", async () => {
+test("main exits 2 on a bad command line, before building anything", async (t) => {
+  // The usage error it prints is expected; keep it out of the test output.
+  const error = t.mock.method(console, "error", () => {});
   assert.equal(await main(["--nope"]), 2);
+  assert.match(String(error.mock.calls[0]?.arguments[0]), /unknown argument/);
 });
 
 test("an identical interface is unchanged", () => {

@@ -56,6 +56,7 @@ import {
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { winShellArgs } from "./lib/win-shell-args.mjs";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -191,14 +192,19 @@ export function renderReport(verdict, { base, head }) {
   return lines.join("\n");
 }
 
-/** Run a command to completion; throw with its output when it fails. */
+/**
+ * Run a command to completion; throw with its output when it fails. Only
+ * `npm` needs a shell, and only on Windows (it is a `.cmd` shim there); its
+ * arguments are then quoted for `cmd.exe`. `git` is spawned without one.
+ */
 function run(command, args, cwd, env) {
-  const res = spawnSync(command, args, {
+  const shell = process.platform === "win32" && command === "npm";
+  const res = spawnSync(command, shell ? winShellArgs(args) : args, {
     cwd,
     env: env ?? process.env,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
-    shell: process.platform === "win32",
+    shell,
   });
   if (res.error) throw res.error;
   if (res.status !== 0)

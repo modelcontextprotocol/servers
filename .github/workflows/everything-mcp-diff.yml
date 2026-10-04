@@ -36,6 +36,7 @@ on:
       - "src/everything/**"
       - "package.json"
       - "package-lock.json"
+      - "tsconfig.json"
       - "scripts/interface-diff.mjs"
       - ".github/workflows/everything-mcp-diff.yml"
   # No branch filter: PRs to v2/main and to main both run, and so does a PR
@@ -45,6 +46,7 @@ on:
       - "src/everything/**"
       - "package.json"
       - "package-lock.json"
+      - "tsconfig.json"
       - "scripts/interface-diff.mjs"
       - ".github/workflows/everything-mcp-diff.yml"
   # A published Release (a milestone, tagged vX.Y.Z on main; see RELEASING.md)
@@ -187,6 +189,8 @@ jobs:
   # navigating to the Actions tab. One comment per PR, found again by its
   # marker and edited on each push. This job checks nothing out and runs none
   # of the PR's code; it only reads the report the `diff` job uploaded.
+  # Dependabot's PRs are same-repo but get a read-only token, so they are
+  # skipped like fork PRs and keep the job summary and the artifact.
   comment:
     name: Post the diff on the PR
     needs: diff
@@ -194,6 +198,7 @@ jobs:
       always() &&
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
       (needs.diff.result == 'success' || needs.diff.result == 'failure')
     timeout-minutes: 5
     runs-on: ubuntu-latest
