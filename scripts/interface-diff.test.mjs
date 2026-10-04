@@ -77,12 +77,13 @@ test("a probe failure is an error, though the CLI reports it as a difference", (
   const v = classify(
     cliJson({
       hasDifferences: true,
-      error: "Target probe failed: boom",
+      error: "boom",
       diffs: [{ endpoint: "error", diff: "Target probe failed: boom" }],
     }),
   );
   assert.equal(v.status, "error");
-  assert.match(v.error, /boom/);
+  // The context (which build failed) comes from the diffs entry.
+  assert.equal(v.error, "Target probe failed: boom");
 });
 
 test("output that is not the JSON report is an error, never a pass", () => {
@@ -90,6 +91,7 @@ test("output that is not the JSON report is an error, never a pass", () => {
   assert.equal(classify("Fatal error: x").status, "error");
   assert.equal(classify("{}").status, "error");
   assert.equal(classify(JSON.stringify({ results: [] })).status, "error");
+  assert.equal(classify(JSON.stringify({ results: [{}] })).status, "error");
 });
 
 test("a CLI crash before the report carries its stderr as the reason", () => {

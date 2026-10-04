@@ -131,8 +131,19 @@ export function classify(stdout, stderr = "") {
       diffs: [],
     };
   const diffs = Array.isArray(result.diffs) ? result.diffs : [];
-  if (result.error)
-    return { status: "error", error: String(result.error), diffs };
+  if (result.error) {
+    // `error` is the bare exception; the entry in `diffs` says which build
+    // failed ("Base server probe failed: …" / "Target probe failed: …").
+    const context = diffs.find((d) => d.endpoint === "error")?.diff;
+    return { status: "error", error: String(context ?? result.error), diffs };
+  }
+  // A report without a verdict is not a pass.
+  if (typeof result.hasDifferences !== "boolean")
+    return {
+      status: "error",
+      error: "mcp-server-diff's report has no hasDifferences verdict",
+      diffs,
+    };
   return {
     status: result.hasDifferences ? "changed" : "unchanged",
     diffs,
