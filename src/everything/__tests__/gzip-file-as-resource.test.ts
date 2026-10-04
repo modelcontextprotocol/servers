@@ -150,6 +150,7 @@ describe("gzip-file-as-resource", () => {
     expect(gunzipSync(blob).toString()).toBe("second");
   });
 
+  // KNOWN BUG #4808: pins current (wrong) behavior; the fix changes this assertion.
   it("evicts another session's resource of the same name (#4808)", async () => {
     // Characterization of #4808: session resources are tracked in one
     // module-level map keyed by URI, so the second session's registration

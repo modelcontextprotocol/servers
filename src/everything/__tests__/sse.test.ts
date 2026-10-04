@@ -83,6 +83,7 @@ describe("SSE transport", () => {
     await Promise.all([a.client.close(), b.client.close()]);
   });
 
+  // KNOWN BUG (no issue): POST /message for an unknown session is never answered; the fix changes this assertion.
   it("forgets the session and cleans up when the stream closes", async () => {
     const { client, sessionId } = await connectSse();
     await client.close();
@@ -104,6 +105,7 @@ describe("SSE transport", () => {
     );
   });
 
+  // KNOWN BUG (no issue): POST /message for an unknown session is never answered; the fix changes this assertion.
   it("never answers a POST for an unknown session", async () => {
     expect(
       await respondsWithin(`${base}/message?sessionId=nope`, {
@@ -114,6 +116,7 @@ describe("SSE transport", () => {
     expect(error).toHaveBeenCalledWith("No transport found for sessionId nope");
   });
 
+  // KNOWN BUG (no issue): a second GET /sse for an existing session is never answered; the fix changes this assertion.
   it("never answers a second GET /sse for an existing session, and only logs it", async () => {
     const { client, sessionId } = await connectSse();
     expect(await respondsWithin(`${base}/sse?sessionId=${sessionId}`, {})).toBe(
@@ -126,6 +129,7 @@ describe("SSE transport", () => {
     await client.close();
   });
 
+  // KNOWN BUG (no issue): GET /sse?sessionId=<unknown> throws a TypeError that surfaces as a 500; the fix changes this assertion.
   it("fails a GET /sse for an unknown session id with a 500", async () => {
     // Characterization: the reconnect branch reads `.sessionId` of a missing
     // transport, and Express turns the TypeError into a 500.

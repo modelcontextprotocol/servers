@@ -63,6 +63,7 @@ describe("initialize", () => {
     );
   });
 
+  // KNOWN BUG #4792: pins current (wrong) behavior; the fix changes this assertion.
   it("names capability-gated tools in its instructions even for a client that cannot see them (#4792)", async () => {
     // Characterization of #4792: the instructions are static, so a client
     // that declares no sampling, elicitation or roots capability is told

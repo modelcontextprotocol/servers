@@ -61,6 +61,7 @@ describe("dynamic resource templates", () => {
     ]);
   });
 
+  // KNOWN BUG (no issue): blobResource() labels blob content text/plain instead of a binary MIME type; the fix changes this assertion.
   it("fabricates a blob resource from its id, labelled text/plain", async () => {
     // Characterization: the template advertises application/octet-stream,
     // but the content says text/plain (#4854 baseline).

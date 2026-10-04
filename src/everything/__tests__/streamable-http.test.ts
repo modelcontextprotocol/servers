@@ -158,6 +158,7 @@ describe("Streamable HTTP transport", () => {
     });
   });
 
+  // KNOWN BUG #4087: pins current (wrong) behavior; the fix changes this assertion.
   it("replays events from other streams after a Last-Event-ID (#4087)", async () => {
     // Characterization of #4087: the in-memory event store replays every
     // event stored after the given one, whatever stream it belongs to, so a
@@ -240,6 +241,7 @@ describe("Streamable HTTP transport", () => {
     },
   );
 
+  // KNOWN BUG (no issue): answers 400, not the 404 the spec requires, for an unknown or terminated session ID; the fix changes this assertion.
   it.each(["GET", "DELETE"])(
     "answers %s for an unknown session with a 400",
     async (method) => {
@@ -252,6 +254,7 @@ describe("Streamable HTTP transport", () => {
     },
   );
 
+  // KNOWN BUG (no issue): answers 400, not the 404 the spec requires, for an unknown or terminated session ID, and the error omits the request id; the fix changes this assertion.
   it("answers a POST for an unknown session with a 400 that omits the request id", async () => {
     // Characterization: no body parser runs before this check, so
     // `req.body` is undefined and the error carries no `id`.
@@ -272,6 +275,7 @@ describe("Streamable HTTP transport", () => {
     });
   });
 
+  // KNOWN BUG (no issue): answers 400, not the 404 the spec requires, for an unknown or terminated session ID; the fix changes this assertion.
   it("ends a session on DELETE, cleaning it up and refusing it afterwards", async () => {
     const { client, transport, sessionId } = await connectHttp();
     await transport.terminateSession();
@@ -374,6 +378,7 @@ describe("Streamable HTTP transport", () => {
 });
 
 describe("shutdown", () => {
+  // KNOWN BUG (no issue): the SIGINT handler walks the session Map with for...in, so it never closes a session; the fix changes this assertion.
   it("logs and exits 0 without closing any session", async () => {
     // Characterization: the handler walks the session Map with `for...in`,
     // which visits no entries, so no transport is closed (#4854 baseline).
