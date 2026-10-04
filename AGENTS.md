@@ -52,7 +52,7 @@ servers/
 │   └── time/                 Py  mcp-server-time                                  PyPI  Time and timezone conversion
 ├── .claude/skills/            On-demand procedures (see the Skills index above)
 ├── .changeset/               Pending changesets for the TypeScript servers, and the changesets config
-├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py), its guards (verify-*),
+├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py, interface-diff), its guards (verify-*),
 │                             the skills tooling, release tooling (npm-publish-guard, prepare-python-release,
 │                             pack-and-verify, release-manifest, release-notes), and the issue-filing sweeps
 │                             (dependency-refresh, dependabot-alerts, sdk-watch)
@@ -61,8 +61,8 @@ servers/
 │                             overview of how the rules, skills, gates and sweeps fit together
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
-│                             claude.yml (@claude mentions), and the scheduled sweeps that file issues:
-│                             dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
+│                             claude.yml (@claude mentions), everything-mcp-diff.yml (everything's interface diff on PRs),
+│                             and the scheduled sweeps that file issues: dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
 ├── .github/pull_request_template.md   The "issues, not PRs" banner that turns outside PRs away
 ├── RELEASING.md              How packages are versioned and published, and how to recover a failed publish
@@ -129,14 +129,15 @@ workspace's format check, lint, typecheck, build and tests), `coverage` (each
 TypeScript workspace's per-file coverage gate), `validate:py`
 (each Python server's locked sync, `ruff check`, `ruff format --check`,
 pyright, pytest and build), `coverage:py` (each Python server's per-file
-coverage gate), `verify:skills:cli`, and `smoke` (every server
-booted over each transport it implements). The stage-by-stage reference, and
-what CI runs where, is [`docs/quality-gate.md`](./docs/quality-gate.md);
+coverage gate), `verify:skills:cli`, `smoke` (every server booted over each
+transport it implements), and `interface-diff` (the `everything` server's MCP
+interface diffed against the base it branched from). The stage-by-stage
+reference, and what CI runs where, is [`docs/quality-gate.md`](./docs/quality-gate.md);
 diagnosing a red stage is the `pre-push-gate` skill.
 
 - **`npm run validate` and the per-package commands above are the inner loop,
-  not a substitute.** They skip the other language, the pinned skills validator
-  and the boot smoke.
+  not a substitute.** They skip the other language, the pinned skills validator,
+  the boot smoke and the interface diff.
 - **Format before committing**: `npm run format` at the root (TypeScript), and
   `uv run --frozen ruff format .` in a Python server you changed. The gate only
   checks formatting; it never rewrites files.
