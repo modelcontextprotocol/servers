@@ -270,6 +270,28 @@ def test_git_show(test_repository):
     assert "show test commit" in result
     assert "show_test.txt" in result
 
+def test_git_show_added_and_deleted_files_name_dev_null(test_repository):
+    """GitPython leaves a_path or b_path as None for a file a commit added or
+    deleted, and a unified diff names /dev/null on that side. Rendering None
+    there produces output no patch tool accepts."""
+    working_dir = Path(test_repository.working_dir)
+    (working_dir / "doomed.txt").write_text("y\n")
+    test_repository.index.add(["doomed.txt"])
+    test_repository.index.commit("add the file that will go")
+
+    (working_dir / "fresh.txt").write_text("z\n")
+    (working_dir / "doomed.txt").unlink()
+    test_repository.index.add(["fresh.txt"])
+    test_repository.index.remove(["doomed.txt"])
+    commit = test_repository.index.commit("add one, delete one")
+
+    result = git_show(test_repository, commit.hexsha)
+
+    assert "--- /dev/null\n+++ fresh.txt" in result
+    assert "--- doomed.txt\n+++ /dev/null" in result
+    assert "None" not in result.split("Message:")[-1]
+
+
 def test_git_show_initial_commit(test_repository):
     initial_commit = list(test_repository.iter_commits())[-1]
 
