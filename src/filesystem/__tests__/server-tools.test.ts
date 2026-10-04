@@ -691,7 +691,7 @@ describe("edit_file", () => {
     expect(text.endsWith("`````\n\n")).toBe(true);
   });
 
-  // KNOWN BUG (no issue): any edit silently converts a CRLF file's line endings to LF; the fix changes this assertion.
+  // KNOWN BUG #4991: any edit silently converts a CRLF file's line endings to LF; the fix changes this assertion.
   // The CRLF in the file is normalized away by any edit, dry run aside.
   it("rewrites a CRLF file with LF line endings", async () => {
     await fs.writeFile(file, "a\r\nb\r\n");
@@ -706,7 +706,7 @@ describe("edit_file", () => {
   // with leading and trailing whitespace trimmed, and reindents the
   // replacement. These pin its current reindentation rules.
   describe("whitespace-tolerant matcher (#2034)", () => {
-    // KNOWN BUG (no issue): lines after the first lose the file's indentation when oldText's line has none; the fix changes this assertion.
+    // KNOWN BUG #4990: lines after the first lose the file's indentation when oldText's line has none; the fix changes this assertion.
     it("matches lines whose indentation differs from oldText", async () => {
       await call(client, "edit_file", {
         path: file,
@@ -724,7 +724,7 @@ describe("edit_file", () => {
       );
     });
 
-    // KNOWN BUG (no issue): a replacement line whose oldText line has no indent ignores the file's indentation; the fix changes this assertion.
+    // KNOWN BUG #4990: a replacement line whose oldText line has no indent ignores the file's indentation; the fix changes this assertion.
     it("keeps relative indentation when both old and new lines are indented", async () => {
       await fs.writeFile(file, "    if (a) {\n        b();\n    }\n");
       await call(client, "edit_file", {

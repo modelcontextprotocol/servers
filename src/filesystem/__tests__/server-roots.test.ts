@@ -247,7 +247,7 @@ describe("a client without the roots capability", () => {
     );
   });
 
-  // KNOWN BUG (no issue): with no directories and no Roots, the initialization error the README promises is swallowed and the session stays up with nothing allowed; the fix changes this assertion.
+  // KNOWN BUG #4992: with no directories and no Roots, the initialization error the README promises is swallowed and the session stays up with nothing allowed; the fix changes this assertion.
   // With no directories from either source, oninitialized throws. The SDK
   // routes a notification handler's rejection to the server's onerror, which
   // the server leaves unset, so the error is invisible to the client: the
