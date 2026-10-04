@@ -218,7 +218,7 @@ async def test_invalid_url_is_rejected_by_pydantic(web: FakeWeb, url: str) -> No
     assert web.requests == []
 
 
-# KNOWN BUG (no issue): call_tool ignores the tool name and runs fetch for any name; the fix changes this assertion.
+# KNOWN BUG #4988: call_tool ignores the tool name and runs fetch for any name; the fix changes this assertion.
 async def test_call_tool_never_checks_the_tool_name(web: FakeWeb) -> None:
     # Characterizes call_tool ignoring `name`: an unknown tool name is not
     # rejected, the SDK skips schema validation for it (the tool is not
@@ -232,7 +232,7 @@ async def test_call_tool_never_checks_the_tool_name(web: FakeWeb) -> None:
     assert web.urls() == [ROBOTS, PAGE]
 
 
-# KNOWN BUG (no issue): call_tool ignores the tool name and runs fetch for any name; the fix changes this assertion.
+# KNOWN BUG #4988: call_tool ignores the tool name and runs fetch for any name; the fix changes this assertion.
 async def test_unknown_tool_name_still_validates_through_pydantic(
     web: FakeWeb,
 ) -> None:
@@ -451,7 +451,7 @@ async def test_html_without_node_falls_back_to_pure_python(web: FakeWeb) -> None
     assert "https://example.com/x" not in text
 
 
-# KNOWN BUG (no issue): an empty page without Node reports "No more content available" at start_index 0 instead of a simplification failure; the fix changes this assertion.
+# KNOWN BUG #4989: an empty page without Node reports "No more content available" at start_index 0 instead of a simplification failure; the fix changes this assertion.
 @pytest.mark.usefixtures("python_readability")
 async def test_empty_html_without_node_reads_as_no_more_content(web: FakeWeb) -> None:
     # The pure-Python extractor never returns empty content, so the
@@ -785,7 +785,7 @@ async def test_get_prompt_without_url_is_a_jsonrpc_error(
     assert web.requests == []
 
 
-# KNOWN BUG (no issue): get_prompt ignores the prompt name and serves fetch for any name; the fix changes this assertion.
+# KNOWN BUG #4988: get_prompt ignores the prompt name and serves fetch for any name; the fix changes this assertion.
 async def test_get_prompt_never_checks_the_prompt_name(web: FakeWeb) -> None:
     # Like call_tool, get_prompt ignores `name`.
     web.add(PAGE, plain("ok"))
