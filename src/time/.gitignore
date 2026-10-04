@@ -1,0 +1,5 @@
+# Coverage output from the per-server coverage command (see README,
+# "Development"); generated locally and never committed.
+coverage.json
+.coverage
+.coverage.*

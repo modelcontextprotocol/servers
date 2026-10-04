@@ -26,8 +26,7 @@ and those servers have no coverage gate yet (#4855).
 | Server | Directory | File name | Runner |
 | --- | --- | --- | --- |
 | `everything`, `filesystem`, `memory`, `sequentialthinking` | `src/<server>/__tests__/` | `<subject>.test.ts` | vitest, `globals: true` |
-| `fetch`, `git` | `src/<server>/tests/` | `test_<subject>.py` | pytest |
-| `time` | `src/time/test/` | `<subject>_test.py` | pytest |
+| `fetch`, `git`, `time` | `src/<server>/tests/` | `test_<subject>.py` | pytest |
 | Root tooling | `scripts/`, beside the script | `<name>.test.mjs` | `node --test` |
 
 Each vitest config includes only `**/__tests__/**/*.test.ts`, so a test file
@@ -236,7 +235,7 @@ In Python the same text follows `#`. A bug with no issue yet reads
 | One TypeScript server's coverage gate | `npm run coverage -w src/<server>` (see below) |
 | One TypeScript server's whole chain | `npm run validate -w src/<server>` (format check, lint, typecheck, build, test) |
 | One Python server | `uv run pytest` in `src/<server>` |
-| One Python test | `uv run pytest <path to the test file>::<name>` in `src/<server>` (for example `tests/test_server.py::test_git_checkout_existing_branch`, or `test/time_server_test.py::…` in `time`) |
+| One Python test | `uv run pytest <path to the test file>::<name>` in `src/<server>` (for example `tests/test_server.py::test_git_checkout_existing_branch`) |
 | One Python server's whole chain | `npm run validate:py -- <server>` |
 | Root tooling | `npm run test:scripts` |
 
