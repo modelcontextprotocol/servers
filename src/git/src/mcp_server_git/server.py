@@ -255,10 +255,10 @@ def git_show(repo: git.Repo, revision: str) -> str:
     for d in diff:
         output.append(f"\n--- {d.a_path}\n+++ {d.b_path}\n")
         if d.diff is None:
-            continue
+            continue  # pragma: no cover  # with create_patch=True GitPython always assigns the patch as bytes
         if isinstance(d.diff, bytes):
             output.append(d.diff.decode("utf-8"))
-        else:
+        else:  # pragma: no cover  # with create_patch=True GitPython always assigns the patch as bytes
             output.append(d.diff)
     return "".join(output)
 

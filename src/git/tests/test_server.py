@@ -18,26 +18,7 @@ from mcp_server_git.server import (
     validate_repo_path,
     serve,
 )
-import shutil
 import unittest.mock as mock
-
-
-@pytest.fixture
-def test_repository(tmp_path: Path):
-    repo_path = tmp_path / "temp_test_repo"
-    test_repo = git.Repo.init(repo_path)
-
-    Path(repo_path / "test.txt").write_text("test")
-    test_repo.index.add(["test.txt"])
-    test_repo.index.commit("initial commit")
-
-    yield test_repo
-
-    # Close GitPython's persistent `git cat-file` processes first: on Windows
-    # their cwd is inside the repository, so rmtree fails with WinError 32
-    # (#4855, unblocks #1149).
-    test_repo.close()
-    shutil.rmtree(repo_path)
 
 
 def test_git_checkout_existing_branch(test_repository):
@@ -611,26 +592,21 @@ def test_git_log_date_filtering(test_repository):
     assert len(valid_result) == 1
 
 
-def test_serve_run_does_not_raise_exceptions(tmp_path: Path):
+async def test_serve_run_does_not_raise_exceptions(tmp_path: Path):
     """Verify that serve() runs server.run without raise_exceptions=True."""
-    import anyio
-
     repo_path = tmp_path / "serve_test_repo"
-    git.Repo.init(repo_path)
+    git.Repo.init(repo_path).close()
 
-    async def _run():
-        with mock.patch("mcp_server_git.server.stdio_server") as mock_stdio:
-            mock_read = mock.AsyncMock()
-            mock_write = mock.AsyncMock()
-            mock_stdio.return_value.__aenter__.return_value = (mock_read, mock_write)
-            mock_stdio.return_value.__aexit__.return_value = None
+    with mock.patch("mcp_server_git.server.stdio_server") as mock_stdio:
+        mock_read = mock.AsyncMock()
+        mock_write = mock.AsyncMock()
+        mock_stdio.return_value.__aenter__.return_value = (mock_read, mock_write)
+        mock_stdio.return_value.__aexit__.return_value = None
 
-            with mock.patch(
-                "mcp_server_git.server.Server.run", new_callable=mock.AsyncMock
-            ) as mock_run:
-                await serve(repo_path)
-                mock_run.assert_awaited_once()
-                _, kwargs = mock_run.call_args
-                assert kwargs.get("raise_exceptions") is not True
-
-    anyio.run(_run)
+        with mock.patch(
+            "mcp_server_git.server.Server.run", new_callable=mock.AsyncMock
+        ) as mock_run:
+            await serve(repo_path)
+            mock_run.assert_awaited_once()
+            _, kwargs = mock_run.call_args
+            assert kwargs.get("raise_exceptions") is not True
