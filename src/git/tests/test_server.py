@@ -33,6 +33,10 @@ def test_repository(tmp_path: Path):
 
     yield test_repo
 
+    # Close GitPython's persistent `git cat-file` processes first: on Windows
+    # their cwd is inside the repository, so rmtree fails with WinError 32
+    # (#4855, unblocks #1149).
+    test_repo.close()
     shutil.rmtree(repo_path)
 
 
