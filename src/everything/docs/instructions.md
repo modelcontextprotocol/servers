@@ -26,7 +26,7 @@ present-and-failing, so do not attempt to call it.
 | ----------------------------------- | ------------------------------------------------------ |
 | `get-roots-list`                    | `roots`                                                |
 | `trigger-sampling-request`          | `sampling`                                             |
-| `trigger-elicitation-request`       | `elicitation`                                          |
+| `trigger-elicitation-request`       | `elicitation.form` (or `elicitation` with no mode)     |
 | `trigger-url-elicitation`           | `elicitation.url`                                      |
 | `trigger-sampling-request-async`    | `sampling` and `tasks.requests.sampling.createMessage` |
 | `trigger-elicitation-request-async` | `elicitation` and `tasks.requests.elicitation.create`  |

@@ -58,7 +58,7 @@ describe("Registration Index Files", () => {
         server: {
           getClientCapabilities: vi.fn(() => ({
             roots: {},
-            elicitation: { url: {} },
+            elicitation: { form: {}, url: {} },
             sampling: {},
           })),
         },
@@ -149,7 +149,7 @@ describe("Registration Index Files", () => {
     });
   });
 
-  describe('instructions vs. capability-gated tools', () => {
+  describe("instructions vs. capability-gated tools", () => {
     // The instructions are read once in the server factory and handed to the
     // McpServer constructor, before `oninitialized` runs and client capabilities
     // are known. They are therefore the same string for every client, while the
@@ -161,7 +161,7 @@ describe("Registration Index Files", () => {
     const allCapabilities = {
       roots: {},
       sampling: {},
-      elicitation: { url: {} },
+      elicitation: { form: {}, url: {} },
       tasks: {
         requests: {
           sampling: { createMessage: {} },
@@ -170,8 +170,7 @@ describe("Registration Index Files", () => {
       },
     };
 
-    const registeredWith = async (capabilities: object): Promise<string[]> => {
-      const { registerConditionalTools } = await import('../tools/index.js');
+    const registeredWith = (capabilities: object): string[] => {
       const mockServer = {
         registerTool: vi.fn(),
         server: {
@@ -186,21 +185,21 @@ describe("Registration Index Files", () => {
 
       registerConditionalTools(mockServer);
 
-      const viaRegisterTool = (mockServer.registerTool as any).mock.calls.map(
-        (call: any[]) => call[0]
-      );
-      const viaRegisterToolTask = (
-        mockServer.experimental.tasks.registerToolTask as any
-      ).mock.calls.map((call: any[]) => call[0]);
+      const viaRegisterTool = vi
+        .mocked(mockServer.registerTool)
+        .mock.calls.map((call) => call[0]);
+      const viaRegisterToolTask = vi
+        .mocked(mockServer.experimental.tasks.registerToolTask)
+        .mock.calls.map((call) => call[0]);
       return [...viaRegisterTool, ...viaRegisterToolTask];
     };
 
     // A tool is capability-gated if declaring the capabilities makes it appear.
     // Deriving it as a difference rather than hard-coding a list means a tool
     // that stops being gated drops out of these assertions on its own.
-    const gatedTools = async (): Promise<string[]> => {
-      const withAll = await registeredWith(allCapabilities);
-      const withNone = await registeredWith({});
+    const gatedTools = (): string[] => {
+      const withAll = registeredWith(allCapabilities);
+      const withNone = registeredWith({});
       return withAll.filter((name) => !withNone.includes(name)).sort();
     };
 
@@ -208,38 +207,43 @@ describe("Registration Index Files", () => {
     const documentedTools = (instructions: string): string[] => {
       const section = instructions
         .split(/^## /m)
-        .find((part) => part.startsWith('Capability-Gated Tools'));
-      expect(section, 'instructions.md has no "Capability-Gated Tools" section').toBeDefined();
-      return [...section!.matchAll(/^\|\s*`([a-z0-9-]+)`\s*\|/gm)]
+        .find((part) => part.startsWith("Capability-Gated Tools"));
+      expect(
+        section,
+        'instructions.md has no "Capability-Gated Tools" section',
+      ).toBeDefined();
+      return [...(section ?? "").matchAll(/^\|\s*`([a-z0-9-]+)`\s*\|/gm)]
         .map((match) => match[1])
         .sort();
     };
 
-    it('documents exactly the tools that client capabilities gate', async () => {
-      const { readInstructions } = await import('../resources/index.js');
-
+    it("documents exactly the tools that client capabilities gate", () => {
       // A tool registered only when a capability is declared is absent from
       // tools/list for every other client, so an agent told to use it has
       // nothing to call. The instructions must name the same set the gates do.
-      expect(documentedTools(readInstructions())).toEqual(await gatedTools());
+      expect(documentedTools(readInstructions())).toEqual(gatedTools());
     });
 
-    it('never tells an agent to use a capability-gated tool unconditionally', async () => {
-      const { readInstructions } = await import('../resources/index.js');
+    it("never tells an agent to use a capability-gated tool unconditionally", () => {
       const instructions = readInstructions();
-      const gated = await gatedTools();
+      const gated = gatedTools();
 
       // Lines in the gated section are already qualified by the section itself.
       const sections = instructions.split(/^## /m);
       const otherLines = sections
-        .filter((part) => !part.startsWith('Capability-Gated Tools'))
-        .flatMap((part) => part.split('\n'));
+        .filter((part) => !part.startsWith("Capability-Gated Tools"))
+        .flatMap((part) => part.split("\n"));
 
       const unconditional = otherLines.filter(
-        (line) => gated.some((name) => line.includes(`\`${name}\``)) && !/\bif\b/i.test(line)
+        (line) =>
+          gated.some((name) => line.includes(`\`${name}\``)) &&
+          !/\bif\b/i.test(line),
       );
 
-      expect(unconditional, 'mention a gated tool without saying it may be absent').toEqual([]);
+      expect(
+        unconditional,
+        "mention a gated tool without saying it may be absent",
+      ).toEqual([]);
     });
   });
 
