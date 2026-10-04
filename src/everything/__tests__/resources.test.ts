@@ -231,14 +231,27 @@ describe("resource subscriptions", () => {
     await session.client.subscribeResource({ uri: URI });
     await leaving.close();
 
-    await session.client.callTool({
-      name: "toggle-subscriber-updates",
-      arguments: {},
-    });
-    await vi.waitFor(() => expect(updates()).toEqual([URI]));
-    expect(
-      ofMethod(leaving.notifications, "notifications/resources/updated"),
-    ).toEqual([]);
+    // A new client under the departed session's id, which never subscribed:
+    // if cleanup had left the old subscription behind, its updates would
+    // reach this client.
+    const returning = await connect({ sessionId: leaving.sessionId });
+    try {
+      await returning.client.callTool({
+        name: "toggle-subscriber-updates",
+        arguments: {},
+      });
+      await session.client.callTool({
+        name: "toggle-subscriber-updates",
+        arguments: {},
+      });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(updates()).toEqual([URI, URI]);
+      expect(
+        ofMethod(returning.notifications, "notifications/resources/updated"),
+      ).toEqual([]);
+    } finally {
+      await returning.close();
+    }
   });
 
   it("logs, rather than throws, an update that cannot be sent", async () => {

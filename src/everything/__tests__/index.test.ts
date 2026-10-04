@@ -82,9 +82,15 @@ describe("run", () => {
     expect(exit).toHaveBeenCalledWith(1);
   });
 
-  it("does not start anything when imported", () => {
-    // The module was imported above, under vitest rather than as the binary.
+  it("does not start anything when imported", async () => {
+    // A fresh import, under vitest rather than as the binary: the entry-point
+    // guard must keep it from starting any transport.
+    vi.resetModules();
+    await import("../index.js");
     expect(startStdioServer).not.toHaveBeenCalled();
+    expect(startSseServer).not.toHaveBeenCalled();
+    expect(startStreamableHttpServer).not.toHaveBeenCalled();
+    expect(exit).not.toHaveBeenCalled();
   });
 });
 

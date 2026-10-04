@@ -163,9 +163,16 @@ describe("toggle-simulated-logging", () => {
     const leaving = await connect();
     await toggle(leaving);
     await vi.waitFor(() => expect(messages(leaving)).toHaveLength(1));
+    // A closed client receives nothing either way, so check the server side:
+    // an interval that outlived cleanup would log each failed send.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     await leaving.close();
     await vi.advanceTimersByTimeAsync(20000);
     expect(messages(leaving)).toHaveLength(1);
+    expect(errorSpy).not.toHaveBeenCalledWith(
+      "Simulated logging message failed:",
+      expect.anything(),
+    );
   });
 
   it("logs, rather than throws, a message that cannot be sent", async () => {
