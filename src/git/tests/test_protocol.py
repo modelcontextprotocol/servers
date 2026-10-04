@@ -603,18 +603,18 @@ async def test_git_create_branch_unknown_base_is_error(repo: git.Repo):
     ) == text_result("No item found with id nope", is_error=True)
 
 
-# KNOWN BUG #4996: git_create_branch reports "Created branch" for an existing branch already at the base commit; the fix changes this assertion.
-async def test_git_create_branch_existing_name_at_same_commit_reports_success(
+async def test_git_create_branch_existing_name_at_same_commit_is_error(
     repo: git.Repo,
 ):
-    # Characterization: GitPython's create_head accepts an existing branch that
-    # already points at the base commit, so this "creates" `main` from `main`
-    # and reports success although nothing was created.
+    # GitPython's create_head accepts an existing branch that already points
+    # at the base commit; the server rejects it rather than report a creation.
     assert await call(
         None,
         "git_create_branch",
         {"repo_path": str(root_of(repo)), "branch_name": "main"},
-    ) == text_result("Created branch 'main' from 'main'")
+    ) == text_result(
+        "Cannot create branch 'main': refs/heads/main already exists", is_error=True
+    )
 
 
 async def test_git_create_branch_existing_name_at_other_commit_is_error(
@@ -885,14 +885,10 @@ async def test_git_branch_contains_and_not_contains(repo: git.Repo):
     assert not_contains == text_result("* main")
 
 
-# KNOWN BUG #4995: git_branch returns an unknown branch_type as a successful result, not an error; the fix changes this assertion.
-async def test_git_branch_unknown_type_is_not_an_error(repo: git.Repo):
-    # Characterization: an unknown branch_type is reported in the text of a
-    # *successful* result (isError false), so a client cannot tell it apart
-    # from a branch listing.
+async def test_git_branch_unknown_type_is_error(repo: git.Repo):
     assert await call(
         None, "git_branch", {"repo_path": str(root_of(repo)), "branch_type": "bogus"}
-    ) == text_result("Invalid branch type: bogus")
+    ) == text_result("Invalid branch type: bogus", is_error=True)
 
 
 # KNOWN BUG #4999: the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
