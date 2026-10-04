@@ -273,12 +273,14 @@ describe("memory persistence over the protocol", () => {
       return (await fs.stat(file)).mode & 0o777;
     }
 
-    it("replaces a 0600 graph file's mode with a new file's mode", async () => {
+    it("replaces a hardened graph file's mode with a new file's mode", async () => {
       const { client } = await open();
       await call(client, "create_entities", { entities: [alice] });
-      await fs.chmod(filePath, 0o600);
+      // 0600 as in the issue, unless the umask already makes new files 0600;
+      // the original mode must differ from a new file's for the loss to show.
       const expected = await newFileMode();
-      expect(expected).not.toBe(0o600);
+      const original = expected === 0o600 ? 0o640 : 0o600;
+      await fs.chmod(filePath, original);
 
       await call(client, "create_entities", { entities: [bob] });
 

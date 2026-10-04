@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 
+// The memory server: a knowledge graph of entities, relations and
+// observations, persisted as JSONL and served over MCP as nine tools and one
+// subscribable resource. createServer() builds a server over a graph file so
+// tests can run it in-process; main() connects it to stdio, and runs only
+// when this file is the process entry point, so importing it starts nothing.
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
