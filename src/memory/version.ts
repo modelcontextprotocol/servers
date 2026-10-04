@@ -2,9 +2,13 @@ import { createRequire } from "node:module";
 import path from "path";
 import { fileURLToPath } from "url";
 
-export function resolvePackageVersion(): string {
-  const require = createRequire(import.meta.url);
-  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+// moduleUrl is where to start looking. The server always uses this module's
+// own URL; a test passes another so it can reach the fallback and the error.
+export function resolvePackageVersion(
+  moduleUrl: string = import.meta.url,
+): string {
+  const require = createRequire(moduleUrl);
+  const moduleDir = path.dirname(fileURLToPath(moduleUrl));
   const candidates = [
     path.join(moduleDir, "package.json"),
     path.join(moduleDir, "..", "package.json"),

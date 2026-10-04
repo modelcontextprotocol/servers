@@ -89,6 +89,39 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: npm run validate
 
+  # The per-file coverage gate (#4854): one leg per TypeScript server, beside
+  # `validate` rather than inside it, as the Inspector's CI does (inspector#2159).
+  # Each server's `coverage` (`vitest run --coverage`) fails when any file is
+  # below 90% on lines, statements, functions or branches; the thresholds live
+  # in the server's `vitest.config.ts`. It re-runs the suite instrumented, so it
+  # is kept out of the fast `test`/`validate` loop and given its own runner.
+  # `npm run local:gate` runs the same check through the root `npm run coverage`.
+  coverage:
+    timeout-minutes: 15
+    needs: [detect-packages]
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
+    name: Coverage ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # The same install as the `validate` leg: this package plus the root. Its
+      # `prepare` builds the package, so a test that launches `dist/` finds it.
+      - name: Install dependencies
+        run: npm ci --workspace src/${{ matrix.package }} --include-workspace-root
+
+      - name: Enforce the per-file coverage gate
+        working-directory: src/${{ matrix.package }}
+        run: npm run coverage
+
   # The boot smoke (#4871): every server started the way a client starts it —
   # the built `dist/index.js` for the TypeScript servers, the console script
   # through `uv run` for the Python ones — over each transport it implements,

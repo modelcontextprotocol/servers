@@ -3,7 +3,7 @@
 // drift at the first "Version Packages" PR; this drives the server through a
 // client and reads what `initialize` actually returns.
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createRequire } from "node:module";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -36,6 +36,32 @@ describe("server version", () => {
       cleanup();
       await client.close();
       await server.close();
+    }
+  });
+});
+
+describe("resolvePackageVersion without a usable package.json", () => {
+  it("skips a package.json with no version and one that cannot be read, then throws", async () => {
+    vi.resetModules();
+    vi.doMock("node:module", async (importOriginal) => {
+      const real = await importOriginal<typeof import("node:module")>();
+      let calls = 0;
+      return {
+        ...real,
+        createRequire: () => () => {
+          if (calls++ === 0) return {}; // the first candidate has no version
+          throw new Error("not found"); // the second is missing
+        },
+      };
+    });
+    try {
+      // SERVER_VERSION is resolved at import, so the import itself fails.
+      await expect(import("../version.js")).rejects.toThrow(
+        "Could not locate package.json for server version",
+      );
+    } finally {
+      vi.doUnmock("node:module");
+      vi.resetModules();
     }
   });
 });

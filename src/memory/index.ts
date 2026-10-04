@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 
+// The memory server: a knowledge graph of entities, relations and
+// observations, persisted as JSONL and served over MCP as nine tools and one
+// subscribable resource. createServer() builds a server over a graph file so
+// tests can run it in-process; main() connects it to stdio, and runs only
+// when this file is the process entry point, so importing it starts nothing.
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import {
   SubscribeRequestSchema,
   UnsubscribeRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { promises as fs } from "fs";
+import { promises as fs, realpathSync } from "fs";
 import path from "path";
 import os from "os";
 import { randomBytes } from "crypto";
@@ -76,9 +83,6 @@ export async function ensureMemoryFilePath(
     return newMemoryPath;
   }
 }
-
-// Initialize memory file path (will be set during startup)
-let MEMORY_FILE_PATH: string;
 
 // We are storing our memory using entities, relations, and observations in a graph structure
 export interface Entity {
@@ -423,8 +427,6 @@ export class KnowledgeGraphManager {
   }
 }
 
-let knowledgeGraphManager: KnowledgeGraphManager;
-
 // Zod schemas for entities and relations
 const EntitySchema = z.object({
   name: z.string().describe("The name of the entity"),
@@ -440,295 +442,7 @@ const RelationSchema = z.object({
   relationType: z.string().describe("The type of the relation"),
 });
 
-const server = new McpServer({
-  name: "memory-server",
-  version: SERVER_VERSION,
-});
-
 const RESOURCE_URI = "memory://knowledge-graph";
-
-// Track which resource URIs the connected client has subscribed to, so we only
-// emit notifications/resources/updated to a client that asked for them.
-const resourceSubscribers = new Set<string>();
-
-// Notify subscribers that the knowledge graph resource changed. No-op when the
-// client has not subscribed.
-function notifyGraphUpdated() {
-  if (resourceSubscribers.has(RESOURCE_URI)) {
-    // Fire-and-forget: the tool result must not wait on (or fail because of)
-    // the notification, so a delivery failure is logged rather than thrown.
-    server.server
-      .sendResourceUpdated({ uri: RESOURCE_URI })
-      .catch((error: unknown) => {
-        console.error("Failed to send resource updated notification:", error);
-      });
-  }
-}
-
-// Register create_entities tool
-server.registerTool(
-  "create_entities",
-  {
-    title: "Create Entities",
-    description: "Create multiple new entities in the knowledge graph",
-    inputSchema: {
-      entities: z.array(EntitySchema),
-    },
-    outputSchema: {
-      entities: z.array(EntitySchema),
-    },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-  },
-  async ({ entities }) => {
-    const result = await knowledgeGraphManager.createEntities(entities);
-    notifyGraphUpdated();
-    return {
-      content: [
-        { type: "text" as const, text: JSON.stringify(result, null, 2) },
-      ],
-      structuredContent: { entities: result },
-    };
-  },
-);
-
-// Register create_relations tool
-server.registerTool(
-  "create_relations",
-  {
-    title: "Create Relations",
-    description:
-      "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
-    inputSchema: {
-      relations: z.array(RelationSchema),
-    },
-    outputSchema: {
-      relations: z.array(RelationSchema),
-    },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-  },
-  async ({ relations }) => {
-    const result = await knowledgeGraphManager.createRelations(relations);
-    notifyGraphUpdated();
-    return {
-      content: [
-        { type: "text" as const, text: JSON.stringify(result, null, 2) },
-      ],
-      structuredContent: { relations: result },
-    };
-  },
-);
-
-// Register add_observations tool
-server.registerTool(
-  "add_observations",
-  {
-    title: "Add Observations",
-    description:
-      "Add new observations to existing entities in the knowledge graph",
-    inputSchema: {
-      observations: z.array(
-        z.object({
-          entityName: z
-            .string()
-            .describe("The name of the entity to add the observations to"),
-          contents: z
-            .array(z.string())
-            .describe("An array of observation contents to add"),
-        }),
-      ),
-    },
-    outputSchema: {
-      results: z.array(
-        z.object({
-          entityName: z.string(),
-          addedObservations: z.array(z.string()),
-        }),
-      ),
-    },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-  },
-  async ({ observations }) => {
-    const result = await knowledgeGraphManager.addObservations(observations);
-    notifyGraphUpdated();
-    return {
-      content: [
-        { type: "text" as const, text: JSON.stringify(result, null, 2) },
-      ],
-      structuredContent: { results: result },
-    };
-  },
-);
-
-// Register delete_entities tool
-server.registerTool(
-  "delete_entities",
-  {
-    title: "Delete Entities",
-    description:
-      "Delete multiple entities and their associated relations from the knowledge graph",
-    inputSchema: {
-      entityNames: z
-        .array(z.string())
-        .describe("An array of entity names to delete"),
-    },
-    outputSchema: {
-      success: z.boolean(),
-      message: z.string(),
-    },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ entityNames }) => {
-    const { deleted, notFound } =
-      await knowledgeGraphManager.deleteEntities(entityNames);
-    notifyGraphUpdated();
-    const message =
-      notFound.length === 0
-        ? "Entities deleted successfully"
-        : `Deleted ${deleted.length} of ${entityNames.length} entities. Not found: ${notFound.join(", ")}`;
-    return {
-      content: [{ type: "text" as const, text: message }],
-      structuredContent: { success: true, message },
-    };
-  },
-);
-
-// Register delete_observations tool
-server.registerTool(
-  "delete_observations",
-  {
-    title: "Delete Observations",
-    description:
-      "Delete specific observations from entities in the knowledge graph",
-    inputSchema: {
-      deletions: z.array(
-        z.object({
-          entityName: z
-            .string()
-            .describe("The name of the entity containing the observations"),
-          observations: z
-            .array(z.string())
-            .describe("An array of observations to delete"),
-        }),
-      ),
-    },
-    outputSchema: {
-      success: z.boolean(),
-      message: z.string(),
-    },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ deletions }) => {
-    const { deletedCount, missingEntities } =
-      await knowledgeGraphManager.deleteObservations(deletions);
-    notifyGraphUpdated();
-    const requested = deletions.reduce(
-      (total, d) => total + d.observations.length,
-      0,
-    );
-    const message =
-      deletedCount === requested
-        ? "Observations deleted successfully"
-        : `Deleted ${deletedCount} of ${requested} observations.` +
-          (missingEntities.length
-            ? ` Entities not found: ${missingEntities.join(", ")}`
-            : "");
-    return {
-      content: [{ type: "text" as const, text: message }],
-      structuredContent: { success: true, message },
-    };
-  },
-);
-
-// Register delete_relations tool
-server.registerTool(
-  "delete_relations",
-  {
-    title: "Delete Relations",
-    description: "Delete multiple relations from the knowledge graph",
-    inputSchema: {
-      relations: z
-        .array(RelationSchema)
-        .describe("An array of relations to delete"),
-    },
-    outputSchema: {
-      success: z.boolean(),
-      message: z.string(),
-    },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ relations }) => {
-    const { deletedCount } =
-      await knowledgeGraphManager.deleteRelations(relations);
-    notifyGraphUpdated();
-    const message =
-      deletedCount === relations.length
-        ? "Relations deleted successfully"
-        : `Deleted ${deletedCount} of ${relations.length} relations. The rest matched nothing.`;
-    return {
-      content: [{ type: "text" as const, text: message }],
-      structuredContent: { success: true, message },
-    };
-  },
-);
-
-// Register read_graph tool
-server.registerTool(
-  "read_graph",
-  {
-    title: "Read Graph",
-    description: "Read the entire knowledge graph",
-    inputSchema: {},
-    outputSchema: {
-      entities: z.array(EntitySchema),
-      relations: z.array(RelationSchema),
-    },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async () => {
-    const graph = await knowledgeGraphManager.readGraph();
-    return {
-      content: [
-        { type: "text" as const, text: JSON.stringify(graph, null, 2) },
-      ],
-      structuredContent: { ...graph },
-    };
-  },
-);
 
 export const SEARCH_QUERY_MAX_LENGTH = 2048;
 
@@ -739,69 +453,370 @@ export const SearchNodesQuerySchema = z
     "The search query to match against entity names, types, and observation content",
   );
 
-// Register search_nodes tool
-server.registerTool(
-  "search_nodes",
-  {
-    title: "Search Nodes",
-    description: "Search for nodes in the knowledge graph based on a query",
-    inputSchema: {
-      query: SearchNodesQuerySchema,
-    },
-    outputSchema: {
-      entities: z.array(EntitySchema),
-      relations: z.array(RelationSchema),
-    },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async ({ query }) => {
-    const graph = await knowledgeGraphManager.searchNodes(query);
-    return {
-      content: [
-        { type: "text" as const, text: JSON.stringify(graph, null, 2) },
-      ],
-      structuredContent: { ...graph },
-    };
-  },
-);
+// Build a memory server over the graph file at memoryFilePath: the nine
+// tools, the knowledge-graph resource and its subscriptions. main() connects
+// the result to stdio; tests connect it to an in-memory transport, so each
+// call returns an independent server with its own subscriber set.
+export function createServer(memoryFilePath: string): McpServer {
+  const knowledgeGraphManager = new KnowledgeGraphManager(memoryFilePath);
 
-// Register open_nodes tool
-server.registerTool(
-  "open_nodes",
-  {
-    title: "Open Nodes",
-    description: "Open specific nodes in the knowledge graph by their names",
-    inputSchema: {
-      names: z
-        .array(z.string())
-        .describe("An array of entity names to retrieve"),
+  const server = new McpServer({
+    name: "memory-server",
+    version: SERVER_VERSION,
+  });
+
+  // Track which resource URIs the connected client has subscribed to, so we only
+  // emit notifications/resources/updated to a client that asked for them.
+  const resourceSubscribers = new Set<string>();
+
+  // Notify subscribers that the knowledge graph resource changed. No-op when the
+  // client has not subscribed.
+  function notifyGraphUpdated() {
+    if (resourceSubscribers.has(RESOURCE_URI)) {
+      // Fire-and-forget: the tool result must not wait on (or fail because of)
+      // the notification, so a delivery failure is logged rather than thrown.
+      server.server
+        .sendResourceUpdated({ uri: RESOURCE_URI })
+        .catch((error: unknown) => {
+          console.error("Failed to send resource updated notification:", error);
+        });
+    }
+  }
+
+  // Register create_entities tool
+  server.registerTool(
+    "create_entities",
+    {
+      title: "Create Entities",
+      description: "Create multiple new entities in the knowledge graph",
+      inputSchema: {
+        entities: z.array(EntitySchema),
+      },
+      outputSchema: {
+        entities: z.array(EntitySchema),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
-    outputSchema: {
-      entities: z.array(EntitySchema),
-      relations: z.array(RelationSchema),
+    async ({ entities }) => {
+      const result = await knowledgeGraphManager.createEntities(entities);
+      notifyGraphUpdated();
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(result, null, 2) },
+        ],
+        structuredContent: { entities: result },
+      };
     },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
+  );
+
+  // Register create_relations tool
+  server.registerTool(
+    "create_relations",
+    {
+      title: "Create Relations",
+      description:
+        "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
+      inputSchema: {
+        relations: z.array(RelationSchema),
+      },
+      outputSchema: {
+        relations: z.array(RelationSchema),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
-  },
-  async ({ names }) => {
-    const graph = await knowledgeGraphManager.openNodes(names);
-    return {
-      content: [
-        { type: "text" as const, text: JSON.stringify(graph, null, 2) },
-      ],
-      structuredContent: { ...graph },
-    };
-  },
-);
+    async ({ relations }) => {
+      const result = await knowledgeGraphManager.createRelations(relations);
+      notifyGraphUpdated();
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(result, null, 2) },
+        ],
+        structuredContent: { relations: result },
+      };
+    },
+  );
+
+  // Register add_observations tool
+  server.registerTool(
+    "add_observations",
+    {
+      title: "Add Observations",
+      description:
+        "Add new observations to existing entities in the knowledge graph",
+      inputSchema: {
+        observations: z.array(
+          z.object({
+            entityName: z
+              .string()
+              .describe("The name of the entity to add the observations to"),
+            contents: z
+              .array(z.string())
+              .describe("An array of observation contents to add"),
+          }),
+        ),
+      },
+      outputSchema: {
+        results: z.array(
+          z.object({
+            entityName: z.string(),
+            addedObservations: z.array(z.string()),
+          }),
+        ),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ observations }) => {
+      const result = await knowledgeGraphManager.addObservations(observations);
+      notifyGraphUpdated();
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(result, null, 2) },
+        ],
+        structuredContent: { results: result },
+      };
+    },
+  );
+
+  // Register delete_entities tool
+  server.registerTool(
+    "delete_entities",
+    {
+      title: "Delete Entities",
+      description:
+        "Delete multiple entities and their associated relations from the knowledge graph",
+      inputSchema: {
+        entityNames: z
+          .array(z.string())
+          .describe("An array of entity names to delete"),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        message: z.string(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ entityNames }) => {
+      const { deleted, notFound } =
+        await knowledgeGraphManager.deleteEntities(entityNames);
+      notifyGraphUpdated();
+      const message =
+        notFound.length === 0
+          ? "Entities deleted successfully"
+          : `Deleted ${deleted.length} of ${entityNames.length} entities. Not found: ${notFound.join(", ")}`;
+      return {
+        content: [{ type: "text" as const, text: message }],
+        structuredContent: { success: true, message },
+      };
+    },
+  );
+
+  // Register delete_observations tool
+  server.registerTool(
+    "delete_observations",
+    {
+      title: "Delete Observations",
+      description:
+        "Delete specific observations from entities in the knowledge graph",
+      inputSchema: {
+        deletions: z.array(
+          z.object({
+            entityName: z
+              .string()
+              .describe("The name of the entity containing the observations"),
+            observations: z
+              .array(z.string())
+              .describe("An array of observations to delete"),
+          }),
+        ),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        message: z.string(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ deletions }) => {
+      const { deletedCount, missingEntities } =
+        await knowledgeGraphManager.deleteObservations(deletions);
+      notifyGraphUpdated();
+      const requested = deletions.reduce(
+        (total, d) => total + d.observations.length,
+        0,
+      );
+      const message =
+        deletedCount === requested
+          ? "Observations deleted successfully"
+          : `Deleted ${deletedCount} of ${requested} observations.` +
+            (missingEntities.length
+              ? ` Entities not found: ${missingEntities.join(", ")}`
+              : "");
+      return {
+        content: [{ type: "text" as const, text: message }],
+        structuredContent: { success: true, message },
+      };
+    },
+  );
+
+  // Register delete_relations tool
+  server.registerTool(
+    "delete_relations",
+    {
+      title: "Delete Relations",
+      description: "Delete multiple relations from the knowledge graph",
+      inputSchema: {
+        relations: z
+          .array(RelationSchema)
+          .describe("An array of relations to delete"),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        message: z.string(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ relations }) => {
+      const { deletedCount } =
+        await knowledgeGraphManager.deleteRelations(relations);
+      notifyGraphUpdated();
+      const message =
+        deletedCount === relations.length
+          ? "Relations deleted successfully"
+          : `Deleted ${deletedCount} of ${relations.length} relations. The rest matched nothing.`;
+      return {
+        content: [{ type: "text" as const, text: message }],
+        structuredContent: { success: true, message },
+      };
+    },
+  );
+
+  // Register read_graph tool
+  server.registerTool(
+    "read_graph",
+    {
+      title: "Read Graph",
+      description: "Read the entire knowledge graph",
+      inputSchema: {},
+      outputSchema: {
+        entities: z.array(EntitySchema),
+        relations: z.array(RelationSchema),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => {
+      const graph = await knowledgeGraphManager.readGraph();
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(graph, null, 2) },
+        ],
+        structuredContent: { ...graph },
+      };
+    },
+  );
+
+  // Register search_nodes tool
+  server.registerTool(
+    "search_nodes",
+    {
+      title: "Search Nodes",
+      description: "Search for nodes in the knowledge graph based on a query",
+      inputSchema: {
+        query: SearchNodesQuerySchema,
+      },
+      outputSchema: {
+        entities: z.array(EntitySchema),
+        relations: z.array(RelationSchema),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ query }) => {
+      const graph = await knowledgeGraphManager.searchNodes(query);
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(graph, null, 2) },
+        ],
+        structuredContent: { ...graph },
+      };
+    },
+  );
+
+  // Register open_nodes tool
+  server.registerTool(
+    "open_nodes",
+    {
+      title: "Open Nodes",
+      description: "Open specific nodes in the knowledge graph by their names",
+      inputSchema: {
+        names: z
+          .array(z.string())
+          .describe("An array of entity names to retrieve"),
+      },
+      outputSchema: {
+        entities: z.array(EntitySchema),
+        relations: z.array(RelationSchema),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ names }) => {
+      const graph = await knowledgeGraphManager.openNodes(names);
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(graph, null, 2) },
+        ],
+        structuredContent: { ...graph },
+      };
+    },
+  );
+
+  registerKnowledgeGraphResource(server, knowledgeGraphManager);
+  registerKnowledgeGraphSubscriptions(server, resourceSubscribers);
+
+  return server;
+}
 
 export function registerKnowledgeGraphResource(
   server: McpServer,
@@ -832,7 +847,10 @@ export function registerKnowledgeGraphResource(
 
 // Enable clients to subscribe to the knowledge-graph resource and receive
 // notifications/resources/updated when mutation tools change the graph.
-export function registerKnowledgeGraphSubscriptions(server: McpServer) {
+export function registerKnowledgeGraphSubscriptions(
+  server: McpServer,
+  resourceSubscribers: Set<string>,
+) {
   server.server.registerCapabilities({ resources: { subscribe: true } });
   server.server.setRequestHandler(SubscribeRequestSchema, async (request) => {
     resourceSubscribers.add(request.params.uri);
@@ -844,18 +862,39 @@ export function registerKnowledgeGraphSubscriptions(server: McpServer) {
   });
 }
 
-async function main() {
-  MEMORY_FILE_PATH = await ensureMemoryFilePath();
-  knowledgeGraphManager = new KnowledgeGraphManager(MEMORY_FILE_PATH);
-  registerKnowledgeGraphResource(server, knowledgeGraphManager);
-  registerKnowledgeGraphSubscriptions(server);
-
-  const transport = new StdioServerTransport();
+// Start the server on stdio, writing the graph to the file
+// ensureMemoryFilePath picks. The transport is a parameter so a test can run
+// this whole startup path in-process; the bin always uses stdio.
+export async function main(
+  transport: Transport = new StdioServerTransport(),
+): Promise<McpServer> {
+  const memoryFilePath = await ensureMemoryFilePath();
+  const server = createServer(memoryFilePath);
   await server.connect(transport);
   console.error("Knowledge Graph MCP Server running on stdio");
+  return server;
 }
 
-main().catch((error) => {
-  console.error("Fatal error in main():", error);
-  process.exit(1);
-});
+// True when this module is the program node was asked to run, rather than a
+// module imported by a test. Both sides go through realpath, because npm runs
+// the bin through a symlink (node_modules/.bin/mcp-server-memory).
+export function isMainModule(
+  entryPath: string | undefined = process.argv[1],
+  moduleUrl: string = import.meta.url,
+): boolean {
+  if (!entryPath) {
+    return false;
+  }
+  try {
+    return realpathSync(entryPath) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
+  main().catch((error) => {
+    console.error("Fatal error in main():", error);
+    process.exit(1);
+  });
+}

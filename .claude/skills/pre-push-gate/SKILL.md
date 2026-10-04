@@ -154,6 +154,40 @@ the server's own `tsc`. An error in a test file only shows in `typecheck`.
 Re-run just that suite to iterate: `npm test -w src/<server>`. Read the failure
 before changing a timeout: an assertion that races is a bug in the test.
 
+### `coverage`
+
+A TypeScript file is below 90% on lines, statements, functions or branches.
+Vitest names each file and dimension:
+
+```
+ERROR: Coverage for branches (71.42%) does not meet global threshold (90%) for roots-utils.ts
+```
+
+("global threshold" is Vitest's wording; with `perFile: true` it is checked
+per file.) The root `npm run coverage` carries on into the remaining
+workspaces after a failure, so **the failing report is not the last thing
+printed**: find the `npm ERR!` block, which names the workspace
+(`in workspace: @modelcontextprotocol/server-<name>`), and read the `ERROR:`
+lines just above it.
+
+1. Re-run that server alone: `npm run coverage -w src/<server>`.
+2. Read its per-file table. The `Uncovered Line #s` column is where the
+   missing tests go (a long list is truncated to `...`, and a long file name
+   to `...-name.ts`; open `coverage/index.html` in the workspace, or narrow
+   the run, for the full list). A branch shortfall with no uncovered lines is
+   the untaken side of a condition, `??`, `?.` or default parameter.
+3. **Write the tests.** Drive what a client sees through a `Client` over the
+   in-memory transport; call a helper directly only for its logic (`testing`
+   skill).
+4. Only for code that genuinely cannot run, annotate it at the source with
+   its reason, `/* v8 ignore next -- <reason> */` (or `start`/`stop` around a
+   block). A branch that is merely awkward to reach is not unreachable.
+
+**Never lower a threshold, drop `perFile`, or widen the coverage `exclude`**
+to get green; the gate is the rule in `AGENTS.md` **Always test new or
+modified code**. A failing _test_ in this stage is an ordinary test failure:
+fix it as under `test`, above.
+
 ### `validate:py`
 
 The summary at the end names the failing server, and the step that failed is
@@ -221,8 +255,7 @@ The details of the lease are in
 
 ## Not part of the gate
 
-`npm run skills:eval` (real model calls), `npm run coverage` (a report; no
-threshold is enforced yet) and `npm run pack:verify` (installs each package's
-publish artifact and boots it; needs the network, and belongs to the release
-flow) are separate commands. Run the eval suite when you
-add a skill or change a description.
+`npm run skills:eval` (real model calls) and `npm run pack:verify` (installs
+each package's publish artifact and boots it; needs the network, and belongs to
+the release flow) are separate commands. Run the eval suite when you add a
+skill or change a description.

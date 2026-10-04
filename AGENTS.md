@@ -29,7 +29,7 @@ not in advance.
 | [`security-advisory`](.claude/skills/security-advisory/SKILL.md) | A privately reported vulnerability end to end: the `[GHSA-…]` draft card, server or SDK ownership, the reach classes, accepting, the private fork, publishing, public tracking | Model-invoked, or `/security-advisory` |
 | [`project-structure`](.claude/skills/project-structure/SKILL.md) | What is inside each server: the TypeScript and Python layouts, where each server registers its features, and where a new file goes | Model-invoked, or `/project-structure` |
 | [`local-dev`](.claude/skills/local-dev/SKILL.md) | Install, build and run each server from the checkout over the transports it implements; local `npx`/`uvx` and client-config runs; stale builds and fresh worktrees; the `overrides`, lockstep and `uv.lock` procedures | Model-invoked, or `/local-dev` |
-| [`testing`](.claude/skills/testing/SKILL.md) | The harness each server has today, in-process and stdio protocol-level test recipes, test placement, the commands per suite, and `test` versus `coverage` | Model-invoked, or `/testing` |
+| [`testing`](.claude/skills/testing/SKILL.md) | The in-process protocol-level harness, test placement, the commands per suite, `test` versus `coverage`, and clearing the per-file coverage gate | Model-invoked, or `/testing` |
 | [`release`](.claude/skills/release/SKILL.md) | A milestone release end to end: the release issue, the preparation PRs on `v2/main` (audit, Version Packages, Python CalVer), the pure `v2/main` → `main` merge PR, the release ledger, and what a maintainer publishes | **Name-only**: `/release` |
 | [`client-smoke`](.claude/skills/client-smoke/SKILL.md) | Driving a built server with the Inspector CLI (the scripted path), the Inspector web UI (by hand) and an LLM client; the CLI's argument split and exit codes; protocol eras and what can be exercised today | Model-invoked, or `/client-smoke` |
 
@@ -100,7 +100,8 @@ dependencies are managed with **`uv`, never `pip`**.
 # TypeScript: one install at the root covers all four workspaces
 npm install
 npm run build                           # every workspace
-npm test -w src/<server>                # one workspace (vitest, with coverage)
+npm test -w src/<server>                # one workspace (vitest)
+npm run coverage -w src/<server>        # the same suite, with the per-file coverage gate
 
 # Python: per server
 cd src/<server>
@@ -119,7 +120,8 @@ npm run local:gate
 **Run `npm run local:gate` before every push, and push only when it exits 0.**
 It runs every check CI runs, for both languages, in one command:
 `verify:install-fresh`, the root `validate` (the guards, then each TypeScript
-workspace's format check, lint, typecheck, build and tests), `validate:py`
+workspace's format check, lint, typecheck, build and tests), `coverage` (each
+TypeScript workspace's per-file coverage gate), `validate:py`
 (each Python server's locked sync, `ruff check`, `ruff format --check`,
 pyright, pytest and build), `verify:skills:cli`, and `smoke` (every server
 booted over each transport it implements). The stage-by-stage reference, and
@@ -453,6 +455,22 @@ here.
   `__tests__/` directory. Python servers use **pytest** (`pytest-asyncio` where
   the server is async), with tests in the server's `tests/` directory (`test/` in
   `time`).
+- **Coverage is gated per file.** The rule for each language:
+  - **TypeScript**: every file in a server clears **≥ 90 on all four
+    dimensions** (lines, statements, functions and branches). The thresholds
+    are set in each server's `vitest.config.ts` (`perFile: true`). A PR that
+    drops any file below 90 on any dimension fails CI (`typescript.yml` →
+    **Coverage \<server\>**) and `npm run local:gate`.
+- **A genuinely unreachable branch is annotated at the source, never waved
+  through by lowering the gate.** Every ignore carries its reason:
+  `/* v8 ignore next -- <reason> */` in TypeScript. Reach for one only when the
+  code cannot be exercised (a defensive guard for a value the types already
+  rule out, say), never because a test is hard to write.
+- **`coverage` is its own command, separate from `test` and `validate`.**
+  `npm run coverage -w src/<server>` (or the root `npm run coverage` for every
+  TypeScript server) runs the suite instrumented and enforces the gate;
+  `test` and `validate` stay fast and do not. CI and `npm run local:gate` run
+  it as a stage of its own.
 - **Test at the protocol level where you can**: drive the server through an MCP
   client over an in-memory transport and assert on what comes back, rather than
   only calling internal functions.
