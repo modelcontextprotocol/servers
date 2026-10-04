@@ -2,10 +2,10 @@
 // handling, the memory.json -> memory.jsonl migration, and "~" expansion.
 //
 // Every test runs ensureMemoryFilePath against its own temporary directory.
-// Importing ../index.js starts the server's main(), which runs the same
-// migration on the package directory, and Vitest runs test files in parallel:
-// files written beside the source are shared with every other test file, and
-// were migrated away mid-test (#4922).
+// Vitest runs test files in parallel, so files written beside the source are
+// shared with every other test file; when importing ../index.js still started
+// main(), its migration of the package directory moved them away mid-test
+// (#4922).
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
