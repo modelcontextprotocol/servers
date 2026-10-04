@@ -151,9 +151,10 @@ The rules for maintainers and the agents working for them are in
 pushing, run `npm run format` at the repository root and then
 **`npm run local:gate`**, which runs every check CI runs for both languages:
 the repo-wide guards, each TypeScript server's `validate` (format check, lint
-where a warning fails like an error, typecheck, build, tests), each Python
-server's `validate:py` chain, the skills validator, and a boot smoke of every
-server. [`docs/quality-gate.md`](./docs/quality-gate.md) describes each stage.
+where a warning fails like an error, typecheck, build, tests) and per-file
+coverage gate (`coverage`), each Python
+server's `validate:py` chain and per-file coverage gate (`coverage:py`), the
+skills validator, and a boot smoke of every server. [`docs/quality-gate.md`](./docs/quality-gate.md) describes each stage.
 While iterating, `npm run validate -w src/<server>` checks a single TypeScript
 server and `npm run validate:py -- <server>` a single Python one; neither
 replaces the gate.

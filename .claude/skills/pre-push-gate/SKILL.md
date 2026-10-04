@@ -75,7 +75,8 @@ unquoted `#` or `:` in a `description`.
 `verify:skills:cli` is the authoritative validator. It fetches the pinned
 Claude Code CLI with `npx` when the installed one is a different version, so it
 **fails offline**. (`validate:py`'s `sync` step is the other stage that can:
-`uv sync --locked` downloads when a server's environment is missing or stale.)
+`uv sync --locked` downloads when a server's environment is missing or stale.
+`coverage:py` opens with the same sync, a no-op once `validate:py` has run.)
 
 ### `verify:typecheck-coverage`
 
@@ -204,6 +205,38 @@ the last `[validate:py] <server>: <step>` line above it. Re-run one server with
 | `build` | A packaging error in `pyproject.toml` |
 
 `uv: command not found` means `uv` is not installed. Never substitute `pip`.
+
+### `coverage:py`
+
+The Python per-file coverage gate: every file each server measures must reach
+**90% on lines and 90% on branches**. The summary names the server, the step,
+and for a shortfall each file and dimension below 90:
+
+```
+  FAIL  time — per-file check (2 below 90%)
+          src/time/src/mcp_server_time/server.py: lines 84.2% (75/89) is below 90%
+          src/time/src/mcp_server_time/server.py: branches 78.5% (11/14) is below 90%
+```
+
+Re-run one server with `npm run coverage:py -- <server>`. The per-file table
+above the summary gives both figures for every file, and coverage.py's own
+report above that (`term-missing`) lists the uncovered lines and partial
+branches (`120->124` is the jump from line 120 to 124 never taken).
+
+| Step | Fix |
+| --- | --- |
+| `sync` | As for `validate:py`: run `uv lock` in that server and commit the lockfile |
+| `pytest --cov` | A test failed, so no verdict was reached; fix it as for `validate:py`'s `pytest`. `unrecognized arguments: --cov` means `pytest-cov` is missing from the server's dev dependencies |
+| `per-file check`, "below 90%" | Write tests for the lines and branches the report lists. Drive the server in-process through a `ClientSession` where you can (`/testing`) |
+| `per-file check`, "was not written" or "measured no files" | The run produced no usable `coverage.json`: check the server's `[tool.coverage.run]` (`branch = true`, `source` naming its package) |
+| `per-file check`, "no covered_branches/num_branches" | `branch = true` is missing from `[tool.coverage.run]` |
+
+**Never lower the gate**, and never drop a file from `source` to clear it.
+Code that genuinely cannot run (a guard the types already rule out, a branch
+the SDK's input validation makes unreachable) is marked at the source with
+`# pragma: no cover  # <reason>`; every pragma carries its reason
+(`AGENTS.md` **Always test new or modified code**). A pragma on a line that is
+merely awkward to test is not justified; write the test.
 
 ### `smoke`
 

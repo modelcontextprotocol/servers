@@ -387,6 +387,7 @@ describe("the gate's name", () => {
     "validate:guards",
     "coverage",
     "validate:py",
+    "coverage:py",
     "verify:skills:cli",
     "smoke",
   ]) {

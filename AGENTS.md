@@ -52,7 +52,7 @@ servers/
 │   └── time/                 Py  mcp-server-time                                  PyPI  Time and timezone conversion
 ├── .claude/skills/            On-demand procedures (see the Skills index above)
 ├── .changeset/               Pending changesets for the TypeScript servers, and the changesets config
-├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py), its guards (verify-*),
+├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py), its guards (verify-*),
 │                             the skills tooling, and release tooling (npm-publish-guard, prepare-python-release,
 │                             pack-and-verify, release-manifest)
 ├── docs/                     Design documents; quality-gate.md is the gate's reference (stages, CI vs local, the lease);
@@ -110,6 +110,7 @@ uv run pytest
 uv run --frozen pyright
 uv run ruff check .
 uv build
+npm run coverage:py -- <server>         # at the root: the per-file coverage gate
 
 # Both languages: the pre-push gate (see Before pushing)
 npm run local:gate
@@ -123,7 +124,8 @@ It runs every check CI runs, for both languages, in one command:
 workspace's format check, lint, typecheck, build and tests), `coverage` (each
 TypeScript workspace's per-file coverage gate), `validate:py`
 (each Python server's locked sync, `ruff check`, `ruff format --check`,
-pyright, pytest and build), `verify:skills:cli`, and `smoke` (every server
+pyright, pytest and build), `coverage:py` (each Python server's per-file
+coverage gate), `verify:skills:cli`, and `smoke` (every server
 booted over each transport it implements). The stage-by-stage reference, and
 what CI runs where, is [`docs/quality-gate.md`](./docs/quality-gate.md);
 diagnosing a red stage is the `pre-push-gate` skill.
@@ -452,25 +454,30 @@ here.
 
 - **New or changed behavior comes with tests.** TypeScript servers use
   **vitest** (with `@vitest/coverage-v8`), with tests in the server's
-  `__tests__/` directory. Python servers use **pytest** (`pytest-asyncio` where
-  the server is async), with tests in the server's `tests/` directory (`test/` in
-  `time`).
+  `__tests__/` directory. Python servers use **pytest** (with `pytest-asyncio`),
+  with tests in the server's `tests/` directory.
 - **Coverage is gated per file.** The rule for each language:
   - **TypeScript**: every file in a server clears **≥ 90 on all four
     dimensions** (lines, statements, functions and branches). The thresholds
     are set in each server's `vitest.config.ts` (`perFile: true`). A PR that
     drops any file below 90 on any dimension fails CI (`typescript.yml` →
     **Coverage \<server\>**) and `npm run local:gate`.
+  - **Python**: every file clears **≥ 90 on lines and on branches**, the two
+    dimensions coverage.py measures (it has no native function dimension). A
+    PR that drops any Python file below 90 on either fails CI (`python.yml` →
+    **Coverage \<server\>**) and `npm run local:gate`.
 - **A genuinely unreachable branch is annotated at the source, never waved
   through by lowering the gate.** Every ignore carries its reason:
-  `/* v8 ignore next -- <reason> */` in TypeScript. Reach for one only when the
+  `/* v8 ignore next -- <reason> */` in TypeScript,
+  `# pragma: no cover  # <reason>` in Python. Reach for one only when the
   code cannot be exercised (a defensive guard for a value the types already
   rule out, say), never because a test is hard to write.
-- **`coverage` is its own command, separate from `test` and `validate`.**
+- **Coverage is its own command, separate from the fast test loop.**
   `npm run coverage -w src/<server>` (or the root `npm run coverage` for every
-  TypeScript server) runs the suite instrumented and enforces the gate;
-  `test` and `validate` stay fast and do not. CI and `npm run local:gate` run
-  it as a stage of its own.
+  TypeScript server) and `npm run coverage:py` (`-- <server>` for one) run the
+  suites instrumented and enforce the gate; `test`, `validate` and
+  `uv run pytest` stay fast and do not. CI and `npm run local:gate` run each
+  as a stage of its own.
 - **Test at the protocol level where you can**: drive the server through an MCP
   client over an in-memory transport and assert on what comes back, rather than
   only calling internal functions.

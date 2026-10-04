@@ -38,7 +38,7 @@ jobs:
           node-version: 22
 
       - name: Run node --test
-        run: node --test scripts/validate-py.test.mjs
+        run: node --test scripts/validate-py.test.mjs scripts/coverage-py.test.mjs scripts/lib/py-coverage.test.mjs
 
   test:
     timeout-minutes: 15
@@ -67,6 +67,37 @@ jobs:
       # sync, ruff check, ruff format --check, pyright, pytest, uv build.
       - name: Validate
         run: node scripts/validate-py.mjs ${{ matrix.package }}
+
+  # The per-file coverage gate (#4855), in parallel with `test`: every file of
+  # each server at >= 90% on lines and on branches. The same script
+  # `npm run coverage:py` runs locally, one server per leg. fail-fast is off so
+  # one server's shortfall does not cancel the other legs' verdicts.
+  coverage:
+    timeout-minutes: 15
+    needs: [detect-packages]
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
+    name: Coverage ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: "src/${{ matrix.package }}/.python-version"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Coverage
+        run: npm run coverage:py -- ${{ matrix.package }}
 
   build:
     timeout-minutes: 10

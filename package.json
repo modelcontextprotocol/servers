@@ -37,13 +37,14 @@
     "verify:typecheck-coverage": "node scripts/verify-typecheck-coverage.mjs",
     "verify:dep-lockstep": "node scripts/verify-dep-lockstep.mjs",
     "validate:py": "node scripts/validate-py.mjs",
+    "coverage:py": "node scripts/coverage-py.mjs",
     "verify:install-fresh": "node scripts/verify-install-fresh.mjs",
     "verify:no-test-retries": "node scripts/verify-no-test-retries.mjs",
     "verify:action-pins": "node scripts/verify-action-pins.mjs",
     "smoke": "node scripts/smoke-servers.mjs",
     "pack:verify": "node scripts/pack-and-verify.mjs",
     "local:gate": "node scripts/gate-lease.mjs npm run local:gate:stages",
-    "local:gate:stages": "npm run verify:install-fresh && npm run validate && npm run coverage && npm run validate:py && npm run verify:skills:cli && npm run smoke"
+    "local:gate:stages": "npm run verify:install-fresh && npm run validate && npm run coverage && npm run validate:py && npm run coverage:py && npm run verify:skills:cli && npm run smoke"
   },
   "dependencies": {
     "@modelcontextprotocol/server-everything": "*",
