@@ -3,118 +3,223 @@
 # This workflow helps reviewers see how tools, resources, prompts, and capabilities
 # evolve over time - useful for SDK compliance validation and catching regressions.
 #
+# Contributed by @SamMorrowDrums in #3260 and adapted for v2/main in #4860:
+#
+# - The check is `npm run interface-diff` (scripts/interface-diff.mjs), which
+#   drives the `mcp-server-diff` CLI, an exact-pinned root devDependency. The
+#   same script is a `local:gate` stage, and `scripts/lib/workflow-gate.test.mjs`
+#   requires every npm script a workflow runs to be one, so CI and the gate run
+#   the same check. No third-party action runs here.
+# - The base is chosen per event below rather than by the tool, whose default
+#   (the merge-base with origin/main) is the wrong base for PRs to v2/main.
+# - Untrusted code (the PR's install, build and server) runs only in `diff`,
+#   which holds a read-only token and no persisted credentials. The sticky
+#   comment is posted by `comment`, which holds `pull-requests: write` and runs
+#   none of the PR's code, and only for PRs from this repository: a fork PR's
+#   token is read-only, so there the report is in the job summary and the
+#   `mcp-diff-report` artifact. `pull_request_target` is deliberately not used,
+#   since it would run the fork's build next to a write token. If fork PRs need
+#   the comment too, the way is a separate `workflow_run` workflow that posts
+#   the artifact without checking anything out.
+#
+# A changed interface does not fail the run: the diff is information for the
+# reviewer. A diff that cannot run (a base that does not build, a server that
+# cannot be probed) does.
+#
 # See: https://github.com/modelcontextprotocol/inspector/issues/1034
 name: Everything Server MCP Diff
 
 on:
   push:
-    branches: [main]
+    branches: [main, v2/main]
     paths:
-      - 'src/everything/**'
-    # TypeScript release tags also trigger a run, comparing against the
-    # previous typescript-servers-* tag (auto-detected by mcp-server-diff).
-    # This surfaces the cumulative interface delta for each release.
-    tags:
-      - 'typescript-servers-*'
+      - "src/everything/**"
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/interface-diff.mjs"
+      - ".github/workflows/everything-mcp-diff.yml"
+  # No branch filter: PRs to v2/main and to main both run, and so does a PR
+  # stacked on another PR's branch. The base is the PR's own base either way.
   pull_request:
     paths:
-      - 'src/everything/**'
+      - "src/everything/**"
+      - "package.json"
+      - "package-lock.json"
+      - "scripts/interface-diff.mjs"
+      - ".github/workflows/everything-mcp-diff.yml"
+  # A published Release (a milestone, tagged vX.Y.Z on main; see RELEASING.md)
+  # surfaces the cumulative interface delta since the previous release's tag.
+  release:
+    types: [published]
   # Manual trigger for comparing any two refs (commits, tags, branches)
   workflow_dispatch:
     inputs:
       compare_ref:
-        description: 'Base ref to compare against (commit SHA, tag, or branch)'
+        description: "Base ref to compare against (commit SHA, tag, or branch; defaults to the merge-base with v2/main)"
         required: false
-        default: ''
+        default: ""
       target_ref:
-        description: 'Target ref to compare (defaults to current branch if empty)'
+        description: "Target ref to compare (defaults to the ref the workflow runs on)"
         required: false
-        default: ''
+        default: ""
 
 permissions:
   contents: read
-  pull-requests: write
 
+# Superseded runs on the same PR are cancelled; pushes and releases each keep
+# their own run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  mcp-diff:
+  diff:
     name: Diff Everything Server Interface
+    timeout-minutes: 15
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v6
         with:
+          # The base is built from history, so all of it is needed, tags
+          # included (the release base is the previous tag).
           fetch-depth: 0
-          ref: ${{ github.event.inputs.target_ref || github.ref }}
+          ref: ${{ inputs.target_ref || github.ref }}
+          persist-credentials: false
 
-      - name: Run MCP Server Diff
-        id: mcp_diff
-        uses: SamMorrowDrums/mcp-server-diff@f7e5e58a4b0c4f68a5827adad2292953bb1ab9ef # v2.3.5
+      - uses: actions/setup-node@v7
         with:
-          setup_node: 'true'
-          node_version: '22'
-          install_command: cd src/everything && npm ci
-          build_command: cd src/everything && npm run build
-          start_command: node src/everything/dist/index.js stdio
-          compare_ref: ${{ github.event.inputs.compare_ref || '' }}
-          server_timeout: '15'
+          node-version: 22
+          cache: npm
 
-      - name: Add summary context
+      # A root `npm ci` runs every workspace's `prepare`, which builds it, so
+      # the head build the diff probes exists after this step.
+      - name: Install dependencies and build
+        run: npm ci
+
+      - name: Choose the base to compare against
+        id: base
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+          INPUT_BASE: ${{ inputs.compare_ref }}
+        run: |
+          case "$EVENT" in
+            # The checkout is the PR's merge commit, so its base tip is
+            # exactly what the PR changes.
+            pull_request) base="$PR_BASE" ;;
+            # The branch as it was before this push; a new branch has none.
+            push)
+              if [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+                base="$BEFORE"
+              else
+                base=$(git rev-parse HEAD^)
+              fi ;;
+            release) base=$(git describe --tags --abbrev=0 HEAD^) ;;
+            workflow_dispatch)
+              if [ -n "$INPUT_BASE" ]; then
+                base="$INPUT_BASE"
+              else
+                base=$(git merge-base HEAD origin/v2/main)
+              fi ;;
+            *) echo "unexpected event: $EVENT" >&2; exit 1 ;;
+          esac
+          echo "Comparing against $base"
+          echo "ref=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Diff the interface
+        env:
+          BASE: ${{ steps.base.outputs.ref }}
+        run: npm run interface-diff -- --base "$BASE" --report-dir mcp-diff-report
+
+      - name: Write the job summary
         if: always()
         run: |
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "ℹ️ **Interpreting Results**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The Everything server is a reference implementation that exercises all MCP features." >> $GITHUB_STEP_SUMMARY
-          echo "Interface changes here may indicate:" >> $GITHUB_STEP_SUMMARY
-          echo "- New MCP protocol features being demonstrated" >> $GITHUB_STEP_SUMMARY
-          echo "- Updated tool schemas or descriptions" >> $GITHUB_STEP_SUMMARY
-          echo "- New resources, prompts, or capabilities" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Review changes to ensure they align with the intended protocol updates." >> $GITHUB_STEP_SUMMARY
-
-      # Post (or update) a sticky PR comment so reviewers can see the diff without
-      # navigating to the Actions tab. The same comment is updated on subsequent
-      # pushes via the `header` key. Skipped for PRs from forks where GITHUB_TOKEN
-      # is read-only — the report is still available in the workflow summary and
-      # as an uploaded artifact.
-      - name: Build PR comment body
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        id: comment_body
-        run: |
           {
-            echo 'body<<MCP_DIFF_EOF'
-            echo '## 🔍 Everything Server MCP Interface Diff'
-            echo ''
-            if [ "${{ steps.mcp_diff.outputs.status }}" = "passed" ]; then
-              echo '✅ **No interface changes detected** between this PR and its merge-base.'
+            if [ -f mcp-diff-report/report.md ]; then
+              cat mcp-diff-report/report.md
             else
-              echo '⚠️ **Interface changes detected** — review below to confirm they are intentional.'
+              echo "The interface diff produced no report; see the job log."
             fi
-            echo ''
-            if [ -f conformance-report/CONFORMANCE_REPORT.md ]; then
-              echo '<details><summary>Full report</summary>'
-              echo ''
-              tail -n +5 conformance-report/CONFORMANCE_REPORT.md
-              echo ''
-              echo '</details>'
-            else
-              echo '_Report file not found — see the workflow logs for details._'
-            fi
-            echo ''
-            echo "<sub>Updated by [\`${{ github.workflow }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) · commit \`${{ github.event.pull_request.head.sha }}\`</sub>"
-            echo 'MCP_DIFF_EOF'
-          } >> "$GITHUB_OUTPUT"
+            echo ""
+            echo "---"
+            echo ""
+            echo "ℹ️ **Interpreting Results**"
+            echo ""
+            echo "The Everything server is a reference implementation that exercises all MCP features."
+            echo "Interface changes here may indicate:"
+            echo "- New MCP protocol features being demonstrated"
+            echo "- Updated tool schemas or descriptions"
+            echo "- New resources, prompts, or capabilities"
+            echo ""
+            echo "Review changes to ensure they align with the intended protocol updates."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mcp-diff-report
+          path: mcp-diff-report/
+          if-no-files-found: ignore
+
+  # Post (or update) a sticky PR comment so reviewers can see the diff without
+  # navigating to the Actions tab. One comment per PR, found again by its
+  # marker and edited on each push. This job checks nothing out and runs none
+  # of the PR's code; it only reads the report the `diff` job uploaded.
+  comment:
+    name: Post the diff on the PR
+    needs: diff
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (needs.diff.result == 'success' || needs.diff.result == 'failure')
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Download the report
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: mcp-diff-report
+          path: mcp-diff-report
 
       - name: Post / update sticky PR comment
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
-        with:
-          header: everything-server-mcp-diff
-          message: ${{ steps.comment_body.outputs.body }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          marker='<!-- everything-mcp-diff -->'
+          {
+            echo "$marker"
+            if [ -f mcp-diff-report/report.md ]; then
+              # A comment holds at most 65536 characters.
+              head -c 60000 mcp-diff-report/report.md
+              if [ "$(wc -c < mcp-diff-report/report.md)" -gt 60000 ]; then
+                echo ""
+                echo "_The report is truncated here; the full report is in the run's \`mcp-diff-report\` artifact._"
+              fi
+            else
+              echo "## \`everything\`: MCP interface diff"
+              echo ""
+              echo "❌ The diff job produced no report; see the run's log."
+            fi
+            echo ""
+            echo "<sub>Updated by [this run]($RUN_URL) for \`$HEAD_SHA\`.</sub>"
+          } > body.md
+          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@body.md > /dev/null
+          else
+            gh api "repos/$REPO/issues/$PR/comments" -F body=@body.md > /dev/null
+          fi
