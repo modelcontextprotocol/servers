@@ -216,13 +216,26 @@ export class KnowledgeGraphManager {
     // The temp file is kept in the same directory so the rename stays on one
     // filesystem — renaming across mount points fails with EXDEV.
     //
-    // The rename also replaces the target's inode, and the temp file is
-    // created under the process umask, so a memory file an operator narrowed
-    // with chmod would come back 0644. Capture the existing bits and restore
-    // them after the rename, as src/filesystem/lib.ts does for the same
-    // write pattern. A memory file that does not exist yet has nothing to
-    // preserve.
-    const existingStats = await fs.stat(this.memoryFilePath).catch(() => undefined);
+    // The rename also replaces the graph file's inode, and a new file takes
+    // the process umask, so the file's own mode would be lost (#4827): an
+    // operator's 0600 would come back 0644, and a read-only file would be
+    // silently replaced, since rename(2) needs only a writable directory.
+    // So refuse a graph file this process may not write, as fs.writeFile
+    // would (EACCES), and give the temp file the existing file's permission
+    // bits before the rename, as src/filesystem/lib.ts preserves them for
+    // the same write pattern. A graph file that does not exist yet has
+    // nothing to preserve.
+    let mode: number | undefined;
+    try {
+      await fs.access(this.memoryFilePath, fs.constants.W_OK);
+      mode = (await fs.stat(this.memoryFilePath)).mode & 0o777;
+    } catch (error) {
+      if (
+        !(error instanceof Error && "code" in error && error.code === "ENOENT")
+      ) {
+        throw error;
+      }
+    }
 
     const directory = path.dirname(this.memoryFilePath);
     const tempFilePath = path.join(
@@ -232,16 +245,14 @@ export class KnowledgeGraphManager {
 
     try {
       await fs.writeFile(tempFilePath, lines.join("\n") + "\n");
+      if (mode !== undefined) {
+        await fs.chmod(tempFilePath, mode);
+      }
       await fs.rename(tempFilePath, this.memoryFilePath);
     } catch (error) {
       // Never leave a stray temp file behind on failure.
       await fs.unlink(tempFilePath).catch(() => {});
       throw error;
-    }
-
-    if (existingStats) {
-      // The data is already durable, so a failed chmod must not fail the save.
-      await fs.chmod(this.memoryFilePath, existingStats.mode & 0o777).catch(() => {});
     }
   }
 
