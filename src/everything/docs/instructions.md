@@ -14,25 +14,17 @@ Follow them to use, extend, and troubleshoot the server safely and effectively.
 
 - `gzip-file-as-resource`: Max fetch size controlled by `GZIP_MAX_FETCH_SIZE` (default 10MB), timeout by `GZIP_MAX_FETCH_TIME_MILLIS` (default 30s), allowed domains by `GZIP_ALLOWED_DOMAINS`
 - Session resources are ephemeral and lost when the session ends
-- Some tools are only registered for clients that declared the matching capability; see Capability-Gated Tools below
 
 ## Capability-Gated Tools
 
-These tools are registered after initialization, and only if your client declared the matching
-capability. If it did not, the tool is absent from `tools/list` for this session rather than
-present-and-failing, so do not attempt to call it.
+Registered only if your client declared the capability shown. Otherwise they are absent from `tools/list`, so do not call them:
 
-| Tool                                | Required client capability                             |
-| ----------------------------------- | ------------------------------------------------------ |
-| `get-roots-list`                    | `roots`                                                |
-| `trigger-sampling-request`          | `sampling`                                             |
-| `trigger-elicitation-request`       | `elicitation.form` (or `elicitation` with no mode)     |
-| `trigger-url-elicitation`           | `elicitation.url`                                      |
-| `trigger-sampling-request-async`    | `sampling` and `tasks.requests.sampling.createMessage` |
-| `trigger-elicitation-request-async` | `elicitation` and `tasks.requests.elicitation.create`  |
-
-Every other tool in this document is registered for every client. Treat `tools/list` as
-authoritative: it reflects the capabilities you declared.
+- `get-roots-list`: `roots`
+- `trigger-sampling-request`: `sampling`
+- `trigger-elicitation-request`: `elicitation.form`, or `elicitation` with no mode
+- `trigger-url-elicitation`: `elicitation.url`
+- `trigger-sampling-request-async`: `sampling` and `tasks.requests.sampling.createMessage`
+- `trigger-elicitation-request-async`: `elicitation` and `tasks.requests.elicitation.create`
 
 ## Operational Patterns
 

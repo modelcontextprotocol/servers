@@ -203,7 +203,7 @@ describe("Registration Index Files", () => {
       return withAll.filter((name) => !withNone.includes(name)).sort();
     };
 
-    // The rows of the "Capability-Gated Tools" table, by tool name.
+    // The entries of the "Capability-Gated Tools" list, by tool name.
     const documentedTools = (instructions: string): string[] => {
       const section = instructions
         .split(/^## /m)
@@ -212,7 +212,7 @@ describe("Registration Index Files", () => {
         section,
         'instructions.md has no "Capability-Gated Tools" section',
       ).toBeDefined();
-      return [...(section ?? "").matchAll(/^\|\s*`([a-z0-9-]+)`\s*\|/gm)]
+      return [...(section ?? "").matchAll(/^- `([a-z0-9-]+)`:/gm)]
         .map((match) => match[1])
         .sort();
     };
