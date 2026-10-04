@@ -38,6 +38,7 @@ on:
       - "package-lock.json"
       - "tsconfig.json"
       - "scripts/interface-diff.mjs"
+      - "scripts/lib/win-shell-args.mjs"
       - ".github/workflows/everything-mcp-diff.yml"
   # No branch filter: PRs to v2/main and to main both run, and so does a PR
   # stacked on another PR's branch. The base is the PR's own base either way.
@@ -48,6 +49,7 @@ on:
       - "package-lock.json"
       - "tsconfig.json"
       - "scripts/interface-diff.mjs"
+      - "scripts/lib/win-shell-args.mjs"
       - ".github/workflows/everything-mcp-diff.yml"
   # A published Release (a milestone, tagged vX.Y.Z on main; see RELEASING.md)
   # surfaces the cumulative interface delta since the previous Release. This
@@ -160,7 +162,12 @@ jobs:
         run: |
           {
             if [ -f mcp-diff-report/report.md ]; then
-              cat mcp-diff-report/report.md
+              # A step summary holds at most 1 MiB.
+              head -c 900000 mcp-diff-report/report.md
+              if [ "$(wc -c < mcp-diff-report/report.md)" -gt 900000 ]; then
+                echo ""
+                echo "_The report is truncated here; the full report is in the run's \`mcp-diff-report\` artifact._"
+              fi
             else
               echo "The interface diff produced no report; see the job log."
             fi
