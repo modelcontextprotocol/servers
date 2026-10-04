@@ -15,6 +15,7 @@ read as an endorsement of the behavior.
 
 from __future__ import annotations
 
+import os
 from importlib.metadata import version
 from typing import Any
 
@@ -195,7 +196,7 @@ async def test_schema_violations_are_rejected_by_the_sdk(
     # of the message is jsonschema's wording, which varies by version.
     async with connect() as (session, _):
         result = await call(session, arguments)
-    assert result.isError is True
+    assert wire(result)["isError"] is True
     text = text_of(result)
     assert text.startswith("Input validation error: ")
     assert offending in text
@@ -208,7 +209,7 @@ async def test_invalid_url_is_rejected_by_pydantic(web: FakeWeb, url: str) -> No
     # and its ValidationError (a ValueError) becomes an isError result.
     async with connect() as (session, _):
         result = await call(session, {"url": url})
-    assert result.isError is True
+    assert wire(result)["isError"] is True
     text = text_of(result)
     assert "1 validation error for Fetch" in text
     assert "url" in text
@@ -223,7 +224,7 @@ async def test_call_tool_never_checks_the_tool_name(web: FakeWeb) -> None:
     web.add(PAGE, plain("fetched anyway"))
     async with connect() as (session, _):
         result = await session.call_tool("nope", {"url": PAGE})
-    assert result.isError is False
+    assert wire(result)["isError"] is False
     assert text_of(result).endswith("fetched anyway")
     assert web.urls() == [ROBOTS, PAGE]
 
@@ -233,7 +234,7 @@ async def test_unknown_tool_name_still_validates_through_pydantic(
 ) -> None:
     async with connect() as (session, _):
         result = await session.call_tool("nope", {})
-    assert result.isError is True
+    assert wire(result)["isError"] is True
     assert "url" in text_of(result)
     assert "Field required" in text_of(result)
 
@@ -251,7 +252,7 @@ async def test_robots_4xx_other_than_401_403_allows_fetch(
     web.add(PAGE, plain("ok"))
     async with connect() as (session, _):
         result = await call(session, {"url": PAGE})
-    assert result.isError is False
+    assert wire(result)["isError"] is False
     assert text_of(result).endswith("ok")
 
 
@@ -298,7 +299,7 @@ async def test_robots_disallow_blocks_fetch(web: FakeWeb) -> None:
     web.add(ROBOTS, plain(robots))
     async with connect() as (session, _):
         result = await call(session, {"url": PAGE})
-    assert result.isError is True
+    assert wire(result)["isError"] is True
     assert text_of(result) == (
         f"The sites robots.txt ({ROBOTS}), specifies that autonomous fetching of this page is not allowed, "
         f"<useragent>{DEFAULT_USER_AGENT_AUTONOMOUS}</useragent>\n"
@@ -317,7 +318,7 @@ async def test_robots_allow_then_fetches_page(web: FakeWeb) -> None:
     web.add(PAGE, plain("public"))
     async with connect() as (session, _):
         result = await call(session, {"url": PAGE})
-    assert result.isError is False
+    assert wire(result)["isError"] is False
     assert web.urls() == [ROBOTS, PAGE]
     for request in web.requests:
         assert request.headers["user-agent"] == DEFAULT_USER_AGENT_AUTONOMOUS
@@ -328,7 +329,7 @@ async def test_robots_comment_lines_are_ignored(web: FakeWeb) -> None:
     web.add(PAGE, plain("ok"))
     async with connect() as (session, _):
         result = await call(session, {"url": PAGE})
-    assert result.isError is False
+    assert wire(result)["isError"] is False
 
 
 async def test_robots_5xx_body_is_parsed_as_rules(web: FakeWeb) -> None:
@@ -336,7 +337,7 @@ async def test_robots_5xx_body_is_parsed_as_rules(web: FakeWeb) -> None:
     web.add(ROBOTS, plain("User-agent: *\nDisallow: /", status=503))
     async with connect() as (session, _):
         result = await call(session, {"url": PAGE})
-    assert result.isError is True
+    assert wire(result)["isError"] is True
     assert "specifies that autonomous fetching of this page is not allowed" in (
         text_of(result)
     )
@@ -350,7 +351,7 @@ async def test_robots_redirect_is_followed(web: FakeWeb) -> None:
     web.add("https://www.example.com/robots.txt", plain("User-agent: *\nDisallow: /"))
     async with connect() as (session, _):
         result = await call(session, {"url": PAGE})
-    assert result.isError is True
+    assert wire(result)["isError"] is True
     assert web.urls() == [ROBOTS, "https://www.example.com/robots.txt"]
 
 
@@ -358,7 +359,7 @@ async def test_robots_rules_match_the_custom_user_agent(web: FakeWeb) -> None:
     web.add(ROBOTS, plain("User-agent: MyBot\nDisallow: /\n\nUser-agent: *\nAllow: /"))
     async with connect(custom_user_agent="MyBot") as (session, _):
         result = await call(session, {"url": PAGE})
-    assert result.isError is True
+    assert wire(result)["isError"] is True
     assert "<useragent>MyBot</useragent>" in text_of(result)
     assert web.requests[0].headers["user-agent"] == "MyBot"
 
@@ -368,7 +369,7 @@ async def test_ignore_robots_txt_skips_the_check(web: FakeWeb) -> None:
     web.add(PAGE, plain("ok"))
     async with connect(ignore_robots_txt=True) as (session, _):
         result = await call(session, {"url": PAGE})
-    assert result.isError is False
+    assert wire(result)["isError"] is False
     assert web.urls() == [PAGE]
 
 
@@ -382,7 +383,7 @@ async def test_html_is_extracted_to_markdown(web: FakeWeb) -> None:
     web.add(PAGE, html(ARTICLE_HTML))
     async with connect(ignore_robots_txt=True) as (session, _):
         result = await call(session, {"url": PAGE})
-    assert result.isError is False
+    assert wire(result)["isError"] is False
     text = text_of(result)
     assert text.startswith(f"Contents of {PAGE}:\n")
     assert "[link](https://example.com/x)" in text
@@ -585,7 +586,9 @@ async def test_pagination_walks_the_whole_document(web: FakeWeb) -> None:
     pieces: list[str] = []
     async with connect(ignore_robots_txt=True) as (session, _):
         start = 0
-        while True:
+        # Four pages plus the exhaustion call. Bounded, so a regression that
+        # ignores start_index fails here instead of looping forever.
+        for _ in range(5):
             text = text_of(
                 await call(
                     session, {"url": PAGE, "start_index": start, "max_length": 7}
@@ -597,6 +600,8 @@ async def test_pagination_walks_the_whole_document(web: FakeWeb) -> None:
             chunk = body.split("\n\n<error>", 1)[0]
             pieces.append(chunk)
             start += len(chunk)
+        else:
+            pytest.fail(f"pagination did not reach the end; pages so far: {pieces}")
     assert "".join(pieces) == ALPHABET
     assert pieces == ["abcdefg", "hijklmn", "opqrstu", "vwxyz"]
 
@@ -615,7 +620,7 @@ async def test_redirect_to_private_address_is_followed(web: FakeWeb) -> None:
     web.add(metadata, plain("instance-secret"))
     async with connect() as (session, _):
         result = await call(session, {"url": PAGE})
-    assert result.isError is False
+    assert wire(result)["isError"] is False
     assert text_of(result) == f"{RAW_PREFIX_PLAIN}Contents of {PAGE}:\ninstance-secret"
     # robots.txt is only consulted for the original host, never the target.
     assert web.urls() == [ROBOTS, PAGE, metadata]
@@ -650,7 +655,7 @@ async def test_proxy_url_is_passed_to_every_client(web: FakeWeb) -> None:
     async with connect(proxy_url=proxy) as (session, _):
         result = await call(session, {"url": PAGE})
         await session.get_prompt("fetch", {"url": PAGE})
-    assert result.isError is False
+    assert wire(result)["isError"] is False
     assert web.client_kwargs == [{"proxy": proxy}, {"proxy": proxy}, {"proxy": proxy}]
 
 
@@ -781,10 +786,17 @@ async def test_get_prompt_never_checks_the_prompt_name(web: FakeWeb) -> None:
     assert wire(result)["description"] == f"Contents of {PAGE}"
 
 
-async def test_get_prompt_does_not_validate_the_url() -> None:
+async def test_get_prompt_does_not_validate_the_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # The prompt passes the raw string to httpx; an unusable URL comes back as
     # a "Failed to fetch" prompt message rather than a validation error.
     # No `web` fixture: the real transport rejects the URL before any I/O.
+    # Proxy variables are cleared so the real client cannot pick up one from
+    # the environment (a socks:// proxy would fail on the missing socksio).
+    for name in list(os.environ):
+        if name.lower() in ("http_proxy", "https_proxy", "all_proxy"):
+            monkeypatch.delenv(name)
     async with connect() as (session, _):
         result = await session.get_prompt("fetch", {"url": "not a url"})
     data = wire(result)
