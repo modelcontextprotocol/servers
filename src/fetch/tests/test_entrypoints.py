@@ -1,4 +1,9 @@
-"""Tests for the command-line entry points: ``main()``, ``__main__`` and the console script."""
+"""Tests for the command-line entry points: ``main()``, ``__main__`` and the console script.
+
+``main()`` and ``__main__`` run in-process with ``serve`` patched, so coverage
+sees them; only the console-script smoke spawns a process, to prove the
+installed entry point boots and speaks MCP over real stdio.
+"""
 
 from __future__ import annotations
 

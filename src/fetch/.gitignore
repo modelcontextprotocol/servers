@@ -1,3 +1,5 @@
+# Coverage output from `uv run --frozen pytest --cov ...` (see README, Development).
+# Kept per server so each Python server ignores its own reports.
 coverage.json
 .coverage
 .coverage.*

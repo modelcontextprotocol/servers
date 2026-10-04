@@ -248,7 +248,7 @@ Coverage, measured per file with branch coverage:
 uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json
 ```
 
-This writes `coverage.json` (git-ignored). Every file under `src/mcp_server_fetch` is held to at least 90% of lines and 90% of branches.
+This writes `coverage.json` (git-ignored). The command reports coverage but does not enforce a threshold; the target is at least 90% of lines and 90% of branches for every file under `src/mcp_server_fetch`.
 
 ## Contributing
 
