@@ -107,7 +107,6 @@ async def test_server_version_is_the_sdk_version(web: FakeWeb) -> None:
 # --------------------------------------------------------------------------
 
 
-# KNOWN BUG #1624: pins current (wrong) behavior; the fix changes this assertion.
 async def test_list_tools_wire_shape(web: FakeWeb) -> None:
     async with connect() as (session, _):
         result = await session.list_tools()
@@ -129,13 +128,13 @@ async def test_list_tools_wire_shape(web: FakeWeb) -> None:
                 "title": "Url",
                 "type": "string",
             },
-            # #1624: pydantic's gt/lt emit the numeric (draft 6+) form of
-            # exclusiveMinimum/exclusiveMaximum, which some clients reject.
+            # #1624: inclusive minimum/maximum, never exclusiveMinimum/
+            # exclusiveMaximum, which some clients (Gemini) reject.
             "max_length": {
                 "default": 5000,
                 "description": "Maximum number of characters to return.",
-                "exclusiveMaximum": 1000000,
-                "exclusiveMinimum": 0,
+                "maximum": 999999,
+                "minimum": 1,
                 "title": "Max Length",
                 "type": "integer",
             },
@@ -184,7 +183,8 @@ async def test_call_with_only_url_applies_defaults(web: FakeWeb) -> None:
         ({}, "'url'"),
         ({"url": ""}, "''"),
         ({"url": 5}, "5"),
-        # #1624: the bounds come from exclusiveMinimum/exclusiveMaximum.
+        # #1624: the bounds are minimum 1 and maximum 999999, so the rejected
+        # values are the same as under the old exclusive 0 and 1000000.
         ({"url": PAGE, "max_length": 0}, "0"),
         ({"url": PAGE, "max_length": 1000000}, "1000000"),
         ({"url": PAGE, "start_index": -1}, "-1"),
@@ -203,6 +203,18 @@ async def test_schema_violations_are_rejected_by_the_sdk(
     assert text.startswith("Input validation error: ")
     assert offending in text
     assert web.requests == []
+
+
+@pytest.mark.parametrize("max_length", [1, 999999])
+async def test_max_length_bounds_are_inclusive(web: FakeWeb, max_length: int) -> None:
+    # #1624: the edges of the inclusive range pass both the SDK's schema check
+    # and Fetch's own validation, and the page is fetched.
+    web.add(ROBOTS, plain("", status=404))
+    web.add(PAGE, plain("hello"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE, "max_length": max_length})
+    assert wire(result)["isError"] is False
+    assert web.urls() == [ROBOTS, PAGE]
 
 
 @pytest.mark.parametrize("url", ["not a url", "example.com/page", "http://"])

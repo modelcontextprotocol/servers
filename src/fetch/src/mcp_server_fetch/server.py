@@ -169,8 +169,11 @@ class Fetch(BaseModel):
         Field(
             default=5000,
             description="Maximum number of characters to return.",
-            gt=0,
-            lt=1000000,
+            # ge/le rather than gt/lt: the inclusive bounds emit minimum/maximum,
+            # which every client accepts, while exclusiveMinimum/exclusiveMaximum
+            # are rejected by some (Gemini, #1624). Same range for an int.
+            ge=1,
+            le=999999,
         ),
     ]
     start_index: Annotated[
