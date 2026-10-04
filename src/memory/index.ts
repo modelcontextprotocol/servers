@@ -102,9 +102,125 @@ export interface KnowledgeGraph {
   relations: Relation[];
 }
 
+// Timings for the cross-process lock around each mutation. Exposed so tests
+// can shorten them; the server always uses the defaults.
+export interface FileLockOptions {
+  // A lock older than this is presumed abandoned and is broken.
+  staleMs?: number;
+  // Give up, failing the mutation, after waiting this long for the lock.
+  timeoutMs?: number;
+  // Wait between attempts, plus up to the same again of random jitter.
+  retryMs?: number;
+}
+
+// Whether the process that wrote a lock file is known to be gone. Only a
+// process on this host can be checked; for any other host, or a lock whose
+// contents cannot be read, the lock's age decides instead.
+function isLockOwnerDead(contents: string): boolean {
+  let owner: unknown;
+  try {
+    owner = JSON.parse(contents);
+  } catch {
+    return false;
+  }
+  const { pid, hostname } = (owner ?? {}) as Record<string, unknown>;
+  if (typeof pid !== "number" || hostname !== os.hostname()) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    // EPERM means the process exists but belongs to another user.
+    return (error as NodeJS.ErrnoException).code === "ESRCH";
+  }
+}
+
+// Run operation while holding an exclusive lock file at lockPath, so that
+// mutations from separate server processes sharing one graph file take turns
+// and each one loads the graph the previous one saved (#4797). The lock is a
+// file created with O_EXCL, which is atomic on local filesystems: exactly one
+// creator wins. A lock left behind by a crashed process is broken once its
+// owner is known to be dead, or once it is older than staleMs.
+export async function withFileLock<T>(
+  lockPath: string,
+  operation: () => Promise<T>,
+  { staleMs = 30_000, timeoutMs = 60_000, retryMs = 10 }: FileLockOptions = {},
+): Promise<T> {
+  const token = JSON.stringify({
+    pid: process.pid,
+    hostname: os.hostname(),
+    token: randomBytes(16).toString("hex"),
+  });
+  const deadline = Date.now() + timeoutMs;
+
+  for (;;) {
+    try {
+      const handle = await fs.open(lockPath, "wx");
+      try {
+        await handle.writeFile(token);
+      } finally {
+        await handle.close();
+      }
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw error;
+      }
+    }
+
+    // Someone else holds the lock. Break it if it is abandoned; otherwise
+    // wait and try again.
+    try {
+      const [contents, stats] = await Promise.all([
+        fs.readFile(lockPath, "utf-8"),
+        fs.stat(lockPath),
+      ]);
+      if (isLockOwnerDead(contents) || Date.now() - stats.mtimeMs > staleMs) {
+        // Re-read just before removing, so a lock another waiter has just
+        // re-acquired after breaking the same stale lock is left alone.
+        if ((await fs.readFile(lockPath, "utf-8")) === contents) {
+          console.error(`Breaking stale memory file lock ${lockPath}`);
+          await fs.unlink(lockPath);
+        }
+        continue;
+      }
+    } catch (error) {
+      // The holder released the lock between our attempts: try again now.
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        continue;
+      }
+      throw error;
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Timed out after ${timeoutMs} ms waiting for the memory file lock ${lockPath}`,
+      );
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, retryMs + Math.random() * retryMs),
+    );
+  }
+
+  try {
+    return await operation();
+  } finally {
+    // Release only our own lock: if it was broken as stale while we held it,
+    // the file may now belong to another process.
+    const current = await fs.readFile(lockPath, "utf-8").catch(() => null);
+    if (current === token) {
+      await fs.unlink(lockPath).catch(() => {});
+    }
+  }
+}
+
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
 export class KnowledgeGraphManager {
-  constructor(private memoryFilePath: string) {}
+  constructor(
+    private memoryFilePath: string,
+    private lockOptions: FileLockOptions = {},
+  ) {}
 
   // Serializes all read-modify-write graph mutations behind a single queue.
   // Without this, concurrent tool calls (e.g. multiple mutations dispatched
@@ -112,10 +228,15 @@ export class KnowledgeGraphManager {
   // copy, and write it back — so whichever write lands last silently
   // overwrites the other's changes, and interleaved writes to the same file
   // can corrupt it outright. See #1819.
+  // The queue only orders calls within this process, so each queued mutation
+  // also holds a lock file next to the graph file while it runs, which orders
+  // it against other server processes sharing the same file. See #4797.
   private mutationQueue: Promise<unknown> = Promise.resolve();
 
   private async withLock<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.mutationQueue.then(operation, operation);
+    const locked = () =>
+      withFileLock(`${this.memoryFilePath}.lock`, operation, this.lockOptions);
+    const result = this.mutationQueue.then(locked, locked);
     // Always resolve the queue itself, even if this operation failed, so a
     // single failed mutation doesn't permanently wedge every call after it.
     // The failure still propagates normally to whoever awaited `result`.

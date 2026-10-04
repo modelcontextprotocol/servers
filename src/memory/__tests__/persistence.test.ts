@@ -2,7 +2,7 @@
 // through an SDK Client over an in-memory transport (#4854): the JSONL file
 // format, how unreadable lines are loaded and then rewritten, read and write
 // failures as tool errors, the atomic temp-file save, and two servers sharing
-// one file. Tests that pin a known bug cite its issue (#4885, #4827, #4797),
+// one file. Tests that pin a known bug cite its issue (#4885, #4827),
 // so the PR that fixes it has a test to change.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "fs";
@@ -308,13 +308,13 @@ describe("memory persistence over the protocol", () => {
     });
   });
 
-  // KNOWN BUG #4797: pins current (wrong) behavior; the fix changes this assertion.
-  // Characterizes #4797: the mutation lock is per server instance, so two
-  // servers on one file (two client processes in practice) can both load the
-  // same graph, and the second save replaces the first. Both calls report
-  // success. Each load is held until both servers have loaded, which is the
-  // overlap the issue measured. The fix for #4797 changes this test.
-  it("loses one of two concurrent writes from two servers on one file (#4797)", async () => {
+  // #4797: two servers on one file (two client processes in practice) used to
+  // both load the same graph, and the second save replaced the first, with
+  // both calls reporting success. Each graph load here is held long enough for
+  // the other server's mutation to start, which is the overlap the issue
+  // measured. The lock file around each mutation makes the second one wait
+  // and load the graph the first one saved, so both writes survive.
+  it("keeps both of two concurrent writes from two servers on one file (#4797)", async () => {
     const seedEntity = { name: "Seed", entityType: "thing", observations: [] };
     await fs.writeFile(
       filePath,
@@ -325,20 +325,13 @@ describe("memory persistence over the protocol", () => {
 
     try {
       const realReadFile = fs.readFile;
-      let loads = 0;
-      let releaseLoads: () => void = () => {};
-      const bothLoaded = new Promise<void>((resolve) => {
-        releaseLoads = resolve;
-      });
       vi.spyOn(fs, "readFile").mockImplementation((async (
         ...args: Parameters<typeof fs.readFile>
       ) => {
         const data = await realReadFile(...args);
-        loads += 1;
-        if (loads === 2) {
-          releaseLoads();
+        if (args[0] === filePath) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
         }
-        await bothLoaded;
         return data;
       }) as typeof fs.readFile);
 
@@ -355,9 +348,9 @@ describe("memory persistence over the protocol", () => {
       const graph = (await call(first.client, "read_graph"))
         .structuredContent as { entities: { name: string }[] };
       const names = graph.entities.map((e) => e.name);
-      expect(names).toHaveLength(2);
       expect(names[0]).toBe("Seed");
-      expect(["From A", "From B"]).toContain(names[1]);
+      expect(names.slice(1).sort()).toEqual(["From A", "From B"]);
+      expect(await fs.readdir(dir)).toEqual(["memory.jsonl"]);
     } finally {
       await second.close();
     }

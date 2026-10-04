@@ -232,6 +232,14 @@ On Windows, use:
 
 - `MEMORY_FILE_PATH`: Path to the memory storage JSONL file (default: `memory.jsonl` in the server directory)
 
+#### Sharing one memory file between clients
+
+Each MCP client starts its own server process, so two clients using the same `MEMORY_FILE_PATH` (or both using the default) are two processes writing one file. Every write tool takes an exclusive lock file, `<memory file>.lock`, next to the memory file while it reads, changes and saves the graph, so writes from different processes take turns and none is lost. The lock file exists only while a write is in progress, so the directory holding the memory file must be writable (it already must be, for the atomic save).
+
+- A lock left behind by a server that crashed mid-write is removed automatically: at once if its process is known to have exited on the same machine, otherwise once it is 30 seconds old.
+- A write that cannot get the lock within 60 seconds fails with a tool error rather than overwriting the file.
+- The lock relies on exclusive file creation, which local filesystems provide; a network filesystem that does not honour it cannot be shared safely this way.
+
 # VS Code Installation Instructions
 
 For quick installation, use one of the one-click installation buttons below:
