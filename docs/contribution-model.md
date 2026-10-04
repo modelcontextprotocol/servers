@@ -170,16 +170,21 @@ maintainer-authored PRs still targeting `main`.
 
 ## New outside PRs after the sweep
 
-Nothing in this change stops new outside PRs from being opened. Until a
-maintainer decides otherwise, each triage pass handles new ones by the same
-classes and comments. Two related pieces are separate decisions, not part of
-this plan:
+On 2026-10-04, once the policy reached `main` (#4939), a maintainer restricted
+pull request creation in the repository settings, so an account without access
+to the repository can no longer open one. What is left for triage is the open
+backlog this plan works through, and any PR from an account that still has
+access but is not a maintainer (write access alone does not make someone one).
+Each triage pass handles those by the same classes and comments.
+
+Two related pieces:
 
 - **`readme-pr-check.yml`** invited README-only PRs to continue with
   `/i-promise-this-is-not-a-new-server`, which no longer matched the policy.
   #4868 retired it and folded its behavior into `issue-triage`: a README-only
   PR pre-classifies as a listing, and reading it decides the class (a fix to an
   existing entry can still be one to keep).
-- **Automatic closing** of outside PRs (a workflow, as maintainer PR #4528
-  proposes for new-server PRs, or a repository setting where GitHub offers one)
-  is a maintainer decision about repository settings and workflows.
+- **Automatic closing** of outside PRs, once an open maintainer decision (a
+  workflow, as maintainer PR #4528 proposed for new-server PRs, or a repository
+  setting), was settled by the setting above: a PR from an account without
+  access is stopped at creation rather than closed after it.
