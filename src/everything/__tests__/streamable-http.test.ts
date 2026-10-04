@@ -1,10 +1,11 @@
 /**
  * Characterizes the Streamable HTTP transport manager (#4854). `createApp()`
  * is served on a free loopback port and driven by the SDK's Streamable HTTP
- * client, and by raw HTTP where the test pins the wire itself: the 400s for
- * missing or unknown sessions, the priming event on each SSE stream (#3267),
- * and the event store's replay of events from other streams (#4087). The
- * shutdown handler is called directly, and `startStreamableHttpServer()` is
+ * client, and by raw HTTP where the test pins the wire itself: the 400 for a
+ * missing session and the 404 for an unknown one (#4982), the priming event on
+ * each SSE stream (#3267), and the event store's replay of the resumed stream
+ * only (#4087). The shutdown handler is called directly (#4983), and
+ * `startStreamableHttpServer()` is
  * checked with `listenOrExit` stubbed, so no fixed port is ever bound.
  */
 import type { Server } from "node:http";
@@ -56,6 +57,12 @@ const JSON_HEADERS = {
 const BAD_SESSION = {
   jsonrpc: "2.0",
   error: { code: -32000, message: "Bad Request: No valid session ID provided" },
+};
+
+const SESSION_NOT_FOUND = {
+  jsonrpc: "2.0",
+  error: { code: -32001, message: "Session not found" },
+  id: null,
 };
 
 type SseEvent = { id?: string; data: string };
@@ -111,22 +118,30 @@ async function rawInitialize() {
   return { sessionId, events };
 }
 
-/** Read an open SSE response until `done(text)` holds, then abort it. */
-async function readUntil(
+/**
+ * Read an open SSE response for `ms`, then abort it. A replay is written
+ * before the response's headers are, so it has all arrived by then.
+ */
+async function readFor(
   response: Response,
-  done: (text: string) => boolean,
+  ms: number,
   controller: AbortController,
 ): Promise<string> {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let text = "";
-  const deadline = Date.now() + 2000;
-  while (!done(text) && Date.now() < deadline) {
-    const { value, done: ended } = await reader.read();
-    if (ended) break;
-    text += decoder.decode(value);
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value);
+    }
+  } catch {
+    // aborted: the read window is over
+  } finally {
+    clearTimeout(timer);
   }
-  controller.abort();
   return text;
 }
 
@@ -158,11 +173,10 @@ describe("Streamable HTTP transport", () => {
     });
   });
 
-  // KNOWN BUG #4087: pins current (wrong) behavior; the fix changes this assertion.
-  it("replays events from other streams after a Last-Event-ID (#4087)", async () => {
-    // Characterization of #4087: the in-memory event store replays every
-    // event stored after the given one, whatever stream it belongs to, so a
-    // GET resuming the initialize stream receives a later tool result.
+  it("replays only the resumed stream's events after a Last-Event-ID (#4087)", async () => {
+    // The initialize stream is resumed from its priming event: its own
+    // response is replayed, and the tool result stored afterwards on another
+    // stream is not.
     const { sessionId, events } = await rawInitialize();
     const echo = await post(
       {
@@ -173,7 +187,7 @@ describe("Streamable HTTP transport", () => {
       },
       sessionId,
     );
-    await echo.text();
+    expect(await echo.text()).toContain("Echo: from another stream");
 
     const controller = new AbortController();
     const resumed = await fetch(mcp, {
@@ -181,25 +195,22 @@ describe("Streamable HTTP transport", () => {
         accept: "text/event-stream",
         "mcp-session-id": sessionId,
         "mcp-protocol-version": "2025-11-25",
-        "last-event-id": events[1].id!,
+        "last-event-id": events[0].id!,
       },
       signal: controller.signal,
     });
     expect(resumed.status).toBe(200);
-    const text = await readUntil(
-      resumed,
-      (t) => t.includes("from another stream"),
-      controller,
-    );
-    expect(text).toContain("Echo: from another stream");
+    const replayed = parseSse(await readFor(resumed, 250, controller));
+    expect(replayed).toEqual([{ id: events[1].id, data: events[1].data }]);
     expect(log).toHaveBeenCalledWith(
-      `Client reconnecting with Last-Event-ID: ${events[1].id}`,
+      `Client reconnecting with Last-Event-ID: ${events[0].id}`,
     );
   });
 
-  it("opens a standalone SSE stream, replaying nothing for an unknown Last-Event-ID", async () => {
+  it("refuses a GET resuming from an unknown Last-Event-ID with a 400 (#4087)", async () => {
+    // The event store reports no stream for the id, so the SDK refuses the
+    // resume rather than mapping it to a stream that does not exist.
     const { sessionId } = await rawInitialize();
-    const controller = new AbortController();
     const response = await fetch(mcp, {
       headers: {
         accept: "text/event-stream",
@@ -207,11 +218,12 @@ describe("Streamable HTTP transport", () => {
         "mcp-protocol-version": "2025-11-25",
         "last-event-id": "no-such-event",
       },
-      signal: controller.signal,
     });
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toBe("text/event-stream");
-    controller.abort();
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Invalid event ID format" },
+    });
   });
 
   it("opens a standalone SSE stream without a Last-Event-ID", async () => {
@@ -241,30 +253,46 @@ describe("Streamable HTTP transport", () => {
     },
   );
 
-  // KNOWN BUG #4982: answers 400, not the 404 the spec requires, for an unknown or terminated session ID; the fix changes this assertion.
   it.each(["GET", "DELETE"])(
-    "answers %s for an unknown session with a 400",
+    "answers %s for an unknown session with a 404 (#4982)",
     async (method) => {
       const response = await fetch(mcp, {
         method,
         headers: { "mcp-session-id": "unknown" },
       });
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual(BAD_SESSION);
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual(SESSION_NOT_FOUND);
     },
   );
 
-  // KNOWN BUG #4982: answers 400, not the 404 the spec requires, for an unknown or terminated session ID, and the error omits the request id; the fix changes this assertion.
-  it("answers a POST for an unknown session with a 400 that omits the request id", async () => {
-    // Characterization: no body parser runs before this check, so
-    // `req.body` is undefined and the error carries no `id`.
+  it("answers a POST for an unknown session with a 404 that carries the request id (#4982)", async () => {
     const response = await post(
       { jsonrpc: "2.0", id: 7, method: "ping" },
       "unknown",
     );
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual(BAD_SESSION);
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ ...SESSION_NOT_FOUND, id: 7 });
   });
+
+  it.each([
+    ["a notification", JSON.stringify({ jsonrpc: "2.0", method: "ping" })],
+    ["malformed JSON", "{not json"],
+    [
+      "a body too large to read for its id",
+      JSON.stringify({ jsonrpc: "2.0", id: 8, pad: "x".repeat(70 * 1024) }),
+    ],
+  ])(
+    "answers a POST of %s for an unknown session with a 404 and a null id",
+    async (_label, body) => {
+      const response = await fetch(mcp, {
+        method: "POST",
+        headers: { ...JSON_HEADERS, "mcp-session-id": "unknown" },
+        body,
+      });
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual(SESSION_NOT_FOUND);
+    },
+  );
 
   it("creates a server for a session-less POST that is not initialize, which the SDK then rejects", async () => {
     const response = await post({ jsonrpc: "2.0", id: 1, method: "ping" });
@@ -275,8 +303,7 @@ describe("Streamable HTTP transport", () => {
     });
   });
 
-  // KNOWN BUG #4982: answers 400, not the 404 the spec requires, for an unknown or terminated session ID; the fix changes this assertion.
-  it("ends a session on DELETE, cleaning it up and refusing it afterwards", async () => {
+  it("ends a session on DELETE, cleaning it up and refusing it afterwards with a 404 (#4982)", async () => {
     const { client, transport, sessionId } = await connectHttp();
     await transport.terminateSession();
     expect(log).toHaveBeenCalledWith(
@@ -291,7 +318,8 @@ describe("Streamable HTTP transport", () => {
       { jsonrpc: "2.0", id: 9, method: "ping" },
       sessionId,
     );
-    expect(after.status).toBe(400);
+    expect(after.status).toBe(404);
+    expect(await after.json()).toEqual({ ...SESSION_NOT_FOUND, id: 9 });
     await client.close();
   });
 
@@ -378,29 +406,51 @@ describe("Streamable HTTP transport", () => {
 });
 
 describe("shutdown", () => {
-  // KNOWN BUG #4983: the SIGINT handler walks the session Map with for...in, so it never closes a session; the fix changes this assertion.
-  it("logs and exits 0 without closing any session", async () => {
-    // Characterization: the handler walks the session Map with `for...in`,
-    // which visits no entries, so no transport is closed (#4854 baseline).
+  it("closes every open session, then logs and exits 0 (#4983)", async () => {
     const exit = vi
       .spyOn(process, "exit")
       .mockImplementation(() => undefined as never);
-    const { client } = await connectHttp();
+    const first = await connectHttp();
+    const second = await connectHttp();
     await app.shutdown();
     expect(log).toHaveBeenCalledWith("Shutting down server...");
+    for (const { sessionId } of [first, second]) {
+      expect(log).toHaveBeenCalledWith(
+        `Closing transport for session ${sessionId}`,
+      );
+      expect(log).toHaveBeenCalledWith(
+        `Transport closed for session ${sessionId}, removing from transports map`,
+      );
+      // The session is gone: the server answers it as unknown.
+      const after = await post(
+        { jsonrpc: "2.0", id: 1, method: "ping" },
+        sessionId,
+      );
+      expect(after.status).toBe(404);
+    }
     expect(log).toHaveBeenCalledWith("Server shutdown complete");
-    expect(log).not.toHaveBeenCalledWith(
-      expect.stringMatching(/^Closing transport for session/),
-    );
     expect(exit).toHaveBeenCalledWith(0);
-    // The session still works.
-    const result = await client.callTool({
-      name: "echo",
-      arguments: { message: "still here" },
-    });
-    expect(result.content).toEqual([
-      { type: "text", text: "Echo: still here" },
-    ]);
+    await first.client.close();
+    await second.client.close();
+  });
+
+  it("logs a session that fails to close and still exits 0", async () => {
+    const exit = vi
+      .spyOn(process, "exit")
+      .mockImplementation(() => undefined as never);
+    const { client, sessionId } = await connectHttp();
+    const failure = new Error("close failed");
+    vi.spyOn(
+      StreamableHTTPServerTransport.prototype,
+      "close",
+    ).mockRejectedValueOnce(failure);
+    await app.shutdown();
+    expect(log).toHaveBeenCalledWith(
+      `Error closing transport for session ${sessionId}:`,
+      failure,
+    );
+    expect(log).toHaveBeenCalledWith("Server shutdown complete");
+    expect(exit).toHaveBeenCalledWith(0);
     await client.close();
   });
 });

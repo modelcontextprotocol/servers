@@ -16,6 +16,44 @@ import cors from "cors";
 import { listenOrExit } from "./listen.js";
 import { InMemoryEventStore } from "./inMemoryEventStore.js";
 
+/** The most of a refused POST's body read to find its request id. */
+const MAX_ID_BODY_BYTES = 64 * 1024;
+
+/**
+ * The JSON-RPC `id` of a POST's body, or `null` when the body is not a single
+ * request (a notification, a batch, malformed JSON, or larger than
+ * `MAX_ID_BODY_BYTES`). Used only for a POST that is refused before the SDK
+ * reads its body, so the error can still carry the request's id (#4982).
+ */
+async function readRequestId(req: Request): Promise<string | number | null> {
+  try {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of req) {
+      size += (chunk as Buffer).length;
+      if (size > MAX_ID_BODY_BYTES) return null;
+      chunks.push(chunk as Buffer);
+    }
+    const id = JSON.parse(Buffer.concat(chunks).toString("utf8"))?.id;
+    return typeof id === "string" || typeof id === "number" ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Answer a request whose `Mcp-Session-Id` this app does not know, or has
+ * ended: `404 Not Found`, which the spec makes the client's signal to start a
+ * new session (#4982). Same shape as the SDK's own "Session not found".
+ */
+function sessionNotFound(res: Response, id: string | number | null = null) {
+  res.status(404).json({
+    jsonrpc: "2.0",
+    error: { code: -32001, message: "Session not found" },
+    id,
+  });
+}
+
 /** The Streamable HTTP app, and the handler the launcher installs for SIGINT. */
 export type StreamableHttpApp = {
   app: Express;
@@ -96,15 +134,8 @@ export function createApp(): StreamableHttpApp {
         await transport.handleRequest(req, res);
         return;
       } else {
-        // Invalid request - no session ID or not initialization request
-        res.status(400).json({
-          jsonrpc: "2.0",
-          error: {
-            code: -32000,
-            message: "Bad Request: No valid session ID provided",
-          },
-          id: req?.body?.id,
-        });
+        // A session ID this app does not know, or has already ended
+        sessionNotFound(res, await readRequestId(req));
         return;
       }
 
@@ -131,7 +162,7 @@ export function createApp(): StreamableHttpApp {
   app.get("/mcp", async (req: Request, res: Response) => {
     console.log("Received MCP GET request");
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
-    if (!sessionId || !transports.has(sessionId)) {
+    if (!sessionId) {
       res.status(400).json({
         jsonrpc: "2.0",
         error: {
@@ -140,6 +171,10 @@ export function createApp(): StreamableHttpApp {
         },
         id: req?.body?.id,
       });
+      return;
+    }
+    if (!transports.has(sessionId)) {
+      sessionNotFound(res);
       return;
     }
 
@@ -158,7 +193,7 @@ export function createApp(): StreamableHttpApp {
   // Handle DELETE requests for session termination
   app.delete("/mcp", async (req: Request, res: Response) => {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
-    if (!sessionId || !transports.has(sessionId)) {
+    if (!sessionId) {
       res.status(400).json({
         jsonrpc: "2.0",
         error: {
@@ -167,6 +202,10 @@ export function createApp(): StreamableHttpApp {
         },
         id: req?.body?.id,
       });
+      return;
+    }
+    if (!transports.has(sessionId)) {
+      sessionNotFound(res);
       return;
     }
 
@@ -198,16 +237,15 @@ export function createApp(): StreamableHttpApp {
     console.log("Shutting down server...");
 
     // Close all active transports to properly clean up resources
-    for (const sessionId in transports) {
-      /* v8 ignore start -- unreachable: `for...in` over a Map visits no entries, so shutdown never closes a session; pinned in streamable-http.test.ts */
+    // (a snapshot, since closing a transport removes it from the map)
+    for (const [sessionId, transport] of [...transports]) {
       try {
         console.log(`Closing transport for session ${sessionId}`);
-        await transports.get(sessionId)!.close();
+        await transport.close();
         transports.delete(sessionId);
       } catch (error) {
         console.log(`Error closing transport for session ${sessionId}:`, error);
       }
-      /* v8 ignore stop */
     }
 
     console.log("Server shutdown complete");
