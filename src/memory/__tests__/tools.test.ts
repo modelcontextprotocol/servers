@@ -419,6 +419,7 @@ describe("memory tools over the protocol", () => {
       expect(textOf(result)).toBe("[]");
     });
 
+    // KNOWN BUG #4887: pins current (wrong) behavior; the fix changes this assertion.
     it("keeps only the first of two same-named entities in one batch", async () => {
       const second = { ...alice, entityType: "robot", observations: ["beeps"] };
       const result = await call(client, "create_entities", {
@@ -428,6 +429,7 @@ describe("memory tools over the protocol", () => {
       expect(await readGraph()).toEqual({ entities: [alice], relations: [] });
     });
 
+    // KNOWN BUG #4887: pins current (wrong) behavior; the fix changes this assertion.
     // Characterizes #4887: create_entities silently drops the observations of
     // an entity whose name already exists. The call succeeds, reports nothing
     // created, and the new observation is lost. The fix for #4887 changes this

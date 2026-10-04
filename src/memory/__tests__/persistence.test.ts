@@ -167,6 +167,7 @@ describe("memory persistence over the protocol", () => {
       ]);
     });
 
+    // KNOWN BUG #4885: pins current (wrong) behavior; the fix changes this assertion.
     // Characterizes #4885: the next write rewrites the file from the filtered
     // graph, so every unreadable line is deleted for good, and Bob loses two
     // valid observations because of one null. The relation to Bob now dangles.
@@ -255,6 +256,7 @@ describe("memory persistence over the protocol", () => {
     });
   });
 
+  // KNOWN BUG #4827: pins current (wrong) behavior; the fix changes this assertion.
   // Characterizes #4827: saveGraph writes a new temp file and renames it over
   // the graph file, so the graph file takes a new file's mode. An operator's
   // 0600 is lost, and a read-only file is silently replaced. The fix for #4827
@@ -306,6 +308,7 @@ describe("memory persistence over the protocol", () => {
     });
   });
 
+  // KNOWN BUG #4797: pins current (wrong) behavior; the fix changes this assertion.
   // Characterizes #4797: the mutation lock is per server instance, so two
   // servers on one file (two client processes in practice) can both load the
   // same graph, and the second save replaces the first. Both calls report
