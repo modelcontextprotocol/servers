@@ -38,5 +38,10 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Set the LOCAL_TIMEZONE environment variable
 ENV LOCAL_TIMEZONE=${LOCAL_TIMEZONE:-"UTC"}
 
+# Exec-form ENTRYPOINT does not invoke a shell, so "${LOCAL_TIMEZONE}" below was
+# never expanded — it was passed to the process as the literal string
+# "${LOCAL_TIMEZONE}", which ZoneInfo() then rejected on every run.
+# Shell form expands the variable; `exec` still replaces the shell so signals
+# (e.g. SIGTERM) reach mcp-server-time directly, same as exec form would.
 # when running the container, add --local-timezone and a bind mount to the host's db file
-ENTRYPOINT ["mcp-server-time", "--local-timezone", "${LOCAL_TIMEZONE}"]
+ENTRYPOINT exec mcp-server-time --local-timezone "$LOCAL_TIMEZONE"
