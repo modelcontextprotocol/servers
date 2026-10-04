@@ -7,19 +7,6 @@ import { minimatch } from "minimatch";
 import { normalizePath, expandHome } from "./path-utils.js";
 import { isPathWithinAllowedDirectories } from "./path-validation.js";
 
-// Global allowed directories - set by the main module
-let allowedDirectories: string[] = [];
-
-// Function to set allowed directories from the main module
-export function setAllowedDirectories(directories: string[]): void {
-  allowedDirectories = [...directories];
-}
-
-// Function to get current allowed directories
-export function getAllowedDirectories(): string[] {
-  return [...allowedDirectories];
-}
-
 // Type definitions
 interface FileInfo {
   size: number;
@@ -79,6 +66,7 @@ export function createUnifiedDiff(
 // Helper function to resolve relative paths against allowed directories
 function resolveRelativePathAgainstAllowedDirectories(
   relativePath: string,
+  allowedDirectories: readonly string[],
 ): string {
   if (allowedDirectories.length === 0) {
     // Fallback to process.cwd() if no allowed directories are set
@@ -106,6 +94,7 @@ function resolveRelativePathAgainstAllowedDirectories(
 // Security & Validation Functions
 async function resolveUnicodeEquivalentPath(
   absolutePath: string,
+  allowedDirectories: readonly string[],
 ): Promise<string> {
   const allowedDirectory = [...allowedDirectories]
     .sort((left, right) => right.length - left.length)
@@ -113,6 +102,7 @@ async function resolveUnicodeEquivalentPath(
       isPathWithinAllowedDirectories(normalizePath(absolutePath), [directory]),
     );
 
+  /* v8 ignore next -- validatePath calls this only after the same allow-list check passed, so a containing directory always exists */
   if (!allowedDirectory) {
     return absolutePath;
   }
@@ -162,7 +152,13 @@ async function resolveUnicodeEquivalentPath(
   return currentPath;
 }
 
-export async function validatePath(requestedPath: string): Promise<string> {
+// The allow-list is passed in rather than read from module state, so each
+// server instance (see server.ts) validates against its own directories and two
+// instances can coexist in one process (#4854).
+export async function validatePath(
+  requestedPath: string,
+  allowedDirectories: readonly string[],
+): Promise<string> {
   const expandedPath = expandHome(requestedPath);
   // Do not silently reinterpret a Windows drive path as a relative POSIX path.
   // This would create a literal filename such as `C:\\Users\\...` inside the
@@ -177,7 +173,10 @@ export async function validatePath(requestedPath: string): Promise<string> {
   }
   const absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
-    : resolveRelativePathAgainstAllowedDirectories(expandedPath);
+    : resolveRelativePathAgainstAllowedDirectories(
+        expandedPath,
+        allowedDirectories,
+      );
 
   const normalizedRequested = normalizePath(absolute);
 
@@ -208,7 +207,7 @@ export async function validatePath(requestedPath: string): Promise<string> {
     // This ensures we can't create files in unauthorized locations
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       try {
-        return await resolveUnicodeEquivalentPath(absolute);
+        return await resolveUnicodeEquivalentPath(absolute, allowedDirectories);
       } catch (resolutionError) {
         if ((resolutionError as NodeJS.ErrnoException).code === "ENOENT") {
           throw new Error(
@@ -509,7 +508,7 @@ export async function headFile(
 export async function searchFilesWithValidation(
   rootPath: string,
   pattern: string,
-  allowedDirectories: string[],
+  allowedDirectories: readonly string[],
   options: SearchOptions = {},
 ): Promise<string[]> {
   const { excludePatterns = [] } = options;
@@ -522,7 +521,7 @@ export async function searchFilesWithValidation(
       const fullPath = path.join(currentPath, entry.name);
 
       try {
-        await validatePath(fullPath);
+        await validatePath(fullPath, allowedDirectories);
 
         const relativePath = path.relative(rootPath, fullPath);
         const shouldExclude = excludePatterns.some((excludePattern) =>

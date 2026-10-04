@@ -10,7 +10,7 @@ import path from "path";
  */
 export function isPathWithinAllowedDirectories(
   absolutePath: string,
-  allowedDirectories: string[],
+  allowedDirectories: readonly string[],
 ): boolean {
   // Type validation
   if (typeof absolutePath !== "string" || !Array.isArray(allowedDirectories)) {
@@ -32,10 +32,12 @@ export function isPathWithinAllowedDirectories(
   try {
     normalizedPath = path.resolve(path.normalize(absolutePath));
   } catch {
+    /* v8 ignore next -- path.normalize/resolve throw only on a non-string, and the typeof check above already returned for one */
     return false;
   }
 
   // Verify it's absolute after normalization
+  /* v8 ignore next -- path.resolve always returns an absolute path, so this cannot fire */
   if (!path.isAbsolute(normalizedPath)) {
     throw new Error("Path must be absolute after normalization");
   }
@@ -56,10 +58,12 @@ export function isPathWithinAllowedDirectories(
     try {
       normalizedDir = path.resolve(path.normalize(dir));
     } catch {
+      /* v8 ignore next -- path.normalize/resolve throw only on a non-string, and the typeof check above already returned false for one */
       return false;
     }
 
     // Verify allowed directory is absolute after normalization
+    /* v8 ignore next -- path.resolve always returns an absolute path, so this cannot fire */
     if (!path.isAbsolute(normalizedDir)) {
       throw new Error(
         "Allowed directories must be absolute paths after normalization",

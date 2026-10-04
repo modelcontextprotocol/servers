@@ -17,7 +17,6 @@ import {
   createUnifiedDiff,
   // Security & validation functions
   validatePath,
-  setAllowedDirectories,
   // File operations
   getFileStats,
   readFileContent,
@@ -78,21 +77,20 @@ function createMockFileHandle(content: Buffer) {
   };
 }
 
+// The allow-list validatePath checks against; each server instance passes its
+// own (#4854), so the unit tests pass this one explicitly.
+const allowedDirs =
+  process.platform === "win32"
+    ? ["C:\\Users\\test", "C:\\temp", "C:\\allowed"]
+    : ["/home/user", "/tmp", "/allowed"];
+
 describe("Lib Functions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Set up allowed directories for tests
-    const allowedDirs =
-      process.platform === "win32"
-        ? ["C:\\Users\\test", "C:\\temp", "C:\\allowed"]
-        : ["/home/user", "/tmp", "/allowed"];
-    setAllowedDirectories(allowedDirs);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    // Clear allowed directories after tests
-    setAllowedDirectories([]);
   });
 
   describe("Pure Utility Functions", () => {
@@ -239,7 +237,7 @@ describe("Lib Functions", () => {
         if (process.platform === "win32") return;
 
         await expect(
-          validatePath("C:\\Users\\me\\notes\\file.md"),
+          validatePath("C:\\Users\\me\\notes\\file.md", allowedDirs),
         ).rejects.toThrow("Windows-style path received on a POSIX host");
       });
 
@@ -254,7 +252,7 @@ describe("Lib Functions", () => {
           process.platform === "win32"
             ? "C:\\Users\\test\\file.txt"
             : "/home/user/file.txt";
-        const result = await validatePath(testPath);
+        const result = await validatePath(testPath, allowedDirs);
         expect(result).toBe(testPath);
       });
 
@@ -263,7 +261,7 @@ describe("Lib Functions", () => {
           process.platform === "win32"
             ? "C:\\Windows\\System32\\file.txt"
             : "/etc/passwd";
-        await expect(validatePath(testPath)).rejects.toThrow(
+        await expect(validatePath(testPath, allowedDirs)).rejects.toThrow(
           "Access denied - path outside allowed directories",
         );
       });
@@ -284,7 +282,7 @@ describe("Lib Functions", () => {
           .mockRejectedValueOnce(enoentError)
           .mockResolvedValueOnce(parentPath);
 
-        const result = await validatePath(newFilePath);
+        const result = await validatePath(newFilePath, allowedDirs);
         expect(result).toBe(path.resolve(newFilePath));
       });
 
@@ -306,7 +304,7 @@ describe("Lib Functions", () => {
         // undefined, so every component below it counts as missing.
         mockFs.realpath.mockRejectedValueOnce(enoentError);
 
-        const result = await validatePath(newFilePath);
+        const result = await validatePath(newFilePath, allowedDirs);
         expect(result).toBe(path.resolve(newFilePath));
       });
 
@@ -322,7 +320,7 @@ describe("Lib Functions", () => {
         // Every ancestor, all the way up to the filesystem root, is missing.
         mockFs.realpath.mockRejectedValue(enoentError);
 
-        await expect(validatePath(newFilePath)).rejects.toThrow(
+        await expect(validatePath(newFilePath, allowedDirs)).rejects.toThrow(
           "Parent directory does not exist",
         );
       });
@@ -337,7 +335,7 @@ describe("Lib Functions", () => {
         process.cwd = vi.fn(() => disallowedCwd);
 
         try {
-          const result = await validatePath(relativePath);
+          const result = await validatePath(relativePath, allowedDirs);
 
           // Result should be resolved against first allowed directory, not process.cwd()
           const expectedPath =
