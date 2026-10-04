@@ -229,7 +229,7 @@ branches (`120->124` is the jump from line 120 to 124 never taken).
 | `pytest --cov` | A test failed, so no verdict was reached; fix it as for `validate:py`'s `pytest`. `unrecognized arguments: --cov` means `pytest-cov` is missing from the server's dev dependencies |
 | `per-file check`, "below 90%" | Write tests for the lines and branches the report lists. Drive the server in-process through a `ClientSession` where you can (`/testing`) |
 | `per-file check`, "was not written" or "measured no files" | The run produced no usable `coverage.json`: check the server's `[tool.coverage.run]` (`branch = true`, `source` naming its package) |
-| `per-file check`, "no covered_branches/num_branches" | `branch = true` is missing from `[tool.coverage.run]` |
+| `per-file check`, "not measured with branch coverage" or "no covered_branches/num_branches" | `branch = true` is missing from `[tool.coverage.run]`. The check refuses such a report rather than counting every file's zero branches as 100% |
 
 **Never lower the gate**, and never drop a file from `source` to clear it.
 Code that genuinely cannot run (a guard the types already rule out, a branch

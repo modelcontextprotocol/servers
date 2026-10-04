@@ -22,8 +22,9 @@
  *     compared exactly in integers, so 89.96% fails rather than rounding up.
  *   - A dimension with nothing to measure (no statements, or no branches)
  *     counts as 100%: there is nothing in it left untested.
- *   - A report that is missing, unreadable, or measured no files at all is a
- *     failure, never a vacuous pass.
+ *   - A report that is missing, unreadable, measured no files at all, or was
+ *     measured without branch coverage (`meta.branch_coverage` not true, where
+ *     every file's branch count is 0) is a failure, never a vacuous pass.
  *
  * Pure apart from `readCoverageReport`, so `node --test` covers it without
  * `uv` or Python.
@@ -85,6 +86,16 @@ export function checkReport(report, threshold = THRESHOLD) {
       : undefined;
   if (!files || typeof files !== "object" || Array.isArray(files)) {
     return { error: "not a coverage.py JSON report (no `files` object)" };
+  }
+  // Without branch measurement coverage.py still writes `num_branches: 0` for
+  // every file, which would read as 100% below. Refuse the report instead.
+  const meta = /** @type {{ meta?: { branch_coverage?: unknown } }} */ (report)
+    .meta;
+  if (meta?.branch_coverage !== true) {
+    return {
+      error:
+        "the report was not measured with branch coverage (meta.branch_coverage is not true); set [tool.coverage.run] branch = true in pyproject.toml",
+    };
   }
   const names = Object.keys(files).sort();
   if (names.length === 0) {

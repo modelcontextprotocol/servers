@@ -19,8 +19,10 @@ const entry = (cl, st, cb, br) => ({
   },
 });
 
-const passing = { files: { "src/pkg/server.py": entry(10, 10, 4, 4) } };
+const meta = { branch_coverage: true };
+const passing = { meta, files: { "src/pkg/server.py": entry(10, 10, 4, 4) } };
 const failing = {
+  meta,
   files: {
     "src/pkg/server.py": entry(5, 10, 4, 4),
     "src/pkg/__main__.py": entry(0, 3, 1, 2),
@@ -125,7 +127,7 @@ describe("coverServers", () => {
   });
 
   it("fails a server whose report measured nothing", () => {
-    const { results } = harness({ reports: { fetch: { files: {} } } });
+    const { results } = harness({ reports: { fetch: { meta, files: {} } } });
     assert.equal(results[0].failedStep, "per-file check");
     assert.match(results[0].detail, /measured no files/);
   });

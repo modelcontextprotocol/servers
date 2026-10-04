@@ -146,6 +146,24 @@ describe("checkReport", () => {
     assert.ok(result.verdicts.every((v) => v.ok));
   });
 
+  for (const [name, meta] of [
+    ["branch_coverage: false", { branch_coverage: false }],
+    ["no branch_coverage flag", {}],
+    ["no meta at all", undefined],
+  ]) {
+    it(`rejects a report measured without branches (${name})`, () => {
+      // coverage.py writes num_branches: 0 for every file when branch = true
+      // is missing, which would otherwise count as 100% on branches.
+      const result = checkReport({
+        ...(meta === undefined ? {} : { meta }),
+        files: { "src/pkg/server.py": entry(100, 100, 0, 0) },
+      });
+      assert.ok("error" in result);
+      assert.match(result.error, /not measured with branch coverage/);
+      assert.match(result.error, /branch = true/);
+    });
+  }
+
   it("rejects a report that measured no files, rather than passing it", () => {
     const result = checkReport(report({}));
     assert.ok("error" in result);
