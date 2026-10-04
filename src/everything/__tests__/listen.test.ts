@@ -80,6 +80,20 @@ describe("listenOrExit", () => {
     expect(errorSpy).not.toHaveBeenCalledWith(LISTENING);
   });
 
+  it("reports an error that is not an object, and exits 1", async () => {
+    const server = listenOrExit(express(), 0, LISTENING);
+    servers.push(server);
+    await once(server, "listening");
+
+    server.emit("error", "a bare string");
+
+    expect(await exited).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "HTTP server encountered an error while starting:",
+      "a bare string",
+    );
+  });
+
   it("reports any other server error and exits 1", async () => {
     const server = listenOrExit(express(), 0, LISTENING);
     servers.push(server);

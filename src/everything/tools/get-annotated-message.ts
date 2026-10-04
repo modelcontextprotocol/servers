@@ -66,6 +66,7 @@ export const registerGetAnnotatedMessageTool = (server: McpServer) => {
           audience: ["user"], // Success mainly for user consumption
         },
       });
+      /* v8 ignore start -- the input schema's enum admits only error, success and debug, so the debug test is never false */
     } else if (messageType === "debug") {
       content.push({
         type: "text",
@@ -76,6 +77,7 @@ export const registerGetAnnotatedMessageTool = (server: McpServer) => {
         },
       });
     }
+    /* v8 ignore stop */
 
     // Optional image with its own annotations
     if (includeImage) {

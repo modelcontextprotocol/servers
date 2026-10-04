@@ -51,6 +51,7 @@ export const beginSimulatedLogging = (
   };
 
   // Set the interval to send later logging messages to this client
+  /* v8 ignore else -- toggle-simulated-logging tracks the sessions it started and never begins one twice */
   if (!logsUpdateIntervals.has(sessionId)) {
     // Send once immediately, then every 5 seconds. Fire-and-forget: this
     // function is synchronous by contract (it starts a background simulation),

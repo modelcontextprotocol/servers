@@ -71,6 +71,7 @@ async function runResearchProcess(
   sendRequest: any,
 ): Promise<void> {
   const state = researchStates.get(taskId);
+  /* v8 ignore next -- createTask stores the state immediately before starting this process */
   if (!state) return;
 
   // Process each stage
@@ -295,6 +296,7 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
         return { task };
       },
 
+      /* v8 ignore start -- SDK 1.x never calls a tool task's getTask/getTaskResult: tasks/get and tasks/result are answered from the task store (Protocol), so these handlers are unreachable over the wire */
       /**
        * Returns the current status of the research task.
        */
@@ -315,6 +317,7 @@ export const registerSimulateResearchQueryTool = (server: McpServer) => {
 
         return result as CallToolResult;
       },
+      /* v8 ignore stop */
     },
   );
 };

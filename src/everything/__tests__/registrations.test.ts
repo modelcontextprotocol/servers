@@ -1,5 +1,12 @@
+// Checks what each feature area's register function hands the McpServer,
+// with a mocked server. Its imports are static (#4854): the per-test dynamic
+// imports they replace ran inside the 5 s test timeout, and a cold start
+// (transforming the whole tool tree) could take longer than that.
 import { describe, it, expect, vi } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerConditionalTools, registerTools } from "../tools/index.js";
+import { registerPrompts } from "../prompts/index.js";
+import { readInstructions, registerResources } from "../resources/index.js";
 
 // Create mock server
 function createMockServer() {
@@ -18,8 +25,7 @@ function createMockServer() {
 
 describe("Registration Index Files", () => {
   describe("tools/index.ts", () => {
-    it("should register all standard tools", async () => {
-      const { registerTools } = await import("../tools/index.js");
+    it("should register all standard tools", () => {
       const mockServer = createMockServer();
 
       registerTools(mockServer);
@@ -45,9 +51,7 @@ describe("Registration Index Files", () => {
       expect(registeredTools).toContain("toggle-subscriber-updates");
     });
 
-    it("should register conditional tools based on capabilities", async () => {
-      const { registerConditionalTools } = await import("../tools/index.js");
-
+    it("should register conditional tools based on capabilities", () => {
       // Server with all capabilities including experimental tasks API
       const mockServerWithCapabilities = {
         registerTool: vi.fn(),
@@ -86,9 +90,27 @@ describe("Registration Index Files", () => {
       ).toHaveBeenCalled();
     });
 
-    it("should not register conditional tools when capabilities missing", async () => {
-      const { registerConditionalTools } = await import("../tools/index.js");
+    it("should not register conditional tools before capabilities are known", () => {
+      // getClientCapabilities() is undefined until initialize; each gated
+      // tool treats that as "no capabilities".
+      const mockServerBeforeInit = {
+        registerTool: vi.fn(),
+        server: {
+          getClientCapabilities: vi.fn(() => undefined),
+        },
+        experimental: {
+          tasks: {
+            registerToolTask: vi.fn(),
+          },
+        },
+      } as unknown as McpServer; // partial mock: McpServer's private members rule out a structural literal
 
+      registerConditionalTools(mockServerBeforeInit);
+
+      expect(mockServerBeforeInit.registerTool).not.toHaveBeenCalled();
+    });
+
+    it("should not register conditional tools when capabilities missing", () => {
       const mockServerNoCapabilities = {
         registerTool: vi.fn(),
         server: {
@@ -109,8 +131,7 @@ describe("Registration Index Files", () => {
   });
 
   describe("prompts/index.ts", () => {
-    it("should register all prompts", async () => {
-      const { registerPrompts } = await import("../prompts/index.js");
+    it("should register all prompts", () => {
       const mockServer = createMockServer();
 
       registerPrompts(mockServer);
@@ -129,8 +150,7 @@ describe("Registration Index Files", () => {
   });
 
   describe("resources/index.ts", () => {
-    it("should register resource templates", async () => {
-      const { registerResources } = await import("../resources/index.js");
+    it("should register resource templates", () => {
       const mockServer = createMockServer();
 
       registerResources(mockServer);
@@ -144,9 +164,7 @@ describe("Registration Index Files", () => {
       expect(registeredResources).toContain("Dynamic Blob Resource");
     });
 
-    it("should read instructions from file", async () => {
-      const { readInstructions } = await import("../resources/index.js");
-
+    it("should read instructions from file", () => {
       const instructions = readInstructions();
 
       // Should return a string (either content or error message)

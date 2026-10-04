@@ -120,6 +120,7 @@ export const registerGZipFileAsResourceTool = (server: McpServer) => {
         content: [resourceLink],
       };
     } else {
+      /* v8 ignore next -- unreachable: the input schema's enum admits only resource and resourceLink */
       throw new Error(`Unknown outputType: ${outputType}`);
     }
   });
@@ -228,7 +229,10 @@ async function fetchSafely(
           // settle, and we are about to throw anyway. Swallow its rejection so
           // it cannot surface as an unhandled one; the thrown size error is
           // the failure this path reports.
-          reader.cancel().catch(() => {});
+          reader.cancel().catch(
+            /* v8 ignore next -- only runs if cancelling the source fails, which nothing here can provoke */
+            () => {},
+          );
           throw new Error(`Response from ${url} exceeds ${maxBytes} bytes`);
         }
 

@@ -1,197 +1,237 @@
-import { describe, it, expect, vi } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerSimplePrompt } from "../prompts/simple.js";
-import { registerArgumentsPrompt } from "../prompts/args.js";
-import { registerPromptWithCompletions } from "../prompts/completions.js";
-import { registerEmbeddedResourcePrompt } from "../prompts/resource.js";
-import { contentOfType, textOf, type PromptHandler } from "./helpers.js";
+/**
+ * Characterizes the everything server's prompts and argument completions
+ * through the protocol (#4854): `prompts/get` for each prompt, and
+ * `completion/complete` for prompt arguments and for the resource templates'
+ * `{resourceId}` variable.
+ */
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { connect, textOf, type Session } from "./harness.js";
 
-// Helper to capture registered prompt handlers
-function createMockServer() {
-  const handlers: Map<string, PromptHandler> = new Map();
-  const configs: Map<string, unknown> = new Map();
+let session: Session;
 
-  const mockServer = {
-    registerPrompt: vi.fn(
-      (name: string, config: unknown, handler: PromptHandler) => {
-        handlers.set(name, handler);
-        configs.set(name, config);
+beforeEach(async () => {
+  session = await connect();
+});
+
+afterEach(async () => {
+  await session.close();
+});
+
+describe("simple-prompt", () => {
+  it("returns its fixed message", async () => {
+    const result = await session.client.getPrompt({ name: "simple-prompt" });
+    expect(result).toEqual({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: "This is a simple prompt without arguments.",
+          },
+        },
+      ],
+    });
+  });
+});
+
+describe("args-prompt", () => {
+  it("uses the city alone when no state is given", async () => {
+    const result = await session.client.getPrompt({
+      name: "args-prompt",
+      arguments: { city: "San Francisco" },
+    });
+    expect(textOf(result.messages[0].content)).toBe(
+      "What's weather in San Francisco?",
+    );
+  });
+
+  it("appends the state when given", async () => {
+    const result = await session.client.getPrompt({
+      name: "args-prompt",
+      arguments: { city: "Austin", state: "Texas" },
+    });
+    expect(textOf(result.messages[0].content)).toBe(
+      "What's weather in Austin, Texas?",
+    );
+  });
+
+  it("rejects a missing required argument", async () => {
+    await expect(
+      session.client.getPrompt({ name: "args-prompt", arguments: {} }),
+    ).rejects.toThrow(/Invalid arguments for prompt args-prompt/);
+  });
+});
+
+describe("completable-prompt", () => {
+  it("builds the promotion message from both arguments", async () => {
+    const result = await session.client.getPrompt({
+      name: "completable-prompt",
+      arguments: { department: "Engineering", name: "Alice" },
+    });
+    expect(textOf(result.messages[0].content)).toBe(
+      "Please promote Alice to the head of the Engineering team.",
+    );
+  });
+});
+
+describe("resource-prompt", () => {
+  it("embeds a text resource", async () => {
+    const result = await session.client.getPrompt({
+      name: "resource-prompt",
+      arguments: { resourceType: "Text", resourceId: "1" },
+    });
+    expect(textOf(result.messages[0].content)).toBe(
+      "This prompt includes the Text resource with id: 1. Please analyze the following resource:",
+    );
+    expect(result.messages[1]).toMatchObject({
+      role: "user",
+      content: {
+        type: "resource",
+        resource: {
+          uri: "demo://resource/dynamic/text/1",
+          mimeType: "text/plain",
+          text: expect.stringMatching(/^Resource 1: This is a plaintext/),
+        },
       },
-    ),
-    // Partial mock: the prompt registrars only call registerPrompt, and
-    // McpServer is a class whose private members no object literal can satisfy.
-  } as unknown as McpServer;
+    });
+  });
 
-  return { mockServer, handlers, configs };
+  it("embeds a blob resource", async () => {
+    const result = await session.client.getPrompt({
+      name: "resource-prompt",
+      arguments: { resourceType: "Blob", resourceId: "2" },
+    });
+    expect(result.messages[1]).toMatchObject({
+      content: {
+        type: "resource",
+        resource: {
+          uri: "demo://resource/dynamic/blob/2",
+          mimeType: "text/plain",
+          blob: expect.any(String),
+        },
+      },
+    });
+  });
+
+  it("rejects an unknown resource type", async () => {
+    await expect(
+      session.client.getPrompt({
+        name: "resource-prompt",
+        arguments: { resourceType: "Video", resourceId: "1" },
+      }),
+    ).rejects.toThrow("Invalid resourceType: Video. Must be Text or Blob.");
+  });
+
+  it.each(["0", "-3", "1.5", "abc"])(
+    "rejects resource id %s",
+    async (resourceId) => {
+      await expect(
+        session.client.getPrompt({
+          name: "resource-prompt",
+          arguments: { resourceType: "Text", resourceId },
+        }),
+      ).rejects.toThrow(
+        `Invalid resourceId: ${resourceId}. Must be a finite positive integer.`,
+      );
+    },
+  );
+});
+
+describe("an unknown prompt", () => {
+  it("is a protocol error", async () => {
+    await expect(
+      session.client.getPrompt({ name: "no-such-prompt" }),
+    ).rejects.toThrow("Prompt no-such-prompt not found");
+  });
+});
+
+/** Complete one argument of a prompt. */
+async function completePrompt(
+  name: string,
+  argument: string,
+  value: string,
+  context?: Record<string, string>,
+) {
+  const { completion } = await session.client.complete({
+    ref: { type: "ref/prompt", name },
+    argument: { name: argument, value },
+    ...(context ? { context: { arguments: context } } : {}),
+  });
+  return completion.values;
 }
 
-describe("Prompts", () => {
-  describe("simple-prompt", () => {
-    it("should return fixed message with no arguments", () => {
-      const { mockServer, handlers } = createMockServer();
-      registerSimplePrompt(mockServer);
-
-      const handler = handlers.get("simple-prompt")!;
-      const result = handler();
-
-      expect(result).toEqual({
-        messages: [
-          {
-            role: "user",
-            content: {
-              type: "text",
-              text: "This is a simple prompt without arguments.",
-            },
-          },
-        ],
-      });
-    });
+describe("completion/complete for prompts", () => {
+  it.each([
+    ["", ["Engineering", "Sales", "Marketing", "Support"]],
+    ["S", ["Sales", "Support"]],
+    ["X", []],
+  ])("completes department %j", async (value, expected) => {
+    expect(
+      await completePrompt("completable-prompt", "department", value),
+    ).toEqual(expected);
   });
 
-  describe("args-prompt", () => {
-    it("should include city in message", () => {
-      const { mockServer, handlers } = createMockServer();
-      registerArgumentsPrompt(mockServer);
-
-      const handler = handlers.get("args-prompt")!;
-      const result = handler({ city: "San Francisco" });
-
-      expect(textOf(result.messages[0].content)).toBe(
-        "What's weather in San Francisco?",
-      );
-    });
-
-    it("should include city and state in message", () => {
-      const { mockServer, handlers } = createMockServer();
-      registerArgumentsPrompt(mockServer);
-
-      const handler = handlers.get("args-prompt")!;
-      const result = handler({ city: "San Francisco", state: "California" });
-
-      expect(textOf(result.messages[0].content)).toBe(
-        "What's weather in San Francisco, California?",
-      );
-    });
-
-    it("should handle city only (optional state omitted)", () => {
-      const { mockServer, handlers } = createMockServer();
-      registerArgumentsPrompt(mockServer);
-
-      const handler = handlers.get("args-prompt")!;
-      const result = handler({ city: "New York" });
-
-      expect(textOf(result.messages[0].content)).toBe(
-        "What's weather in New York?",
-      );
-      expect(textOf(result.messages[0].content)).not.toContain(",");
-      expect(result.messages[0].role).toBe("user");
-      expect(result.messages[0].content.type).toBe("text");
-    });
-  });
-
-  describe("completable-prompt", () => {
-    it("should generate promotion message with department and name", () => {
-      const { mockServer, handlers } = createMockServer();
-      registerPromptWithCompletions(mockServer);
-
-      const handler = handlers.get("completable-prompt")!;
-      const result = handler({ department: "Engineering", name: "Alice" });
-
-      expect(textOf(result.messages[0].content)).toBe(
-        "Please promote Alice to the head of the Engineering team.",
-      );
-    });
-
-    it("should work with different departments", () => {
-      const { mockServer, handlers } = createMockServer();
-      registerPromptWithCompletions(mockServer);
-
-      const handler = handlers.get("completable-prompt")!;
-
-      const salesResult = handler({ department: "Sales", name: "David" });
-      expect(textOf(salesResult.messages[0].content)).toContain("Sales");
-      expect(textOf(salesResult.messages[0].content)).toContain("David");
-      expect(salesResult.messages[0].role).toBe("user");
-
-      const marketingResult = handler({
-        department: "Marketing",
-        name: "Grace",
-      });
-      expect(textOf(marketingResult.messages[0].content)).toContain(
-        "Marketing",
-      );
-      expect(textOf(marketingResult.messages[0].content)).toContain("Grace");
-    });
-  });
-
-  describe("resource-prompt", () => {
-    it("should return text resource reference", () => {
-      const { mockServer, handlers } = createMockServer();
-      registerEmbeddedResourcePrompt(mockServer);
-
-      const handler = handlers.get("resource-prompt")!;
-      const result = handler({ resourceType: "Text", resourceId: "1" });
-
-      expect(result.messages).toHaveLength(2);
-      expect(textOf(result.messages[0].content)).toContain("Text");
-      expect(textOf(result.messages[0].content)).toContain("1");
-      expect(result.messages[1].content.type).toBe("resource");
+  it.each([
+    ["Engineering", "", ["Alice", "Bob", "Charlie"]],
+    ["Sales", "", ["David", "Eve", "Frank"]],
+    ["Marketing", "I", ["Iris"]],
+    ["Support", "K", ["Kim"]],
+  ])(
+    "completes a %s team member from %j",
+    async (department, value, expected) => {
       expect(
-        contentOfType(result.messages[1].content, "resource").resource.uri,
-      ).toContain("text/1");
+        await completePrompt("completable-prompt", "name", value, {
+          department,
+        }),
+      ).toEqual(expected);
+    },
+  );
+
+  it("offers no team members without a known department", async () => {
+    expect(await completePrompt("completable-prompt", "name", "")).toEqual([]);
+    expect(
+      await completePrompt("completable-prompt", "name", "", {
+        department: "Legal",
+      }),
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["", ["Text", "Blob"]],
+    ["T", ["Text"]],
+    ["x", []],
+  ])("completes resource-prompt's resourceType %j", async (value, expected) => {
+    expect(
+      await completePrompt("resource-prompt", "resourceType", value),
+    ).toEqual(expected);
+  });
+
+  it.each([
+    ["5", ["5"]],
+    ["0", []],
+    ["abc", []],
+  ])("completes resource-prompt's resourceId %j", async (value, expected) => {
+    expect(
+      await completePrompt("resource-prompt", "resourceId", value),
+    ).toEqual(expected);
+  });
+
+  it("offers nothing for an argument without a completer", async () => {
+    expect(await completePrompt("args-prompt", "city", "S")).toEqual([]);
+  });
+});
+
+describe("completion/complete for resource templates", () => {
+  it.each([
+    ["demo://resource/dynamic/text/{resourceId}", "3", ["3"]],
+    ["demo://resource/dynamic/blob/{resourceId}", "12", ["12"]],
+    ["demo://resource/dynamic/text/{resourceId}", "-1", []],
+    ["demo://resource/dynamic/blob/{resourceId}", "x", []],
+  ])("completes %s from %j", async (uri, value, expected) => {
+    const { completion } = await session.client.complete({
+      ref: { type: "ref/resource", uri },
+      argument: { name: "resourceId", value },
     });
-
-    it("should return blob resource reference", () => {
-      const { mockServer, handlers } = createMockServer();
-      registerEmbeddedResourcePrompt(mockServer);
-
-      const handler = handlers.get("resource-prompt")!;
-      const result = handler({ resourceType: "Blob", resourceId: "5" });
-
-      expect(textOf(result.messages[0].content)).toContain("Blob");
-      expect(
-        contentOfType(result.messages[1].content, "resource").resource.uri,
-      ).toContain("blob/5");
-    });
-
-    it("should reject invalid resource type", () => {
-      const { mockServer, handlers } = createMockServer();
-      registerEmbeddedResourcePrompt(mockServer);
-
-      const handler = handlers.get("resource-prompt")!;
-      expect(() =>
-        handler({ resourceType: "Invalid", resourceId: "1" }),
-      ).toThrow("Invalid resourceType");
-    });
-
-    it("should reject invalid resource ID", () => {
-      const { mockServer, handlers } = createMockServer();
-      registerEmbeddedResourcePrompt(mockServer);
-
-      const handler = handlers.get("resource-prompt")!;
-      expect(() => handler({ resourceType: "Text", resourceId: "-1" })).toThrow(
-        "Invalid resourceId",
-      );
-      expect(() => handler({ resourceType: "Text", resourceId: "0" })).toThrow(
-        "Invalid resourceId",
-      );
-      expect(() =>
-        handler({ resourceType: "Text", resourceId: "abc" }),
-      ).toThrow("Invalid resourceId");
-    });
-
-    it("should include both intro text and resource messages", () => {
-      const { mockServer, handlers } = createMockServer();
-      registerEmbeddedResourcePrompt(mockServer);
-
-      const handler = handlers.get("resource-prompt")!;
-      const result = handler({ resourceType: "Text", resourceId: "3" });
-
-      expect(result.messages).toHaveLength(2);
-      expect(result.messages[0].role).toBe("user");
-      expect(result.messages[0].content.type).toBe("text");
-      expect(result.messages[1].role).toBe("user");
-      expect(result.messages[1].content.type).toBe("resource");
-    });
+    expect(completion.values).toEqual(expected);
   });
 });

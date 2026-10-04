@@ -73,9 +73,11 @@ export const registerGetResourceLinksTool = (server: McpServer) => {
         uri: resource.uri,
         name: `${isOdd ? "Text" : "Blob"} Resource ${resourceId}`,
         description: `Resource ${resourceId}: ${
+          /* v8 ignore start -- the false arm is dead: blobResource() also reports text/plain (pinned in tools.test.ts) */
           resource.mimeType === "text/plain"
             ? "plaintext resource"
             : "binary blob resource"
+          /* v8 ignore stop */
         }`,
         mimeType: resource.mimeType,
       });

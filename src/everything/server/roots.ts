@@ -39,6 +39,7 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
       try {
         // Request the updated roots list from the client
         const response = await server.server.listRoots();
+        /* v8 ignore else -- unreachable: listRoots() validates the reply against ListRootsResultSchema, which requires `roots`, and rejects anything else */
         if (response && "roots" in response) {
           // Store the roots list for this client
           roots.set(sessionId, response.roots);
@@ -65,7 +66,9 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
       } catch (error) {
         console.error(
           `Failed to request roots from client ${sessionId}: ${
+            /* v8 ignore start -- the SDK always rejects listRoots() with an Error (McpError) */
             error instanceof Error ? error.message : String(error)
+            /* v8 ignore stop */
           }`,
         );
       }
