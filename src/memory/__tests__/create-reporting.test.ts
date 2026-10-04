@@ -1,3 +1,8 @@
+// Unit tests for the helpers behind create_entities' skip report (#4887).
+// create_entities ignores entities whose name already exists, as the README
+// documents. The agent only sees the tool description and the result, though,
+// so the result must say which entities were skipped: otherwise their
+// observations look stored when nothing was written.
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
@@ -9,12 +14,6 @@ import {
   skippedEntitiesNotice,
 } from "../index.js";
 
-/**
- * create_entities ignores entities whose name already exists, as the README
- * documents. The agent only sees the tool description, though, so the response
- * must say which entities were skipped: otherwise their observations look
- * stored when nothing was written.
- */
 describe("create reporting", () => {
   let manager: KnowledgeGraphManager;
   let testFilePath: string;
