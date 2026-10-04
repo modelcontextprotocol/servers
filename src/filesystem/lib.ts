@@ -92,6 +92,48 @@ function resolveRelativePathAgainstAllowedDirectories(
 }
 
 // Security & Validation Functions
+
+// The form two path components are compared in when the exact spelling is not
+// on disk (#1970): canonically equivalent spellings (NFC/NFD, as macOS stores
+// "é" or Japanese dakuten) match, and so do the Unicode space separators
+// (U+00A0, the U+202F macOS puts before "PM" in a screenshot's name, ...),
+// which a client typing the name back almost always sends as U+0020.
+function unicodeMatchKey(component: string): string {
+  return component.normalize("NFC").replace(/\p{Zs}/gu, " ");
+}
+
+// An allowed directory whose own name is spelled differently on disk (NFD)
+// from the request (NFC) fails the allow-list check, which compares strings
+// (#1970). Map such a request onto the allowed directory's own spelling, so
+// the result is inside that directory by construction and every later check
+// still runs against the real allow-list. A request that does not spell an
+// allowed directory is returned unchanged and is refused as before.
+function respellAllowedDirectoryPrefix(
+  absolutePath: string,
+  allowedDirectories: readonly string[],
+): string {
+  const requestedParts = absolutePath.split(path.sep).filter(Boolean);
+  const candidates = allowedDirectories
+    .map((directory) => path.resolve(directory))
+    .sort((left, right) => right.length - left.length);
+  for (const directory of candidates) {
+    const directoryParts = directory.split(path.sep).filter(Boolean);
+    if (
+      directoryParts.length <= requestedParts.length &&
+      directoryParts.every(
+        (part, index) =>
+          unicodeMatchKey(part) === unicodeMatchKey(requestedParts[index]),
+      )
+    ) {
+      return path.join(
+        directory,
+        ...requestedParts.slice(directoryParts.length),
+      );
+    }
+  }
+  return absolutePath;
+}
+
 async function resolveUnicodeEquivalentPath(
   absolutePath: string,
   allowedDirectories: readonly string[],
@@ -120,7 +162,7 @@ async function resolveUnicodeEquivalentPath(
     const equivalentMatches = exactMatch
       ? [exactMatch]
       : entries.filter(
-          (entry) => entry.normalize("NFC") === requestedPart.normalize("NFC"),
+          (entry) => unicodeMatchKey(entry) === unicodeMatchKey(requestedPart),
         );
 
     if (equivalentMatches.length > 1) {
@@ -171,12 +213,17 @@ export async function validatePath(
       `Access denied - Windows-style path received on a POSIX host: ${requestedPath}`,
     );
   }
-  const absolute = path.isAbsolute(expandedPath)
+  let absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
     : resolveRelativePathAgainstAllowedDirectories(
         expandedPath,
         allowedDirectories,
       );
+  if (
+    !isPathWithinAllowedDirectories(normalizePath(absolute), allowedDirectories)
+  ) {
+    absolute = respellAllowedDirectoryPrefix(absolute, allowedDirectories);
+  }
 
   const normalizedRequested = normalizePath(absolute);
 
