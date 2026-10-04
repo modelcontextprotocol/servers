@@ -32,14 +32,15 @@ and those servers have no coverage gate yet (#4855).
 
 Each vitest config includes only `**/__tests__/**/*.test.ts`, so a test file
 anywhere else in a workspace is never run and reports nothing. Shared test
-helpers go in `__tests__/` without the `.test` suffix, as
-`src/everything/__tests__/helpers.ts` does.
+helpers go in `__tests__/` without the `.test` suffix, as each server's
+connection harness does (`__tests__/harness.ts` in `everything`,
+`__tests__/helpers.ts` in the other three).
 
 ## What each server's tests do
 
 | Server | How its tests reach the code |
 | --- | --- |
-| `everything`, `filesystem`, `memory`, `sequentialthinking` | An SDK `Client` connected to the server's `createServer()` over `InMemoryTransport`, in the vitest process; unit tests of the helper modules beside them; at most a thin spawn-based smoke of the built `dist/index.js` |
+| `everything`, `filesystem`, `memory`, `sequentialthinking` | An SDK `Client` connected to the server's `createServer()` over `InMemoryTransport`, in the vitest process, through the server's own harness, plus unit tests of helper modules such as `lib.ts`. `everything` drives its stdio, SSE and Streamable HTTP transports in-process too; the other three have one thin spawn smoke of the built `dist/index.js` |
 | `fetch`, `git`, `time` | Direct calls on the functions in `server.py`, with `unittest.mock` |
 
 No Python test opens a `ClientSession` yet.
@@ -63,45 +64,39 @@ Which client harness is available depends on the language.
 
 Each TypeScript server exports a `createServer(…)` factory and starts its
 transport only from a guarded `main()`, so importing it starts nothing and a
-test can link a real `Client` to a real server with no process and no build:
+test can link a real `Client` to a real server with no process and no build.
+**Each server's `__tests__/` has a harness that does the linking. Connect
+through it**, never by calling `createServer()` and
+`InMemoryTransport.createLinkedPair()` by hand: the harness also does the
+per-session setup and teardown the server needs.
 
-| Server | Factory | Takes |
-| --- | --- | --- |
-| `everything` | `server/index.ts` | nothing; returns `{ server, cleanup }` |
-| `filesystem` | `server.ts` | the allowed directories |
-| `memory` | `index.ts` | the graph file's path |
-| `sequentialthinking` | `index.ts` | nothing |
+| Server | Factory | Harness | `connect(…)` takes |
+| --- | --- | --- | --- |
+| `everything` | `createServer()` in `server/index.ts`, returns `{ server, cleanup }` | `__tests__/harness.ts` | `{ capabilities, taskStore, setup, sessionId }`, all optional |
+| `filesystem` | `createServer(allowedDirectories)` in `server.ts` | `__tests__/helpers.ts` | the allowed directories, then `{ capabilities, listRoots }` |
+| `memory` | `createServer(memoryFilePath)` in `index.ts` | `__tests__/helpers.ts` | the graph file's path (`makeTempGraph()` makes one) |
+| `sequentialthinking` | `createServer()` in `index.ts` | `__tests__/helpers.ts` | `{ disableThoughtLogging }`, defaulting to `"true"` |
 
-Each server's `__tests__/` already has a shared helper that does the
-connecting (and, where the server needs one, the temporary directory or file).
-**Use it** rather than writing the linking by hand again. What it does, shown
-for `everything`:
+Each `connect` returns the `client` and a `close()`; call `close()` in
+`afterEach`. The harnesses also export small result helpers (`call`,
+`textOf` and the like); read the one you are using before adding another.
 
 ```ts
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createServer } from "../server/index.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { connect, contentOf, textOf, type Session } from "./harness.js";
 
 describe("echo, over the protocol", () => {
+  let session: Session;
   let client: Client;
-  let cleanup: () => void;
 
   beforeEach(async () => {
-    const created = createServer();
-    cleanup = created.cleanup;
-    const [clientTransport, serverTransport] =
-      InMemoryTransport.createLinkedPair();
-    client = new Client({ name: "test-client", version: "0.0.0" });
-    await Promise.all([
-      created.server.connect(serverTransport),
-      client.connect(clientTransport),
-    ]);
+    session = await connect();
+    client = session.client;
   });
 
   afterEach(async () => {
-    await client.close();
-    cleanup();
+    await session.close();
   });
 
   it("returns the message", async () => {
@@ -109,7 +104,7 @@ describe("echo, over the protocol", () => {
       name: "echo",
       arguments: { message: "hi" },
     });
-    expect(result.content).toEqual([{ type: "text", text: "Echo: hi" }]);
+    expect(textOf(contentOf(result)[0])).toBe("Echo: hi");
   });
 
   it("reports bad input as a tool error", async () => {
@@ -119,12 +114,23 @@ describe("echo, over the protocol", () => {
 });
 ```
 
-Close the client (and, for `everything`, call `cleanup()`) in `afterEach`:
-`everything`'s `createServer()` starts timers (the roots sync after
-`initialize`, the task store) that otherwise outlive the test. A tool
-`everything` registers in `registerConditionalTools` appears only when the
-`Client` declares the matching capability (`roots`, `sampling`,
-`elicitation`) in its constructor options.
+What `everything`'s harness does that a hand-rolled connection would miss:
+
+- **A session id per connection.** Logging, subscriptions, roots and the
+  toggle tools keep per-session state in module-level maps keyed by the
+  transport's session id, and `InMemoryTransport` has none, so every
+  hand-rolled session would share the `undefined` key and leak state into the
+  next test. `connect()` sets a fresh `sessionId` on the server transport
+  (`sessionId: null` keeps it undefined, as stdio does), and `close()` runs the
+  server's `cleanup(sessionId)`, which also stops the timers `createServer()`
+  starts (the roots sync, the task store).
+- **Capabilities.** A tool `everything` registers in `registerConditionalTools`
+  appears only when the client declares the matching capability: pass
+  `capabilities` (`ALL_CAPABILITIES` declares every one), with `setup` to
+  install the client's handlers for the requests the server sends back
+  (sampling, elicitation, roots) and `taskStore` for the task-augmented ones.
+- **Notifications.** `session.notifications` collects every notification no
+  specific handler consumed; `ofMethod(notifications, method)` filters it.
 
 Assert on what the client receives (tool, resource and prompt lists, call
 results, errors, notifications), never on SDK internals or a handler's context
@@ -133,22 +139,28 @@ import and type changes alone.
 
 ### TypeScript: the spawn smoke of the built binary
 
-What only the published entry point can show (that `dist/index.js` starts,
-reads its arguments and serves over stdio) is checked by a thin test that
-spawns it with `StdioClientTransport`. Everything else is tested in-process.
-Two hazards apply to that kind of test, and only to it:
+What only the published entry point can show (that `dist/index.js` starts as a
+bin and serves over stdio; in `memory` and `sequentialthinking`, also through
+a symlink, as npm's `.bin` entry runs it) is checked by one thin test per server that spawns it with
+`StdioClientTransport`: `filesystem`'s `bin-smoke.test.ts`, and
+`stdio-smoke.test.ts` in `memory` and `sequentialthinking`. `everything` has
+none; its transports are driven in-process. Everything else is tested
+in-process. Two hazards apply to these tests, and only to them:
 
-- ⚠️ **It runs the last build, not your edit.** `npm test` does not build. Build
-  first, or run `npm run validate -w src/<server>`, which builds before it
-  tests.
-- ⚠️ **A spawn test guarded with `skipIf(!existsSync(distIndexPath))` is
-  reported as skipped with no build**, and the run stays green having tested
-  nothing over stdio. A skipped test in this repo usually means "not built".
+- ⚠️ **They run the last build, not your edit.** `npm test` does not build.
+  Build first, or run `npm run validate -w src/<server>`, which builds before
+  it tests.
+- ⚠️ **A missing `dist/` is handled two ways.** `filesystem` and
+  `sequentialthinking` guard the smoke with `skipIf(!existsSync(distIndexPath))`,
+  so with no build it is reported as **skipped** and the run stays green having
+  tested nothing over stdio. `memory`'s has no guard and **fails**. A skipped
+  test in this repo usually means "not built".
 
 Close the client in `finally` or `afterEach`: that is what stops the child
 process. Pipe its stderr (`stderr: "pipe"`), and pass environment variables
-in the transport's `env` option, since the child inherits only the SDK's
-default safelist (`PATH`, `HOME`, `USER` and the like).
+in the transport's `env` option (`MEMORY_FILE_PATH`, say), since the child
+inherits only the SDK's default safelist (`PATH`, `HOME`, `USER` and the
+like).
 
 ### Python: `ClientSession` over stdio
 
@@ -241,7 +253,7 @@ Clearing a red file:
   `exclude` to get green.
 
 ⚠️ **A spawned server is invisible to the report.** v8 coverage measures the
-vitest process, not a child it starts, so code reached only through the spawn
+vitest process, not a child it starts, so code reached only through a spawn
 smoke reads as uncovered. That is why behavior is tested in-process: a file
 whose only test spawns it cannot clear the gate.
 
