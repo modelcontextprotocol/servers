@@ -281,9 +281,16 @@ describe("memory persistence over the protocol", () => {
       // the original mode must differ from a new file's for a loss to show.
       const original = (await newFileMode()) === 0o600 ? 0o640 : 0o600;
       await fs.chmod(filePath, original);
+      const writeFile = vi.spyOn(fs, "writeFile");
 
       await call(client, "create_entities", { entities: [bob] });
 
+      // The temp file is created with that mode, never a wider one first.
+      expect(writeFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\.tmp$/),
+        expect.any(String),
+        { mode: original },
+      );
       expect(await modeOf(filePath)).toBe(original);
       expect((await call(client, "read_graph")).structuredContent).toEqual({
         entities: [alice, bob],

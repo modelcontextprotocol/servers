@@ -244,7 +244,15 @@ export class KnowledgeGraphManager {
     );
 
     try {
-      await fs.writeFile(tempFilePath, lines.join("\n") + "\n");
+      // Create the temp file with the existing mode, so the graph is never
+      // readable through it more widely than through the file it replaces;
+      // the umask can only narrow that. The chmod then restores any bits the
+      // umask removed.
+      await fs.writeFile(
+        tempFilePath,
+        lines.join("\n") + "\n",
+        mode === undefined ? undefined : { mode },
+      );
       if (mode !== undefined) {
         await fs.chmod(tempFilePath, mode);
       }
