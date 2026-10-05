@@ -122,6 +122,37 @@ jobs:
         working-directory: src/${{ matrix.package }}
         run: npm run coverage
 
+  # The test suites on Windows (#1149). Every other job runs on Ubuntu, so
+  # Windows-only code paths (drive letters, UNC shares, no O_NOFOLLOW, rename
+  # over a locked file) were only ever exercised by mocking `path.win32`. This
+  # leg runs each server's own `npm test` on a real Windows runner. It is tests
+  # only: format, lint, typecheck and coverage do not depend on the OS and stay
+  # in the Ubuntu legs above.
+  test-windows:
+    timeout-minutes: 20
+    needs: [detect-packages]
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
+    name: Test ${{ matrix.package }} (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # The same install as the `validate` leg; its `prepare` builds `dist/`.
+      - name: Install dependencies
+        run: npm ci --workspace src/${{ matrix.package }} --include-workspace-root
+
+      - name: Run tests
+        working-directory: src/${{ matrix.package }}
+        run: npm test
+
   # The boot smoke (#4871): every server started the way a client starts it —
   # the built `dist/index.js` for the TypeScript servers, the console script
   # through `uv run` for the Python ones — over each transport it implements,

@@ -388,27 +388,18 @@ describe("trigger-elicitation-request", () => {
     expect(texts[0]).toBe("⚠️ User cancelled the elicitation dialog.");
   });
 
-  // KNOWN BUG #4985: trigger-elicitation-request is listed for a URL-only elicitation client, whose call then fails; the fix changes this assertion.
-  it("is listed for a URL-only client, which then cannot answer its form request", async () => {
-    // Characterization: the tool is gated on `elicitation` alone, so a
-    // client that declared only URL mode sees it and the call fails.
-    const { s } = await connectElicitation(() => ({ action: "cancel" }), {
-      elicitation: { url: {} },
-    });
+  it("is not listed for a URL-only client, which cannot answer a form request (#4985)", async () => {
+    const { s, asked } = await connectElicitation(
+      () => ({ action: "cancel" }),
+      { elicitation: { url: {} } },
+    );
     session = s;
-    const result = await s.client.callTool({
-      name: "trigger-elicitation-request",
-      arguments: {},
-    });
-    expect(result).toEqual({
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: "MCP error -32602: MCP error -32602: Client does not support form-mode elicitation requests",
-        },
-      ],
-    });
+    const { tools } = await s.client.listTools();
+    expect(tools.map((t) => t.name)).not.toContain(
+      "trigger-elicitation-request",
+    );
+    expect(tools.map((t) => t.name)).toContain("trigger-url-elicitation");
+    expect(asked).toEqual([]);
   });
 });
 
