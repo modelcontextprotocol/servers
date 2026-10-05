@@ -206,7 +206,6 @@ describe("trigger-long-running-operation", () => {
 });
 
 describe("get-resource-links", () => {
-  // KNOWN BUG #4984: blobResource() labels blob content text/plain instead of a binary MIME type; the fix changes this assertion.
   it("returns three links by default, blob for odd ids and text for even", async () => {
     const result = await call("get-resource-links");
     const content = contentOf(result);
@@ -218,10 +217,8 @@ describe("get-resource-links", () => {
         type: "resource_link",
         uri: "demo://resource/dynamic/blob/1",
         name: "Blob Resource 1",
-        // Characterization: blobResource() reports text/plain, so every link
-        // is described as a plaintext resource (#4854 baseline).
-        description: "Resource 1: plaintext resource",
-        mimeType: "text/plain",
+        description: "Resource 1: binary blob resource",
+        mimeType: "application/octet-stream",
       },
       {
         type: "resource_link",
@@ -234,8 +231,8 @@ describe("get-resource-links", () => {
         type: "resource_link",
         uri: "demo://resource/dynamic/blob/3",
         name: "Blob Resource 3",
-        description: "Resource 3: plaintext resource",
-        mimeType: "text/plain",
+        description: "Resource 3: binary blob resource",
+        mimeType: "application/octet-stream",
       },
     ]);
   });
@@ -271,7 +268,6 @@ describe("get-resource-reference", () => {
     );
   });
 
-  // KNOWN BUG #4984: blobResource() labels blob content text/plain instead of a binary MIME type; the fix changes this assertion.
   it("returns an embedded blob resource", async () => {
     const result = await call("get-resource-reference", {
       resourceType: "Blob",
@@ -279,7 +275,7 @@ describe("get-resource-reference", () => {
     });
     const embedded = contentOfType(contentOf(result)[1], "resource").resource;
     expect(embedded.uri).toBe("demo://resource/dynamic/blob/7");
-    expect(embedded.mimeType).toBe("text/plain");
+    expect(embedded.mimeType).toBe("application/octet-stream");
     const blob = "blob" in embedded ? embedded.blob : "";
     expect(Buffer.from(blob, "base64").toString()).toMatch(
       /^Resource 7: This is a base64 blob created at /,
