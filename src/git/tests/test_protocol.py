@@ -674,14 +674,12 @@ async def test_git_checkout_branch(repo: git.Repo):
     assert repo.active_branch.name == "feature"
 
 
-# KNOWN BUG #4804: pins current (wrong) behavior; the fix changes this assertion.
 @pytest.mark.parametrize("revision", ["sha", "tag", "HEAD~1", "refs/heads/feature"])
-async def test_git_checkout_non_branch_detaches_head_but_claims_switch(
+async def test_git_checkout_non_branch_reports_detached_head(
     repo: git.Repo, revision: str
 ):
-    # Pins #4804: any revision rev_parse accepts is checked out, detaching
-    # HEAD, and the reply still says "Switched to branch". Fixing #4804 changes
-    # this test.
+    # #4804: any revision rev_parse accepts is checked out, detaching HEAD, and
+    # the reply says so with the short sha instead of claiming a branch switch.
     add_commits(repo, 1)
     repo.git.branch("feature")
     repo.create_tag("v1", ref="HEAD~1")
@@ -689,11 +687,13 @@ async def test_git_checkout_non_branch_detaches_head_but_claims_switch(
         "sha": repo.head.commit.hexsha[:7],
         "tag": "v1",
     }.get(revision, revision)
+    target = repo.commit(name).hexsha
     result = await call(
         None, "git_checkout", {"repo_path": str(root_of(repo)), "branch_name": name}
     )
-    assert result == text_result(f"Switched to branch '{name}'")
     assert repo.head.is_detached
+    assert repo.head.commit.hexsha == target
+    assert result == text_result(f"HEAD is now detached at {target[:7]}")
 
 
 async def test_git_checkout_unknown_branch_is_error(repo: git.Repo):
