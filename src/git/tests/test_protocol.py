@@ -611,6 +611,17 @@ async def test_git_create_branch_existing_name_at_same_commit_is_error(
     )
 
 
+async def test_git_create_branch_name_matching_list_attribute(repo: git.Repo):
+    # The existence check compares head names, so a new branch named like an
+    # attribute of GitPython's IterableList ("append") is still created.
+    assert await call(
+        None,
+        "git_create_branch",
+        {"repo_path": str(root_of(repo)), "branch_name": "append"},
+    ) == text_result("Created branch 'append' from 'main'")
+    assert repo.commit("refs/heads/append") == repo.heads["main"].commit
+
+
 async def test_git_create_branch_existing_name_at_other_commit_is_error(
     repo: git.Repo,
 ):
