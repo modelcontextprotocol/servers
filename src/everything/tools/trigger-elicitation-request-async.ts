@@ -153,7 +153,9 @@ export const registerTriggerElicitationRequestAsyncTool = (
         // Poll for task completion
         let attempts = 0;
         let taskStatus = elicitResponse.task.status;
-        let taskStatusMessage: string | undefined;
+        // A task that is already finished when created is never polled, so
+        // its status message has to come from the CreateTaskResult
+        let taskStatusMessage = elicitResponse.task.statusMessage;
         let timedOut = false;
 
         while (
