@@ -221,7 +221,9 @@ def git_create_branch(
 
     # GitPython's create_head accepts a name that already points at the base
     # commit, so check first rather than report a branch that was not created.
-    if branch_name in repo.heads:
+    # Compare names: `in repo.heads` also matches IterableList attributes
+    # such as "append".
+    if any(head.name == branch_name for head in repo.heads):
         raise ValueError(
             f"Cannot create branch '{branch_name}': refs/heads/{branch_name} already exists"
         )
