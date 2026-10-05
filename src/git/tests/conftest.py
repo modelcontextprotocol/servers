@@ -80,7 +80,9 @@ def make_repo(path: Path) -> git.Repo:
     with repo.config_writer() as config:
         config.set_value("user", "name", "Test User")
         config.set_value("user", "email", "test@example.com")
-    (path / "test.txt").write_text("line 1\nline 2\nline 3\nline 4\nline 5\n")
+    (path / "test.txt").write_text(
+        "line 1\nline 2\nline 3\nline 4\nline 5\n", newline="\n"
+    )
     repo.index.add(["test.txt"])
     repo.index.commit("initial commit")
     return repo

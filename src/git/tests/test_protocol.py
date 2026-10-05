@@ -164,8 +164,8 @@ async def test_git_status_clean(repo: git.Repo):
 
 async def test_git_status_reports_untracked_and_modified(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("changed\n")
-    (root / "new.txt").write_text("new\n")
+    (root / "test.txt").write_text("changed\n", newline="\n")
+    (root / "new.txt").write_text("new\n", newline="\n")
     result = await call(None, "git_status", {"repo_path": str(root)})
     assert result == text_result(f"Repository status:\n{repo.git.status()}")
     text = result["content"][0]["text"]
@@ -180,7 +180,9 @@ async def test_git_status_reports_untracked_and_modified(repo: git.Repo):
 
 async def test_git_diff_unstaged(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("line 1\nline 2\nCHANGED\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nCHANGED\nline 4\nline 5\n", newline="\n"
+    )
     result = await call(None, "git_diff_unstaged", {"repo_path": str(root)})
     assert result == text_result("Unstaged changes:\n" + repo.git.diff("--unified=3"))
     assert "-line 3\n+CHANGED" in result["content"][0]["text"]
@@ -189,7 +191,9 @@ async def test_git_diff_unstaged(repo: git.Repo):
 
 async def test_git_diff_unstaged_honors_context_lines(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("line 1\nline 2\nCHANGED\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nCHANGED\nline 4\nline 5\n", newline="\n"
+    )
     result = await call(
         None, "git_diff_unstaged", {"repo_path": str(root), "context_lines": 0}
     )
@@ -206,7 +210,9 @@ async def test_git_diff_unstaged_empty(repo: git.Repo):
 
 async def test_git_diff_staged(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("line 1\nline 2\nCHANGED\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nCHANGED\nline 4\nline 5\n", newline="\n"
+    )
     repo.index.add(["test.txt"])
     result = await call(None, "git_diff_staged", {"repo_path": str(root)})
     assert result == text_result(
@@ -217,7 +223,9 @@ async def test_git_diff_staged(repo: git.Repo):
 
 async def test_git_diff_staged_honors_context_lines(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("line 1\nline 2\nCHANGED\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nCHANGED\nline 4\nline 5\n", newline="\n"
+    )
     repo.index.add(["test.txt"])
     result = await call(
         None, "git_diff_staged", {"repo_path": str(root), "context_lines": 0}
@@ -241,7 +249,9 @@ async def test_git_diff_staged_empty(repo: git.Repo):
 async def test_git_diff_against_branch(repo: git.Repo):
     root = root_of(repo)
     repo.git.checkout("-b", "feature")
-    (root / "test.txt").write_text("line 1\nline 2\nFEATURE\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nFEATURE\nline 4\nline 5\n", newline="\n"
+    )
     repo.index.add(["test.txt"])
     repo.index.commit("feature commit")
     result = await call(None, "git_diff", {"repo_path": str(root), "target": "main"})
@@ -253,7 +263,9 @@ async def test_git_diff_against_branch(repo: git.Repo):
 
 async def test_git_diff_honors_context_lines(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("line 1\nline 2\nCHANGED\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nCHANGED\nline 4\nline 5\n", newline="\n"
+    )
     result = await call(
         None,
         "git_diff",
@@ -286,7 +298,7 @@ async def test_git_diff_rejects_flag_injection(repo: git.Repo):
 
 async def test_git_commit_records_staged_changes(repo: git.Repo):
     root = root_of(repo)
-    (root / "new.txt").write_text("new\n")
+    (root / "new.txt").write_text("new\n", newline="\n")
     repo.index.add(["new.txt"])
     result = await call(
         None, "git_commit", {"repo_path": str(root), "message": "add new"}
@@ -305,7 +317,7 @@ async def test_git_commit_with_nothing_staged_creates_empty_commit(repo: git.Rep
     # tree equals its parent's) and reports success. `git commit` would refuse
     # with "no changes added to commit". Fixing #4762 changes this test.
     root = root_of(repo)
-    (root / "test.txt").write_text("edited but not staged\n")
+    (root / "test.txt").write_text("edited but not staged\n", newline="\n")
     before = repo.head.commit
     result = await call(
         None, "git_commit", {"repo_path": str(root), "message": "claims a fix"}
@@ -326,8 +338,8 @@ async def test_git_commit_with_nothing_staged_creates_empty_commit(repo: git.Rep
 
 async def test_git_add_specific_files(repo: git.Repo):
     root = root_of(repo)
-    (root / "a.txt").write_text("a\n")
-    (root / "b.txt").write_text("b\n")
+    (root / "a.txt").write_text("a\n", newline="\n")
+    (root / "b.txt").write_text("b\n", newline="\n")
     result = await call(None, "git_add", {"repo_path": str(root), "files": ["a.txt"]})
     assert result == text_result("Files staged successfully")
     assert staged_paths(repo) == {"a.txt"}
@@ -335,8 +347,8 @@ async def test_git_add_specific_files(repo: git.Repo):
 
 async def test_git_add_dot_stages_everything(repo: git.Repo):
     root = root_of(repo)
-    (root / "a.txt").write_text("a\n")
-    (root / "b.txt").write_text("b\n")
+    (root / "a.txt").write_text("a\n", newline="\n")
+    (root / "b.txt").write_text("b\n", newline="\n")
     result = await call(None, "git_add", {"repo_path": str(root), "files": ["."]})
     assert result == text_result("Files staged successfully")
     assert staged_paths(repo) == {"a.txt", "b.txt"}
@@ -345,7 +357,7 @@ async def test_git_add_dot_stages_everything(repo: git.Repo):
 async def test_git_add_dot_never_stages_git_dir(repo: git.Repo):
     # Regression guard for #628: `git add .` must not stage `.git` itself.
     root = root_of(repo)
-    (root / "a.txt").write_text("a\n")
+    (root / "a.txt").write_text("a\n", newline="\n")
     await call(None, "git_add", {"repo_path": str(root), "files": ["."]})
     entries = [str(path) for path, _stage in repo.index.entries]
     assert not any(p == ".git" or p.startswith(".git/") for p in entries)
@@ -354,7 +366,7 @@ async def test_git_add_dot_never_stages_git_dir(repo: git.Repo):
 
 async def test_git_add_absolute_path_inside_repository(repo: git.Repo):
     root = root_of(repo)
-    (root / "a.txt").write_text("a\n")
+    (root / "a.txt").write_text("a\n", newline="\n")
     result = await call(
         None, "git_add", {"repo_path": str(root), "files": [str(root / "a.txt")]}
     )
@@ -366,7 +378,7 @@ async def test_git_add_file_starting_with_dash_is_a_path(repo: git.Repo):
     # `--` separates the pathspec, so a dash-named file is staged, not parsed
     # as an option.
     root = root_of(repo)
-    (root / "-n").write_text("dash\n")
+    (root / "-n").write_text("dash\n", newline="\n")
     result = await call(None, "git_add", {"repo_path": str(root), "files": ["-n"]})
     assert result == text_result("Files staged successfully")
     assert staged_paths(repo) == {"-n"}
@@ -379,7 +391,7 @@ async def test_git_add_empty_list_reports_success_but_stages_nothing(
     # Pins #4763: `files: []` runs `git add --`, a no-op, and still reports
     # success. Fixing #4763 changes this test.
     root = root_of(repo)
-    (root / "test.txt").write_text("edited\n")
+    (root / "test.txt").write_text("edited\n", newline="\n")
     result = await call(None, "git_add", {"repo_path": str(root), "files": []})
     assert result == text_result("Files staged successfully")
     assert staged_paths(repo) == set()
@@ -409,7 +421,7 @@ async def test_git_add_rejects_relative_traversal(repo: git.Repo):
     # CVE-2026-27735: a path escaping the working tree is refused before git
     # runs.
     root = root_of(repo)
-    (root.parent / "outside.txt").write_text("secret\n")
+    (root.parent / "outside.txt").write_text("secret\n", newline="\n")
     result = await call(
         None, "git_add", {"repo_path": str(root), "files": ["../outside.txt"]}
     )
@@ -423,7 +435,7 @@ async def test_git_add_rejects_relative_traversal(repo: git.Repo):
 async def test_git_add_rejects_absolute_path_outside(repo: git.Repo):
     root = root_of(repo)
     outside = root.parent / "outside.txt"
-    outside.write_text("secret\n")
+    outside.write_text("secret\n", newline="\n")
     result = await call(
         None, "git_add", {"repo_path": str(root), "files": [str(outside)]}
     )
@@ -436,7 +448,7 @@ async def test_git_add_rejects_absolute_path_outside(repo: git.Repo):
 async def test_git_add_rejects_symlink_out_of_repository(repo: git.Repo):
     root = root_of(repo)
     outside = root.parent / "outside.txt"
-    outside.write_text("secret\n")
+    outside.write_text("secret\n", newline="\n")
     (root / "link.txt").symlink_to(outside)
     result = await call(
         None, "git_add", {"repo_path": str(root), "files": ["link.txt"]}
@@ -473,8 +485,8 @@ async def test_git_add_unresolvable_path_is_invalid_path(repo: git.Repo):
 
 async def test_git_reset_unstages_everything(repo: git.Repo):
     root = root_of(repo)
-    (root / "a.txt").write_text("a\n")
-    (root / "test.txt").write_text("edited\n")
+    (root / "a.txt").write_text("a\n", newline="\n")
+    (root / "test.txt").write_text("edited\n", newline="\n")
     repo.index.add(["a.txt", "test.txt"])
     assert staged_paths(repo) == {"a.txt", "test.txt"}
     result = await call(None, "git_reset", {"repo_path": str(root)})
@@ -502,7 +514,7 @@ def add_commits(repo: git.Repo, n: int) -> list[git.Commit]:
     root = root_of(repo)
     commits = []
     for i in range(n):
-        (root / f"f{i}.txt").write_text(f"{i}\n")
+        (root / f"f{i}.txt").write_text(f"{i}\n", newline="\n")
         repo.index.add([f"f{i}.txt"])
         commits.append(repo.index.commit(f"commit {i}\n\nbody {i}"))
     return commits
@@ -731,7 +743,9 @@ def show_header(commit: git.Commit) -> str:
 # KNOWN BUG #4998: git_show prints Python reprs (quoted sha, <git.Actor>, datetime with a memory address) instead of git's format; the fix changes this assertion.
 async def test_git_show_commit_with_parent(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("line 1\nline 2\nSHOWN\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nSHOWN\nline 4\nline 5\n", newline="\n"
+    )
     repo.index.add(["test.txt"])
     commit = repo.index.commit("show me")
     result = await call(
