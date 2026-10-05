@@ -14,7 +14,7 @@ import {
   findUnsigned,
   parseArgs,
   parseLog,
-  parseSignoffs,
+  parseIdentity,
   signoffProblem,
   verifyDco,
 } from "./verify-dco.mjs";
@@ -27,26 +27,15 @@ const commit = (over = {}) => ({
   parents: ["b".repeat(40)],
   author: ada,
   committer: ada,
-  message: "Fix a thing\n\nSigned-off-by: Ada Lovelace <ada@example.com>\n",
+  signoffs: ["Ada Lovelace <ada@example.com>"],
+  message: "Fix a thing\n",
   ...over,
 });
 
-test("parseSignoffs: reads every trailer, any key case", () => {
-  assert.deepEqual(
-    parseSignoffs(
-      "x\n\nsigned-off-by: Ada Lovelace <ada@example.com>\n" +
-        "Signed-off-by:Bob Builder  <bob@example.com>  \n",
-    ),
-    [ada, bob],
-  );
-});
-
-test("parseSignoffs: a line that only mentions the trailer is not one", () => {
-  assert.deepEqual(
-    parseSignoffs("Explain Signed-off-by: Ada <ada@example.com> inline\n"),
-    [],
-  );
-  assert.deepEqual(parseSignoffs("Signed-off-by: Ada Lovelace\n"), []);
+test("parseIdentity: reads `Name <email>`, or nothing without an email", () => {
+  assert.deepEqual(parseIdentity("Ada Lovelace <ada@example.com>"), ada);
+  assert.deepEqual(parseIdentity(" Bob Builder  <bob@example.com> "), bob);
+  assert.equal(parseIdentity("Ada Lovelace"), null);
 });
 
 test("signoffProblem: a signoff matching the author passes", () => {
@@ -54,11 +43,17 @@ test("signoffProblem: a signoff matching the author passes", () => {
 });
 
 test("signoffProblem: a signoff matching only the committer passes", () => {
+  assert.equal(signoffProblem(commit({ author: bob })), null);
+});
+
+test("signoffProblem: any one matching signoff of several passes", () => {
   assert.equal(
     signoffProblem(
       commit({
-        author: bob,
-        message: "x\n\nSigned-off-by: Ada Lovelace <ada@example.com>\n",
+        signoffs: [
+          "Bob Builder <bob@example.com>",
+          ada.name + " <" + ada.email + ">",
+        ],
       }),
     ),
     null,
@@ -67,30 +62,29 @@ test("signoffProblem: a signoff matching only the committer passes", () => {
 
 test("signoffProblem: the email is compared ignoring case", () => {
   assert.equal(
-    signoffProblem(
-      commit({ message: "x\n\nSigned-off-by: Ada Lovelace <ADA@Example.com>" }),
-    ),
+    signoffProblem(commit({ signoffs: ["Ada Lovelace <ADA@Example.com>"] })),
     null,
   );
 });
 
 test("signoffProblem: no trailer fails", () => {
   assert.equal(
-    signoffProblem(commit({ message: "Fix a thing\n" })),
+    signoffProblem(commit({ signoffs: [] })),
     "has no Signed-off-by trailer",
   );
 });
 
 test("signoffProblem: the name and the email must both match", () => {
-  for (const message of [
-    "x\n\nSigned-off-by: Ada L <ada@example.com>",
-    "x\n\nSigned-off-by: Ada Lovelace <ada@elsewhere.com>",
-    "x\n\nSigned-off-by: Bob Builder <bob@example.com>",
+  for (const value of [
+    "Ada L <ada@example.com>",
+    "Ada Lovelace <ada@elsewhere.com>",
+    "Bob Builder <bob@example.com>",
+    "Ada Lovelace",
   ]) {
     assert.match(
-      signoffProblem(commit({ message })),
+      signoffProblem(commit({ signoffs: [value] })),
       /matches neither its author \(Ada Lovelace <ada@example\.com>\) nor its committer/,
-      message,
+      value,
     );
   }
 });
@@ -98,7 +92,7 @@ test("signoffProblem: the name and the email must both match", () => {
 test("signoffProblem: merge commits are exempt", () => {
   assert.equal(
     signoffProblem(
-      commit({ parents: ["b".repeat(40), "c".repeat(40)], message: "Merge" }),
+      commit({ parents: ["b".repeat(40), "c".repeat(40)], signoffs: [] }),
     ),
     null,
   );
@@ -110,9 +104,7 @@ test("signoffProblem: bot-authored commits are exempt", () => {
     "github-actions[bot]@users.noreply.github.com",
   ])
     assert.equal(
-      signoffProblem(
-        commit({ author: { name: "bot", email }, message: "Bump\n" }),
-      ),
+      signoffProblem(commit({ author: { name: "bot", email }, signoffs: [] })),
       null,
       email,
     );
@@ -123,7 +115,7 @@ test("signoffProblem: a bot name with a human email is not exempt", () => {
     signoffProblem(
       commit({
         author: { name: "helper[bot]", email: "me@example.com" },
-        message: "x\n",
+        signoffs: [],
       }),
     ),
     "has no Signed-off-by trailer",
@@ -131,25 +123,27 @@ test("signoffProblem: a bot name with a human email is not exempt", () => {
 });
 
 test("parseLog: reads NUL-separated records, message last", () => {
-  const rec = (sha, parents, msg) =>
-    [sha, parents, "A", "a@x", "C", "c@x", msg].join("\x1f");
+  const rec = (sha, parents, signoffs, msg) =>
+    [sha, parents, "A", "a@x", "C", "c@x", signoffs, msg].join("\x1f");
   const commits = parseLog(
-    rec("1".repeat(40), "p1", "one\n\nbody \x1f kept\n") +
+    rec("1".repeat(40), "p1", "A <a@x>\x1eC <c@x>", "one\n\nbody \x1f kept\n") +
       "\0" +
-      rec("2".repeat(40), "p1 p2", "merge\n") +
+      rec("2".repeat(40), "p1 p2", "", "merge\n") +
       "\0",
   );
   assert.equal(commits.length, 2);
   assert.deepEqual(commits[0].author, { name: "A", email: "a@x" });
   assert.deepEqual(commits[0].committer, { name: "C", email: "c@x" });
+  assert.deepEqual(commits[0].signoffs, ["A <a@x>", "C <c@x>"]);
   assert.equal(commits[0].message, "one\n\nbody \x1f kept\n");
   assert.deepEqual(commits[1].parents, ["p1", "p2"]);
+  assert.deepEqual(commits[1].signoffs, []);
 });
 
 test("findUnsigned: reports failures oldest first", () => {
-  const newest = commit({ sha: "1".repeat(40), message: "new\n" });
+  const newest = commit({ sha: "1".repeat(40), signoffs: [] });
   const middle = commit({ sha: "2".repeat(40) });
-  const oldest = commit({ sha: "3".repeat(40), message: "old\n" });
+  const oldest = commit({ sha: "3".repeat(40), signoffs: [] });
   assert.deepEqual(
     findUnsigned([newest, middle, oldest]).map((f) => f.commit.sha[0]),
     ["3", "1"],
@@ -261,4 +255,47 @@ test("verifyDco: an unresolvable base fails and says how to fix it", (t) => {
   });
   assert.equal(code, 1);
   assert.match(output, /cannot resolve origin\/v2\/main\. Fetch it/);
+});
+
+test("verifyDco: only the trailer block counts, as git parses it (#5055 review)", (t) => {
+  const r = repo();
+  t.after(r.done);
+  const line = `Signed-off-by: ${ada.name} <${ada.email}>`;
+  // A signoff quoted in the body, with prose after it: not a trailer.
+  r.git(
+    "commit",
+    "-q",
+    "--allow-empty",
+    "-m",
+    "Document the signoff",
+    "-m",
+    `For example:\n${line}\nis what -s adds.`,
+    "-m",
+    "More prose.",
+  );
+  // A signoff written as the subject, which git never reads as a trailer.
+  r.git("commit", "-q", "--allow-empty", "--cleanup=verbatim", "-m", line);
+  // A real trailer, folded over two lines, which git unfolds: passes.
+  r.git(
+    "commit",
+    "-q",
+    "--allow-empty",
+    "-m",
+    "Folded",
+    "-m",
+    `Signed-off-by: ${ada.name}\n <${ada.email}>`,
+  );
+  const { code, output } = verifyDco({
+    base: "main",
+    head: "HEAD",
+    cwd: r.dir,
+  });
+  assert.equal(code, 1);
+  assert.match(output, /2 commits without a valid DCO signoff/);
+  assert.match(output, /"Document the signoff" has no Signed-off-by trailer/);
+  assert.match(
+    output,
+    /"Signed-off-by: Ada Lovelace <ada@example\.com>" has no Signed-off-by trailer/,
+  );
+  assert.doesNotMatch(output, /"Folded"/);
 });

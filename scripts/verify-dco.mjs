@@ -8,7 +8,11 @@
 //
 //   - every commit in the range carries a `Signed-off-by: Name <email>`
 //     trailer whose name AND email match the commit's author or its
-//     committer. The name is compared exactly, the email ignoring case;
+//     committer. The name is compared exactly, the email ignoring case.
+//     Git reads the trailers (`%(trailers)`), the same parser `git commit -s`
+//     and `git interpret-trailers` use, so only the message's trailer block
+//     counts: a `Signed-off-by:` line quoted in the body, or written as the
+//     subject, is not a signoff;
 //   - merge commits are exempt, and so are bot-authored commits (an author
 //     email of the form `[<id>+]<name>[bot]@users.noreply.github.com`, which
 //     is how GitHub records every app's commits).
@@ -32,24 +36,27 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 /** The range's default base: the branch every v2 PR targets. */
 export const DEFAULT_BASE = "origin/v2/main";
 
-const SIGNOFF = /^signed-off-by:[ \t]*(.*?)[ \t]*<([^<>]*)>[ \t]*$/gim;
+const IDENTITY = /^(.*?)\s*<([^<>]*)>$/;
 const BOT_EMAIL = /^(?:\d+\+)?[^@\s]+\[bot\]@users\.noreply\.github\.com$/i;
 
 // Fields are separated by US (0x1f) and, under `git log -z`, commits by NUL.
-// The message comes last, so a stray separator in it cannot shift a field.
-const LOG_FORMAT = "%H%x1f%P%x1f%an%x1f%ae%x1f%cn%x1f%ce%x1f%B";
+// The signoffs are git's own trailer values (folded lines unfolded), one per
+// RS (0x1e). The message comes last, so a stray separator in it cannot shift
+// a field.
+const LOG_FORMAT =
+  "%H%x1f%P%x1f%an%x1f%ae%x1f%cn%x1f%ce%x1f" +
+  "%(trailers:key=Signed-off-by,valueonly,unfold,separator=%x1e)%x1f%B";
 
 /**
- * Pure: the `Signed-off-by:` identities in a commit message.
+ * Pure: the identity in one `Signed-off-by:` value, or `null` when it has no
+ * `<email>`.
  *
- * @param {string} message
- * @returns {{ name: string, email: string }[]}
+ * @param {string} value
+ * @returns {{ name: string, email: string } | null}
  */
-export function parseSignoffs(message) {
-  return [...message.matchAll(SIGNOFF)].map((m) => ({
-    name: m[1],
-    email: m[2].trim(),
-  }));
+export function parseIdentity(value) {
+  const m = IDENTITY.exec(value.trim());
+  return m ? { name: m[1], email: m[2].trim() } : null;
 }
 
 /**
@@ -63,13 +70,14 @@ export function parseLog(stdout) {
     .filter((record) => record.trim() !== "")
     .map((record) => {
       const fields = record.replace(/^\n/, "").split("\x1f");
-      const [sha, parents, an, ae, cn, ce] = fields;
+      const [sha, parents, an, ae, cn, ce, signoffs] = fields;
       return {
         sha,
         parents: parents.split(" ").filter(Boolean),
         author: { name: an, email: ae },
         committer: { name: cn, email: ce },
-        message: fields.slice(6).join("\x1f"),
+        signoffs: signoffs.split("\x1e").filter((v) => v.trim() !== ""),
+        message: fields.slice(7).join("\x1f"),
       };
     });
 }
@@ -90,13 +98,13 @@ const show = (id) => `${id.name} <${id.email}>`;
 export function signoffProblem(commit) {
   if (commit.parents.length > 1) return null;
   if (BOT_EMAIL.test(commit.author.email.trim())) return null;
-  const signoffs = parseSignoffs(commit.message);
-  if (signoffs.length === 0) return "has no Signed-off-by trailer";
+  if (commit.signoffs.length === 0) return "has no Signed-off-by trailer";
   const identities = [commit.author, commit.committer];
-  if (signoffs.some((s) => identities.some((id) => sameIdentity(s, id))))
+  const signers = commit.signoffs.map(parseIdentity).filter(Boolean);
+  if (signers.some((s) => identities.some((id) => sameIdentity(s, id))))
     return null;
   return (
-    `is signed off by ${signoffs.map(show).join(", ")}, which matches ` +
+    `is signed off by ${commit.signoffs.join(", ")}, which matches ` +
     `neither its author (${show(commit.author)}) nor its committer ` +
     `(${show(commit.committer)})`
   );
