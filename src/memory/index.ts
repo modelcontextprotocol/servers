@@ -114,6 +114,9 @@ export interface FileLockOptions {
   retryMs?: number;
 }
 
+// For best-effort lock cleanup, whose failure must not mask the real outcome.
+function ignoreError(): void {}
+
 // Whether the process that wrote a lock file is known to be gone. Only a
 // process on this host can be checked; for any other host, or a lock whose
 // contents cannot be read, the lock's age decides instead.
@@ -134,6 +137,63 @@ function isLockOwnerDead(contents: string): boolean {
   } catch (error) {
     // EPERM means the process exists but belongs to another user.
     return (error as NodeJS.ErrnoException).code === "ESRCH";
+  }
+}
+
+// Whether the lock at lockPath is abandoned. Its owner and its mtime are read
+// through one open handle, so both describe the same lock file even if it is
+// replaced meanwhile.
+async function isLockStale(
+  lockPath: string,
+  staleMs: number,
+): Promise<boolean> {
+  const handle = await fs.open(lockPath, "r");
+  try {
+    const [contents, stats] = await Promise.all([
+      handle.readFile("utf-8"),
+      handle.stat(),
+    ]);
+    return isLockOwnerDead(contents) || Date.now() - stats.mtimeMs > staleMs;
+  } finally {
+    await handle.close();
+  }
+}
+
+// Remove an abandoned lock, returning whether it did. Breaking is itself
+// guarded by a second O_EXCL file, so only one waiter breaks at a time and
+// re-checks the lock under that guard: two waiters can never both judge the
+// same abandoned lock stale and one then remove the lock the other has just
+// taken in its place.
+async function breakStaleLock(
+  lockPath: string,
+  staleMs: number,
+): Promise<boolean> {
+  const breakerPath = `${lockPath}.break`;
+  let breaker: FileHandle;
+  try {
+    breaker = await fs.open(breakerPath, "wx");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      throw error;
+    }
+    // Another waiter is breaking the lock. Its guard is held for a moment
+    // only, so one that outlives staleMs was left by a crash: clear it.
+    const stats = await fs.stat(breakerPath).catch(() => null);
+    if (stats && Date.now() - stats.mtimeMs > staleMs) {
+      await fs.unlink(breakerPath).catch(ignoreError);
+    }
+    return false;
+  }
+  try {
+    await breaker.close();
+    if (!(await isLockStale(lockPath, staleMs))) {
+      return false;
+    }
+    console.error(`Breaking stale memory file lock ${lockPath}`);
+    await fs.unlink(lockPath);
+    return true;
+  } finally {
+    await fs.unlink(breakerPath).catch(ignoreError);
   }
 }
 
@@ -172,8 +232,8 @@ export async function withFileLock<T>(
       } catch (error) {
         // The lock was created but not written: remove it rather than leave
         // every other writer waiting for it to go stale.
-        await handle.close().catch(() => {});
-        await fs.unlink(lockPath).catch(() => {});
+        await handle.close().catch(ignoreError);
+        await fs.unlink(lockPath).catch(ignoreError);
         throw error;
       }
       break;
@@ -182,17 +242,10 @@ export async function withFileLock<T>(
     // Someone else holds the lock. Break it if it is abandoned; otherwise
     // wait and try again.
     try {
-      const [contents, stats] = await Promise.all([
-        fs.readFile(lockPath, "utf-8"),
-        fs.stat(lockPath),
-      ]);
-      if (isLockOwnerDead(contents) || Date.now() - stats.mtimeMs > staleMs) {
-        // Re-read just before removing, so a lock another waiter has just
-        // re-acquired after breaking the same stale lock is left alone.
-        if ((await fs.readFile(lockPath, "utf-8")) === contents) {
-          console.error(`Breaking stale memory file lock ${lockPath}`);
-          await fs.unlink(lockPath);
-        }
+      if (
+        (await isLockStale(lockPath, staleMs)) &&
+        (await breakStaleLock(lockPath, staleMs))
+      ) {
         continue;
       }
     } catch (error) {
@@ -217,7 +270,7 @@ export async function withFileLock<T>(
   // staleMs (a large graph, a slow disk) is not mistaken for an abandoned one.
   const heartbeat = setInterval(() => {
     const now = new Date();
-    fs.utimes(lockPath, now, now).catch(() => {});
+    fs.utimes(lockPath, now, now).catch(ignoreError);
   }, staleMs / 2);
   heartbeat.unref();
 
@@ -229,7 +282,7 @@ export async function withFileLock<T>(
     // the file may now belong to another process.
     const current = await fs.readFile(lockPath, "utf-8").catch(() => null);
     if (current === token) {
-      await fs.unlink(lockPath).catch(() => {});
+      await fs.unlink(lockPath).catch(ignoreError);
     }
   }
 }

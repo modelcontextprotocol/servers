@@ -135,32 +135,91 @@ describe("withFileLock", () => {
     },
   );
 
-  it("does not break a stale lock that was replaced before it could be removed", async () => {
-    await fs.writeFile(lockPath, "stale");
+  async function writeStaleLock(contents = "stale"): Promise<void> {
+    await fs.writeFile(lockPath, contents);
     const longAgo = new Date(Date.now() - 120_000);
     await fs.utimes(lockPath, longAgo, longAgo);
-    // Another waiter breaks the stale lock and takes it between this waiter's
-    // first read and its re-check; that waiter's lock must survive.
-    const realReadFile = fs.readFile;
-    vi.spyOn(fs, "readFile")
-      .mockImplementationOnce(realReadFile)
-      .mockImplementationOnce((async () => {
-        await fs.writeFile(lockPath, "fresh");
-        return "fresh";
-      }) as unknown as typeof fs.readFile);
+  }
+
+  // Run hook once, the first time fs.open is called with these arguments.
+  function onceOnOpen(
+    file: string,
+    flags: string,
+    hook: () => Promise<void>,
+  ): void {
+    const realOpen = fs.open;
+    let fired = false;
+    vi.spyOn(fs, "open").mockImplementation((async (
+      ...args: Parameters<typeof fs.open>
+    ) => {
+      if (!fired && args[0] === file && args[1] === flags) {
+        fired = true;
+        await hook();
+      }
+      return realOpen(...args);
+    }) as typeof fs.open);
+  }
+
+  it("does not break a lock another waiter replaced while it was judged stale", async () => {
+    await writeStaleLock();
+    // Another waiter breaks the stale lock and takes it after this waiter
+    // judged it stale but before this waiter takes the breaking guard.
+    onceOnOpen(`${lockPath}.break`, "wx", async () => {
+      await fs.unlink(lockPath);
+      await fs.writeFile(lockPath, "fresh");
+    });
 
     await expect(
       withFileLock(lockPath, async () => "ran", fast),
     ).rejects.toThrow("Timed out");
     expect(await fs.readFile(lockPath, "utf-8")).toBe("fresh");
+    expect(await fs.readdir(dir)).toEqual(["memory.jsonl.lock"]);
+  });
+
+  it("leaves a stale lock to the waiter already breaking it", async () => {
+    await writeStaleLock();
+    await fs.writeFile(`${lockPath}.break`, "");
+
+    await expect(
+      withFileLock(lockPath, async () => "ran", fast),
+    ).rejects.toThrow("Timed out");
+    expect(await fs.readFile(lockPath, "utf-8")).toBe("stale");
+  });
+
+  it("clears a breaking guard left by a crash, then breaks the stale lock", async () => {
+    await writeStaleLock();
+    const breakerPath = `${lockPath}.break`;
+    await fs.writeFile(breakerPath, "");
+    const longAgo = new Date(Date.now() - 120_000);
+    await fs.utimes(breakerPath, longAgo, longAgo);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(await withFileLock(lockPath, async () => "ran", fast)).toBe("ran");
+    expect(await fs.readdir(dir)).toEqual([]);
+  });
+
+  it("fails when the breaking guard cannot be created", async () => {
+    await writeStaleLock();
+    const realOpen = fs.open;
+    vi.spyOn(fs, "open").mockImplementation((async (
+      ...args: Parameters<typeof fs.open>
+    ) => {
+      if (args[0] === `${lockPath}.break`) {
+        throw Object.assign(new Error("EACCES: simulated"), {
+          code: "EACCES",
+        });
+      }
+      return realOpen(...args);
+    }) as typeof fs.open);
+
+    await expect(
+      withFileLock(lockPath, async () => "ran", fast),
+    ).rejects.toThrow("EACCES: simulated");
   });
 
   it("acquires the lock at once when the holder releases it mid-check", async () => {
     await fs.writeFile(lockPath, "held");
-    vi.spyOn(fs, "readFile").mockImplementationOnce((async () => {
-      await fs.unlink(lockPath);
-      throw Object.assign(new Error("ENOENT: gone"), { code: "ENOENT" });
-    }) as typeof fs.readFile);
+    onceOnOpen(lockPath, "r", () => fs.unlink(lockPath));
 
     expect(await withFileLock(lockPath, async () => "ran", fast)).toBe("ran");
   });
@@ -198,6 +257,12 @@ describe("withFileLock", () => {
       handle.writeFile = async () => {
         throw new Error("EIO: simulated write failure");
       };
+      // The cleanup's own close failing must not mask the write failure.
+      const realClose = handle.close.bind(handle);
+      handle.close = async () => {
+        await realClose();
+        throw new Error("EIO: simulated close failure");
+      };
       return handle;
     });
 
@@ -212,6 +277,16 @@ describe("withFileLock", () => {
       await fs.writeFile(lockPath, "someone else");
     });
     expect(await fs.readFile(lockPath, "utf-8")).toBe("someone else");
+  });
+
+  it("releases quietly when its lock is already gone", async () => {
+    expect(
+      await withFileLock(lockPath, async () => {
+        await fs.unlink(lockPath);
+        return "ran";
+      }),
+    ).toBe("ran");
+    expect(await exists(lockPath)).toBe(false);
   });
 
   it("fails when the lock file cannot be created", async () => {
