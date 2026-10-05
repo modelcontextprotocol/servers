@@ -985,8 +985,10 @@ async def test_restricted_server_rejects_dotdot_traversal(
     other = make_repo(tmp_path / "other")
     try:
         sneaky = f"{root}/../other"
+        # The server echoes the path as `Path(repo_path)` renders it: unchanged
+        # on POSIX, with backslash separators on Windows.
         assert await call(root, "git_status", {"repo_path": sneaky}) == outside_error(
-            sneaky, root
+            Path(sneaky), root
         )
     finally:
         other.close()

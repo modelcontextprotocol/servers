@@ -369,7 +369,11 @@ describe("Path Validation", () => {
 
       // But only on the same filesystem root
       if (path.sep === "\\") {
-        expect(isPathWithinAllowedDirectories("D:\\other", ["/"])).toBe(false);
+        // "/" resolves to the current drive's root, so use another drive.
+        const otherDrive = /^D:/i.test(path.resolve("/")) ? "E:" : "D:";
+        expect(
+          isPathWithinAllowedDirectories(`${otherDrive}\\other`, ["/"]),
+        ).toBe(false);
       }
     });
   });

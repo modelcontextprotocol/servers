@@ -484,7 +484,7 @@ describe("read_multiple_files", () => {
     );
     expect(parts[2]).toBe(`${b}:\nbeta\n`);
     expect(parts[3]).toBe(
-      `/etc/hostname: Error - Access denied - path outside allowed directories: /etc/hostname not in ${dir}`,
+      `/etc/hostname: Error - Access denied - path outside allowed directories: ${path.resolve("/etc/hostname")} not in ${dir}`,
     );
   });
 
@@ -541,7 +541,10 @@ describe("write_file", () => {
     expect(await fs.readFile(file, "utf-8")).toBe("new");
     expect(after.ino).toBe(before.ino);
     expect(after.birthtimeMs).toBe(before.birthtimeMs);
-    expect(after.mode & 0o777).toBe(0o640);
+    // Windows has no POSIX mode bits: a writable file always reports 666.
+    expect(after.mode & 0o777).toBe(
+      process.platform === "win32" ? 0o666 : 0o640,
+    );
   });
 
   it("keeps a hard link on overwrite (#4512)", async () => {
@@ -912,7 +915,10 @@ describe("edit_file", () => {
     expect(await fs.readFile(file, "utf-8")).toContain("return 2;");
     expect(after.ino).toBe(before.ino);
     expect(after.birthtimeMs).toBe(before.birthtimeMs);
-    expect(after.mode & 0o777).toBe(0o600);
+    // Windows has no POSIX mode bits: a writable file always reports 666.
+    expect(after.mode & 0o777).toBe(
+      process.platform === "win32" ? 0o666 : 0o600,
+    );
   });
 
   it("keeps a hard link on edit (#4512)", async () => {
@@ -1298,7 +1304,10 @@ describe("get_file_info", () => {
     expect(lines[0]).toBe("size: 5");
     expect(lines[4]).toBe("isDirectory: false");
     expect(lines[5]).toBe("isFile: true");
-    expect(lines[6]).toBe("permissions: 640");
+    // Windows has no POSIX mode bits: a writable file always reports 666.
+    expect(lines[6]).toBe(
+      process.platform === "win32" ? "permissions: 666" : "permissions: 640",
+    );
     // Dates are rendered with Date#toString, in the server's local time zone.
     expect(lines[2]).toMatch(/^modified: \w{3} \w{3} \d{2} \d{4} /);
   });
