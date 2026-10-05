@@ -2,8 +2,7 @@
 // through an SDK Client over an in-memory transport (#4854): the JSONL file
 // format, how unreadable lines are loaded and then kept on write, read and write
 // failures as tool errors, the atomic temp-file save, and two servers sharing
-// one file. Tests that pin a known bug cite its issue (#4827),
-// so the PR that fixes it has a test to change.
+// one file.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
