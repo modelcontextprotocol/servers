@@ -73,6 +73,23 @@ _NON_PUBLIC_NETWORKS = tuple(
 )
 
 
+# Globally reachable assignments inside the ranges above (anycast services
+# and the like), matching the exceptions in current CPython's tables.
+_PUBLIC_EXCEPTIONS = tuple(
+    ipaddress.ip_network(network)
+    for network in (
+        "192.0.0.9/32",
+        "192.0.0.10/32",
+        "2001:1::1/128",
+        "2001:1::2/128",
+        "2001:3::/32",
+        "2001:4:112::/48",
+        "2001:20::/28",
+        "2001:30::/28",
+    )
+)
+
+
 def _is_public_address(address: str) -> bool:
     """True when ``address`` is a globally routable unicast address.
 
@@ -84,6 +101,8 @@ def _is_public_address(address: str) -> bool:
     ip = ipaddress.ip_address(address)
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
+    if any(ip in network for network in _PUBLIC_EXCEPTIONS):
+        return True
     if any(ip in network for network in _NON_PUBLIC_NETWORKS):
         return False
     return ip.is_global and not ip.is_multicast

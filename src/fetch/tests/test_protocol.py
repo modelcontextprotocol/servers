@@ -664,6 +664,8 @@ async def test_redirect_to_private_address_is_refused(web: FakeWeb) -> None:
         "192.0.0.8",
         "64:ff9b:1::1",
         "2002:7f00:1::",
+        # Inside 2001::/23 but outside its global exceptions (benchmarking).
+        "2001:2::1",
         # Multicast, which is_global does not exclude.
         "224.0.0.251",
     ],
@@ -684,6 +686,23 @@ async def test_private_address_is_refused_before_any_request(
     assert "/robots.txt: " in text
     assert "which is not a public address" in text
     assert web.requests == []
+
+
+@pytest.mark.parametrize(
+    "address",
+    # Globally reachable assignments inside refused special-purpose ranges.
+    ["192.0.0.9", "192.0.0.10", "2001:1::1", "2001:3::1", "2001:20::1"],
+)
+async def test_global_exceptions_in_special_ranges_are_allowed(
+    web: FakeWeb, address: str
+) -> None:
+    web.dns["anycast.example.com"] = [address]
+    url = "https://anycast.example.com/"
+    web.add(url, plain("ok"))
+    async with connect(ignore_robots_txt=True) as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is False
+    assert web.urls() == [url]
 
 
 async def test_hostname_resolving_to_a_private_address_is_refused(
