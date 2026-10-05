@@ -40,13 +40,8 @@ async def call(
 
 
 def rejected(message: str) -> dict[str, Any]:
-    """The error a flag-injection guard returns over the wire.
-
-    The guards raise `BadName(message)`, and BadName's `__str__` wraps its
-    argument as a ref name, so the client sees the guard's message nested
-    inside "Ref '...' did not resolve to an object". Characterized as is.
-    """
-    return text_result(f"Ref '{message}' did not resolve to an object", is_error=True)
+    """The error a flag-injection guard returns: its message, as written."""
+    return text_result(message, is_error=True)
 
 
 def staged_paths(repo: git.Repo) -> set[str]:
@@ -115,11 +110,12 @@ async def test_unknown_tool_is_error(repo: git.Repo):
     ) == text_result("Unknown tool: git_nope", is_error=True)
 
 
-# KNOWN BUG #4994: an unknown tool called without repo_path reports the KeyError repr "'repo_path'" instead of "Unknown tool"; the fix changes this assertion.
-async def test_unknown_tool_without_repo_path_reports_the_key_error():
-    # An unlisted tool skips schema validation, so call_tool's
-    # `arguments["repo_path"]` raises KeyError and its repr is the message.
-    assert await call(None, "git_nope", {}) == text_result("'repo_path'", is_error=True)
+async def test_unknown_tool_without_repo_path_is_unknown_tool():
+    # An unlisted tool skips schema validation; the name is checked before
+    # any argument is read, so a missing repo_path does not mask it.
+    assert await call(None, "git_nope", {}) == text_result(
+        "Unknown tool: git_nope", is_error=True
+    )
 
 
 async def test_nonexistent_repo_path_error_is_the_bare_path(tmp_path: Path):
@@ -270,7 +266,6 @@ async def test_git_diff_unknown_target_is_error(repo: git.Repo):
     ) == text_result("Ref 'nope' did not resolve to an object", is_error=True)
 
 
-# KNOWN BUG #4999: the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_diff_rejects_flag_injection(repo: git.Repo):
     assert await call(
         None,
@@ -631,7 +626,6 @@ async def test_git_create_branch_existing_name_at_other_commit_is_error(
     assert "already exist" in result["content"][0]["text"]
 
 
-# KNOWN BUG #4999: the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_create_branch_rejects_flag_injection(repo: git.Repo):
     root = str(root_of(repo))
     assert await call(
@@ -691,7 +685,6 @@ async def test_git_checkout_unknown_branch_is_error(repo: git.Repo):
     assert repo.active_branch.name == "main"
 
 
-# KNOWN BUG #4999: the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_checkout_rejects_flag_injection(repo: git.Repo):
     assert await call(
         None,
@@ -862,7 +855,6 @@ async def test_git_show_unknown_revision_is_error(repo: git.Repo):
     ) == text_result("Ref 'nope' did not resolve to an object", is_error=True)
 
 
-# KNOWN BUG #4999: the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_show_rejects_flag_injection(repo: git.Repo):
     assert await call(
         None, "git_show", {"repo_path": str(root_of(repo)), "revision": "--format=x"}
@@ -927,7 +919,6 @@ async def test_git_branch_unknown_type_is_error(repo: git.Repo):
     ) == text_result("Invalid branch type: bogus", is_error=True)
 
 
-# KNOWN BUG #4999: the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_branch_rejects_flag_injection(repo: git.Repo):
     root = str(root_of(repo))
     assert await call(

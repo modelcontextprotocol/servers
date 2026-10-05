@@ -17,6 +17,18 @@ from pydantic import BaseModel, Field
 DEFAULT_CONTEXT_LINES = 3
 
 
+class FlagInjectionError(BadName):
+    """A flag-injection guard's rejection of a value starting with '-'.
+
+    Still a BadName, but BadName's __str__ wraps its argument as a ref name
+    ("Ref '...' did not resolve to an object"), which garbles the guard's own
+    message. The message is already complete, so report it as written.
+    """
+
+    def __str__(self) -> str:
+        return str(self.args[0])
+
+
 class GitStatus(BaseModel):
     repo_path: str
 
@@ -135,7 +147,7 @@ def git_diff(
     # Defense in depth: reject targets starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if target.startswith("-"):
-        raise BadName(f"Invalid target: '{target}' - cannot start with '-'")
+        raise FlagInjectionError(f"Invalid target: '{target}' - cannot start with '-'")
     repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
     return repo.git.diff(f"--unified={context_lines}", target)
 
@@ -253,9 +265,13 @@ def git_create_branch(
 ) -> str:
     # Defense in depth: reject names starting with '-' to prevent flag injection
     if branch_name.startswith("-"):
-        raise BadName(f"Invalid branch name: '{branch_name}' - cannot start with '-'")
+        raise FlagInjectionError(
+            f"Invalid branch name: '{branch_name}' - cannot start with '-'"
+        )
     if base_branch and base_branch.startswith("-"):
-        raise BadName(f"Invalid base branch: '{base_branch}' - cannot start with '-'")
+        raise FlagInjectionError(
+            f"Invalid base branch: '{base_branch}' - cannot start with '-'"
+        )
     if base_branch:
         base = repo.references[base_branch]
     else:
@@ -275,7 +291,9 @@ def git_checkout(repo: git.Repo, branch_name: str) -> str:
     # Defense in depth: reject branch names starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if branch_name.startswith("-"):
-        raise BadName(f"Invalid branch name: '{branch_name}' - cannot start with '-'")
+        raise FlagInjectionError(
+            f"Invalid branch name: '{branch_name}' - cannot start with '-'"
+        )
     repo.rev_parse(
         branch_name
     )  # Validates branch_name is a real git ref, throws BadName if not
@@ -292,7 +310,9 @@ def git_show(repo: git.Repo, revision: str) -> str:
     # Defense in depth: reject revisions starting with '-' to prevent flag injection,
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if revision.startswith("-"):
-        raise BadName(f"Invalid revision: '{revision}' - cannot start with '-'")
+        raise FlagInjectionError(
+            f"Invalid revision: '{revision}' - cannot start with '-'"
+        )
     obj = repo.rev_parse(revision)
     if isinstance(obj, git.Blob):
         return obj.data_stream.read().decode("utf-8", errors="replace")
@@ -362,9 +382,11 @@ def git_branch(
 ) -> str:
     # Defense in depth: reject values starting with '-' to prevent flag injection
     if contains and contains.startswith("-"):
-        raise BadName(f"Invalid contains value: '{contains}' - cannot start with '-'")
+        raise FlagInjectionError(
+            f"Invalid contains value: '{contains}' - cannot start with '-'"
+        )
     if not_contains and not_contains.startswith("-"):
-        raise BadName(
+        raise FlagInjectionError(
             f"Invalid not_contains value: '{not_contains}' - cannot start with '-'"
         )
 
@@ -548,6 +570,11 @@ async def serve(repository: Path | None) -> None:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+        # Reject an unknown tool before reading its arguments, so a call
+        # without repo_path still reports "Unknown tool" (#4994).
+        if name not in {tool.value for tool in GitTools}:
+            raise ValueError(f"Unknown tool: {name}")
+
         repo_path = Path(arguments["repo_path"])
 
         # Validate repo_path is within allowed repository
@@ -632,7 +659,8 @@ async def serve(repository: Path | None) -> None:
                 )
                 return [TextContent(type="text", text=result)]
 
-            case _:
+            # Unreachable: unknown names are rejected before the repo is opened.
+            case _:  # pragma: no cover
                 raise ValueError(f"Unknown tool: {name}")
 
     options = server.create_initialization_options()
