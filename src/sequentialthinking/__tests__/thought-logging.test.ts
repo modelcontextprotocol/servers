@@ -4,8 +4,8 @@
 // are driven through the in-process client and stderr is captured by spying
 // on console.error, which also keeps the boxes off the test output. chalk's
 // colour level depends on the terminal the tests run in, so it is pinned to 0
-// (no colour) around each test; the last test turns colour on to pin how the
-// border width is computed from the coloured header.
+// (no colour) around each test; the last test turns colour on to check that
+// the border width ignores the header's escape codes.
 
 import {
   describe,
@@ -98,12 +98,11 @@ describe("sequentialthinking thought logging", () => {
       ]);
     });
 
-    // KNOWN BUG #5000: the header reads "revising thought undefined" when revisesThought is unset; the fix changes this assertion.
-    it("prints 'undefined' for a revision with no revisesThought", async () => {
+    // #5000: with no revisesThought, the "revising thought N" suffix is left out.
+    it("draws a plain revision header when no revisesThought is given", async () => {
       await conn!.think(thought({ thought: "x", isRevision: true }));
-      expect(logged()).toEqual([
-        box("🔄 Revision 1/3 (revising thought undefined)", "x"),
-      ]);
+      expect(logged()).toEqual([box("🔄 Revision 1/3", "x")]);
+      expect(logged()[0]).not.toContain("undefined");
     });
 
     it("draws a branch, naming its origin and id", async () => {
@@ -115,12 +114,11 @@ describe("sequentialthinking thought logging", () => {
       ]);
     });
 
-    // KNOWN BUG #5000: a branchFromThought with no branchId draws a Branch header reading "ID: undefined"; the fix changes this assertion.
-    it("draws a branch header even when no branch is recorded (no branchId)", async () => {
+    // #5000: with no branchId, the Branch header names the origin and omits the ID.
+    it("omits the ID from a branch header when no branchId is given", async () => {
       await conn!.think(thought({ thought: "fork", branchFromThought: 2 }));
-      expect(logged()).toEqual([
-        box("🌿 Branch 1/3 (from thought 2, ID: undefined)", "fork"),
-      ]);
+      expect(logged()).toEqual([box("🌿 Branch 1/3 (from thought 2)", "fork")]);
+      expect(logged()[0]).not.toContain("undefined");
     });
 
     it("prefers the revision header when a thought is both", async () => {
@@ -156,27 +154,27 @@ describe("sequentialthinking thought logging", () => {
       expect(logged()).toEqual([]);
     });
 
-    // KNOWN BUG #4813: pins current (wrong) behavior; the fix changes this assertion.
-    // #4813: the push throws before the box is drawn.
-    it("logs nothing for a #4813 branch-id collision", async () => {
+    // #4813: a branchId that names an Object.prototype key is an ordinary branch.
+    it("draws the Branch box for a branchId that names an Object.prototype key", async () => {
       await conn!.think(
         thought({ branchFromThought: 1, branchId: "constructor" }),
       );
-      expect(logged()).toEqual([]);
+      expect(logged()).toEqual([
+        box("🌿 Branch 1/3 (from thought 1, ID: constructor)", "a thought"),
+      ]);
     });
   });
 
-  // KNOWN BUG #5000: the border counts the header's colour escape codes, so the box is drawn wider than its text; the fix changes this assertion.
-  // The border is sized from header.length, and the header carries chalk's
-  // escape codes, so when colour is on the box is wider than its visible text.
-  it("sizes the border from the coloured header, escape codes included", async () => {
+  // #5000: when colour is on, the header carries chalk's escape codes, but the
+  // border is sized from the visible text, so the box matches the uncoloured one.
+  it("sizes the border from the visible header, not its escape codes", async () => {
     chalk.level = 1;
     conn = await connect({ disableThoughtLogging: undefined });
     await conn.think(thought({ thought: "t" }));
     const raw = String(errorSpy.mock.calls[0][0]);
+    const visible = "💭 Thought 1/3";
     const coloured = `${chalk.blue("💭 Thought")} 1/3`;
-    expect(coloured.length).toBeGreaterThan("💭 Thought 1/3".length);
-    expect(raw).toContain(coloured);
-    expect(raw).toContain(`┌${"─".repeat(coloured.length + 4)}┐`);
+    expect(coloured.length).toBeGreaterThan(visible.length);
+    expect(raw).toBe(box(visible, "t").replace(visible, coloured));
   });
 });

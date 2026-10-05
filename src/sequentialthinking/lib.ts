@@ -14,7 +14,9 @@ export interface ThoughtData {
 
 export class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
-  private branches: Record<string, ThoughtData[]> = {};
+  // Null prototype, so any string branchId (even "constructor" or "__proto__")
+  // is an ordinary own key rather than an inherited Object.prototype member.
+  private branches: Record<string, ThoughtData[]> = Object.create(null);
   private disableThoughtLogging: boolean;
 
   constructor() {
@@ -33,22 +35,38 @@ export class SequentialThinkingServer {
       branchId,
     } = thoughtData;
 
-    let prefix: string;
-    let context: string;
+    // The label is coloured only after the header is measured, so the border
+    // is sized from the visible text, not from chalk's escape codes. A missing
+    // revisesThought or branchId is left out of the header rather than printed
+    // as "undefined".
+    let label: string;
+    let colour: (text: string) => string;
+    let context = "";
 
     if (isRevision) {
-      prefix = chalk.yellow("🔄 Revision");
-      context = ` (revising thought ${revisesThought})`;
+      label = "🔄 Revision";
+      colour = chalk.yellow;
+      if (revisesThought !== undefined) {
+        context = ` (revising thought ${revisesThought})`;
+      }
     } else if (branchFromThought) {
-      prefix = chalk.green("🌿 Branch");
-      context = ` (from thought ${branchFromThought}, ID: ${branchId})`;
+      label = "🌿 Branch";
+      colour = chalk.green;
+      context =
+        branchId !== undefined
+          ? ` (from thought ${branchFromThought}, ID: ${branchId})`
+          : ` (from thought ${branchFromThought})`;
     } else {
-      prefix = chalk.blue("💭 Thought");
-      context = "";
+      label = "💭 Thought";
+      colour = chalk.blue;
     }
 
-    const header = `${prefix} ${thoughtNumber}/${totalThoughts}${context}`;
-    const border = "─".repeat(Math.max(header.length, thought.length) + 4);
+    const counts = ` ${thoughtNumber}/${totalThoughts}${context}`;
+    const visibleHeader = `${label}${counts}`;
+    const header = `${colour(label)}${counts}`;
+    const border = "─".repeat(
+      Math.max(visibleHeader.length, thought.length) + 4,
+    );
 
     return `
 ┌${border}┐
@@ -69,6 +87,14 @@ export class SequentialThinkingServer {
         input.totalThoughts = input.thoughtNumber;
       }
 
+      // Log before touching any state: drawing and writing the box are the
+      // steps that can throw, so a failed call leaves thoughtHistory and
+      // branches as they were.
+      if (!this.disableThoughtLogging) {
+        const formattedThought = this.formatThought(input);
+        console.error(formattedThought);
+      }
+
       this.thoughtHistory.push(input);
 
       if (input.branchFromThought && input.branchId) {
@@ -76,11 +102,6 @@ export class SequentialThinkingServer {
           this.branches[input.branchId] = [];
         }
         this.branches[input.branchId].push(input);
-      }
-
-      if (!this.disableThoughtLogging) {
-        const formattedThought = this.formatThought(input);
-        console.error(formattedThought);
       }
 
       return {
