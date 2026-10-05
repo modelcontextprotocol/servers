@@ -127,10 +127,23 @@ export class KnowledgeGraphManager {
   }
 
   private async loadGraph(): Promise<KnowledgeGraph> {
+    return (await this.loadGraphWithUnreadable()).graph;
+  }
+
+  // Lines that can't be read (malformed JSON, entries that fail validation,
+  // unknown record types) stay out of the in-memory graph, but mutations pass
+  // them back to saveGraph so they are written out unchanged. Otherwise the
+  // next unrelated write would silently delete them from disk, together with
+  // every valid observation of an entity that has one bad field.
+  private async loadGraphWithUnreadable(): Promise<{
+    graph: KnowledgeGraph;
+    unreadable: string[];
+  }> {
     try {
       const data = await fs.readFile(this.memoryFilePath, "utf-8");
       const lines = data.split("\n").filter((line) => line.trim() !== "");
       const graph: KnowledgeGraph = { entities: [], relations: [] };
+      const unreadable: string[] = [];
 
       for (const line of lines) {
         let item: unknown;
@@ -138,11 +151,13 @@ export class KnowledgeGraphManager {
           item = JSON.parse(line);
         } catch {
           console.error("Skipping malformed line in memory file");
+          unreadable.push(line);
           continue;
         }
 
         if (typeof item !== "object" || item === null) {
           console.error("Skipping non-object line in memory file");
+          unreadable.push(line);
           continue;
         }
 
@@ -152,6 +167,7 @@ export class KnowledgeGraphManager {
           if (parsed.success) {
             graph.entities.push(parsed.data);
           } else {
+            unreadable.push(line);
             console.error(
               "Skipping invalid entity in memory file:",
               parsed.error.issues
@@ -164,6 +180,7 @@ export class KnowledgeGraphManager {
           if (parsed.success) {
             graph.relations.push(parsed.data);
           } else {
+            unreadable.push(line);
             console.error(
               "Skipping invalid relation in memory file:",
               parsed.error.issues
@@ -171,23 +188,28 @@ export class KnowledgeGraphManager {
                 .join(", "),
             );
           }
+        } else {
+          unreadable.push(line);
         }
       }
 
-      return graph;
+      return { graph, unreadable };
     } catch (error) {
       if (
         error instanceof Error &&
         "code" in error &&
         error.code === "ENOENT"
       ) {
-        return { entities: [], relations: [] };
+        return { graph: { entities: [], relations: [] }, unreadable: [] };
       }
       throw error;
     }
   }
 
-  private async saveGraph(graph: KnowledgeGraph): Promise<void> {
+  private async saveGraph(
+    graph: KnowledgeGraph,
+    unreadable: string[],
+  ): Promise<void> {
     const lines = [
       ...graph.entities.map((e) =>
         JSON.stringify({
@@ -205,6 +227,7 @@ export class KnowledgeGraphManager {
           relationType: r.relationType,
         }),
       ),
+      ...unreadable,
     ];
 
     // Write to a temporary file in the same directory, then rename it over
@@ -233,7 +256,7 @@ export class KnowledgeGraphManager {
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
     return this.withLock(async () => {
-      const graph = await this.loadGraph();
+      const { graph, unreadable } = await this.loadGraphWithUnreadable();
       const newEntities = entities.filter(
         (e, index) =>
           !graph.entities.some(
@@ -243,14 +266,14 @@ export class KnowledgeGraphManager {
           !entities.slice(0, index).some((earlier) => earlier.name === e.name),
       );
       graph.entities.push(...newEntities);
-      await this.saveGraph(graph);
+      await this.saveGraph(graph, unreadable);
       return newEntities;
     });
   }
 
   async createRelations(relations: Relation[]): Promise<Relation[]> {
     return this.withLock(async () => {
-      const graph = await this.loadGraph();
+      const { graph, unreadable } = await this.loadGraphWithUnreadable();
       const entityNames = new Set(graph.entities.map((e) => e.name));
 
       relations.forEach((r) => {
@@ -275,7 +298,7 @@ export class KnowledgeGraphManager {
             .some((earlier) => isSameRelation(earlier, r)),
       );
       graph.relations.push(...newRelations);
-      await this.saveGraph(graph);
+      await this.saveGraph(graph, unreadable);
       return newRelations;
     });
   }
@@ -284,7 +307,7 @@ export class KnowledgeGraphManager {
     observations: { entityName: string; contents: string[] }[],
   ): Promise<{ entityName: string; addedObservations: string[] }[]> {
     return this.withLock(async () => {
-      const graph = await this.loadGraph();
+      const { graph, unreadable } = await this.loadGraphWithUnreadable();
       const results = observations.map((o) => {
         const entity = graph.entities.find((e) => e.name === o.entityName);
         if (!entity) {
@@ -296,7 +319,7 @@ export class KnowledgeGraphManager {
         entity.observations.push(...newObservations);
         return { entityName: o.entityName, addedObservations: newObservations };
       });
-      await this.saveGraph(graph);
+      await this.saveGraph(graph, unreadable);
       return results;
     });
   }
@@ -305,7 +328,7 @@ export class KnowledgeGraphManager {
     entityNames: string[],
   ): Promise<{ deleted: string[]; notFound: string[] }> {
     return this.withLock(async () => {
-      const graph = await this.loadGraph();
+      const { graph, unreadable } = await this.loadGraphWithUnreadable();
       const present = new Set(graph.entities.map((e) => e.name));
       const deleted = entityNames.filter((name) => present.has(name));
       const notFound = entityNames.filter((name) => !present.has(name));
@@ -315,7 +338,7 @@ export class KnowledgeGraphManager {
       graph.relations = graph.relations.filter(
         (r) => !entityNames.includes(r.from) && !entityNames.includes(r.to),
       );
-      await this.saveGraph(graph);
+      await this.saveGraph(graph, unreadable);
       return { deleted, notFound };
     });
   }
@@ -324,7 +347,7 @@ export class KnowledgeGraphManager {
     deletions: { entityName: string; observations: string[] }[],
   ): Promise<{ deletedCount: number; missingEntities: string[] }> {
     return this.withLock(async () => {
-      const graph = await this.loadGraph();
+      const { graph, unreadable } = await this.loadGraphWithUnreadable();
       let deletedCount = 0;
       const missingEntities: string[] = [];
       deletions.forEach((d) => {
@@ -339,7 +362,7 @@ export class KnowledgeGraphManager {
           missingEntities.push(d.entityName);
         }
       });
-      await this.saveGraph(graph);
+      await this.saveGraph(graph, unreadable);
       return { deletedCount, missingEntities };
     });
   }
@@ -348,7 +371,7 @@ export class KnowledgeGraphManager {
     relations: Relation[],
   ): Promise<{ deletedCount: number }> {
     return this.withLock(async () => {
-      const graph = await this.loadGraph();
+      const { graph, unreadable } = await this.loadGraphWithUnreadable();
       const before = graph.relations.length;
       graph.relations = graph.relations.filter(
         (r) =>
@@ -359,7 +382,7 @@ export class KnowledgeGraphManager {
               r.relationType === delRelation.relationType,
           ),
       );
-      await this.saveGraph(graph);
+      await this.saveGraph(graph, unreadable);
       return { deletedCount: before - graph.relations.length };
     });
   }

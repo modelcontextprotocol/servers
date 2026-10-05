@@ -1,8 +1,8 @@
 // Characterization tests for how the memory server persists its graph, driven
 // through an SDK Client over an in-memory transport (#4854): the JSONL file
-// format, how unreadable lines are loaded and then rewritten, read and write
+// format, how unreadable lines are loaded and then kept on write, read and write
 // failures as tool errors, the atomic temp-file save, and two servers sharing
-// one file. Tests that pin a known bug cite its issue (#4885, #4827, #4797),
+// one file. Tests that pin a known bug cite its issue (#4827, #4797),
 // so the PR that fixes it has a test to change.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "fs";
@@ -167,12 +167,11 @@ describe("memory persistence over the protocol", () => {
       ]);
     });
 
-    // KNOWN BUG #4885: pins current (wrong) behavior; the fix changes this assertion.
-    // Characterizes #4885: the next write rewrites the file from the filtered
-    // graph, so every unreadable line is deleted for good, and Bob loses two
-    // valid observations because of one null. The relation to Bob now dangles.
-    // The call reports success. The fix for #4885 changes this test.
-    it("deletes the unreadable lines on the next unrelated write (#4885)", async () => {
+    // #4885: the next write keeps the unreadable lines out of the graph but
+    // writes them back verbatim, after the graph's own lines, so Bob keeps his
+    // valid observations and the relation to him still has its entity on
+    // disk. Blank lines carry no data and are not kept.
+    it("keeps the unreadable lines on the next unrelated write (#4885)", async () => {
       await seed();
       vi.spyOn(console, "error").mockImplementation(() => {});
       const { client } = await open();
@@ -188,9 +187,22 @@ describe("memory persistence over the protocol", () => {
           '{"type":"entity","name":"Alice","entityType":"person","observations":["Works at Acme","Prefers email"]}',
           '{"type":"entity","name":"Carol","entityType":"person","observations":["New hire"]}',
           '{"type":"relation","from":"Alice","to":"Bob","relationType":"manages"}',
+          '{"type":"entity","name":"Bob","entityType":"person","observations":["Allergic to penicillin","Lives in Haifa",null]}',
+          '{"type":"entity","name":"Project X","observations":["Deadline 2026-10-01","Budget 40k"]}',
+          '{"type":"relation","from":"Alice","to":"Bob"}',
+          '{"type":"entity","name":"Trunc',
+          '{"type":"entity","name":"A","entityType":"x","observations":[]}{"type":"entity","name":"B","entityType":"x","observations":[]}',
+          "42",
+          "null",
+          '{"type":"note","text":"unknown type"}',
           "",
         ].join("\n"),
       );
+      // The kept lines stay out of the graph.
+      expect((await call(client, "read_graph")).structuredContent).toEqual({
+        entities: [alice, carol],
+        relations: [aliceManagesBob],
+      });
     });
   });
 
