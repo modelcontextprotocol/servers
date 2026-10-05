@@ -10,6 +10,7 @@
 import os
 import runpy
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -114,3 +115,22 @@ async def test_console_script_boots_over_stdio() -> None:
     )
     assert [tool.name for tool in tools.tools] == ["get_current_time", "convert_time"]
     assert result.model_dump(by_alias=True, mode="json")["isError"] is False
+
+
+def test_console_script_rejects_an_invalid_local_timezone() -> None:
+    # #5001: one line on stderr naming the value, a non-zero exit, and no
+    # traceback.
+    script = shutil.which("mcp-server-time", path=str(Path(sys.executable).parent))
+    assert script is not None, "the console script is not installed in this venv"
+    proc = subprocess.run(
+        [script, "--local-timezone", "Not/AZone"],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 1
+    assert proc.stdout == ""
+    assert proc.stderr.splitlines() == [
+        "Error: invalid --local-timezone 'Not/AZone': not a known IANA timezone name"
+    ]
