@@ -1,9 +1,7 @@
 // Windows path handling, characterized on any host (#4854). The `path` module
 // is replaced by `path.win32` and `process.platform` reads "win32", so the
 // Windows-only branches of path-utils.ts and path-validation.ts run here:
-// drive roots, bare drive letters, backslash conversion and UNC shares. #3527
-// (a UNC share as the allowed root refuses its own subdirectories) is pinned
-// as it stands.
+// drive roots, bare drive letters, backslash conversion and UNC shares.
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -85,13 +83,60 @@ describe("isPathWithinAllowedDirectories on win32", () => {
     ).toBe(true);
   });
 
-  // KNOWN BUG #3527: pins current (wrong) behavior; the fix changes this assertion.
-  // #3527: path.resolve keeps a UNC root's trailing backslash, and the prefix
-  // check appends another, so nothing below the share matches.
-  it("refuses a subdirectory of a UNC share allowed directory (#3527)", () => {
+  // #3527: path.resolve keeps a UNC share root's trailing backslash, so the
+  // prefix check must not append a second one.
+  it("accepts a subdirectory of a UNC share allowed directory (#3527)", () => {
     expect(
       isPathWithinAllowedDirectories("\\\\server\\share\\sub", [
         "\\\\server\\share\\",
+      ]),
+    ).toBe(true);
+  });
+
+  it("accepts a deep path under a UNC share given without a trailing backslash", () => {
+    expect(
+      isPathWithinAllowedDirectories("\\\\server\\share\\a b\\.c\\f.txt", [
+        "\\\\server\\share",
+      ]),
+    ).toBe(true);
+  });
+
+  it("refuses a sibling share whose name extends the allowed share's", () => {
+    expect(
+      isPathWithinAllowedDirectories("\\\\server\\share-evil\\x", [
+        "\\\\server\\share\\",
+      ]),
+    ).toBe(false);
+    expect(
+      isPathWithinAllowedDirectories("\\\\server\\share-evil", [
+        "\\\\server\\share",
+      ]),
+    ).toBe(false);
+  });
+
+  it("refuses another share, and the same share on another server", () => {
+    expect(
+      isPathWithinAllowedDirectories("\\\\server\\other\\x", [
+        "\\\\server\\share\\",
+      ]),
+    ).toBe(false);
+    expect(
+      isPathWithinAllowedDirectories("\\\\server2\\share\\x", [
+        "\\\\server\\share\\",
+      ]),
+    ).toBe(false);
+  });
+
+  it("keeps a .. that climbs past a UNC share root inside that share", () => {
+    // Node clamps .. at the share root, so this resolves to \\server\share\other.
+    expect(
+      isPathWithinAllowedDirectories("\\\\server\\share\\..\\other\\x", [
+        "\\\\server\\share\\",
+      ]),
+    ).toBe(true);
+    expect(
+      isPathWithinAllowedDirectories("\\\\server\\share\\sub\\..\\..\\x", [
+        "\\\\server\\share\\sub",
       ]),
     ).toBe(false);
   });

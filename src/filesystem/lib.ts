@@ -1,6 +1,5 @@
 import fs from "fs/promises";
 import path from "path";
-import { randomBytes } from "crypto";
 import { StringDecoder } from "string_decoder";
 import { createTwoFilesPatch } from "diff";
 import { minimatch } from "minimatch";
@@ -92,6 +91,48 @@ function resolveRelativePathAgainstAllowedDirectories(
 }
 
 // Security & Validation Functions
+
+// The form two path components are compared in when the exact spelling is not
+// on disk (#1970): canonically equivalent spellings (NFC/NFD, as macOS stores
+// "é" or Japanese dakuten) match, and so do the Unicode space separators
+// (U+00A0, the U+202F macOS puts before "PM" in a screenshot's name, ...),
+// which a client typing the name back almost always sends as U+0020.
+function unicodeMatchKey(component: string): string {
+  return component.normalize("NFC").replace(/\p{Zs}/gu, " ");
+}
+
+// An allowed directory whose own name is spelled differently on disk (NFD)
+// from the request (NFC) fails the allow-list check, which compares strings
+// (#1970). Map such a request onto the allowed directory's own spelling, so
+// the result is inside that directory by construction and every later check
+// still runs against the real allow-list. A request that does not spell an
+// allowed directory is returned unchanged and is refused as before.
+function respellAllowedDirectoryPrefix(
+  absolutePath: string,
+  allowedDirectories: readonly string[],
+): string {
+  const requestedParts = absolutePath.split(path.sep).filter(Boolean);
+  const candidates = allowedDirectories
+    .map((directory) => path.resolve(directory))
+    .sort((left, right) => right.length - left.length);
+  for (const directory of candidates) {
+    const directoryParts = directory.split(path.sep).filter(Boolean);
+    if (
+      directoryParts.length <= requestedParts.length &&
+      directoryParts.every(
+        (part, index) =>
+          unicodeMatchKey(part) === unicodeMatchKey(requestedParts[index]),
+      )
+    ) {
+      return path.join(
+        directory,
+        ...requestedParts.slice(directoryParts.length),
+      );
+    }
+  }
+  return absolutePath;
+}
+
 async function resolveUnicodeEquivalentPath(
   absolutePath: string,
   allowedDirectories: readonly string[],
@@ -120,7 +161,7 @@ async function resolveUnicodeEquivalentPath(
     const equivalentMatches = exactMatch
       ? [exactMatch]
       : entries.filter(
-          (entry) => entry.normalize("NFC") === requestedPart.normalize("NFC"),
+          (entry) => unicodeMatchKey(entry) === unicodeMatchKey(requestedPart),
         );
 
     if (equivalentMatches.length > 1) {
@@ -171,12 +212,17 @@ export async function validatePath(
       `Access denied - Windows-style path received on a POSIX host: ${requestedPath}`,
     );
   }
-  const absolute = path.isAbsolute(expandedPath)
+  let absolute = path.isAbsolute(expandedPath)
     ? path.resolve(expandedPath)
     : resolveRelativePathAgainstAllowedDirectories(
         expandedPath,
         allowedDirectories,
       );
+  if (
+    !isPathWithinAllowedDirectories(normalizePath(absolute), allowedDirectories)
+  ) {
+    absolute = respellAllowedDirectoryPrefix(absolute, allowedDirectories);
+  }
 
   const normalizedRequested = normalizePath(absolute);
 
@@ -253,34 +299,65 @@ export async function writeFileContent(
     await fs.writeFile(filePath, content, { encoding: "utf-8", flag: "wx" });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-      // Security: Use atomic rename to prevent race conditions where symlinks
-      // could be created between validation and write. Rename operations
-      // replace the target file atomically and don't follow symlinks.
-      const origStats = await fs.stat(filePath);
-      const tempPath = `${filePath}.${randomBytes(16).toString("hex")}.tmp`;
-      try {
-        await fs.writeFile(tempPath, content, "utf-8");
-        await fs.rename(tempPath, filePath);
-      } catch (renameError) {
-        try {
-          await fs.unlink(tempPath);
-        } catch {
-          // Best-effort cleanup; the rename error below is the one to report.
-        }
-        throw renameError;
-      }
-      // Restore original permission bits since the atomic rename replaces the
-      // inode and the temp file has default (0644) permissions. Mask off the
-      // file-type bits; POSIX leaves them unspecified for chmod. A chmod
-      // failure must not fail the write, which has already succeeded.
-      try {
-        await fs.chmod(filePath, origStats.mode & 0o777);
-      } catch {
-        // Deliberately ignored: the write already succeeded (see above).
-      }
+      await overwriteInPlace(filePath, content);
     } else {
       throw error;
     }
+  }
+}
+
+/**
+ * Replace an existing file's content in place, through a single handle.
+ *
+ * Writing through the existing file, rather than renaming a temp file over it,
+ * keeps its identity: the inode, creation time (birthtime), hard links,
+ * permission bits and anything watching it by inode all survive (#4512). It
+ * also never renames over the target, which on Windows fails with EPERM when
+ * another process holds the file open without FILE_SHARE_DELETE (#3199).
+ *
+ * Security: the path was validated before this runs, so a symlink swapped in
+ * since then must not be written through (TOCTOU). Three checks hold that:
+ * - lstat refuses anything at the path that is not a regular file, a symlink
+ *   included;
+ * - O_NOFOLLOW makes the open itself fail with ELOOP on a symlink. It exists
+ *   only on POSIX: fs.constants.O_NOFOLLOW is undefined on Windows;
+ * - the opened handle must be the very file lstat saw (same device and inode),
+ *   which catches a swap between the lstat and the open on every platform,
+ *   Windows included. Once the handle is verified, every write goes through
+ *   it, so a later swap of the path cannot redirect it.
+ *
+ * The trade-off is crash-atomicity: a crash mid-write leaves a partly written
+ * file, where the rename left either the old content or the new.
+ */
+async function overwriteInPlace(
+  filePath: string,
+  content: string,
+): Promise<void> {
+  const expected = await fs.lstat(filePath);
+  if (!expected.isFile()) {
+    throw new Error(`Refusing to write: not a regular file: ${filePath}`);
+  }
+  // O_RDWR rather than O_WRONLY: opening a FIFO swapped in after the lstat for
+  // writing only would block until a reader arrives.
+  const handle = await fs.open(
+    filePath,
+    fs.constants.O_RDWR | (fs.constants.O_NOFOLLOW ?? 0),
+  );
+  try {
+    const opened = await handle.stat();
+    if (
+      !opened.isFile() ||
+      opened.dev !== expected.dev ||
+      opened.ino !== expected.ino
+    ) {
+      throw new Error(
+        `Refusing to write: ${filePath} was replaced while it was being opened`,
+      );
+    }
+    await handle.truncate(0);
+    await handle.writeFile(content, "utf-8");
+  } finally {
+    await handle.close();
   }
 }
 
@@ -473,31 +550,7 @@ export async function applyFileEdits(
   const formattedDiff = `${"`".repeat(numBackticks)}diff\n${diff}${"`".repeat(numBackticks)}\n\n`;
 
   if (!dryRun) {
-    // Security: Use atomic rename to prevent race conditions where symlinks
-    // could be created between validation and write. Rename operations
-    // replace the target file atomically and don't follow symlinks.
-    const origStats = await fs.stat(filePath);
-    const tempPath = `${filePath}.${randomBytes(16).toString("hex")}.tmp`;
-    try {
-      await fs.writeFile(tempPath, modifiedContent, "utf-8");
-      await fs.rename(tempPath, filePath);
-    } catch (error) {
-      try {
-        await fs.unlink(tempPath);
-      } catch {
-        // Best-effort cleanup; the write error below is the one to report.
-      }
-      throw error;
-    }
-    // Restore original permission bits since the atomic rename replaces the
-    // inode and the temp file has default (0644) permissions. Mask off the
-    // file-type bits; POSIX leaves them unspecified for chmod. A chmod
-    // failure must not fail the write, which has already succeeded.
-    try {
-      await fs.chmod(filePath, origStats.mode & 0o777);
-    } catch {
-      // Deliberately ignored: the write already succeeded (see above).
-    }
+    await overwriteInPlace(filePath, modifiedContent);
   }
 
   return formattedDiff;

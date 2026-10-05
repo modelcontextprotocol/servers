@@ -31,6 +31,21 @@ import {
 } from "./lib.js";
 import { SERVER_VERSION } from "./version.js";
 
+// The JSON Schema dialect every advertised tool schema declares (#4841). The
+// SDK 1.x tools/list handler renders zod schemas with zod's draft-07 target and
+// stamps "$schema": draft-07 on each one, which validators that accept only
+// 2020-12 (the dialect MCP assumes for tool schemas) reject outright. Setting
+// $schema in the root object's zod metadata overrides that stamp. The schemas
+// below use nothing whose draft-07 and 2020-12 renderings differ (no tuples),
+// so the label is the only change; server-tools.test.ts fails if a draft-07-only
+// keyword ever appears under it.
+const JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema";
+
+/** A tool's input or output shape as an object schema declaring 2020-12. */
+function jsonSchema2020<Shape extends z.ZodRawShape>(shape: Shape) {
+  return z.object(shape).meta({ $schema: JSON_SCHEMA_DIALECT });
+}
+
 // Schema definitions
 const ReadTextFileArgsSchema = z.object({
   path: z.string(),
@@ -132,17 +147,54 @@ async function readFileAsBase64Stream(filePath: string): Promise<string> {
 }
 
 /**
+ * Why the server cannot operate when it has no allowed directories from either
+ * the command line or the client's Roots (#4992).
+ */
+export const NO_ALLOWED_DIRECTORIES_ERROR =
+  "Server cannot operate: No allowed directories available. Server was started without command-line directories and client does not support MCP roots protocol. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.";
+
+export interface ServerOptions {
+  /**
+   * Called after the server has closed the connection because it cannot
+   * operate: no directories were given and the client does not support
+   * Roots (#4992). The stdio entry point exits the process from here.
+   */
+  onCannotOperate?: (error: Error) => void;
+}
+
+/**
  * Build a filesystem server that may touch only `initialAllowedDirectories`
  * (already resolved and normalized by the caller) until the client's Roots
  * replace them.
  */
-export function createServer(initialAllowedDirectories: string[]): McpServer {
+export function createServer(
+  initialAllowedDirectories: string[],
+  options: ServerOptions = {},
+): McpServer {
   let allowedDirectories = [...initialAllowedDirectories];
 
   const server = new McpServer({
     name: "secure-filesystem-server",
     version: SERVER_VERSION,
   });
+
+  // Settles once the post-initialize setup (fetching the client's initial
+  // roots) has finished, successfully or not; it never rejects. Every tool call
+  // waits for it, so a call that arrives while the initial roots/list is still
+  // outstanding is checked against the client's roots rather than against the
+  // command-line directories (#3204). It is replaced in oninitialized, which
+  // the SDK runs before any request sent after notifications/initialized.
+  let initialization: Promise<void> = Promise.resolve();
+  const registerTool = server.registerTool.bind(server);
+  server.registerTool = ((
+    name: string,
+    config: Parameters<typeof registerTool>[1],
+    handler: (...args: unknown[]) => unknown,
+  ) =>
+    registerTool(name, config, (async (...args: unknown[]) => {
+      await initialization;
+      return handler(...args);
+    }) as never)) as typeof server.registerTool;
 
   // Tool registrations
 
@@ -179,8 +231,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
       title: "Read File (Deprecated)",
       description:
         "Read the complete contents of a file as text. DEPRECATED: Use read_text_file instead.",
-      inputSchema: ReadTextFileArgsSchema.shape,
-      outputSchema: { content: z.string() },
+      inputSchema: jsonSchema2020(ReadTextFileArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     readTextFileHandler,
@@ -198,7 +250,7 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "the first N lines of a file, or the 'tail' parameter to read only " +
         "the last N lines of a file. Operates on the file as text regardless of extension. " +
         "Only works within allowed directories.",
-      inputSchema: {
+      inputSchema: jsonSchema2020({
         path: z.string(),
         tail: z
           .number()
@@ -208,8 +260,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
           .number()
           .optional()
           .describe("If provided, returns only the first N lines of the file"),
-      },
-      outputSchema: { content: z.string() },
+      }),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     readTextFileHandler,
@@ -223,8 +275,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "Read a file and return it as a base64-encoded content block with its MIME type. " +
         "Image and audio files are returned as image/audio content; any other file type is " +
         "returned as an embedded resource. Only works within allowed directories.",
-      inputSchema: ReadMediaFileArgsSchema.shape,
-      outputSchema: {
+      inputSchema: jsonSchema2020(ReadMediaFileArgsSchema.shape),
+      outputSchema: jsonSchema2020({
         content: z.array(
           z.union([
             z.object({
@@ -243,7 +295,7 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
             }),
           ]),
         ),
-      },
+      }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args: z.infer<typeof ReadMediaFileArgsSchema>) => {
@@ -298,8 +350,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "or compare multiple files. Each file's content is returned with its " +
         "path as a reference. Failed reads for individual files won't stop " +
         "the entire operation. Only works within allowed directories.",
-      inputSchema: ReadMultipleFilesArgsSchema.shape,
-      outputSchema: { content: z.string() },
+      inputSchema: jsonSchema2020(ReadMultipleFilesArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args: z.infer<typeof ReadMultipleFilesArgsSchema>) => {
@@ -332,8 +384,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "Create a new file or completely overwrite an existing file with new content. " +
         "Use with caution as it will overwrite existing files without warning. " +
         "Handles text content with proper encoding. Only works within allowed directories.",
-      inputSchema: WriteFileArgsSchema.shape,
-      outputSchema: { content: z.string() },
+      inputSchema: jsonSchema2020(WriteFileArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: {
         readOnlyHint: false,
         idempotentHint: true,
@@ -360,8 +412,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "Make line-based edits to a text file. Each edit replaces exact line sequences " +
         "with new content. Returns a git-style diff showing the changes made. " +
         "Only works within allowed directories.",
-      inputSchema: EditFileArgsSchema.shape,
-      outputSchema: { content: z.string() },
+      inputSchema: jsonSchema2020(EditFileArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: {
         readOnlyHint: false,
         idempotentHint: false,
@@ -388,8 +440,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "nested directories in one operation. If the directory already exists, " +
         "this operation will succeed silently. Perfect for setting up directory " +
         "structures for projects or ensuring required paths exist. Only works within allowed directories.",
-      inputSchema: CreateDirectoryArgsSchema.shape,
-      outputSchema: { content: z.string() },
+      inputSchema: jsonSchema2020(CreateDirectoryArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: {
         readOnlyHint: false,
         idempotentHint: true,
@@ -417,8 +469,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "Results clearly distinguish between files and directories with [FILE] and [DIR] " +
         "prefixes. This tool is essential for understanding directory structure and " +
         "finding specific files within a directory. Only works within allowed directories.",
-      inputSchema: ListDirectoryArgsSchema.shape,
-      outputSchema: { content: z.string() },
+      inputSchema: jsonSchema2020(ListDirectoryArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args: z.infer<typeof ListDirectoryArgsSchema>) => {
@@ -446,8 +498,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "Results clearly distinguish between files and directories with [FILE] and [DIR] " +
         "prefixes. This tool is useful for understanding directory structure and " +
         "finding specific files within a directory. Only works within allowed directories.",
-      inputSchema: ListDirectoryWithSizesArgsSchema.shape,
-      outputSchema: { content: z.string() },
+      inputSchema: jsonSchema2020(ListDirectoryWithSizesArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args: z.infer<typeof ListDirectoryWithSizesArgsSchema>) => {
@@ -526,8 +578,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "Each entry includes 'name', 'type' (file/directory), and 'children' for directories. " +
         "Files have no children array, while directories always have a children array (which may be empty). " +
         "The output is formatted with 2-space indentation for readability. Only works within allowed directories.",
-      inputSchema: DirectoryTreeArgsSchema.shape,
-      outputSchema: { content: z.string() },
+      inputSchema: jsonSchema2020(DirectoryTreeArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args: z.infer<typeof DirectoryTreeArgsSchema>) => {
@@ -600,8 +652,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "and rename them in a single operation. If the destination exists, the " +
         "operation will fail. Works across different directories and can be used " +
         "for simple renaming within the same directory. Both source and destination must be within allowed directories.",
-      inputSchema: MoveFileArgsSchema.shape,
-      outputSchema: { content: z.string() },
+      inputSchema: jsonSchema2020(MoveFileArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: {
         readOnlyHint: false,
         idempotentHint: false,
@@ -638,8 +690,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "Use pattern like '*.ext' to match files in current directory, and '**/*.ext' to match files in all subdirectories. " +
         "Returns full paths to all matching items. Great for finding files when you don't know their exact location. " +
         "Only searches within allowed directories.",
-      inputSchema: SearchFilesArgsSchema.shape,
-      outputSchema: { content: z.string() },
+      inputSchema: jsonSchema2020(SearchFilesArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args: z.infer<typeof SearchFilesArgsSchema>) => {
@@ -667,8 +719,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "information including size, creation time, last modified time, permissions, " +
         "and type. This tool is perfect for understanding file characteristics " +
         "without reading the actual content. Only works within allowed directories.",
-      inputSchema: GetFileInfoArgsSchema.shape,
-      outputSchema: { content: z.string() },
+      inputSchema: jsonSchema2020(GetFileInfoArgsSchema.shape),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args: z.infer<typeof GetFileInfoArgsSchema>) => {
@@ -693,8 +745,8 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
         "Subdirectories within these allowed directories are also accessible. " +
         "Use this to understand which directories and their nested paths are available " +
         "before trying to access files.",
-      inputSchema: {},
-      outputSchema: { content: z.string() },
+      inputSchema: jsonSchema2020({}),
+      outputSchema: jsonSchema2020({ content: z.string() }),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async () => {
@@ -739,8 +791,13 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
     },
   );
 
-  // Handles post-initialization setup, specifically checking for and fetching MCP roots.
-  server.server.oninitialized = async () => {
+  // Handles post-initialization setup, specifically checking for and fetching
+  // MCP roots. Tool calls wait for it (see `initialization` above).
+  server.server.oninitialized = () => {
+    initialization = initialize();
+  };
+
+  async function initialize(): Promise<void> {
     const clientCapabilities = server.server.getClientCapabilities();
 
     if (clientCapabilities?.roots) {
@@ -767,12 +824,17 @@ export function createServer(initialAllowedDirectories: string[]): McpServer {
           allowedDirectories,
         );
       } else {
-        throw new Error(
-          `Server cannot operate: No allowed directories available. Server was started without command-line directories and client either does not support MCP roots protocol or provided empty roots. Please either: 1) Start server with directory arguments, or 2) Use a client that supports MCP roots protocol and provides valid root directories.`,
-        );
+        // Nothing could ever be allowed in this session, so fail visibly
+        // rather than serve every call with "Access denied" (#4992): log the
+        // reason and close the connection. Throwing here would only reach the
+        // SDK's onerror, which the client never sees.
+        const error = new Error(NO_ALLOWED_DIRECTORIES_ERROR);
+        console.error(`Error: ${error.message}`);
+        await server.close();
+        options.onCannotOperate?.(error);
       }
     }
-  };
+  }
 
   return server;
 }
