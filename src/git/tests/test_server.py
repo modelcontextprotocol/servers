@@ -344,9 +344,10 @@ def test_git_commit_allows_an_empty_merge_commit(repo):
     repo.git.checkout("-b", "side")
     Path(repo.working_dir, "side.txt").write_text("side only")
     repo.git.add("side.txt")
-    repo.index.commit("side change")
+    side_sha = repo.index.commit("side change").hexsha
 
     repo.git.checkout(starting_branch)
+    head_before = repo.head.commit.hexsha
     repo.git.merge("side", "--no-commit", "--no-ff")
     assert (Path(repo.git_dir) / "MERGE_HEAD").exists()
 
@@ -359,6 +360,33 @@ def test_git_commit_allows_an_empty_merge_commit(repo):
     result = git_commit(repo, "merge side")
 
     assert "Changes committed successfully with hash" in result
+    assert [p.hexsha for p in repo.head.commit.parents] == [head_before, side_sha]
+    assert not (Path(repo.git_dir) / "MERGE_HEAD").exists()
+
+
+def test_git_commit_concludes_a_merge_with_both_parents(repo):
+    # #5012: a merge commit records HEAD and MERGE_HEAD as parents and clears
+    # the merge state, as `git commit` does.
+    starting_branch = repo.active_branch.name
+    repo.git.checkout("-b", "side")
+    Path(repo.working_dir, "side.txt").write_text("side only")
+    repo.git.add("side.txt")
+    side_sha = repo.index.commit("side change").hexsha
+
+    repo.git.checkout(starting_branch)
+    head_before = repo.head.commit.hexsha
+    repo.git.merge("side", "--no-commit", "--no-ff")
+
+    result = git_commit(repo, "merge side")
+
+    commit = repo.head.commit
+    assert commit.hexsha in result
+    assert [p.hexsha for p in commit.parents] == [head_before, side_sha]
+    assert "side.txt" in commit.tree
+    git_dir = Path(repo.git_dir)
+    for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE"):
+        assert not (git_dir / name).exists()
+    assert repo.active_branch.name == starting_branch
 
 
 def test_git_reset(test_repository):

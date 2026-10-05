@@ -181,7 +181,20 @@ def git_commit(repo: git.Repo, message: str) -> str:
             "No changes staged for commit. Use git_add to stage changes first; "
             "git_status shows what is currently staged."
         )
-    commit = repo.index.commit(message)
+    git_dir = Path(repo.git_dir)
+    merge_head = git_dir / "MERGE_HEAD"
+    if merge_head.exists():
+        # Conclude the merge as `git commit` does: HEAD plus every MERGE_HEAD
+        # commit as parents, then clear the merge state. index.commit() alone
+        # records only HEAD and leaves the repository mid-merge.
+        parents = [repo.head.commit] + [
+            repo.commit(sha) for sha in merge_head.read_text().split()
+        ]
+        commit = repo.index.commit(message, parent_commits=parents)
+        for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "AUTO_MERGE"):
+            (git_dir / name).unlink(missing_ok=True)
+    else:
+        commit = repo.index.commit(message)
     return f"Changes committed successfully with hash {commit.hexsha}"
 
 
