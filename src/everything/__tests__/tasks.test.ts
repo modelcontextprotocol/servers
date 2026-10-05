@@ -568,6 +568,20 @@ describe("trigger-elicitation-request-async", () => {
     expect(polls).toHaveLength(4);
   });
 
+  it("reports the status message of a client task that is already finished when it is created", async () => {
+    // A task that fails before it is returned is never polled, so its status
+    // message comes from the CreateTaskResult.
+    const { taskStore } = await connectTaskClient((_m, taskId) => {
+      void taskStore.updateTaskStatus(taskId!, "failed", "instant failure");
+    });
+    const texts = await callAsync("trigger-elicitation-request-async");
+    expect(texts).toEqual([
+      expect.stringMatching(
+        /^\[FAILED\] instant failure\n\nProgress:\nTask created: \S+$/,
+      ),
+    ]);
+  });
+
   it("reports a failed client task", async () => {
     const { taskStore } = await connectTaskClient((_m, taskId) => {
       later(() => taskStore.updateTaskStatus(taskId!, "failed"));
