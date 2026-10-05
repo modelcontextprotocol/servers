@@ -153,7 +153,12 @@ describe("relative paths", () => {
   });
 
   it("resolves against the process cwd when there are no allowed directories, and refuses it", async () => {
-    const empty = await connect([]);
+    // A Roots client that offers no roots: with no directories and no Roots
+    // at all the server closes the connection instead (#4992).
+    const empty = await connect([], {
+      capabilities: { roots: {} },
+      listRoots: () => [],
+    });
     try {
       const result = await call(empty.client, "read_text_file", {
         path: "anything.txt",
