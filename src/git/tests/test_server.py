@@ -389,6 +389,59 @@ def test_git_commit_concludes_a_merge_with_both_parents(repo):
     assert repo.active_branch.name == starting_branch
 
 
+def _start_autostash_merge(repo: git.Repo, dirty: str) -> str:
+    """Begin `git merge --no-commit --autostash side` over a dirty test.txt.
+
+    Returns the autostash's oid, read from MERGE_AUTOSTASH.
+    """
+    starting_branch = repo.active_branch.name
+    repo.git.checkout("-b", "side")
+    Path(repo.working_dir, "side.txt").write_text("side only")
+    repo.git.add("side.txt")
+    repo.index.commit("side change")
+
+    repo.git.checkout(starting_branch)
+    Path(repo.working_dir, "test.txt").write_text(dirty, newline="\n")
+    repo.git.merge("side", "--no-commit", "--no-ff", "--autostash")
+    autostash = Path(repo.git_dir) / "MERGE_AUTOSTASH"
+    assert autostash.exists()
+    # The merge stashed the edit away, so the tree is back at HEAD.
+    assert Path(repo.working_dir, "test.txt").read_text() != dirty
+    return autostash.read_text().strip()
+
+
+def test_git_commit_reapplies_a_merge_autostash(repo):
+    # #5050: concluding a `--autostash` merge restores the pre-merge edits and
+    # removes MERGE_AUTOSTASH, as `git commit` does.
+    dirty = "line 1\nline 2\nline 3\nline 4\nline 5\ndirty\n"
+    _start_autostash_merge(repo, dirty)
+
+    result = git_commit(repo, "merge side")
+
+    assert "Applied autostash." in result
+    assert len(repo.head.commit.parents) == 2
+    assert Path(repo.working_dir, "test.txt").read_text() == dirty
+    assert not (Path(repo.git_dir) / "MERGE_AUTOSTASH").exists()
+    assert repo.git.stash("list") == ""
+
+
+def test_git_commit_stores_a_conflicting_merge_autostash(repo):
+    # #5050: when reapplying the autostash conflicts, `git commit` keeps it in
+    # the stash list instead, so the edits are never lost.
+    stash_oid = _start_autostash_merge(repo, "dirty\n")
+    # Stage a different edit to the same line into the merge commit, so the
+    # stash no longer applies cleanly on top of it.
+    Path(repo.working_dir, "test.txt").write_text("merged\n", newline="\n")
+    repo.git.add("test.txt")
+
+    result = git_commit(repo, "merge side")
+
+    assert "Applying autostash resulted in conflicts" in result
+    assert len(repo.head.commit.parents) == 2
+    assert not (Path(repo.git_dir) / "MERGE_AUTOSTASH").exists()
+    assert repo.git.rev_parse("stash@{0}") == stash_oid
+
+
 def test_git_reset(test_repository):
     file_path = Path(test_repository.working_dir) / "reset_test.txt"
     file_path.write_text("content to reset")
