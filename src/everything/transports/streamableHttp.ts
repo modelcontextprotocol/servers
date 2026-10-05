@@ -17,7 +17,7 @@ import cors from "cors";
 import { listenOrExit } from "./listen.js";
 import { InMemoryEventStore } from "./in-memory-event-store.js";
 
-/** The most of a refused POST's body read to find its request id. */
+/** The most bytes of a refused POST's body read to find its request id. */
 const MAX_ID_BODY_BYTES = 64 * 1024;
 
 /**
