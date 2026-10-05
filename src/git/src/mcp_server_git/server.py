@@ -193,9 +193,35 @@ def git_commit(repo: git.Repo, message: str) -> str:
         commit = repo.index.commit(message, parent_commits=parents)
         for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "AUTO_MERGE"):
             (git_dir / name).unlink(missing_ok=True)
+        autostash_note = _apply_merge_autostash(repo)
     else:
         commit = repo.index.commit(message)
-    return f"Changes committed successfully with hash {commit.hexsha}"
+        autostash_note = ""
+    return f"Changes committed successfully with hash {commit.hexsha}{autostash_note}"
+
+
+def _apply_merge_autostash(repo: git.Repo) -> str:
+    """Reapply a `git merge --autostash` stash, as `git commit` does.
+
+    Mirrors git's sequencer: apply the stash, store it in the stash list if
+    that conflicts, then remove MERGE_AUTOSTASH. Returns a note for the reply,
+    empty when the merge had no autostash.
+    """
+    autostash = Path(repo.git_dir) / "MERGE_AUTOSTASH"
+    if not autostash.exists():
+        return ""
+    stash_oid = autostash.read_text().strip()
+    try:
+        repo.git.stash("apply", stash_oid)
+        note = "\nApplied autostash."
+    except git.GitCommandError:
+        repo.git.stash("store", "-m", "autostash", "-q", stash_oid)
+        note = (
+            "\nApplying autostash resulted in conflicts. Your changes are safe "
+            'in the stash; run "git stash pop" or "git stash drop" at any time.'
+        )
+    autostash.unlink()
+    return note
 
 
 def _index_entries(repo: git.Repo, files: list[str]) -> str:
