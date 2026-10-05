@@ -754,6 +754,41 @@ describe("edit_file", () => {
       );
     });
 
+    it("dedents a tab-indented file by levels when the edit indents with spaces", async () => {
+      await fs.writeFile(file, "\tif (a) {\n\t\tb();\n\t}\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "    b();", newText: "  c();" }],
+      });
+      // The edit dedents b() by one 2-space level; in the file that is one
+      // tab, not two characters (which would strip both tabs).
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "\tif (a) {\n\tc();\n\t}\n",
+      );
+    });
+
+    it("indents a tab-indented file by levels when the edit indents with spaces", async () => {
+      await fs.writeFile(file, "\tif (a) {\n\t\tb();\n\t}\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "if (a) {\n  b();", newText: "if (a) {\n    c();" }],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "\tif (a) {\n\t\t\tc();\n\t}\n",
+      );
+    });
+
+    it("indents a space-indented file by levels when the edit indents with tabs", async () => {
+      await fs.writeFile(file, "  if (a) {\n    b();\n  }\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "if (a) {\n\tb();", newText: "if (a) {\n\t\tc();" }],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "  if (a) {\n      c();\n  }\n",
+      );
+    });
+
     it("keeps the file's indentation when oldText indents with a different width", async () => {
       await fs.writeFile(file, "    if (a) {\n        b();\n    }\n");
       await call(client, "edit_file", {

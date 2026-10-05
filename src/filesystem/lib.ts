@@ -327,18 +327,56 @@ function leadingWhitespace(line: string): string {
 }
 
 /**
+ * The indentation unit of some lines: a tab when any indented line starts
+ * with one, otherwise the narrowest run of leading spaces, or "" when no line
+ * is indented.
+ */
+function indentUnit(lines: string[]): string {
+  let narrowest = Infinity;
+  for (const line of lines) {
+    const indent = leadingWhitespace(line);
+    if (indent === "" || line.trim() === "") continue;
+    if (indent.includes("\t")) return "\t";
+    narrowest = Math.min(narrowest, indent.length);
+  }
+  return narrowest === Infinity ? "" : " ".repeat(narrowest);
+}
+
+/**
  * Reindents one replacement line for the whitespace-tolerant matcher: it gets
  * the indentation of `fileLine` (the file line it replaces), plus or minus the
  * difference between its own indentation and `oldLine`'s (the oldText line
  * that matched `fileLine`). A dedent never goes below no indentation. A blank
  * line is kept as given.
+ *
+ * When the edit and the file indent with different characters (tabs in one,
+ * spaces in the other), the difference is counted in indent levels of the
+ * edit's unit and applied in the file's unit, so four spaces of extra
+ * indent in the edit become one tab in a tab-indented file.
  */
-function reindentLine(line: string, fileLine: string, oldLine: string): string {
+function reindentLine(
+  line: string,
+  fileLine: string,
+  oldLine: string,
+  editUnit: string,
+  fileUnit: string,
+): string {
   const body = line.trimStart();
   if (body === "") return line;
   const fileIndent = leadingWhitespace(fileLine);
   const newIndent = leadingWhitespace(line);
   const delta = newIndent.length - leadingWhitespace(oldLine).length;
+  if (editUnit && fileUnit && (editUnit === "\t") !== (fileUnit === "\t")) {
+    const levels = Math.trunc(delta / editUnit.length);
+    const indent =
+      levels >= 0
+        ? fileIndent + fileUnit.repeat(levels)
+        : fileIndent.slice(
+            0,
+            Math.max(0, fileIndent.length + levels * fileUnit.length),
+          );
+    return indent + body;
+  }
   const indent =
     delta >= 0
       ? fileIndent + newIndent.slice(newIndent.length - delta)
@@ -391,9 +429,20 @@ export async function applyFileEdits(
         // replaces, shifted by however much the edit indents or dedents it
         // relative to the matching oldText line (#4990). Lines beyond
         // oldText's length are placed relative to its last line.
+        const editUnit = indentUnit([
+          ...oldLines,
+          ...normalizedNew.split("\n"),
+        ]);
+        const fileUnit = indentUnit(contentLines);
         const newLines = normalizedNew.split("\n").map((line, j) => {
           const k = Math.min(j, oldLines.length - 1);
-          return reindentLine(line, potentialMatch[k], oldLines[k]);
+          return reindentLine(
+            line,
+            potentialMatch[k],
+            oldLines[k],
+            editUnit,
+            fileUnit,
+          );
         });
 
         contentLines.splice(i, oldLines.length, ...newLines);
