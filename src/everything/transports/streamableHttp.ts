@@ -8,6 +8,7 @@
 // session map. `startStreamableHttpServer()` is what the launcher runs.
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isJSONRPCRequest } from "@modelcontextprotocol/sdk/types.js";
 import express, { Express, Request, Response } from "express";
 import type { Server } from "node:http";
 import { createServer } from "../server/index.js";
@@ -21,8 +22,8 @@ const MAX_ID_BODY_BYTES = 64 * 1024;
 
 /**
  * The JSON-RPC `id` of a POST's body, or `null` when the body is not a single
- * request (a notification, a batch, malformed JSON, or larger than
- * `MAX_ID_BODY_BYTES`). Used only for a POST that is refused before the SDK
+ * JSON-RPC request (a notification, a response, a batch, any other JSON,
+ * malformed JSON, or larger than `MAX_ID_BODY_BYTES`). Used only for a POST that is refused before the SDK
  * reads its body, so the error can still carry the request's id (#4982).
  */
 async function readRequestId(req: Request): Promise<string | number | null> {
@@ -34,8 +35,8 @@ async function readRequestId(req: Request): Promise<string | number | null> {
       if (size > MAX_ID_BODY_BYTES) return null;
       chunks.push(chunk as Buffer);
     }
-    const id = JSON.parse(Buffer.concat(chunks).toString("utf8"))?.id;
-    return typeof id === "string" || typeof id === "number" ? id : null;
+    const message: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return isJSONRPCRequest(message) ? message.id : null;
   } catch {
     return null;
   }
