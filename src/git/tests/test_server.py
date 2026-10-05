@@ -187,7 +187,7 @@ def test_git_diff(test_repository):
     assert "feature changes" in result
 
 NON_ASCII_FILENAME = "日本語.txt"
-ESCAPED_NON_ASCII_FILENAME = "\346\227\245\346\234\254\350\252\236.txt"
+ESCAPED_NON_ASCII_FILENAME = r"\346\227\245\346\234\254\350\252\236.txt"
 
 @pytest.fixture
 def quotepath_repository(test_repository):
