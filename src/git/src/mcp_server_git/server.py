@@ -261,6 +261,12 @@ def git_create_branch(
     else:
         base = repo.active_branch
 
+    # GitPython's create_head accepts a name that already points at the base
+    # commit, so check first rather than report a branch that was not created.
+    if branch_name in repo.heads:
+        raise ValueError(
+            f"Cannot create branch '{branch_name}': refs/heads/{branch_name} already exists"
+        )
     repo.create_head(branch_name, base)
     return f"Created branch '{branch_name}' from '{base.name}'"
 
@@ -365,7 +371,7 @@ def git_branch(
         case "all":
             b_type = "-a"
         case _:
-            return f"Invalid branch type: {branch_type}"
+            raise ValueError(f"Invalid branch type: {branch_type}")
 
     # None value will be auto deleted by GitPython
     branch_info = repo.git.branch(b_type, *contains_sha, *not_contains_sha)
