@@ -54,6 +54,20 @@ repo root**, commit the lockfile if it changed, and re-run. It is the first stag
 passes every static check and fails later as a test reporting the _old_
 dependency's behavior. Do not "fix" that test.
 
+### `verify:dco`
+
+A commit in `origin/v2/main..HEAD` has no `Signed-off-by:` trailer, or one
+whose name and email match neither its author nor its committer. The output
+names each commit and the repair: `git rebase --signoff <merge-base>`, then
+`git push --force-with-lease` if it was already pushed. Commit with
+`git commit -s` from then on. The rule, and when a rewrite is safe, is
+`pr-flow` step 3.
+
+"cannot resolve origin/v2/main" means the ref is missing from this clone:
+`git fetch origin v2/main`. On a stacked branch the gate also checks the lower
+branch's commits; `npm run verify:dco -- --base <lower branch>` checks only
+yours.
+
 ### `format:check` / `format:check:root`
 
 Run `npm run format` at the **root**. It covers `scripts/`, the root configs

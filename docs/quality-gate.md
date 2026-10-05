@@ -13,7 +13,7 @@ out; everything else points here.
 | --- | --- | --- | --- |
 | Inner loop | `npm run validate -w src/<server>`, `npm run validate:py -- <server>` | Your machine | While iterating on one server |
 | Pre-push gate | `npm run local:gate` | Your machine, under a lease | Before every push |
-| CI | `.github/workflows/typescript.yml`, `python.yml` | GitHub, on every push and pull request | Before merge |
+| CI | `.github/workflows/typescript.yml`, `python.yml`; `dco.yml` | GitHub, on every push and pull request; `dco.yml` on pull requests only | Before merge |
 
 **`npm run local:gate` runs every check CI runs.** CI splits the same checks
 into parallel jobs on a fresh install; the gate runs them in sequence on your
@@ -41,13 +41,14 @@ in this order, and the first failure stops the run.
 | # | Stage | What it checks | CI counterpart |
 | --- | --- | --- | --- |
 | 1 | `verify:install-fresh` | Every package in `node_modules` is at the version `package-lock.json` records, and every `package.json` declares what the lockfile says it does | None needed: CI installs with `npm ci` |
-| 2 | `validate` → `validate:guards` | The root guards, listed [below](#the-root-guards) | `typescript.yml` → **Root guards** |
-| 3 | `validate` → each workspace's `validate` | Per TypeScript server: `format:check`, `lint` (`--max-warnings 0`), `typecheck`, `build`, `test` | `typescript.yml` → **Validate \<server\>** (one leg each) |
-| 4 | `coverage` | Per TypeScript server: `vitest run --coverage`, failing when any file is below 90% on lines, statements, functions or branches | `typescript.yml` → **Coverage \<server\>** (one leg each) |
-| 5 | `validate:py` | Per Python server: `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `pytest`, `uv build` | `python.yml` → **Test \<server\>** (one leg each) |
-| 6 | `coverage:py` | Per Python server: `uv sync --locked`, then `uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json`; then **every file** in `coverage.json` must reach **90% on lines and 90% on branches** | `python.yml` → **Coverage \<server\>** (one leg each) |
-| 7 | `verify:skills:cli` | `claude plugin validate` on `.claude/skills`, at the pinned CLI version | `typescript.yml` → **Root guards** |
-| 8 | `smoke` | Every server boots over each transport it implements and answers one tool call | `typescript.yml` → **Boot smoke** |
+| 2 | `verify:dco` | Every commit in `origin/v2/main..HEAD` carries a `Signed-off-by:` trailer matching its author or committer (merge and bot commits exempt) | `dco.yml` → **DCO signoff**, over the pull request's `base.sha..head.sha` |
+| 3 | `validate` → `validate:guards` | The root guards, listed [below](#the-root-guards) | `typescript.yml` → **Root guards** |
+| 4 | `validate` → each workspace's `validate` | Per TypeScript server: `format:check`, `lint` (`--max-warnings 0`), `typecheck`, `build`, `test` | `typescript.yml` → **Validate \<server\>** (one leg each) |
+| 5 | `coverage` | Per TypeScript server: `vitest run --coverage`, failing when any file is below 90% on lines, statements, functions or branches | `typescript.yml` → **Coverage \<server\>** (one leg each) |
+| 6 | `validate:py` | Per Python server: `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `pytest`, `uv build` | `python.yml` → **Test \<server\>** (one leg each) |
+| 7 | `coverage:py` | Per Python server: `uv sync --locked`, then `uv run --frozen pytest --cov --cov-report=term-missing --cov-report=json`; then **every file** in `coverage.json` must reach **90% on lines and 90% on branches** | `python.yml` → **Coverage \<server\>** (one leg each) |
+| 8 | `verify:skills:cli` | `claude plugin validate` on `.claude/skills`, at the pinned CLI version | `typescript.yml` → **Root guards** |
+| 9 | `smoke` | Every server boots over each transport it implements and answers one tool call | `typescript.yml` → **Boot smoke** |
 
 Notes on the stages:
 
@@ -55,8 +56,14 @@ Notes on the stages:
   `npm ci`, so a checkout whose `node_modules` predates a pulled dependency
   bump would be tested against dependencies CI does not use, and the failure
   would show up later as a test reporting the old dependency's behavior. The
-  Python servers need no counterpart: stage 5 begins each server with
+  Python servers need no counterpart: stage 6 begins each server with
   `uv sync --locked`, which brings its environment to its lockfile.
+- **`verify:dco` checks the commits you are about to push**, the same rule
+  CI's **DCO signoff** job applies to a pull request (`scripts/verify-dco.mjs`
+  for both). It needs `origin/v2/main` to exist locally, and on a stacked
+  branch it also checks the lower branch's commits
+  (`npm run verify:dco -- --base <rev>` checks a range of your choosing). A
+  failure names each unsigned commit and the `git rebase --signoff` repair.
 - **`coverage` is the TypeScript test suite run a second time, instrumented.**
   It is a separate command from `test` and `validate` so the inner loop stays
   fast, and a separate CI job so it gets its own runner. The 90% per-file
@@ -97,7 +104,7 @@ Notes on the stages:
   neither.
 - `python.yml` also has a **Build \<server\>** job per server that re-runs
   pyright and `uv build` and uploads the built distribution. It checks nothing
-  stage 5 does not.
+  stage 6 does not.
 
 ### The root guards
 
@@ -121,7 +128,7 @@ covers: the repo-wide tooling and the guards that keep the gate itself honest.
   so it is in neither the gate nor CI. Run the whole suite when adding a skill
   or editing a description ([`skill-authoring.md`](./skill-authoring.md)).
 - **Coverage is not in this list: it is in both tiers.** The per-file gates are stages above: `coverage`
-  (stage 4) for the TypeScript servers and `coverage:py` (stage 6) for the
+  (stage 5) for the TypeScript servers and `coverage:py` (stage 7) for the
   Python servers, each with its own CI job. They are also the coverage
   commands: `npm run coverage -w src/<server>` and
   `npm run coverage:py -- <server>` for one server. They stay out of

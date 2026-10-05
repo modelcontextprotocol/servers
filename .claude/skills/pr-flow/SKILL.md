@@ -67,17 +67,19 @@ This repo adopted the [Developer Certificate of
 Origin](https://developercertificate.org/) (maintainer decision on #4861).
 Commit with **`git commit -s`**, every time.
 
-⚠️ **The [probot DCO app](https://probot.github.io/apps/dco/) is not installed on
-this repo yet**, so today nothing fails an unsigned commit. Installing it is an
-org-admin step (#4867). Sign off anyway: once the app is on, it checks
-every commit in a PR, so an unsigned commit pushed today becomes a red check
-that can only be cleared by rewriting history. Once the app enforces the check,
-`AGENTS.md` gains the signoff rule and this paragraph goes.
+The rule is checked twice, by the same script (`scripts/verify-dco.mjs`):
 
-What the app checks: each commit carries a `Signed-off-by: Name <email>` trailer
+- **`npm run verify:dco`**, a stage of the pre-push gate (step 4), over
+  `origin/v2/main..HEAD`: the commits you are about to push. Name another
+  range with `-- --base <rev> --head <rev>` (a stacked branch's base, say).
+- **The `DCO signoff` job** (`.github/workflows/dco.yml`), on every pull
+  request except into `main`, over the PR's `base.sha..head.sha`.
+
+What it checks: each commit carries a `Signed-off-by: Name <email>` trailer
 whose name **and** email match the commit's author or its committer. Merge
 commits and bot-authored commits are exempt. There is no partial credit: one
-unsigned commit out of six fails the whole check.
+unsigned commit out of six fails the whole check. The failure names each
+unsigned commit and prints the repair below.
 
 Two things that look like automation and are not:
 
@@ -90,20 +92,19 @@ Two things that look like automation and are not:
   `git var GIT_AUTHOR_IDENT` returns your config identity rather than the
   preserved author, so it cannot even tell it is signing for someone else.
 
-**Repairing commits already pushed** means rewriting them:
+**Repairing commits already made** means rewriting them, onto the merge base
+the failure prints:
 
 ```sh
-git rebase HEAD~<n> --signoff
+git rebase --signoff <merge-base>
 git push --force-with-lease
 ```
 
-Use `--force-with-lease` rather than `--force`, and rewrite only when you are the
-sole author and nobody has based work on the branch (a stacked PR above yours
-has). The two apparent alternatives are not alternatives: the app's empty
-"remediation commit" flow needs `allowRemediationCommits.individual`, and this
-repo ships no `.github/dco.yml`, so it is disabled; and the override button that
-anyone with write access sees only silences the check, with nobody certifying
-anything.
+`--signoff` signs each commit as you, the committer. Use `--force-with-lease`
+rather than `--force`, and rewrite only when you are the sole author and
+nobody has based work on the branch (a stacked PR above yours has). Nothing
+else clears the check: an empty "remediation" commit signs nothing that came
+before it, and the check reads every commit in the range.
 
 The signoff is a DCO assertion made in **your own name**. It does not claim you
 wrote the code, so signing off a cherry-pick is legitimate. Fabricating
