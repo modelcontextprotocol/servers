@@ -7,44 +7,52 @@
 // a real client, and call its shutdown handler directly; each app has its own
 // session map. `startStreamableHttpServer()` is what the launcher runs.
 
-import {
-  StreamableHTTPServerTransport,
-  EventStore,
-} from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isJSONRPCRequest } from "@modelcontextprotocol/sdk/types.js";
 import express, { Express, Request, Response } from "express";
 import type { Server } from "node:http";
 import { createServer } from "../server/index.js";
 import { randomUUID } from "node:crypto";
 import cors from "cors";
 import { listenOrExit } from "./listen.js";
+import { InMemoryEventStore } from "./in-memory-event-store.js";
 
-// Simple in-memory event store for SSE resumability
-class InMemoryEventStore implements EventStore {
-  private events: Map<string, { streamId: string; message: unknown }> =
-    new Map();
+/** The most bytes of a refused POST's body read to find its request id. */
+const MAX_ID_BODY_BYTES = 64 * 1024;
 
-  async storeEvent(streamId: string, message: unknown): Promise<string> {
-    const eventId = randomUUID();
-    this.events.set(eventId, { streamId, message });
-    return eventId;
-  }
-
-  async replayEventsAfter(
-    lastEventId: string,
-    { send }: { send: (eventId: string, message: unknown) => Promise<void> },
-  ): Promise<string> {
-    const entries = Array.from(this.events.entries());
-    const startIndex = entries.findIndex(([id]) => id === lastEventId);
-    if (startIndex === -1) return lastEventId;
-
-    let lastId: string = lastEventId;
-    for (let i = startIndex + 1; i < entries.length; i++) {
-      const [eventId, { message }] = entries[i];
-      await send(eventId, message);
-      lastId = eventId;
+/**
+ * The JSON-RPC `id` of a POST's body, or `null` when the body is not a single
+ * JSON-RPC request (a notification, a response, a batch, any other JSON,
+ * malformed JSON, or larger than `MAX_ID_BODY_BYTES`). Used only for a POST that is refused before the SDK
+ * reads its body, so the error can still carry the request's id (#4982).
+ */
+async function readRequestId(req: Request): Promise<string | number | null> {
+  try {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of req) {
+      size += (chunk as Buffer).length;
+      if (size > MAX_ID_BODY_BYTES) return null;
+      chunks.push(chunk as Buffer);
     }
-    return lastId;
+    const message: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return isJSONRPCRequest(message) ? message.id : null;
+  } catch {
+    return null;
   }
+}
+
+/**
+ * Answer a request whose `Mcp-Session-Id` this app does not know, or has
+ * ended: `404 Not Found`, which the spec makes the client's signal to start a
+ * new session (#4982). Same shape as the SDK's own "Session not found".
+ */
+function sessionNotFound(res: Response, id: string | number | null = null) {
+  res.status(404).json({
+    jsonrpc: "2.0",
+    error: { code: -32001, message: "Session not found" },
+    id,
+  });
 }
 
 /** The Streamable HTTP app, and the handler the launcher installs for SIGINT. */
@@ -127,15 +135,8 @@ export function createApp(): StreamableHttpApp {
         await transport.handleRequest(req, res);
         return;
       } else {
-        // Invalid request - no session ID or not initialization request
-        res.status(400).json({
-          jsonrpc: "2.0",
-          error: {
-            code: -32000,
-            message: "Bad Request: No valid session ID provided",
-          },
-          id: req?.body?.id,
-        });
+        // A session ID this app does not know, or has already ended
+        sessionNotFound(res, await readRequestId(req));
         return;
       }
 
@@ -162,7 +163,7 @@ export function createApp(): StreamableHttpApp {
   app.get("/mcp", async (req: Request, res: Response) => {
     console.log("Received MCP GET request");
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
-    if (!sessionId || !transports.has(sessionId)) {
+    if (!sessionId) {
       res.status(400).json({
         jsonrpc: "2.0",
         error: {
@@ -171,6 +172,10 @@ export function createApp(): StreamableHttpApp {
         },
         id: req?.body?.id,
       });
+      return;
+    }
+    if (!transports.has(sessionId)) {
+      sessionNotFound(res);
       return;
     }
 
@@ -189,7 +194,7 @@ export function createApp(): StreamableHttpApp {
   // Handle DELETE requests for session termination
   app.delete("/mcp", async (req: Request, res: Response) => {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
-    if (!sessionId || !transports.has(sessionId)) {
+    if (!sessionId) {
       res.status(400).json({
         jsonrpc: "2.0",
         error: {
@@ -198,6 +203,10 @@ export function createApp(): StreamableHttpApp {
         },
         id: req?.body?.id,
       });
+      return;
+    }
+    if (!transports.has(sessionId)) {
+      sessionNotFound(res);
       return;
     }
 
@@ -229,16 +238,15 @@ export function createApp(): StreamableHttpApp {
     console.log("Shutting down server...");
 
     // Close all active transports to properly clean up resources
-    for (const sessionId in transports) {
-      /* v8 ignore start -- unreachable: `for...in` over a Map visits no entries, so shutdown never closes a session; pinned in streamable-http.test.ts */
+    // (a snapshot, since closing a transport removes it from the map)
+    for (const [sessionId, transport] of [...transports]) {
       try {
         console.log(`Closing transport for session ${sessionId}`);
-        await transports.get(sessionId)!.close();
+        await transport.close();
         transports.delete(sessionId);
       } catch (error) {
         console.log(`Error closing transport for session ${sessionId}:`, error);
       }
-      /* v8 ignore stop */
     }
 
     console.log("Server shutdown complete");

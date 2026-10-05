@@ -43,17 +43,6 @@ async function connectSse() {
   return { client, sessionId };
 }
 
-/** Whether `request` gets any response within `ms`. */
-async function respondsWithin(url: string, init: RequestInit, ms = 300) {
-  try {
-    await fetch(url, { ...init, signal: AbortSignal.timeout(ms) });
-    return true;
-  } catch (e) {
-    if (e instanceof Error && e.name === "TimeoutError") return false;
-    throw e;
-  }
-}
-
 describe("SSE transport", () => {
   it("serves the protocol: GET /sse opens the stream, POST /message carries requests", async () => {
     const { client, sessionId } = await connectSse();
@@ -83,58 +72,99 @@ describe("SSE transport", () => {
     await Promise.all([a.client.close(), b.client.close()]);
   });
 
-  // KNOWN BUG #4981: POST /message for an unknown session is never answered; the fix changes this assertion.
   it("forgets the session and cleans up when the stream closes", async () => {
     const { client, sessionId } = await connectSse();
     await client.close();
     await vi.waitFor(() =>
       expect(error).toHaveBeenCalledWith("Client Disconnected: ", sessionId),
     );
-    // A message for the closed session finds no transport and gets no answer.
-    const answered = await respondsWithin(
-      `${base}/message?sessionId=${sessionId}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
-      },
-    );
-    expect(answered).toBe(false);
+    // A message for the closed session finds no transport and is answered 404.
+    const response = await fetch(`${base}/message?sessionId=${sessionId}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
+      signal: AbortSignal.timeout(2000),
+    });
+    expect(response.status).toBe(404);
     expect(error).toHaveBeenCalledWith(
       `No transport found for sessionId ${sessionId}`,
     );
   });
 
-  // KNOWN BUG #4981: POST /message for an unknown session is never answered; the fix changes this assertion.
-  it("never answers a POST for an unknown session", async () => {
-    expect(
-      await respondsWithin(`${base}/message?sessionId=nope`, {
-        method: "POST",
-        body: "{}",
-      }),
-    ).toBe(false);
+  it("answers a POST for an unknown session with a 404", async () => {
+    const response = await fetch(`${base}/message?sessionId=nope`, {
+      method: "POST",
+      body: "{}",
+      signal: AbortSignal.timeout(2000),
+    });
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Session not found" },
+      id: null,
+    });
     expect(error).toHaveBeenCalledWith("No transport found for sessionId nope");
   });
 
-  // KNOWN BUG #4981: a second GET /sse for an existing session is never answered; the fix changes this assertion.
-  it("never answers a second GET /sse for an existing session, and only logs it", async () => {
+  it("answers a POST with no session id with a 400", async () => {
+    const response = await fetch(`${base}/message`, {
+      method: "POST",
+      body: "{}",
+      signal: AbortSignal.timeout(2000),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Bad Request: sessionId query parameter is required",
+      },
+      id: null,
+    });
+  });
+
+  it("answers a second GET /sse for an existing session with a 409, and keeps the first stream", async () => {
     const { client, sessionId } = await connectSse();
-    expect(await respondsWithin(`${base}/sse?sessionId=${sessionId}`, {})).toBe(
-      false,
-    );
+    const response = await fetch(`${base}/sse?sessionId=${sessionId}`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Conflict: this session already has an SSE stream",
+      },
+      id: null,
+    });
     expect(error).toHaveBeenCalledWith(
       "Client Reconnecting? This shouldn't happen; when client has a sessionId, GET /sse should not be called again.",
       sessionId,
     );
+    // The original session is untouched and still serves requests.
+    const result = await client.callTool({
+      name: "echo",
+      arguments: { message: "still here" },
+    });
+    expect(result.content).toEqual([
+      { type: "text", text: "Echo: still here" },
+    ]);
     await client.close();
   });
 
-  // KNOWN BUG #4981: GET /sse?sessionId=<unknown> throws a TypeError that surfaces as a 500; the fix changes this assertion.
-  it("fails a GET /sse for an unknown session id with a 500", async () => {
-    // Characterization: the reconnect branch reads `.sessionId` of a missing
-    // transport, and Express turns the TypeError into a 500.
-    const response = await fetch(`${base}/sse?sessionId=unknown`);
-    expect(response.status).toBe(500);
+  it("answers a GET /sse for an unknown session id with a 404", async () => {
+    const response = await fetch(`${base}/sse?sessionId=unknown`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Session not found" },
+      id: null,
+    });
+    expect(error).toHaveBeenCalledWith(
+      "No transport found for sessionId unknown",
+    );
   });
 
   it("answers a CORS preflight for any origin", async () => {
