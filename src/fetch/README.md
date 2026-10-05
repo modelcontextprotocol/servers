@@ -10,6 +10,8 @@ Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server
 
 > [!CAUTION]
 > This server can access local/internal IP addresses and may represent a security risk. Exercise caution when using this MCP server to ensure this does not expose any sensitive data.
+>
+> By default the server refuses to fetch private, loopback, link-local and other non-public addresses, including cloud metadata endpoints such as `169.254.169.254`, and checks every redirect hop the same way. The `--allow-private-ips` argument turns this guard off; see [Customization - Private addresses](#customization---private-addresses). The guard checks the addresses a hostname resolves to before each request, so it does not protect against DNS rebinding between that check and the connection, and a hostname the server cannot resolve itself (one only a proxy can resolve) is not checked.
 
 The fetch tool will truncate the response, but by using the `start_index` argument, you can specify where to start the content extraction. This lets models read a webpage in chunks, until they find the information they need.
 
@@ -155,6 +157,17 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 By default, the server will obey a websites robots.txt file if the request came from the model (via a tool), but not if
 the request was user initiated (via a prompt). This can be disabled by adding the argument `--ignore-robots-txt` to the
 `args` list in the configuration.
+
+### Customization - Private addresses
+
+By default, the server refuses any request, including a redirect hop or a robots.txt fetch, whose host resolves to an
+address that is not globally routable: loopback (`127.0.0.0/8`, `::1`), private (`10.0.0.0/8`, `172.16.0.0/12`,
+`192.168.0.0/16`, `fc00::/7`), link-local (`169.254.0.0/16`, `fe80::/10`), shared address space (`100.64.0.0/10`),
+multicast, unspecified, documentation and the other IANA special-purpose ranges. A hostname is refused if any one of its addresses is in those ranges.
+The client receives an error naming the refused address.
+
+To fetch from local or internal hosts (a development server, an intranet page), add the argument
+`--allow-private-ips` to the `args` list in the configuration.
 
 ### Customization - User-agent
 

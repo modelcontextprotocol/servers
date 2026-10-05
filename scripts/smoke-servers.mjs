@@ -150,6 +150,9 @@ export const SERVERS = [
     name: "fetch",
     language: "py",
     transports: ["stdio"],
+    // fetch refuses loopback addresses by default (#4838); the smoke page is
+    // on loopback, so the guard is turned off for it.
+    args: () => ["--allow-private-ips"],
     // The loopback page must not be routed through a proxy the developer has
     // configured for real traffic.
     env: () => ({
