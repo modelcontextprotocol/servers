@@ -825,7 +825,6 @@ async def test_convert_time_ignores_extra_arguments() -> None:
     assert result["target"]["timezone"] == "UTC"
 
 
-# KNOWN BUG #5003: an empty source_timezone surfaces zoneinfo's raw message, unlike get_current_time's "Missing required argument"; the fix changes this assertion.
 @pytest.mark.parametrize(
     "arguments,expected",
     [
@@ -857,13 +856,15 @@ async def test_convert_time_ignores_extra_arguments() -> None:
             {"source_timezone": "UTC", "time": "12:00", "target_timezone": "Bad/Zone"},
             handler_error("Invalid timezone: 'No time zone found with key Bad/Zone'"),
         ),
-        # Unlike get_current_time, an empty timezone is not special-cased and
-        # surfaces zoneinfo's own message.
+        # Like get_current_time, an empty timezone is reported as a missing
+        # argument rather than as zoneinfo's own message.
         (
             {"source_timezone": "", "time": "12:00", "target_timezone": "UTC"},
-            handler_error(
-                "Invalid timezone: ZoneInfo keys must be normalized relative paths, got: "
-            ),
+            handler_error("Missing required argument: source_timezone"),
+        ),
+        (
+            {"source_timezone": "UTC", "time": "12:00", "target_timezone": ""},
+            handler_error("Missing required argument: target_timezone"),
         ),
     ],
 )
