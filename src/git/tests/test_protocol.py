@@ -58,13 +58,15 @@ def staged_paths(repo: git.Repo) -> set[str]:
 # --------------------------------------------------------------------------
 
 
-# KNOWN BUG #360: pins current (wrong) behavior; the fix changes this assertion.
-async def test_initialize_reports_sdk_version_as_server_version(repo: git.Repo):
-    # Pins #360: serverInfo.version is the `mcp` SDK's version, not this
-    # package's, because serve() builds `Server("mcp-git")` without a version.
+async def test_initialize_reports_package_version_as_server_version(repo: git.Repo):
+    # #360: serverInfo.version is this package's version (from pyproject.toml
+    # via the installed metadata), not the `mcp` SDK's.
     async with connect(root_of(repo), initialize=False) as session:
         init = wire(await session.initialize())
-    assert init["serverInfo"] == {"name": "mcp-git", "version": version("mcp")}
+    assert init["serverInfo"] == {
+        "name": "mcp-git",
+        "version": version("mcp-server-git"),
+    }
     assert version("mcp") != version("mcp-server-git")
     assert init["capabilities"] == {
         "experimental": {},

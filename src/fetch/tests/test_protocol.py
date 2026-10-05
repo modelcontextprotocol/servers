@@ -92,14 +92,13 @@ async def test_initialize_advertises_tools_and_prompts(web: FakeWeb) -> None:
     assert "resources" not in data["capabilities"]
 
 
-# KNOWN BUG #360: pins current (wrong) behavior; the fix changes this assertion.
-async def test_server_version_is_the_sdk_version(web: FakeWeb) -> None:
-    # Characterizes #360: serverInfo.version is the `mcp` SDK's version, not
-    # this package's, because Server("mcp-fetch") is given no version.
+async def test_server_version_is_the_package_version(web: FakeWeb) -> None:
+    # #360: serverInfo.version is this package's version (from pyproject.toml
+    # via the installed metadata), not the `mcp` SDK's.
     async with connect() as (_, init):
         data = wire(init)
-    assert data["serverInfo"]["version"] == version("mcp")
-    assert data["serverInfo"]["version"] != version("mcp-server-fetch")
+    assert data["serverInfo"]["version"] == version("mcp-server-fetch")
+    assert data["serverInfo"]["version"] != version("mcp")
 
 
 # --------------------------------------------------------------------------
