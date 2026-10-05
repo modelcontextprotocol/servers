@@ -681,12 +681,23 @@ async def test_no_proxy_by_default(web: FakeWeb) -> None:
     assert web.client_kwargs == [{"proxy": None}]
 
 
-# KNOWN BUG #767, #1401: pins current (wrong) behavior; the fix changes this assertion.
+async def test_socks_alias_proxy_url_is_passed_as_socks5(web: FakeWeb) -> None:
+    # #767: httpx rejects the common socks:// alias, so it reaches the client
+    # as socks5:// (supported through httpx[socks], #1401).
+    web.add(ROBOTS, plain("", status=404))
+    web.add(PAGE, plain("ok"))
+    async with connect(proxy_url="socks://127.0.0.1:2080") as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is False
+    socks5 = "socks5://127.0.0.1:2080"
+    assert web.client_kwargs == [{"proxy": socks5}, {"proxy": socks5}]
+
+
 @pytest.mark.parametrize("ignore_robots_txt", [False, True])
-async def test_bad_proxy_config_surfaces_as_bare_text(ignore_robots_txt: bool) -> None:
-    # Characterizes #767 and #1401: a bad proxy URL makes httpx.AsyncClient()
-    # raise at construction, outside the `except HTTPError`, so the client gets
-    # httpx's bare exception text with no mention of fetch or the proxy flag.
+async def test_bad_proxy_config_is_a_tool_error(ignore_robots_txt: bool) -> None:
+    # #767 and #1401: a proxy httpx cannot use makes httpx.AsyncClient() raise
+    # at construction, before any request. The client gets an isError result
+    # that names the proxy settings, not httpx's bare exception text.
     # No `web` fixture: the real AsyncClient fails before any request is made.
     async with connect(
         proxy_url="ftp://proxy.example.com", ignore_robots_txt=ignore_robots_txt
@@ -696,7 +707,10 @@ async def test_bad_proxy_config_surfaces_as_bare_text(ignore_robots_txt: bool) -
         "content": [
             {
                 "type": "text",
-                "text": "Unknown scheme for proxy URL URL('ftp://proxy.example.com')",
+                "text": "Failed to set up the HTTP client, check the proxy "
+                "configuration (--proxy-url or the HTTP_PROXY, HTTPS_PROXY and "
+                "ALL_PROXY environment variables): "
+                "Unknown scheme for proxy URL URL('ftp://proxy.example.com')",
             }
         ],
         "isError": True,
@@ -818,7 +832,7 @@ async def test_get_prompt_does_not_validate_the_url(
     # a "Failed to fetch" prompt message rather than a validation error.
     # No `web` fixture: the real transport rejects the URL before any I/O.
     # Proxy variables are cleared so the real client cannot pick up one from
-    # the environment (a socks:// proxy would fail on the missing socksio).
+    # the environment and send the request through it.
     for name in list(os.environ):
         if name.lower() in ("http_proxy", "https_proxy", "all_proxy"):
             monkeypatch.delenv(name)
