@@ -165,6 +165,48 @@ describe("withFileLock", () => {
     expect(await withFileLock(lockPath, async () => "ran", fast)).toBe("ran");
   });
 
+  it("keeps a lock held longer than staleMs fresh, so it is not broken", async () => {
+    const opts = { staleMs: 100, timeoutMs: 5_000, retryMs: 5 };
+    const order: string[] = [];
+    const long = withFileLock(
+      lockPath,
+      async () => {
+        order.push("long start");
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        order.push("long end");
+      },
+      opts,
+    );
+    // Let the long holder take the lock before the waiter starts.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const waiter = withFileLock(
+      lockPath,
+      async () => {
+        order.push("waiter");
+      },
+      opts,
+    );
+
+    await Promise.all([long, waiter]);
+    expect(order).toEqual(["long start", "long end", "waiter"]);
+  });
+
+  it("removes the lock it created when writing it fails", async () => {
+    const realOpen = fs.open;
+    vi.spyOn(fs, "open").mockImplementationOnce(async (...args) => {
+      const handle = await realOpen(...args);
+      handle.writeFile = async () => {
+        throw new Error("EIO: simulated write failure");
+      };
+      return handle;
+    });
+
+    await expect(withFileLock(lockPath, async () => "ran")).rejects.toThrow(
+      "EIO: simulated write failure",
+    );
+    expect(await exists(lockPath)).toBe(false);
+  });
+
   it("leaves a lock it no longer owns in place on release", async () => {
     await withFileLock(lockPath, async () => {
       await fs.writeFile(lockPath, "someone else");

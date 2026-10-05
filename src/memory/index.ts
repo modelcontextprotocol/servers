@@ -15,6 +15,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { promises as fs, realpathSync } from "fs";
+import type { FileHandle } from "fs/promises";
 import path from "path";
 import os from "os";
 import { randomBytes } from "crypto";
@@ -105,7 +106,7 @@ export interface KnowledgeGraph {
 // Timings for the cross-process lock around each mutation. Exposed so tests
 // can shorten them; the server always uses the defaults.
 export interface FileLockOptions {
-  // A lock older than this is presumed abandoned and is broken.
+  // A lock not refreshed for this long is presumed abandoned and is broken.
   staleMs?: number;
   // Give up, failing the mutation, after waiting this long for the lock.
   timeoutMs?: number;
@@ -140,8 +141,9 @@ function isLockOwnerDead(contents: string): boolean {
 // mutations from separate server processes sharing one graph file take turns
 // and each one loads the graph the previous one saved (#4797). The lock is a
 // file created with O_EXCL, which is atomic on local filesystems: exactly one
-// creator wins. A lock left behind by a crashed process is broken once its
-// owner is known to be dead, or once it is older than staleMs.
+// creator wins. The holder refreshes the lock's mtime every staleMs / 2 while
+// it runs. A lock left behind by a crashed process is broken once its owner
+// is known to be dead, or once it has gone unrefreshed for staleMs.
 export async function withFileLock<T>(
   lockPath: string,
   operation: () => Promise<T>,
@@ -155,18 +157,26 @@ export async function withFileLock<T>(
   const deadline = Date.now() + timeoutMs;
 
   for (;;) {
+    let handle: FileHandle | undefined;
     try {
-      const handle = await fs.open(lockPath, "wx");
-      try {
-        await handle.writeFile(token);
-      } finally {
-        await handle.close();
-      }
-      break;
+      handle = await fs.open(lockPath, "wx");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
         throw error;
       }
+    }
+    if (handle) {
+      try {
+        await handle.writeFile(token);
+        await handle.close();
+      } catch (error) {
+        // The lock was created but not written: remove it rather than leave
+        // every other writer waiting for it to go stale.
+        await handle.close().catch(() => {});
+        await fs.unlink(lockPath).catch(() => {});
+        throw error;
+      }
+      break;
     }
 
     // Someone else holds the lock. Break it if it is abandoned; otherwise
@@ -203,9 +213,18 @@ export async function withFileLock<T>(
     );
   }
 
+  // Keep the lock fresh while the operation runs, so a mutation that outlasts
+  // staleMs (a large graph, a slow disk) is not mistaken for an abandoned one.
+  const heartbeat = setInterval(() => {
+    const now = new Date();
+    fs.utimes(lockPath, now, now).catch(() => {});
+  }, staleMs / 2);
+  heartbeat.unref();
+
   try {
     return await operation();
   } finally {
+    clearInterval(heartbeat);
     // Release only our own lock: if it was broken as stale while we held it,
     // the file may now belong to another process.
     const current = await fs.readFile(lockPath, "utf-8").catch(() => null);
