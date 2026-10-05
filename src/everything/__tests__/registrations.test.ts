@@ -145,7 +145,7 @@ describe("Registration Index Files", () => {
             registerToolTask: vi.fn(),
           },
         },
-      } as unknown as McpServer;
+      } as unknown as McpServer; // partial mock: McpServer's private members rule out a structural literal
 
       registerConditionalTools(mockServerUrlOnly);
 
@@ -207,7 +207,7 @@ describe("Registration Index Files", () => {
             registerToolTask: vi.fn(),
           },
         },
-      } as unknown as McpServer;
+      } as unknown as McpServer; // partial mock: McpServer's private members rule out a structural literal
 
       registerConditionalTools(mockServer);
 

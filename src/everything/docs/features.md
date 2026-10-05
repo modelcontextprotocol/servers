@@ -85,7 +85,7 @@ The server advertises support for MCP Tasks, enabling long-running operations wi
 Use the `simulate-research-query` tool to exercise the full task lifecycle. Set `ambiguous: true` to trigger elicitation - the server will send an `elicitation/create` request directly and await the response before completing.
 
 **Client-side tasks (server calls client):**
-Use `trigger-sampling-request-async` or `trigger-elicitation-request-async` to demonstrate bidirectional tasks where the server sends requests that the client executes as background tasks. These require the client to advertise `tasks.requests.sampling.createMessage` or `tasks.requests.elicitation.create` capabilities respectively.
+Use `trigger-sampling-request-async` or `trigger-elicitation-request-async` to demonstrate bidirectional tasks where the server sends requests that the client executes as background tasks. These require the client to advertise `sampling` with `tasks.requests.sampling.createMessage`, or form-mode `elicitation` with `tasks.requests.elicitation.create`, respectively.
 
 ### Bidirectional Task Flow
 
