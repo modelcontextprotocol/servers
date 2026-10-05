@@ -71,11 +71,13 @@ export class SequentialThinkingServer {
         input.totalThoughts = input.thoughtNumber;
       }
 
-      // Do the work that can throw before touching any state, so a failed
-      // call leaves thoughtHistory and branches as they were.
-      const formattedThought = this.disableThoughtLogging
-        ? undefined
-        : this.formatThought(input);
+      // Log before touching any state: drawing and writing the box are the
+      // steps that can throw, so a failed call leaves thoughtHistory and
+      // branches as they were.
+      if (!this.disableThoughtLogging) {
+        const formattedThought = this.formatThought(input);
+        console.error(formattedThought);
+      }
 
       this.thoughtHistory.push(input);
 
@@ -84,10 +86,6 @@ export class SequentialThinkingServer {
           this.branches[input.branchId] = [];
         }
         this.branches[input.branchId].push(input);
-      }
-
-      if (formattedThought !== undefined) {
-        console.error(formattedThought);
       }
 
       return {

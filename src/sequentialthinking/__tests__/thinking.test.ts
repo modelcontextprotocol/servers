@@ -330,38 +330,60 @@ describe("sequentialthinking thought processing", () => {
       });
     });
 
-    it("leaves the history and branches unchanged when a call fails", async () => {
-      const logging = await connect({ disableThoughtLogging: undefined });
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      try {
-        await logging.think(thought({ branchFromThought: 1, branchId: "alt" }));
-        // Drawing the box is the work that can still throw; make it fail once.
-        vi.spyOn(String.prototype, "padEnd").mockImplementationOnce(() => {
-          throw new Error("boom");
-        });
-        const failed = await logging.think(
-          thought({ thoughtNumber: 2, branchFromThought: 1, branchId: "new" }),
-        );
-        expect(failed.isError).toBe(true);
-        expect(JSON.parse(textOf(failed))).toEqual({
-          error: "boom",
-          status: "failed",
-        });
-        expect(
-          parseOk(await logging.think(thought({ thoughtNumber: 3 }))),
-        ).toEqual({
-          thoughtNumber: 3,
-          totalThoughts: 3,
-          nextThoughtNeeded: true,
-          branches: ["alt"],
-          thoughtHistoryLength: 2,
-        });
-      } finally {
-        vi.restoreAllMocks();
-        errorSpy.mockRestore();
-        await logging.close();
-      }
-    });
+    // Drawing the box and writing it to stderr are the steps that can still
+    // throw; make each fail once and check nothing was recorded.
+    it.each([
+      [
+        "drawing",
+        () =>
+          vi.spyOn(String.prototype, "padEnd").mockImplementationOnce(() => {
+            throw new Error("boom");
+          }),
+      ],
+      [
+        "writing",
+        () =>
+          vi.spyOn(console, "error").mockImplementationOnce(() => {
+            throw new Error("boom");
+          }),
+      ],
+    ])(
+      "leaves the history and branches unchanged when %s the log box fails",
+      async (_step, fail) => {
+        const logging = await connect({ disableThoughtLogging: undefined });
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+          await logging.think(
+            thought({ branchFromThought: 1, branchId: "alt" }),
+          );
+          fail();
+          const failed = await logging.think(
+            thought({
+              thoughtNumber: 2,
+              branchFromThought: 1,
+              branchId: "new",
+            }),
+          );
+          expect(failed.isError).toBe(true);
+          expect(JSON.parse(textOf(failed))).toEqual({
+            error: "boom",
+            status: "failed",
+          });
+          expect(
+            parseOk(await logging.think(thought({ thoughtNumber: 3 }))),
+          ).toEqual({
+            thoughtNumber: 3,
+            totalThoughts: 3,
+            nextThoughtNeeded: true,
+            branches: ["alt"],
+            thoughtHistoryLength: 2,
+          });
+        } finally {
+          vi.restoreAllMocks();
+          await logging.close();
+        }
+      },
+    );
 
     it("is harmless when branchFromThought is absent, since no branch is recorded", async () => {
       expect(
