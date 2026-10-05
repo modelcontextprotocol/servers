@@ -6,7 +6,9 @@ pair of in-memory streams, and a `ClientSession` talks to the other side. Every
 assertion is then made on what a client receives over the wire.
 """
 
+import os
 import shutil
+import stat
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -28,6 +30,7 @@ from mcp_server_git.server import serve
 def test_repository(tmp_path: Path) -> Iterator[git.Repo]:
     repo_path = tmp_path / "temp_test_repo"
     test_repo = git.Repo.init(repo_path)
+    disable_autocrlf(test_repo)
 
     Path(repo_path / "test.txt").write_text("test")
     test_repo.index.add(["test.txt"])
@@ -39,16 +42,47 @@ def test_repository(tmp_path: Path) -> Iterator[git.Repo]:
     # their cwd is inside the repository, so rmtree fails with WinError 32
     # (#4855, unblocks #1149).
     test_repo.close()
-    shutil.rmtree(repo_path)
+    rmtree(repo_path)
+
+
+def disable_autocrlf(repo: git.Repo) -> None:
+    """Commit and check out bytes unchanged, whatever the host's git config.
+
+    Git for Windows defaults to `core.autocrlf=true`, which rewrites the
+    fixtures' LF line endings to CRLF in the working tree, so diffs and `show`
+    output carry CRLF there and nowhere else. Set it repo-locally, before
+    anything is committed, so every OS sees the same bytes.
+    """
+    with repo.config_writer() as config:
+        config.set_value("core", "autocrlf", "false")
+
+
+def _clear_readonly_and_retry(func: Any, path: str, _exc_info: Any) -> None:
+    # Git writes object files read-only; on Windows that makes them
+    # undeletable (WinError 5) until the read-only bit is cleared.
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def rmtree(path: Path) -> None:
+    """`shutil.rmtree` that also removes git's read-only files on Windows.
+
+    Uses `onerror`, not `onexc`: the server pins Python 3.10, and `onexc` is
+    3.12+.
+    """
+    shutil.rmtree(path, onerror=_clear_readonly_and_retry)
 
 
 def make_repo(path: Path) -> git.Repo:
     """A repository on branch `main` with one commit of `test.txt`."""
     repo = git.Repo.init(path, initial_branch="main")
+    disable_autocrlf(repo)
     with repo.config_writer() as config:
         config.set_value("user", "name", "Test User")
         config.set_value("user", "email", "test@example.com")
-    (path / "test.txt").write_text("line 1\nline 2\nline 3\nline 4\nline 5\n")
+    (path / "test.txt").write_text(
+        "line 1\nline 2\nline 3\nline 4\nline 5\n", newline="\n"
+    )
     repo.index.add(["test.txt"])
     repo.index.commit("initial commit")
     return repo

@@ -99,6 +99,36 @@ jobs:
       - name: Coverage
         run: npm run coverage:py -- ${{ matrix.package }}
 
+  # The test suites on Windows (#1149), beside the Ubuntu `test` legs. Only
+  # pytest: ruff, pyright and the build do not depend on the OS.
+  test-windows:
+    timeout-minutes: 20
+    needs: [detect-packages]
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect-packages.outputs.packages) }}
+    name: Test ${{ matrix.package }} (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: "src/${{ matrix.package }}/.python-version"
+
+      - name: Install dependencies
+        working-directory: src/${{ matrix.package }}
+        run: uv sync --locked --all-extras --dev
+
+      - name: Run pytest
+        working-directory: src/${{ matrix.package }}
+        run: uv run --frozen pytest
+
   build:
     timeout-minutes: 10
     needs: [detect-packages, test]

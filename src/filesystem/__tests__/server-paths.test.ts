@@ -213,7 +213,12 @@ describe("symlinks", () => {
   it("reports a realpath failure other than ENOENT as is", async () => {
     await fs.writeFile(path.join(dir, "file.txt"), "");
     const result = await read(path.join(dir, "file.txt", "child"));
-    expect(textOf(result)).toMatch(/^ENOTDIR: not a directory, realpath/);
+    // Windows reports the failing syscall as scandir rather than realpath.
+    expect(textOf(result)).toMatch(
+      process.platform === "win32"
+        ? /^ENOTDIR: not a directory/
+        : /^ENOTDIR: not a directory, realpath/,
+    );
   });
 });
 
