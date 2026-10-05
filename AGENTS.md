@@ -19,19 +19,19 @@ not in advance.
 
 ## Skills index
 
-| Skill                                                  | Covers                                                                                                                                                  | How it loads                      |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| [`board-ops`](.claude/skills/board-ops/SKILL.md)       | `gh project` recipes and the IDs for the Servers V2 board (#43); resolving option IDs by name; the option-deletion hazard and its recovery               | Model-invoked, or `/board-ops`    |
-| [`issue-create`](.claude/skills/issue-create/SKILL.md) | The create flow: duplicate check, `v2` + type + server-scope labels, milestone, board card, Status + Priority, and the query that verifies them          | Model-invoked, or `/issue-create` |
-| [`pr-flow`](.claude/skills/pr-flow/SKILL.md)           | Issue to PR: branch, DCO signoff and repair, the gate, client evidence, `addCloseIssueReferences`, the Copilot loop and its exits, close-out on merge    | Model-invoked, or `/pr-flow`      |
-| [`issue-triage`](.claude/skills/issue-triage/SKILL.md) | Inflow: the class check and canned responses (listings, new servers, duplicates, outside PRs), pass 1 onto the board as Incoming, the priority rubric and its score comment, the board audit | Model-invoked, or `/issue-triage` |
-| [`pre-push-gate`](.claude/skills/pre-push-gate/SKILL.md) | Running `npm run local:gate` and reading its result; what each stage checks and how to fix it when it fails; waiting on the gate lease | Model-invoked, or `/pre-push-gate` |
-| [`security-advisory`](.claude/skills/security-advisory/SKILL.md) | A privately reported vulnerability end to end: the `[GHSA-…]` draft card, server or SDK ownership, the reach classes, accepting, the private fork, publishing, public tracking | Model-invoked, or `/security-advisory` |
-| [`project-structure`](.claude/skills/project-structure/SKILL.md) | What is inside each server: the TypeScript and Python layouts, where each server registers its features, and where a new file goes | Model-invoked, or `/project-structure` |
-| [`local-dev`](.claude/skills/local-dev/SKILL.md) | Install, build and run each server from the checkout over the transports it implements; local `npx`/`uvx` and client-config runs; stale builds and fresh worktrees; the `overrides`, lockstep and `uv.lock` procedures | Model-invoked, or `/local-dev` |
-| [`testing`](.claude/skills/testing/SKILL.md) | The in-process protocol-level harness, test placement, the commands per suite, `test` versus `coverage`, and clearing the per-file coverage gate | Model-invoked, or `/testing` |
-| [`release`](.claude/skills/release/SKILL.md) | A milestone release end to end: the release issue, the preparation PRs on `v2/main` (audit, Version Packages, Python CalVer), the pure `v2/main` → `main` merge PR, the release ledger, and what a maintainer publishes | **Name-only**: `/release` |
-| [`client-smoke`](.claude/skills/client-smoke/SKILL.md) | Driving a built server with the Inspector CLI (the scripted path), the Inspector web UI (by hand) and an LLM client; the CLI's argument split and exit codes; protocol eras and what can be exercised today | Model-invoked, or `/client-smoke` |
+| Skill                                                            | Covers                                                                                                                                                                                                                  | How it loads                           |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| [`board-ops`](.claude/skills/board-ops/SKILL.md)                 | `gh project` recipes and the IDs for the Servers V2 board (#43); resolving option IDs by name; the option-deletion hazard and its recovery                                                                              | Model-invoked, or `/board-ops`         |
+| [`issue-create`](.claude/skills/issue-create/SKILL.md)           | The create flow: duplicate check, `v2` + type + server-scope labels, milestone, board card, Status + Priority, and the query that verifies them                                                                         | Model-invoked, or `/issue-create`      |
+| [`pr-flow`](.claude/skills/pr-flow/SKILL.md)                     | Issue to PR: branch, DCO signoff and repair, the gate, client evidence, `addCloseIssueReferences`, the Copilot loop and its exits, close-out on merge                                                                   | Model-invoked, or `/pr-flow`           |
+| [`issue-triage`](.claude/skills/issue-triage/SKILL.md)           | Inflow: the class check and canned responses (listings, new servers, duplicates, outside PRs), pass 1 onto the board as Incoming, the priority rubric and its score comment, the board audit                            | Model-invoked, or `/issue-triage`      |
+| [`pre-push-gate`](.claude/skills/pre-push-gate/SKILL.md)         | Running `npm run local:gate` and reading its result; what each stage checks and how to fix it when it fails; waiting on the gate lease                                                                                  | Model-invoked, or `/pre-push-gate`     |
+| [`security-advisory`](.claude/skills/security-advisory/SKILL.md) | A privately reported vulnerability end to end: the `[GHSA-…]` draft card, server or SDK ownership, the reach classes, accepting, the private fork, publishing, public tracking                                          | Model-invoked, or `/security-advisory` |
+| [`project-structure`](.claude/skills/project-structure/SKILL.md) | What is inside each server: the TypeScript and Python layouts, where each server registers its features, and where a new file goes                                                                                      | Model-invoked, or `/project-structure` |
+| [`local-dev`](.claude/skills/local-dev/SKILL.md)                 | Install, build and run each server from the checkout over the transports it implements; local `npx`/`uvx` and client-config runs; stale builds and fresh worktrees; the `overrides`, lockstep and `uv.lock` procedures  | Model-invoked, or `/local-dev`         |
+| [`testing`](.claude/skills/testing/SKILL.md)                     | The in-process protocol-level harness, test placement, the commands per suite, `test` versus `coverage`, and clearing the per-file coverage gate                                                                        | Model-invoked, or `/testing`           |
+| [`release`](.claude/skills/release/SKILL.md)                     | A milestone release end to end: the release issue, the preparation PRs on `v2/main` (audit, Version Packages, Python CalVer), the pure `v2/main` → `main` merge PR, the release ledger, and what a maintainer publishes | **Name-only**: `/release`              |
+| [`client-smoke`](.claude/skills/client-smoke/SKILL.md)           | Driving a built server with the Inspector CLI (the scripted path), the Inspector web UI (by hand) and an LLM client; the CLI's argument split and exit codes; protocol eras and what can be exercised today             | Model-invoked, or `/client-smoke`      |
 
 A PR that adds a skill under `.claude/skills/<name>/SKILL.md` adds its row to
 this table in the same change, and the table never lists a skill that does not
@@ -120,7 +120,8 @@ npm run local:gate
 
 **Run `npm run local:gate` before every push, and push only when it exits 0.**
 It runs every check CI runs, for both languages, in one command:
-`verify:install-fresh`, the root `validate` (the guards, then each TypeScript
+`verify:install-fresh`, `verify:dco` (every commit since `origin/v2/main` is
+signed off), the root `validate` (the guards, then each TypeScript
 workspace's format check, lint, typecheck, build and tests), `coverage` (each
 TypeScript workspace's per-file coverage gate), `validate:py`
 (each Python server's locked sync, `ruff check`, `ruff format --check`,
@@ -251,6 +252,15 @@ together.
   PR merges to `v2/main`. The server dropdown in each form does not label the
   issue; triage applies the `server-<name>` scope label from it.
 
+**Every commit is signed off** under the [Developer Certificate of
+Origin](https://developercertificate.org/) (adopted on #4861): commit with
+`git commit -s`, so the message ends in a `Signed-off-by: Name <email>`
+trailer whose name and email match the commit's author or committer. Merge
+commits and bot-authored commits are exempt. `verify:dco` checks it in the
+pre-push gate, and the **DCO signoff** job (`.github/workflows/dco.yml`) checks
+every commit a pull request adds; one unsigned commit fails it. The repair
+(`git rebase --signoff`) is in the `pr-flow` skill.
+
 **Every PR references an issue.** The PR body's first line is
 `Closes #<ISSUE_NUMBER>`. A PR with no linked issue has no board card, so the
 work is invisible to the board. If there is no issue yet, create it first. This
@@ -327,11 +337,12 @@ from happening. How to write a description that fires, and eval cases that
 measure it, is [`docs/skill-authoring.md`](./docs/skill-authoring.md).
 
 1. **`npm run verify:skills` must pass.** It runs inside `validate:guards`, and
-   CI runs it with `verify:skills:cli` (the authoritative `claude plugin
-   validate`, at a pinned CLI version) on every push and pull request. It parses
-   each `SKILL.md`'s frontmatter the way Claude Code does. Malformed YAML loads
-   the body with an _empty_ description, so `/name` still works while the skill
-   can never auto-fire; an unquoted `#` truncates the description silently.
+   CI runs it with `verify:skills:cli` (the authoritative
+   `claude plugin validate`, at a pinned CLI version) on every push and pull
+   request. It parses each `SKILL.md`'s frontmatter the way Claude Code does.
+   Malformed YAML loads the body with an _empty_ description, so `/name` still
+   works while the skill can never auto-fire; an unquoted `#` truncates the
+   description silently.
    **Quote any description containing `#` or `:`**, and keep the opening `---`
    on the file's first line.
 2. **Every skill declares `disable-model-invocation` explicitly. Default it to
