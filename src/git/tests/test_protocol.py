@@ -40,13 +40,8 @@ async def call(
 
 
 def rejected(message: str) -> dict[str, Any]:
-    """The error a flag-injection guard returns over the wire.
-
-    The guards raise `BadName(message)`, and BadName's `__str__` wraps its
-    argument as a ref name, so the client sees the guard's message nested
-    inside "Ref '...' did not resolve to an object". Characterized as is.
-    """
-    return text_result(f"Ref '{message}' did not resolve to an object", is_error=True)
+    """The error a flag-injection guard returns: its message, as written."""
+    return text_result(message, is_error=True)
 
 
 def staged_paths(repo: git.Repo) -> set[str]:
@@ -58,13 +53,15 @@ def staged_paths(repo: git.Repo) -> set[str]:
 # --------------------------------------------------------------------------
 
 
-# KNOWN BUG #360: pins current (wrong) behavior; the fix changes this assertion.
-async def test_initialize_reports_sdk_version_as_server_version(repo: git.Repo):
-    # Pins #360: serverInfo.version is the `mcp` SDK's version, not this
-    # package's, because serve() builds `Server("mcp-git")` without a version.
+async def test_initialize_reports_package_version_as_server_version(repo: git.Repo):
+    # #360: serverInfo.version is this package's version (from pyproject.toml
+    # via the installed metadata), not the `mcp` SDK's.
     async with connect(root_of(repo), initialize=False) as session:
         init = wire(await session.initialize())
-    assert init["serverInfo"] == {"name": "mcp-git", "version": version("mcp")}
+    assert init["serverInfo"] == {
+        "name": "mcp-git",
+        "version": version("mcp-server-git"),
+    }
     assert version("mcp") != version("mcp-server-git")
     assert init["capabilities"] == {
         "experimental": {},
@@ -115,11 +112,12 @@ async def test_unknown_tool_is_error(repo: git.Repo):
     ) == text_result("Unknown tool: git_nope", is_error=True)
 
 
-# KNOWN BUG #4994: an unknown tool called without repo_path reports the KeyError repr "'repo_path'" instead of "Unknown tool"; the fix changes this assertion.
-async def test_unknown_tool_without_repo_path_reports_the_key_error():
-    # An unlisted tool skips schema validation, so call_tool's
-    # `arguments["repo_path"]` raises KeyError and its repr is the message.
-    assert await call(None, "git_nope", {}) == text_result("'repo_path'", is_error=True)
+async def test_unknown_tool_without_repo_path_is_unknown_tool():
+    # An unlisted tool skips schema validation; the name is checked before
+    # any argument is read, so a missing repo_path does not mask it.
+    assert await call(None, "git_nope", {}) == text_result(
+        "Unknown tool: git_nope", is_error=True
+    )
 
 
 async def test_nonexistent_repo_path_error_is_the_bare_path(tmp_path: Path):
@@ -164,8 +162,8 @@ async def test_git_status_clean(repo: git.Repo):
 
 async def test_git_status_reports_untracked_and_modified(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("changed\n")
-    (root / "new.txt").write_text("new\n")
+    (root / "test.txt").write_text("changed\n", newline="\n")
+    (root / "new.txt").write_text("new\n", newline="\n")
     result = await call(None, "git_status", {"repo_path": str(root)})
     assert result == text_result(f"Repository status:\n{repo.git.status()}")
     text = result["content"][0]["text"]
@@ -180,7 +178,9 @@ async def test_git_status_reports_untracked_and_modified(repo: git.Repo):
 
 async def test_git_diff_unstaged(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("line 1\nline 2\nCHANGED\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nCHANGED\nline 4\nline 5\n", newline="\n"
+    )
     result = await call(None, "git_diff_unstaged", {"repo_path": str(root)})
     assert result == text_result("Unstaged changes:\n" + repo.git.diff("--unified=3"))
     assert "-line 3\n+CHANGED" in result["content"][0]["text"]
@@ -189,7 +189,9 @@ async def test_git_diff_unstaged(repo: git.Repo):
 
 async def test_git_diff_unstaged_honors_context_lines(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("line 1\nline 2\nCHANGED\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nCHANGED\nline 4\nline 5\n", newline="\n"
+    )
     result = await call(
         None, "git_diff_unstaged", {"repo_path": str(root), "context_lines": 0}
     )
@@ -206,7 +208,9 @@ async def test_git_diff_unstaged_empty(repo: git.Repo):
 
 async def test_git_diff_staged(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("line 1\nline 2\nCHANGED\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nCHANGED\nline 4\nline 5\n", newline="\n"
+    )
     repo.index.add(["test.txt"])
     result = await call(None, "git_diff_staged", {"repo_path": str(root)})
     assert result == text_result(
@@ -217,7 +221,9 @@ async def test_git_diff_staged(repo: git.Repo):
 
 async def test_git_diff_staged_honors_context_lines(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("line 1\nline 2\nCHANGED\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nCHANGED\nline 4\nline 5\n", newline="\n"
+    )
     repo.index.add(["test.txt"])
     result = await call(
         None, "git_diff_staged", {"repo_path": str(root), "context_lines": 0}
@@ -241,7 +247,9 @@ async def test_git_diff_staged_empty(repo: git.Repo):
 async def test_git_diff_against_branch(repo: git.Repo):
     root = root_of(repo)
     repo.git.checkout("-b", "feature")
-    (root / "test.txt").write_text("line 1\nline 2\nFEATURE\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nFEATURE\nline 4\nline 5\n", newline="\n"
+    )
     repo.index.add(["test.txt"])
     repo.index.commit("feature commit")
     result = await call(None, "git_diff", {"repo_path": str(root), "target": "main"})
@@ -253,7 +261,9 @@ async def test_git_diff_against_branch(repo: git.Repo):
 
 async def test_git_diff_honors_context_lines(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("line 1\nline 2\nCHANGED\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nCHANGED\nline 4\nline 5\n", newline="\n"
+    )
     result = await call(
         None,
         "git_diff",
@@ -270,7 +280,6 @@ async def test_git_diff_unknown_target_is_error(repo: git.Repo):
     ) == text_result("Ref 'nope' did not resolve to an object", is_error=True)
 
 
-# KNOWN BUG #4999: the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_diff_rejects_flag_injection(repo: git.Repo):
     assert await call(
         None,
@@ -286,7 +295,7 @@ async def test_git_diff_rejects_flag_injection(repo: git.Repo):
 
 async def test_git_commit_records_staged_changes(repo: git.Repo):
     root = root_of(repo)
-    (root / "new.txt").write_text("new\n")
+    (root / "new.txt").write_text("new\n", newline="\n")
     repo.index.add(["new.txt"])
     result = await call(
         None, "git_commit", {"repo_path": str(root), "message": "add new"}
@@ -299,23 +308,21 @@ async def test_git_commit_records_staged_changes(repo: git.Repo):
     assert "new.txt" in head.stats.files
 
 
-# KNOWN BUG #4762: pins current (wrong) behavior; the fix changes this assertion.
-async def test_git_commit_with_nothing_staged_creates_empty_commit(repo: git.Repo):
-    # Pins #4762: with nothing staged, git_commit still writes a commit (whose
-    # tree equals its parent's) and reports success. `git commit` would refuse
-    # with "no changes added to commit". Fixing #4762 changes this test.
+async def test_git_commit_with_nothing_staged_is_refused(repo: git.Repo):
+    # #4762: with nothing staged, git_commit refuses, as `git commit` does
+    # without --allow-empty, instead of writing an empty commit.
     root = root_of(repo)
-    (root / "test.txt").write_text("edited but not staged\n")
+    (root / "test.txt").write_text("edited but not staged\n", newline="\n")
     before = repo.head.commit
     result = await call(
         None, "git_commit", {"repo_path": str(root), "message": "claims a fix"}
     )
-    after = repo.head.commit
     assert result == text_result(
-        f"Changes committed successfully with hash {after.hexsha}"
+        "No changes staged for commit. Use git_add to stage changes first; "
+        "git_status shows what is currently staged.",
+        is_error=True,
     )
-    assert after.parents == (before,)
-    assert after.tree.hexsha == before.tree.hexsha
+    assert repo.head.commit == before
     assert repo.is_dirty()
 
 
@@ -326,8 +333,8 @@ async def test_git_commit_with_nothing_staged_creates_empty_commit(repo: git.Rep
 
 async def test_git_add_specific_files(repo: git.Repo):
     root = root_of(repo)
-    (root / "a.txt").write_text("a\n")
-    (root / "b.txt").write_text("b\n")
+    (root / "a.txt").write_text("a\n", newline="\n")
+    (root / "b.txt").write_text("b\n", newline="\n")
     result = await call(None, "git_add", {"repo_path": str(root), "files": ["a.txt"]})
     assert result == text_result("Files staged successfully")
     assert staged_paths(repo) == {"a.txt"}
@@ -335,8 +342,8 @@ async def test_git_add_specific_files(repo: git.Repo):
 
 async def test_git_add_dot_stages_everything(repo: git.Repo):
     root = root_of(repo)
-    (root / "a.txt").write_text("a\n")
-    (root / "b.txt").write_text("b\n")
+    (root / "a.txt").write_text("a\n", newline="\n")
+    (root / "b.txt").write_text("b\n", newline="\n")
     result = await call(None, "git_add", {"repo_path": str(root), "files": ["."]})
     assert result == text_result("Files staged successfully")
     assert staged_paths(repo) == {"a.txt", "b.txt"}
@@ -345,7 +352,7 @@ async def test_git_add_dot_stages_everything(repo: git.Repo):
 async def test_git_add_dot_never_stages_git_dir(repo: git.Repo):
     # Regression guard for #628: `git add .` must not stage `.git` itself.
     root = root_of(repo)
-    (root / "a.txt").write_text("a\n")
+    (root / "a.txt").write_text("a\n", newline="\n")
     await call(None, "git_add", {"repo_path": str(root), "files": ["."]})
     entries = [str(path) for path, _stage in repo.index.entries]
     assert not any(p == ".git" or p.startswith(".git/") for p in entries)
@@ -354,7 +361,7 @@ async def test_git_add_dot_never_stages_git_dir(repo: git.Repo):
 
 async def test_git_add_absolute_path_inside_repository(repo: git.Repo):
     root = root_of(repo)
-    (root / "a.txt").write_text("a\n")
+    (root / "a.txt").write_text("a\n", newline="\n")
     result = await call(
         None, "git_add", {"repo_path": str(root), "files": [str(root / "a.txt")]}
     )
@@ -366,32 +373,33 @@ async def test_git_add_file_starting_with_dash_is_a_path(repo: git.Repo):
     # `--` separates the pathspec, so a dash-named file is staged, not parsed
     # as an option.
     root = root_of(repo)
-    (root / "-n").write_text("dash\n")
+    (root / "-n").write_text("dash\n", newline="\n")
     result = await call(None, "git_add", {"repo_path": str(root), "files": ["-n"]})
     assert result == text_result("Files staged successfully")
     assert staged_paths(repo) == {"-n"}
 
 
-# KNOWN BUG #4763: pins current (wrong) behavior; the fix changes this assertion.
-async def test_git_add_empty_list_reports_success_but_stages_nothing(
-    repo: git.Repo,
-):
-    # Pins #4763: `files: []` runs `git add --`, a no-op, and still reports
-    # success. Fixing #4763 changes this test.
+async def test_git_add_empty_list_is_rejected(repo: git.Repo):
+    # #4763: `files: []` would run `git add --`, a no-op. The schema's
+    # minItems makes the SDK reject it before the tool runs.
     root = root_of(repo)
-    (root / "test.txt").write_text("edited\n")
+    (root / "test.txt").write_text("edited\n", newline="\n")
     result = await call(None, "git_add", {"repo_path": str(root), "files": []})
-    assert result == text_result("Files staged successfully")
+    assert result == text_result(
+        "Input validation error: [] should be non-empty", is_error=True
+    )
     assert staged_paths(repo) == set()
 
 
-# KNOWN BUG #4763: pins current (wrong) behavior; the fix changes this assertion.
-async def test_git_add_dot_on_clean_tree_reports_success(repo: git.Repo):
-    # Pins #4763: nothing to stage, success reported anyway.
+async def test_git_add_dot_on_clean_tree_reports_nothing_staged(repo: git.Repo):
+    # #4763: nothing to stage, and the result says so.
     result = await call(
         None, "git_add", {"repo_path": str(root_of(repo)), "files": ["."]}
     )
-    assert result == text_result("Files staged successfully")
+    assert result == text_result(
+        "No changes were staged: the given paths had nothing new to stage. "
+        "git_status shows what is modified or untracked."
+    )
     assert staged_paths(repo) == set()
 
 
@@ -409,7 +417,7 @@ async def test_git_add_rejects_relative_traversal(repo: git.Repo):
     # CVE-2026-27735: a path escaping the working tree is refused before git
     # runs.
     root = root_of(repo)
-    (root.parent / "outside.txt").write_text("secret\n")
+    (root.parent / "outside.txt").write_text("secret\n", newline="\n")
     result = await call(
         None, "git_add", {"repo_path": str(root), "files": ["../outside.txt"]}
     )
@@ -423,7 +431,7 @@ async def test_git_add_rejects_relative_traversal(repo: git.Repo):
 async def test_git_add_rejects_absolute_path_outside(repo: git.Repo):
     root = root_of(repo)
     outside = root.parent / "outside.txt"
-    outside.write_text("secret\n")
+    outside.write_text("secret\n", newline="\n")
     result = await call(
         None, "git_add", {"repo_path": str(root), "files": [str(outside)]}
     )
@@ -436,7 +444,7 @@ async def test_git_add_rejects_absolute_path_outside(repo: git.Repo):
 async def test_git_add_rejects_symlink_out_of_repository(repo: git.Repo):
     root = root_of(repo)
     outside = root.parent / "outside.txt"
-    outside.write_text("secret\n")
+    outside.write_text("secret\n", newline="\n")
     (root / "link.txt").symlink_to(outside)
     result = await call(
         None, "git_add", {"repo_path": str(root), "files": ["link.txt"]}
@@ -473,8 +481,8 @@ async def test_git_add_unresolvable_path_is_invalid_path(repo: git.Repo):
 
 async def test_git_reset_unstages_everything(repo: git.Repo):
     root = root_of(repo)
-    (root / "a.txt").write_text("a\n")
-    (root / "test.txt").write_text("edited\n")
+    (root / "a.txt").write_text("a\n", newline="\n")
+    (root / "test.txt").write_text("edited\n", newline="\n")
     repo.index.add(["a.txt", "test.txt"])
     assert staged_paths(repo) == {"a.txt", "test.txt"}
     result = await call(None, "git_reset", {"repo_path": str(root)})
@@ -502,7 +510,7 @@ def add_commits(repo: git.Repo, n: int) -> list[git.Commit]:
     root = root_of(repo)
     commits = []
     for i in range(n):
-        (root / f"f{i}.txt").write_text(f"{i}\n")
+        (root / f"f{i}.txt").write_text(f"{i}\n", newline="\n")
         repo.index.add([f"f{i}.txt"])
         commits.append(repo.index.commit(f"commit {i}\n\nbody {i}"))
     return commits
@@ -603,18 +611,29 @@ async def test_git_create_branch_unknown_base_is_error(repo: git.Repo):
     ) == text_result("No item found with id nope", is_error=True)
 
 
-# KNOWN BUG #4996: git_create_branch reports "Created branch" for an existing branch already at the base commit; the fix changes this assertion.
-async def test_git_create_branch_existing_name_at_same_commit_reports_success(
+async def test_git_create_branch_existing_name_at_same_commit_is_error(
     repo: git.Repo,
 ):
-    # Characterization: GitPython's create_head accepts an existing branch that
-    # already points at the base commit, so this "creates" `main` from `main`
-    # and reports success although nothing was created.
+    # GitPython's create_head accepts an existing branch that already points
+    # at the base commit; the server rejects it rather than report a creation.
     assert await call(
         None,
         "git_create_branch",
         {"repo_path": str(root_of(repo)), "branch_name": "main"},
-    ) == text_result("Created branch 'main' from 'main'")
+    ) == text_result(
+        "Cannot create branch 'main': refs/heads/main already exists", is_error=True
+    )
+
+
+async def test_git_create_branch_name_matching_list_attribute(repo: git.Repo):
+    # The existence check compares head names, so a new branch named like an
+    # attribute of GitPython's IterableList ("append") is still created.
+    assert await call(
+        None,
+        "git_create_branch",
+        {"repo_path": str(root_of(repo)), "branch_name": "append"},
+    ) == text_result("Created branch 'append' from 'main'")
+    assert repo.commit("refs/heads/append") == repo.heads["main"].commit
 
 
 async def test_git_create_branch_existing_name_at_other_commit_is_error(
@@ -632,7 +651,6 @@ async def test_git_create_branch_existing_name_at_other_commit_is_error(
     assert "already exist" in result["content"][0]["text"]
 
 
-# KNOWN BUG #4999: the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_create_branch_rejects_flag_injection(repo: git.Repo):
     root = str(root_of(repo))
     assert await call(
@@ -661,14 +679,12 @@ async def test_git_checkout_branch(repo: git.Repo):
     assert repo.active_branch.name == "feature"
 
 
-# KNOWN BUG #4804: pins current (wrong) behavior; the fix changes this assertion.
 @pytest.mark.parametrize("revision", ["sha", "tag", "HEAD~1", "refs/heads/feature"])
-async def test_git_checkout_non_branch_detaches_head_but_claims_switch(
+async def test_git_checkout_non_branch_reports_detached_head(
     repo: git.Repo, revision: str
 ):
-    # Pins #4804: any revision rev_parse accepts is checked out, detaching
-    # HEAD, and the reply still says "Switched to branch". Fixing #4804 changes
-    # this test.
+    # #4804: any revision rev_parse accepts is checked out, detaching HEAD, and
+    # the reply says so with the short sha instead of claiming a branch switch.
     add_commits(repo, 1)
     repo.git.branch("feature")
     repo.create_tag("v1", ref="HEAD~1")
@@ -676,11 +692,13 @@ async def test_git_checkout_non_branch_detaches_head_but_claims_switch(
         "sha": repo.head.commit.hexsha[:7],
         "tag": "v1",
     }.get(revision, revision)
+    target = repo.commit(name).hexsha
     result = await call(
         None, "git_checkout", {"repo_path": str(root_of(repo)), "branch_name": name}
     )
-    assert result == text_result(f"Switched to branch '{name}'")
     assert repo.head.is_detached
+    assert repo.head.commit.hexsha == target
+    assert result == text_result(f"HEAD is now detached at {target[:7]}")
 
 
 async def test_git_checkout_unknown_branch_is_error(repo: git.Repo):
@@ -692,7 +710,6 @@ async def test_git_checkout_unknown_branch_is_error(repo: git.Repo):
     assert repo.active_branch.name == "main"
 
 
-# KNOWN BUG #4999: the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_checkout_rejects_flag_injection(repo: git.Repo):
     assert await call(
         None,
@@ -706,32 +723,28 @@ async def test_git_checkout_rejects_flag_injection(repo: git.Repo):
 # --------------------------------------------------------------------------
 
 
-def without_addresses(text: str) -> str:
-    """Mask CPython object addresses (`object at 0x...`)."""
-    return re.sub(r" at 0x[0-9a-fA-F]+", " at 0x?", text)
-
-
 def show_text(result: dict[str, Any]) -> str:
     assert result["isError"] is False
-    return without_addresses(result["content"][0]["text"])
+    return result["content"][0]["text"]
 
 
 def show_header(commit: git.Commit) -> str:
-    # git_show formats its header with !r, so the reply carries Python reprs:
-    # a quoted sha, `<git.Actor ...>`, and a `datetime.datetime(...)` whose
-    # tzinfo repr includes a memory address. Compared with addresses masked.
-    return without_addresses(
-        f"Commit: {commit.hexsha!r}\n"
-        f"Author: {commit.author!r}\n"
-        f"Date: {commit.authored_datetime!r}\n"
-        f"Message: {commit.message!r}\n"
+    # git_show's header follows `git show --date=iso`.
+    date = commit.authored_datetime.strftime("%Y-%m-%d %H:%M:%S %z")
+    lines = str(commit.message).rstrip("\n").split("\n")
+    return (
+        f"commit {commit.hexsha}\n"
+        "Author: Test User <test@example.com>\n"
+        f"Date:   {date}\n"
+        "\n" + "".join(f"    {line}\n" for line in lines)
     )
 
 
-# KNOWN BUG #4998: git_show prints Python reprs (quoted sha, <git.Actor>, datetime with a memory address) instead of git's format; the fix changes this assertion.
 async def test_git_show_commit_with_parent(repo: git.Repo):
     root = root_of(repo)
-    (root / "test.txt").write_text("line 1\nline 2\nSHOWN\nline 4\nline 5\n")
+    (root / "test.txt").write_text(
+        "line 1\nline 2\nSHOWN\nline 4\nline 5\n", newline="\n"
+    )
     repo.index.add(["test.txt"])
     commit = repo.index.commit("show me")
     result = await call(
@@ -743,29 +756,52 @@ async def test_git_show_commit_with_parent(repo: git.Repo):
         + "@@ -1,5 +1,5 @@\n line 1\n line 2\n-line 3\n+SHOWN\n line 4\n line 5\n"
     )
     text = show_text(result)
-    assert f"Commit: '{commit.hexsha}'\n" in text
-    assert 'Author: <git.Actor "Test User <test@example.com>">\n' in text
-    assert "Date: datetime.datetime(" in text
-    assert "Message: 'show me'\n" in text
+    assert text.startswith(
+        f"commit {commit.hexsha}\nAuthor: Test User <test@example.com>\n"
+    )
+    assert re.search(
+        r"\nDate:   \d{4}-\d\d-\d\d \d\d:\d\d:\d\d [+-]\d{4}\n\n    show me\n", text
+    )
 
 
-# KNOWN BUG #4998: git_show prints Python reprs (with a memory address) and "--- None" where git prints /dev/null; the fix changes this assertion.
+async def test_git_show_multiline_message_is_indented(repo: git.Repo):
+    root = root_of(repo)
+    (root / "test.txt").write_text("changed\n")
+    repo.index.add(["test.txt"])
+    commit = repo.index.commit("subject\n\nbody line\n")
+    result = await call(None, "git_show", {"repo_path": str(root), "revision": "HEAD"})
+    text = show_text(result)
+    assert text.startswith(show_header(commit))
+    assert "\n\n    subject\n    \n    body line\n\n--- test.txt\n" in text
+
+
 async def test_git_show_initial_commit_diffs_against_empty_tree(repo: git.Repo):
     # With no parent the commit is diffed against NULL_TREE. An added file has
-    # no a_path, so the header prints Python's `None` where git prints
-    # `/dev/null`.
+    # no a_path, so the header prints /dev/null, as git does.
     initial = repo.head.commit
     result = await call(
         None, "git_show", {"repo_path": str(root_of(repo)), "revision": "HEAD"}
     )
     assert show_text(result) == (
         show_header(initial)
-        + "\n--- None\n+++ test.txt\n"
+        + "\n--- /dev/null\n+++ test.txt\n"
         + "@@ -0,0 +1,5 @@\n+line 1\n+line 2\n+line 3\n+line 4\n+line 5\n"
     )
 
 
-# KNOWN BUG #4998: git_show prints Python reprs (quoted sha, <git.Actor>, datetime with a memory address) instead of git's format; the fix changes this assertion.
+async def test_git_show_deleted_file_diffs_to_dev_null(repo: git.Repo):
+    repo.index.remove(["test.txt"], working_tree=True)
+    commit = repo.index.commit("delete")
+    result = await call(
+        None, "git_show", {"repo_path": str(root_of(repo)), "revision": "HEAD"}
+    )
+    assert show_text(result) == (
+        show_header(commit)
+        + "\n--- test.txt\n+++ /dev/null\n"
+        + "@@ -1,5 +0,0 @@\n-line 1\n-line 2\n-line 3\n-line 4\n-line 5\n"
+    )
+
+
 async def test_git_show_rename_only_commit_has_header_and_no_patch(repo: git.Repo):
     # A pure rename yields a diff entry whose patch is empty bytes.
     repo.index.move(["test.txt", "renamed.txt"])
@@ -778,7 +814,6 @@ async def test_git_show_rename_only_commit_has_header_and_no_patch(repo: git.Rep
     )
 
 
-# KNOWN BUG #4998: git_show prints Python reprs (quoted sha, <git.Actor>, datetime with a memory address) instead of git's format; the fix changes this assertion.
 async def test_git_show_binary_commit(repo: git.Repo):
     root = root_of(repo)
     (root / "blob.bin").write_bytes(bytes(range(256)))
@@ -787,36 +822,57 @@ async def test_git_show_binary_commit(repo: git.Repo):
     result = await call(None, "git_show", {"repo_path": str(root), "revision": "HEAD"})
     assert show_text(result) == (
         show_header(commit)
-        + "\n--- blob.bin\n+++ blob.bin\n"
+        + "\n--- /dev/null\n+++ blob.bin\n"
         + "Binary files /dev/null and b/blob.bin differ\n"
     )
 
 
-# KNOWN BUG #4997: git_show decodes the patch as strict UTF-8, so a Latin-1 file fails the whole call; the fix changes this assertion.
-async def test_git_show_non_utf8_patch_is_decode_error(repo: git.Repo):
-    # Characterization: the patch bytes are decoded as strict UTF-8, so a
-    # Latin-1 text file makes the whole call fail.
+async def test_git_show_non_utf8_patch_is_decoded_with_replacement(repo: git.Repo):
+    # A Latin-1 text file's patch is not valid UTF-8; the undecodable byte
+    # becomes U+FFFD and the rest of the commit is still shown.
     root = root_of(repo)
     (root / "latin.txt").write_bytes("caf\xe9\n".encode("latin-1"))
     repo.index.add(["latin.txt"])
-    repo.index.commit("latin-1")
+    commit = repo.index.commit("latin-1")
     result = await call(None, "git_show", {"repo_path": str(root), "revision": "HEAD"})
-    assert result["isError"] is True
-    assert "codec can't decode byte 0xe9" in result["content"][0]["text"]
+    assert show_text(result) == (
+        show_header(commit)
+        + "\n--- /dev/null\n+++ latin.txt\n"
+        + "@@ -0,0 +1 @@\n+caf\ufffd\n"
+    )
 
 
-# KNOWN BUG #1682: pins current (wrong) behavior; the fix changes this assertion.
-async def test_git_show_revision_path_syntax_is_error(repo: git.Repo):
-    # Pins #1682's current error: `<rev>:<path>` names a blob, not a commit,
-    # and repo.commit() appends `^0`, so the call fails with this message
-    # rather than crashing the server.
+async def test_git_show_revision_path_shows_the_file(repo: git.Repo):
+    # `<rev>:<path>` names a blob; git_show returns its content (#1682).
     result = await call(
         None,
         "git_show",
         {"repo_path": str(root_of(repo)), "revision": "HEAD:test.txt"},
     )
+    # Compared with the raw bytes: the fixture writes text, so CRLF on Windows.
+    expected = (root_of(repo) / "test.txt").read_bytes().decode()
+    assert result == text_result(expected)
+
+
+async def test_git_show_revision_path_to_a_directory_lists_it(repo: git.Repo):
+    # `<rev>:<dir>` names a tree; git_show lists it, subdirectories with `/`.
+    root = root_of(repo)
+    (root / "logic").mkdir()
+    (root / "logic" / "infos.py").write_text("print('infos')\n")
+    repo.index.add(["logic/infos.py"])
+    repo.index.commit("add infos")
+    result = await call(None, "git_show", {"repo_path": str(root), "revision": "HEAD:"})
+    assert result == text_result("logic/\ntest.txt")
+
+
+async def test_git_show_revision_path_not_found_is_error(repo: git.Repo):
+    result = await call(
+        None,
+        "git_show",
+        {"repo_path": str(root_of(repo)), "revision": "HEAD:nope.txt"},
+    )
     assert result == text_result(
-        "\"Blob or Tree named 'test.txt^0' not found\"", is_error=True
+        "\"Blob or Tree named 'nope.txt' not found\"", is_error=True
     )
 
 
@@ -826,7 +882,6 @@ async def test_git_show_unknown_revision_is_error(repo: git.Repo):
     ) == text_result("Ref 'nope' did not resolve to an object", is_error=True)
 
 
-# KNOWN BUG #4999: the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_show_rejects_flag_injection(repo: git.Repo):
     assert await call(
         None, "git_show", {"repo_path": str(root_of(repo)), "revision": "--format=x"}
@@ -885,17 +940,12 @@ async def test_git_branch_contains_and_not_contains(repo: git.Repo):
     assert not_contains == text_result("* main")
 
 
-# KNOWN BUG #4995: git_branch returns an unknown branch_type as a successful result, not an error; the fix changes this assertion.
-async def test_git_branch_unknown_type_is_not_an_error(repo: git.Repo):
-    # Characterization: an unknown branch_type is reported in the text of a
-    # *successful* result (isError false), so a client cannot tell it apart
-    # from a branch listing.
+async def test_git_branch_unknown_type_is_error(repo: git.Repo):
     assert await call(
         None, "git_branch", {"repo_path": str(root_of(repo)), "branch_type": "bogus"}
-    ) == text_result("Invalid branch type: bogus")
+    ) == text_result("Invalid branch type: bogus", is_error=True)
 
 
-# KNOWN BUG #4999: the flag-injection guard's message reaches the client wrapped as "Ref '...' did not resolve to an object"; the fix changes this assertion.
 async def test_git_branch_rejects_flag_injection(repo: git.Repo):
     root = str(root_of(repo))
     assert await call(
@@ -985,8 +1035,10 @@ async def test_restricted_server_rejects_dotdot_traversal(
     other = make_repo(tmp_path / "other")
     try:
         sneaky = f"{root}/../other"
+        # The server echoes the path as `Path(repo_path)` renders it: unchanged
+        # on POSIX, with backslash separators on Windows.
         assert await call(root, "git_status", {"repo_path": sneaky}) == outside_error(
-            sneaky, root
+            Path(sneaky), root
         )
     finally:
         other.close()

@@ -7,11 +7,16 @@ Two pieces:
   go through the SDK's validation and error mapping exactly as a client would.
 - ``web`` replaces ``httpx.AsyncClient`` with one backed by an
   ``httpx.MockTransport``, so no test touches the network. It records every
-  request and the keyword arguments each client was constructed with.
+  request and the keyword arguments each client was constructed with. It also
+  replaces the server's DNS lookup (``_resolve_host``) with ``FakeWeb.dns``:
+  a hostname listed there resolves to its addresses, an IP literal resolves to
+  itself, and any other name resolves to ``PUBLIC_IP``.
 """
 
 from __future__ import annotations
 
+import ipaddress
+import socket
 import tempfile
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -30,6 +35,10 @@ import mcp_server_fetch.server as server_module
 
 Responder = Union[httpx.Response, Callable[[httpx.Request], httpx.Response]]
 
+# A globally routable address (documentation ranges are not global, so they
+# would be refused by the private-address guard).
+PUBLIC_IP = "93.184.215.14"
+
 
 @dataclass
 class FakeWeb:
@@ -38,6 +47,9 @@ class FakeWeb:
     routes: dict[str, Responder] = field(default_factory=dict)
     requests: list[httpx.Request] = field(default_factory=list)
     client_kwargs: list[dict[str, Any]] = field(default_factory=list)
+    # hostname -> addresses; an empty list makes the name unresolvable.
+    dns: dict[str, list[str]] = field(default_factory=dict)
+    lookups: list[str] = field(default_factory=list)
 
     def add(self, url: str, response: Responder) -> None:
         self.routes[url] = response
@@ -53,6 +65,17 @@ class FakeWeb:
 
     def urls(self) -> list[str]:
         return [str(r.url) for r in self.requests]
+
+    async def resolve(self, host: str) -> list[str]:
+        self.lookups.append(host)
+        try:
+            return [str(ipaddress.ip_address(host))]
+        except ValueError:
+            pass
+        addresses = self.dns.get(host, [PUBLIC_IP])
+        if not addresses:
+            raise socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+        return addresses
 
 
 @pytest.fixture
@@ -71,6 +94,7 @@ def web(monkeypatch: pytest.MonkeyPatch) -> FakeWeb:
     # server.py imports AsyncClient from httpx inside each function, so
     # patching the attribute on the httpx module is what it picks up.
     monkeypatch.setattr(httpx, "AsyncClient", factory)
+    monkeypatch.setattr(server_module, "_resolve_host", fake.resolve)
     return fake
 
 

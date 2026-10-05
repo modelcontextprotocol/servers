@@ -153,6 +153,7 @@
             "items": {
               "type": "string"
             },
+            "minItems": 1,
             "title": "Files",
             "type": "array"
           }
@@ -318,7 +319,7 @@
     },
     {
       "name": "git_show",
-      "description": "Shows the contents of a commit",
+      "description": "Shows the contents of a commit, or of a file or directory given as <revision>:<path>",
       "inputSchema": {
         "properties": {
           "repo_path": {

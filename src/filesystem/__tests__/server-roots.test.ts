@@ -2,8 +2,9 @@
 // the command-line directories after initialize, how roots/list_changed
 // updates them, and what happens when roots are invalid, fail or are not
 // offered. Driven by a real Client that answers the server's roots/list
-// requests over the in-memory transport. Pins #3204 as a known bug, and
-// #3602's roots-replace-the-command-line behavior as the README documents it.
+// requests over the in-memory transport. Guards the fixes for #3204 (tool
+// calls wait for the initial roots) and #4992 (no directories at all fails
+// visibly), and pins #3602's roots-replace-the-command-line behavior as the README documents it.
 
 import fs from "fs/promises";
 import path from "path";
@@ -19,6 +20,7 @@ import {
   textOf,
   type Connected,
 } from "./helpers.js";
+import { NO_ALLOWED_DIRECTORIES_ERROR } from "../server.js";
 
 const ROOTS = { roots: { listChanged: true } };
 
@@ -157,40 +159,77 @@ describe("initial roots", () => {
     expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
   });
 
-  // KNOWN BUG #3204: pins current (wrong) behavior; the fix changes this assertion.
-  // #3204: the server does not wait for the initial roots before serving
-  // tool calls. A call that arrives while roots/list is outstanding is
-  // checked against the command-line directories (here, none).
-  it("are not awaited before tool calls are served (#3204)", async () => {
+  // #3204: a tool call that arrives while the initial roots/list is still
+  // outstanding waits for it, and is checked against the client's roots
+  // rather than the command-line directories (here, none).
+  it("are awaited before tool calls are served (#3204)", async () => {
     await fs.writeFile(path.join(rootDir, "f.txt"), "from root");
     let release: () => void = () => {};
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
+    let asked = false;
     const { client } = await connectTracked([], {
       capabilities: ROOTS,
       listRoots: async () => {
+        asked = true;
         await gate;
         return [rootOf(rootDir)];
       },
     });
 
-    const early = await call(client, "read_text_file", {
+    let settled = false;
+    const early = call(client, "read_text_file", {
       path: path.join(rootDir, "f.txt"),
+    }).finally(() => {
+      settled = true;
     });
-    expect(early.isError).toBe(true);
-    expect(textOf(early)).toBe(
-      `Access denied - path outside allowed directories: ${path.join(rootDir, "f.txt")} not in `,
-    );
+    await vi.waitFor(() => expect(asked).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(settled).toBe(false);
 
     release();
-    await vi.waitFor(async () =>
-      expect(await allowedDirectoriesOf(client)).toEqual([rootDir]),
-    );
-    const late = await call(client, "read_text_file", {
-      path: path.join(rootDir, "f.txt"),
+    const result = await early;
+    expect(result.isError).toBeFalsy();
+    expect(textOf(result)).toBe("from root");
+    expect(await allowedDirectoriesOf(client)).toEqual([rootDir]);
+  });
+
+  it("are awaited by concurrent tool calls, which then all succeed (#3204)", async () => {
+    await fs.writeFile(path.join(rootDir, "a.txt"), "a");
+    await fs.writeFile(path.join(rootDir, "b.txt"), "b");
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return [rootOf(rootDir)];
+      },
     });
-    expect(textOf(late)).toBe("from root");
+    const results = await Promise.all([
+      call(client, "read_text_file", { path: path.join(rootDir, "a.txt") }),
+      call(client, "read_text_file", { path: path.join(rootDir, "b.txt") }),
+      call(client, "list_allowed_directories"),
+    ]);
+    expect(results.map(textOf)).toEqual([
+      "a",
+      "b",
+      `Allowed directories:\n${rootDir}`,
+    ]);
+  });
+
+  it("fall back to the command-line directories for waiting calls when roots/list fails (#3204)", async () => {
+    await fs.writeFile(path.join(cliDir, "f.txt"), "from cli");
+    const { client } = await connectTracked([cliDir], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        throw new Error("no roots");
+      },
+    });
+    const result = await call(client, "read_text_file", {
+      path: path.join(cliDir, "f.txt"),
+    });
+    expect(textOf(result)).toBe("from cli");
   });
 });
 
@@ -247,15 +286,18 @@ describe("a client without the roots capability", () => {
     );
   });
 
-  // KNOWN BUG #4992: with no directories and no Roots, the initialization error the README promises is swallowed and the session stays up with nothing allowed; the fix changes this assertion.
-  // With no directories from either source, oninitialized throws. The SDK
-  // routes a notification handler's rejection to the server's onerror, which
-  // the server leaves unset, so the error is invisible to the client: the
-  // session stays up and every path is refused.
-  it("stays connected with nothing allowed when no directories were given", async () => {
+  // #4992: with no directories from either source nothing could ever be
+  // allowed, so the server says why on stderr and closes the connection
+  // rather than staying up and refusing every call.
+  it("closes the connection with an error when no directories were given (#4992)", async () => {
     const { client } = await connectTracked([]);
-    expect(await allowedDirectoriesOf(client)).toEqual([]);
-    const result = await call(client, "list_directory", { path: rootDir });
-    expect(textOf(result)).toMatch(/^Access denied/);
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        `Error: ${NO_ALLOWED_DIRECTORIES_ERROR}`,
+      ),
+    );
+    await expect(
+      call(client, "list_directory", { path: rootDir }),
+    ).rejects.toThrow(/Connection closed|Not connected/);
   });
 });

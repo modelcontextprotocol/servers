@@ -1,11 +1,10 @@
 // Pins what a client sees when it connects and lists tools: the server's
 // identity and capabilities, and the one tool's name, title, description,
 // annotations, input schema and output schema, exactly as SDK 1.x emits them
-// today. These are characterization tests: where today's value is known to be
-// wrong (#4721 annotations) the test pins the current value and cites the
-// issue, so the fix shows up as a deliberate assertion change rather than a
-// silent drift. The 2781-character description (#799) is pinned as current
-// design: the 1024 cap is an OpenAI/Azure client limit, not the MCP spec.
+// today. These are characterization tests. The annotations assert the values
+// fixed in #4721 (the tool is stateful, so neither read-only nor idempotent).
+// The 2781-character description (#799) is pinned as current design: the
+// 1024 cap is an OpenAI/Azure client limit, not the MCP spec.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createRequire } from "node:module";
@@ -52,15 +51,15 @@ describe("sequentialthinking: initialize and tools/list", () => {
     expect(tool.title).toBe("Sequential Thinking");
   });
 
-  // KNOWN BUG #4721: pins current (wrong) behavior; the fix changes this assertion.
-  // #4721: the server keeps a thought history and branch map that every call
-  // mutates, so readOnlyHint: true and idempotentHint: true are wrong for it.
-  // Pinned as they are today; the fix changes this assertion on purpose.
-  it("carries today's annotations (#4721: read-only and idempotent, though the tool is stateful)", () => {
+  // #4721: every call appends to the server's thought history, and a call with
+  // both branchFromThought and branchId also appends to that branch, so the
+  // tool is neither read-only nor idempotent. It is still not destructive (it
+  // only appends) and not open-world.
+  it("advertises the tool as stateful: not read-only, not idempotent, not destructive, closed-world", () => {
     expect(tool.annotations).toEqual({
-      readOnlyHint: true,
+      readOnlyHint: false,
       destructiveHint: false,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: false,
     });
   });

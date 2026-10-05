@@ -14,6 +14,7 @@ import {
   // Pure utility functions
   formatSize,
   normalizeLineEndings,
+  detectLineEnding,
   createUnifiedDiff,
   // Security & validation functions
   validatePath,
@@ -75,6 +76,33 @@ function createMockFileHandle(content: Buffer) {
     ),
     close: vi.fn().mockResolvedValue(undefined),
   };
+}
+
+// What lstat and the opened handle's stat report for the file an in-place
+// write replaces: a regular file, the same device and inode both times.
+const REGULAR_FILE = { isFile: () => true, dev: 1, ino: 42 } as Stats;
+
+interface MockWriteHandle {
+  stat: Mock;
+  truncate: Mock;
+  writeFile: Mock;
+  close: Mock;
+}
+
+function createMockWriteHandle(stats: Stats = REGULAR_FILE): MockWriteHandle {
+  return {
+    stat: vi.fn().mockResolvedValue(stats),
+    truncate: vi.fn().mockResolvedValue(undefined),
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+function asWriteHandle(handle: MockWriteHandle): FileHandle {
+  // Double cast for the same reason as asFileHandle: the in-place write only
+  // calls stat(), truncate(), writeFile() and close(), which this double
+  // provides, and FileHandle's overloads cannot be matched by vi.fn() mocks.
+  return handle as unknown as FileHandle;
 }
 
 // The allow-list validatePath checks against; each server instance passes its
@@ -158,6 +186,26 @@ describe("Lib Functions", () => {
 
       it("handles empty string", () => {
         expect(normalizeLineEndings("")).toBe("");
+      });
+    });
+
+    describe("detectLineEnding", () => {
+      it("detects CRLF", () => {
+        expect(detectLineEnding("line1\r\nline2\r\n")).toBe("\r\n");
+      });
+
+      it("detects LF", () => {
+        expect(detectLineEnding("line1\nline2\n")).toBe("\n");
+      });
+
+      it("picks the predominant ending of a mixed file", () => {
+        expect(detectLineEnding("a\r\nb\r\nc\n")).toBe("\r\n");
+        expect(detectLineEnding("a\r\nb\nc\n")).toBe("\n");
+      });
+
+      it("defaults to LF for a file with no line breaks", () => {
+        expect(detectLineEnding("")).toBe("\n");
+        expect(detectLineEnding("line1")).toBe("\n");
       });
     });
 
@@ -435,39 +483,139 @@ describe("Lib Functions", () => {
         );
       });
 
-      it("preserves file permissions when overwriting existing file", async () => {
-        // First writeFile call with 'wx' flag fails because file exists
+      it("overwrites an existing file in place, through one handle (#4512)", async () => {
         mockFs.writeFile.mockRejectedValueOnce(
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
-        // stat returns executable permissions
-        mockFs.stat.mockResolvedValueOnce({ mode: 0o100755 } as Stats);
-        // Second writeFile (to temp) succeeds
-        mockFs.writeFile.mockResolvedValueOnce(undefined);
-        mockFs.rename.mockResolvedValueOnce(undefined);
-        mockFs.chmod.mockResolvedValueOnce(undefined);
+        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
+        const handle = createMockWriteHandle();
+        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
 
         await writeFileContent("/test/script.sh", "new content");
 
-        expect(mockFs.stat).toHaveBeenCalledWith("/test/script.sh");
-        expect(mockFs.chmod).toHaveBeenCalledWith("/test/script.sh", 0o755);
+        expect(mockFs.lstat).toHaveBeenCalledWith("/test/script.sh");
+        expect(mockFs.open).toHaveBeenCalledWith(
+          "/test/script.sh",
+          fs.constants.O_RDWR | (fs.constants.O_NOFOLLOW ?? 0),
+        );
+        expect(handle.truncate).toHaveBeenCalledWith(0);
+        expect(handle.writeFile).toHaveBeenCalledWith("new content", "utf-8");
+        expect(handle.close).toHaveBeenCalled();
+        // No temp file, no rename over the target (#3199), no chmod to repair
+        // the permission bits of a replaced inode.
+        expect(mockFs.writeFile).toHaveBeenCalledTimes(1);
+        expect(mockFs.rename).not.toHaveBeenCalled();
+        expect(mockFs.chmod).not.toHaveBeenCalled();
       });
 
-      it("does not fail the write when chmod fails", async () => {
+      it("opens without O_NOFOLLOW where the platform has none (Windows)", async () => {
         mockFs.writeFile.mockRejectedValueOnce(
           Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
         );
-        mockFs.stat.mockResolvedValueOnce({ mode: 0o100755 } as Stats);
-        mockFs.writeFile.mockResolvedValueOnce(undefined);
-        mockFs.rename.mockResolvedValueOnce(undefined);
-        mockFs.chmod.mockRejectedValueOnce(
-          Object.assign(new Error("EPERM"), { code: "EPERM" }),
+        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
+        mockFs.open.mockResolvedValueOnce(
+          asWriteHandle(createMockWriteHandle()),
         );
+        const constants = mockFs.constants as { O_NOFOLLOW?: number };
+        const noFollow = constants.O_NOFOLLOW;
+        constants.O_NOFOLLOW = undefined;
+        try {
+          await writeFileContent("/test/file.txt", "new content");
+        } finally {
+          constants.O_NOFOLLOW = noFollow;
+        }
+
+        expect(mockFs.open).toHaveBeenCalledWith(
+          "/test/file.txt",
+          fs.constants.O_RDWR,
+        );
+      });
+
+      it("refuses to overwrite a path that is not a regular file", async () => {
+        mockFs.writeFile.mockRejectedValueOnce(
+          Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
+        );
+        mockFs.lstat.mockResolvedValueOnce({
+          ...REGULAR_FILE,
+          isFile: () => false,
+        } as Stats);
 
         await expect(
-          writeFileContent("/test/script.sh", "new content"),
-        ).resolves.toBeUndefined();
-        expect(mockFs.unlink).not.toHaveBeenCalled();
+          writeFileContent("/test/link.txt", "new content"),
+        ).rejects.toThrow(
+          "Refusing to write: not a regular file: /test/link.txt",
+        );
+        expect(mockFs.open).not.toHaveBeenCalled();
+      });
+
+      it("refuses to write when the opened file is not the one lstat saw", async () => {
+        mockFs.writeFile.mockRejectedValueOnce(
+          Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
+        );
+        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
+        const handle = createMockWriteHandle({
+          ...REGULAR_FILE,
+          ino: 43,
+        } as Stats);
+        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
+
+        await expect(
+          writeFileContent("/test/file.txt", "new content"),
+        ).rejects.toThrow(
+          "Refusing to write: /test/file.txt was replaced while it was being opened",
+        );
+        expect(handle.truncate).not.toHaveBeenCalled();
+        expect(handle.writeFile).not.toHaveBeenCalled();
+        expect(handle.close).toHaveBeenCalled();
+      });
+
+      it("refuses to write when the opened file is on another device", async () => {
+        mockFs.writeFile.mockRejectedValueOnce(
+          Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
+        );
+        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
+        const handle = createMockWriteHandle({
+          ...REGULAR_FILE,
+          dev: 2,
+        } as Stats);
+        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
+
+        await expect(
+          writeFileContent("/test/file.txt", "new content"),
+        ).rejects.toThrow("was replaced while it was being opened");
+        expect(handle.writeFile).not.toHaveBeenCalled();
+      });
+
+      it("refuses to write when the opened file is not a regular file", async () => {
+        mockFs.writeFile.mockRejectedValueOnce(
+          Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
+        );
+        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
+        const handle = createMockWriteHandle({
+          ...REGULAR_FILE,
+          isFile: () => false,
+        } as Stats);
+        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
+
+        await expect(
+          writeFileContent("/test/file.txt", "new content"),
+        ).rejects.toThrow("was replaced while it was being opened");
+        expect(handle.writeFile).not.toHaveBeenCalled();
+      });
+
+      it("closes the handle when the write fails", async () => {
+        mockFs.writeFile.mockRejectedValueOnce(
+          Object.assign(new Error("EEXIST"), { code: "EEXIST" }),
+        );
+        mockFs.lstat.mockResolvedValueOnce(REGULAR_FILE);
+        const handle = createMockWriteHandle();
+        handle.writeFile.mockRejectedValueOnce(new Error("ENOSPC"));
+        mockFs.open.mockResolvedValueOnce(asWriteHandle(handle));
+
+        await expect(
+          writeFileContent("/test/file.txt", "new content"),
+        ).rejects.toThrow("ENOSPC");
+        expect(handle.close).toHaveBeenCalled();
       });
     });
 
@@ -614,30 +762,31 @@ describe("Lib Functions", () => {
 
   describe("File Editing Functions", () => {
     describe("applyFileEdits", () => {
+      let handle: MockWriteHandle;
+
       beforeEach(() => {
         mockFs.readFile.mockResolvedValue("line1\nline2\nline3\n");
-        mockFs.writeFile.mockResolvedValue(undefined);
-        mockFs.stat.mockResolvedValue({ mode: 0o100644 } as Stats);
-        mockFs.chmod.mockResolvedValue(undefined);
+        mockFs.lstat.mockResolvedValue(REGULAR_FILE);
+        handle = createMockWriteHandle();
+        mockFs.open.mockResolvedValue(asWriteHandle(handle));
+      });
+
+      afterEach(() => {
+        // Persistent implementations outlive vi.clearAllMocks(); drop them so
+        // the tailFile and headFile tests below set up fs.open themselves.
+        mockFs.lstat.mockReset();
+        mockFs.open.mockReset();
       });
 
       it("applies simple text replacement", async () => {
         const edits = [{ oldText: "line2", newText: "modified line2" }];
 
-        mockFs.rename.mockResolvedValueOnce(undefined);
-
         const result = await applyFileEdits("/test/file.txt", edits, false);
 
         expect(result).toContain("modified line2");
-        // Should write to temporary file then rename
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+        expect(handle.writeFile).toHaveBeenCalledWith(
           "line1\nmodified line2\nline3\n",
           "utf-8",
-        );
-        expect(mockFs.rename).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
-          "/test/file.txt",
         );
       });
 
@@ -649,12 +798,9 @@ describe("Lib Functions", () => {
           },
         ];
 
-        mockFs.rename.mockResolvedValueOnce(undefined);
-
         await applyFileEdits("/test/file.txt", edits, false);
 
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+        expect(handle.writeFile).toHaveBeenCalledWith(
           "line1\nprice=$$; match=$&; before=$`; after=$'\nline3\n",
           "utf-8",
         );
@@ -666,7 +812,7 @@ describe("Lib Functions", () => {
         const result = await applyFileEdits("/test/file.txt", edits, true);
 
         expect(result).toContain("modified line2");
-        expect(mockFs.writeFile).not.toHaveBeenCalled();
+        expect(handle.writeFile).not.toHaveBeenCalled();
       });
 
       it("applies multiple edits sequentially", async () => {
@@ -675,18 +821,11 @@ describe("Lib Functions", () => {
           { oldText: "line3", newText: "third line" },
         ];
 
-        mockFs.rename.mockResolvedValueOnce(undefined);
-
         await applyFileEdits("/test/file.txt", edits, false);
 
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+        expect(handle.writeFile).toHaveBeenCalledWith(
           "first line\nline2\nthird line\n",
           "utf-8",
-        );
-        expect(mockFs.rename).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
-          "/test/file.txt",
         );
       });
 
@@ -695,39 +834,35 @@ describe("Lib Functions", () => {
 
         const edits = [{ oldText: "line2", newText: "modified line2" }];
 
-        mockFs.rename.mockResolvedValueOnce(undefined);
-
         await applyFileEdits("/test/file.txt", edits, false);
 
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
+        expect(handle.writeFile).toHaveBeenCalledWith(
           "  line1\n    modified line2\n  line3\n",
           "utf-8",
         );
-        expect(mockFs.rename).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
-          "/test/file.txt",
-        );
       });
 
-      it("preserves file permissions after applying edits", async () => {
-        mockFs.stat.mockResolvedValue({ mode: 0o100755 } as Stats);
+      it("writes the edit in place, without a temp file, rename or chmod (#4512, #3199)", async () => {
         const edits = [{ oldText: "line2", newText: "modified line2" }];
-
-        mockFs.rename.mockResolvedValueOnce(undefined);
 
         await applyFileEdits("/test/script.sh", edits, false);
 
-        expect(mockFs.stat).toHaveBeenCalledWith("/test/script.sh");
-        expect(mockFs.chmod).toHaveBeenCalledWith("/test/script.sh", 0o755);
+        expect(mockFs.open).toHaveBeenCalledWith(
+          "/test/script.sh",
+          fs.constants.O_RDWR | (fs.constants.O_NOFOLLOW ?? 0),
+        );
+        expect(handle.truncate).toHaveBeenCalledWith(0);
+        expect(mockFs.writeFile).not.toHaveBeenCalled();
+        expect(mockFs.rename).not.toHaveBeenCalled();
+        expect(mockFs.chmod).not.toHaveBeenCalled();
       });
 
-      it("does not restore permissions in dry run mode", async () => {
+      it("does not open the file for writing in dry run mode", async () => {
         const edits = [{ oldText: "line2", newText: "modified line2" }];
 
         await applyFileEdits("/test/file.txt", edits, true);
 
-        expect(mockFs.chmod).not.toHaveBeenCalled();
+        expect(mockFs.open).not.toHaveBeenCalled();
       });
 
       it("throws error for non-matching edits", async () => {
@@ -751,18 +886,11 @@ describe("Lib Functions", () => {
           },
         ];
 
-        mockFs.rename.mockResolvedValueOnce(undefined);
-
         await applyFileEdits("/test/file.js", edits, false);
 
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
+        expect(handle.writeFile).toHaveBeenCalledWith(
           'function test() {\n  console.log("world");\n  console.log("test");\n  return false;\n}',
           "utf-8",
-        );
-        expect(mockFs.rename).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
-          "/test/file.js",
         );
       });
 
@@ -778,18 +906,11 @@ describe("Lib Functions", () => {
           },
         ];
 
-        mockFs.rename.mockResolvedValueOnce(undefined);
-
         await applyFileEdits("/test/file.js", edits, false);
 
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
+        expect(handle.writeFile).toHaveBeenCalledWith(
           "    if (condition) {\n        doSomethingElse();\n        doAnotherThing();\n    }",
           "utf-8",
-        );
-        expect(mockFs.rename).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.js\.[a-f0-9]+\.tmp$/),
-          "/test/file.js",
         );
       });
 
@@ -798,18 +919,11 @@ describe("Lib Functions", () => {
 
         const edits = [{ oldText: "line2", newText: "modified line2" }];
 
-        mockFs.rename.mockResolvedValueOnce(undefined);
-
         await applyFileEdits("/test/file.txt", edits, false);
 
-        expect(mockFs.writeFile).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
-          "line1\nmodified line2\nline3\n",
+        expect(handle.writeFile).toHaveBeenCalledWith(
+          "line1\r\nmodified line2\r\nline3\r\n",
           "utf-8",
-        );
-        expect(mockFs.rename).toHaveBeenCalledWith(
-          expect.stringMatching(/\/test\/file\.txt\.[a-f0-9]+\.tmp$/),
-          "/test/file.txt",
         );
       });
     });

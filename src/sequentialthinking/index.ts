@@ -138,9 +138,12 @@ You should:
           .describe("If more thoughts are needed"),
       },
       annotations: {
-        readOnlyHint: true,
+        // Every call appends to the server's in-memory thought history, and a
+        // call with both branchFromThought and branchId also appends to that
+        // branch, so the tool is neither read-only nor idempotent (#4721).
+        readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
       outputSchema: {
