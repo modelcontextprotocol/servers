@@ -93,6 +93,14 @@ export function isPathWithinAllowedDirectories(
       );
     }
 
-    return normalizedPath.startsWith(normalizedDir + path.sep);
+    // path.resolve strips a trailing separator except from a root, and a UNC
+    // share root (\\server\share\) keeps one, so appending another would give
+    // \\server\share\\, a prefix nothing matches (#3527). Append one only when
+    // it is missing; the boundary stays at a separator either way, so a
+    // sibling such as \\server\share-evil still does not match.
+    const dirWithSep = normalizedDir.endsWith(path.sep)
+      ? normalizedDir
+      : normalizedDir + path.sep;
+    return normalizedPath.startsWith(dirWithSep);
   });
 }

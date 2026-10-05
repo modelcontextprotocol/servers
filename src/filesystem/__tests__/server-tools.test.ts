@@ -149,19 +149,51 @@ describe("server identity and tool list", () => {
     });
   });
 
-  // KNOWN BUG #4841: pins current (wrong) behavior; the fix changes this assertion.
-  // #4841: every schema declares the draft-07 dialect, from the SDK's default
-  // zod-to-JSON-Schema target. Strict 2020-12 validators reject it.
-  it("declares the draft-07 $schema on every input and output schema (#4841)", async () => {
+  // #4841: the SDK 1.x tools/list handler stamps draft-07 on every schema it
+  // renders, which validators that accept only JSON Schema 2020-12 reject. The
+  // server declares 2020-12 instead.
+  it("declares the 2020-12 $schema on every input and output schema (#4841)", async () => {
     const { tools } = await client.listTools();
+    expect(tools).toHaveLength(TOOL_NAMES.length);
     for (const tool of tools) {
       expect(tool.inputSchema.$schema).toBe(
-        "http://json-schema.org/draft-07/schema#",
+        "https://json-schema.org/draft/2020-12/schema",
       );
       expect(tool.outputSchema?.$schema).toBe(
-        "http://json-schema.org/draft-07/schema#",
+        "https://json-schema.org/draft/2020-12/schema",
       );
     }
+  });
+
+  // #4841: the schemas are still rendered with zod's draft-07 rules, so the
+  // 2020-12 label holds only while they use no keyword whose meaning differs
+  // between the two dialects: array-form (tuple) items, additionalItems, and
+  // definitions rather than $defs.
+  it("advertises no draft-07-only keyword under the 2020-12 label (#4841)", async () => {
+    const { tools } = await client.listTools();
+    const draft07Only: string[] = [];
+    const walk = (node: unknown, at: string): void => {
+      if (Array.isArray(node)) {
+        node.forEach((item, i) => walk(item, `${at}[${i}]`));
+        return;
+      }
+      if (node === null || typeof node !== "object") return;
+      for (const [key, value] of Object.entries(node)) {
+        if (
+          (key === "items" && Array.isArray(value)) ||
+          key === "additionalItems" ||
+          key === "definitions"
+        ) {
+          draft07Only.push(`${at}.${key}`);
+        }
+        walk(value, `${at}.${key}`);
+      }
+    };
+    for (const tool of tools) {
+      walk(tool.inputSchema, `${tool.name}.inputSchema`);
+      walk(tool.outputSchema, `${tool.name}.outputSchema`);
+    }
+    expect(draft07Only).toEqual([]);
   });
 
   it("pins the input schemas a client is shown", async () => {
@@ -452,7 +484,7 @@ describe("read_multiple_files", () => {
     );
     expect(parts[2]).toBe(`${b}:\nbeta\n`);
     expect(parts[3]).toBe(
-      `/etc/hostname: Error - Access denied - path outside allowed directories: /etc/hostname not in ${dir}`,
+      `/etc/hostname: Error - Access denied - path outside allowed directories: ${path.resolve("/etc/hostname")} not in ${dir}`,
     );
   });
 
@@ -496,10 +528,10 @@ describe("write_file", () => {
     );
   });
 
-  // KNOWN BUG #4512: pins current (wrong) behavior; the fix changes this assertion.
-  // #4512: an overwrite goes through a temp file and a rename, so the file
-  // gets a new inode (and loses its birthtime and hard links) every time.
-  it("replaces the inode on overwrite, keeping the permission bits (#4512)", async () => {
+  // #4512: an overwrite writes through the existing file rather than renaming
+  // a temp file over it, so the file keeps its inode, its creation time and
+  // its permission bits.
+  it("keeps the inode, birthtime and permission bits on overwrite (#4512)", async () => {
     const file = path.join(dir, "existing.txt");
     await fs.writeFile(file, "old");
     await fs.chmod(file, 0o640);
@@ -507,18 +539,52 @@ describe("write_file", () => {
     await call(client, "write_file", { path: file, content: "new" });
     const after = await fs.stat(file);
     expect(await fs.readFile(file, "utf-8")).toBe("new");
-    expect(after.ino).not.toBe(before.ino);
-    expect(after.mode & 0o777).toBe(0o640);
+    expect(after.ino).toBe(before.ino);
+    expect(after.birthtimeMs).toBe(before.birthtimeMs);
+    // Windows has no POSIX mode bits: a writable file always reports 666.
+    expect(after.mode & 0o777).toBe(
+      process.platform === "win32" ? 0o666 : 0o640,
+    );
   });
 
-  // KNOWN BUG #4512: pins current (wrong) behavior; the fix changes this assertion.
-  it("severs a hard link on overwrite (#4512)", async () => {
+  it("keeps a hard link on overwrite (#4512)", async () => {
     const file = path.join(dir, "linked.txt");
     const hardLink = path.join(dir, "hardlink.txt");
     await fs.writeFile(file, "shared");
     await fs.link(file, hardLink);
     await call(client, "write_file", { path: file, content: "changed" });
-    expect(await fs.readFile(hardLink, "utf-8")).toBe("shared");
+    expect(await fs.readFile(hardLink, "utf-8")).toBe("changed");
+  });
+
+  // Writing in place opens the existing file for writing, so a read-only file
+  // is refused rather than replaced; the old rename only got past the mode
+  // bits because it rewrote the directory entry instead of the file. Root
+  // ignores mode bits, so the refusal cannot be observed there.
+  it.skipIf(process.getuid?.() === 0)(
+    "refuses to overwrite a read-only file and leaves it unchanged",
+    async () => {
+      const file = path.join(dir, "readonly.txt");
+      await fs.writeFile(file, "keep me");
+      await fs.chmod(file, 0o444);
+      try {
+        const result = await call(client, "write_file", {
+          path: file,
+          content: "replaced",
+        });
+        expect(result.isError).toBe(true);
+        expect(textOf(result)).toMatch(/EACCES|EPERM/);
+        expect(await fs.readFile(file, "utf-8")).toBe("keep me");
+      } finally {
+        await fs.chmod(file, 0o644);
+      }
+    },
+  );
+
+  it("truncates the old content when the new content is shorter", async () => {
+    const file = path.join(dir, "existing.txt");
+    await fs.writeFile(file, "a much longer original");
+    await call(client, "write_file", { path: file, content: "short" });
+    expect(await fs.readFile(file, "utf-8")).toBe("short");
   });
 
   it("writes through a symlink inside the allowed directory to its target", async () => {
@@ -531,14 +597,14 @@ describe("write_file", () => {
     expect((await fs.lstat(link)).isSymbolicLink()).toBe(true);
   });
 
-  // KNOWN BUG #3199: pins current (wrong) behavior; the fix changes this assertion.
-  // #3199: on Windows a rename over a locked file fails with EPERM. The
-  // server reports it and removes its temp file; it does not fall back to an
-  // in-place write. The rename is mocked, so this runs on every platform.
-  it("reports a failed rename and removes the temp file (#3199)", async () => {
+  // #3199: on Windows a rename over a file another process holds open fails
+  // with EPERM. An overwrite never renames, so such a rename failing does not
+  // matter, and no temp file is left behind. The rename is mocked, so this runs
+  // on every platform.
+  it("overwrites without a rename, so a rename failing with EPERM does not matter (#3199)", async () => {
     const file = path.join(dir, "locked.txt");
     await fs.writeFile(file, "original");
-    vi.spyOn(fs, "rename").mockRejectedValueOnce(
+    const rename = vi.spyOn(fs, "rename").mockRejectedValue(
       Object.assign(new Error("EPERM: operation not permitted, rename"), {
         code: "EPERM",
       }),
@@ -547,34 +613,80 @@ describe("write_file", () => {
       path: file,
       content: "replacement",
     });
-    expect(result.isError).toBe(true);
-    expect(textOf(result)).toBe("EPERM: operation not permitted, rename");
-    expect(await fs.readFile(file, "utf-8")).toBe("original");
-    expect(await fs.readdir(dir)).toEqual(["locked.txt"]);
-  });
-
-  it("still reports the rename error when removing the temp file also fails (#3199)", async () => {
-    const file = path.join(dir, "locked.txt");
-    await fs.writeFile(file, "original");
-    vi.spyOn(fs, "rename").mockRejectedValueOnce(new Error("EPERM rename"));
-    vi.spyOn(fs, "unlink").mockRejectedValueOnce(new Error("EPERM unlink"));
-    const result = await call(client, "write_file", {
-      path: file,
-      content: "replacement",
-    });
-    expect(textOf(result)).toBe("EPERM rename");
-  });
-
-  it("does not fail the write when restoring the permission bits fails", async () => {
-    const file = path.join(dir, "existing.txt");
-    await fs.writeFile(file, "old");
-    vi.spyOn(fs, "chmod").mockRejectedValueOnce(new Error("EPERM chmod"));
-    const result = await call(client, "write_file", {
-      path: file,
-      content: "new",
-    });
     expect(result.isError).toBeFalsy();
-    expect(await fs.readFile(file, "utf-8")).toBe("new");
+    expect(await fs.readFile(file, "utf-8")).toBe("replacement");
+    expect(await fs.readdir(dir)).toEqual(["locked.txt"]);
+    expect(rename).not.toHaveBeenCalled();
+  });
+
+  // The TOCTOU window: validation resolved the path to a regular file, then
+  // something swapped what is at the path before the write opened it. The swap
+  // is staged inside the server's own lstat call, so it lands in that window.
+  describe("a path swapped after validation", () => {
+    const swapAfterLstat = (swap: () => Promise<void>) => {
+      const realLstat = fs.lstat.bind(fs);
+      vi.spyOn(fs, "lstat").mockImplementationOnce(async (p, opts) => {
+        const stats = await realLstat(p, opts);
+        await swap();
+        return stats;
+      });
+    };
+
+    it.skipIf(process.platform === "win32")(
+      "refuses to write through a symlink swapped in",
+      async () => {
+        const file = path.join(dir, "victim.txt");
+        const outside = await makeTempDir("mcp-fs-outside-");
+        const secret = path.join(outside, "secret.txt");
+        await fs.writeFile(file, "original");
+        await fs.writeFile(secret, "SECRET");
+        try {
+          swapAfterLstat(async () => {
+            await fs.unlink(file);
+            await fs.symlink(secret, file);
+          });
+          const result = await call(client, "write_file", {
+            path: file,
+            content: "pwned",
+          });
+          expect(result.isError).toBe(true);
+          expect(textOf(result)).toMatch(/^ELOOP/);
+          expect(await fs.readFile(secret, "utf-8")).toBe("SECRET");
+        } finally {
+          await fs.rm(outside, { recursive: true, force: true });
+        }
+      },
+    );
+
+    it("refuses to write to a different file swapped in", async () => {
+      const file = path.join(dir, "victim.txt");
+      const other = path.join(dir, "other.txt");
+      await fs.writeFile(file, "original");
+      await fs.writeFile(other, "other");
+      swapAfterLstat(() => fs.rename(other, file));
+      const result = await call(client, "write_file", {
+        path: file,
+        content: "replacement",
+      });
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toBe(
+        `Refusing to write: ${file} was replaced while it was being opened`,
+      );
+      expect(await fs.readFile(file, "utf-8")).toBe("other");
+    });
+  });
+
+  it("refuses to overwrite a directory", async () => {
+    const sub = path.join(dir, "sub");
+    await fs.mkdir(sub);
+    const result = await call(client, "write_file", {
+      path: sub,
+      content: "x",
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toBe(
+      `Refusing to write: not a regular file: ${sub}`,
+    );
   });
 
   it("reports a create failure other than EEXIST as is", async () => {
@@ -691,22 +803,35 @@ describe("edit_file", () => {
     expect(text.endsWith("`````\n\n")).toBe(true);
   });
 
-  // KNOWN BUG #4991: any edit silently converts a CRLF file's line endings to LF; the fix changes this assertion.
-  // The CRLF in the file is normalized away by any edit, dry run aside.
-  it("rewrites a CRLF file with LF line endings", async () => {
+  // #4991: an edit keeps the file's line endings, whatever oldText and
+  // newText use.
+  it("keeps a CRLF file's line endings", async () => {
     await fs.writeFile(file, "a\r\nb\r\n");
     await call(client, "edit_file", {
       path: file,
-      edits: [{ oldText: "a\r\n", newText: "c\r\n" }],
+      edits: [
+        { oldText: "a\r\n", newText: "c\r\n" },
+        { oldText: "b\n", newText: "d\ne\n" },
+      ],
     });
-    expect(await fs.readFile(file, "utf-8")).toBe("c\nb\n");
+    expect(await fs.readFile(file, "utf-8")).toBe("c\r\nd\r\ne\r\n");
+  });
+
+  it("keeps an LF file's line endings when newText uses CRLF", async () => {
+    await fs.writeFile(file, "a\nb\n");
+    await call(client, "edit_file", {
+      path: file,
+      edits: [{ oldText: "a", newText: "c\r\nd" }],
+    });
+    expect(await fs.readFile(file, "utf-8")).toBe("c\nd\nb\n");
   });
 
   // #2034: when there is no exact substring, the matcher compares line by line
   // with leading and trailing whitespace trimmed, and reindents the
-  // replacement. These pin its current reindentation rules.
+  // replacement (#4990): each replacement line takes the indentation of the
+  // file line it replaces, shifted by its indent relative to the matching
+  // oldText line.
   describe("whitespace-tolerant matcher (#2034)", () => {
-    // KNOWN BUG #4990: lines after the first lose the file's indentation when oldText's line has none; the fix changes this assertion.
     it("matches lines whose indentation differs from oldText", async () => {
       await call(client, "edit_file", {
         path: file,
@@ -717,14 +842,12 @@ describe("edit_file", () => {
           },
         ],
       });
-      // First line takes the file's indentation; later lines without
-      // indentation of their own are inserted as given.
+      // Every line takes the indentation of the file line it replaces.
       expect(await fs.readFile(file, "utf-8")).toBe(
-        "function greet() {\n  console.log('bye');\nreturn 0;\n}\n",
+        "function greet() {\n  console.log('bye');\n  return 0;\n}\n",
       );
     });
 
-    // KNOWN BUG #4990: a replacement line whose oldText line has no indent ignores the file's indentation; the fix changes this assertion.
     it("keeps relative indentation when both old and new lines are indented", async () => {
       await fs.writeFile(file, "    if (a) {\n        b();\n    }\n");
       await call(client, "edit_file", {
@@ -736,30 +859,99 @@ describe("edit_file", () => {
           },
         ],
       });
-      // Line 2: new indent 6 - old indent 2 = 4 extra spaces on top of the
-      // first line's 4. Line 3: old line "}" has no indent, so the new
-      // line is inserted as given.
+      // Line 2: the file's 8, plus new indent 6 - old indent 2 = 4 more.
+      // Line 3: the file's 4, plus new indent 2 - old indent 0 = 2 more.
       expect(await fs.readFile(file, "utf-8")).toBe(
-        "    if (a) {\n        c();\n  }\n",
+        "    if (a) {\n            c();\n      }\n",
       );
     });
 
-    it("clamps a negative relative indent to the first line's indentation", async () => {
+    it("dedents a tab-indented file by levels when the edit indents with spaces", async () => {
+      await fs.writeFile(file, "\tif (a) {\n\t\tb();\n\t}\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "    b();", newText: "  c();" }],
+      });
+      // The edit dedents b() by one 2-space level; in the file that is one
+      // tab, not two characters (which would strip both tabs).
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "\tif (a) {\n\tc();\n\t}\n",
+      );
+    });
+
+    it("indents a tab-indented file by levels when the edit indents with spaces", async () => {
+      await fs.writeFile(file, "\tif (a) {\n\t\tb();\n\t}\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "if (a) {\n  b();", newText: "if (a) {\n    c();" }],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "\tif (a) {\n\t\t\tc();\n\t}\n",
+      );
+    });
+
+    it("indents a space-indented file by levels when the edit indents with tabs", async () => {
+      await fs.writeFile(file, "  if (a) {\n    b();\n  }\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "if (a) {\n\tb();", newText: "if (a) {\n\t\tc();" }],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "  if (a) {\n      c();\n  }\n",
+      );
+    });
+
+    it("keeps the file's indentation when oldText indents with a different width", async () => {
+      await fs.writeFile(file, "    if (a) {\n        b();\n    }\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [
+          {
+            oldText: "if (a) {\n  b();\n}",
+            newText: "if (a) {\n  c();\n}",
+          },
+        ],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "    if (a) {\n        c();\n    }\n",
+      );
+    });
+
+    it("dedents relative to the file line it replaces", async () => {
       await fs.writeFile(file, "  x\n      y\n");
       await call(client, "edit_file", {
         path: file,
         edits: [{ oldText: "x\n    y", newText: "x\n z" }],
       });
-      expect(await fs.readFile(file, "utf-8")).toBe("  x\n  z\n");
+      // Line 2: the file's 6, minus old indent 4 - new indent 1 = 3.
+      expect(await fs.readFile(file, "utf-8")).toBe("  x\n   z\n");
     });
 
-    it("inserts extra replacement lines beyond oldText's length as given", async () => {
-      await fs.writeFile(file, "a\nb\n");
+    it("clamps a dedent at no indentation", async () => {
+      await fs.writeFile(file, "x\n  y\n");
       await call(client, "edit_file", {
         path: file,
-        edits: [{ oldText: " a ", newText: "a\n  added" }],
+        edits: [{ oldText: "x\n    y", newText: "x\nz" }],
       });
-      expect(await fs.readFile(file, "utf-8")).toBe("a\n  added\nb\n");
+      expect(await fs.readFile(file, "utf-8")).toBe("x\nz\n");
+    });
+
+    it("indents replacement lines beyond oldText's length relative to its last line", async () => {
+      await fs.writeFile(file, "  a\nb\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "a ", newText: "a\n  added" }],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe("  a\n    added\nb\n");
+    });
+
+    it("keeps a blank replacement line as given", async () => {
+      await fs.writeFile(file, "  a\n  b\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "a\nb", newText: "a\n\nb" }],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe("  a\n\n  b\n");
     });
 
     it("reports no match when a line differs beyond whitespace", async () => {
@@ -771,8 +963,7 @@ describe("edit_file", () => {
     });
   });
 
-  // KNOWN BUG #4512: pins current (wrong) behavior; the fix changes this assertion.
-  it("replaces the inode on edit, keeping the permission bits (#4512)", async () => {
+  it("keeps the inode, birthtime and permission bits on edit (#4512)", async () => {
     await fs.chmod(file, 0o600);
     const before = await fs.stat(file);
     await call(client, "edit_file", {
@@ -780,39 +971,37 @@ describe("edit_file", () => {
       edits: [{ oldText: "return 1;", newText: "return 2;" }],
     });
     const after = await fs.stat(file);
-    expect(after.ino).not.toBe(before.ino);
-    expect(after.mode & 0o777).toBe(0o600);
+    expect(await fs.readFile(file, "utf-8")).toContain("return 2;");
+    expect(after.ino).toBe(before.ino);
+    expect(after.birthtimeMs).toBe(before.birthtimeMs);
+    // Windows has no POSIX mode bits: a writable file always reports 666.
+    expect(after.mode & 0o777).toBe(
+      process.platform === "win32" ? 0o666 : 0o600,
+    );
   });
 
-  // KNOWN BUG #3199: pins current (wrong) behavior; the fix changes this assertion.
-  it("reports a failed rename and removes the temp file (#3199)", async () => {
-    vi.spyOn(fs, "rename").mockRejectedValueOnce(new Error("EPERM rename"));
-    vi.spyOn(fs, "unlink").mockRejectedValueOnce(new Error("EPERM unlink"));
-    const result = await call(client, "edit_file", {
-      path: file,
-      edits: [{ oldText: "return 1;", newText: "return 2;" }],
-    });
-    expect(result.isError).toBe(true);
-    expect(textOf(result)).toBe("EPERM rename");
-    expect(await fs.readFile(file, "utf-8")).toContain("return 1;");
-  });
-
-  it("removes the temp file when the rename fails and cleanup succeeds (#3199)", async () => {
-    vi.spyOn(fs, "rename").mockRejectedValueOnce(new Error("EPERM rename"));
+  it("keeps a hard link on edit (#4512)", async () => {
+    const hardLink = path.join(dir, "hardlink.ts");
+    await fs.link(file, hardLink);
     await call(client, "edit_file", {
       path: file,
       edits: [{ oldText: "return 1;", newText: "return 2;" }],
     });
-    expect(await fs.readdir(dir)).toEqual(["code.ts"]);
+    expect(await fs.readFile(hardLink, "utf-8")).toContain("return 2;");
   });
 
-  it("does not fail the edit when restoring the permission bits fails", async () => {
-    vi.spyOn(fs, "chmod").mockRejectedValueOnce(new Error("EPERM chmod"));
+  it("edits without a rename, so a rename failing with EPERM does not matter (#3199)", async () => {
+    const rename = vi
+      .spyOn(fs, "rename")
+      .mockRejectedValue(new Error("EPERM rename"));
     const result = await call(client, "edit_file", {
       path: file,
       edits: [{ oldText: "return 1;", newText: "return 2;" }],
     });
     expect(result.isError).toBeFalsy();
+    expect(await fs.readFile(file, "utf-8")).toContain("return 2;");
+    expect(await fs.readdir(dir)).toEqual(["code.ts"]);
+    expect(rename).not.toHaveBeenCalled();
   });
 });
 
@@ -1174,7 +1363,10 @@ describe("get_file_info", () => {
     expect(lines[0]).toBe("size: 5");
     expect(lines[4]).toBe("isDirectory: false");
     expect(lines[5]).toBe("isFile: true");
-    expect(lines[6]).toBe("permissions: 640");
+    // Windows has no POSIX mode bits: a writable file always reports 666.
+    expect(lines[6]).toBe(
+      process.platform === "win32" ? "permissions: 666" : "permissions: 640",
+    );
     // Dates are rendered with Date#toString, in the server's local time zone.
     expect(lines[2]).toMatch(/^modified: \w{3} \w{3} \d{2} \d{4} /);
   });

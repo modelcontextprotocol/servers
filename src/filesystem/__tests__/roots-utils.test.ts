@@ -27,9 +27,18 @@ describe("getValidRootDirectories", () => {
 
   beforeEach(() => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    testDir1 = realpathSync(mkdtempSync(join(tmpdir(), "mcp-roots-test1-")));
-    testDir2 = realpathSync(mkdtempSync(join(tmpdir(), "mcp-roots-test2-")));
-    testDir3 = realpathSync(mkdtempSync(join(tmpdir(), "mcp-roots-test3-")));
+    // realpathSync.native, like the fs.promises.realpath the code uses,
+    // expands a Windows 8.3 short name (RUNNER~1) in os.tmpdir(); the JS
+    // realpathSync does not.
+    testDir1 = realpathSync.native(
+      mkdtempSync(join(tmpdir(), "mcp-roots-test1-")),
+    );
+    testDir2 = realpathSync.native(
+      mkdtempSync(join(tmpdir(), "mcp-roots-test2-")),
+    );
+    testDir3 = realpathSync.native(
+      mkdtempSync(join(tmpdir(), "mcp-roots-test3-")),
+    );
     testFile = join(testDir1, "test-file.txt");
     writeFileSync(testFile, "test content");
   });
@@ -61,7 +70,7 @@ describe("getValidRootDirectories", () => {
     });
 
     it("expands ~ and ~/ in a plain path to the home directory", async () => {
-      const home = realpathSync(homedir());
+      const home = realpathSync.native(homedir());
       expect(await getValidRootDirectories([{ uri: "~" }])).toEqual([home]);
       expect(await getValidRootDirectories([{ uri: "~/" }])).toEqual([home]);
     });
