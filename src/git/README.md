@@ -47,14 +47,14 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `message` (string): Commit message
-   - Returns: Confirmation with new commit hash
+   - Returns: Confirmation with new commit hash; an error if nothing is staged (as `git commit` without `--allow-empty`), except while a merge is in progress (`MERGE_HEAD` present), where git also allows an empty commit
 
 6. `git_add`
    - Adds file contents to the staging area
    - Inputs:
      - `repo_path` (string): Path to Git repository
-     - `files` (string[]): Array of file paths to stage
-   - Returns: Confirmation of staged files
+     - `files` (string[]): Non-empty array of file paths to stage; `["."]` stages everything
+   - Returns: Confirmation of staged files, or a message saying nothing was staged when the call left the index unchanged
 
 7. `git_reset`
    - Unstages all staged changes

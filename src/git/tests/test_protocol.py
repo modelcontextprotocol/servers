@@ -299,23 +299,21 @@ async def test_git_commit_records_staged_changes(repo: git.Repo):
     assert "new.txt" in head.stats.files
 
 
-# KNOWN BUG #4762: pins current (wrong) behavior; the fix changes this assertion.
-async def test_git_commit_with_nothing_staged_creates_empty_commit(repo: git.Repo):
-    # Pins #4762: with nothing staged, git_commit still writes a commit (whose
-    # tree equals its parent's) and reports success. `git commit` would refuse
-    # with "no changes added to commit". Fixing #4762 changes this test.
+async def test_git_commit_with_nothing_staged_is_refused(repo: git.Repo):
+    # #4762: with nothing staged, git_commit refuses, as `git commit` does
+    # without --allow-empty, instead of writing an empty commit.
     root = root_of(repo)
     (root / "test.txt").write_text("edited but not staged\n")
     before = repo.head.commit
     result = await call(
         None, "git_commit", {"repo_path": str(root), "message": "claims a fix"}
     )
-    after = repo.head.commit
     assert result == text_result(
-        f"Changes committed successfully with hash {after.hexsha}"
+        "No changes staged for commit. Use git_add to stage changes first; "
+        "git_status shows what is currently staged.",
+        is_error=True,
     )
-    assert after.parents == (before,)
-    assert after.tree.hexsha == before.tree.hexsha
+    assert repo.head.commit == before
     assert repo.is_dirty()
 
 
@@ -372,26 +370,27 @@ async def test_git_add_file_starting_with_dash_is_a_path(repo: git.Repo):
     assert staged_paths(repo) == {"-n"}
 
 
-# KNOWN BUG #4763: pins current (wrong) behavior; the fix changes this assertion.
-async def test_git_add_empty_list_reports_success_but_stages_nothing(
-    repo: git.Repo,
-):
-    # Pins #4763: `files: []` runs `git add --`, a no-op, and still reports
-    # success. Fixing #4763 changes this test.
+async def test_git_add_empty_list_is_rejected(repo: git.Repo):
+    # #4763: `files: []` would run `git add --`, a no-op. The schema's
+    # minItems makes the SDK reject it before the tool runs.
     root = root_of(repo)
     (root / "test.txt").write_text("edited\n")
     result = await call(None, "git_add", {"repo_path": str(root), "files": []})
-    assert result == text_result("Files staged successfully")
+    assert result == text_result(
+        "Input validation error: [] should be non-empty", is_error=True
+    )
     assert staged_paths(repo) == set()
 
 
-# KNOWN BUG #4763: pins current (wrong) behavior; the fix changes this assertion.
-async def test_git_add_dot_on_clean_tree_reports_success(repo: git.Repo):
-    # Pins #4763: nothing to stage, success reported anyway.
+async def test_git_add_dot_on_clean_tree_reports_nothing_staged(repo: git.Repo):
+    # #4763: nothing to stage, and the result says so.
     result = await call(
         None, "git_add", {"repo_path": str(root_of(repo)), "files": ["."]}
     )
-    assert result == text_result("Files staged successfully")
+    assert result == text_result(
+        "No changes were staged: the given paths had nothing new to stage. "
+        "git_status shows what is modified or untracked."
+    )
     assert staged_paths(repo) == set()
 
 
