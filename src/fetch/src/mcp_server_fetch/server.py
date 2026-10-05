@@ -46,12 +46,19 @@ def extract_content_from_html(html: str) -> str:
     ret = readabilipy.simple_json.simple_json_from_html_string(
         html, use_readability=True
     )
+    failed = "<error>Page failed to be simplified from HTML</error>"
     if not ret["content"]:
-        return "<error>Page failed to be simplified from HTML</error>"
+        return failed
     content = markdownify.markdownify(
         ret["content"],
         heading_style=markdownify.ATX,
     )
+    # Without Node, readabilipy's pure-Python extractor never returns empty
+    # content: an empty page comes back as "<div></div>", which converts to an
+    # empty string. Report that as the same simplification failure the Node
+    # path reports, rather than letting it reach pagination as an exhausted page.
+    if not content.strip():
+        return failed
     return content
 
 
