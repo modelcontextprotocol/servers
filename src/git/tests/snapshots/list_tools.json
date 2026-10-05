@@ -153,6 +153,7 @@
             "items": {
               "type": "string"
             },
+            "minItems": 1,
             "title": "Files",
             "type": "array"
           }

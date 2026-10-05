@@ -50,7 +50,7 @@ class GitCommit(BaseModel):
 
 class GitAdd(BaseModel):
     repo_path: str
-    files: list[str]
+    files: list[str] = Field(..., min_length=1)
 
 
 class GitReset(BaseModel):
@@ -146,13 +146,60 @@ def git_diff(
     return repo.git.diff(f"--unified={context_lines}", target)
 
 
+def _has_staged_changes(repo: git.Repo) -> bool:
+    """Whether the index holds anything git would record as a commit.
+
+    Mirrors `git commit`, which refuses to create an empty commit unless
+    --allow-empty is given, but permits one while a merge is in progress.
+    """
+    if (Path(repo.git_dir) / "MERGE_HEAD").exists():
+        return True
+    if not repo.head.is_valid():
+        # Unborn branch: the first commit, so anything in the index counts.
+        return bool(repo.index.entries)
+    return bool(repo.index.diff(repo.head.commit))
+
+
 def git_commit(repo: git.Repo, message: str) -> str:
-    commit = repo.index.commit(message)
+    # repo.index.commit() writes a tree unconditionally, so without this check
+    # a caller that forgot to stage gets a hash back for an empty commit and no
+    # way to tell it apart from a real one.
+    if not _has_staged_changes(repo):
+        raise ValueError(
+            "No changes staged for commit. Use git_add to stage changes first; "
+            "git_status shows what is currently staged."
+        )
+    git_dir = Path(repo.git_dir)
+    merge_head = git_dir / "MERGE_HEAD"
+    if merge_head.exists():
+        # Conclude the merge as `git commit` does: HEAD plus every MERGE_HEAD
+        # commit as parents, then clear the merge state. index.commit() alone
+        # records only HEAD and leaves the repository mid-merge.
+        parents = [repo.head.commit] + [
+            repo.commit(sha) for sha in merge_head.read_text().split()
+        ]
+        commit = repo.index.commit(message, parent_commits=parents)
+        for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "AUTO_MERGE"):
+            (git_dir / name).unlink(missing_ok=True)
+    else:
+        commit = repo.index.commit(message)
     return f"Changes committed successfully with hash {commit.hexsha}"
 
 
+def _index_entries(repo: git.Repo, files: list[str]) -> str:
+    """Mode, blob and stage of the index entries matching the pathspecs."""
+    return repo.git.ls_files("--stage", "--", *files)
+
+
 def git_add(repo: git.Repo, files: list[str]) -> str:
+    if not files:
+        # `git add --` with no pathspec is a no-op that exits 0.
+        raise ValueError(
+            "No files provided to stage. Pass one or more paths, "
+            "or ['.'] to stage everything."
+        )
     if files == ["."]:
+        before = _index_entries(repo, files)
         repo.git.add(".")
     else:
         # Defense in depth: validate each path resolves within the repository
@@ -168,8 +215,16 @@ def git_add(repo: git.Repo, files: list[str]) -> str:
                 resolved.relative_to(repo_root)
             except ValueError:
                 raise ValueError(f"Path '{f}' is outside the repository '{repo_root}'")
+        before = _index_entries(repo, files)
         # Use '--' to prevent files starting with '-' from being interpreted as options
         repo.git.add("--", *files)
+    # `git add` exits 0 when it stages nothing (e.g. '.' on a clean tree), so
+    # read the outcome back from the index rather than the exit status.
+    if _index_entries(repo, files) == before:
+        return (
+            "No changes were staged: the given paths had nothing new to stage. "
+            "git_status shows what is modified or untracked."
+        )
     return "Files staged successfully"
 
 

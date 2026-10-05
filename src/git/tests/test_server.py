@@ -110,6 +110,35 @@ def test_git_add_specific_files(test_repository):
     assert result == "Files staged successfully"
 
 
+def test_git_add_rejects_an_empty_file_list(test_repository):
+    # #4763: `git add --` with no pathspec is a no-op that exits 0.
+    with pytest.raises(ValueError, match="No files provided to stage"):
+        git_add(test_repository, [])
+
+
+def test_git_add_clean_tree_reports_nothing_staged(test_repository):
+    result = git_add(test_repository, ["."])
+
+    assert result.startswith("No changes were staged")
+    assert not test_repository.index.diff(test_repository.head.commit)
+
+
+def test_git_add_already_staged_file_reports_nothing_staged(test_repository):
+    # A change staged earlier must not make a no-op call read as a success.
+    Path(test_repository.working_dir, "staged.txt").write_text("staged")
+    test_repository.index.add(["staged.txt"])
+
+    assert git_add(test_repository, ["staged.txt"]).startswith("No changes were staged")
+    assert git_add(test_repository, ["."]).startswith("No changes were staged")
+
+
+def test_git_add_reports_a_staged_deletion(test_repository):
+    Path(test_repository.working_dir, "test.txt").unlink()
+
+    assert git_add(test_repository, ["test.txt"]) == "Files staged successfully"
+    assert "test.txt" not in [path for path, _stage in test_repository.index.entries]
+
+
 def test_git_add_rejects_path_traversal(test_repository):
     # Security invariant (CVE-2026-27735): a relative path escaping the
     # repository must never be staged. Accept rejection from either the
@@ -204,6 +233,115 @@ def test_git_commit(test_repository):
 
     latest_commit = test_repository.head.commit
     assert latest_commit.message.strip() == "test commit message"
+
+
+def test_git_commit_refuses_when_nothing_is_staged(test_repository):
+    # #4762: repo.index.commit() writes a tree unconditionally, so each of
+    # these used to come back as a hash for an empty commit.
+    head_before = test_repository.head.commit.hexsha
+    working_file = Path(test_repository.working_dir) / "test.txt"
+
+    # A clean tree.
+    with pytest.raises(ValueError, match="No changes staged for commit"):
+        git_commit(test_repository, "nothing to record")
+
+    # An untracked file, which git_add was never called for.
+    Path(test_repository.working_dir, "untracked.txt").write_text("never added")
+    with pytest.raises(ValueError, match="No changes staged for commit"):
+        git_commit(test_repository, "nothing to record")
+
+    # A tracked file edited but not staged.
+    working_file.write_text("edited but never staged")
+    with pytest.raises(ValueError, match="No changes staged for commit"):
+        git_commit(test_repository, "nothing to record")
+
+    assert test_repository.head.commit.hexsha == head_before
+    assert working_file.read_text() == "edited but never staged"
+
+
+def test_git_commit_records_a_staged_deletion(test_repository):
+    # A deletion leaves no file behind, so it must not read as an empty index.
+    test_repository.git.rm("test.txt")
+
+    result = git_commit(test_repository, "remove test.txt")
+
+    assert "Changes committed successfully with hash" in result
+    assert "test.txt" not in test_repository.head.commit.tree
+
+
+def test_git_commit_allows_the_first_commit_on_an_unborn_branch(tmp_path: Path):
+    repo = git.Repo.init(tmp_path / "unborn")
+    Path(repo.working_dir, "first.txt").write_text("first")
+    repo.index.add(["first.txt"])
+
+    result = git_commit(repo, "initial commit")
+
+    assert "Changes committed successfully with hash" in result
+    assert repo.head.commit.message.strip() == "initial commit"
+    repo.close()
+
+
+def test_git_commit_refuses_an_empty_unborn_branch(tmp_path: Path):
+    repo = git.Repo.init(tmp_path / "unborn")
+
+    with pytest.raises(ValueError, match="No changes staged for commit"):
+        git_commit(repo, "initial commit")
+
+    assert not repo.head.is_valid()
+    repo.close()
+
+
+def test_git_commit_allows_an_empty_merge_commit(repo):
+    # git permits an empty commit while a merge is in progress, so a merge
+    # whose result matches HEAD must still be committable. --no-commit sets
+    # MERGE_HEAD deterministically, without provoking a conflict.
+    starting_branch = repo.active_branch.name
+    repo.git.checkout("-b", "side")
+    Path(repo.working_dir, "side.txt").write_text("side only")
+    repo.git.add("side.txt")
+    side_sha = repo.index.commit("side change").hexsha
+
+    repo.git.checkout(starting_branch)
+    head_before = repo.head.commit.hexsha
+    repo.git.merge("side", "--no-commit", "--no-ff")
+    assert (Path(repo.git_dir) / "MERGE_HEAD").exists()
+
+    # Roll the index back to HEAD's own content: the pending merge commit
+    # records no change at all, which git allows.
+    repo.git.rm("side.txt", "--cached")
+    Path(repo.working_dir, "side.txt").unlink()
+    assert not repo.index.diff(repo.head.commit)
+
+    result = git_commit(repo, "merge side")
+
+    assert "Changes committed successfully with hash" in result
+    assert [p.hexsha for p in repo.head.commit.parents] == [head_before, side_sha]
+    assert not (Path(repo.git_dir) / "MERGE_HEAD").exists()
+
+
+def test_git_commit_concludes_a_merge_with_both_parents(repo):
+    # #5012: a merge commit records HEAD and MERGE_HEAD as parents and clears
+    # the merge state, as `git commit` does.
+    starting_branch = repo.active_branch.name
+    repo.git.checkout("-b", "side")
+    Path(repo.working_dir, "side.txt").write_text("side only")
+    repo.git.add("side.txt")
+    side_sha = repo.index.commit("side change").hexsha
+
+    repo.git.checkout(starting_branch)
+    head_before = repo.head.commit.hexsha
+    repo.git.merge("side", "--no-commit", "--no-ff")
+
+    result = git_commit(repo, "merge side")
+
+    commit = repo.head.commit
+    assert commit.hexsha in result
+    assert [p.hexsha for p in commit.parents] == [head_before, side_sha]
+    assert "side.txt" in commit.tree
+    git_dir = Path(repo.git_dir)
+    for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE"):
+        assert not (git_dir / name).exists()
+    assert repo.active_branch.name == starting_branch
 
 
 def test_git_reset(test_repository):
