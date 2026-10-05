@@ -58,7 +58,7 @@ src/everything
      │   ├── trigger-sampling-request-async.ts
      │   └── trigger-url-elicitation.ts
      └── transports
-         ├── inMemoryEventStore.ts
+         ├── in-memory-event-store.ts
          ├── listen.ts
          ├── sse.ts
          ├── stdio.ts
@@ -190,7 +190,7 @@ src/everything
 
 ### `transports/`
 
-- `inMemoryEventStore.ts`
+- `in-memory-event-store.ts`
   - `InMemoryEventStore`: the Streamable HTTP transport's event store for resumability. Replays only the events of the stream a `Last-Event-ID` belongs to, and reports an unknown event ID as having no stream, so the SDK refuses the resume.
 - `listen.ts`
   - `listenOrExit(app, port, listeningMessage)`: binds an Express app to its port for both HTTP transports.

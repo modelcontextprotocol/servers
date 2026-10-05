@@ -276,6 +276,7 @@ describe("Streamable HTTP transport", () => {
 
   it.each([
     ["a notification", JSON.stringify({ jsonrpc: "2.0", method: "ping" })],
+    ["a batch", JSON.stringify([{ jsonrpc: "2.0", id: 8, method: "ping" }])],
     ["malformed JSON", "{not json"],
     [
       "a body too large to read for its id",

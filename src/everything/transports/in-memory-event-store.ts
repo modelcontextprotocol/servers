@@ -1,3 +1,15 @@
+// The Streamable HTTP transport's event store, which makes its SSE streams
+// resumable: a client that reconnects with a `Last-Event-ID` is sent the
+// events it missed (#4087).
+//
+// Events are kept per stream, and a replay sends only the later events of the
+// stream the given event belongs to, never another stream's. An unknown event
+// id has no stream: `getStreamIdForEventId` reports that as `undefined`, which
+// is how the SDK learns to refuse the resume before it calls
+// `replayEventsAfter`. In memory and unbounded, so for examples and testing,
+// not production. Split out of `streamableHttp.ts` (from #4099) so it can be
+// tested directly.
+
 import { randomUUID } from "node:crypto";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import type {
@@ -6,8 +18,6 @@ import type {
   StreamId,
 } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-// Simple in-memory event store for SSE resumability.
-// Primarily intended for examples and testing, not production use.
 export class InMemoryEventStore implements EventStore {
   private events: Map<
     EventId,
@@ -35,10 +45,9 @@ export class InMemoryEventStore implements EventStore {
   ): Promise<StreamId> {
     const lastEvent = this.events.get(lastEventId);
     if (!lastEvent) {
-      // The SDK type currently requires a StreamId, but unknown event IDs have
-      // no stream to resume. Return undefined at runtime to match the intended
-      // EventStore semantics and Python API behavior.
-      return undefined as unknown as StreamId;
+      // The SDK asks getStreamIdForEventId first and refuses an unknown id, so
+      // reaching here is a caller error: there is no stream to return.
+      throw new Error(`Unknown event ID: ${lastEventId}`);
     }
 
     const { streamId } = lastEvent;

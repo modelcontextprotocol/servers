@@ -1,6 +1,12 @@
+// Unit tests for the Streamable HTTP event store (#4087), called directly
+// rather than over HTTP: which events a replay sends, and what an unknown event
+// id yields, are exact here, where streamable-http.test.ts can only observe
+// them through the SDK (which asks getStreamIdForEventId first and refuses an
+// unknown id before replaying).
+
 import { describe, it, expect } from "vitest";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
-import { InMemoryEventStore } from "../transports/inMemoryEventStore.js";
+import { InMemoryEventStore } from "../transports/in-memory-event-store.js";
 
 const message = (method: string): JSONRPCMessage => ({
   jsonrpc: "2.0",
@@ -50,22 +56,19 @@ describe("InMemoryEventStore", () => {
     );
   });
 
-  it("returns undefined without replaying events for unknown event ids", async () => {
+  it("rejects an unknown event id without replaying anything", async () => {
     const eventStore = new InMemoryEventStore();
     await eventStore.storeEvent("stream-a", message("notifications/stream-a"));
 
     const replayedEvents: Array<{ eventId: string; message: JSONRPCMessage }> =
       [];
-    const replayedStreamId = await eventStore.replayEventsAfter(
-      "unknown-event-id",
-      {
+    await expect(
+      eventStore.replayEventsAfter("unknown-event-id", {
         send: async (eventId, replayedMessage) => {
           replayedEvents.push({ eventId, message: replayedMessage });
         },
-      },
-    );
-
-    expect(replayedStreamId).toBeUndefined();
+      }),
+    ).rejects.toThrow("Unknown event ID: unknown-event-id");
     expect(replayedEvents).toEqual([]);
   });
 

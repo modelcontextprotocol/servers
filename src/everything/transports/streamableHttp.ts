@@ -14,7 +14,7 @@ import { createServer } from "../server/index.js";
 import { randomUUID } from "node:crypto";
 import cors from "cors";
 import { listenOrExit } from "./listen.js";
-import { InMemoryEventStore } from "./inMemoryEventStore.js";
+import { InMemoryEventStore } from "./in-memory-event-store.js";
 
 /** The most of a refused POST's body read to find its request id. */
 const MAX_ID_BODY_BYTES = 64 * 1024;
