@@ -97,4 +97,15 @@ describe('Startup Directory Validation', () => {
     // Should still start with the valid directory
     expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
   });
+
+  it('should start successfully with tilde-prefixed directory name', async () => {
+    const tildeDir = path.join(testDir, '~MyFolder');
+    await fs.mkdir(tildeDir, { recursive: true });
+
+    const result = await spawnServer([tildeDir]);
+
+    // Server should start without errors
+    expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+    expect(result.stderr).not.toContain('Error:');
+  });
 });

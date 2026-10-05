@@ -48,7 +48,7 @@ describe('getValidRootDirectories', () => {
     it('should normalize complex paths', async () => {
       const subDir = join(testDir1, 'subdir');
       mkdirSync(subDir);
-      
+
       const roots = [
         { uri: `file://${testDir1}/./subdir/../subdir`, name: 'Complex Path' }
       ];
@@ -79,6 +79,38 @@ describe('getValidRootDirectories', () => {
       expect(result).not.toContain(testFile);
       expect(result).not.toContain(invalidPath);
       expect(result).toHaveLength(1);
+    });
+  });
+
+  describe('tilde-prefixed directory names', () => {
+    let tildeDir: string;
+
+    beforeEach(() => {
+      // Create a directory with a tilde-prefixed name inside testDir1
+      tildeDir = join(testDir1, '~MyFolder');
+      mkdirSync(tildeDir);
+    });
+
+    it('should handle directory names starting with tilde as literal names', async () => {
+      const roots = [
+        { uri: tildeDir, name: 'Tilde Dir' }
+      ];
+
+      const result = await getValidRootDirectories(roots);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toContain('~MyFolder');
+    });
+
+    it('should handle file:// URIs with tilde-prefixed directory names', async () => {
+      const roots = [
+        { uri: `file://${tildeDir}`, name: 'Tilde Dir URI' }
+      ];
+
+      const result = await getValidRootDirectories(roots);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toContain('~MyFolder');
     });
   });
 });
