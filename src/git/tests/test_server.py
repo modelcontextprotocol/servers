@@ -461,7 +461,7 @@ def test_git_show(test_repository):
 
     result = git_show(test_repository, commit_sha)
 
-    assert "Commit:" in result
+    assert result.startswith("commit ")
     assert "Author:" in result
     assert "show test commit" in result
     assert "show_test.txt" in result
@@ -472,9 +472,33 @@ def test_git_show_initial_commit(test_repository):
 
     result = git_show(test_repository, initial_commit.hexsha)
 
-    assert "Commit:" in result
+    assert result.startswith("commit ")
     assert "initial commit" in result
     assert "test.txt" in result
+
+
+def test_git_show_blob_object_spec(test_repository):
+    file_path = Path(test_repository.working_dir) / "logic" / "infos.py"
+    file_path.parent.mkdir()
+    file_path.write_bytes(b"print('infos')\n")
+    test_repository.index.add(["logic/infos.py"])
+    test_repository.index.commit("add infos")
+
+    result = git_show(test_repository, "HEAD:logic/infos.py")
+
+    assert result == "print('infos')\n"
+
+
+def test_git_show_tree_object_spec(test_repository):
+    file_path = Path(test_repository.working_dir) / "logic" / "infos.py"
+    file_path.parent.mkdir()
+    file_path.write_text("print('infos')\n")
+    test_repository.index.add(["logic/infos.py"])
+    test_repository.index.commit("add infos")
+
+    result = git_show(test_repository, "HEAD:")
+
+    assert result == "logic/\ntest.txt"
 
 
 # Tests for validate_repo_path (repository scoping security fix)

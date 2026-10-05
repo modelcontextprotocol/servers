@@ -314,12 +314,25 @@ def git_show(repo: git.Repo, revision: str) -> str:
     # even if a malicious ref with that name exists (e.g. via filesystem manipulation)
     if revision.startswith("-"):
         raise BadName(f"Invalid revision: '{revision}' - cannot start with '-'")
+    obj = repo.rev_parse(revision)
+    if isinstance(obj, git.Blob):
+        return obj.data_stream.read().decode("utf-8", errors="replace")
+    if isinstance(obj, git.Tree):
+        return "\n".join(
+            f"{item.name}/" if isinstance(item, git.Tree) else item.name for item in obj
+        )
     commit = repo.commit(revision)
+    message = commit.message
+    if isinstance(message, bytes):  # pragma: no cover
+        # GitPython already decodes the message, falling back to errors="replace".
+        message = message.decode("utf-8", errors="replace")
+    # The header follows `git show --date=iso`: the sha, `Name <email>`, an
+    # ISO date, and the message indented by four spaces.
     output = [
-        f"Commit: {commit.hexsha!r}\n"
-        f"Author: {commit.author!r}\n"
-        f"Date: {commit.authored_datetime!r}\n"
-        f"Message: {commit.message!r}\n"
+        f"commit {commit.hexsha}\n"
+        f"Author: {commit.author.name} <{commit.author.email}>\n"
+        f"Date:   {commit.authored_datetime.strftime('%Y-%m-%d %H:%M:%S %z')}\n"
+        "\n" + "".join(f"    {line}\n" for line in message.rstrip("\n").split("\n"))
     ]
     if commit.parents:
         parent = commit.parents[0]
@@ -327,11 +340,15 @@ def git_show(repo: git.Repo, revision: str) -> str:
     else:
         diff = commit.diff(git.NULL_TREE, create_patch=True)
     for d in diff:
-        output.append(f"\n--- {d.a_path}\n+++ {d.b_path}\n")
+        # git prints /dev/null for the missing side of an added or deleted file.
+        a_path = "/dev/null" if d.new_file or d.a_path is None else d.a_path
+        b_path = "/dev/null" if d.deleted_file or d.b_path is None else d.b_path
+        output.append(f"\n--- {a_path}\n+++ {b_path}\n")
         if d.diff is None:
             continue  # pragma: no cover  # with create_patch=True GitPython always assigns the patch as bytes
         if isinstance(d.diff, bytes):
-            output.append(d.diff.decode("utf-8"))
+            # A non-UTF-8 file (Latin-1, say) must not fail the whole call.
+            output.append(d.diff.decode("utf-8", errors="replace"))
         else:  # pragma: no cover  # with create_patch=True GitPython always assigns the patch as bytes
             output.append(d.diff)
     return "".join(output)
@@ -528,7 +545,7 @@ async def serve(repository: Path | None) -> None:
             ),
             Tool(
                 name=GitTools.SHOW,
-                description="Shows the contents of a commit",
+                description="Shows the contents of a commit, or of a file or directory given as <revision>:<path>",
                 inputSchema=GitShow.model_json_schema(),
                 annotations=ToolAnnotations(
                     readOnlyHint=True,

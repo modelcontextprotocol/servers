@@ -730,29 +730,23 @@ async def test_git_checkout_rejects_flag_injection(repo: git.Repo):
 # --------------------------------------------------------------------------
 
 
-def without_addresses(text: str) -> str:
-    """Mask CPython object addresses (`object at 0x...`)."""
-    return re.sub(r" at 0x[0-9a-fA-F]+", " at 0x?", text)
-
-
 def show_text(result: dict[str, Any]) -> str:
     assert result["isError"] is False
-    return without_addresses(result["content"][0]["text"])
+    return result["content"][0]["text"]
 
 
 def show_header(commit: git.Commit) -> str:
-    # git_show formats its header with !r, so the reply carries Python reprs:
-    # a quoted sha, `<git.Actor ...>`, and a `datetime.datetime(...)` whose
-    # tzinfo repr includes a memory address. Compared with addresses masked.
-    return without_addresses(
-        f"Commit: {commit.hexsha!r}\n"
-        f"Author: {commit.author!r}\n"
-        f"Date: {commit.authored_datetime!r}\n"
-        f"Message: {commit.message!r}\n"
+    # git_show's header follows `git show --date=iso`.
+    date = commit.authored_datetime.strftime("%Y-%m-%d %H:%M:%S %z")
+    lines = str(commit.message).rstrip("\n").split("\n")
+    return (
+        f"commit {commit.hexsha}\n"
+        "Author: Test User <test@example.com>\n"
+        f"Date:   {date}\n"
+        "\n" + "".join(f"    {line}\n" for line in lines)
     )
 
 
-# KNOWN BUG #4998: git_show prints Python reprs (quoted sha, <git.Actor>, datetime with a memory address) instead of git's format; the fix changes this assertion.
 async def test_git_show_commit_with_parent(repo: git.Repo):
     root = root_of(repo)
     (root / "test.txt").write_text(
@@ -769,29 +763,52 @@ async def test_git_show_commit_with_parent(repo: git.Repo):
         + "@@ -1,5 +1,5 @@\n line 1\n line 2\n-line 3\n+SHOWN\n line 4\n line 5\n"
     )
     text = show_text(result)
-    assert f"Commit: '{commit.hexsha}'\n" in text
-    assert 'Author: <git.Actor "Test User <test@example.com>">\n' in text
-    assert "Date: datetime.datetime(" in text
-    assert "Message: 'show me'\n" in text
+    assert text.startswith(
+        f"commit {commit.hexsha}\nAuthor: Test User <test@example.com>\n"
+    )
+    assert re.search(
+        r"\nDate:   \d{4}-\d\d-\d\d \d\d:\d\d:\d\d [+-]\d{4}\n\n    show me\n", text
+    )
 
 
-# KNOWN BUG #4998: git_show prints Python reprs (with a memory address) and "--- None" where git prints /dev/null; the fix changes this assertion.
+async def test_git_show_multiline_message_is_indented(repo: git.Repo):
+    root = root_of(repo)
+    (root / "test.txt").write_text("changed\n")
+    repo.index.add(["test.txt"])
+    commit = repo.index.commit("subject\n\nbody line\n")
+    result = await call(None, "git_show", {"repo_path": str(root), "revision": "HEAD"})
+    text = show_text(result)
+    assert text.startswith(show_header(commit))
+    assert "\n\n    subject\n    \n    body line\n\n--- test.txt\n" in text
+
+
 async def test_git_show_initial_commit_diffs_against_empty_tree(repo: git.Repo):
     # With no parent the commit is diffed against NULL_TREE. An added file has
-    # no a_path, so the header prints Python's `None` where git prints
-    # `/dev/null`.
+    # no a_path, so the header prints /dev/null, as git does.
     initial = repo.head.commit
     result = await call(
         None, "git_show", {"repo_path": str(root_of(repo)), "revision": "HEAD"}
     )
     assert show_text(result) == (
         show_header(initial)
-        + "\n--- None\n+++ test.txt\n"
+        + "\n--- /dev/null\n+++ test.txt\n"
         + "@@ -0,0 +1,5 @@\n+line 1\n+line 2\n+line 3\n+line 4\n+line 5\n"
     )
 
 
-# KNOWN BUG #4998: git_show prints Python reprs (quoted sha, <git.Actor>, datetime with a memory address) instead of git's format; the fix changes this assertion.
+async def test_git_show_deleted_file_diffs_to_dev_null(repo: git.Repo):
+    repo.index.remove(["test.txt"], working_tree=True)
+    commit = repo.index.commit("delete")
+    result = await call(
+        None, "git_show", {"repo_path": str(root_of(repo)), "revision": "HEAD"}
+    )
+    assert show_text(result) == (
+        show_header(commit)
+        + "\n--- test.txt\n+++ /dev/null\n"
+        + "@@ -1,5 +0,0 @@\n-line 1\n-line 2\n-line 3\n-line 4\n-line 5\n"
+    )
+
+
 async def test_git_show_rename_only_commit_has_header_and_no_patch(repo: git.Repo):
     # A pure rename yields a diff entry whose patch is empty bytes.
     repo.index.move(["test.txt", "renamed.txt"])
@@ -804,7 +821,6 @@ async def test_git_show_rename_only_commit_has_header_and_no_patch(repo: git.Rep
     )
 
 
-# KNOWN BUG #4998: git_show prints Python reprs (quoted sha, <git.Actor>, datetime with a memory address) instead of git's format; the fix changes this assertion.
 async def test_git_show_binary_commit(repo: git.Repo):
     root = root_of(repo)
     (root / "blob.bin").write_bytes(bytes(range(256)))
@@ -813,36 +829,57 @@ async def test_git_show_binary_commit(repo: git.Repo):
     result = await call(None, "git_show", {"repo_path": str(root), "revision": "HEAD"})
     assert show_text(result) == (
         show_header(commit)
-        + "\n--- blob.bin\n+++ blob.bin\n"
+        + "\n--- /dev/null\n+++ blob.bin\n"
         + "Binary files /dev/null and b/blob.bin differ\n"
     )
 
 
-# KNOWN BUG #4997: git_show decodes the patch as strict UTF-8, so a Latin-1 file fails the whole call; the fix changes this assertion.
-async def test_git_show_non_utf8_patch_is_decode_error(repo: git.Repo):
-    # Characterization: the patch bytes are decoded as strict UTF-8, so a
-    # Latin-1 text file makes the whole call fail.
+async def test_git_show_non_utf8_patch_is_decoded_with_replacement(repo: git.Repo):
+    # A Latin-1 text file's patch is not valid UTF-8; the undecodable byte
+    # becomes U+FFFD and the rest of the commit is still shown.
     root = root_of(repo)
     (root / "latin.txt").write_bytes("caf\xe9\n".encode("latin-1"))
     repo.index.add(["latin.txt"])
-    repo.index.commit("latin-1")
+    commit = repo.index.commit("latin-1")
     result = await call(None, "git_show", {"repo_path": str(root), "revision": "HEAD"})
-    assert result["isError"] is True
-    assert "codec can't decode byte 0xe9" in result["content"][0]["text"]
+    assert show_text(result) == (
+        show_header(commit)
+        + "\n--- /dev/null\n+++ latin.txt\n"
+        + "@@ -0,0 +1 @@\n+caf\ufffd\n"
+    )
 
 
-# KNOWN BUG #1682: pins current (wrong) behavior; the fix changes this assertion.
-async def test_git_show_revision_path_syntax_is_error(repo: git.Repo):
-    # Pins #1682's current error: `<rev>:<path>` names a blob, not a commit,
-    # and repo.commit() appends `^0`, so the call fails with this message
-    # rather than crashing the server.
+async def test_git_show_revision_path_shows_the_file(repo: git.Repo):
+    # `<rev>:<path>` names a blob; git_show returns its content (#1682).
     result = await call(
         None,
         "git_show",
         {"repo_path": str(root_of(repo)), "revision": "HEAD:test.txt"},
     )
+    # Compared with the raw bytes: the fixture writes text, so CRLF on Windows.
+    expected = (root_of(repo) / "test.txt").read_bytes().decode()
+    assert result == text_result(expected)
+
+
+async def test_git_show_revision_path_to_a_directory_lists_it(repo: git.Repo):
+    # `<rev>:<dir>` names a tree; git_show lists it, subdirectories with `/`.
+    root = root_of(repo)
+    (root / "logic").mkdir()
+    (root / "logic" / "infos.py").write_text("print('infos')\n")
+    repo.index.add(["logic/infos.py"])
+    repo.index.commit("add infos")
+    result = await call(None, "git_show", {"repo_path": str(root), "revision": "HEAD:"})
+    assert result == text_result("logic/\ntest.txt")
+
+
+async def test_git_show_revision_path_not_found_is_error(repo: git.Repo):
+    result = await call(
+        None,
+        "git_show",
+        {"repo_path": str(root_of(repo)), "revision": "HEAD:nope.txt"},
+    )
     assert result == text_result(
-        "\"Blob or Tree named 'test.txt^0' not found\"", is_error=True
+        "\"Blob or Tree named 'nope.txt' not found\"", is_error=True
     )
 
 
