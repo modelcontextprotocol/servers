@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerEchoTool, EchoSchema } from '../tools/echo.js';
 import { registerGetSumTool } from '../tools/get-sum.js';
-import { registerGetEnvTool } from '../tools/get-env.js';
+import {
+  registerGetEnvTool,
+  isSensitiveEnvVar,
+  getRedactedEnv,
+  REDACTED_VALUE,
+} from '../tools/get-env.js';
 import { registerGetTinyImageTool, MCP_TINY_IMAGE } from '../tools/get-tiny-image.js';
 import { registerGetStructuredContentTool } from '../tools/get-structured-content.js';
 import { registerGetAnnotatedMessageTool } from '../tools/get-annotated-message.js';
@@ -156,23 +161,6 @@ describe('Tools', () => {
   });
 
   describe('get-env', () => {
-    it('should return all environment variables as JSON', async () => {
-      const { mockServer, handlers } = createMockServer();
-      registerGetEnvTool(mockServer);
-
-      const handler = handlers.get('get-env')!;
-      process.env.TEST_VAR_EVERYTHING = 'test_value';
-      const result = await handler({});
-
-      expect(result.content).toHaveLength(1);
-      expect(result.content[0].type).toBe('text');
-
-      const envJson = JSON.parse(result.content[0].text);
-      expect(envJson.TEST_VAR_EVERYTHING).toBe('test_value');
-
-      delete process.env.TEST_VAR_EVERYTHING;
-    });
-
     it('should return valid JSON', async () => {
       const { mockServer, handlers } = createMockServer();
       registerGetEnvTool(mockServer);
@@ -181,6 +169,161 @@ describe('Tools', () => {
       const result = await handler({});
 
       expect(() => JSON.parse(result.content[0].text)).not.toThrow();
+    });
+
+    it('should return safe environment variables unmodified', async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerGetEnvTool(mockServer);
+
+      const handler = handlers.get('get-env')!;
+      process.env.TEST_VAR_EVERYTHING = 'test_value';
+      process.env.TEST_SAFE_VAR = 'safe_unmodified_value';
+
+      try {
+        const result = await handler({});
+        expect(result.content).toHaveLength(1);
+        expect(result.content[0].type).toBe('text');
+
+        const envJson = JSON.parse(result.content[0].text);
+        expect(envJson.TEST_VAR_EVERYTHING).toBe('test_value');
+        expect(envJson.TEST_SAFE_VAR).toBe('safe_unmodified_value');
+        if (process.env.PATH) {
+          expect(envJson.PATH).toBe(process.env.PATH);
+        }
+        if (process.env.NODE_ENV) {
+          expect(envJson.NODE_ENV).toBe(process.env.NODE_ENV);
+        }
+      } finally {
+        delete process.env.TEST_VAR_EVERYTHING;
+        delete process.env.TEST_SAFE_VAR;
+      }
+    });
+
+    it('should redact sensitive environment variables to [REDACTED]', async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerGetEnvTool(mockServer);
+
+      const handler = handlers.get('get-env')!;
+      process.env.TEST_API_KEY = 'sk-123456789';
+      process.env.SECRET_TOKEN = 'secret-token-value';
+      process.env.DB_PASSWORD = 'super_secret_password';
+      process.env.AWS_SECRET_ACCESS_KEY = 'AKIAIOSFODNN7EXAMPLE';
+      process.env.TEST_SAFE_VAR = 'safe_value';
+
+      try {
+        const result = await handler({});
+        const envJson = JSON.parse(result.content[0].text);
+
+        expect(envJson.TEST_API_KEY).toBe(REDACTED_VALUE);
+        expect(envJson.SECRET_TOKEN).toBe(REDACTED_VALUE);
+        expect(envJson.DB_PASSWORD).toBe(REDACTED_VALUE);
+        expect(envJson.AWS_SECRET_ACCESS_KEY).toBe(REDACTED_VALUE);
+        expect(envJson.TEST_SAFE_VAR).toBe('safe_value');
+      } finally {
+        delete process.env.TEST_API_KEY;
+        delete process.env.SECRET_TOKEN;
+        delete process.env.DB_PASSWORD;
+        delete process.env.AWS_SECRET_ACCESS_KEY;
+        delete process.env.TEST_SAFE_VAR;
+      }
+    });
+
+    it('should identify sensitive env vars case-insensitively with isSensitiveEnvVar', () => {
+      // Substrings (case-insensitive)
+      expect(isSensitiveEnvVar('TEST_API_KEY')).toBe(true);
+      expect(isSensitiveEnvVar('test_api_key')).toBe(true);
+      expect(isSensitiveEnvVar('SECRET_TOKEN')).toBe(true);
+      expect(isSensitiveEnvVar('secret_token')).toBe(true);
+      expect(isSensitiveEnvVar('DB_PASSWORD')).toBe(true);
+      expect(isSensitiveEnvVar('db_password')).toBe(true);
+      expect(isSensitiveEnvVar('AUTH_HEADER')).toBe(true);
+      expect(isSensitiveEnvVar('auth_header')).toBe(true);
+      expect(isSensitiveEnvVar('PRIVATE_KEY')).toBe(true);
+      expect(isSensitiveEnvVar('private_key')).toBe(true);
+      expect(isSensitiveEnvVar('USER_CREDENTIALS')).toBe(true);
+      expect(isSensitiveEnvVar('user_credentials')).toBe(true);
+      expect(isSensitiveEnvVar('CUSTOM_APIKEY')).toBe(true);
+      expect(isSensitiveEnvVar('custom_apikey')).toBe(true);
+      expect(isSensitiveEnvVar('AWS_ACCESS_KEY_ID')).toBe(true);
+      expect(isSensitiveEnvVar('aws_access_key_id')).toBe(true);
+      expect(isSensitiveEnvVar('GPG_PASSPHRASE')).toBe(true);
+      expect(isSensitiveEnvVar('gpg_passphrase')).toBe(true);
+      expect(isSensitiveEnvVar('SSL_CERT_PATH')).toBe(true);
+      expect(isSensitiveEnvVar('ssl_cert_path')).toBe(true);
+
+      // Prefixes (case-insensitive)
+      expect(isSensitiveEnvVar('AWS_DEFAULT_REGION')).toBe(true);
+      expect(isSensitiveEnvVar('aws_default_region')).toBe(true);
+      expect(isSensitiveEnvVar('GITHUB_RUN_ID')).toBe(true);
+      expect(isSensitiveEnvVar('github_run_id')).toBe(true);
+      expect(isSensitiveEnvVar('ANTHROPIC_BASE_URL')).toBe(true);
+      expect(isSensitiveEnvVar('anthropic_base_url')).toBe(true);
+      expect(isSensitiveEnvVar('OPENAI_ORGANIZATION')).toBe(true);
+      expect(isSensitiveEnvVar('openai_organization')).toBe(true);
+      expect(isSensitiveEnvVar('SLACK_CHANNEL')).toBe(true);
+      expect(isSensitiveEnvVar('slack_channel')).toBe(true);
+      expect(isSensitiveEnvVar('SSH_CONNECTION')).toBe(true);
+      expect(isSensitiveEnvVar('ssh_connection')).toBe(true);
+
+      // Non-sensitive variables
+      expect(isSensitiveEnvVar('PATH')).toBe(false);
+      expect(isSensitiveEnvVar('NODE_ENV')).toBe(false);
+      expect(isSensitiveEnvVar('LANG')).toBe(false);
+      expect(isSensitiveEnvVar('HOME')).toBe(false);
+      expect(isSensitiveEnvVar('USER')).toBe(false);
+      expect(isSensitiveEnvVar('HOSTNAME')).toBe(false);
+      expect(isSensitiveEnvVar('SHELL')).toBe(false);
+      expect(isSensitiveEnvVar('TERM')).toBe(false);
+      expect(isSensitiveEnvVar('TEST_SAFE_VAR')).toBe(false);
+    });
+
+    it('should mask sensitive variables and keep safe variables in getRedactedEnv', () => {
+      const mockEnv = {
+        PATH: '/usr/bin:/bin',
+        NODE_ENV: 'production',
+        TEST_SAFE_VAR: 'safe',
+        LANG: 'en_US.UTF-8',
+        HOME: '/home/user',
+        USER: 'user',
+        HOSTNAME: 'localhost',
+        SHELL: '/bin/bash',
+        TERM: 'xterm-256color',
+        TEST_API_KEY: 'sensitive_key_value',
+        SECRET_TOKEN: 'sensitive_token_value',
+        DB_PASSWORD: 'sensitive_password_value',
+        AWS_SECRET_ACCESS_KEY: 'sensitive_aws_value',
+        GITHUB_TOKEN: 'sensitive_gh_value',
+        ANTHROPIC_API_KEY: 'sensitive_anthropic_value',
+        OPENAI_API_KEY: 'sensitive_openai_value',
+        SLACK_BOT_TOKEN: 'sensitive_slack_value',
+        SSH_AUTH_SOCK: '/tmp/ssh-agent',
+        UNDEFINED_VAR: undefined,
+      };
+
+      const redacted = getRedactedEnv(mockEnv);
+      expect('UNDEFINED_VAR' in redacted).toBe(false);
+
+      // Verify safe variables are unmodified
+      expect(redacted.PATH).toBe('/usr/bin:/bin');
+      expect(redacted.NODE_ENV).toBe('production');
+      expect(redacted.TEST_SAFE_VAR).toBe('safe');
+      expect(redacted.LANG).toBe('en_US.UTF-8');
+      expect(redacted.HOME).toBe('/home/user');
+      expect(redacted.USER).toBe('user');
+      expect(redacted.HOSTNAME).toBe('localhost');
+      expect(redacted.SHELL).toBe('/bin/bash');
+      expect(redacted.TERM).toBe('xterm-256color');
+
+      // Verify sensitive variables are redacted
+      expect(redacted.TEST_API_KEY).toBe(REDACTED_VALUE);
+      expect(redacted.SECRET_TOKEN).toBe(REDACTED_VALUE);
+      expect(redacted.DB_PASSWORD).toBe(REDACTED_VALUE);
+      expect(redacted.AWS_SECRET_ACCESS_KEY).toBe(REDACTED_VALUE);
+      expect(redacted.GITHUB_TOKEN).toBe(REDACTED_VALUE);
+      expect(redacted.ANTHROPIC_API_KEY).toBe(REDACTED_VALUE);
+      expect(redacted.OPENAI_API_KEY).toBe(REDACTED_VALUE);
+      expect(redacted.SLACK_BOT_TOKEN).toBe(REDACTED_VALUE);
+      expect(redacted.SSH_AUTH_SOCK).toBe(REDACTED_VALUE);
     });
   });
 
