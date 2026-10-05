@@ -102,14 +102,13 @@ class TimeServer:
             tzinfo=source_timezone,
         )
 
-        # A wall-clock time skipped by a DST jump (e.g. 02:30 on a
+        # A wall-clock time skipped by a clock change (e.g. 02:30 on a DST
         # spring-forward day) does not survive a round trip through UTC.
         round_trip = datetime.fromtimestamp(source_time.timestamp(), source_timezone)
         if round_trip.replace(tzinfo=None) != source_time.replace(tzinfo=None):
             raise ValueError(
                 f"Invalid time: {time_str} does not exist in {source_tz} on "
-                f"{source_time.date().isoformat()} (skipped by a daylight "
-                "saving time change)"
+                f"{source_time.date().isoformat()} (skipped by a clock change)"
             )
 
         target_time = source_time.astimezone(target_timezone)

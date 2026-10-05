@@ -726,7 +726,7 @@ async def test_convert_time_into_a_nonexistent_local_time() -> None:
             )
     assert result == handler_error(
         "Invalid time: 02:30 does not exist in America/New_York on 2024-03-10 "
-        "(skipped by a daylight saving time change)"
+        "(skipped by a clock change)"
     )
 
 
