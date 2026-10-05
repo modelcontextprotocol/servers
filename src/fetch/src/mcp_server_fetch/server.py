@@ -1,5 +1,6 @@
 import os
 from typing import TYPE_CHECKING, Annotated, Tuple
+from importlib.metadata import version
 from urllib.parse import urlparse, urlunparse
 
 import markdownify
@@ -24,6 +25,11 @@ from pydantic import BaseModel, Field, AnyUrl
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
+# The version this server reports in serverInfo, read from the installed
+# distribution's metadata (pyproject.toml) so it cannot drift from the
+# published version (#360). Without it the SDK reports its own `mcp` version.
+SERVER_VERSION = version("mcp-server-fetch")
+
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
 
@@ -40,12 +46,19 @@ def extract_content_from_html(html: str) -> str:
     ret = readabilipy.simple_json.simple_json_from_html_string(
         html, use_readability=True
     )
+    failed = "<error>Page failed to be simplified from HTML</error>"
     if not ret["content"]:
-        return "<error>Page failed to be simplified from HTML</error>"
+        return failed
     content = markdownify.markdownify(
         ret["content"],
         heading_style=markdownify.ATX,
     )
+    # Without Node, readabilipy's pure-Python extractor never returns empty
+    # content: an empty page comes back as "<div></div>", which converts to an
+    # empty string. Report that as the same simplification failure the Node
+    # path reports, rather than letting it reach pagination as an exhausted page.
+    if not content.strip():
+        return failed
     return content
 
 
@@ -224,8 +237,11 @@ class Fetch(BaseModel):
         Field(
             default=5000,
             description="Maximum number of characters to return.",
-            gt=0,
-            lt=1000000,
+            # ge/le rather than gt/lt: the inclusive bounds emit minimum/maximum,
+            # which every client accepts, while exclusiveMinimum/exclusiveMaximum
+            # are rejected by some (Gemini, #1624). Same range for an int.
+            ge=1,
+            le=999999,
         ),
     ]
     start_index: Annotated[
@@ -260,7 +276,7 @@ async def serve(
     if proxy_url:
         proxy_url = normalize_proxy_url(proxy_url)
     normalize_proxy_env()
-    server = Server("mcp-fetch")
+    server = Server("mcp-fetch", version=SERVER_VERSION)
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
     user_agent_manual = custom_user_agent or DEFAULT_USER_AGENT_MANUAL
 
@@ -292,6 +308,8 @@ Although originally you did not have internet access, and were advised to refuse
 
     @server.call_tool()
     async def call_tool(name, arguments: dict) -> list[TextContent]:
+        if name != "fetch":
+            raise ValueError(f"Unknown tool: {name}")
         try:
             args = Fetch(**arguments)
         except ValueError as e:
@@ -328,6 +346,10 @@ Although originally you did not have internet access, and were advised to refuse
 
     @server.get_prompt()
     async def get_prompt(name: str, arguments: dict | None) -> GetPromptResult:
+        if name != "fetch":
+            raise McpError(
+                ErrorData(code=INVALID_PARAMS, message=f"Unknown prompt: {name}")
+            )
         if not arguments or "url" not in arguments:
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 
