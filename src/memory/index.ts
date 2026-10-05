@@ -15,6 +15,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { promises as fs, realpathSync } from "fs";
+import type { FileHandle } from "fs/promises";
 import path from "path";
 import os from "os";
 import { randomBytes } from "crypto";
@@ -122,9 +123,196 @@ export function skippedEntitiesNotice(skipped: string[]): string {
   );
 }
 
+// Timings for the cross-process lock around each mutation. Exposed so tests
+// can shorten them; the server always uses the defaults.
+export interface FileLockOptions {
+  // A lock not refreshed for this long is presumed abandoned and is broken.
+  staleMs?: number;
+  // Give up, failing the mutation, after waiting this long for the lock.
+  timeoutMs?: number;
+  // Wait between attempts, plus up to the same again of random jitter.
+  retryMs?: number;
+}
+
+// For best-effort lock cleanup, whose failure must not mask the real outcome.
+function ignoreError(): void {}
+
+// Whether the process that wrote a lock file is known to be gone. Only a
+// process on this host can be checked; for any other host, or a lock whose
+// contents cannot be read, the lock's age decides instead.
+function isLockOwnerDead(contents: string): boolean {
+  let owner: unknown;
+  try {
+    owner = JSON.parse(contents);
+  } catch {
+    return false;
+  }
+  const { pid, hostname } = (owner ?? {}) as Record<string, unknown>;
+  if (typeof pid !== "number" || hostname !== os.hostname()) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    // EPERM means the process exists but belongs to another user.
+    return (error as NodeJS.ErrnoException).code === "ESRCH";
+  }
+}
+
+// Whether the lock at lockPath is abandoned. Its owner and its mtime are read
+// through one open handle, so both describe the same lock file even if it is
+// replaced meanwhile.
+async function isLockStale(
+  lockPath: string,
+  staleMs: number,
+): Promise<boolean> {
+  const handle = await fs.open(lockPath, "r");
+  try {
+    const [contents, stats] = await Promise.all([
+      handle.readFile("utf-8"),
+      handle.stat(),
+    ]);
+    return isLockOwnerDead(contents) || Date.now() - stats.mtimeMs > staleMs;
+  } finally {
+    await handle.close();
+  }
+}
+
+// Remove an abandoned lock, returning whether it did. Breaking is itself
+// guarded by a second O_EXCL file, so only one waiter breaks at a time and
+// re-checks the lock under that guard: two waiters can never both judge the
+// same abandoned lock stale and one then remove the lock the other has just
+// taken in its place.
+async function breakStaleLock(
+  lockPath: string,
+  staleMs: number,
+): Promise<boolean> {
+  const breakerPath = `${lockPath}.break`;
+  let breaker: FileHandle;
+  try {
+    breaker = await fs.open(breakerPath, "wx");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      throw error;
+    }
+    // Another waiter is breaking the lock. Its guard is held for a moment
+    // only, so one that outlives staleMs was left by a crash: clear it.
+    const stats = await fs.stat(breakerPath).catch(() => null);
+    if (stats && Date.now() - stats.mtimeMs > staleMs) {
+      await fs.unlink(breakerPath).catch(ignoreError);
+    }
+    return false;
+  }
+  try {
+    await breaker.close();
+    if (!(await isLockStale(lockPath, staleMs))) {
+      return false;
+    }
+    console.error(`Breaking stale memory file lock ${lockPath}`);
+    await fs.unlink(lockPath);
+    return true;
+  } finally {
+    await fs.unlink(breakerPath).catch(ignoreError);
+  }
+}
+
+// Run operation while holding an exclusive lock file at lockPath, so that
+// mutations from separate server processes sharing one graph file take turns
+// and each one loads the graph the previous one saved (#4797). The lock is a
+// file created with O_EXCL, which is atomic on local filesystems: exactly one
+// creator wins. The holder refreshes the lock's mtime every staleMs / 2 while
+// it runs. A lock left behind by a crashed process is broken once its owner
+// is known to be dead, or once it has gone unrefreshed for staleMs.
+export async function withFileLock<T>(
+  lockPath: string,
+  operation: () => Promise<T>,
+  { staleMs = 30_000, timeoutMs = 60_000, retryMs = 10 }: FileLockOptions = {},
+): Promise<T> {
+  const token = JSON.stringify({
+    pid: process.pid,
+    hostname: os.hostname(),
+    token: randomBytes(16).toString("hex"),
+  });
+  const deadline = Date.now() + timeoutMs;
+
+  for (;;) {
+    let handle: FileHandle | undefined;
+    try {
+      handle = await fs.open(lockPath, "wx");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw error;
+      }
+    }
+    if (handle) {
+      try {
+        await handle.writeFile(token);
+        await handle.close();
+      } catch (error) {
+        // The lock was created but not written: remove it rather than leave
+        // every other writer waiting for it to go stale.
+        await handle.close().catch(ignoreError);
+        await fs.unlink(lockPath).catch(ignoreError);
+        throw error;
+      }
+      break;
+    }
+
+    // Someone else holds the lock. Break it if it is abandoned; otherwise
+    // wait and try again.
+    try {
+      if (
+        (await isLockStale(lockPath, staleMs)) &&
+        (await breakStaleLock(lockPath, staleMs))
+      ) {
+        continue;
+      }
+    } catch (error) {
+      // The holder released the lock between our attempts: try again now.
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        continue;
+      }
+      throw error;
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Timed out after ${timeoutMs} ms waiting for the memory file lock ${lockPath}`,
+      );
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, retryMs + Math.random() * retryMs),
+    );
+  }
+
+  // Keep the lock fresh while the operation runs, so a mutation that outlasts
+  // staleMs (a large graph, a slow disk) is not mistaken for an abandoned one.
+  const heartbeat = setInterval(() => {
+    const now = new Date();
+    fs.utimes(lockPath, now, now).catch(ignoreError);
+  }, staleMs / 2);
+  heartbeat.unref();
+
+  try {
+    return await operation();
+  } finally {
+    clearInterval(heartbeat);
+    // Release only our own lock: if it was broken as stale while we held it,
+    // the file may now belong to another process.
+    const current = await fs.readFile(lockPath, "utf-8").catch(() => null);
+    if (current === token) {
+      await fs.unlink(lockPath).catch(ignoreError);
+    }
+  }
+}
+
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
 export class KnowledgeGraphManager {
-  constructor(private memoryFilePath: string) {}
+  constructor(
+    private memoryFilePath: string,
+    private lockOptions: FileLockOptions = {},
+  ) {}
 
   // Serializes all read-modify-write graph mutations behind a single queue.
   // Without this, concurrent tool calls (e.g. multiple mutations dispatched
@@ -132,10 +320,15 @@ export class KnowledgeGraphManager {
   // copy, and write it back — so whichever write lands last silently
   // overwrites the other's changes, and interleaved writes to the same file
   // can corrupt it outright. See #1819.
+  // The queue only orders calls within this process, so each queued mutation
+  // also holds a lock file next to the graph file while it runs, which orders
+  // it against other server processes sharing the same file. See #4797.
   private mutationQueue: Promise<unknown> = Promise.resolve();
 
   private async withLock<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.mutationQueue.then(operation, operation);
+    const locked = () =>
+      withFileLock(`${this.memoryFilePath}.lock`, operation, this.lockOptions);
+    const result = this.mutationQueue.then(locked, locked);
     // Always resolve the queue itself, even if this operation failed, so a
     // single failed mutation doesn't permanently wedge every call after it.
     // The failure still propagates normally to whoever awaited `result`.
