@@ -181,8 +181,9 @@ than `GITHUB_TOKEN`. Today that is `release.yml`'s publish jobs and
   upward escape by silently downgrading.
 - **When you bump a devDependency that several TypeScript workspaces declare**
   (`typescript`, `vitest`, `@vitest/coverage-v8`, `@types/node`, …), bump it in
-  every workspace that declares it. Their ranges already differ; do not widen the
-  skew.
+  every workspace that declares it, with one identical range everywhere. The
+  `verify:dep-lockstep` guard (in `validate:guards`, so in CI) fails when two
+  declarations of a package in its `SHARED_DEV_DEPENDENCIES` list differ.
 - **A Python dependency change updates that server's `uv.lock`** in the same
   commit (`uv lock`). CI installs with `--frozen` / `--locked` and fails on a
   stale lockfile.
