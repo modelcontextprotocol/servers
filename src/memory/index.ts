@@ -102,6 +102,26 @@ export interface KnowledgeGraph {
   relations: Relation[];
 }
 
+// Names of requested entities that createEntities did not create: the name
+// already existed, or repeated earlier in the same batch. createEntities
+// returns the created entities themselves, so identity tells them apart.
+export function skippedEntityNames(
+  requested: Entity[],
+  created: Entity[],
+): string[] {
+  return requested.filter((e) => !created.includes(e)).map((e) => e.name);
+}
+
+// Text telling the agent which entities create_entities skipped.
+export function skippedEntitiesNotice(skipped: string[]): string {
+  const one = skipped.length === 1;
+  return (
+    `Skipped ${skipped.length} ${one ? "entity that already exists" : "entities that already exist"}: ` +
+    `${skipped.join(", ")}. ${one ? "Its" : "Their"} observations were not added; ` +
+    "use add_observations for existing entities."
+  );
+}
+
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
 export class KnowledgeGraphManager {
   constructor(private memoryFilePath: string) {}
@@ -511,12 +531,15 @@ export function createServer(memoryFilePath: string): McpServer {
     "create_entities",
     {
       title: "Create Entities",
-      description: "Create multiple new entities in the knowledge graph",
+      description:
+        "Create multiple new entities in the knowledge graph. An entity whose name already exists, or repeats an earlier entity in the same call, is skipped and its observations are not added; the result lists the skipped names in `skipped`. Use add_observations to add observations to an existing entity.",
       inputSchema: {
         entities: z.array(EntitySchema),
       },
       outputSchema: {
         entities: z.array(EntitySchema),
+        // Present only when at least one requested entity was skipped.
+        skipped: z.array(z.string()).optional(),
       },
       annotations: {
         readOnlyHint: false,
@@ -528,11 +551,24 @@ export function createServer(memoryFilePath: string): McpServer {
     async ({ entities }) => {
       const result = await knowledgeGraphManager.createEntities(entities);
       notifyGraphUpdated();
+      // Existing names are ignored (see README). Say so: otherwise an agent
+      // reads the response as its observations having been stored.
+      const skipped = skippedEntityNames(entities, result);
+      const content = [
+        { type: "text" as const, text: JSON.stringify(result, null, 2) },
+      ];
+      if (skipped.length > 0) {
+        content.push({
+          type: "text" as const,
+          text: skippedEntitiesNotice(skipped),
+        });
+      }
       return {
-        content: [
-          { type: "text" as const, text: JSON.stringify(result, null, 2) },
-        ],
-        structuredContent: { entities: result },
+        content,
+        structuredContent:
+          skipped.length > 0
+            ? { entities: result, skipped }
+            : { entities: result },
       };
     },
   );
