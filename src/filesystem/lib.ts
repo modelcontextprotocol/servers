@@ -58,6 +58,17 @@ export function normalizeLineEndings(text: string): string {
   return text.replace(/\r\n/g, '\n');
 }
 
+// Strips trailing horizontal whitespace (spaces/tabs) from every line.
+// Applied only to content that is actually being written, so callers
+// that pass already-clean content see no behavioral change, and edits
+// never touch whitespace on lines outside the edit itself.
+export function stripTrailingWhitespace(text: string): string {
+  return text
+    .split('\n')
+    .map(line => line.replace(/[ \t]+$/, ''))
+    .join('\n');
+}
+
 export function createUnifiedDiff(originalContent: string, newContent: string, filepath: string = 'file'): string {
   // Ensure consistent line endings for diff
   const normalizedOriginal = normalizeLineEndings(originalContent);
@@ -203,10 +214,14 @@ export async function readFileContent(filePath: string, encoding: string = 'utf-
 }
 
 export async function writeFileContent(filePath: string, content: string): Promise<void> {
+  // Strip trailing whitespace from every line before writing. This is the
+  // content the caller is asking us to write, so cleaning it here avoids
+  // the trailing-whitespace/lint churn reported in #1590.
+  const cleanedContent = stripTrailingWhitespace(content);
   try {
     // Security: 'wx' flag ensures exclusive creation - fails if file/symlink exists,
     // preventing writes through pre-existing symlinks
-    await fs.writeFile(filePath, content, { encoding: "utf-8", flag: 'wx' });
+    await fs.writeFile(filePath, cleanedContent, { encoding: "utf-8", flag: 'wx' });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
       // Security: Use atomic rename to prevent race conditions where symlinks
@@ -215,7 +230,7 @@ export async function writeFileContent(filePath: string, content: string): Promi
       const origStats = await fs.stat(filePath);
       const tempPath = `${filePath}.${randomBytes(16).toString('hex')}.tmp`;
       try {
-        await fs.writeFile(tempPath, content, 'utf-8');
+        await fs.writeFile(tempPath, cleanedContent, 'utf-8');
         await fs.rename(tempPath, filePath);
       } catch (renameError) {
         try {
@@ -274,7 +289,10 @@ export async function applyFileEdits(
   let modifiedContent = content;
   for (const edit of edits) {
     const normalizedOld = normalizeLineEndings(edit.oldText);
-    const normalizedNew = normalizeLineEndings(edit.newText);
+    // Strip trailing whitespace from the incoming replacement text only -
+    // this is the content the edit is introducing, so it's safe to clean
+    // without touching whitespace on unrelated lines elsewhere in the file.
+    const normalizedNew = stripTrailingWhitespace(normalizeLineEndings(edit.newText));
 
     // If exact match exists, use it
     if (modifiedContent.includes(normalizedOld)) {
