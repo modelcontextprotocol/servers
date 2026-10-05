@@ -43,9 +43,13 @@ export const registerTriggerElicitationRequestAsyncTool = (
   // Check client capabilities
   const clientCapabilities = server.server.getClientCapabilities() || {};
 
-  // Client must support elicitation AND tasks.requests.elicitation
+  // Client must support form-mode elicitation AND tasks.requests.elicitation.
+  // The request is form mode, so a URL-only client cannot answer it (#4985):
+  // form mode is `elicitation.form`, or `elicitation` with neither mode.
+  const elicitation = clientCapabilities.elicitation;
   const clientSupportsElicitation =
-    clientCapabilities.elicitation !== undefined;
+    elicitation !== undefined &&
+    (elicitation.form !== undefined || elicitation.url === undefined);
   const clientTasksCapability = clientCapabilities.tasks as
     | {
         requests?: { elicitation?: { create?: object } };
