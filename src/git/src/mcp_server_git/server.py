@@ -111,11 +111,18 @@ class GitTools(str, Enum):
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
 
+def _sanitize_diff_output(diff: str) -> str:
+    # GitPython decodes command output with surrogateescape, so a diff of a
+    # legacy-encoded file contains lone surrogates that fail UTF-8 JSON
+    # serialization in the SDK stdio writer and kill the server. Recover the
+    # raw bytes and replace undecodable sequences instead.
+    return diff.encode("utf-8", errors="surrogateescape").decode("utf-8", errors="replace")
+
 def git_diff_unstaged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
-    return repo.git.diff(f"--unified={context_lines}")
+    return _sanitize_diff_output(repo.git.diff(f"--unified={context_lines}"))
 
 def git_diff_staged(repo: git.Repo, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
-    return repo.git.diff(f"--unified={context_lines}", "--cached")
+    return _sanitize_diff_output(repo.git.diff(f"--unified={context_lines}", "--cached"))
 
 def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_LINES) -> str:
     # Defense in depth: reject targets starting with '-' to prevent flag injection,
@@ -123,7 +130,7 @@ def git_diff(repo: git.Repo, target: str, context_lines: int = DEFAULT_CONTEXT_L
     if target.startswith("-"):
         raise BadName(f"Invalid target: '{target}' - cannot start with '-'")
     repo.rev_parse(target)  # Validates target is a real git ref, throws BadName if not
-    return repo.git.diff(f"--unified={context_lines}", target)
+    return _sanitize_diff_output(repo.git.diff(f"--unified={context_lines}", target))
 
 def git_commit(repo: git.Repo, message: str) -> str:
     commit = repo.index.commit(message)

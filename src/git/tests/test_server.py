@@ -18,6 +18,7 @@ from mcp_server_git.server import (
     validate_repo_path,
     serve,
 )
+from mcp.types import TextContent
 import shutil
 import unittest.mock as mock
 
@@ -185,6 +186,54 @@ def test_git_diff(test_repository):
 
     assert "test.txt" in result
     assert "feature changes" in result
+
+def test_git_diff_unstaged_handles_non_utf8_content(test_repository):
+    """A diff containing non-UTF-8 bytes must stay JSON serializable.
+
+    GitPython decodes command output with surrogateescape, so the raw diff
+    holds lone surrogates that make TextContent serialization fail and kill
+    the server over stdio.
+    """
+    file_path = Path(test_repository.working_dir) / "legacy_latin1.txt"
+    file_path.write_bytes(b"caf\xe9 na\xefve\n")
+    test_repository.index.add(["legacy_latin1.txt"])
+    test_repository.index.commit("import legacy file")
+    file_path.write_bytes(b"caf\xe9 na\xefve MODIFIED\xe9\n")
+
+    result = git_diff_unstaged(test_repository)
+
+    assert "legacy_latin1.txt" in result
+    assert "caf\ufffd na\ufffdve MODIFIED\ufffd" in result
+    TextContent(type="text", text=result).model_dump_json()
+
+def test_git_diff_staged_handles_non_utf8_content(test_repository):
+    file_path = Path(test_repository.working_dir) / "legacy_latin1.txt"
+    file_path.write_bytes(b"caf\xe9 na\xefve\n")
+    test_repository.index.add(["legacy_latin1.txt"])
+    test_repository.index.commit("import legacy file")
+    file_path.write_bytes(b"caf\xe9 na\xefve MODIFIED\xe9\n")
+    test_repository.index.add(["legacy_latin1.txt"])
+
+    result = git_diff_staged(test_repository)
+
+    assert "legacy_latin1.txt" in result
+    assert "caf\ufffd na\ufffdve MODIFIED\ufffd" in result
+    TextContent(type="text", text=result).model_dump_json()
+
+def test_git_diff_handles_non_utf8_content(test_repository):
+    file_path = Path(test_repository.working_dir) / "legacy_latin1.txt"
+    file_path.write_bytes(b"caf\xe9 na\xefve\n")
+    test_repository.index.add(["legacy_latin1.txt"])
+    test_repository.index.commit("import legacy file")
+    file_path.write_bytes(b"caf\xe9 na\xefve MODIFIED\xe9\n")
+    test_repository.index.add(["legacy_latin1.txt"])
+    test_repository.index.commit("modify legacy file")
+
+    result = git_diff(test_repository, "HEAD~1")
+
+    assert "legacy_latin1.txt" in result
+    assert "caf\ufffd na\ufffdve MODIFIED\ufffd" in result
+    TextContent(type="text", text=result).model_dump_json()
 
 def test_git_commit(test_repository):
     file_path = Path(test_repository.working_dir) / "commit_test.txt"
