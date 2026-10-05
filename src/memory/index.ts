@@ -137,6 +137,18 @@ export interface FileLockOptions {
 // For best-effort lock cleanup, whose failure must not mask the real outcome.
 function ignoreError(): void {}
 
+// Whether opening a lock file failed because the file is held right now. On
+// Windows, opening a file that another process is still deleting fails with
+// EPERM (or EACCES) rather than EEXIST until the deletion completes, so there
+// those mean "held" too.
+function isLockBusy(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return (
+    code === "EEXIST" ||
+    (process.platform === "win32" && (code === "EPERM" || code === "EACCES"))
+  );
+}
+
 // Whether the process that wrote a lock file is known to be gone. Only a
 // process on this host can be checked; for any other host, or a lock whose
 // contents cannot be read, the lock's age decides instead.
@@ -193,7 +205,7 @@ async function breakStaleLock(
   try {
     breaker = await fs.open(breakerPath, "wx");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+    if (!isLockBusy(error)) {
       throw error;
     }
     // Another waiter is breaking the lock. Its guard is held for a moment
@@ -241,7 +253,7 @@ export async function withFileLock<T>(
     try {
       handle = await fs.open(lockPath, "wx");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      if (!isLockBusy(error)) {
         throw error;
       }
     }
@@ -273,7 +285,10 @@ export async function withFileLock<T>(
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         continue;
       }
-      throw error;
+      // On Windows, the lock is still being deleted: wait, then try again.
+      if (!isLockBusy(error)) {
+        throw error;
+      }
     }
 
     if (Date.now() >= deadline) {

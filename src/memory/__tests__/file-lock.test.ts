@@ -303,6 +303,37 @@ describe("withFileLock", () => {
     ).rejects.toThrow("EISDIR");
   });
 
+  it("waits, on Windows, for a lock file another process is still deleting", async () => {
+    // Windows fails an open of a file pending deletion with EPERM, not EEXIST.
+    vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    const pendingDelete = Object.assign(new Error("EPERM"), { code: "EPERM" });
+    const realOpen = fs.open.bind(fs);
+    let calls = 0;
+    vi.spyOn(fs, "open").mockImplementation(((
+      ...args: Parameters<typeof fs.open>
+    ) => {
+      calls += 1;
+      // The create, then the stale check's read, both see the pending delete.
+      return calls <= 2 ? Promise.reject(pendingDelete) : realOpen(...args);
+    }) as typeof fs.open);
+
+    await expect(
+      withFileLock(lockPath, async () => "done", fast),
+    ).resolves.toBe("done");
+    expect(calls).toBeGreaterThan(2);
+    expect(await exists(lockPath)).toBe(false);
+  });
+
+  it("does not treat EPERM as a held lock off Windows", async () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+    const denied = Object.assign(new Error("EPERM"), { code: "EPERM" });
+    vi.spyOn(fs, "open").mockRejectedValue(denied);
+
+    await expect(withFileLock(lockPath, async () => "done", fast)).rejects.toBe(
+      denied,
+    );
+  });
+
   it("orders two managers' mutations on one graph file", async () => {
     const filePath = path.join(dir, "memory.jsonl");
     const managers = [
