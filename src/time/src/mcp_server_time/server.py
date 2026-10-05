@@ -239,6 +239,9 @@ async def serve(local_timezone: str | None = None) -> None:
                         raise ValueError(  # pragma: no cover  # unreachable: the SDK rejects a missing key against inputSchema first
                             "Missing required arguments"
                         )
+                    for key in ["source_timezone", "target_timezone"]:
+                        if not arguments[key]:
+                            raise ValueError(f"Missing required argument: {key}")
 
                     result = time_server.convert_time(
                         arguments["source_timezone"],
