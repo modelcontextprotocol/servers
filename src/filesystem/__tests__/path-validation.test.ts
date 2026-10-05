@@ -369,7 +369,11 @@ describe("Path Validation", () => {
 
       // But only on the same filesystem root
       if (path.sep === "\\") {
-        expect(isPathWithinAllowedDirectories("D:\\other", ["/"])).toBe(false);
+        // "/" resolves to the current drive's root, so use another drive.
+        const otherDrive = /^D:/i.test(path.resolve("/")) ? "E:" : "D:";
+        expect(
+          isPathWithinAllowedDirectories(`${otherDrive}\\other`, ["/"]),
+        ).toBe(false);
       }
     });
   });
@@ -1275,8 +1279,11 @@ describe("Path Validation", () => {
       const realPath = await fs.realpath(legitFile);
       expect(isPathWithinAllowedDirectories(realPath, allowed)).toBe(false);
 
-      // With atomic rename, symlinks are replaced not followed
-      // So this test now demonstrates the protection
+      // So validatePath, which checks the realpath, refuses this
+      // outside-pointing symlink before any write is attempted. A symlink
+      // swapped in after validation is refused by the write itself (lstat,
+      // O_NOFOLLOW and an inode check in lib.ts's overwriteInPlace), which
+      // server-tools.test.ts covers.
 
       // Verify content remains unchanged
       const targetContent = await fs.readFile(targetFile, "utf-8");
