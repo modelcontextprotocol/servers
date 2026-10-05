@@ -268,11 +268,10 @@ describe("memory persistence over the protocol", () => {
     });
   });
 
-  // KNOWN BUG #4827: pins current (wrong) behavior; the fix changes this assertion.
-  // Characterizes #4827: saveGraph writes a new temp file and renames it over
-  // the graph file, so the graph file takes a new file's mode. An operator's
-  // 0600 is lost, and a read-only file is silently replaced. The fix for #4827
-  // changes this test. POSIX only: Windows has no mode bits to lose.
+  // #4827: saveGraph writes a new temp file and renames it over the graph
+  // file, which replaces the file's inode. The save keeps the graph file's
+  // own mode rather than a new file's, and refuses a read-only graph file as
+  // a plain write would. POSIX only: Windows has no mode bits to lose.
   describe.skipIf(process.platform === "win32")("file mode (#4827)", () => {
     // The mode a file created now gets, which is what the temp file gets.
     async function newFileMode(): Promise<number> {
@@ -287,37 +286,50 @@ describe("memory persistence over the protocol", () => {
       return (await fs.stat(file)).mode & 0o777;
     }
 
-    it("replaces a hardened graph file's mode with a new file's mode", async () => {
+    it("keeps a hardened graph file's mode across a save", async () => {
       const { client } = await open();
       await call(client, "create_entities", { entities: [alice] });
       // 0600 as in the issue, unless the umask already makes new files 0600;
-      // the original mode must differ from a new file's for the loss to show.
-      const expected = await newFileMode();
-      const original = expected === 0o600 ? 0o640 : 0o600;
+      // the original mode must differ from a new file's for a loss to show.
+      const original = (await newFileMode()) === 0o600 ? 0o640 : 0o600;
       await fs.chmod(filePath, original);
+      const writeFile = vi.spyOn(fs, "writeFile");
 
       await call(client, "create_entities", { entities: [bob] });
 
-      expect(await modeOf(filePath)).toBe(expected);
-    });
-
-    it("silently overwrites a read-only graph file", async () => {
-      const { client } = await open();
-      await call(client, "create_entities", { entities: [alice] });
-      await fs.chmod(filePath, 0o444);
-      const expected = await newFileMode();
-
-      const result = await call(client, "create_entities", {
-        entities: [bob],
-      });
-
-      expect(result.isError).toBeUndefined();
-      expect(await modeOf(filePath)).toBe(expected);
+      // The temp file is created with that mode, never a wider one first.
+      expect(writeFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\.tmp$/),
+        expect.any(String),
+        { mode: original },
+      );
+      expect(await modeOf(filePath)).toBe(original);
       expect((await call(client, "read_graph")).structuredContent).toEqual({
         entities: [alice, bob],
         relations: [],
       });
     });
+
+    // root may write a read-only file, so the refusal shows only without it.
+    it.skipIf(process.getuid?.() === 0)(
+      "refuses to overwrite a read-only graph file",
+      async () => {
+        const { client } = await open();
+        await call(client, "create_entities", { entities: [alice] });
+        await fs.chmod(filePath, 0o444);
+        const before = await readFileText(filePath);
+
+        const result = await call(client, "create_entities", {
+          entities: [bob],
+        });
+
+        expect(result.isError).toBe(true);
+        expect(textOf(result)).toMatch(/EACCES/);
+        expect(await modeOf(filePath)).toBe(0o444);
+        expect(await readFileText(filePath)).toBe(before);
+        expect(await fs.readdir(dir)).toEqual(["memory.jsonl"]);
+      },
+    );
   });
 
   // #4797: two servers on one file (two client processes in practice) used to
