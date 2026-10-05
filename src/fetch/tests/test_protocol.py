@@ -630,20 +630,165 @@ async def test_pagination_walks_the_whole_document(web: FakeWeb) -> None:
 # --------------------------------------------------------------------------
 
 
-# KNOWN BUG #4838: pins current (wrong) behavior; the fix changes this assertion.
-async def test_redirect_to_private_address_is_followed(web: FakeWeb) -> None:
-    # Characterizes #4838: redirects are followed with no private-IP guard, so
-    # a public URL can bounce the server to a link-local metadata address.
+def refused(url: str, host: str, address: str) -> str:
+    return (
+        f"Refused to fetch {url}: {host} resolves to {address}, which is not a "
+        "public address. Start the server with --allow-private-ips to allow "
+        "private, loopback and link-local addresses."
+    )
+
+
+async def test_redirect_to_private_address_is_refused(web: FakeWeb) -> None:
+    # #4838: every redirect hop is checked, so a public URL cannot bounce the
+    # server to a link-local metadata address.
     metadata = "http://169.254.169.254/latest/meta-data/"
     web.add(ROBOTS, plain("", status=404))
     web.add(PAGE, httpx.Response(302, headers={"location": metadata}))
     web.add(metadata, plain("instance-secret"))
     async with connect() as (session, _):
         result = await call(session, {"url": PAGE})
+    assert wire(result) == {
+        "content": [
+            {
+                "type": "text",
+                "text": refused(metadata, "169.254.169.254", "169.254.169.254"),
+            }
+        ],
+        "isError": True,
+    }
+    # The metadata address is never requested.
+    assert web.urls() == [ROBOTS, PAGE]
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "127.0.0.1",
+        "10.0.0.1",
+        "172.16.0.1",
+        "192.168.1.1",
+        "169.254.169.254",
+        "100.100.100.200",
+        "0.0.0.0",
+        "::1",
+        "fe80::1",
+        "fd00:ec2::254",
+        "::ffff:127.0.0.1",
+        # Read as global by is_global on older Python patch releases.
+        "192.0.0.8",
+        "64:ff9b:1::1",
+        "2002:7f00:1::",
+        # Inside 2001::/23 but outside its global exceptions (benchmarking).
+        "2001:2::1",
+        # Multicast, which is_global does not exclude.
+        "224.0.0.251",
+    ],
+)
+async def test_private_address_is_refused_before_any_request(
+    web: FakeWeb, address: str
+) -> None:
+    # robots.txt is the first request on the tool path, so it is refused too.
+    host = f"[{address}]" if ":" in address else address
+    url = f"http://{host}/admin"
+    async with connect() as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is True
+    # httpx normalizes the host (::ffff:127.0.0.1 becomes ::ffff:7f00:1), so
+    # only the shape of the message is pinned here.
+    text = text_of(result)
+    assert text.startswith("Refused to fetch http://")
+    assert "/robots.txt: " in text
+    assert "which is not a public address" in text
+    assert web.requests == []
+
+
+@pytest.mark.parametrize(
+    "address",
+    # Globally reachable assignments inside refused special-purpose ranges.
+    ["192.0.0.9", "192.0.0.10", "2001:1::1", "2001:3::1", "2001:20::1"],
+)
+async def test_global_exceptions_in_special_ranges_are_allowed(
+    web: FakeWeb, address: str
+) -> None:
+    web.dns["anycast.example.com"] = [address]
+    url = "https://anycast.example.com/"
+    web.add(url, plain("ok"))
+    async with connect(ignore_robots_txt=True) as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is False
+    assert web.urls() == [url]
+
+
+async def test_hostname_resolving_to_a_private_address_is_refused(
+    web: FakeWeb,
+) -> None:
+    # Fails closed when any one of a name's addresses is private.
+    web.dns["intranet.example.com"] = ["93.184.215.14", "10.1.2.3"]
+    url = "https://intranet.example.com/"
+    async with connect(ignore_robots_txt=True) as (session, _):
+        result = await call(session, {"url": url})
+    assert text_of(result) == refused(url, "intranet.example.com", "10.1.2.3")
+    assert web.requests == []
+
+
+async def test_private_address_is_refused_on_the_prompt_path(web: FakeWeb) -> None:
+    url = "http://127.0.0.1/"
+    async with connect() as (session, _):
+        result = await session.get_prompt("fetch", {"url": url})
+    assert wire(result)["messages"][0]["content"]["text"] == refused(
+        url, "127.0.0.1", "127.0.0.1"
+    )
+    assert web.requests == []
+
+
+async def test_robots_redirect_to_private_address_is_refused(web: FakeWeb) -> None:
+    internal = "http://127.0.0.1/robots.txt"
+    web.add(ROBOTS, httpx.Response(302, headers={"location": internal}))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert text_of(result) == refused(internal, "127.0.0.1", "127.0.0.1")
+    assert web.urls() == [ROBOTS]
+
+
+async def test_unresolvable_host_is_left_to_the_transport(web: FakeWeb) -> None:
+    # A name the server cannot resolve is not refused: a direct connection
+    # fails on its own, and a proxy resolves the name on its side.
+    url = "https://only-the-proxy-knows.example/"
+    web.dns["only-the-proxy-knows.example"] = []
+    web.add(url, plain("ok"))
+    async with connect(ignore_robots_txt=True) as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is False
+    assert web.lookups == ["only-the-proxy-knows.example"]
+
+
+async def test_allow_private_ips_follows_redirect_to_private_address(
+    web: FakeWeb,
+) -> None:
+    metadata = "http://169.254.169.254/latest/meta-data/"
+    web.add(ROBOTS, plain("", status=404))
+    web.add(PAGE, httpx.Response(302, headers={"location": metadata}))
+    web.add(metadata, plain("instance-secret"))
+    async with connect(allow_private_ips=True) as (session, _):
+        result = await call(session, {"url": PAGE})
+        prompt = await session.get_prompt("fetch", {"url": metadata})
     assert wire(result)["isError"] is False
     assert text_of(result) == f"{RAW_PREFIX_PLAIN}Contents of {PAGE}:\ninstance-secret"
+    assert prompt.description == f"Contents of {metadata}"
     # robots.txt is only consulted for the original host, never the target.
-    assert web.urls() == [ROBOTS, PAGE, metadata]
+    assert web.urls() == [ROBOTS, PAGE, metadata, metadata]
+    # With the guard off, nothing is resolved by the server.
+    assert web.lookups == []
+
+
+async def test_guard_uses_the_real_resolver() -> None:
+    # No `web` fixture: the real getaddrinfo resolves localhost to loopback,
+    # and the request is refused before any connection is attempted.
+    url = "http://localhost:9/"
+    async with connect(ignore_robots_txt=True) as (session, _):
+        result = await call(session, {"url": url})
+    assert wire(result)["isError"] is True
+    assert text_of(result).startswith(f"Refused to fetch {url}: localhost resolves to ")
 
 
 async def test_timeouts_are_hard_coded(web: FakeWeb) -> None:
