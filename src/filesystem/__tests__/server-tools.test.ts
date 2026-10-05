@@ -521,6 +521,30 @@ describe("write_file", () => {
     expect(await fs.readFile(hardLink, "utf-8")).toBe("changed");
   });
 
+  // Writing in place opens the existing file for writing, so a read-only file
+  // is refused rather than replaced; the old rename only got past the mode
+  // bits because it rewrote the directory entry instead of the file. Root
+  // ignores mode bits, so the refusal cannot be observed there.
+  it.skipIf(process.getuid?.() === 0)(
+    "refuses to overwrite a read-only file and leaves it unchanged",
+    async () => {
+      const file = path.join(dir, "readonly.txt");
+      await fs.writeFile(file, "keep me");
+      await fs.chmod(file, 0o444);
+      try {
+        const result = await call(client, "write_file", {
+          path: file,
+          content: "replaced",
+        });
+        expect(result.isError).toBe(true);
+        expect(textOf(result)).toMatch(/EACCES|EPERM/);
+        expect(await fs.readFile(file, "utf-8")).toBe("keep me");
+      } finally {
+        await fs.chmod(file, 0o644);
+      }
+    },
+  );
+
   it("truncates the old content when the new content is shorter", async () => {
     const file = path.join(dir, "existing.txt");
     await fs.writeFile(file, "a much longer original");
