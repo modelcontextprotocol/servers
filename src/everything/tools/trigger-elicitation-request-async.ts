@@ -65,8 +65,9 @@ export const registerTriggerElicitationRequestAsyncTool = (
       async (args, extra): Promise<CallToolResult> => {
         // Polling must end before the client may expire the task. The client
         // starts the TTL when it creates the task, after this point, so a
-        // deadline measured from here is conservative.
-        const pollDeadline = Date.now() + TASK_TTL - TTL_SAFETY_MARGIN;
+        // deadline measured from here is conservative. performance.now() is
+        // monotonic, so a wall-clock adjustment cannot stretch the deadline.
+        const pollDeadline = performance.now() + TASK_TTL - TTL_SAFETY_MARGIN;
 
         // Create the elicitation request WITH task metadata
         // Using z.any() schema to avoid complex type matching with _meta
@@ -160,14 +161,16 @@ export const registerTriggerElicitationRequestAsyncTool = (
           taskStatus !== "failed" &&
           taskStatus !== "cancelled"
         ) {
-          // Give up rather than poll past the TTL the task was created with
-          if (Date.now() + POLL_INTERVAL > pollDeadline) {
+          // Wait before polling
+          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+
+          // Give up rather than poll past the TTL the task was created with.
+          // Checked after the wait, so a timer that fires late cannot slip a
+          // poll in after the deadline.
+          if (performance.now() > pollDeadline) {
             timedOut = true;
             break;
           }
-
-          // Wait before polling
-          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
           attempts++;
 
           // Get task status from client

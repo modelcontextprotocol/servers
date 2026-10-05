@@ -576,13 +576,15 @@ describe("trigger-elicitation-request-async", () => {
     expect(texts[0]).toMatch(/^\[FAILED\] No message\n\nProgress:\n/);
   });
 
-  /** Also fake `Date`, which the tool's polling deadline is measured with. */
-  function fakeDate() {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  /** Also fake `performance`, which the tool's polling deadline is measured with. */
+  function fakeClock() {
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "performance"],
+    });
   }
 
   it("gives up 5 seconds before the 10-minute TTL of a task that never finishes", async () => {
-    fakeDate();
+    fakeClock();
     // A client that keeps its task longer than the 10-minute TTL asked for.
     await connectTaskClient(() => {}, 60_000);
     const texts = await callAsync("trigger-elicitation-request-async");
@@ -592,7 +594,7 @@ describe("trigger-elicitation-request-async", () => {
   });
 
   it("times out before a client that honors the 10-minute TTL expires the task", async () => {
-    fakeDate();
+    fakeClock();
     let created = "";
     const { taskStore } = await connectTaskClient((_m, taskId) => {
       created = taskId!;
@@ -607,6 +609,22 @@ describe("trigger-elicitation-request-async", () => {
     // The client still holds the task when the tool gives up, 5 s before the
     // 600000 ms TTL it asked for runs out.
     expect((await taskStore.getTask(created))?.ttl).toBe(600000);
+  });
+
+  it("times out without polling when its wait ends past the deadline", async () => {
+    // A timer that fires late: the first reading sets the deadline, and every
+    // later one is already past it.
+    let readings = 0;
+    vi.spyOn(performance, "now").mockImplementation(() =>
+      readings++ === 0 ? 0 : 600_000,
+    );
+    await connectTaskClient(() => {});
+    const texts = await callAsync("trigger-elicitation-request-async");
+    expect(texts).toEqual([
+      expect.stringMatching(
+        /^\[TIMEOUT\] Task timed out after 0 poll attempts, before its 10-minute TTL expired\n\nProgress:\nTask created: \S+$/,
+      ),
+    ]);
   });
 
   it("returns a synchronous answer from a client that ignores the task request", async () => {
