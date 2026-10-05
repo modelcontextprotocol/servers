@@ -556,6 +556,30 @@ describe("write_file", () => {
     expect(await fs.readFile(hardLink, "utf-8")).toBe("changed");
   });
 
+  // Writing in place opens the existing file for writing, so a read-only file
+  // is refused rather than replaced; the old rename only got past the mode
+  // bits because it rewrote the directory entry instead of the file. Root
+  // ignores mode bits, so the refusal cannot be observed there.
+  it.skipIf(process.getuid?.() === 0)(
+    "refuses to overwrite a read-only file and leaves it unchanged",
+    async () => {
+      const file = path.join(dir, "readonly.txt");
+      await fs.writeFile(file, "keep me");
+      await fs.chmod(file, 0o444);
+      try {
+        const result = await call(client, "write_file", {
+          path: file,
+          content: "replaced",
+        });
+        expect(result.isError).toBe(true);
+        expect(textOf(result)).toMatch(/EACCES|EPERM/);
+        expect(await fs.readFile(file, "utf-8")).toBe("keep me");
+      } finally {
+        await fs.chmod(file, 0o644);
+      }
+    },
+  );
+
   it("truncates the old content when the new content is shorter", async () => {
     const file = path.join(dir, "existing.txt");
     await fs.writeFile(file, "a much longer original");
@@ -839,6 +863,41 @@ describe("edit_file", () => {
       // Line 3: the file's 4, plus new indent 2 - old indent 0 = 2 more.
       expect(await fs.readFile(file, "utf-8")).toBe(
         "    if (a) {\n            c();\n      }\n",
+      );
+    });
+
+    it("dedents a tab-indented file by levels when the edit indents with spaces", async () => {
+      await fs.writeFile(file, "\tif (a) {\n\t\tb();\n\t}\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "    b();", newText: "  c();" }],
+      });
+      // The edit dedents b() by one 2-space level; in the file that is one
+      // tab, not two characters (which would strip both tabs).
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "\tif (a) {\n\tc();\n\t}\n",
+      );
+    });
+
+    it("indents a tab-indented file by levels when the edit indents with spaces", async () => {
+      await fs.writeFile(file, "\tif (a) {\n\t\tb();\n\t}\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "if (a) {\n  b();", newText: "if (a) {\n    c();" }],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "\tif (a) {\n\t\t\tc();\n\t}\n",
+      );
+    });
+
+    it("indents a space-indented file by levels when the edit indents with tabs", async () => {
+      await fs.writeFile(file, "  if (a) {\n    b();\n  }\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "if (a) {\n\tb();", newText: "if (a) {\n\t\tc();" }],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "  if (a) {\n      c();\n  }\n",
       );
     });
 

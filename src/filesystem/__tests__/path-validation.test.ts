@@ -1279,8 +1279,11 @@ describe("Path Validation", () => {
       const realPath = await fs.realpath(legitFile);
       expect(isPathWithinAllowedDirectories(realPath, allowed)).toBe(false);
 
-      // The server's write path refuses a symlink rather than following it
-      // (lstat, O_NOFOLLOW and an inode check in lib.ts's overwriteInPlace)
+      // So validatePath, which checks the realpath, refuses this
+      // outside-pointing symlink before any write is attempted. A symlink
+      // swapped in after validation is refused by the write itself (lstat,
+      // O_NOFOLLOW and an inode check in lib.ts's overwriteInPlace), which
+      // server-tools.test.ts covers.
 
       // Verify content remains unchanged
       const targetContent = await fs.readFile(targetFile, "utf-8");
