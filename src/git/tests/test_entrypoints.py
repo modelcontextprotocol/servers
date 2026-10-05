@@ -38,25 +38,38 @@ async def test_serve_logs_the_repository_it_uses(
     assert f"Using repository at {root}" in caplog.text
 
 
-# KNOWN BUG #3029: pins current (wrong) behavior; the fix changes this assertion.
-async def test_serve_returns_early_for_repository_subdirectory(
+async def test_serve_resolves_repository_subdirectory_to_root(
     repo: git.Repo, caplog: pytest.LogCaptureFixture
 ):
-    # Pins #3029: `--repository` pointing inside a working tree (for example
-    # `.` from a subdirectory) is not resolved to the repository root. serve()
-    # logs an error and returns before opening stdio, so the server exits
-    # without serving. Fixing #3029 changes this test.
+    # #3029: `--repository` pointing inside a working tree is resolved to the
+    # repository root, like `git rev-parse --show-toplevel`, and the server
+    # serves that root.
     assert repo.working_dir is not None
-    sub = Path(repo.working_dir) / "sub"
+    root = Path(repo.working_dir)
+    sub = root / "sub" / "deeper"
+    sub.mkdir(parents=True)
+    with caplog.at_level(logging.INFO, logger="mcp_server_git.server"):
+        async with connect(sub) as session:
+            result = await session.call_tool("git_status", {"repo_path": str(root)})
+    assert not result.isError
+    assert f"Resolved --repository {sub} to repository root {root}" in caplog.text
+    assert f"Using repository at {root}" in caplog.text
+
+
+async def test_serve_resolves_dot_from_subdirectory(
+    repo: git.Repo, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+):
+    # #3029: the shared-config case, `--repository .` launched from a
+    # subdirectory of the repository.
+    assert repo.working_dir is not None
+    root = Path(repo.working_dir)
+    sub = root / "sub"
     sub.mkdir()
-    stdio = mock.MagicMock()
-    with (
-        mock.patch("mcp_server_git.server.stdio_server", stdio),
-        caplog.at_level(logging.ERROR, logger="mcp_server_git.server"),
-    ):
-        assert await serve(sub) is None
-    stdio.assert_not_called()
-    assert f"{sub} is not a valid Git repository" in caplog.text
+    monkeypatch.chdir(sub)
+    with caplog.at_level(logging.INFO, logger="mcp_server_git.server"):
+        async with connect(Path(".")):
+            pass
+    assert f"Using repository at {root}" in caplog.text
 
 
 async def test_serve_returns_early_for_non_repository(
@@ -72,16 +85,22 @@ async def test_serve_returns_early_for_non_repository(
     assert f"{tmp_path} is not a valid Git repository" in caplog.text
 
 
-# KNOWN BUG #4993: a nonexistent --repository escapes serve() as NoSuchPathError instead of a logged error; the fix changes this assertion.
-async def test_serve_raises_for_nonexistent_repository(tmp_path: Path):
-    # Characterization: serve() catches only InvalidGitRepositoryError, so a
-    # nonexistent path escapes as NoSuchPathError and kills the server with a
-    # traceback (see the console-script smoke below).
+async def test_serve_exits_for_nonexistent_repository(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+):
+    # #4993: a nonexistent path is logged like an invalid repository, and the
+    # server exits non-zero without opening stdio.
     stdio = mock.MagicMock()
-    with mock.patch("mcp_server_git.server.stdio_server", stdio):
-        with pytest.raises(git.NoSuchPathError):
-            await serve(tmp_path / "missing")
+    missing = tmp_path / "missing"
+    with (
+        mock.patch("mcp_server_git.server.stdio_server", stdio),
+        caplog.at_level(logging.ERROR, logger="mcp_server_git.server"),
+    ):
+        with pytest.raises(SystemExit) as exc:
+            await serve(missing)
+    assert exc.value.code == 1
     stdio.assert_not_called()
+    assert f"{missing} does not exist" in caplog.text
 
 
 # --------------------------------------------------------------------------
@@ -167,12 +186,12 @@ def test_python_dash_m_calls_main():
     fake_main.assert_called_once_with()
 
 
-# KNOWN BUG #4993: a nonexistent --repository kills the server with a Python traceback instead of a one-line error; the fix changes this assertion.
-def test_console_script_nonexistent_repository_exits_with_traceback(tmp_path: Path):
+def test_console_script_nonexistent_repository_exits_with_one_line_error(
+    tmp_path: Path,
+):
     # The one subprocess test: the installed entry point, end to end. A
-    # nonexistent --repository is not caught (see
-    # test_serve_raises_for_nonexistent_repository), so the process dies with
-    # a Python traceback instead of a one-line error.
+    # nonexistent --repository exits non-zero with a one-line logged error
+    # naming the path, not a Python traceback (#4993).
     script = shutil.which("mcp-server-git", path=str(Path(sys.executable).parent))
     assert script is not None
     missing = tmp_path / "missing"
@@ -184,6 +203,7 @@ def test_console_script_nonexistent_repository_exits_with_traceback(tmp_path: Pa
         timeout=60,
     )
     assert proc.returncode == 1
-    assert "Traceback (most recent call last)" in proc.stderr
-    assert "git.exc.NoSuchPathError" in proc.stderr
-    assert str(missing) in proc.stderr
+    assert "Traceback" not in proc.stderr
+    assert proc.stderr.splitlines() == [
+        f"ERROR:mcp_server_git.server:{missing} does not exist"
+    ]
