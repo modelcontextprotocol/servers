@@ -174,6 +174,11 @@ This can be customized by adding the argument `--user-agent=YourUserAgent` to th
 
 The server can be configured to use a proxy by using the `--proxy-url` argument.
 
+Without `--proxy-url`, the server uses the proxy in the standard `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY`
+environment variables (honoring `NO_PROXY`). Both `http(s)://` and SOCKS5 proxies are supported (SOCKS support is
+installed with the server). A `socks://` proxy URL, as many desktop proxy settings export it, is treated as
+`socks5://`. A proxy setting the server cannot use makes each fetch fail with a tool error that says so.
+
 ## Windows Configuration
 
 If you're experiencing timeout issues on Windows, you may need to set the `PYTHONIOENCODING` environment variable to ensure proper character encoding:
