@@ -1,3 +1,5 @@
+import os
+import ssl
 from typing import Annotated, Tuple
 from urllib.parse import urlparse, urlunparse
 
@@ -22,6 +24,10 @@ from pydantic import BaseModel, Field, AnyUrl
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
+
+# Set MCP_FETCH_SSL_VERIFY=false to disable SSL verification for internal/self-signed certificates.
+# Fail-secure: any value other than "false" keeps SSL verification enabled.
+SSL_VERIFY = os.getenv("MCP_FETCH_SSL_VERIFY", "true").strip().lower() != "false"
 
 
 def extract_content_from_html(html: str) -> str:
@@ -68,17 +74,40 @@ async def check_may_autonomously_fetch_url(url: str, user_agent: str, proxy_url:
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
     """
-    from httpx import AsyncClient, HTTPError
+    from httpx import AsyncClient, ConnectError, HTTPError
 
     robot_txt_url = get_robots_txt_url(url)
 
-    async with AsyncClient(proxy=proxy_url) as client:
+    async with AsyncClient(proxy=proxy_url, verify=SSL_VERIFY) as client:
         try:
             response = await client.get(
                 robot_txt_url,
                 follow_redirects=True,
                 headers={"User-Agent": user_agent},
             )
+        except ssl.SSLError as e:
+            raise McpError(ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"SSL certificate verification failed for {robot_txt_url}. "
+                f"If this is an internal server with a self-signed certificate, "
+                f"set MCP_FETCH_SSL_VERIFY=false in your environment. "
+                f"Error details: {str(e)}",
+            ))
+        except ConnectError as e:
+            # httpx wraps SSL errors in ConnectError in some cases
+            error_str = str(e).lower()
+            if "ssl" in error_str or "certificate" in error_str or "verify" in error_str:
+                raise McpError(ErrorData(
+                    code=INTERNAL_ERROR,
+                    message=f"SSL certificate verification failed for {robot_txt_url}. "
+                    f"If this is an internal server with a self-signed certificate, "
+                    f"set MCP_FETCH_SSL_VERIFY=false in your environment. "
+                    f"Error details: {str(e)}",
+                ))
+            raise McpError(ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"Failed to fetch robots.txt {robot_txt_url} due to a connection issue",
+            ))
         except HTTPError:
             raise McpError(ErrorData(
                 code=INTERNAL_ERROR,
@@ -114,9 +143,9 @@ async def fetch_url(
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
     """
-    from httpx import AsyncClient, HTTPError
+    from httpx import AsyncClient, ConnectError, HTTPError
 
-    async with AsyncClient(proxy=proxy_url) as client:
+    async with AsyncClient(proxy=proxy_url, verify=SSL_VERIFY) as client:
         try:
             response = await client.get(
                 url,
@@ -124,6 +153,26 @@ async def fetch_url(
                 headers={"User-Agent": user_agent},
                 timeout=30,
             )
+        except ssl.SSLError as e:
+            raise McpError(ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"SSL certificate verification failed for {url}. "
+                f"If this is an internal server with a self-signed certificate, "
+                f"set MCP_FETCH_SSL_VERIFY=false in your environment. "
+                f"Error details: {str(e)}",
+            ))
+        except ConnectError as e:
+            # httpx wraps SSL errors in ConnectError in some cases
+            error_str = str(e).lower()
+            if "ssl" in error_str or "certificate" in error_str or "verify" in error_str:
+                raise McpError(ErrorData(
+                    code=INTERNAL_ERROR,
+                    message=f"SSL certificate verification failed for {url}. "
+                    f"If this is an internal server with a self-signed certificate, "
+                    f"set MCP_FETCH_SSL_VERIFY=false in your environment. "
+                    f"Error details: {str(e)}",
+                ))
+            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}"))
         except HTTPError as e:
             raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Failed to fetch {url}: {e!r}"))
         if response.status_code >= 400:
