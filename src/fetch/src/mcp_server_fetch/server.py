@@ -38,17 +38,53 @@ async def _resolve_host(host: str) -> list[str]:
     return [str(info[4][0]) for info in infos]
 
 
+# IANA special-purpose ranges that are not public destinations. ``is_global``
+# covers most of them, but its tables were corrected only in recent releases
+# (3.13, and patch releases of 3.11 and 3.12: before them 192.0.0.0/24 and
+# 64:ff9b:1::/48, for example, read as global), so the ranges are listed here
+# too, to give the same answer on every supported Python.
+_NON_PUBLIC_NETWORKS = tuple(
+    ipaddress.ip_network(network)
+    for network in (
+        "0.0.0.0/8",
+        "10.0.0.0/8",
+        "100.64.0.0/10",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "172.16.0.0/12",
+        "192.0.0.0/24",
+        "192.0.2.0/24",
+        "192.88.99.0/24",
+        "192.168.0.0/16",
+        "198.18.0.0/15",
+        "198.51.100.0/24",
+        "203.0.113.0/24",
+        "240.0.0.0/4",
+        "::/128",
+        "::1/128",
+        "64:ff9b:1::/48",
+        "100::/64",
+        "2001::/23",
+        "2001:db8::/32",
+        "fc00::/7",
+        "fe80::/10",
+    )
+)
+
+
 def _is_public_address(address: str) -> bool:
     """True when ``address`` is a globally routable unicast address.
 
-    ``is_global`` is False for loopback, RFC 1918, link-local (169.254.0.0/16,
-    which holds most cloud metadata endpoints), shared address space
-    (100.64.0.0/10, which holds Alibaba Cloud's 100.100.100.200), unique local
-    IPv6 (AWS's fd00:ec2::254), unspecified and reserved ranges.
+    Refused: loopback, RFC 1918, link-local (169.254.0.0/16, which holds most
+    cloud metadata endpoints), shared address space (100.64.0.0/10, which holds
+    Alibaba Cloud's 100.100.100.200), unique local IPv6 (AWS's fd00:ec2::254),
+    multicast, unspecified, documentation and other special-purpose ranges.
     """
     ip = ipaddress.ip_address(address)
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
+    if any(ip in network for network in _NON_PUBLIC_NETWORKS):
+        return False
     return ip.is_global and not ip.is_multicast
 
 

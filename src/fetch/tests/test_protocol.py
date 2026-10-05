@@ -660,6 +660,11 @@ async def test_redirect_to_private_address_is_refused(web: FakeWeb) -> None:
         "fe80::1",
         "fd00:ec2::254",
         "::ffff:127.0.0.1",
+        # Read as global by is_global on older Python patch releases.
+        "192.0.0.8",
+        "64:ff9b:1::1",
+        # Multicast, which is_global does not exclude.
+        "224.0.0.251",
     ],
 )
 async def test_private_address_is_refused_before_any_request(
