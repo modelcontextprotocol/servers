@@ -139,13 +139,12 @@ function ignoreError(): void {}
 
 // Whether opening a lock file failed because the file is held right now. On
 // Windows, opening a file that another process is still deleting fails with
-// EPERM (or EACCES) rather than EEXIST until the deletion completes, so there
-// those mean "held" too.
+// EPERM rather than EEXIST until the deletion completes, so there EPERM means
+// "held" too.
 function isLockBusy(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException).code;
   return (
-    code === "EEXIST" ||
-    (process.platform === "win32" && (code === "EPERM" || code === "EACCES"))
+    code === "EEXIST" || (process.platform === "win32" && code === "EPERM")
   );
 }
 
