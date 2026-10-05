@@ -401,6 +401,99 @@ test("reading only a needed job's result does not make it credentialed", () => {
   assert.deepEqual([...credentialedJobs(yaml)], ["publish"]);
 });
 
+test("a secret in a mixed-case context counts; GITHUB_TOKEN in any case does not (#4934)", () => {
+  const yaml = wf(
+    "jobs:",
+    "  publish:",
+    "    steps:",
+    "      - uses: actions/checkout@v6",
+    "      - env:",
+    "          KEY: ${{ SECRETS.DEPLOY_TOKEN }}",
+    "        run: publish",
+    "  bracketed:",
+    "    steps:",
+    "      - env:",
+    "          KEY: ${{ Secrets['deploy_token'] }}",
+    "        run: publish",
+    "  default:",
+    "    steps:",
+    "      - uses: actions/checkout@v6",
+    "      - env:",
+    "          A: ${{ Secrets['github_token'] }}",
+    "          B: ${{ SECRETS.Github_Token }}",
+    "        run: gh release view",
+  );
+  assert.deepEqual([...credentialedJobs(yaml)].sort(), [
+    "bracketed",
+    "publish",
+  ]);
+  assert.deepEqual(unpinnedRefs(yaml), [
+    { job: "publish", uses: "actions/checkout@v6" },
+  ]);
+});
+
+test("the needs context and job ids are matched without regard to case (#4934)", () => {
+  const job = (expr) =>
+    wf(
+      "jobs:",
+      "  detect:",
+      "    steps:",
+      "      - uses: actions/checkout@v6",
+      "  lint:",
+      "    runs-on: x",
+      "  publish:",
+      "    needs: [detect, lint]",
+      "    permissions:",
+      "      id-token: write",
+      "    steps:",
+      "      - env:",
+      `          EXPECTED: \${{ ${expr} }}`,
+      "        run: publish",
+    );
+  for (const expr of [
+    "NEEDS.detect.outputs.expected",
+    "needs.DETECT.outputs.expected",
+    "Needs['Detect'].Outputs.expected",
+  ]) {
+    const yaml = job(expr);
+    assert.deepEqual(
+      [...credentialedJobs(yaml)].sort(),
+      ["detect", "publish"],
+      expr,
+    );
+    assert.deepEqual(
+      unpinnedRefs(yaml),
+      [{ job: "detect", uses: "actions/checkout@v6" }],
+      expr,
+    );
+  }
+  // `.RESULT` is still only the result, and `NEEDS.*` still every needed job.
+  assert.deepEqual(
+    [...credentialedJobs(job("NEEDS.DETECT.RESULT == 'success'"))],
+    ["publish"],
+  );
+  assert.deepEqual(
+    [...credentialedJobs(job("join(NEEDS.*.outputs.v)"))].sort(),
+    ["detect", "lint", "publish"],
+  );
+});
+
+test("a needs entry in another case still reaches the artifact producer (#4934)", () => {
+  const yaml = wf(
+    "jobs:",
+    "  build:",
+    "    steps:",
+    "      - uses: actions/upload-artifact@v7",
+    "  publish:",
+    "    needs: [BUILD]",
+    "    permissions:",
+    "      id-token: write",
+    "    steps:",
+    "      - uses: actions/download-artifact@v8",
+  );
+  assert.deepEqual([...credentialedJobs(yaml)].sort(), ["build", "publish"]);
+});
+
 test("an upload is not credentialed when the consumer downloads nothing", () => {
   const yaml = wf(
     "jobs:",

@@ -45,6 +45,12 @@
 //      name and version an artifact must match before it is published, so a
 //      moved tag there could approve a tampered artifact.
 //
+// GitHub reads expression contexts, their property names and job ids without
+// regard to case, so `SECRETS.X`, `NEEDS.detect.outputs` and
+// `needs.DETECT.outputs` are matched here as their lowercase spellings are, and
+// a job id named anywhere (`needs:` or an expression) resolves to the job in
+// `jobs:` it names in any case (#4934).
+//
 // `GITHUB_TOKEN` alone does not count: every job holds one, so counting it
 // would turn this into "pin everything", which #4873 does not ask. That is why
 // `version-packages.yml` and `prepare-python-release.yml` are out of scope
@@ -81,11 +87,11 @@ const repoRoot = path.resolve(
   "..",
 );
 
-// `GITHUB_TOKEN` in either accessor spelling; removed before looking for any
-// other `secrets` reference, so every spelling of every other name, a dynamic
-// index included, still reads as a secret.
+// `GITHUB_TOKEN` in either accessor spelling, in any case; removed before
+// looking for any other `secrets` reference, so every spelling of every other
+// name, a dynamic index included, still reads as a secret.
 const DEFAULT_TOKEN =
-  /\bsecrets\s*(?:\.\s*GITHUB_TOKEN\b|\[\s*(['"])GITHUB_TOKEN\1\s*\])/g;
+  /\bsecrets\s*(?:\.\s*GITHUB_TOKEN\b|\[\s*(['"])GITHUB_TOKEN\1\s*\])/gi;
 // Where the first expression in a string opens. Everything from there on is
 // searched, rather than each `${{ … }}` body: finding where an expression ENDS
 // needs a parser, since a quoted string inside one may itself contain `}}`
@@ -124,7 +130,7 @@ function handedSecret(job, inherited) {
     const open = text.indexOf(EXPRESSION_OPEN);
     return (
       open !== -1 &&
-      /\bsecrets\b/.test(text.slice(open).replace(DEFAULT_TOKEN, ""))
+      /\bsecrets\b/i.test(text.slice(open).replace(DEFAULT_TOKEN, ""))
     );
   });
 }
@@ -182,6 +188,11 @@ function parseWorkflow(yaml, file = "<workflow>") {
 export function credentialedJobs(yaml, file) {
   const workflow = parseWorkflow(yaml, file).toJS() ?? {};
   const jobs = Object.entries(workflow.jobs ?? {});
+  // A job id as written anywhere (a `needs:` entry, `needs.<job>`) → its key
+  // in `jobs:`, or undefined when no job has that id in any case.
+  const byId = new Map(jobs.map(([name]) => [name.toLowerCase(), name]));
+  const resolve = (id) => byId.get(id.toLowerCase());
+  const needed = (job) => needsOf(job).map(resolve).filter(Boolean);
   const held = new Set();
   for (const [name, job] of jobs) {
     const permissions =
@@ -197,12 +208,12 @@ export function credentialedJobs(yaml, file) {
   // about the chain.
   const upstreamOf = (name) => {
     const seen = new Set();
-    const queue = [...needsOf(workflow.jobs[name])];
+    const queue = needed(workflow.jobs[name]);
     while (queue.length > 0) {
       const next = queue.pop();
-      if (seen.has(next) || !workflow.jobs[next]) continue;
+      if (seen.has(next)) continue;
       seen.add(next);
-      queue.push(...needsOf(workflow.jobs[next]));
+      queue.push(...needed(workflow.jobs[next]));
     }
     return seen;
   };
@@ -213,7 +224,7 @@ export function credentialedJobs(yaml, file) {
   // reference that names no job (bare `needs`, `needs.*`, a dynamic index)
   // counts every job the reader needs.
   const NEEDS_USE =
-    /\bneeds\b\s*(\.\s*([\w-]+|\*)|\[\s*(?:'([^']*)'|"([^"]*)"|[^\]]*)\s*\])?\s*(?:\.\s*(\w+)|\[\s*['"](\w+)['"]\s*\])?/g;
+    /\bneeds\b\s*(\.\s*([\w-]+|\*)|\[\s*(?:'([^']*)'|"([^"]*)"|[^\]]*)\s*\])?\s*(?:\.\s*(\w+)|\[\s*['"](\w+)['"]\s*\])?/gi;
   const outputsReadBy = (job) => {
     const read = new Set();
     for (const text of stringsIn(job)) {
@@ -222,10 +233,11 @@ export function credentialedJobs(yaml, file) {
       for (const m of text.slice(open).matchAll(NEEDS_USE)) {
         const named = m[2] ?? m[3] ?? m[4];
         const property = m[5] ?? m[6];
-        if (m[1] !== undefined && property === "result") continue;
+        if (m[1] !== undefined && property?.toLowerCase() === "result")
+          continue;
         if (named === undefined || named === "*")
-          for (const n of needsOf(job)) read.add(n);
-        else read.add(named);
+          for (const n of needed(job)) read.add(n);
+        else if (resolve(named)) read.add(resolve(named));
       }
     }
     return read;
@@ -235,7 +247,7 @@ export function credentialedJobs(yaml, file) {
     for (const [name, job] of jobs) {
       if (!held.has(name)) continue;
       for (const source of outputsReadBy(job)) {
-        if (workflow.jobs[source] && !held.has(source)) {
+        if (!held.has(source)) {
           held.add(source);
           grew = true;
         }
