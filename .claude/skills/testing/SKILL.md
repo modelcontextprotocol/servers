@@ -238,7 +238,7 @@ above the test (or above its `describe`/class when the whole block pins the
 same bug):
 
 ```ts
-// KNOWN BUG #4808: pins current (wrong) behavior; the fix changes this assertion.
+// KNOWN BUG #<N>: pins current (wrong) behavior; the fix changes this assertion.
 ```
 
 In Python the same text follows `#`. A bug with no issue yet reads
