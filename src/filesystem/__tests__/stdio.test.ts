@@ -139,6 +139,20 @@ describe("startup", () => {
     );
   });
 
+  // #4992: with no directories and a client without Roots, the server fails
+  // at initialization as the README says: it logs why and exits 1.
+  it("exits 1 after initialize when no directories were given and the client lacks Roots (#4992)", async () => {
+    const exit = vi
+      .spyOn(process, "exit")
+      .mockImplementation((() => undefined) as never);
+    await session.start([]);
+    await session.initialize();
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
+    expect(stderrText()).toContain(
+      "Error: Server cannot operate: No allowed directories available.",
+    );
+  });
+
   it("skips a missing directory with a warning and keeps the rest", async () => {
     const missing = path.join(dir, "missing");
     const accessible = path.join(dir, "ok");

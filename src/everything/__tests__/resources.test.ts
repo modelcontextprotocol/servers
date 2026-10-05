@@ -61,14 +61,12 @@ describe("dynamic resource templates", () => {
     ]);
   });
 
-  // KNOWN BUG #4984: blobResource() labels blob content text/plain instead of a binary MIME type; the fix changes this assertion.
-  it("fabricates a blob resource from its id, labelled text/plain", async () => {
-    // Characterization: the template advertises application/octet-stream,
-    // but the content says text/plain (#4854 baseline).
+  it("fabricates a blob resource from its id, labelled application/octet-stream", async () => {
+    // The content's type matches the one the blob template advertises.
     const uri = "demo://resource/dynamic/blob/9";
     const { contents } = await session.client.readResource({ uri });
     expect(contents).toEqual([
-      { uri, mimeType: "text/plain", blob: expect.any(String) },
+      { uri, mimeType: "application/octet-stream", blob: expect.any(String) },
     ]);
     const blob = "blob" in contents[0] ? contents[0].blob : "";
     expect(Buffer.from(blob, "base64").toString()).toMatch(

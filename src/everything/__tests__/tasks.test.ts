@@ -422,10 +422,9 @@ describe("trigger-sampling-request-async", () => {
     );
   });
 
-  // KNOWN BUG #4987: trigger-sampling-request-async drops the status message of a task that is already finished when created; the fix changes this assertion.
-  it("does not poll a client task that is already finished when it is created", async () => {
-    // Characterization: the status message is only read from polls, so a
-    // task that fails before it is returned is reported with "No message".
+  it("reports the status message of a client task that is already finished when it is created", async () => {
+    // A task that fails before it is returned is never polled, so its status
+    // message comes from the CreateTaskResult.
     const { taskStore } = await connectTaskClient((_m, taskId) => {
       void taskStore.updateTaskStatus(taskId!, "failed", "instant failure");
     });
@@ -433,7 +432,7 @@ describe("trigger-sampling-request-async", () => {
       prompt: "p",
     });
     expect(text).toMatch(
-      /^\[FAILED\] No message\n\nProgress:\nTask created: \S+$/,
+      /^\[FAILED\] instant failure\n\nProgress:\nTask created: \S+$/,
     );
   });
 
@@ -569,6 +568,20 @@ describe("trigger-elicitation-request-async", () => {
     expect(polls).toHaveLength(4);
   });
 
+  it("reports the status message of a client task that is already finished when it is created", async () => {
+    // A task that fails before it is returned is never polled, so its status
+    // message comes from the CreateTaskResult.
+    const { taskStore } = await connectTaskClient((_m, taskId) => {
+      void taskStore.updateTaskStatus(taskId!, "failed", "instant failure");
+    });
+    const texts = await callAsync("trigger-elicitation-request-async");
+    expect(texts).toEqual([
+      expect.stringMatching(
+        /^\[FAILED\] instant failure\n\nProgress:\nTask created: \S+$/,
+      ),
+    ]);
+  });
+
   it("reports a failed client task", async () => {
     const { taskStore } = await connectTaskClient((_m, taskId) => {
       later(() => taskStore.updateTaskStatus(taskId!, "failed"));
@@ -577,25 +590,54 @@ describe("trigger-elicitation-request-async", () => {
     expect(texts[0]).toMatch(/^\[FAILED\] No message\n\nProgress:\n/);
   });
 
-  it("gives up after 600 polls of a task that never finishes", async () => {
+  /** Also fake `performance`, which the tool's polling deadline is measured with. */
+  function fakeClock() {
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "performance"],
+    });
+  }
+
+  it("gives up 5 seconds before the 10-minute TTL of a task that never finishes", async () => {
+    fakeClock();
     // A client that keeps its task longer than the 10-minute TTL asked for.
     await connectTaskClient(() => {}, 60_000);
     const texts = await callAsync("trigger-elicitation-request-async");
     expect(texts[0]).toMatch(
-      /^\[TIMEOUT\] Task timed out after 600 poll attempts\n\nProgress:\n/,
+      /^\[TIMEOUT\] Task timed out after 595 poll attempts, before its 10-minute TTL expired\n\nProgress:\n/,
     );
   });
 
-  // KNOWN BUG #4986: trigger-elicitation-request-async polls for longer than the 10-minute TTL it requests for its task; the fix changes this assertion.
-  it("fails on the last poll instead when the client honors the 10-minute TTL", async () => {
-    // Characterization: 600 one-second polls outlast the 600000 ms TTL the
-    // tool asks for, so a client that expires the task on time answers the
-    // last tasks/get with "not found" and the call fails before the timeout
-    // report.
+  it("times out before a client that honors the 10-minute TTL expires the task", async () => {
+    fakeClock();
+    let created = "";
+    const { taskStore } = await connectTaskClient((_m, taskId) => {
+      created = taskId!;
+    });
+    const texts = await callAsync("trigger-elicitation-request-async");
+    // The last poll reached the task while the client still held it.
+    expect(texts).toHaveLength(1);
+    expect(texts[0]).toMatch(
+      /^\[TIMEOUT\] Task timed out after 595 poll attempts, before its 10-minute TTL expired\n\nProgress:\nTask created: \S+\nPoll 1: working\n/,
+    );
+    expect(texts[0]).toMatch(/\nPoll 595: working$/);
+    // The client still holds the task when the tool gives up, 5 s before the
+    // 600000 ms TTL it asked for runs out.
+    expect((await taskStore.getTask(created))?.ttl).toBe(600000);
+  });
+
+  it("times out without polling when its wait ends past the deadline", async () => {
+    // A timer that fires late: the first reading sets the deadline, and every
+    // later one is already past it.
+    let readings = 0;
+    vi.spyOn(performance, "now").mockImplementation(() =>
+      readings++ === 0 ? 0 : 600_000,
+    );
     await connectTaskClient(() => {});
     const texts = await callAsync("trigger-elicitation-request-async");
     expect(texts).toEqual([
-      "MCP error -32602: MCP error -32602: Failed to retrieve task: Task not found",
+      expect.stringMatching(
+        /^\[TIMEOUT\] Task timed out after 0 poll attempts, before its 10-minute TTL expired\n\nProgress:\nTask created: \S+$/,
+      ),
     ]);
   });
 
