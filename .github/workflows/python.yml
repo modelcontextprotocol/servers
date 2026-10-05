@@ -1,8 +1,10 @@
 name: Python
 
 on:
+  # Push only, as in the Inspector: with pull_request as well, every commit on a
+  # PR branch ran each workflow twice (once per event). PR checks still report
+  # from the push run of the head commit.
   push:
-  pull_request:
 
 # Superseded runs on the same ref are cancelled (e.g. rapid amend-pushes),
 # except on main, where every merge keeps its own CI run
