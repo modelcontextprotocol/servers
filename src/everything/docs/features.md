@@ -27,7 +27,7 @@
 - `trigger-sampling-request` (tools/trigger-sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM's response payload.
 - `simulate-research-query` (tools/simulate-research-query.ts): Demonstrates MCP Tasks (SEP-1686) with a simulated multi-stage research operation. Accepts `topic` and `ambiguous` parameters. Returns a task that progresses through stages with status updates. If `ambiguous` is true and client supports elicitation, sends an elicitation request directly to gather clarification before completing.
 - `trigger-sampling-request-async` (tools/trigger-sampling-request-async.ts): Demonstrates bidirectional tasks where the server sends a sampling request that the client executes as a background task. Server polls for status and retrieves the LLM result when complete. Requires client to support `tasks.requests.sampling.createMessage`.
-- `trigger-elicitation-request-async` (tools/trigger-elicitation-request-async.ts): Demonstrates bidirectional tasks where the server sends an elicitation request that the client executes as a background task. Server polls while waiting for user input. Requires client to support `tasks.requests.elicitation.create`.
+- `trigger-elicitation-request-async` (tools/trigger-elicitation-request-async.ts): Demonstrates bidirectional tasks where the server sends an elicitation request that the client executes as a background task. Server polls while waiting for user input. Requires client form-mode elicitation (as for `trigger-elicitation-request`) and `tasks.requests.elicitation.create`.
 
 ## Prompts
 

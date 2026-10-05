@@ -146,6 +146,22 @@ describe("tools/list", () => {
       { elicitation: {}, tasks: { requests: { elicitation: { create: {} } } } },
       ["trigger-elicitation-request", "trigger-elicitation-request-async"],
     ],
+    [
+      {
+        elicitation: { form: {} },
+        tasks: { requests: { elicitation: { create: {} } } },
+      },
+      ["trigger-elicitation-request", "trigger-elicitation-request-async"],
+    ],
+    // The async tool's request is form mode too, so a URL-only client does
+    // not get it even with task support (#4985).
+    [
+      {
+        elicitation: { url: {} },
+        tasks: { requests: { elicitation: { create: {} } } },
+      },
+      ["trigger-url-elicitation"],
+    ],
     // The async tools need the base capability as well as the task one.
     [{ tasks: { requests: { sampling: { createMessage: {} } } } }, []],
     [{ tasks: { requests: { elicitation: { create: {} } } } }, []],
