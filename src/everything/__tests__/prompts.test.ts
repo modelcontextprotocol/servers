@@ -96,7 +96,6 @@ describe("resource-prompt", () => {
     });
   });
 
-  // KNOWN BUG #4984: blobResource() labels blob content text/plain instead of a binary MIME type; the fix changes this assertion.
   it("embeds a blob resource", async () => {
     const result = await session.client.getPrompt({
       name: "resource-prompt",
@@ -107,7 +106,7 @@ describe("resource-prompt", () => {
         type: "resource",
         resource: {
           uri: "demo://resource/dynamic/blob/2",
-          mimeType: "text/plain",
+          mimeType: "application/octet-stream",
           blob: expect.any(String),
         },
       },
