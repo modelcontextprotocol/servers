@@ -830,7 +830,9 @@ async def test_git_show_revision_path_shows_the_file(repo: git.Repo):
         "git_show",
         {"repo_path": str(root_of(repo)), "revision": "HEAD:test.txt"},
     )
-    assert result == text_result("line 1\nline 2\nline 3\nline 4\nline 5\n")
+    # Compared with the raw bytes: the fixture writes text, so CRLF on Windows.
+    expected = (root_of(repo) / "test.txt").read_bytes().decode()
+    assert result == text_result(expected)
 
 
 async def test_git_show_revision_path_to_a_directory_lists_it(repo: git.Repo):
