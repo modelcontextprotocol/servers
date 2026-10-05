@@ -123,6 +123,8 @@ python -m mcp_server_git
 
 ## Configuration
 
+`--repository` (`-r`) accepts any path inside a Git working tree. At startup the server walks up to the enclosing repository root, the way `git rev-parse --show-toplevel` does, so `--repository .` works when a shared config is launched from any subdirectory of the repository. A path inside the repository therefore allows tool calls anywhere in that repository, not only under the subdirectory given. A path that does not exist, or is not inside a Git repository, is logged as a one-line error at startup.
+
 ### Usage with Claude Desktop
 
 Add this to your `claude_desktop_config.json`:
