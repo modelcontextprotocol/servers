@@ -800,22 +800,35 @@ describe("edit_file", () => {
     expect(text.endsWith("`````\n\n")).toBe(true);
   });
 
-  // KNOWN BUG #4991: any edit silently converts a CRLF file's line endings to LF; the fix changes this assertion.
-  // The CRLF in the file is normalized away by any edit, dry run aside.
-  it("rewrites a CRLF file with LF line endings", async () => {
+  // #4991: an edit keeps the file's line endings, whatever oldText and
+  // newText use.
+  it("keeps a CRLF file's line endings", async () => {
     await fs.writeFile(file, "a\r\nb\r\n");
     await call(client, "edit_file", {
       path: file,
-      edits: [{ oldText: "a\r\n", newText: "c\r\n" }],
+      edits: [
+        { oldText: "a\r\n", newText: "c\r\n" },
+        { oldText: "b\n", newText: "d\ne\n" },
+      ],
     });
-    expect(await fs.readFile(file, "utf-8")).toBe("c\nb\n");
+    expect(await fs.readFile(file, "utf-8")).toBe("c\r\nd\r\ne\r\n");
+  });
+
+  it("keeps an LF file's line endings when newText uses CRLF", async () => {
+    await fs.writeFile(file, "a\nb\n");
+    await call(client, "edit_file", {
+      path: file,
+      edits: [{ oldText: "a", newText: "c\r\nd" }],
+    });
+    expect(await fs.readFile(file, "utf-8")).toBe("c\nd\nb\n");
   });
 
   // #2034: when there is no exact substring, the matcher compares line by line
   // with leading and trailing whitespace trimmed, and reindents the
-  // replacement. These pin its current reindentation rules.
+  // replacement (#4990): each replacement line takes the indentation of the
+  // file line it replaces, shifted by its indent relative to the matching
+  // oldText line.
   describe("whitespace-tolerant matcher (#2034)", () => {
-    // KNOWN BUG #4990: lines after the first lose the file's indentation when oldText's line has none; the fix changes this assertion.
     it("matches lines whose indentation differs from oldText", async () => {
       await call(client, "edit_file", {
         path: file,
@@ -826,14 +839,12 @@ describe("edit_file", () => {
           },
         ],
       });
-      // First line takes the file's indentation; later lines without
-      // indentation of their own are inserted as given.
+      // Every line takes the indentation of the file line it replaces.
       expect(await fs.readFile(file, "utf-8")).toBe(
-        "function greet() {\n  console.log('bye');\nreturn 0;\n}\n",
+        "function greet() {\n  console.log('bye');\n  return 0;\n}\n",
       );
     });
 
-    // KNOWN BUG #4990: a replacement line whose oldText line has no indent ignores the file's indentation; the fix changes this assertion.
     it("keeps relative indentation when both old and new lines are indented", async () => {
       await fs.writeFile(file, "    if (a) {\n        b();\n    }\n");
       await call(client, "edit_file", {
@@ -845,30 +856,99 @@ describe("edit_file", () => {
           },
         ],
       });
-      // Line 2: new indent 6 - old indent 2 = 4 extra spaces on top of the
-      // first line's 4. Line 3: old line "}" has no indent, so the new
-      // line is inserted as given.
+      // Line 2: the file's 8, plus new indent 6 - old indent 2 = 4 more.
+      // Line 3: the file's 4, plus new indent 2 - old indent 0 = 2 more.
       expect(await fs.readFile(file, "utf-8")).toBe(
-        "    if (a) {\n        c();\n  }\n",
+        "    if (a) {\n            c();\n      }\n",
       );
     });
 
-    it("clamps a negative relative indent to the first line's indentation", async () => {
+    it("dedents a tab-indented file by levels when the edit indents with spaces", async () => {
+      await fs.writeFile(file, "\tif (a) {\n\t\tb();\n\t}\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "    b();", newText: "  c();" }],
+      });
+      // The edit dedents b() by one 2-space level; in the file that is one
+      // tab, not two characters (which would strip both tabs).
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "\tif (a) {\n\tc();\n\t}\n",
+      );
+    });
+
+    it("indents a tab-indented file by levels when the edit indents with spaces", async () => {
+      await fs.writeFile(file, "\tif (a) {\n\t\tb();\n\t}\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "if (a) {\n  b();", newText: "if (a) {\n    c();" }],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "\tif (a) {\n\t\t\tc();\n\t}\n",
+      );
+    });
+
+    it("indents a space-indented file by levels when the edit indents with tabs", async () => {
+      await fs.writeFile(file, "  if (a) {\n    b();\n  }\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "if (a) {\n\tb();", newText: "if (a) {\n\t\tc();" }],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "  if (a) {\n      c();\n  }\n",
+      );
+    });
+
+    it("keeps the file's indentation when oldText indents with a different width", async () => {
+      await fs.writeFile(file, "    if (a) {\n        b();\n    }\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [
+          {
+            oldText: "if (a) {\n  b();\n}",
+            newText: "if (a) {\n  c();\n}",
+          },
+        ],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe(
+        "    if (a) {\n        c();\n    }\n",
+      );
+    });
+
+    it("dedents relative to the file line it replaces", async () => {
       await fs.writeFile(file, "  x\n      y\n");
       await call(client, "edit_file", {
         path: file,
         edits: [{ oldText: "x\n    y", newText: "x\n z" }],
       });
-      expect(await fs.readFile(file, "utf-8")).toBe("  x\n  z\n");
+      // Line 2: the file's 6, minus old indent 4 - new indent 1 = 3.
+      expect(await fs.readFile(file, "utf-8")).toBe("  x\n   z\n");
     });
 
-    it("inserts extra replacement lines beyond oldText's length as given", async () => {
-      await fs.writeFile(file, "a\nb\n");
+    it("clamps a dedent at no indentation", async () => {
+      await fs.writeFile(file, "x\n  y\n");
       await call(client, "edit_file", {
         path: file,
-        edits: [{ oldText: " a ", newText: "a\n  added" }],
+        edits: [{ oldText: "x\n    y", newText: "x\nz" }],
       });
-      expect(await fs.readFile(file, "utf-8")).toBe("a\n  added\nb\n");
+      expect(await fs.readFile(file, "utf-8")).toBe("x\nz\n");
+    });
+
+    it("indents replacement lines beyond oldText's length relative to its last line", async () => {
+      await fs.writeFile(file, "  a\nb\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "a ", newText: "a\n  added" }],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe("  a\n    added\nb\n");
+    });
+
+    it("keeps a blank replacement line as given", async () => {
+      await fs.writeFile(file, "  a\n  b\n");
+      await call(client, "edit_file", {
+        path: file,
+        edits: [{ oldText: "a\nb", newText: "a\n\nb" }],
+      });
+      expect(await fs.readFile(file, "utf-8")).toBe("  a\n\n  b\n");
     });
 
     it("reports no match when a line differs beyond whitespace", async () => {
