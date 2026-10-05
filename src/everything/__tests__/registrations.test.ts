@@ -128,6 +128,32 @@ describe("Registration Index Files", () => {
       // Should not register any capability-gated tools when capabilities are missing
       expect(mockServerNoCapabilities.registerTool).not.toHaveBeenCalled();
     });
+
+    it("should register no form-mode elicitation tool for a URL-only client, even with task support", () => {
+      // Both elicitation tools send form-mode requests, which a client that
+      // declared only `elicitation.url` cannot answer (#4985).
+      const mockServerUrlOnly = {
+        registerTool: vi.fn(),
+        server: {
+          getClientCapabilities: vi.fn(() => ({
+            elicitation: { url: {} },
+            tasks: { requests: { elicitation: { create: {} } } },
+          })),
+        },
+        experimental: {
+          tasks: {
+            registerToolTask: vi.fn(),
+          },
+        },
+      } as unknown as McpServer; // partial mock: McpServer's private members rule out a structural literal
+
+      registerConditionalTools(mockServerUrlOnly);
+
+      const registeredTools = vi
+        .mocked(mockServerUrlOnly.registerTool)
+        .mock.calls.map((call) => call[0]);
+      expect(registeredTools).toEqual(["trigger-url-elicitation"]);
+    });
   });
 
   describe("prompts/index.ts", () => {
@@ -181,7 +207,7 @@ describe("Registration Index Files", () => {
             registerToolTask: vi.fn(),
           },
         },
-      } as unknown as McpServer;
+      } as unknown as McpServer; // partial mock: McpServer's private members rule out a structural literal
 
       registerConditionalTools(mockServer);
 

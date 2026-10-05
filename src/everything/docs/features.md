@@ -27,7 +27,7 @@
 - `trigger-sampling-request` (tools/trigger-sampling-request.ts): Issues a `sampling/createMessage` request to the client/LLM using provided `prompt` and optional generation controls; returns the LLM's response payload.
 - `simulate-research-query` (tools/simulate-research-query.ts): Demonstrates MCP Tasks (SEP-1686) with a simulated multi-stage research operation. Accepts `topic` and `ambiguous` parameters. Returns a task that progresses through stages with status updates. If `ambiguous` is true and client supports elicitation, sends an elicitation request directly to gather clarification before completing.
 - `trigger-sampling-request-async` (tools/trigger-sampling-request-async.ts): Demonstrates bidirectional tasks where the server sends a sampling request that the client executes as a background task. Server polls for status and retrieves the LLM result when complete. Requires client to support `tasks.requests.sampling.createMessage`.
-- `trigger-elicitation-request-async` (tools/trigger-elicitation-request-async.ts): Demonstrates bidirectional tasks where the server sends an elicitation request that the client executes as a background task. Server polls while waiting for user input. Requires client to support `tasks.requests.elicitation.create`.
+- `trigger-elicitation-request-async` (tools/trigger-elicitation-request-async.ts): Demonstrates bidirectional tasks where the server sends an elicitation request that the client executes as a background task. Server polls while waiting for user input. Requires client form-mode elicitation (as for `trigger-elicitation-request`) and `tasks.requests.elicitation.create`.
 
 ## Prompts
 
@@ -85,7 +85,7 @@ The server advertises support for MCP Tasks, enabling long-running operations wi
 Use the `simulate-research-query` tool to exercise the full task lifecycle. Set `ambiguous: true` to trigger elicitation - the server will send an `elicitation/create` request directly and await the response before completing.
 
 **Client-side tasks (server calls client):**
-Use `trigger-sampling-request-async` or `trigger-elicitation-request-async` to demonstrate bidirectional tasks where the server sends requests that the client executes as background tasks. These require the client to advertise `tasks.requests.sampling.createMessage` or `tasks.requests.elicitation.create` capabilities respectively.
+Use `trigger-sampling-request-async` or `trigger-elicitation-request-async` to demonstrate bidirectional tasks where the server sends requests that the client executes as background tasks. These require the client to advertise `sampling` with `tasks.requests.sampling.createMessage`, or form-mode `elicitation` with `tasks.requests.elicitation.create`, respectively.
 
 ### Bidirectional Task Flow
 
