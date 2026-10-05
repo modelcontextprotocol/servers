@@ -132,7 +132,8 @@ covers: the repo-wide tooling and the guards that keep the gate itself honest.
   tarball, the wheel), installs it into an empty directory and boots the
   installed server. It catches what the boot smoke cannot, since the smoke
   runs the checkout: a file missing from the tarball, a dependency that only
-  resolves inside the workspace. It needs the network, so it is not a gate
+  resolves inside the workspace. It also fails an npm tarball that ships a
+  test, a test helper or a test runner's config. It needs the network, so it is not a gate
   stage. `release.yml` runs it before anything publishes, and the `release`
   skill runs it by hand for the release ledger.
 - **`npm run format`** rewrites files, so it is something you run, not
