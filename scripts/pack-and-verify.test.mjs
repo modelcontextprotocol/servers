@@ -20,6 +20,7 @@ import {
   consumerEnv,
   installedLaunch,
   isDistribution,
+  isTestFile,
   main,
   parseArgs,
   tarballProblems,
@@ -69,6 +70,44 @@ test("the string form of bin is read, and a missing bin is a problem", () => {
   assert.deepEqual(tarballProblems({ name: "x" }, ["package.json"]), [
     "package.json declares no `bin`",
   ]);
+});
+
+test("a test or test-config file in the tarball is named (#4930)", () => {
+  const manifest = { name: "@scope/pkg", bin: { cmd: "dist/index.js" } };
+  assert.deepEqual(
+    tarballProblems(manifest, [
+      "package.json",
+      "dist/index.js",
+      "dist/__tests__/tools.test.js",
+      "dist/vitest.config.js",
+    ]),
+    [
+      "dist/__tests__/tools.test.js is a test file, which a package does not ship",
+      "dist/vitest.config.js is a test file, which a package does not ship",
+    ],
+  );
+});
+
+test("isTestFile matches tests, helpers and runner configs, nothing else", () => {
+  for (const f of [
+    "dist/__tests__/helpers.js",
+    "dist/__tests__/server.test.d.ts",
+    "dist/tools/echo.test.js",
+    "dist/tools/echo.spec.mjs",
+    "dist/tools/echo.test.js.map",
+    "dist/vitest.config.js",
+    "vitest.config.ts",
+  ])
+    assert.equal(isTestFile(f), true, f);
+  for (const f of [
+    "dist/index.js",
+    "dist/tools/test-helpers.js",
+    "dist/tools/get-test.js",
+    "dist/docs/testing.md",
+    "dist/__tests__.js",
+    "README.md",
+  ])
+    assert.equal(isTestFile(f), false, f);
 });
 
 test("installedLaunch runs what each installer put in place", () => {

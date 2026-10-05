@@ -8,6 +8,7 @@
     "./**/*.ts"
   ],
   "exclude": [
+    "**/__tests__/**",
     "**/*.test.ts",
     "vitest.config.ts"
   ]

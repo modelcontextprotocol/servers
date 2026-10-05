@@ -101,9 +101,10 @@ export function parseArgs(argv) {
 
 /**
  * What is wrong with an npm tarball's contents, judged from its manifest and
- * file list alone: every `bin` target must be in it. Anything subtler (a
- * module the entry point imports, a data file) is found by actually running
- * the installed bin, which is the next step.
+ * file list alone: every `bin` target must be in it, and no test or test
+ * config file may be (#4930). Anything subtler (a module the entry point
+ * imports, a data file) is found by actually running the installed bin, which
+ * is the next step.
  *
  * @param {{ bin?: string | Record<string, string> }} manifest the package.json
  * @param {string[]} files the paths in the tarball, relative to the package
@@ -113,12 +114,34 @@ export function tarballProblems(manifest, files) {
   const bins = binEntries(manifest);
   if (bins.length === 0) return ["package.json declares no `bin`"];
   const present = new Set(files.map((f) => path.posix.normalize(f)));
-  return bins
-    .filter(([, target]) => !present.has(path.posix.normalize(target)))
-    .map(
-      ([name, target]) =>
-        `bin \`${name}\` points at ${target}, which is not in the tarball`,
-    );
+  return [
+    ...bins
+      .filter(([, target]) => !present.has(path.posix.normalize(target)))
+      .map(
+        ([name, target]) =>
+          `bin \`${name}\` points at ${target}, which is not in the tarball`,
+      ),
+    ...files
+      .filter(isTestFile)
+      .map((f) => `${f} is a test file, which a package does not ship`),
+  ];
+}
+
+/**
+ * Whether a packed path is a test, a test helper or a test runner's config,
+ * compiled or not: anything under a `__tests__` directory, a `*.test.*` or
+ * `*.spec.*` file, or a `vitest.config.*`.
+ *
+ * @param {string} file a path in the tarball, relative to the package
+ */
+export function isTestFile(file) {
+  const parts = path.posix.normalize(file).split("/");
+  const base = parts.at(-1);
+  return (
+    parts.slice(0, -1).includes("__tests__") ||
+    /\.(test|spec)\.(d\.)?[cm]?[jt]sx?(\.map)?$/.test(base) ||
+    /^vitest\.config\./.test(base)
+  );
 }
 
 /** A manifest's `bin` as `[command, target]` pairs, in either of its forms. */
