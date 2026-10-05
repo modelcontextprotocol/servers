@@ -3,9 +3,9 @@
  * (#4854), with its default limits: fetching a `data:` or local `http:` URL,
  * returning the gzipped file as a resource link or an embedded resource,
  * registering it for later reads, and the errors for bad protocols, oversized
- * or empty responses and failed fetches. It also pins #4808: two sessions that
- * use the same file name evict each other's resource. The configurable limits
- * are in `gzip-limits.test.ts`.
+ * or empty responses and failed fetches. It also guards #4808: two sessions
+ * that use the same file name each keep their own resource. The configurable
+ * limits are in `gzip-limits.test.ts`.
  */
 import { createServer as createHttpServer, type Server } from "node:http";
 import { once } from "node:events";
@@ -150,24 +150,21 @@ describe("gzip-file-as-resource", () => {
     expect(gunzipSync(blob).toString()).toBe("second");
   });
 
-  // KNOWN BUG #4808: pins current (wrong) behavior; the fix changes this assertion.
-  it("evicts another session's resource of the same name (#4808)", async () => {
-    // Characterization of #4808: session resources are tracked in one
-    // module-level map keyed by URI, so the second session's registration
-    // removes the first session's resource from the first session's server.
+  it("keeps each session's resource when two sessions use the same name (#4808)", async () => {
+    // Regression guard for #4808: session resources are tracked per server,
+    // so the second session's registration leaves the first session's
+    // resource (and its content) in place.
     const a = await open();
     const b = await open();
+    const second = `data:text/plain;base64,${Buffer.from("from b").toString("base64")}`;
     await gzip(a, { name: "shared.gz", data: DATA_URI });
-    await gzip(b, { name: "shared.gz", data: DATA_URI });
+    await gzip(b, { name: "shared.gz", data: second });
 
-    await expect(
-      a.client.readResource({ uri: "demo://resource/session/shared.gz" }),
-    ).rejects.toThrow("Resource demo://resource/session/shared.gz not found");
-    expect(
-      gunzipSync(
-        await readBlob(b, "demo://resource/session/shared.gz"),
-      ).toString(),
-    ).toBe(TEXT);
+    const uri = "demo://resource/session/shared.gz";
+    expect(gunzipSync(await readBlob(a, uri)).toString()).toBe(TEXT);
+    expect(gunzipSync(await readBlob(b, uri)).toString()).toBe("from b");
+    const { resources } = await a.client.listResources();
+    expect(resources.map((r) => r.uri)).toContain(uri);
   });
 
   it("rejects a URL that is not http, https or data", async () => {

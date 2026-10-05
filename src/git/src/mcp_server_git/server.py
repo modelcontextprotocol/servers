@@ -1,4 +1,5 @@
 import logging
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Optional
 from mcp.server import Server
@@ -12,6 +13,11 @@ from enum import Enum
 import git
 from git.exc import BadName
 from pydantic import BaseModel, Field
+
+# The version this server reports in serverInfo, read from the installed
+# distribution's metadata (pyproject.toml) so it cannot drift from the
+# published version (#360). Without it the SDK reports its own `mcp` version.
+SERVER_VERSION = version("mcp-server-git")
 
 # Default number of context lines to show in diff output
 DEFAULT_CONTEXT_LINES = 3
@@ -441,7 +447,7 @@ async def serve(repository: Path | None) -> None:
         repository = root
         logger.info(f"Using repository at {repository}")
 
-    server = Server("mcp-git")
+    server = Server("mcp-git", version=SERVER_VERSION)
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:

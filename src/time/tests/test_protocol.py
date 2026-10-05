@@ -120,16 +120,17 @@ def handler_error(message: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-# KNOWN BUG #360: pins current (wrong) behavior; the fix changes this assertion.
 async def test_initialize_reports_server_info_and_capabilities() -> None:
     async with serving("UTC") as session:
         init = wire(await session.initialize())
 
-    # Characterizes #360: `Server("mcp-time")` is constructed without a
-    # version, so the SDK reports its OWN package version as the server's
-    # version, not mcp-server-time's. A fix will change this assertion.
-    assert init["serverInfo"] == {"name": "mcp-time", "version": version("mcp")}
-    assert init["serverInfo"]["version"] != version("mcp-server-time")
+    # #360: serverInfo.version is mcp-server-time's own version (from
+    # pyproject.toml via the installed metadata), not the `mcp` SDK's.
+    assert init["serverInfo"] == {
+        "name": "mcp-time",
+        "version": version("mcp-server-time"),
+    }
+    assert init["serverInfo"]["version"] != version("mcp")
     # Only tools are advertised; no resources, prompts or logging.
     assert init["capabilities"] == {"experimental": {}, "tools": {"listChanged": False}}
     assert "instructions" not in init

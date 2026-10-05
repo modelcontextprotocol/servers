@@ -22,6 +22,13 @@ your machine. It is the strongest predictor of a green CI there is here, though
 not a proof: CI runs on Linux, on a fresh `npm ci`, with Node 22 and each
 Python server's pinned interpreter.
 
+**The one exception is the Windows legs** (#1149): `test-windows` in both
+workflows runs each server's test suite (`npm test`, `pytest`) on a
+`windows-latest` runner. The gate runs the same suites, but only on your
+machine's OS, so a Windows-only failure (a drive letter, a UNC path, a missing
+`O_NOFOLLOW`, a locked file) shows up first in CI. When a PR touches
+platform-specific code, wait for those legs, not just the gate.
+
 The inner-loop commands are subsets. They are for speed while working, and are
 never a substitute for the gate.
 

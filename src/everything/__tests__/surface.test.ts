@@ -63,24 +63,41 @@ describe("initialize", () => {
     );
   });
 
-  // KNOWN BUG #4792: pins current (wrong) behavior; the fix changes this assertion.
-  it("names capability-gated tools in its instructions even for a client that cannot see them (#4792)", async () => {
-    // Characterization of #4792: the instructions are static, so a client
-    // that declares no sampling, elicitation or roots capability is told
-    // about tools that are not in its tools/list. The fix changes this test.
+  it("qualifies every capability-gated tool it names, for a client that cannot see them (#4792)", async () => {
+    // The instructions are fixed before client capabilities are known, so a
+    // client that declares no sampling, elicitation or roots capability still
+    // receives them. Each gated tool it names may appear only in the
+    // "Capability-Gated Tools" section or on a line that makes it conditional.
     session = await connect();
     const instructions = session.client.getInstructions() ?? "";
     const { tools } = await session.client.listTools();
     const names = tools.map((t) => t.name);
-
-    for (const gated of [
-      "trigger-sampling-request",
-      "trigger-elicitation-request",
+    const gated = [
       "get-roots-list",
-    ]) {
-      expect(instructions).toContain(`\`${gated}\``);
-      expect(names).not.toContain(gated);
+      "trigger-elicitation-request",
+      "trigger-elicitation-request-async",
+      "trigger-sampling-request",
+      "trigger-sampling-request-async",
+      "trigger-url-elicitation",
+    ];
+
+    const sections = instructions.split(/^## /m);
+    const gatedSection =
+      sections.find((part) => part.startsWith("Capability-Gated Tools")) ?? "";
+    const unconditional = sections
+      .filter((part) => part !== gatedSection)
+      .flatMap((part) => part.split("\n"))
+      .filter(
+        (line) =>
+          gated.some((tool) => line.includes(`\`${tool}\``)) &&
+          !/\bif\b/i.test(line),
+      );
+
+    for (const tool of gated) {
+      expect(names).not.toContain(tool);
+      expect(gatedSection).toContain(`\`${tool}\``);
     }
+    expect(unconditional).toEqual([]);
   });
 });
 
@@ -111,8 +128,11 @@ describe("tools/list", () => {
     [{ roots: {} }, ["get-roots-list"]],
     [{ sampling: {} }, ["trigger-sampling-request"]],
     [{ elicitation: {} }, ["trigger-elicitation-request"]],
+    [{ elicitation: { form: {} } }, ["trigger-elicitation-request"]],
+    // A URL-only client cannot answer the form request (#4985).
+    [{ elicitation: { url: {} } }, ["trigger-url-elicitation"]],
     [
-      { elicitation: { url: {} } },
+      { elicitation: { form: {}, url: {} } },
       ["trigger-elicitation-request", "trigger-url-elicitation"],
     ],
     [
@@ -125,6 +145,22 @@ describe("tools/list", () => {
     [
       { elicitation: {}, tasks: { requests: { elicitation: { create: {} } } } },
       ["trigger-elicitation-request", "trigger-elicitation-request-async"],
+    ],
+    [
+      {
+        elicitation: { form: {} },
+        tasks: { requests: { elicitation: { create: {} } } },
+      },
+      ["trigger-elicitation-request", "trigger-elicitation-request-async"],
+    ],
+    // The async tool's request is form mode too, so a URL-only client does
+    // not get it even with task support (#4985).
+    [
+      {
+        elicitation: { url: {} },
+        tasks: { requests: { elicitation: { create: {} } } },
+      },
+      ["trigger-url-elicitation"],
     ],
     // The async tools need the base capability as well as the task one.
     [{ tasks: { requests: { sampling: { createMessage: {} } } } }, []],
