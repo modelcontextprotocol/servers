@@ -1,9 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getValidRootDirectories } from '../roots-utils.js';
+import { formatEffectiveAllowedDirectories, getValidRootDirectories } from '../roots-utils.js';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, realpathSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import type { Root } from '@modelcontextprotocol/sdk/types.js';
+
+describe('formatEffectiveAllowedDirectories', () => {
+  it('includes the source and effective directories', () => {
+    expect(formatEffectiveAllowedDirectories(['/workspace', '/data'], 'client-provided MCP Roots'))
+      .toBe('Effective allowed directories (source: client-provided MCP Roots):\n  /workspace\n  /data');
+  });
+
+  it('marks an empty effective directory set', () => {
+    expect(formatEffectiveAllowedDirectories([], 'none'))
+      .toBe('Effective allowed directories (source: none):\n  (none)');
+  });
+});
 
 describe('getValidRootDirectories', () => {
   let testDir1: string;
