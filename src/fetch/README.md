@@ -163,7 +163,7 @@ the request was user initiated (via a prompt). This can be disabled by adding th
 By default, the server refuses any request, including a redirect hop or a robots.txt fetch, whose host resolves to an
 address that is not globally routable: loopback (`127.0.0.0/8`, `::1`), private (`10.0.0.0/8`, `172.16.0.0/12`,
 `192.168.0.0/16`, `fc00::/7`), link-local (`169.254.0.0/16`, `fe80::/10`), shared address space (`100.64.0.0/10`),
-multicast, unspecified and reserved ranges. A hostname is refused if any one of its addresses is in those ranges.
+multicast, unspecified, documentation and the other IANA special-purpose ranges. A hostname is refused if any one of its addresses is in those ranges.
 The client receives an error naming the refused address.
 
 To fetch from local or internal hosts (a development server, an intranet page), add the argument
