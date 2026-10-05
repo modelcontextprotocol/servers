@@ -92,7 +92,8 @@ const expectedTools = [
   {
     name: "create_entities",
     title: "Create Entities",
-    description: "Create multiple new entities in the knowledge graph",
+    description:
+      "Create multiple new entities in the knowledge graph. An entity whose name already exists, or repeats an earlier entity in the same call, is skipped and its observations are not added; the result lists the skipped names in `skipped`. Use add_observations to add observations to an existing entity.",
     inputSchema: {
       type: "object",
       properties: { entities: { type: "array", items: entityItem(false) } },
@@ -101,7 +102,10 @@ const expectedTools = [
     },
     outputSchema: {
       type: "object",
-      properties: { entities: { type: "array", items: entityItem(true) } },
+      properties: {
+        entities: { type: "array", items: entityItem(true) },
+        skipped: { type: "array", items: { type: "string" } },
+      },
       required: ["entities"],
       $schema: DRAFT_07,
       additionalProperties: false,
@@ -419,22 +423,30 @@ describe("memory tools over the protocol", () => {
       expect(textOf(result)).toBe("[]");
     });
 
-    // KNOWN BUG #4887: pins current (wrong) behavior; the fix changes this assertion.
-    it("keeps only the first of two same-named entities in one batch", async () => {
+    it("keeps the first of two same-named entities in one batch and reports the second as skipped (#4887)", async () => {
       const second = { ...alice, entityType: "robot", observations: ["beeps"] };
       const result = await call(client, "create_entities", {
         entities: [alice, second],
       });
-      expect(result.structuredContent).toEqual({ entities: [alice] });
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual({
+        entities: [alice],
+        skipped: ["Alice"],
+      });
+      expect(result.content).toEqual([
+        { type: "text", text: JSON.stringify([alice], null, 2) },
+        {
+          type: "text",
+          text: "Skipped 1 entity that already exists: Alice. Its observations were not added; use add_observations for existing entities.",
+        },
+      ]);
       expect(await readGraph()).toEqual({ entities: [alice], relations: [] });
     });
 
-    // KNOWN BUG #4887: pins current (wrong) behavior; the fix changes this assertion.
-    // Characterizes #4887: create_entities silently drops the observations of
-    // an entity whose name already exists. The call succeeds, reports nothing
-    // created, and the new observation is lost. The fix for #4887 changes this
-    // test.
-    it("drops observations for an entity that already exists (#4887)", async () => {
+    // #4887: create_entities still ignores an entity whose name already
+    // exists, as documented, but now reports it as skipped so the caller
+    // knows its observations were not stored.
+    it("reports an entity that already exists as skipped (#4887)", async () => {
       await call(client, "create_entities", {
         entities: [
           {
@@ -452,12 +464,22 @@ describe("memory tools over the protocol", () => {
             entityType: "person",
             observations: ["Allergic to penicillin"],
           },
+          bob,
         ],
       });
 
       expect(result.isError).toBeUndefined();
-      expect(result.structuredContent).toEqual({ entities: [] });
-      expect(textOf(result)).toBe("[]");
+      expect(result.structuredContent).toEqual({
+        entities: [bob],
+        skipped: ["Alice"],
+      });
+      expect(result.content).toEqual([
+        { type: "text", text: JSON.stringify([bob], null, 2) },
+        {
+          type: "text",
+          text: "Skipped 1 entity that already exists: Alice. Its observations were not added; use add_observations for existing entities.",
+        },
+      ]);
       const opened = await call(client, "open_nodes", { names: ["Alice"] });
       expect(opened.structuredContent).toEqual({
         entities: [
