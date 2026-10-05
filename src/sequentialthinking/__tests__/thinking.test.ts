@@ -2,10 +2,11 @@
 // count, the branch list, revisions, totalThoughts auto-adjustment and the
 // state kept per server instance. Every case drives the tool through the
 // in-process client and reads only the result's text and structuredContent.
-// Includes the #4813 characterization (a branchId that names an
-// Object.prototype key); PR #4814 is the fix, so that test changes with it.
+// Includes the #4813 regression tests: a branchId that names an
+// Object.prototype key is an ordinary branch, and a failed call leaves the
+// state unchanged.
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   connect,
   parseOk,
@@ -277,68 +278,112 @@ describe("sequentialthinking thought processing", () => {
     });
   });
 
-  // #4813: branches is a plain object, so a branchId that names an inherited
-  // Object.prototype member reads back that member (truthy, not an array) and
-  // `.push` throws. The call fails with the TypeError's message as an
-  // isError result, after the thought was already appended to the history, so
-  // the failed call still advances thoughtHistoryLength. PR #4814 fixes this;
-  // these assertions change with it.
+  // #4813: a branchId is an opaque string, so one that names an
+  // Object.prototype member is tracked like any other id, and a call that
+  // fails leaves thoughtHistory and branches as they were.
   describe("#4813: branchId colliding with an Object.prototype key", () => {
-    // KNOWN BUG #4813: pins current (wrong) behavior; the fix changes this assertion.
     it.each(["constructor", "__proto__", "toString", "hasOwnProperty"])(
-      "fails the call for branchId %j",
+      "creates and lists the branch for branchId %j",
       async (branchId) => {
-        const result = await conn.think(
-          thought({ branchFromThought: 1, branchId }),
-        );
-        expect(result).toEqual({
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  error: "this.branches[input.branchId].push is not a function",
-                  status: "failed",
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
+        expect(
+          parseOk(
+            await conn.think(thought({ branchFromThought: 1, branchId })),
+          ),
+        ).toEqual({
+          thoughtNumber: 1,
+          totalThoughts: 3,
+          nextThoughtNeeded: true,
+          branches: [branchId],
+          thoughtHistoryLength: 1,
         });
       },
     );
 
-    // KNOWN BUG #4813: pins current (wrong) behavior; the fix changes this assertion.
-    it("still counts the failed thought in the history and does not list the branch", async () => {
+    it("counts the thought once and lists the branch alongside ordinary ones", async () => {
       await conn.think(thought({ branchFromThought: 1, branchId: "alt" }));
-      const failed = await conn.think(
-        thought({
-          thoughtNumber: 2,
-          branchFromThought: 1,
-          branchId: "constructor",
-        }),
+      parseOk(
+        await conn.think(
+          thought({
+            thoughtNumber: 2,
+            branchFromThought: 1,
+            branchId: "constructor",
+          }),
+        ),
       );
-      expect(failed.isError).toBe(true);
-      expect(JSON.parse(textOf(failed))).toEqual({
-        error: "this.branches[input.branchId].push is not a function",
-        status: "failed",
-      });
       expect(
         parseOk(
           await conn.think(
-            thought({ thoughtNumber: 3, nextThoughtNeeded: false }),
+            thought({
+              thoughtNumber: 3,
+              nextThoughtNeeded: false,
+              branchFromThought: 1,
+              branchId: "constructor",
+            }),
           ),
         ),
       ).toEqual({
         thoughtNumber: 3,
         totalThoughts: 3,
         nextThoughtNeeded: false,
-        branches: ["alt"],
+        branches: ["alt", "constructor"],
         thoughtHistoryLength: 3,
       });
     });
+
+    // Drawing the box and writing it to stderr are the steps that can still
+    // throw; make each fail once and check nothing was recorded.
+    it.each([
+      [
+        "drawing",
+        () =>
+          vi.spyOn(String.prototype, "padEnd").mockImplementationOnce(() => {
+            throw new Error("boom");
+          }),
+      ],
+      [
+        "writing",
+        () =>
+          vi.spyOn(console, "error").mockImplementationOnce(() => {
+            throw new Error("boom");
+          }),
+      ],
+    ])(
+      "leaves the history and branches unchanged when %s the log box fails",
+      async (_step, fail) => {
+        const logging = await connect({ disableThoughtLogging: undefined });
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+          await logging.think(
+            thought({ branchFromThought: 1, branchId: "alt" }),
+          );
+          fail();
+          const failed = await logging.think(
+            thought({
+              thoughtNumber: 2,
+              branchFromThought: 1,
+              branchId: "new",
+            }),
+          );
+          expect(failed.isError).toBe(true);
+          expect(JSON.parse(textOf(failed))).toEqual({
+            error: "boom",
+            status: "failed",
+          });
+          expect(
+            parseOk(await logging.think(thought({ thoughtNumber: 3 }))),
+          ).toEqual({
+            thoughtNumber: 3,
+            totalThoughts: 3,
+            nextThoughtNeeded: true,
+            branches: ["alt"],
+            thoughtHistoryLength: 2,
+          });
+        } finally {
+          vi.restoreAllMocks();
+          await logging.close();
+        }
+      },
+    );
 
     it("is harmless when branchFromThought is absent, since no branch is recorded", async () => {
       expect(

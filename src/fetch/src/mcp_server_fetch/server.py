@@ -1,7 +1,9 @@
 import asyncio
 import ipaddress
+import os
 import socket
 from typing import Annotated, Tuple
+from importlib.metadata import version
 from urllib.parse import urlparse, urlunparse
 
 import httpx
@@ -23,6 +25,11 @@ from mcp.types import (
 )
 from protego import Protego
 from pydantic import BaseModel, Field, AnyUrl
+
+# The version this server reports in serverInfo, read from the installed
+# distribution's metadata (pyproject.toml) so it cannot drift from the
+# published version (#360). Without it the SDK reports its own `mcp` version.
+SERVER_VERSION = version("mcp-server-fetch")
 
 DEFAULT_USER_AGENT_AUTONOMOUS = "ModelContextProtocol/1.0 (Autonomous; +https://github.com/modelcontextprotocol/servers)"
 DEFAULT_USER_AGENT_MANUAL = "ModelContextProtocol/1.0 (User-Specified; +https://github.com/modelcontextprotocol/servers)"
@@ -147,12 +154,19 @@ def extract_content_from_html(html: str) -> str:
     ret = readabilipy.simple_json.simple_json_from_html_string(
         html, use_readability=True
     )
+    failed = "<error>Page failed to be simplified from HTML</error>"
     if not ret["content"]:
-        return "<error>Page failed to be simplified from HTML</error>"
+        return failed
     content = markdownify.markdownify(
         ret["content"],
         heading_style=markdownify.ATX,
     )
+    # Without Node, readabilipy's pure-Python extractor never returns empty
+    # content: an empty page comes back as "<div></div>", which converts to an
+    # empty string. Report that as the same simplification failure the Node
+    # path reports, rather than letting it reach pagination as an exhausted page.
+    if not content.strip():
+        return failed
     return content
 
 
@@ -174,6 +188,55 @@ def get_robots_txt_url(url: str) -> str:
     return robots_url
 
 
+PROXY_ENV_VARS = (
+    "HTTP_PROXY",
+    "http_proxy",
+    "HTTPS_PROXY",
+    "https_proxy",
+    "ALL_PROXY",
+    "all_proxy",
+)
+
+
+def normalize_proxy_url(proxy_url: str) -> str:
+    """Rewrite the ``socks://`` alias, which httpx rejects, to ``socks5://``.
+
+    Desktop proxy settings often export ``socks://host:port``; httpx only
+    accepts ``socks5://``. Every other value is returned unchanged.
+    """
+    if proxy_url.lower().startswith("socks://"):
+        return "socks5://" + proxy_url[len("socks://") :]
+    return proxy_url
+
+
+def normalize_proxy_env() -> None:
+    """Apply ``normalize_proxy_url`` to the proxy variables httpx reads."""
+    for name in PROXY_ENV_VARS:
+        value = os.environ.get(name)
+        if value:
+            os.environ[name] = normalize_proxy_url(value)
+
+
+def make_client(proxy_url: str | None) -> httpx.AsyncClient:
+    """Build the httpx client, turning a bad proxy setting into a tool error.
+
+    httpx validates the proxy (``--proxy-url`` or the proxy environment
+    variables) when the client is constructed, before any request, so this
+    failure is not an ``HTTPError``.
+    """
+    try:
+        return httpx.AsyncClient(proxy=proxy_url)
+    except (ValueError, ImportError) as e:
+        raise McpError(
+            ErrorData(
+                code=INTERNAL_ERROR,
+                message=f"Failed to set up the HTTP client, check the proxy "
+                f"configuration (--proxy-url or the HTTP_PROXY, HTTPS_PROXY and "
+                f"ALL_PROXY environment variables): {e}",
+            )
+        )
+
+
 async def check_may_autonomously_fetch_url(
     url: str,
     user_agent: str,
@@ -184,11 +247,11 @@ async def check_may_autonomously_fetch_url(
     Check if the URL can be fetched by the user agent according to the robots.txt file.
     Raises a McpError if not.
     """
-    from httpx import AsyncClient, HTTPError
+    from httpx import HTTPError
 
     robot_txt_url = get_robots_txt_url(url)
 
-    async with AsyncClient(proxy=proxy_url) as client:
+    async with make_client(proxy_url) as client:
         if not allow_private_ips:
             client.event_hooks = {"request": [_refuse_private_destination]}
         try:
@@ -242,9 +305,9 @@ async def fetch_url(
     """
     Fetch the URL and return the content in a form ready for the LLM, as well as a prefix string with status information.
     """
-    from httpx import AsyncClient, HTTPError
+    from httpx import HTTPError
 
-    async with AsyncClient(proxy=proxy_url) as client:
+    async with make_client(proxy_url) as client:
         if not allow_private_ips:
             client.event_hooks = {"request": [_refuse_private_destination]}
         try:
@@ -291,8 +354,11 @@ class Fetch(BaseModel):
         Field(
             default=5000,
             description="Maximum number of characters to return.",
-            gt=0,
-            lt=1000000,
+            # ge/le rather than gt/lt: the inclusive bounds emit minimum/maximum,
+            # which every client accepts, while exclusiveMinimum/exclusiveMaximum
+            # are rejected by some (Gemini, #1624). Same range for an int.
+            ge=1,
+            le=999999,
         ),
     ]
     start_index: Annotated[
@@ -327,7 +393,10 @@ async def serve(
         allow_private_ips: Allow fetching private, loopback and link-local
             addresses, which are refused by default
     """
-    server = Server("mcp-fetch")
+    if proxy_url:
+        proxy_url = normalize_proxy_url(proxy_url)
+    normalize_proxy_env()
+    server = Server("mcp-fetch", version=SERVER_VERSION)
     user_agent_autonomous = custom_user_agent or DEFAULT_USER_AGENT_AUTONOMOUS
     user_agent_manual = custom_user_agent or DEFAULT_USER_AGENT_MANUAL
 
@@ -359,6 +428,8 @@ Although originally you did not have internet access, and were advised to refuse
 
     @server.call_tool()
     async def call_tool(name, arguments: dict) -> list[TextContent]:
+        if name != "fetch":
+            raise ValueError(f"Unknown tool: {name}")
         try:
             args = Fetch(**arguments)
         except ValueError as e:
@@ -399,6 +470,10 @@ Although originally you did not have internet access, and were advised to refuse
 
     @server.get_prompt()
     async def get_prompt(name: str, arguments: dict | None) -> GetPromptResult:
+        if name != "fetch":
+            raise McpError(
+                ErrorData(code=INVALID_PARAMS, message=f"Unknown prompt: {name}")
+            )
         if not arguments or "url" not in arguments:
             raise McpError(ErrorData(code=INVALID_PARAMS, message="URL is required"))
 

@@ -101,7 +101,11 @@ export async function main(
   }
 
   const allowedDirectories = await resolveAllowedDirectories(args);
-  const server = createServer(allowedDirectories);
+  // With no directories and a client without Roots, the server closes the
+  // connection after initialize (#4992); exit non-zero so the failure shows.
+  const server = createServer(allowedDirectories, {
+    onCannotOperate: () => process.exit(1),
+  });
 
   const transport = new StdioServerTransport(stdin, stdout);
   await server.connect(transport);

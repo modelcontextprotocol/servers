@@ -153,7 +153,12 @@ describe("relative paths", () => {
   });
 
   it("resolves against the process cwd when there are no allowed directories, and refuses it", async () => {
-    const empty = await connect([]);
+    // A Roots client that offers no roots: with no directories and no Roots
+    // at all the server closes the connection instead (#4992).
+    const empty = await connect([], {
+      capabilities: { roots: {} },
+      listRoots: () => [],
+    });
     try {
       const result = await call(empty.client, "read_text_file", {
         path: "anything.txt",
@@ -208,7 +213,12 @@ describe("symlinks", () => {
   it("reports a realpath failure other than ENOENT as is", async () => {
     await fs.writeFile(path.join(dir, "file.txt"), "");
     const result = await read(path.join(dir, "file.txt", "child"));
-    expect(textOf(result)).toMatch(/^ENOTDIR: not a directory, realpath/);
+    // Windows reports the failing syscall as scandir rather than realpath.
+    expect(textOf(result)).toMatch(
+      process.platform === "win32"
+        ? /^ENOTDIR: not a directory/
+        : /^ENOTDIR: not a directory, realpath/,
+    );
   });
 });
 
@@ -269,11 +279,10 @@ describe("Unicode normalization", () => {
     },
   );
 
-  // KNOWN BUG #1970: pins current (wrong) behavior; the fix changes this assertion.
   // #1970: when the allowed directory's own name is NFD, an NFC spelling of
-  // it fails the allow-list prefix check (a string comparison) before the
-  // Unicode walk starts, on any file system.
-  it("refuses an NFC spelling of an NFD allowed directory (#1970)", async () => {
+  // it used to fail the allow-list prefix check (a string comparison) before
+  // the Unicode walk started, on any file system.
+  it("accepts an NFC spelling of an NFD allowed directory (#1970)", async () => {
     const nfdRoot = path.join(dir, "Capture d\u2019e\u0301cran");
     await fs.mkdir(nfdRoot);
     await fs.writeFile(path.join(nfdRoot, "shot.png"), "png");
@@ -283,11 +292,75 @@ describe("Unicode normalization", () => {
       const result = await call(scoped.client, "read_text_file", {
         path: requested,
       });
-      expect(textOf(result)).toBe(
-        `Access denied - path outside allowed directories: ${requested} not in ${nfdRoot}`,
-      );
+      expect(textOf(result)).toBe("png");
     } finally {
       await scoped.close();
     }
+  });
+
+  // #1970: a respelled allowed directory must not open a path into a
+  // different directory that merely shares its name up to normalization.
+  it.skipIf(!distinctForms)(
+    "maps an NFD spelling of an NFC allowed directory onto it, never onto an NFD sibling (#1970)",
+    async () => {
+      const nfcRoot = path.join(dir, "caf\u00e9");
+      const nfdSibling = path.join(dir, "cafe\u0301");
+      await fs.mkdir(nfcRoot);
+      await fs.mkdir(nfdSibling);
+      await fs.writeFile(path.join(nfcRoot, "f.txt"), "allowed");
+      await fs.writeFile(path.join(nfdSibling, "f.txt"), "secret");
+      const scoped = await connect([nfcRoot]);
+      try {
+        const result = await call(scoped.client, "read_text_file", {
+          path: path.join(nfdSibling, "f.txt"),
+        });
+        expect(textOf(result)).toBe("allowed");
+      } finally {
+        await scoped.close();
+      }
+    },
+  );
+
+  it("refuses a path that only shares a normalized prefix with the allowed directory's name", async () => {
+    const result = await read(`${dir}\u00a0x/f.txt`);
+    expect(textOf(result)).toMatch(/^Access denied - path outside/);
+  });
+});
+
+// #1970: macOS names screenshots "Screenshot ... at 2.40.40\u202fPM.png";
+// a client lists the file, then sends the name back with a plain space.
+describe("Unicode space separators (#1970)", () => {
+  const onDisk = "Screenshot 2025-04-23 at 2.40.40\u202fPM.png";
+  const typed = "Screenshot 2025-04-23 at 2.40.40 PM.png";
+
+  it("reads a file whose U+202F the request spells as U+0020", async () => {
+    await fs.writeFile(path.join(dir, onDisk), "shot");
+    expect(textOf(await read(path.join(dir, typed)))).toBe("shot");
+  });
+
+  it("moves a file whose U+00A0 the request spells as U+0020", async () => {
+    await fs.mkdir(path.join(dir, "Images"));
+    await fs.writeFile(path.join(dir, "a\u00a0b.png"), "x");
+    const result = await call(client, "move_file", {
+      source: path.join(dir, "a b.png"),
+      destination: path.join(dir, "Images", "a b.png"),
+    });
+    expect(result.isError).toBeFalsy();
+    expect(await fs.readdir(path.join(dir, "Images"))).toEqual(["a b.png"]);
+    expect(await fs.readdir(dir)).toEqual(["Images"]);
+  });
+
+  it("prefers the exact spelling when both are on disk", async () => {
+    await fs.writeFile(path.join(dir, onDisk), "nnbsp");
+    await fs.writeFile(path.join(dir, typed), "space");
+    expect(textOf(await read(path.join(dir, typed)))).toBe("space");
+    expect(textOf(await read(path.join(dir, onDisk)))).toBe("nnbsp");
+  });
+
+  it("refuses a name that matches two entries differing only in their spaces", async () => {
+    await fs.writeFile(path.join(dir, "a\u00a0b"), "1");
+    await fs.writeFile(path.join(dir, "a\u202fb"), "2");
+    const result = await read(path.join(dir, "a b"));
+    expect(textOf(result)).toBe("Ambiguous Unicode path component: a b");
   });
 });

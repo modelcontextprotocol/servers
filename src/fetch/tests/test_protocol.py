@@ -92,14 +92,13 @@ async def test_initialize_advertises_tools_and_prompts(web: FakeWeb) -> None:
     assert "resources" not in data["capabilities"]
 
 
-# KNOWN BUG #360: pins current (wrong) behavior; the fix changes this assertion.
-async def test_server_version_is_the_sdk_version(web: FakeWeb) -> None:
-    # Characterizes #360: serverInfo.version is the `mcp` SDK's version, not
-    # this package's, because Server("mcp-fetch") is given no version.
+async def test_server_version_is_the_package_version(web: FakeWeb) -> None:
+    # #360: serverInfo.version is this package's version (from pyproject.toml
+    # via the installed metadata), not the `mcp` SDK's.
     async with connect() as (_, init):
         data = wire(init)
-    assert data["serverInfo"]["version"] == version("mcp")
-    assert data["serverInfo"]["version"] != version("mcp-server-fetch")
+    assert data["serverInfo"]["version"] == version("mcp-server-fetch")
+    assert data["serverInfo"]["version"] != version("mcp")
 
 
 # --------------------------------------------------------------------------
@@ -107,7 +106,6 @@ async def test_server_version_is_the_sdk_version(web: FakeWeb) -> None:
 # --------------------------------------------------------------------------
 
 
-# KNOWN BUG #1624: pins current (wrong) behavior; the fix changes this assertion.
 async def test_list_tools_wire_shape(web: FakeWeb) -> None:
     async with connect() as (session, _):
         result = await session.list_tools()
@@ -129,13 +127,13 @@ async def test_list_tools_wire_shape(web: FakeWeb) -> None:
                 "title": "Url",
                 "type": "string",
             },
-            # #1624: pydantic's gt/lt emit the numeric (draft 6+) form of
-            # exclusiveMinimum/exclusiveMaximum, which some clients reject.
+            # #1624: inclusive minimum/maximum, never exclusiveMinimum/
+            # exclusiveMaximum, which some clients (Gemini) reject.
             "max_length": {
                 "default": 5000,
                 "description": "Maximum number of characters to return.",
-                "exclusiveMaximum": 1000000,
-                "exclusiveMinimum": 0,
+                "maximum": 999999,
+                "minimum": 1,
                 "title": "Max Length",
                 "type": "integer",
             },
@@ -184,7 +182,8 @@ async def test_call_with_only_url_applies_defaults(web: FakeWeb) -> None:
         ({}, "'url'"),
         ({"url": ""}, "''"),
         ({"url": 5}, "5"),
-        # #1624: the bounds come from exclusiveMinimum/exclusiveMaximum.
+        # #1624: the bounds are minimum 1 and maximum 999999, so the rejected
+        # values are the same as under the old exclusive 0 and 1000000.
         ({"url": PAGE, "max_length": 0}, "0"),
         ({"url": PAGE, "max_length": 1000000}, "1000000"),
         ({"url": PAGE, "start_index": -1}, "-1"),
@@ -205,6 +204,18 @@ async def test_schema_violations_are_rejected_by_the_sdk(
     assert web.requests == []
 
 
+@pytest.mark.parametrize("max_length", [1, 999999])
+async def test_max_length_bounds_are_inclusive(web: FakeWeb, max_length: int) -> None:
+    # #1624: the edges of the inclusive range pass both the SDK's schema check
+    # and Fetch's own validation, and the page is fetched.
+    web.add(ROBOTS, plain("", status=404))
+    web.add(PAGE, plain("hello"))
+    async with connect() as (session, _):
+        result = await call(session, {"url": PAGE, "max_length": max_length})
+    assert wire(result)["isError"] is False
+    assert web.urls() == [ROBOTS, PAGE]
+
+
 @pytest.mark.parametrize("url", ["not a url", "example.com/page", "http://"])
 async def test_invalid_url_is_rejected_by_pydantic(web: FakeWeb, url: str) -> None:
     # jsonschema does not check `format: uri`, so these reach Fetch(**arguments)
@@ -218,29 +229,27 @@ async def test_invalid_url_is_rejected_by_pydantic(web: FakeWeb, url: str) -> No
     assert web.requests == []
 
 
-# KNOWN BUG #4988: call_tool ignores the tool name and runs fetch for any name; the fix changes this assertion.
-async def test_call_tool_never_checks_the_tool_name(web: FakeWeb) -> None:
-    # Characterizes call_tool ignoring `name`: an unknown tool name is not
-    # rejected, the SDK skips schema validation for it (the tool is not
-    # listed), and the URL is fetched as if `fetch` had been called.
+async def test_unknown_tool_name_is_rejected_without_fetching(web: FakeWeb) -> None:
+    # The SDK skips schema validation for a tool it has not listed, so the
+    # name check in call_tool is what stops an unknown name from fetching.
     web.add(ROBOTS, plain("", status=404))
     web.add(PAGE, plain("fetched anyway"))
     async with connect() as (session, _):
         result = await session.call_tool("nope", {"url": PAGE})
-    assert wire(result)["isError"] is False
-    assert text_of(result).endswith("fetched anyway")
-    assert web.urls() == [ROBOTS, PAGE]
+    assert wire(result)["isError"] is True
+    assert text_of(result) == "Unknown tool: nope"
+    assert web.requests == []
 
 
-# KNOWN BUG #4988: call_tool ignores the tool name and runs fetch for any name; the fix changes this assertion.
-async def test_unknown_tool_name_still_validates_through_pydantic(
+async def test_unknown_tool_name_is_rejected_before_argument_validation(
     web: FakeWeb,
 ) -> None:
+    # An unknown name is reported as such, not as a missing `url` argument.
     async with connect() as (session, _):
         result = await session.call_tool("nope", {})
     assert wire(result)["isError"] is True
-    assert "url" in text_of(result)
-    assert "Field required" in text_of(result)
+    assert text_of(result) == "Unknown tool: nope"
+    assert web.requests == []
 
 
 # --------------------------------------------------------------------------
@@ -451,18 +460,23 @@ async def test_html_without_node_falls_back_to_pure_python(web: FakeWeb) -> None
     assert "https://example.com/x" not in text
 
 
-# KNOWN BUG #4989: an empty page without Node reports "No more content available" at start_index 0 instead of a simplification failure; the fix changes this assertion.
 @pytest.mark.usefixtures("python_readability")
-async def test_empty_html_without_node_reads_as_no_more_content(web: FakeWeb) -> None:
-    # The pure-Python extractor never returns empty content, so the
-    # "failed to be simplified" message is not reached; the page converts to
-    # an empty string and the pagination check reports it as exhausted.
+async def test_empty_html_without_node_cannot_be_simplified(web: FakeWeb) -> None:
+    # The pure-Python extractor returns "<div></div>" for an empty page, which
+    # converts to an empty string. It reports the same simplification failure
+    # as the Node path, not "No more content available" at start_index 0.
     web.add(PAGE, html("<html><body></body></html>"))
     async with connect(ignore_robots_txt=True) as (session, _):
         result = await call(session, {"url": PAGE})
-    assert text_of(result) == (
-        f"Contents of {PAGE}:\n<error>No more content available.</error>"
-    )
+    assert wire(result) == {
+        "content": [
+            {
+                "type": "text",
+                "text": f"Contents of {PAGE}:\n<error>Page failed to be simplified from HTML</error>",
+            }
+        ],
+        "isError": False,
+    }
 
 
 async def test_raw_returns_html_unsimplified(web: FakeWeb) -> None:
@@ -817,12 +831,23 @@ async def test_no_proxy_by_default(web: FakeWeb) -> None:
     assert web.client_kwargs == [{"proxy": None}]
 
 
-# KNOWN BUG #767, #1401: pins current (wrong) behavior; the fix changes this assertion.
+async def test_socks_alias_proxy_url_is_passed_as_socks5(web: FakeWeb) -> None:
+    # #767: httpx rejects the common socks:// alias, so it reaches the client
+    # as socks5:// (supported through httpx[socks], #1401).
+    web.add(ROBOTS, plain("", status=404))
+    web.add(PAGE, plain("ok"))
+    async with connect(proxy_url="socks://127.0.0.1:2080") as (session, _):
+        result = await call(session, {"url": PAGE})
+    assert wire(result)["isError"] is False
+    socks5 = "socks5://127.0.0.1:2080"
+    assert web.client_kwargs == [{"proxy": socks5}, {"proxy": socks5}]
+
+
 @pytest.mark.parametrize("ignore_robots_txt", [False, True])
-async def test_bad_proxy_config_surfaces_as_bare_text(ignore_robots_txt: bool) -> None:
-    # Characterizes #767 and #1401: a bad proxy URL makes httpx.AsyncClient()
-    # raise at construction, outside the `except HTTPError`, so the client gets
-    # httpx's bare exception text with no mention of fetch or the proxy flag.
+async def test_bad_proxy_config_is_a_tool_error(ignore_robots_txt: bool) -> None:
+    # #767 and #1401: a proxy httpx cannot use makes httpx.AsyncClient() raise
+    # at construction, before any request. The client gets an isError result
+    # that names the proxy settings, not httpx's bare exception text.
     # No `web` fixture: the real AsyncClient fails before any request is made.
     async with connect(
         proxy_url="ftp://proxy.example.com", ignore_robots_txt=ignore_robots_txt
@@ -832,7 +857,10 @@ async def test_bad_proxy_config_surfaces_as_bare_text(ignore_robots_txt: bool) -
         "content": [
             {
                 "type": "text",
-                "text": "Unknown scheme for proxy URL URL('ftp://proxy.example.com')",
+                "text": "Failed to set up the HTTP client, check the proxy "
+                "configuration (--proxy-url or the HTTP_PROXY, HTTPS_PROXY and "
+                "ALL_PROXY environment variables): "
+                "Unknown scheme for proxy URL URL('ftp://proxy.example.com')",
             }
         ],
         "isError": True,
@@ -930,13 +958,21 @@ async def test_get_prompt_without_url_is_a_jsonrpc_error(
     assert web.requests == []
 
 
-# KNOWN BUG #4988: get_prompt ignores the prompt name and serves fetch for any name; the fix changes this assertion.
-async def test_get_prompt_never_checks_the_prompt_name(web: FakeWeb) -> None:
-    # Like call_tool, get_prompt ignores `name`.
+@pytest.mark.parametrize("arguments", [{"url": PAGE}, None])
+async def test_get_prompt_with_unknown_name_is_a_jsonrpc_error(
+    web: FakeWeb, arguments: dict[str, str] | None
+) -> None:
+    # The name is checked first, so an unknown prompt is reported as such
+    # whether or not a URL was given, and nothing is fetched.
     web.add(PAGE, plain("ok"))
     async with connect() as (session, _):
-        result = await session.get_prompt("nope", {"url": PAGE})
-    assert wire(result)["description"] == f"Contents of {PAGE}"
+        with pytest.raises(McpError) as excinfo:
+            await session.get_prompt("nope", arguments)
+    assert wire(excinfo.value.error) == {
+        "code": INVALID_PARAMS,
+        "message": "Unknown prompt: nope",
+    }
+    assert web.requests == []
 
 
 async def test_get_prompt_does_not_validate_the_url(
@@ -946,7 +982,7 @@ async def test_get_prompt_does_not_validate_the_url(
     # a "Failed to fetch" prompt message rather than a validation error.
     # No `web` fixture: the real transport rejects the URL before any I/O.
     # Proxy variables are cleared so the real client cannot pick up one from
-    # the environment (a socks:// proxy would fail on the missing socksio).
+    # the environment and send the request through it.
     for name in list(os.environ):
         if name.lower() in ("http_proxy", "https_proxy", "all_proxy"):
             monkeypatch.delenv(name)
