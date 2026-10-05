@@ -34,7 +34,6 @@ import pytest
 from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 from pydantic import BaseModel
-from zoneinfo import ZoneInfoNotFoundError
 
 from mcp_server_time.server import serve
 
@@ -236,16 +235,31 @@ async def test_empty_local_timezone_override_is_treated_as_absent() -> None:
     assert result == {"tools": expected_tools("Africa/Cairo")}
 
 
-# KNOWN BUG #5001: an invalid --local-timezone crashes serve() with a traceback instead of a clean error; the fix changes this assertion.
-async def test_invalid_local_timezone_fails_before_the_transport_opens() -> None:
-    # An unknown `--local-timezone` raises out of `serve()` itself, before
-    # stdio is opened: the process dies with a traceback instead of starting.
+@pytest.mark.parametrize(
+    "local_timezone",
+    [
+        "Not/AZone",  # unknown name: ZoneInfoNotFoundError
+        "America",  # a tzdata directory, not a zone: OSError
+        "../etc/passwd",  # outside TZPATH: ValueError
+    ],
+)
+async def test_invalid_local_timezone_fails_before_the_transport_opens(
+    local_timezone: str,
+) -> None:
+    # An invalid `--local-timezone` stops `serve()` before stdio is opened,
+    # with a one-line message naming the value and a non-zero exit, rather
+    # than a traceback (#5001). A `SystemExit` whose code is a string prints
+    # that string to stderr and exits 1.
     def unexpected_stdio_server():
         raise AssertionError("stdio_server must not be reached")
 
     with patch("mcp_server_time.server.stdio_server", unexpected_stdio_server):
-        with pytest.raises(ZoneInfoNotFoundError, match="Not/AZone"):
-            await serve("Not/AZone")
+        with pytest.raises(SystemExit) as exit_info:
+            await serve(local_timezone)
+    assert exit_info.value.code == (
+        f"Error: invalid --local-timezone {local_timezone!r}: "
+        "not a known IANA timezone name"
+    )
 
 
 # ---------------------------------------------------------------------------
