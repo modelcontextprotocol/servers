@@ -1,15 +1,20 @@
 """Tests for the fetch MCP server."""
 
+import os
+import sys
+
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from mcp.shared.exceptions import McpError
 
+from mcp_server_fetch import main
 from mcp_server_fetch.server import (
     extract_content_from_html,
     get_robots_txt_url,
     check_may_autonomously_fetch_url,
     fetch_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
+    DEFAULT_REQUEST_TIMEOUT,
 )
 
 
@@ -324,3 +329,84 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+    @pytest.mark.asyncio
+    async def test_fetch_uses_default_timeout(self):
+        """Test that fetch_url applies the default timeout to the request."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"data": "test"}'
+        mock_response.headers = {"content-type": "application/json"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+            )
+
+            assert mock_client.get.call_args.kwargs["timeout"] == DEFAULT_REQUEST_TIMEOUT
+
+    @pytest.mark.asyncio
+    async def test_fetch_uses_custom_timeout(self):
+        """Test that an explicit timeout is passed through to the request."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"data": "test"}'
+        mock_response.headers = {"content-type": "application/json"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://api.example.com/data",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                timeout=60.0,
+            )
+
+            assert mock_client.get.call_args.kwargs["timeout"] == 60.0
+
+
+class TestServerTimeoutConfiguration:
+    """Tests for timeout configuration via the CLI flag and environment variable."""
+
+    def _serve_timeout_for(self, argv, env=None):
+        """Run main() with the given argv/env and return the timeout passed to serve()."""
+        import mcp_server_fetch
+
+        with patch.object(mcp_server_fetch, "serve", new=AsyncMock()) as mock_serve, \
+                patch.dict(os.environ, env or {}, clear=False), \
+                patch.object(sys, "argv", argv):
+            if not (env and "FETCH_TIMEOUT" in env):
+                os.environ.pop("FETCH_TIMEOUT", None)
+            main()
+
+        # serve(custom_user_agent, ignore_robots_txt, proxy_url, timeout)
+        return mock_serve.call_args.args[3]
+
+    def test_default_timeout_when_unset(self):
+        """The default timeout is used when neither flag nor env var is set."""
+        assert self._serve_timeout_for(["mcp-server-fetch"]) == DEFAULT_REQUEST_TIMEOUT
+
+    def test_timeout_from_cli_flag(self):
+        """The --timeout flag sets the server default."""
+        assert self._serve_timeout_for(["mcp-server-fetch", "--timeout", "45"]) == 45.0
+
+    def test_timeout_from_env_var(self):
+        """FETCH_TIMEOUT sets the server default when no flag is given."""
+        assert self._serve_timeout_for(
+            ["mcp-server-fetch"], {"FETCH_TIMEOUT": "50"}
+        ) == 50.0
+
+    def test_cli_flag_overrides_env_var(self):
+        """The --timeout flag takes precedence over FETCH_TIMEOUT."""
+        assert self._serve_timeout_for(
+            ["mcp-server-fetch", "--timeout", "45"], {"FETCH_TIMEOUT": "50"}
+        ) == 45.0
