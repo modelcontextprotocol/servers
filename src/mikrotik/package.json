@@ -1,0 +1,41 @@
+{
+    "name": "@marcelo-ochoa/server-mikrotik",
+    "mcpName": "io.github.marcelo-ochoa/mikrotik",
+    "version": "1.0.6",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/marcelo-ochoa/servers.git",
+        "subfolder": "src/mikrotik"
+    },
+    "description": "An MCP server for MikroTik RouterOS API.",
+    "keywords": [
+        "read-only-mcp",
+        "mikrotik",
+        "ai-agent",
+        "llm-tool",
+        "rag"
+    ],
+    "license": "MIT",
+    "author": "Marcelo Fabian Ochoa",
+    "homepage": "https://modelcontextprotocol.io",
+    "bugs": "https://github.com/marcelo-ochoa/servers/issues",
+    "type": "module",
+    "bin": {
+        "mcp-server-mikrotik": "dist/index.js"
+    },
+    "main": "dist/api.js",
+    "types": "dist/api.d.ts",
+    "scripts": {
+        "build": "tsc && shx chmod +x dist/*.js",
+        "prepare": "npm run build",
+        "watch": "tsc --watch"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.24.2"
+    },
+    "devDependencies": {
+        "@types/node": "^22",
+        "shx": "^0.3.4",
+        "typescript": "^5.6.2"
+    }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.marcelo-ochoa/oracle",
+  "description": "MCP server for interacting with Oracle databases",
+  "repository": {
+    "url": "https://github.com/marcelo-ochoa/servers",
+    "source": "github",
+    "subfolder": "src/oracle"
+  },
+  "version": "1.0.7",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@marcelo-ochoa/server-oracle",
+      "version": "1.0.7",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "valueHint": "connectionString",
+          "description": "Oracle connection string",
+          "isRequired": false
+        }
+      ],
+      "environmentVariables": [
+        {
+          "description": "Oracle user name",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "ORACLE_USER"
+        },
+        {
+          "description": "Oracle password",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true,
+          "name": "ORACLE_PASSWORD"
+        }
+      ]
+    }
+  ]
+}

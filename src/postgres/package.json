@@ -1,0 +1,44 @@
+{
+  "name": "@marcelo-ochoa/server-postgres",
+  "mcpName": "io.github.marcelo-ochoa/postgres",
+  "version": "1.0.8",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/marcelo-ochoa/servers.git",
+    "subfolder": "src/postgres"
+  },
+  "description": "An MCP server for PostgreSQL databases.",
+  "keywords": [
+    "read-only-mcp",
+    "postgres-database",
+    "ai-agent",
+    "llm-tool",
+    "rag"
+  ],
+  "license": "MIT",
+  "author": "Marcelo Fabian Ochoa",
+  "homepage": "https://modelcontextprotocol.io",
+  "bugs": "https://github.com/marcelo-ochoa/servers/issues",
+  "type": "module",
+  "bin": {
+    "mcp-server-postgres": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && shx chmod +x dist/*.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.2",
+    "@toon-format/toon": "^1.0.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "shx": "^0.3.4",
+    "typescript": "^5.6.2"
+  }
+}

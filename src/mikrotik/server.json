@@ -1,0 +1,45 @@
+{
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.github.marcelo-ochoa/mikrotik",
+    "description": "MCP server for MikroTik RouterOS API",
+    "repository": {
+        "url": "https://github.com/marcelo-ochoa/servers",
+        "source": "github",
+        "subfolder": "src/mikrotik"
+    },
+    "version": "1.0.6",
+    "packages": [
+        {
+            "registryType": "npm",
+            "identifier": "@marcelo-ochoa/server-mikrotik",
+            "version": "1.0.6",
+            "transport": {
+                "type": "stdio"
+            },
+            "packageArguments": [
+                {
+                    "type": "positional",
+                    "valueHint": "host",
+                    "description": "MikroTik host",
+                    "isRequired": false
+                }
+            ],
+            "environmentVariables": [
+                {
+                    "description": "MikroTik username",
+                    "isRequired": false,
+                    "format": "string",
+                    "isSecret": false,
+                    "name": "MK_USER"
+                },
+                {
+                    "description": "MikroTik password",
+                    "isRequired": false,
+                    "format": "string",
+                    "isSecret": true,
+                    "name": "MK_PASSWORD"
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,62 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push oracle
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./src/oracle/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: mochoa/mcp-oracle:latest
+      - name: Build and push postgres
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./src/postgres/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: mochoa/mcp-postgres:latest
+      - name: Build and push mysql
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./src/mysql/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: mochoa/mcp-mysql:latest
+      - name: Build and push Mikrotik
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./src/mikrotik/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: mochoa/mcp-mikrotik:latest
+      - name: Build and push QNAP
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./src/qnap/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: mochoa/mcp-qnap:latest

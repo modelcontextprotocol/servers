@@ -1,0 +1,44 @@
+{
+    "name": "@marcelo-ochoa/server-mysql",
+    "mcpName": "io.github.marcelo-ochoa/mysql",
+    "version": "1.0.7",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/marcelo-ochoa/servers.git",
+        "subfolder": "src/mysql"
+    },
+    "description": "An MCP server for MySQL databases.",
+    "keywords": [
+        "read-only-mcp",
+        "mysql-database",
+        "ai-agent",
+        "llm-tool",
+        "rag"
+    ],
+    "license": "MIT",
+    "author": "Marcelo Fabian Ochoa",
+    "homepage": "https://modelcontextprotocol.io",
+    "bugs": "https://github.com/marcelo-ochoa/servers/issues",
+    "type": "module",
+    "bin": {
+        "mcp-server-mysql": "dist/index.js"
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc && shx chmod +x dist/*.js",
+        "prepare": "npm run build",
+        "watch": "tsc --watch"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.24.2",
+        "@toon-format/toon": "^1.0.0",
+        "mysql2": "^3.11.5"
+    },
+    "devDependencies": {
+        "@types/node": "^22.10.1",
+        "shx": "^0.3.4",
+        "typescript": "^5.6.2"
+    }
+}
