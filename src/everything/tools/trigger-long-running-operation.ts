@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -50,9 +51,8 @@ export const registerTriggerLongRunningOperationTool = (server: McpServer) => {
       const progressToken = extra._meta?.progressToken;
 
       for (let i = 1; i < steps + 1; i++) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, stepDuration * 1000)
-        );
+        // Stop waiting as soon as the client cancels the request
+        await delay(stepDuration * 1000, undefined, { signal: extra.signal });
 
         if (progressToken !== undefined) {
           await server.server.notification(

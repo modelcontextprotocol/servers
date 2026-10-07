@@ -363,6 +363,35 @@ describe('Tools', () => {
         expect.any(Object)
       );
     }, 10000);
+
+    it('should stop when the request is cancelled', async () => {
+      const { mockServer, handlers } = createMockServer();
+      registerTriggerLongRunningOperationTool(mockServer);
+
+      const handler = handlers.get('trigger-long-running-operation')!;
+      const controller = new AbortController();
+      const operation = handler(
+        { duration: 2, steps: 2 },
+        {
+          _meta: { progressToken: 'token-789' },
+          requestId: 'test-789',
+          signal: controller.signal,
+        }
+      );
+
+      setTimeout(() => controller.abort(), 50);
+
+      const outcome = await Promise.race([
+        operation.then(
+          () => 'completed',
+          () => 'stopped'
+        ),
+        new Promise((resolve) => setTimeout(() => resolve('still running'), 500)),
+      ]);
+
+      expect(outcome).toBe('stopped');
+      expect(mockServer.server.notification).not.toHaveBeenCalled();
+    }, 10000);
   });
 
   describe('get-resource-links', () => {
