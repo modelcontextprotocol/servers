@@ -211,9 +211,12 @@ its reasoning; these are the rules.
   setting can be flipped in the UI with no commit, so the alert sweep reads it
   back and fails on `enabled: true` (under the workflow's token it can only
   report UNVERIFIED, since `administration: read` is not grantable).
-- **A sweep files an issue, never a PR, and never closes one.** When the work
-  goes away it rewrites the issue to say so; closing, and deciding whether the
-  card goes to Done or is deleted, stays a maintainer's act.
+- **A sweep files an issue, never a PR, and never closes one.** Closing, and
+  deciding whether the card goes to Done or is deleted, stays a maintainer's
+  act. When the work goes away, the refresh and alert sweeps rewrite their
+  issue to say so; the SDK watch leaves a supersession note on an issue a
+  newer release has passed, and otherwise leaves the issue to the upgrade PR
+  that closes it.
 - **Sweeps do not write the board.** `GITHUB_TOKEN` cannot hold `organization
 projects: write`. A sweep issue arrives labeled `v2` + `chore` +
   `dependencies` (+ a `server-<name>` scope where it concerns one server) and

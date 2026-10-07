@@ -443,7 +443,7 @@ test("main files one issue per group behind, and hands them to the analysis", (t
       issue: 600,
       label: "MCP TypeScript SDK (v1)",
       repo: "modelcontextprotocol/typescript-sdk",
-      from: "1.30.0",
+      from: "1.29.0",
       to: "1.32.1",
     },
     {

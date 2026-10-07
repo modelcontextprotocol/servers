@@ -529,7 +529,7 @@ function fakeWorld(state = {}) {
     if (a === "api" && /automated-security-fixes/.test(b)) {
       const r = s.securityFixes;
       return r.status === 0
-        ? ok({ stdout: JSON.stringify(r.body) })
+        ? ok({ stdout: r.body === undefined ? "" : JSON.stringify(r.body) })
         : ok({ status: 1, stderr: r.stderr });
     }
     if (a === "api" && args.some((x) => /dependabot\/alerts/.test(x))) {
@@ -673,6 +673,14 @@ test("a real run fails on security PRs switched back on, before reading alerts",
   assert.ok(
     !world.calls.some((c) => c.args.some((x) => /dependabot\/alerts/.test(x))),
   );
+});
+
+test("an empty success (the older 204 contract) reads as enabled", () => {
+  const world = fakeWorld({
+    alerts: [pipAlerts],
+    securityFixes: { status: 0 },
+  });
+  assert.throws(() => run(world), /ENABLED/);
 });
 
 test("security PRs read back as off are stated in the body", () => {

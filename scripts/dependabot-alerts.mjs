@@ -707,7 +707,12 @@ function checkSecurityPrsOff(repo, spawn, { dryRun, log }) {
     );
     return false;
   }
-  const state = JSON.parse(result.stdout || "{}");
+  // Today the endpoint answers 200 with `{"enabled": …, "paused": …}`. An
+  // older contract answered 204 with no body to mean "enabled", so an empty
+  // success is read as enabled: reading it as `{}`, i.e. off, would wave the
+  // one condition this guard exists for straight through.
+  const text = (result.stdout ?? "").trim();
+  const state = text === "" ? { enabled: true } : JSON.parse(text);
   if (state.enabled === true) {
     const message =
       "Dependabot security-update PRs are ENABLED. This sweep replaces them, so both are running " +

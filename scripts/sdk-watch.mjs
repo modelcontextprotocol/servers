@@ -598,7 +598,12 @@ export function main({
             issue,
             label: state.group.label,
             repo: state.group.repo,
-            from: state.rows.find((r) => r.behind).installed,
+            // The LOWEST installed copy, so the analysis covers every
+            // release some install here still has to cross.
+            from: state.rows
+              .filter((r) => r.behind)
+              .map((r) => r.installed)
+              .sort(compare)[0],
             to: state.target,
           });
 
