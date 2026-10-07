@@ -303,8 +303,11 @@ the policy's point.
 PRs are switched off, and three scheduled sweeps file issues instead. One that
 appears anyway means a config came back or the `automated-security-fixes`
 setting was switched on again. Close it with a pointer to the sweep issue that
-covers the same bump (filing one with `issue-create` if none does), and raise
-the cause with a maintainer.
+covers the same bump, and raise the cause with a maintainer. If no sweep issue
+covers it yet, do **not** file one with `issue-create`: the sweeps trust only
+issues the automation wrote, so the next run would file a duplicate beside it.
+Dispatch the sweep instead (`gh workflow run dependabot-alerts.yml`, or
+`dependency-refresh.yml` for a version bump) and point at the issue it files.
 
 Not touched by triage:
 

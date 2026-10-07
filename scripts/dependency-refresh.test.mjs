@@ -26,6 +26,7 @@ import {
   staleActions,
   unrankedPins,
   uvRows,
+  workspacePackageNames,
 } from "./dependency-refresh.mjs";
 
 const SHA = "d23441a48e516b6c34aea4fa41551a30e30af803";
@@ -41,6 +42,42 @@ test("installLabel maps npm's dependent onto a manifest", () => {
   assert.equal(installLabel("servers"), "root");
   assert.equal(installLabel("mcp-servers-4874"), "root");
   assert.equal(installLabel(undefined), "root");
+  // A package-name spelling is mapped too, rather than folded into root.
+  const names = {
+    "@modelcontextprotocol/server-sequential-thinking":
+      "src/sequentialthinking",
+  };
+  assert.equal(
+    installLabel("@modelcontextprotocol/server-sequential-thinking", names),
+    "src/sequentialthinking",
+  );
+  const byInstall = parseNpmOutdated(
+    JSON.stringify({
+      chalk: {
+        current: "5.6.2",
+        wanted: "5.6.2",
+        latest: "6.0.1",
+        dependent: "@modelcontextprotocol/server-sequential-thinking",
+      },
+    }),
+    names,
+  );
+  assert.deepEqual([...byInstall.keys()], ["src/sequentialthinking"]);
+});
+
+test("workspacePackageNames reads each workspace manifest", (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), "dependency-refresh-ws-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(path.join(root, "src/memory"), { recursive: true });
+  writeFileSync(
+    path.join(root, "src/memory/package.json"),
+    JSON.stringify({ name: "@modelcontextprotocol/server-memory" }),
+  );
+  mkdirSync(path.join(root, "src/time"), { recursive: true });
+  writeFileSync(path.join(root, "src/time/package.json"), "{}");
+  assert.deepEqual(workspacePackageNames(root), {
+    "@modelcontextprotocol/server-memory": "src/memory",
+  });
 });
 
 test("parseNpmOutdated splits by dependent and dedupes per manifest", () => {

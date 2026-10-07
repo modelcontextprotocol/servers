@@ -3,10 +3,10 @@
 This document is the overview of how work gets done in this repository: the
 rules, the procedures, the gates and the scheduled automation that let a
 coding agent, driven by a maintainer, take an approved issue to a merged PR. It
-is written for someone who was not part of building it. It describes; the
-rules themselves live in [`AGENTS.md`](../AGENTS.md) and the procedures in
-[`.claude/skills/`](../.claude/skills), and where this page and those disagree,
-they win.
+is written for someone who was not part of building it. It explains rather
+than rules: the rules themselves live in [`AGENTS.md`](../AGENTS.md) and the
+procedures in [`.claude/skills/`](../.claude/skills), and where this page and
+those disagree, they win.
 
 The model was adapted from the
 [MCP Inspector](https://github.com/modelcontextprotocol/inspector)'s, which

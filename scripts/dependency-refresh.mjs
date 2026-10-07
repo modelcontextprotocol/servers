@@ -73,16 +73,22 @@ export const parseMarker = (body) =>
   (body ?? "").startsWith(ISSUE_MARKER) ? true : null;
 
 /**
- * The manifest a `dependent` from `npm outdated --workspaces` names. npm
- * reports a workspace by its directory name and the root by the checkout's
- * directory name, which differs between machines, so anything that is not a
- * server directory is the root.
+ * The manifest a `dependent` from `npm outdated --workspaces` names.
+ *
+ * npm reports a workspace by its arborist node name, which for this repo's
+ * workspaces is the directory (`everything`), but a package name
+ * (`@modelcontextprotocol/server-everything`) is accepted too, so a change in
+ * how npm spells it cannot fold every workspace into `root` silently. The
+ * root is reported by the checkout's directory name, which differs between
+ * machines, so anything that matches no workspace is the root.
  *
  * @param {string | undefined} dependent
+ * @param {Record<string, string>} [workspaceNames] package name -> `src/<dir>`
  * @returns {string}
  */
-export function installLabel(dependent) {
-  return SERVERS.includes(dependent ?? "") ? `src/${dependent}` : "root";
+export function installLabel(dependent, workspaceNames = {}) {
+  if (SERVERS.includes(dependent ?? "")) return `src/${dependent}`;
+  return workspaceNames[dependent ?? ""] ?? "root";
 }
 
 /**
@@ -91,16 +97,17 @@ export function installLabel(dependent) {
  * comes back as an array, one entry per dependent.
  *
  * @param {string} json raw stdout (may be `""` or `"{}"`)
+ * @param {Record<string, string>} [workspaceNames] package name -> `src/<dir>`
  * @returns {Map<string, Array<{name: string, current: string, wanted: string, latest: string}>>}
  *   keyed by `installLabel`, each list sorted by name
  */
-export function parseNpmOutdated(json) {
+export function parseNpmOutdated(json, workspaceNames = {}) {
   const byInstall = new Map();
   const trimmed = json.trim();
   if (trimmed === "") return byInstall;
   for (const [name, info] of Object.entries(JSON.parse(trimmed))) {
     for (const entry of Array.isArray(info) ? info : [info]) {
-      const label = installLabel(entry.dependent);
+      const label = installLabel(entry.dependent, workspaceNames);
       const rows = byInstall.get(label) ?? [];
       // One manifest can reach a package twice (a dependency and a
       // devDependency); report it once.
@@ -429,6 +436,23 @@ export function buildClearedBody(isoDate) {
   ].join("\n");
 }
 
+/**
+ * Each workspace's package name, mapped to its directory.
+ *
+ * @param {string} root
+ * @returns {Record<string, string>}
+ */
+export function workspacePackageNames(root) {
+  const names = {};
+  for (const server of SERVERS) {
+    const manifest = path.join(root, "src", server, "package.json");
+    if (!existsSync(manifest)) continue;
+    const { name } = JSON.parse(readFileSync(manifest, "utf8"));
+    if (name) names[name] = `src/${server}`;
+  }
+  return names;
+}
+
 function runOutdated(root, spawn) {
   const result = spawn(
     "npm",
@@ -546,7 +570,10 @@ export function main({
   if (!repo) throw new Error("repo not specified (GITHUB_REPOSITORY unset)");
   const writer = issueWriter({ repo, spawn, dryRun, sweep: SWEEP, log });
 
-  const npmByInstall = parseNpmOutdated(runOutdated(root, spawn));
+  const npmByInstall = parseNpmOutdated(
+    runOutdated(root, spawn),
+    workspacePackageNames(root),
+  );
   const npm = ["root", ...SERVERS.map((s) => `src/${s}`)]
     .filter((label) => npmByInstall.has(label))
     .map((label) => ({ label, packages: npmByInstall.get(label) }));
