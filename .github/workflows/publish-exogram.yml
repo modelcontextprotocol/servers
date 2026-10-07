@@ -1,0 +1,44 @@
+name: Publish Exogram MCP Server
+
+on:
+  push:
+    branches:
+      - main
+      - feat/add-exogram-mcp
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # Required for PyPI OIDC Trusted Publishing
+
+jobs:
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies & Test
+        working-directory: src/exogram
+        run: |
+          uv sync --all-extras --dev
+          uv run pyright
+          uv run pytest tests/
+
+      - name: Build package
+        working-directory: src/exogram
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: src/exogram/dist
+          skip-existing: true

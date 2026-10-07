@@ -27,6 +27,7 @@ Typically, each MCP server is implemented with an MCP SDK:
 These servers aim to demonstrate MCP features and the official SDKs.
 
 - **[Everything](src/everything)** - Reference / test server with prompts, resources, and tools.
+- **[Exogram](src/exogram)** - Execution boundary and governance authority runtime for autonomous AI.
 - **[Fetch](src/fetch)** - Web content fetching and conversion for efficient LLM usage.
 - **[Filesystem](src/filesystem)** - Secure file operations with configurable access controls.
 - **[Git](src/git)** - Tools to read, search, and manipulate Git repositories.
