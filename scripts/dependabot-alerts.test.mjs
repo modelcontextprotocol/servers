@@ -35,6 +35,7 @@ import {
   parseCommentMarker,
   parseMarker,
   pickTarget,
+  unverifiedReason,
   scopedOverrideExample,
   splitOwner,
   toSemverRange,
@@ -363,6 +364,8 @@ test("pickTarget names the lowest patched version outside every range", () => {
   assert.deepEqual(tricky, {
     fixedIn: "2.0.0",
     verified: false,
+    reason: "in-range",
+    checked: "2.0.0",
     stillOpen: ["A"],
   });
 
@@ -372,7 +375,13 @@ test("pickTarget names the lowest patched version outside every range", () => {
       { ghsa: "A", range: "<= 3.1.59", fixedIn: "3.1.60" },
       { ghsa: "B", range: "<= 3.1.61", fixedIn: "3.1.62" },
     ]),
-    { fixedIn: "3.1.62", verified: true, stillOpen: [] },
+    {
+      fixedIn: "3.1.62",
+      verified: true,
+      reason: null,
+      checked: "3.1.62",
+      stillOpen: [],
+    },
   );
 
   // Disjoint lines: a lower fix can clear everything.
@@ -381,7 +390,13 @@ test("pickTarget names the lowest patched version outside every range", () => {
       { ghsa: "A", range: "< 1.4.0", fixedIn: "1.4.0" },
       { ghsa: "B", range: ">= 2.0.0, < 2.1.0", fixedIn: "2.1.0" },
     ]),
-    { fixedIn: "1.4.0", verified: true, stillOpen: [] },
+    {
+      fixedIn: "1.4.0",
+      verified: true,
+      reason: null,
+      checked: "1.4.0",
+      stillOpen: [],
+    },
   );
 
   // An unreadable range cannot vouch for anything.
@@ -402,6 +417,8 @@ test("pickTarget never targets below an affected copy", () => {
   assert.deepEqual(pickTarget("npm", advisories, ["1.3.0", "2.0.5"]), {
     fixedIn: "2.1.0",
     verified: true,
+    reason: null,
+    checked: "2.1.0",
     stillOpen: [],
   });
   // Every listed fix is older than an affected copy: unverified, naming the
@@ -412,7 +429,38 @@ test("pickTarget never targets below an affected copy", () => {
       [{ ghsa: "A", range: "< 1.4.0 || >= 3.0.0, < 3.2.0", fixedIn: "1.4.0" }],
       ["3.0.5"],
     ),
-    { fixedIn: "1.4.0", verified: false, stillOpen: ["A"] },
+    {
+      fixedIn: "1.4.0",
+      verified: false,
+      reason: "older",
+      checked: "3.0.5",
+      stillOpen: ["A"],
+    },
+  );
+});
+
+test("an unverified target names the version it actually checked", () => {
+  // Every fix is older than the installed copy: the body blames the copy,
+  // not the fix, which no listed range covers.
+  const older = unverifiedReason({
+    fixedIn: "1.4.0",
+    targetReason: "older",
+    targetChecked: "3.0.5",
+    targetStillOpen: ["A"],
+  });
+  assert.match(
+    older,
+    /older than the installed `3\.0\.5`, which is still in range of `A`/,
+  );
+  assert.ok(!older.includes("`1.4.0`"));
+  assert.match(
+    unverifiedReason({
+      fixedIn: "2.0.0",
+      targetReason: "in-range",
+      targetChecked: "2.0.0",
+      targetStillOpen: ["A"],
+    }),
+    /`2\.0\.0`, the highest listed patched version, is still in range of `A`/,
   );
 });
 
@@ -432,6 +480,11 @@ test("an unverified target is flagged in the body and the comment", () => {
   assert.equal(narrowed.targetVerified, false);
   const body = buildIssueBody(narrowed, { affected, declarers: [] });
   assert.match(body, /still in range of `GHSA-a`/);
+  // The title does not advertise the unsafe version either.
+  assert.equal(
+    buildIssueTitle(narrowed),
+    "chore(deps): find a safe release of `x` in `package-lock.json` (2 advisories, no listed fix clears them)",
+  );
   // No concrete edit to a version known to stay vulnerable.
   assert.match(body, /\*\*Choose a target first\.\*\*/);
   assert.ok(!body.includes("Raise the declared range**"));

@@ -424,21 +424,46 @@ export function pickTarget(ecosystem, advisories, installed = []) {
         advisories.map((a) => a.fixedIn),
       ),
       verified: false,
+      reason: "older",
+      checked: floor,
       stillOpen: covers(floor).map((a) => a.ghsa),
     };
   }
 
   for (const candidate of candidates) {
     if (covers(candidate).length === 0) {
-      return { fixedIn: candidate, verified: true, stillOpen: [] };
+      return {
+        fixedIn: candidate,
+        verified: true,
+        reason: null,
+        checked: candidate,
+        stillOpen: [],
+      };
     }
   }
   const highest = candidates.at(-1);
   return {
     fixedIn: highest,
     verified: false,
+    reason: "in-range",
+    checked: highest,
     stillOpen: covers(highest).map((a) => a.ghsa),
   };
+}
+
+/**
+ * Why an unverified target is not safe, naming the version that was actually
+ * checked: the listed fix itself, or the newest affected copy when every
+ * listed fix is older than it.
+ *
+ * @param {{fixedIn: string, targetReason?: string | null, targetChecked?: string, targetStillOpen?: string[]}} group
+ * @returns {string}
+ */
+export function unverifiedReason(group) {
+  const open = (group.targetStillOpen ?? []).map((g) => `\`${g}\``).join(", ");
+  return group.targetReason === "older"
+    ? `every listed patched version is older than the installed \`${group.targetChecked}\`, which is still in range of ${open}`
+    : `\`${group.fixedIn}\`, the highest listed patched version, is still in range of ${open}`;
 }
 
 /** One advisory as it applies to one manifest. */
@@ -551,9 +576,11 @@ export function narrowToApplicable(group, entries) {
       advisories,
       ghsas: advisories.map((a) => a.ghsa),
       severity,
-      ...(({ fixedIn, verified, stillOpen }) => ({
+      ...(({ fixedIn, verified, reason, checked, stillOpen }) => ({
         fixedIn,
         targetVerified: verified,
+        targetReason: reason,
+        targetChecked: checked,
         targetStillOpen: stillOpen,
       }))(
         pickTarget(
@@ -570,6 +597,11 @@ export function narrowToApplicable(group, entries) {
 /** @param {ReturnType<typeof groupAlerts>[number]} group */
 export function buildIssueTitle(group) {
   const n = group.advisories.length;
+  // An unverified target is not advertised as the version to move to: a title
+  // is often all a notification shows.
+  if (group.targetVerified === false) {
+    return `chore(deps): find a safe release of \`${group.package}\` in \`${group.manifestPath}\` (${n} ${n === 1 ? "advisory" : "advisories"}, no listed fix clears them)`;
+  }
   return `chore(deps): bump \`${group.package}\` to \`${group.fixedIn}\` in \`${group.manifestPath}\` (${n} ${n === 1 ? "advisory" : "advisories"})`;
 }
 
@@ -691,7 +723,7 @@ export function buildIssueBody(
   const steps =
     group.targetVerified === false
       ? [
-          `**Choose a target first.** No patched version these advisories list is outside every range below (\`${group.fixedIn}\` is still in range of ${(group.targetStillOpen ?? []).map((g) => `\`${g}\``).join(", ")}). Find a release of \`${group.package}\` that no listed range covers, then make the edit this repo uses for it: raise the declared range, or pin it with ${group.ecosystem === "pip" ? "`uv lock --upgrade-package` or `constraint-dependencies`" : "an `overrides` entry"}.`,
+          `**Choose a target first.** No patched version these advisories list is a safe target: ${unverifiedReason(group)}. Find a release of \`${group.package}\` that no listed range covers, then make the edit this repo uses for it: raise the declared range, or pin it with ${group.ecosystem === "pip" ? "`uv lock --upgrade-package` or `constraint-dependencies`" : "an `overrides` entry"}.`,
         ]
       : group.ecosystem === "pip"
         ? pipFix(group, { declaredSpec })
@@ -720,7 +752,7 @@ export function buildIssueBody(
     `| Manifest | \`${cell(group.manifestPath)}\` |`,
     `| Vulnerable on \`${TARGET_BRANCH}\` | ${[...new Set(affected.map((e) => e.version))].map((v) => `\`${cell(v)}\``).join(", ") || "—"} |`,
     group.targetVerified === false
-      ? `| Bump to | \`${cell(group.fixedIn)}\` is the highest patched version below, but ⚠️ it is still in range of ${(group.targetStillOpen ?? []).map((g) => `\`${cell(g)}\``).join(", ")}: pick a release outside every range listed |`
+      ? `| Bump to | ⚠️ none found: ${cell(unverifiedReason(group))}. Pick a release outside every range listed |`
       : `| Bump to | \`${cell(group.fixedIn)}\`, the lowest patched version below that is outside every range listed |`,
     `| Scope | ${cell(group.scope)} |`,
     `| Highest severity | ${cell(group.severity)} |`,
