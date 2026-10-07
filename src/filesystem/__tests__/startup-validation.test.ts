@@ -36,6 +36,64 @@ async function spawnServer(args: string[], timeoutMs = 2000): Promise<{ exitCode
   });
 }
 
+async function pingAfterMalformedJson(
+  args: string[],
+  timeoutMs = 2000,
+): Promise<{ exitCode: number | null; stderr: string; stdout: string }> {
+  return new Promise((resolve) => {
+    const proc = spawn('node', [SERVER_PATH, ...args], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let stderr = '';
+    let stdout = '';
+    let sentMessages = false;
+    let settled = false;
+
+    const finish = (exitCode: number | null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      proc.kill('SIGTERM');
+      resolve({ exitCode, stderr, stdout });
+    };
+
+    const sendMessages = () => {
+      if (sentMessages) {
+        return;
+      }
+      sentMessages = true;
+      proc.stdin?.write('{"jsonrpc":"2.0", "method":"test", "params": \n');
+      proc.stdin?.write('{"jsonrpc":"2.0","id":1,"method":"ping"}\n');
+    };
+
+    const timeout = setTimeout(() => finish(proc.exitCode), timeoutMs);
+
+    proc.stderr?.on('data', (data) => {
+      stderr += data.toString();
+      if (stderr.includes('Secure MCP Filesystem Server running on stdio')) {
+        sendMessages();
+      }
+    });
+
+    proc.stdout?.on('data', (data) => {
+      stdout += data.toString();
+      if (stdout.includes('"id":1')) {
+        finish(proc.exitCode);
+      }
+    });
+
+    proc.on('close', (code) => finish(code));
+
+    proc.on('error', (err) => {
+      stderr += err.message;
+      finish(1);
+    });
+  });
+}
+
 describe('Startup Directory Validation', () => {
   let testDir: string;
   let accessibleDir: string;
@@ -96,5 +154,21 @@ describe('Startup Directory Validation', () => {
 
     // Should still start with the valid directory
     expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+  });
+
+  it('should continue processing stdio messages after malformed JSON-RPC input', async () => {
+    const result = await pingAfterMalformedJson([accessibleDir]);
+    const responseLine = result.stdout
+      .split('\n')
+      .find((line) => line.includes('"id":1'));
+
+    expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+    expect(result.stderr).toContain('MCP filesystem transport error:');
+    expect(responseLine).toBeDefined();
+    expect(JSON.parse(responseLine!)).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      result: {},
+    });
   });
 });
