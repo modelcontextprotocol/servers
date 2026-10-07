@@ -1,11 +1,24 @@
 
 from freezegun import freeze_time
 from mcp.shared.exceptions import McpError
+from mcp.shared.memory import create_connected_server_and_client_session
+from mcp.types import CallToolResult, TextContent
 import pytest
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
-from mcp_server_time.server import TimeServer, get_local_tz
+from mcp_server_time.server import TimeServer, build_server, get_local_tz
+
+
+def first_text(result: CallToolResult) -> str:
+    """Return the first content block's text.
+
+    content is a union; only TextContent carries .text, and both time tools
+    only ever emit that. Narrowing here keeps pyright happy at each call site.
+    """
+    block = result.content[0]
+    assert isinstance(block, TextContent)
+    return block.text
 
 
 @pytest.mark.parametrize(
@@ -526,3 +539,50 @@ def test_get_local_tz_various_timezones(mock_get_localzone, timezone_name):
     result = get_local_tz()
     assert str(result) == timezone_name
     assert isinstance(result, ZoneInfo)
+
+
+@pytest.fixture
+def anyio_backend():
+    # The server only ever runs on asyncio; trio is not a dev dependency.
+    return "asyncio"
+
+
+@pytest.mark.anyio
+async def test_call_tool_preserves_mcp_error_for_invalid_timezone():
+    """get_zoneinfo raises McpError(INVALID_PARAMS); the handler must not
+    re-wrap it, which would discard the code and double-prefix the message."""
+    async with create_connected_server_and_client_session(build_server()) as session:
+        result = await session.call_tool(
+            "get_current_time", {"timezone": "Invalid/Zone"}
+        )
+
+    assert result.isError
+    text = first_text(result)
+    assert text.startswith("Invalid timezone:")
+    assert "Error processing mcp-server-time query" not in text
+
+
+@pytest.mark.anyio
+async def test_call_tool_still_wraps_other_errors():
+    """Errors without a specific MCP code keep the existing prefix."""
+    async with create_connected_server_and_client_session(build_server()) as session:
+        result = await session.call_tool(
+            "convert_time",
+            {
+                "source_timezone": "UTC",
+                "time": "not-a-time",
+                "target_timezone": "UTC",
+            },
+        )
+
+    assert result.isError
+    assert "Error processing mcp-server-time query" in first_text(result)
+
+
+@pytest.mark.anyio
+async def test_call_tool_returns_result_for_valid_timezone():
+    async with create_connected_server_and_client_session(build_server()) as session:
+        result = await session.call_tool("get_current_time", {"timezone": "UTC"})
+
+    assert not result.isError
+    assert '"timezone": "UTC"' in first_text(result)
