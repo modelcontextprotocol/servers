@@ -11,7 +11,8 @@
  *   capabilities and keeps its tasks in an `InMemoryTaskStore`.
  *
  * Every wait in these tools is a `setTimeout` (one-second stages and polls),
- * so the tests fake `setTimeout` and advance the clock. *
+ * so the tests fake `setTimeout` and advance the clock.
+ *
  * SDK v2 removed the experimental tasks layer these tools and tests were
  * built on (SEP-2663), so the three tools are gone and every test here is
  * skipped until Part 5 (#4852) re-implements them on the

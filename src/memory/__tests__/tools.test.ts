@@ -8,7 +8,7 @@ import type { Client } from "@modelcontextprotocol/client";
 import { call, connect, makeTempGraph, textOf } from "./helpers.js";
 import type { Connection } from "./helpers.js";
 
-const DRAFT_07 = "https://json-schema.org/draft/2020-12/schema";
+const JSON_SCHEMA_2020_12 = "https://json-schema.org/draft/2020-12/schema";
 
 // JSON Schema fragments as the SDK emits them. Output schemas close every
 // object with additionalProperties: false; input schemas leave them open.
@@ -56,7 +56,7 @@ const graphOutputSchema = {
     relations: { type: "array", items: relationItem(true) },
   },
   required: ["entities", "relations"],
-  $schema: DRAFT_07,
+  $schema: JSON_SCHEMA_2020_12,
   additionalProperties: false,
 };
 
@@ -64,7 +64,7 @@ const statusOutputSchema = {
   type: "object",
   properties: { success: { type: "boolean" }, message: { type: "string" } },
   required: ["success", "message"],
-  $schema: DRAFT_07,
+  $schema: JSON_SCHEMA_2020_12,
   additionalProperties: false,
 };
 
@@ -101,7 +101,7 @@ const expectedTools = [
       type: "object",
       properties: { entities: { type: "array", items: entityItem(false) } },
       required: ["entities"],
-      $schema: DRAFT_07,
+      $schema: JSON_SCHEMA_2020_12,
     },
     outputSchema: {
       type: "object",
@@ -110,7 +110,7 @@ const expectedTools = [
         skipped: { type: "array", items: { type: "string" } },
       },
       required: ["entities"],
-      $schema: DRAFT_07,
+      $schema: JSON_SCHEMA_2020_12,
       additionalProperties: false,
     },
     annotations: writeAnnotations,
@@ -125,13 +125,13 @@ const expectedTools = [
       type: "object",
       properties: { relations: { type: "array", items: relationItem(false) } },
       required: ["relations"],
-      $schema: DRAFT_07,
+      $schema: JSON_SCHEMA_2020_12,
     },
     outputSchema: {
       type: "object",
       properties: { relations: { type: "array", items: relationItem(true) } },
       required: ["relations"],
-      $schema: DRAFT_07,
+      $schema: JSON_SCHEMA_2020_12,
       additionalProperties: false,
     },
     annotations: writeAnnotations,
@@ -166,7 +166,7 @@ const expectedTools = [
         },
       },
       required: ["observations"],
-      $schema: DRAFT_07,
+      $schema: JSON_SCHEMA_2020_12,
     },
     outputSchema: {
       type: "object",
@@ -185,7 +185,7 @@ const expectedTools = [
         },
       },
       required: ["results"],
-      $schema: DRAFT_07,
+      $schema: JSON_SCHEMA_2020_12,
       additionalProperties: false,
     },
     annotations: writeAnnotations,
@@ -206,7 +206,7 @@ const expectedTools = [
         },
       },
       required: ["entityNames"],
-      $schema: DRAFT_07,
+      $schema: JSON_SCHEMA_2020_12,
     },
     outputSchema: statusOutputSchema,
     annotations: deleteAnnotations,
@@ -241,7 +241,7 @@ const expectedTools = [
         },
       },
       required: ["deletions"],
-      $schema: DRAFT_07,
+      $schema: JSON_SCHEMA_2020_12,
     },
     outputSchema: statusOutputSchema,
     annotations: deleteAnnotations,
@@ -261,7 +261,7 @@ const expectedTools = [
         },
       },
       required: ["relations"],
-      $schema: DRAFT_07,
+      $schema: JSON_SCHEMA_2020_12,
     },
     outputSchema: statusOutputSchema,
     annotations: deleteAnnotations,
@@ -271,7 +271,11 @@ const expectedTools = [
     name: "read_graph",
     title: "Read Graph",
     description: "Read the entire knowledge graph",
-    inputSchema: { type: "object", properties: {}, $schema: DRAFT_07 },
+    inputSchema: {
+      type: "object",
+      properties: {},
+      $schema: JSON_SCHEMA_2020_12,
+    },
     outputSchema: graphOutputSchema,
     annotations: readAnnotations,
     execution,
@@ -291,7 +295,7 @@ const expectedTools = [
         },
       },
       required: ["query"],
-      $schema: DRAFT_07,
+      $schema: JSON_SCHEMA_2020_12,
     },
     outputSchema: graphOutputSchema,
     annotations: readAnnotations,
@@ -311,7 +315,7 @@ const expectedTools = [
         },
       },
       required: ["names"],
-      $schema: DRAFT_07,
+      $schema: JSON_SCHEMA_2020_12,
     },
     outputSchema: graphOutputSchema,
     annotations: readAnnotations,
