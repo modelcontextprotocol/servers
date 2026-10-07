@@ -1,0 +1,51 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.modelcontextprotocol/server-everything",
+  "description": "MCP server that exercises all the features of the MCP protocol",
+  "version": "2.0.0",
+  "repository": {
+    "url": "https://github.com/modelcontextprotocol/servers",
+    "source": "github",
+    "subfolder": "src/everything"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@modelcontextprotocol/server-everything",
+      "version": "2.0.0",
+      "runtimeHint": "npx",
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "stdio",
+          "valueHint": "transport"
+        }
+      ],
+      "transport": { "type": "stdio" }
+    },
+    {
+      "registryType": "npm",
+      "identifier": "@modelcontextprotocol/server-everything",
+      "version": "2.0.0",
+      "runtimeHint": "npx",
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "streamableHttp",
+          "valueHint": "transport"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "PORT",
+          "description": "Port the local HTTP server binds to.",
+          "default": "3001"
+        }
+      ],
+      "transport": {
+        "type": "streamable-http",
+        "url": "http://localhost:{PORT}/mcp"
+      }
+    }
+  ]
+}

@@ -214,8 +214,108 @@ jobs:
         env:
           NPM_CONFIG_PROVENANCE: "true"
 
+  publish-registry-npm:
+    needs: [update-packages, create-metadata, publish-npm]
+    # Run on partial matrix failures so successful npm publishes still get
+    # registered. Per-package mcp-publisher will fail if the npm version
+    # doesn't exist, which surfaces the upstream failure naturally.
+    if: ${{ !cancelled() && (needs.publish-npm.result == 'success' || needs.publish-npm.result == 'failure') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.create-metadata.outputs.npm_packages) }}
+    name: Registry ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write  # Required for GitHub OIDC
+      contents: read
+    env:
+      MCP_PUBLISHER_VERSION: v1.7.9
+      MCP_PUBLISHER_SHA256: ab128162b0616090b47cf245afe0a23f3ef08936fdce19074f5ba0a4469281ac
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-metadata.outputs.version }}
+
+      - name: Check for server.json
+        id: check
+        run: |
+          if [ -f "src/${{ matrix.package }}/server.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install mcp-publisher
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          curl -fL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" -o mcp-publisher.tar.gz
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          rm mcp-publisher.tar.gz
+
+      - name: Authenticate to MCP Registry
+        if: steps.check.outputs.exists == 'true'
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        if: steps.check.outputs.exists == 'true'
+        working-directory: src/${{ matrix.package }}
+        run: ../../mcp-publisher publish
+
+  publish-registry-pypi:
+    needs: [update-packages, create-metadata, publish-pypi]
+    # Run on partial matrix failures so successful PyPI publishes still get
+    # registered. Per-package mcp-publisher will fail if the PyPI version
+    # doesn't exist, which surfaces the upstream failure naturally.
+    if: ${{ !cancelled() && (needs.publish-pypi.result == 'success' || needs.publish-pypi.result == 'failure') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.create-metadata.outputs.pypi_packages) }}
+    name: Registry ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write  # Required for GitHub OIDC
+      contents: read
+    env:
+      MCP_PUBLISHER_VERSION: v1.7.9
+      MCP_PUBLISHER_SHA256: ab128162b0616090b47cf245afe0a23f3ef08936fdce19074f5ba0a4469281ac
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-metadata.outputs.version }}
+
+      - name: Check for server.json
+        id: check
+        run: |
+          if [ -f "src/${{ matrix.package }}/server.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install mcp-publisher
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          curl -fL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" -o mcp-publisher.tar.gz
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          rm mcp-publisher.tar.gz
+
+      - name: Authenticate to MCP Registry
+        if: steps.check.outputs.exists == 'true'
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        if: steps.check.outputs.exists == 'true'
+        working-directory: src/${{ matrix.package }}
+        run: ../../mcp-publisher publish
+
   create-release:
-    needs: [update-packages, create-metadata, publish-pypi, publish-npm]
+    needs: [update-packages, create-metadata, publish-pypi, publish-npm, publish-registry-npm, publish-registry-pypi]
     if: |
       always() &&
       needs.update-packages.outputs.changes_made == 'true' &&
