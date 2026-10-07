@@ -408,6 +408,10 @@ test("an unverified target is flagged in the body and the comment", () => {
   assert.equal(narrowed.targetVerified, false);
   const body = buildIssueBody(narrowed, { affected, declarers: [] });
   assert.match(body, /still in range of `GHSA-a`/);
+  // No concrete edit to a version known to stay vulnerable.
+  assert.match(body, /\*\*Choose a target first\.\*\*/);
+  assert.ok(!body.includes("Raise the declared range**"));
+  assert.ok(!body.includes("`>=2.0.0`"));
   assert.match(
     buildNewAdvisoryComment(narrowed, ["GHSA-b"]),
     /no single listed patched version/,

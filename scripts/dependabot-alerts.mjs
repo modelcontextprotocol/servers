@@ -636,10 +636,17 @@ export function buildIssueBody(
     )
     .join("\n");
 
+  // With no listed patched version outside every range, any concrete pin
+  // would name a version known to stay vulnerable, so the fix asks for a
+  // target first and pins nothing.
   const steps =
-    group.ecosystem === "pip"
-      ? pipFix(group, { declaredSpec })
-      : npmFix(group, { affected, declarers });
+    group.targetVerified === false
+      ? [
+          `**Choose a target first.** No patched version these advisories list is outside every range below (\`${group.fixedIn}\` is still in range of ${(group.targetStillOpen ?? []).map((g) => `\`${g}\``).join(", ")}). Find a release of \`${group.package}\` that no listed range covers, then make the edit this repo uses for it: raise the declared range, or pin it with ${group.ecosystem === "pip" ? "`uv lock --upgrade-package` or `constraint-dependencies`" : "an `overrides` entry"}.`,
+        ]
+      : group.ecosystem === "pip"
+        ? pipFix(group, { declaredSpec })
+        : npmFix(group, { affected, declarers });
   const fix = [
     ...(steps.length === 2
       ? [
