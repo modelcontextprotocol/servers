@@ -58,8 +58,12 @@ def get_zoneinfo(timezone_name: str) -> ZoneInfo:
 
 
 class TimeServer:
-    def get_current_time(self, timezone_name: str) -> TimeResult:
+    def __init__(self, local_timezone: str | None = None):
+        self.local_timezone = str(get_local_tz(local_timezone))
+
+    def get_current_time(self, timezone_name: str | None = None) -> TimeResult:
         """Get current time in specified timezone"""
+        timezone_name = timezone_name or self.local_timezone
         timezone = get_zoneinfo(timezone_name)
         current_time = datetime.now(timezone)
 
@@ -71,9 +75,11 @@ class TimeServer:
         )
 
     def convert_time(
-        self, source_tz: str, time_str: str, target_tz: str
+        self, source_tz: str | None, time_str: str, target_tz: str | None
     ) -> TimeConversionResult:
         """Convert time between timezones"""
+        source_tz = source_tz or self.local_timezone
+        target_tz = target_tz or self.local_timezone
         source_timezone = get_zoneinfo(source_tz)
         target_timezone = get_zoneinfo(target_tz)
 
@@ -122,8 +128,8 @@ class TimeServer:
 
 async def serve(local_timezone: str | None = None) -> None:
     server = Server("mcp-time")
-    time_server = TimeServer()
-    local_tz = str(get_local_tz(local_timezone))
+    time_server = TimeServer(local_timezone)
+    local_tz = time_server.local_timezone
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -140,7 +146,7 @@ async def serve(local_timezone: str | None = None) -> None:
                             "description": f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no timezone provided by the user.",
                         }
                     },
-                    "required": ["timezone"],
+                    "required": [],
                 },
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -168,7 +174,7 @@ async def serve(local_timezone: str | None = None) -> None:
                             "description": f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use '{local_tz}' as local timezone if no target timezone provided by the user.",
                         },
                     },
-                    "required": ["source_timezone", "time", "target_timezone"],
+                    "required": ["time"],
                 },
                 annotations=ToolAnnotations(
                     readOnlyHint=True,
@@ -188,22 +194,16 @@ async def serve(local_timezone: str | None = None) -> None:
             match name:
                 case TimeTools.GET_CURRENT_TIME.value:
                     timezone = arguments.get("timezone")
-                    if not timezone:
-                        raise ValueError("Missing required argument: timezone")
-
                     result = time_server.get_current_time(timezone)
 
                 case TimeTools.CONVERT_TIME.value:
-                    if not all(
-                        k in arguments
-                        for k in ["source_timezone", "time", "target_timezone"]
-                    ):
-                        raise ValueError("Missing required arguments")
+                    if "time" not in arguments:
+                        raise ValueError("Missing required argument: time")
 
                     result = time_server.convert_time(
-                        arguments["source_timezone"],
+                        arguments.get("source_timezone"),
                         arguments["time"],
-                        arguments["target_timezone"],
+                        arguments.get("target_timezone"),
                     )
                 case _:
                     raise ValueError(f"Unknown tool: {name}")
