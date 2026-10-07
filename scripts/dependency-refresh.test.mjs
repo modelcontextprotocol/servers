@@ -312,6 +312,18 @@ test("buildIssueBody is null when nothing is behind, and lists each half", () =>
   assert.ok(!actionsOnly.includes("## uv"));
 });
 
+test("buildIssueBody files when unranked pins are the only finding", () => {
+  const body = buildIssueBody({
+    npm: [],
+    uv: [],
+    actions: [],
+    unranked: ["actions/cache@d23441a"],
+  });
+  assert.ok(body?.startsWith(ISSUE_MARKER));
+  assert.match(body, /`actions\/cache@d23441a`/);
+  assert.ok(!body.includes("## GitHub Actions"));
+});
+
 test("buildClearedBody keeps the marker and speaks for every ecosystem", () => {
   const body = buildClearedBody("2026-11-01");
   assert.ok(body.startsWith(ISSUE_MARKER));

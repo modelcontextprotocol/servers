@@ -361,7 +361,14 @@ const uvTable = (rows) =>
 export function buildIssueBody({ npm, uv, actions, unranked = [] }) {
   const npmBehind = npm.filter((i) => i.packages.length > 0);
   const uvBehind = uv.filter((i) => i.packages.length > 0);
-  if (npmBehind.length === 0 && uvBehind.length === 0 && actions.length === 0) {
+  // An unranked pin alone still files: it is something this sweep cannot
+  // vouch for, and saying so is the point of listing it.
+  if (
+    npmBehind.length === 0 &&
+    uvBehind.length === 0 &&
+    actions.length === 0 &&
+    unranked.length === 0
+  ) {
     return null;
   }
 
