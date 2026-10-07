@@ -397,6 +397,10 @@ For each PR marked for harvest, once the manifest is approved:
   does not approve it. The body states the problem in its own words (never just
   "see the PR"), links the PR as a prototype, and credits its author. Then score
   it in pass 1 like any other inflow.
+- **The credit is a line of its own**, `Credit: @<login>` (several logins
+  comma-separated), in the issue body or the comment. The release notes credit
+  the people on that line (`release` skill, 5a), and only when a maintainer
+  wrote it; a credit in prose is not read.
 - **A duplicate group gets one issue**, linking every PR in the group.
 
 ### 4. Close
