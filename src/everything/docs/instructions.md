@@ -12,7 +12,7 @@ Follow them to use, extend, and troubleshoot the server safely and effectively.
 
 ## Constraints & Limitations
 
-- `gzip-file-as-resource`: Max fetch size controlled by `GZIP_MAX_FETCH_SIZE` (default 10MB), timeout by `GZIP_MAX_FETCH_TIME_MILLIS` (default 30s), allowed domains by `GZIP_ALLOWED_DOMAINS`
+- `gzip-file-as-resource`: Max fetch size controlled by `GZIP_MAX_FETCH_SIZE` (default 10MB), timeout by `GZIP_MAX_FETCH_TIME_MILLIS` (default 30s), allowed domains by `GZIP_ALLOWED_DOMAINS`. Requests to loopback, private, link-local, and cloud-metadata IP addresses are always blocked (SSRF protection), including across redirects, regardless of the allowlist.
 - Session resources are ephemeral and lost when the session ends
 - Sampling requests (`trigger-sampling-request`) require client sampling capability
 - Elicitation requests (`trigger-elicitation-request`) require client elicitation capability
