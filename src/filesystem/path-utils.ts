@@ -93,6 +93,10 @@ export function normalizePath(p: string): string {
 
   // Handle Windows paths: convert slashes and ensure drive letter is capitalized
   if (normalized.match(/^[a-zA-Z]:/)) {
+    if (process.platform !== 'win32') {
+      // On POSIX, Windows drive paths (e.g. C:\...) are not native absolute paths; preserve or format cleanly
+      return normalized;
+    }
     let result = normalized.replace(/\//g, '\\');
     // Capitalize drive letter if present
     if (/^[a-z]:/.test(result)) {
