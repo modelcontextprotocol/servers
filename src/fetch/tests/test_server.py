@@ -9,7 +9,9 @@ from mcp_server_fetch.server import (
     get_robots_txt_url,
     check_may_autonomously_fetch_url,
     fetch_url,
+    _get_default_timeout,
     DEFAULT_USER_AGENT_AUTONOMOUS,
+    DEFAULT_TIMEOUT_SECS,
 )
 
 
@@ -324,3 +326,80 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+class TestTimeout:
+    """Tests for configurable timeout."""
+
+    def test_default_timeout_no_overrides(self):
+        """Default timeout is 30s when no CLI or env override."""
+        assert _get_default_timeout(None) == DEFAULT_TIMEOUT_SECS
+
+    def test_cli_timeout_overrides_default(self):
+        """CLI --timeout flag takes highest priority."""
+        assert _get_default_timeout(60) == 60
+
+    def test_env_var_overrides_default(self):
+        """FETCH_TIMEOUT_MS env var overrides the hardcoded default."""
+        with patch.dict("os.environ", {"FETCH_TIMEOUT_MS": "120000"}):
+            assert _get_default_timeout(None) == 120
+
+    def test_cli_timeout_overrides_env_var(self):
+        """CLI flag takes priority over env var."""
+        with patch.dict("os.environ", {"FETCH_TIMEOUT_MS": "120000"}):
+            assert _get_default_timeout(10) == 10
+
+    def test_env_var_ms_to_seconds_conversion(self):
+        """FETCH_TIMEOUT_MS is correctly converted from ms to seconds."""
+        with patch.dict("os.environ", {"FETCH_TIMEOUT_MS": "5000"}):
+            assert _get_default_timeout(None) == 5
+
+    def test_env_var_minimum_is_one_second(self):
+        """Timeout cannot go below 1 second even with low env var."""
+        with patch.dict("os.environ", {"FETCH_TIMEOUT_MS": "100"}):
+            assert _get_default_timeout(None) == 1
+
+    @pytest.mark.asyncio
+    async def test_fetch_url_uses_custom_timeout(self):
+        """Test that fetch_url passes the timeout to httpx."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"data": "test"}'
+        mock_response.headers = {"content-type": "application/json"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://example.com/slow",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+                timeout=120,
+            )
+
+            call_kwargs = mock_client.get.call_args.kwargs
+            assert call_kwargs["timeout"] == 120
+
+    @pytest.mark.asyncio
+    async def test_fetch_url_default_timeout(self):
+        """Test that fetch_url uses DEFAULT_TIMEOUT_SECS when not specified."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "ok"
+        mock_response.headers = {"content-type": "text/plain"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url(
+                "https://example.com/page",
+                DEFAULT_USER_AGENT_AUTONOMOUS,
+            )
+
+            call_kwargs = mock_client.get.call_args.kwargs
+            assert call_kwargs["timeout"] == DEFAULT_TIMEOUT_SECS
