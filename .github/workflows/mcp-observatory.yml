@@ -1,0 +1,20 @@
+name: MCP Observatory
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  mcp-observatory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: KryptosAI/mcp-observatory/action@main
+        with:
+          target: .github/mcp-observatory/sequential-thinking.target.json
+          deep: false
+          security: true
+          comment-on-pr: false
+          set-status: false

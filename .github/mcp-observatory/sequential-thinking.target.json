@@ -1,0 +1,13 @@
+{
+  "targetId": "sequential-thinking",
+  "adapter": "local-process",
+  "command": "npx",
+  "args": [
+    "-y",
+    "@modelcontextprotocol/server-sequential-thinking@latest"
+  ],
+  "timeoutMs": 30000,
+  "metadata": {
+    "observatory": "certification-pr"
+  }
+}
