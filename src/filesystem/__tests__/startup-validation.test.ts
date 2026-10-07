@@ -6,6 +6,17 @@ import * as os from 'os';
 
 const SERVER_PATH = path.join(__dirname, '..', 'dist', 'index.js');
 
+interface StartupValidationErrorPayload {
+  type: 'startup_validation_error';
+  code: 'no_accessible_directories';
+  message: string;
+  rejectedInputs: Array<{
+    input: string;
+    checkedPaths: string[];
+    reason: 'inaccessible' | 'not_directory';
+  }>;
+}
+
 /**
  * Spawns the filesystem server with given arguments and returns exit info
  */
@@ -36,6 +47,28 @@ async function spawnServer(args: string[], timeoutMs = 2000): Promise<{ exitCode
   });
 }
 
+function extractStructuredStartupError(
+  stderr: string,
+): StartupValidationErrorPayload | null {
+  const lines = stderr
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line);
+      if (parsed?.type === 'startup_validation_error') {
+        return parsed as StartupValidationErrorPayload;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
 describe('Startup Directory Validation', () => {
   let testDir: string;
   let accessibleDir: string;
@@ -58,6 +91,7 @@ describe('Startup Directory Validation', () => {
     // Server starts and runs (we kill it after timeout, so exit code is null or from SIGTERM)
     expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
     expect(result.stderr).not.toContain('Error:');
+    expect(extractStructuredStartupError(result.stderr)).toBeNull();
   });
 
   it('should skip inaccessible directory and continue with accessible one', async () => {
@@ -71,9 +105,10 @@ describe('Startup Directory Validation', () => {
 
     // Should still start successfully
     expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+    expect(extractStructuredStartupError(result.stderr)).toBeNull();
   });
 
-  it('should exit with error when ALL directories are inaccessible', async () => {
+  it('should emit a structured startup error when ALL directories are inaccessible', async () => {
     const nonExistent1 = path.join(testDir, 'non-existent-1');
     const nonExistent2 = path.join(testDir, 'non-existent-2');
 
@@ -81,7 +116,24 @@ describe('Startup Directory Validation', () => {
 
     // Should exit with error
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain('Error: None of the specified directories are accessible');
+    const structuredError = extractStructuredStartupError(result.stderr);
+    expect(structuredError).toMatchObject({
+      type: 'startup_validation_error',
+      code: 'no_accessible_directories',
+      message: 'None of the specified directories are accessible',
+    });
+    expect(structuredError?.rejectedInputs).toEqual([
+      {
+        input: nonExistent1,
+        checkedPaths: [nonExistent1],
+        reason: 'inaccessible',
+      },
+      {
+        input: nonExistent2,
+        checkedPaths: [nonExistent2],
+        reason: 'inaccessible',
+      },
+    ]);
   });
 
   it('should warn when path is not a directory', async () => {
@@ -96,5 +148,26 @@ describe('Startup Directory Validation', () => {
 
     // Should still start with the valid directory
     expect(result.stderr).toContain('Secure MCP Filesystem Server running on stdio');
+    expect(extractStructuredStartupError(result.stderr)).toBeNull();
+  });
+
+  it('should classify non-directory fatal inputs in the structured error payload', async () => {
+    const filePath = path.join(testDir, 'not-a-directory-fatal.txt');
+    await fs.writeFile(filePath, 'content');
+
+    const result = await spawnServer([filePath]);
+
+    expect(result.exitCode).toBe(1);
+    const structuredError = extractStructuredStartupError(result.stderr);
+    expect(structuredError).toMatchObject({
+      type: 'startup_validation_error',
+      code: 'no_accessible_directories',
+    });
+    expect(structuredError?.rejectedInputs).toHaveLength(1);
+    expect(structuredError?.rejectedInputs[0]).toMatchObject({
+      input: filePath,
+      reason: 'not_directory',
+    });
+    expect(structuredError?.rejectedInputs[0]?.checkedPaths).toContain(filePath);
   });
 });
