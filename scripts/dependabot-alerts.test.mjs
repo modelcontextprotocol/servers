@@ -557,7 +557,15 @@ function fakeWorld(state = {}) {
     return s.files[file];
   };
   const lines = [];
-  return { spawn, readFile, calls, lines, log: (l) => lines.push(l) };
+  const warnings = [];
+  return {
+    spawn,
+    readFile,
+    calls,
+    lines,
+    warnings,
+    log: (l) => lines.push(l),
+  };
 }
 
 const writes = (calls) =>
@@ -572,6 +580,7 @@ const run = (world, extra = {}) =>
     spawn: world.spawn,
     readFile: world.readFile,
     log: world.log,
+    warn: (w) => world.warnings.push(w),
     dryRun: false,
     today: "2026-10-20",
     ...extra,
@@ -742,6 +751,7 @@ test("a look-alike issue from an outsider does not suppress filing", () => {
   const world = fakeWorld({ alerts: [pipAlerts], issues: [issue] });
   run(world);
   assert.equal(writes(world.calls)[0].args[1], "create");
+  assert.match(world.warnings.join("\n"), /"octocat"/);
 });
 
 test("a new advisory is commented FIRST, then the issue rewritten", () => {

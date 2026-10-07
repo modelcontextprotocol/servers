@@ -375,10 +375,12 @@ function fakeWorld(state = {}) {
     throw new Error(`unexpected gh ${args.join(" ")}`);
   };
   const lines = [];
+  const warnings = [];
   return {
     spawn,
     calls,
     lines,
+    warnings,
     readFile: (p) => {
       if (!(p in s.files)) throw new Error(`no ${p}`);
       return s.files[p];
@@ -411,6 +413,7 @@ const run = (world, extra = {}) =>
     readFile: world.readFile,
     exists: world.exists,
     log: world.log,
+    warn: (w) => world.warnings.push(w),
     dryRun: false,
     ...extra,
   });
@@ -531,6 +534,7 @@ test("a forged marker from an outsider suppresses nothing", (t) => {
   });
   run(world, { output: outputFile(t) });
   assert.equal(writes(world.calls).length, 1);
+  assert.match(world.warnings.join("\n"), /"octocat"/);
 });
 
 test("a newer release supersedes the open older issue, once", (t) => {
@@ -575,6 +579,10 @@ test("a failure after filing still emits what was filed, then fails", (t) => {
     filedFrom(output).map((f) => f.issue),
     [600, 601],
   );
+  assert.match(
+    world.warnings.join("\n"),
+    /MCP Python SDK failed: .*comment boom/,
+  );
 });
 
 test("one group's failure does not cost another its issue", (t) => {
@@ -589,6 +597,10 @@ test("one group's failure does not cost another its issue", (t) => {
   assert.deepEqual(
     filedFrom(output).map((f) => f.label),
     ["MCP Python SDK"],
+  );
+  assert.match(
+    world.warnings.join("\n"),
+    /\(v1\) failed: gh issue create failed/,
   );
 });
 

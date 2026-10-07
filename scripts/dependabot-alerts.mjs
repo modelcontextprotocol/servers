@@ -810,6 +810,7 @@ function announcedAdvisories(repo, number, spawn) {
  * @param {boolean} [options.dryRun]
  * @param {string} [options.today]
  * @param {(line: string) => void} [options.log]
+ * @param {(line: string) => void} [options.warn] for warnings and per-group failures
  */
 export function main({
   repo = process.env.GITHUB_REPOSITORY,
@@ -819,6 +820,7 @@ export function main({
   dryRun = isDryRun(),
   today = new Date().toISOString().slice(0, 10),
   log = console.log,
+  warn = console.warn,
 } = {}) {
   if (!repo) throw new Error("repo not specified (GITHUB_REPOSITORY unset)");
   const writer = issueWriter({ repo, spawn, dryRun, sweep: SWEEP, log });
@@ -834,6 +836,7 @@ export function main({
     state: "open",
     parseMarker,
     sweep: SWEEP,
+    warn,
   })
     .map((issue) => ({ ...issue, marker: parseMarker(issue.body) }))
     .filter((issue) => issue.marker);

@@ -524,6 +524,7 @@ function latestPypi(pkg, spawn) {
  * @param {string | undefined} [options.output] the `$GITHUB_OUTPUT` file
  * @param {boolean} [options.dryRun]
  * @param {(line: string) => void} [options.log]
+ * @param {(line: string) => void} [options.warn] for warnings and per-group failures
  */
 export function main({
   repo = process.env.GITHUB_REPOSITORY,
@@ -534,6 +535,7 @@ export function main({
   output = process.env.GITHUB_OUTPUT,
   dryRun = isDryRun(),
   log = console.log,
+  warn = console.warn,
 } = {}) {
   if (!repo) throw new Error("repo not specified (GITHUB_REPOSITORY unset)");
   const writer = issueWriter({ repo, spawn, dryRun, sweep: SWEEP, log });
@@ -571,6 +573,7 @@ export function main({
     state: "all",
     parseMarker,
     sweep: SWEEP,
+    warn,
   })
     .map((issue) => ({ ...issue, marker: parseMarker(issue.body) }))
     .filter((issue) => issue.marker);
@@ -660,9 +663,7 @@ export function main({
       } catch (error) {
         // One group's failure must not cost another group its issue.
         failures.push(`${state.group.label}: ${error.message}`);
-        console.error(
-          `${SWEEP}: ${state.group.label} failed: ${error.message}`,
-        );
+        warn(`${SWEEP}: ${state.group.label} failed: ${error.message}`);
       }
     }
   } finally {

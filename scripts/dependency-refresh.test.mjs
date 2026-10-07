@@ -442,6 +442,7 @@ test("main updates the open sweep issue instead of filing another", (t) => {
 
 test("main ignores a look-alike issue an outsider wrote", (t) => {
   const root = fixtureRoot(t);
+  const warnings = [];
   const { spawn, calls } = fakeTools({
     issues: [
       {
@@ -453,8 +454,16 @@ test("main ignores a look-alike issue an outsider wrote", (t) => {
       },
     ],
   });
-  main({ repo: "o/r", root, spawn, log: () => {} });
+  main({
+    repo: "o/r",
+    root,
+    spawn,
+    log: () => {},
+    warn: (w) => warnings.push(w),
+  });
   assert.equal(writes(calls)[0].args[1], "create");
+  // Marker and labels with an unknown author is flagged, not trusted.
+  assert.match(warnings.join("\n"), /"octocat"/);
 });
 
 test("main leaves an up-to-date issue alone", (t) => {

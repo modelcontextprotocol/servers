@@ -268,13 +268,13 @@ export function currentMilestone(repo, spawn) {
  *
  * @param {string} repo
  * @param {typeof spawnSync} spawn
- * @param {{state?: "open" | "all", parseMarker: (body: string | undefined) => unknown, sweep: string}} options
+ * @param {{state?: "open" | "all", parseMarker: (body: string | undefined) => unknown, sweep: string, warn?: (msg: string) => void}} options
  * @returns {Array<{number: number, title: string, body: string, state: string, author: object, labels: object[]}>}
  */
 export function sweepIssues(
   repo,
   spawn,
-  { state = "all", parseMarker, sweep },
+  { state = "all", parseMarker, sweep, warn = console.warn },
 ) {
   const LIMIT = 500;
   const issues = ghJson(spawn, [
@@ -299,7 +299,7 @@ export function sweepIssues(
       `${sweep}: the issue listing hit its limit of ${LIMIT}, so it may be truncated; refusing to file against a partial view`,
     );
   }
-  warnOnUnrecognizedAuthors(issues, parseMarker, sweep);
+  warnOnUnrecognizedAuthors(issues, parseMarker, sweep, warn);
   return issues.filter(isSweepAuthored);
 }
 

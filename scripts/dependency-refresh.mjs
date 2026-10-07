@@ -532,6 +532,7 @@ function latestReleaseTag(action, spawn) {
  * @param {boolean} [options.dryRun]
  * @param {string} [options.today] `YYYY-MM-DD`
  * @param {(line: string) => void} [options.log]
+ * @param {(line: string) => void} [options.warn] for warnings and per-group failures
  */
 export function main({
   repo = process.env.GITHUB_REPOSITORY,
@@ -540,6 +541,7 @@ export function main({
   dryRun = isDryRun(),
   today = new Date().toISOString().slice(0, 10),
   log = console.log,
+  warn = console.warn,
 } = {}) {
   if (!repo) throw new Error("repo not specified (GITHUB_REPOSITORY unset)");
   const writer = issueWriter({ repo, spawn, dryRun, sweep: SWEEP, log });
@@ -563,9 +565,12 @@ export function main({
   // Looked up before branching on the body: the nothing-behind case still
   // has to reach an open issue to clear it.
   const existing =
-    sweepIssues(repo, spawn, { state: "open", parseMarker, sweep: SWEEP }).find(
-      (i) => parseMarker(i.body),
-    ) ?? null;
+    sweepIssues(repo, spawn, {
+      state: "open",
+      parseMarker,
+      sweep: SWEEP,
+      warn,
+    }).find((i) => parseMarker(i.body)) ?? null;
   const body = buildIssueBody({ npm, uv, actions, unranked });
 
   if (body === null) {
