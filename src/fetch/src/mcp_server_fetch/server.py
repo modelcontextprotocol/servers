@@ -34,14 +34,16 @@ def extract_content_from_html(html: str) -> str:
         Simplified markdown version of the content
     """
     ret = readabilipy.simple_json.simple_json_from_html_string(
-        html, use_readability=True
+        html, use_readability=False
     )
-    if not ret["content"]:
+    if not ret.get("content"):
         return "<error>Page failed to be simplified from HTML</error>"
     content = markdownify.markdownify(
         ret["content"],
         heading_style=markdownify.ATX,
     )
+    if not content.strip():
+        return "<error>Page failed to be simplified from HTML</error>"
     return content
 
 
