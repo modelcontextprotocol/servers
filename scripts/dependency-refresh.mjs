@@ -470,12 +470,34 @@ function runOutdated(root, spawn) {
   // 0 means nothing is outdated and 1 means something is; both are successful
   // runs. Anything else is a real failure that also prints nothing to stdout,
   // so accepting it would report a clean sweep over an outage.
+  const stdout = result.stdout ?? "";
   if (result.status !== 0 && result.status !== 1) {
     throw new Error(
       `npm outdated failed (exit ${result.status}): ${(result.stderr ?? "").trim()}`,
     );
   }
-  return result.stdout ?? "";
+  // Exit 1 is overloaded: npm also exits 1 on some command and registry
+  // failures. "Outdated" always comes with a payload naming what is, so an
+  // exit 1 without one, or with npm's `{"error": …}`, is a failure too.
+  if (result.status === 1) {
+    let payload;
+    try {
+      payload = JSON.parse(stdout);
+    } catch {
+      payload = null;
+    }
+    if (
+      payload === null ||
+      typeof payload !== "object" ||
+      "error" in payload ||
+      Object.keys(payload).length === 0
+    ) {
+      throw new Error(
+        `npm outdated exited 1 with no outdated payload: ${(result.stderr ?? "").trim() || stdout.trim()}`,
+      );
+    }
+  }
+  return stdout;
 }
 
 function runUv(dir, args, spawn) {

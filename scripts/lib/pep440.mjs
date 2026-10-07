@@ -104,9 +104,12 @@ const CLAUSE_RE = /^(~=|===|==|!=|<=|>=|<|>|=)\s*(\S+)$/;
 
 /** `==1.2.*` style prefix match: the release starts with the prefix. */
 function prefixMatches(version, prefix) {
-  const v = parseVersion(version).release;
-  const p = parseVersion(prefix).release;
-  return p.every((part, i) => (v[i] ?? 0) === part);
+  const v = parseVersion(version);
+  const p = parseVersion(prefix);
+  return (
+    v.epoch === p.epoch &&
+    p.release.every((part, i) => (v.release[i] ?? 0) === part)
+  );
 }
 
 /**
@@ -128,13 +131,13 @@ function clauseMatches(version, clause) {
     return op === "!=" ? !equal : equal;
   }
   if (op === "~=") {
-    const release = parseVersion(operand).release;
+    const { epoch, release } = parseVersion(operand);
     if (release.length < 2) {
       throw new Error(`~= needs at least two release segments: "${clause}"`);
     }
     return (
       compareVersions(version, operand) >= 0 &&
-      prefixMatches(version, release.slice(0, -1).join("."))
+      prefixMatches(version, `${epoch}!${release.slice(0, -1).join(".")}`)
     );
   }
   const d = compareVersions(version, operand);

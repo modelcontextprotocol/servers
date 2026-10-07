@@ -608,6 +608,23 @@ test("main fails, writing nothing, when a lookup fails", (t) => {
       /npm outdated failed/,
     ],
     [
+      { outdated: { status: 1, stdout: "", stderr: "ENOTFOUND" } },
+      /exited 1 with no outdated payload: ENOTFOUND/,
+    ],
+    [
+      { outdated: { status: 1, stdout: "{}" } },
+      /exited 1 with no outdated payload/,
+    ],
+    [
+      {
+        outdated: {
+          status: 1,
+          stdout: JSON.stringify({ error: { code: "E503" } }),
+        },
+      },
+      /exited 1 with no outdated payload/,
+    ],
+    [
       { uvLock: { status: 2, stderr: "no network" } },
       /uv lock --upgrade --dry-run failed/,
     ],

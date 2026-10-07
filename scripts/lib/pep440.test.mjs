@@ -93,6 +93,14 @@ test("exclusive bounds follow PEP 440's pre- and post-release rules", () => {
   assert.equal(satisfies("1.0.post1", ">=1.0"), true);
 });
 
+test("prefix matching compares epochs too", () => {
+  assert.equal(satisfies("2!1.4.5", "~=1!1.4"), false);
+  assert.equal(satisfies("1!1.4.5", "~=1!1.4"), true);
+  assert.equal(satisfies("2!1.4.5", "==1!1.4.*"), false);
+  assert.equal(satisfies("1!1.4.5", "==1!1.4.*"), true);
+  assert.equal(satisfies("1!1.4.5", "==1.4.*"), false);
+});
+
 test("satisfies throws instead of guessing", () => {
   assert.throws(() => satisfies("1.0", "about 1.0"), /specifier clause/);
   assert.throws(() => satisfies("1.0", "~=1"), /two release segments/);
