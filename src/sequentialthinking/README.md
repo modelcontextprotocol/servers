@@ -69,6 +69,10 @@ After installing the server in your MCP host:
 3. Ask the host to solve a non-trivial problem in a step-by-step way.
 4. Verify that the host invokes the tool multiple times instead of returning a one-shot answer.
 
+## Requirements
+
+Node.js 20 or later, when the server runs through `npx` or from source.
+
 ## Configuration
 
 ### Usage with Claude Desktop

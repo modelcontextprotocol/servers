@@ -10,7 +10,7 @@ import fs from "fs/promises";
 import path from "path";
 import { pathToFileURL } from "url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Root } from "@modelcontextprotocol/sdk/types.js";
+import type { Root } from "@modelcontextprotocol/server";
 import {
   allowedDirectoriesOf,
   call,
@@ -153,7 +153,7 @@ describe("initial roots", () => {
     await vi.waitFor(() =>
       expect(stderr).toHaveBeenCalledWith(
         "Failed to request initial roots from client:",
-        "MCP error -32603: client has no roots today",
+        "client has no roots today",
       ),
     );
     expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
@@ -269,7 +269,7 @@ describe("roots/list_changed", () => {
     await vi.waitFor(() =>
       expect(stderr).toHaveBeenCalledWith(
         "Failed to request roots from client:",
-        "MCP error -32603: gone",
+        "gone",
       ),
     );
     expect(await allowedDirectoriesOf(client)).toEqual([rootDir]);

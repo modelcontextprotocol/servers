@@ -11,12 +11,12 @@
 // tested directly.
 
 import { randomUUID } from "node:crypto";
-import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import type {
+  JSONRPCMessage,
   EventId,
   EventStore,
   StreamId,
-} from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+} from "@modelcontextprotocol/server";
 
 export class InMemoryEventStore implements EventStore {
   private events: Map<

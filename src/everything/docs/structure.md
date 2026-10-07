@@ -48,14 +48,11 @@ src/everything
      │   ├── get-sum.ts
      │   ├── get-tiny-image.ts
      │   ├── gzip-file-as-resource.ts
-     │   ├── simulate-research-query.ts
      │   ├── toggle-simulated-logging.ts
      │   ├── toggle-subscriber-updates.ts
      │   ├── trigger-elicitation-request.ts
-     │   ├── trigger-elicitation-request-async.ts
      │   ├── trigger-long-running-operation.ts
      │   ├── trigger-sampling-request.ts
-     │   ├── trigger-sampling-request-async.ts
      │   └── trigger-url-elicitation.ts
      └── transports
          ├── in-memory-event-store.ts
@@ -82,7 +79,7 @@ src/everything
 - Package metadata and scripts:
   - `build`: TypeScript compile to `dist/`, copies `docs/` into `dist/` and marks the compiled entry scripts as executable.
   - `start:stdio`, `start:sse`, `start:streamableHttp`: Run built transports from `dist/`.
-- Declares dependencies on `@modelcontextprotocol/sdk`, `express`, `cors`, `zod`, etc.
+- Declares dependencies on the TypeScript SDK v2 packages (`@modelcontextprotocol/server`, `@modelcontextprotocol/node`, `@modelcontextprotocol/server-legacy`), `express`, `cors`, `zod`, etc.
 
 ### `docs/`
 
@@ -163,18 +160,12 @@ src/everything
     - `GZIP_MAX_FETCH_SIZE` (bytes, default 10 MiB)
     - `GZIP_MAX_FETCH_TIME_MILLIS` (ms, default 30000)
     - `GZIP_ALLOWED_DOMAINS` (comma-separated allowlist; empty means all domains allowed)
-- `simulate-research-query.ts`
-  - Registers a `simulate-research-query` task-based tool that demonstrates the MCP Tasks feature (SEP-1686). Simulates a multi-stage research operation with progress updates. If the query is marked as ambiguous and the client supports elicitation, it pauses mid-execution to request clarification via `elicitation/create`. Uses `server.experimental.tasks.registerToolTask()` with `execution: { taskSupport: "required" }`.
 - `trigger-elicitation-request.ts`
   - Registers a `trigger-elicitation-request` tool that sends an `elicitation/create` request to the client/LLM and returns the elicitation result.
 - `trigger-url-elicitation.ts`
   - Registers a `trigger-url-elicitation` tool that either sends an out-of-band URL-mode `elicitation/create` request (`mode: "url"`) including an `elicitationId` (request path) or throws `UrlElicitationRequiredError` (`-32042`) for client-handled URL elicitation (error path). On the error path the carried prerequisite elicitation points at a different URL than the failing one (`https://modelcontextprotocol.io`), and when the client satisfies it and retries the same call, the retry ignores `errorPath` and proceeds via the request path — so the client does not loop on the same error.
-- `trigger-elicitation-request-async.ts`
-  - Registers a `trigger-elicitation-request-async` tool that demonstrates bidirectional MCP tasks for elicitation. Sends an elicitation request with task metadata, then polls the client's `tasks/get` endpoint for completion status before fetching the final result.
 - `trigger-sampling-request.ts`
   - Registers a `trigger-sampling-request` tool that sends a `sampling/createMessage` request to the client/LLM and returns the sampling result.
-- `trigger-sampling-request-async.ts`
-  - Registers a `trigger-sampling-request-async` tool that demonstrates bidirectional MCP tasks for sampling. Sends a sampling request with task metadata, then polls the client's `tasks/get` endpoint for completion status before fetching the final result.
 - `get-structured-content.ts`
   - Registers a `get-structured-content` tool that demonstrates structuredContent block responses.
 - `get-sum.ts`
@@ -203,10 +194,10 @@ src/everything
     - `GET /sse` to establish an SSE connection per session.
     - `POST /message` for client messages.
   - Manages multiple connected clients via a transport map.
-  - Starts an `SSEServerTransport`, created the server via `createServer()`, and connects it to a new transport.
+  - Starts an `SSEServerTransport` (from the frozen `@modelcontextprotocol/server-legacy/sse` bridge), created the server via `createServer()`, and connects it to a new transport.
   - On server disconnect, calls `cleanup()` to remove any live intervals.
 - `streamableHttp.ts`
-  - Express server exposing a single `/mcp` endpoint for POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `StreamableHTTPServerTransport`.
+  - Express server exposing a single `/mcp` endpoint for POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `NodeStreamableHTTPServerTransport` from `@modelcontextprotocol/node`.
   - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`.
   - Answers a request for an unknown or ended `Mcp-Session-Id` with `404 Not Found`, and closes every open session on `SIGINT`.
   - Connects a fresh server instance on initialization POST and reuses the transport for subsequent requests.

@@ -9,7 +9,7 @@
 // launches the binary.
 
 import type { Readable, Writable } from "node:stream";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { createServer } from "../server/index.js";
 
 /** What a started stdio server hands back: the server and its SIGINT handler. */

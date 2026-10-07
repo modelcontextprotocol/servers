@@ -3,7 +3,7 @@
 // error a client gets back for each kind of bad input. Originally the #4651
 // regression test, which spawned dist/index.js and was skipped when no build
 // existed; ported to the in-process client (#4854) so it always runs and
-// always tests the source. The error texts are the SDK 1.x mapping of a Zod
+// always tests the source. The error texts are the SDK's mapping of a Zod
 // failure and are pinned verbatim: a change to them is a wire change.
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -16,7 +16,7 @@ import {
 } from "./helpers.js";
 
 const INVALID =
-  "MCP error -32602: Input validation error: Invalid arguments for tool sequentialthinking: ";
+  "Input validation error: Invalid arguments for tool sequentialthinking: ";
 
 describe("sequentialthinking input schema", () => {
   let conn: Connected;
@@ -43,7 +43,7 @@ describe("sequentialthinking input schema", () => {
     it("rejects a call that omits nextThoughtNeeded", async () => {
       await expectInvalid(
         { thought: "t", thoughtNumber: 1, totalThoughts: 1 },
-        "Invalid input at nextThoughtNeeded",
+        "nextThoughtNeeded: Invalid input",
       );
     });
 
@@ -51,16 +51,16 @@ describe("sequentialthinking input schema", () => {
       const { thought: _omitted, ...args } = thought();
       await expectInvalid(
         args,
-        "Invalid input: expected string, received undefined at thought",
+        "thought: Invalid input: expected string, received undefined",
       );
     });
 
     it("reports every missing numeric field, coerced to NaN", async () => {
       await expectInvalid(
         { thought: "t" },
-        "Invalid input at nextThoughtNeeded\n" +
-          "Invalid input: expected number, received NaN at thoughtNumber\n" +
-          "Invalid input: expected number, received NaN at totalThoughts",
+        "nextThoughtNeeded: Invalid input, " +
+          "thoughtNumber: Invalid input: expected number, received NaN, " +
+          "totalThoughts: Invalid input: expected number, received NaN",
       );
     });
 
@@ -95,7 +95,7 @@ describe("sequentialthinking input schema", () => {
       async (value) => {
         await expectInvalid(
           thought({ nextThoughtNeeded: value }),
-          `Expected boolean or "true"/"false" string, received "${value}" at nextThoughtNeeded`,
+          `nextThoughtNeeded: Expected boolean or "true"/"false" string, received "${value}"`,
         );
       },
     );
@@ -103,7 +103,7 @@ describe("sequentialthinking input schema", () => {
     it.each([1, 0, null])("rejects the non-string %j", async (value) => {
       await expectInvalid(
         thought({ nextThoughtNeeded: value }),
-        "Invalid input at nextThoughtNeeded",
+        "nextThoughtNeeded: Invalid input",
       );
     });
 
@@ -117,11 +117,11 @@ describe("sequentialthinking input schema", () => {
       ).toBeFalsy();
       await expectInvalid(
         thought({ isRevision: "maybe" }),
-        'Expected boolean or "true"/"false" string, received "maybe" at isRevision',
+        'isRevision: Expected boolean or "true"/"false" string, received "maybe"',
       );
       await expectInvalid(
         thought({ needsMoreThoughts: "nope" }),
-        'Expected boolean or "true"/"false" string, received "nope" at needsMoreThoughts',
+        'needsMoreThoughts: Expected boolean or "true"/"false" string, received "nope"',
       );
     });
   });
@@ -156,13 +156,13 @@ describe("sequentialthinking input schema", () => {
         "Invalid input: expected number, received NaN",
       ],
     ])("rejects %s = %j", async (field, value, detail) => {
-      await expectInvalid(thought({ [field]: value }), `${detail} at ${field}`);
+      await expectInvalid(thought({ [field]: value }), `${field}: ${detail}`);
     });
 
     it("rejects a non-string branchId", async () => {
       await expectInvalid(
         thought({ branchFromThought: 1, branchId: 7 }),
-        "Invalid input: expected string, received number at branchId",
+        "branchId: Invalid input: expected string, received number",
       );
     });
   });

@@ -11,9 +11,11 @@
 import type { Server } from "node:http";
 import { once } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
+import {
+  Client,
+  StreamableHTTPClientTransport,
+} from "@modelcontextprotocol/client";
 import {
   createApp,
   type StreamableHttpApp,
@@ -328,7 +330,7 @@ describe("Streamable HTTP transport", () => {
 
   it("maps a POST that throws before answering to a JSON-RPC internal error", async () => {
     vi.spyOn(
-      StreamableHTTPServerTransport.prototype,
+      NodeStreamableHTTPServerTransport.prototype,
       "handleRequest",
     ).mockRejectedValueOnce(new Error("boom"));
     const response = await post({ jsonrpc: "2.0", id: 1, method: "ping" });
@@ -346,7 +348,7 @@ describe("Streamable HTTP transport", () => {
   it("leaves a POST alone when it throws after answering", async () => {
     const { sessionId } = await rawInitialize();
     vi.spyOn(
-      StreamableHTTPServerTransport.prototype,
+      NodeStreamableHTTPServerTransport.prototype,
       "handleRequest",
     ).mockImplementationOnce(async (_req, res) => {
       res.writeHead(200).end("partial");
@@ -363,7 +365,7 @@ describe("Streamable HTTP transport", () => {
   it("maps a DELETE that throws to a JSON-RPC internal error, unless it already answered", async () => {
     const { sessionId } = await rawInitialize();
     const handle = vi.spyOn(
-      StreamableHTTPServerTransport.prototype,
+      NodeStreamableHTTPServerTransport.prototype,
       "handleRequest",
     );
     handle.mockRejectedValueOnce(new Error("boom"));
@@ -444,7 +446,7 @@ describe("shutdown", () => {
     const { client, sessionId } = await connectHttp();
     const failure = new Error("close failed");
     vi.spyOn(
-      StreamableHTTPServerTransport.prototype,
+      NodeStreamableHTTPServerTransport.prototype,
       "close",
     ).mockRejectedValueOnce(failure);
     await app.shutdown();

@@ -13,6 +13,12 @@ This MCP server attempts to exercise all the features of the MCP protocol. It is
 
 A complete list of the registered MCP primitives and other protocol features demonstrated can be found in the [Server Features](docs/features.md) document.
 
+The task tools (`simulate-research-query`, `trigger-sampling-request-async` and `trigger-elicitation-request-async`) are not available for now: they were built on the TypeScript SDK's experimental tasks layer, which SDK v2 removed. They return on the MCP tasks extension in [#4852](https://github.com/modelcontextprotocol/servers/issues/4852).
+
+## Requirements
+
+Node.js 20 or later, when the server runs through `npx` or from source.
+
 ## Usage with Claude Desktop (uses [stdio Transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#stdio))
 
 Add to your `claude_desktop_config.json`:

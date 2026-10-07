@@ -6,10 +6,9 @@
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { InMemoryTransport } from "@modelcontextprotocol/server";
+import type { McpServer, CallToolResult } from "@modelcontextprotocol/server";
+import { Client } from "@modelcontextprotocol/client";
 import { createServer } from "../index.js";
 
 export interface Connection {

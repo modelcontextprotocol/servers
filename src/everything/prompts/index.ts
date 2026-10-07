@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { registerSimplePrompt } from "./simple.js";
 import { registerArgumentsPrompt } from "./args.js";
 import { registerPromptWithCompletions } from "./completions.js";

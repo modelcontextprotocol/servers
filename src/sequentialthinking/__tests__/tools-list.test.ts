@@ -1,6 +1,6 @@
 // Pins what a client sees when it connects and lists tools: the server's
 // identity and capabilities, and the one tool's name, title, description,
-// annotations, input schema and output schema, exactly as SDK 1.x emits them
+// annotations, input schema and output schema, exactly as the SDK emits them
 // today. These are characterization tests. The annotations assert the values
 // fixed in #4721 (the tool is stateful, so neither read-only nor idempotent).
 // The 2781-character description (#799) is pinned as current design: the
@@ -64,8 +64,12 @@ describe("sequentialthinking: initialize and tools/list", () => {
     });
   });
 
-  it("forbids task-augmented execution", () => {
-    expect(tool.execution).toEqual({ taskSupport: "forbidden" });
+  // SDK 1.x advertised `execution: { taskSupport: "forbidden" }`. SDK v2
+  // removed the experimental tasks layer and advertises no `execution` at
+  // all; Part 5 (#4852) decides what the tool advertises under the tasks
+  // extension.
+  it("advertises no task-execution metadata", () => {
+    expect(tool.execution).toBeUndefined();
   });
 
   // #799: some clients cap a tool description at 1024 characters. This one is
@@ -80,9 +84,9 @@ describe("sequentialthinking: initialize and tools/list", () => {
     );
   });
 
-  it("advertises the input schema as draft-07 JSON Schema", () => {
+  it("advertises the input schema as JSON Schema 2020-12", () => {
     expect(tool.inputSchema).toEqual({
-      $schema: "http://json-schema.org/draft-07/schema#",
+      $schema: "https://json-schema.org/draft/2020-12/schema",
       type: "object",
       properties: {
         thought: { type: "string", description: "Your current thinking step" },
@@ -136,7 +140,7 @@ describe("sequentialthinking: initialize and tools/list", () => {
 
   it("advertises a closed output schema with all five fields required", () => {
     expect(tool.outputSchema).toEqual({
-      $schema: "http://json-schema.org/draft-07/schema#",
+      $schema: "https://json-schema.org/draft/2020-12/schema",
       type: "object",
       properties: {
         thoughtNumber: { type: "number" },
@@ -161,25 +165,22 @@ describe("sequentialthinking: initialize and tools/list", () => {
   });
 
   it("offers no prompts or resources", async () => {
-    await expect(conn.client.listPrompts()).rejects.toThrow(/Method not found/);
-    await expect(conn.client.listResources()).rejects.toThrow(
-      /Method not found/,
-    );
+    // Raw requests: SDK v2's listPrompts() and listResources() answer empty
+    // lists without asking a server that does not advertise them.
+    await expect(
+      conn.client.request({ method: "prompts/list", params: {} }),
+    ).rejects.toThrow(/Method not found/);
+    await expect(
+      conn.client.request({ method: "resources/list", params: {} }),
+    ).rejects.toThrow(/Method not found/);
   });
 
-  it("reports an unknown tool as a tool error", async () => {
-    const result = await conn.client.callTool({
-      name: "no_such_tool",
-      arguments: {},
-    });
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "MCP error -32602: Tool no_such_tool not found",
-        },
-      ],
-      isError: true,
+  it("rejects an unknown tool with -32602", async () => {
+    await expect(
+      conn.client.callTool({ name: "no_such_tool", arguments: {} }),
+    ).rejects.toMatchObject({
+      code: -32602,
+      message: "Tool no_such_tool not found",
     });
   });
 });

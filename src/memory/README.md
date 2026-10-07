@@ -137,6 +137,10 @@ Example:
   - Returns the same shape as `read_graph` (entities and relations)
   - Mutation tools (`create_entities`, `create_relations`, `add_observations`, `delete_entities`, `delete_observations`, `delete_relations`) emit `notifications/resources/updated` for this URI, so subscribed clients see live changes
 
+## Requirements
+
+Node.js 20 or later, when the server runs through `npx` or from source.
+
 # Usage with Claude Desktop
 
 ### Setup
