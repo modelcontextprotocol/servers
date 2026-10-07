@@ -16,18 +16,25 @@ read as an endorsement of the behavior.
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from importlib.metadata import version
 from typing import Any
+from unittest.mock import patch
 
+import anyio
 import httpx
 import pytest
 from mcp import ClientSession
 from mcp.shared.exceptions import MCPError
-from mcp.types import INVALID_PARAMS, CallToolResult
+from mcp.shared.memory import create_client_server_memory_streams
+from mcp.shared.message import SessionMessage
+from mcp.types import INVALID_PARAMS, METHOD_NOT_FOUND, CallToolResult, JSONRPCRequest
 
 from mcp_server_fetch.server import (
     DEFAULT_USER_AGENT_AUTONOMOUS,
     DEFAULT_USER_AGENT_MANUAL,
+    serve,
 )
 
 from .harness import FakeWeb, connect
@@ -998,3 +1005,55 @@ async def test_get_prompt_does_not_validate_the_url(
     assert data["messages"][0]["content"]["text"].startswith(
         "Failed to fetch not a url: UnsupportedProtocol("
     )
+
+
+# ---------------------------------------------------------------------------
+# Protocol era
+# ---------------------------------------------------------------------------
+
+
+async def test_modern_era_is_not_served() -> None:
+    # #4851: the SDK v2 port serves the 2025-11-25 handshake era only.
+    # Server.run() would also open a 2026-07-28 connection for a request that
+    # carries the per-request `_meta` envelope; adopting that era is #4853.
+    # Until then such a request is refused as it was on SDK v1.
+    discover = JSONRPCRequest(
+        jsonrpc="2.0",
+        id=1,
+        method="server/discover",
+        params={
+            "_meta": {
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                "io.modelcontextprotocol/clientInfo": {"name": "test", "version": "0"},
+                "io.modelcontextprotocol/clientCapabilities": {},
+            }
+        },
+    )
+    response: SessionMessage | Exception | None = None
+    async with create_client_server_memory_streams() as (
+        (client_read, client_write),
+        server_streams,
+    ):
+
+        @asynccontextmanager
+        async def fake_stdio_server() -> AsyncIterator[Any]:
+            yield server_streams
+
+        with patch("mcp_server_fetch.server.stdio_server", fake_stdio_server):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(serve)
+                await client_write.send(SessionMessage(discover))
+                with anyio.fail_after(5):
+                    response = await client_read.receive()
+                tg.cancel_scope.cancel()
+
+    assert isinstance(response, SessionMessage)
+    assert response.message.model_dump(by_alias=True, exclude_none=True) == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {
+            "code": METHOD_NOT_FOUND,
+            "message": "Method not found",
+            "data": "server/discover",
+        },
+    }

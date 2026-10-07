@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Optional
 import jsonschema
 from mcp.server import Server, ServerRequestContext
+from mcp.server.runner import serve_loop
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     CallToolRequestParams,
@@ -760,4 +761,15 @@ async def serve(repository: Path | None) -> None:
     )
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, options)
+        # Legacy era only. Server.run() would also serve 2026-07-28 (its
+        # dual-era loop answers server/discover and per-request envelopes);
+        # adopting that era is #4853, so this port (#4851) serves the
+        # handshake loop alone and keeps the wire unchanged.
+        async with server.lifespan(server) as lifespan_state:
+            await serve_loop(
+                server,
+                read_stream,
+                write_stream,
+                lifespan_state=lifespan_state,
+                init_options=options,
+            )

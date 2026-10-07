@@ -33,6 +33,8 @@ import anyio
 import pytest
 from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
+from mcp.shared.message import SessionMessage
+from mcp.types import METHOD_NOT_FOUND, JSONRPCRequest
 from pydantic import BaseModel
 
 from mcp_server_time.server import serve
@@ -920,3 +922,55 @@ async def test_session_survives_errors() -> None:
         await call(session, "get_current_time", {"timezone": "Bad/Zone"})
         result = await call(session, "get_current_time", {"timezone": "UTC"})
     assert result["isError"] is False
+
+
+# ---------------------------------------------------------------------------
+# Protocol era
+# ---------------------------------------------------------------------------
+
+
+async def test_modern_era_is_not_served() -> None:
+    # #4851: the SDK v2 port serves the 2025-11-25 handshake era only.
+    # Server.run() would also open a 2026-07-28 connection for a request that
+    # carries the per-request `_meta` envelope; adopting that era is #4853.
+    # Until then such a request is refused as it was on SDK v1.
+    discover = JSONRPCRequest(
+        jsonrpc="2.0",
+        id=1,
+        method="server/discover",
+        params={
+            "_meta": {
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                "io.modelcontextprotocol/clientInfo": {"name": "test", "version": "0"},
+                "io.modelcontextprotocol/clientCapabilities": {},
+            }
+        },
+    )
+    response: SessionMessage | Exception | None = None
+    async with create_client_server_memory_streams() as (
+        (client_read, client_write),
+        server_streams,
+    ):
+
+        @asynccontextmanager
+        async def fake_stdio_server() -> AsyncIterator[Any]:
+            yield server_streams
+
+        with patch("mcp_server_time.server.stdio_server", fake_stdio_server):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(serve, "UTC")
+                await client_write.send(SessionMessage(discover))
+                with anyio.fail_after(5):
+                    response = await client_read.receive()
+                tg.cancel_scope.cancel()
+
+    assert isinstance(response, SessionMessage)
+    assert response.message.model_dump(by_alias=True, exclude_none=True) == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {
+            "code": METHOD_NOT_FOUND,
+            "message": "Method not found",
+            "data": "server/discover",
+        },
+    }
