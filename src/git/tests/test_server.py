@@ -282,9 +282,24 @@ def test_git_show_initial_commit(test_repository):
 
 # Tests for validate_repo_path (repository scoping security fix)
 
-def test_validate_repo_path_no_restriction():
-    """When no repository restriction is configured, any path should be allowed."""
-    validate_repo_path(Path("/any/path"), None)  # Should not raise
+def test_validate_repo_path_no_restriction_within_cwd():
+    """When no --repository is configured, the server falls back to the
+    implicit sandbox at Path.cwd(). A repo_path inside cwd is allowed."""
+    inside = Path.cwd() / "subdir"
+    inside.mkdir(exist_ok=True)
+    validate_repo_path(inside, None)  # Should not raise
+
+
+def test_validate_repo_path_no_restriction_rejects_outside_cwd():
+    """When no --repository is configured, paths outside Path.cwd() must be
+    rejected (closes partial-bypass of CVE-2025-68145, see Issue #604)."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        outside = Path(td) / "outside_repo"
+        outside.mkdir()
+        with pytest.raises(ValueError) as exc_info:
+            validate_repo_path(outside, None)
+        assert "outside the allowed repository" in str(exc_info.value)
 
 
 def test_validate_repo_path_exact_match(tmp_path: Path):

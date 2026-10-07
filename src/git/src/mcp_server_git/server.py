@@ -233,9 +233,21 @@ def git_show(repo: git.Repo, revision: str) -> str:
     return "".join(output)
 
 def validate_repo_path(repo_path: Path, allowed_repository: Path | None) -> None:
-    """Validate that repo_path is within the allowed repository path."""
+    """Validate that repo_path is within the allowed repository path.
+
+    When allowed_repository is None (i.e. the server was started without
+    ``--repository``), we fall back to the current working directory as an
+    implicit sandbox instead of silently accepting any path on the host.
+    This closes the partial-bypass of CVE-2025-68145 first disclosed in
+    https://github.com/modelcontextprotocol/servers/issues/604 — the
+    previous early-return meant every git tool was reachable against any
+    git working tree on the host filesystem.
+
+    Operators who legitimately need cross-repo access should pass
+    ``--repository`` explicitly.
+    """
     if allowed_repository is None:
-        return  # No restriction configured
+        allowed_repository = Path.cwd()
 
     # Resolve both paths to handle symlinks and relative paths
     try:
@@ -290,6 +302,16 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
 
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
+
+    if repository is None:
+        # No --repository flag: operations are sandboxed to the current
+        # working directory. See validate_repo_path for the rationale.
+        logger.warning(
+            "mcp-server-git started without --repository; "
+            "git operations will be sandboxed to the current working directory (%s). "
+            "Pass --repository explicitly to widen the sandbox.",
+            Path.cwd(),
+        )
 
     if repository is not None:
         try:
