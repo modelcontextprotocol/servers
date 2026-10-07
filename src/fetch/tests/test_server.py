@@ -10,6 +10,7 @@ from mcp_server_fetch.server import (
     check_may_autonomously_fetch_url,
     fetch_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
+    _compute_retry_delay_seconds,
 )
 
 
@@ -286,11 +287,14 @@ class TestFetchUrl:
 
     @pytest.mark.asyncio
     async def test_fetch_500_raises_error(self):
-        """Test that 500 response raises McpError."""
+        """Test that a 500 response raises McpError once retries are exhausted."""
         mock_response = MagicMock()
         mock_response.status_code = 500
+        mock_response.headers = {}
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class, patch(
+            "mcp_server_fetch.server.asyncio.sleep", new=AsyncMock()
+        ):
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
             mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -301,6 +305,108 @@ class TestFetchUrl:
                     "https://example.com/error",
                     DEFAULT_USER_AGENT_AUTONOMOUS
                 )
+
+            # Default max_retries=3: the initial attempt plus 2 retries
+            assert mock_client.get.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_fetch_404_does_not_retry(self):
+        """Test that a non-retryable status like 404 fails on the first attempt."""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+
+        with patch("httpx.AsyncClient") as mock_client_class, patch(
+            "mcp_server_fetch.server.asyncio.sleep", new=AsyncMock()
+        ) as mock_sleep:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with pytest.raises(McpError):
+                await fetch_url(
+                    "https://example.com/notfound",
+                    DEFAULT_USER_AGENT_AUTONOMOUS
+                )
+
+            assert mock_client.get.call_count == 1
+            mock_sleep.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fetch_retries_then_succeeds(self):
+        """Test that a transient 503 is retried and a subsequent success is returned."""
+        error_response = MagicMock()
+        error_response.status_code = 503
+        error_response.headers = {}
+
+        success_response = MagicMock()
+        success_response.status_code = 200
+        success_response.text = '{"data": "ok"}'
+        success_response.headers = {"content-type": "application/json"}
+
+        with patch("httpx.AsyncClient") as mock_client_class, patch(
+            "mcp_server_fetch.server.asyncio.sleep", new=AsyncMock()
+        ) as mock_sleep:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(side_effect=[error_response, success_response])
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            content, _ = await fetch_url(
+                "https://example.com/flaky",
+                DEFAULT_USER_AGENT_AUTONOMOUS
+            )
+
+            assert content == '{"data": "ok"}'
+            assert mock_client.get.call_count == 2
+            mock_sleep.assert_awaited_once_with(1.0)
+
+    @pytest.mark.asyncio
+    async def test_fetch_respects_retry_after_header(self):
+        """Test that a numeric Retry-After header on a 429 overrides the backoff delay."""
+        rate_limited_response = MagicMock()
+        rate_limited_response.status_code = 429
+        rate_limited_response.headers = {"retry-after": "7"}
+
+        success_response = MagicMock()
+        success_response.status_code = 200
+        success_response.text = "ok"
+        success_response.headers = {"content-type": "text/plain"}
+
+        with patch("httpx.AsyncClient") as mock_client_class, patch(
+            "mcp_server_fetch.server.asyncio.sleep", new=AsyncMock()
+        ) as mock_sleep:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(side_effect=[rate_limited_response, success_response])
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await fetch_url("https://example.com/limited", DEFAULT_USER_AGENT_AUTONOMOUS)
+
+            mock_sleep.assert_awaited_once_with(7.0)
+
+    @pytest.mark.asyncio
+    async def test_fetch_network_error_retries(self):
+        """Test that a network-level HTTPError is retried like a transient status code."""
+        from httpx import HTTPError
+
+        success_response = MagicMock()
+        success_response.status_code = 200
+        success_response.text = "ok"
+        success_response.headers = {"content-type": "text/plain"}
+
+        with patch("httpx.AsyncClient") as mock_client_class, patch(
+            "mcp_server_fetch.server.asyncio.sleep", new=AsyncMock()
+        ):
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(side_effect=[HTTPError("boom"), success_response])
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            content, _ = await fetch_url("https://example.com/flaky", DEFAULT_USER_AGENT_AUTONOMOUS)
+
+            assert content == "ok"
+            assert mock_client.get.call_count == 2
 
     @pytest.mark.asyncio
     async def test_fetch_with_proxy(self):
@@ -324,3 +430,31 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+class TestComputeRetryDelaySeconds:
+    """Tests for _compute_retry_delay_seconds function."""
+
+    def test_exponential_backoff(self):
+        """Test that the delay doubles with each attempt."""
+        assert _compute_retry_delay_seconds(0, 1000) == 1.0
+        assert _compute_retry_delay_seconds(1, 1000) == 2.0
+        assert _compute_retry_delay_seconds(2, 1000) == 4.0
+
+    def test_caps_at_max_delay(self):
+        """Test that backoff is capped at MAX_RETRY_DELAY_MS."""
+        assert _compute_retry_delay_seconds(10, 1000) == 10.0
+
+    def test_numeric_retry_after_overrides_backoff(self):
+        """Test that a numeric Retry-After header takes precedence over backoff."""
+        assert _compute_retry_delay_seconds(0, 1000, retry_after_header="5") == 5.0
+
+    def test_retry_after_capped_at_max_delay(self):
+        """Test that an oversized Retry-After is still capped."""
+        assert _compute_retry_delay_seconds(0, 1000, retry_after_header="9999") == 10.0
+
+    def test_non_numeric_retry_after_falls_back_to_backoff(self):
+        """Test that an HTTP-date Retry-After (unsupported) falls back to backoff."""
+        assert _compute_retry_delay_seconds(
+            1, 1000, retry_after_header="Wed, 21 Oct 2026 07:28:00 GMT"
+        ) == 2.0
