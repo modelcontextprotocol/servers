@@ -54,8 +54,8 @@ servers/
 ├── .changeset/               Pending changesets for the TypeScript servers, and the changesets config
 ├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py), its guards (verify-*),
 │                             the skills tooling, release tooling (npm-publish-guard, prepare-python-release,
-│                             pack-and-verify, release-manifest), and the issue-filing sweeps (dependency-refresh,
-│                             dependabot-alerts, sdk-watch)
+│                             pack-and-verify, release-manifest, release-notes), and the issue-filing sweeps
+│                             (dependency-refresh, dependabot-alerts, sdk-watch)
 ├── docs/                     Design documents; quality-gate.md is the gate's reference (stages, CI vs local, the lease);
 │                             contribution-model.md holds the outside-PR backlog plan; ai-software-factory.md is the
 │                             overview of how the rules, skills, gates and sweeps fit together

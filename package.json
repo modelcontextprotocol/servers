@@ -44,6 +44,7 @@
     "verify:dco": "node scripts/verify-dco.mjs",
     "smoke": "node scripts/smoke-servers.mjs",
     "pack:verify": "node scripts/pack-and-verify.mjs",
+    "release:notes": "node scripts/release-notes.mjs",
     "local:gate": "node scripts/gate-lease.mjs npm run local:gate:stages",
     "local:gate:stages": "npm run verify:install-fresh && npm run verify:dco && npm run validate && npm run coverage && npm run validate:py && npm run coverage:py && npm run verify:skills:cli && npm run smoke"
   },
