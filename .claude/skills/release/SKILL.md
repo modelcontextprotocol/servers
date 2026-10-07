@@ -361,26 +361,27 @@ package, its version PR (2b or 2c) runs again first.
 Draft these once the merge PR has merged, so `main` holds what is being
 released. [`scripts/release-notes.mjs`](../../../scripts/release-notes.mjs)
 (`npm run release:notes`) builds them; its header says why each part is
-there. The notes are laid out per package, because a reader wants to know
+there. The changes are laid out per package, because a reader wants to know
 what changed in the server they use:
 
 1. **`## Packages`.** Every package on the merge commit, its version, and
    whether this release publishes it (the registry does not have that version
    yet) or leaves it unchanged. The tag is the milestone's name, not a
    version, so this table is where a reader finds the versions.
-2. **One `## <package> <version>` section per published package**: its
-   `### What's Changed` (the PRs that change files under its `src/<dir>/`) and
-   its `### Thanks for helping us improve` (the community reporters of the
-   issues those PRs close). A PR that touches several servers is listed under
-   each.
+2. **One `## <package> <version>` section per published package**, whose
+   `### What's Changed` lists the PRs that change files under its
+   `src/<dir>/`. A PR that touches several servers is listed under each.
 3. **`## Repository`**: every PR no published section took (CI, docs, skills,
    a server whose version did not change), so no PR in the generated list is
-   dropped. It carries its own Thanks.
+   dropped.
 4. GitHub's **New Contributors** block and **Full Changelog** link, verbatim.
 5. **The release-ledger line**, linking the artifact from 4d.
 6. **`## Known issues`**, only when you pass one. It names the issue, who is
    affected and the workaround. What counts as a known issue is a maintainer's
    judgment, so it is written by hand, never generated.
+7. **`## Thanks for helping us improve`**: one list for the whole release, as
+   the Inspector's release notes have it, crediting the community members
+   whose issues the listed PRs close, one line per person, most issues first.
 
 GitHub adds everyone `@`-mentioned in a release body to that release's
 **Contributors** strip, so the people credited appear there too.
@@ -417,7 +418,9 @@ npm run --silent release:notes -- --milestone "$MILESTONE" --merge-sha "$MERGE_S
 
 `--draft` creates a **draft** Release tagged `$MILESTONE` at `$MERGE_SHA`. It
 refuses a SHA that is not on `main`, and a tag that already has a Release or
-draft (edit or delete that one instead). There is no `--publish`: publishing
+draft (edit or delete that one instead). Every run, preview included, refuses
+a milestone tag that already exists: GitHub would build the notes and the
+Release from that tag's commit, not `$MERGE_SHA`. There is no `--publish`: publishing
 starts `release.yml`, so it is the maintainer's act in 5b.
 
 The rules the helper applies:
@@ -434,13 +437,14 @@ The rules the helper applies:
 - **Maintainers and bots are excluded by permission, not by name.** A
   maintainer is anyone with `admin`, `maintain` or `write` on the repo. Bots,
   deleted accounts, PR numbers and other repos' issues are dropped.
-- **Outside PRs are credited through a `Credit: @login` line.** This repo
+- **Outside PRs are credited through their issue, by hand.** This repo
   closes an outside PR and files an issue for a fix worth keeping, crediting
-  the PR's author there (`issue-triage`, Harvest). The helper credits every
-  login on a `Credit:` line **a maintainer wrote**, in the issue's body or a
-  comment. A credit written as prose is not read: add the line.
+  the PR's author in that issue (`issue-triage`, Harvest). The helper credits
+  the issue's *author*, who is then a maintainer and is excluded. Read the
+  milestone's issues for such credits and add those people to the draft's
+  Thanks section by hand before publishing.
 - **"Addresses", not "fixes."** The credited issues include feature requests.
-- **A Thanks subsection is left out** when no community reporter remains.
+- **The Thanks section is left out** when no community reporter remains.
 - **It fails fast.** A failed `gh` call, a GraphQL error, a missing PR or
   issue, an unknown permission value, a generated line it does not recognize,
   or a registry answer other than 200 or 404 aborts the run before anything is

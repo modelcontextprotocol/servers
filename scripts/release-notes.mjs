@@ -11,23 +11,22 @@
 //
 //   ## Packages                      every package, its version, and whether
 //                                    this release publishes it (registry check)
-//   ## <package> <version>           one per PUBLISHED package: its PRs, then
-//     ### What's Changed             Thanks to the reporters of the issues
-//     ### Thanks for helping us improve   those PRs close
+//   ## <package> <version>           one per PUBLISHED package, with its
+//     ### What's Changed             PRs
 //   ## Repository                    every PR left over (CI, docs, skills, a
 //                                    server whose version did not change), so
 //                                    no PR in the generated list is dropped
 //   ## New Contributors / Full Changelog   GitHub's own trailer, verbatim
 //   Release ledger: [<branch>](<url>)
 //   ## Known issues                  only when passed in: a maintainer's call
+//   ## Thanks for helping us improve one release-wide list of the community
+//                                    members whose issues the PRs close, laid
+//                                    out as the Inspector's release notes are
 //
 // The PR list is GitHub's generated one (`releases/generate-notes`, what the
 // UI's button uses) from the latest PUBLISHED Release to the merge commit. A
 // PR is bucketed by the files it changes: `src/<dir>/` is that directory's
-// package. Thanks credits each closed issue's author, plus anyone a
-// maintainer names on a `Credit: @login` line in the issue's body or a comment
-// (how an outside PR's author is credited once the PR is closed and an issue
-// filed for the fix; see docs/contribution-model.md). Maintainers
+// package. Thanks credits each closed issue's author; maintainers
 // (admin/maintain/write), bots and deleted accounts are never credited.
 // GitHub adds everyone `@`-mentioned in a release body to its Contributors
 // strip, so that section is what puts the reporters there.
@@ -58,7 +57,6 @@ const [OWNER, NAME] = REPO.split("/");
 const MAINTAINER_PERMISSIONS = new Set(["admin", "maintain", "write"]);
 const COMMUNITY_PERMISSIONS = new Set(["triage", "read", "none"]);
 
-export const THANKS_HEADING = "### Thanks for helping us improve";
 export const THANKS_LEAD_IN =
   "This release addresses issues reported by these community members. Thank you for taking the time to file them:";
 export const REPOSITORY_HEADING = "## Repository";
@@ -352,7 +350,9 @@ export function filesOf(spawn, pr) {
     "--paginate",
     `repos/${REPO}/pulls/${pr}/files`,
     "--jq",
-    ".[].filename",
+    // A rename's source is in previous_filename: a file moved out of a
+    // server's directory still changed that server.
+    ".[] | .filename, (.previous_filename // empty)",
   ]);
   return out === "" ? [] : out.split("\n");
 }
@@ -393,30 +393,12 @@ export function closingKeywordIssues(body) {
 }
 
 /**
- * The logins a `Credit: @a, @b` line names. One line per credit, at the start
- * of a line, outside code and quotes, so a sentence that merely mentions
- * someone credits nobody.
- *
- * @param {string | null | undefined} text
- */
-export function creditLines(text) {
-  const logins = [];
-  for (const m of proseOf(text ?? "").matchAll(/^[ \t]*Credit:(.*)$/gim)) {
-    for (const at of m[1].matchAll(
-      /@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)/g,
-    ))
-      logins.push(at[1]);
-  }
-  return logins;
-}
-
-/**
  * The text with every place GitHub ignores a closing keyword blanked out:
  * HTML comments (PR templates leave `<!-- Closes #… -->` behind), fenced
  * code, inline code and blockquotes. Four-space indented code is left alone:
  * telling it from an indented list continuation needs a full Markdown parser,
  * and masking a real `Closes` line would lose a credit. A keyword quoted in
- * any of those does not close the issue, so it must not credit anyone either.
+ * any of those does not close the issue, so it must not credit its author either.
  *
  * @param {string} body
  */
@@ -469,47 +451,25 @@ export function issuesClosedBy(spawn, pr) {
   return numbers;
 }
 
-const ISSUE_QUERY = `query($n:Int!,$after:String){repository(owner:"${OWNER}",name:"${NAME}"){issueOrPullRequest(number:$n){__typename ... on Issue{author{login __typename} body comments(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{author{login __typename} body}}}}}}`;
+const AUTHOR_QUERY = `query($n:Int!){repository(owner:"${OWNER}",name:"${NAME}"){issueOrPullRequest(number:$n){__typename ... on Issue{author{login __typename}}}}}`;
 
 /**
- * Who is up for credit on issue `n`, before the maintainer filter: its author,
- * and every login a maintainer named on a `Credit:` line in the body or a
- * comment. Empty when `n` is a PR, and a bot or deleted account is skipped.
- * A `Credit:` line written by a non-maintainer is ignored, so a reporter
- * cannot add names to the release notes.
+ * The login to credit for issue `n`, or null when there is nobody to credit:
+ * the number is a PR rather than an issue, or the author is a bot or a
+ * deleted account.
  *
  * @param {Spawn} spawn
  * @param {number} n
- * @param {(login: string) => boolean} isMaintainerLogin
- * @returns {string[]}
+ * @returns {string | null}
  */
-export function candidatesFor(spawn, n, isMaintainerLogin) {
-  const found = [];
-  let after;
-  for (;;) {
-    /** @type {Record<string, string | number>} */
-    const variables = after === undefined ? { n } : { n, after };
-    const node = graphql(spawn, ISSUE_QUERY, variables).repository
-      .issueOrPullRequest;
-    if (!node) {
-      throw new Error(`#${n} not found`);
-    }
-    if (node.__typename !== "Issue") return [];
-    // The body counts once, on the first page; every page adds its comments.
-    const texts = [...node.comments.nodes];
-    if (after === undefined) {
-      if (node.author?.__typename === "User") found.push(node.author.login);
-      texts.unshift({ author: node.author, body: node.body });
-    }
-    for (const { author, body } of texts) {
-      if (author?.__typename !== "User") continue;
-      const named = creditLines(body);
-      if (named.length && isMaintainerLogin(author.login)) found.push(...named);
-    }
-    if (!node.comments.pageInfo.hasNextPage) break;
-    after = node.comments.pageInfo.endCursor;
+export function creditableAuthor(spawn, n) {
+  const node = graphql(spawn, AUTHOR_QUERY, { n }).repository
+    .issueOrPullRequest;
+  if (!node) {
+    throw new Error(`#${n} not found`);
   }
-  return [...new Set(found)];
+  if (node.__typename !== "Issue") return null;
+  return node.author?.__typename === "User" ? node.author.login : null;
 }
 
 /**
@@ -531,49 +491,33 @@ export function isMaintainer(spawn, login) {
 }
 
 /**
- * Looks each PR, issue and login up once, however many sections share it.
+ * Community reporter → the issues of theirs the listed PRs close.
  *
  * @param {Spawn} spawn
+ * @param {number[]} pulls
+ * @returns {Map<string, number[]>}
  */
-export function creditLookup(spawn) {
+export function collectReporters(spawn, pulls) {
+  const issues = new Set();
+  for (const pr of pulls) {
+    for (const n of issuesClosedBy(spawn, pr)) issues.add(n);
+  }
+  /** @type {Map<string, number[]>} */
+  const reporters = new Map();
   /** @type {Map<string, boolean>} */
-  const maintainers = new Map();
-  /** @type {Map<number, Set<number>>} */
-  const closed = new Map();
-  /** @type {Map<number, string[]>} */
-  const candidates = new Map();
-  const isMaintainerLogin = (/** @type {string} */ login) => {
-    const key = login.toLowerCase();
-    if (!maintainers.has(key)) maintainers.set(key, isMaintainer(spawn, login));
-    return /** @type {boolean} */ (maintainers.get(key));
-  };
-  /**
-   * Community reporter → the issues of theirs this section's PRs close.
-   *
-   * @param {Entry[]} entries
-   * @returns {Map<string, number[]>}
-   */
-  return function reportersFor(entries) {
-    const issues = new Set();
-    for (const { pr } of entries) {
-      if (!closed.has(pr)) closed.set(pr, issuesClosedBy(spawn, pr));
-      for (const n of /** @type {Set<number>} */ (closed.get(pr)))
-        issues.add(n);
+  const maintainer = new Map();
+  for (const n of [...issues].sort((a, b) => a - b)) {
+    const login = creditableAuthor(spawn, n);
+    if (login === null) continue;
+    if (!maintainer.has(login)) {
+      maintainer.set(login, isMaintainer(spawn, login));
     }
-    /** @type {Map<string, number[]>} */
-    const reporters = new Map();
-    for (const n of [...issues].sort((a, b) => a - b)) {
-      if (!candidates.has(n))
-        candidates.set(n, candidatesFor(spawn, n, isMaintainerLogin));
-      for (const login of /** @type {string[]} */ (candidates.get(n))) {
-        if (isMaintainerLogin(login)) continue;
-        const list = reporters.get(login) ?? [];
-        if (!list.includes(n)) list.push(n);
-        reporters.set(login, list);
-      }
-    }
-    return reporters;
-  };
+    if (maintainer.get(login)) continue;
+    const list = reporters.get(login) ?? [];
+    list.push(n);
+    reporters.set(login, list);
+  }
+  return reporters;
 }
 
 /**
@@ -592,20 +536,15 @@ export function formatThanks(reporters) {
     .map(
       ([login, nums]) => `* @${login} (${nums.map((n) => `#${n}`).join(", ")})`,
     );
-  return `${THANKS_HEADING}\n\n${THANKS_LEAD_IN}\n\n${lines.join("\n")}`;
+  return `## Thanks for helping us improve\n\n${THANKS_LEAD_IN}\n\n${lines.join("\n")}`;
 }
 
-/**
- * @param {Section} section
- * @param {string} thanks
- */
-export function formatSection(section, thanks) {
+/** @param {Section} section */
+export function formatSection(section) {
   const changed = section.entries.length
     ? section.entries.map((e) => e.line).join("\n")
     : "No pull request in this range changed this package's directory.";
-  return [section.heading, `### What's Changed\n\n${changed}`, thanks]
-    .filter(Boolean)
-    .join("\n\n");
+  return `${section.heading}\n\n### What's Changed\n\n${changed}`;
 }
 
 /** @param {string[]} knownIssues */
@@ -616,7 +555,7 @@ export function formatKnownIssues(knownIssues) {
 }
 
 /**
- * @param {{ packages: string, sections: string[], trailer: string, mergeBranch: string, ledgerUrl: string, knownIssues: string[] }} parts
+ * @param {{ packages: string, sections: string[], trailer: string, mergeBranch: string, ledgerUrl: string, knownIssues: string[], thanks: string }} parts
  */
 export function assembleNotes({
   packages,
@@ -625,6 +564,7 @@ export function assembleNotes({
   mergeBranch,
   ledgerUrl,
   knownIssues,
+  thanks,
 }) {
   return (
     [
@@ -633,6 +573,7 @@ export function assembleNotes({
       trailer,
       `Release ledger: [${mergeBranch}](${ledgerUrl})`,
       formatKnownIssues(knownIssues),
+      thanks,
     ]
       .filter(Boolean)
       .join("\n\n") + "\n"
@@ -649,6 +590,22 @@ export async function main(
   { spawn = spawnSync, fetch: fetchImpl = globalThis.fetch } = {},
 ) {
   const args = parseNotesArgs(argv);
+
+  // When the tag already exists, GitHub ignores target_commitish (and
+  // `--target`) in favor of the tag's commit, so the generated range and the
+  // draft could describe a commit other than --merge-sha. Refuse in every
+  // mode, before anything is generated.
+  const existing = run(spawn, "gh", [
+    "api",
+    `repos/${REPO}/git/matching-refs/tags/${args.milestone}`,
+    "--jq",
+    ".[].ref",
+  ]).split("\n");
+  if (existing.includes(`refs/tags/${args.milestone}`)) {
+    throw new Error(
+      `tag ${args.milestone} already exists: GitHub would use its commit, not ${args.mergeSha}`,
+    );
+  }
 
   if (args.mode === "draft") {
     // release.yml only checks that the tagged commit is on main; refuse here
@@ -727,9 +684,15 @@ export async function main(
     touched.set(pr, dirsTouched(filesOf(spawn, pr), dirs));
   }
 
-  const reportersFor = creditLookup(spawn);
-  const sections = bucket(entries, packages, touched).map((section) =>
-    formatSection(section, formatThanks(reportersFor(section.entries))),
+  const sections = bucket(entries, packages, touched).map(formatSection);
+  console.error(
+    `crediting reporters of issues closed by ${entries.length} PRs`,
+  );
+  const thanks = formatThanks(
+    collectReporters(
+      spawn,
+      entries.map((e) => e.pr),
+    ),
   );
   const notes = assembleNotes({
     packages: formatPackages(packages),
@@ -738,6 +701,7 @@ export async function main(
     mergeBranch: args.mergeBranch,
     ledgerUrl: args.ledgerUrl,
     knownIssues: args.knownIssues,
+    thanks,
   });
 
   if (args.mode === "preview") {

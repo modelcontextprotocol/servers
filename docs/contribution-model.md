@@ -113,15 +113,13 @@ For each PR marked for harvest:
   then a search of open and closed issues), file nothing. The issue is the
   pointer in the close comment. Add the PR to that issue as a prototype in the
   same comment that credits its author, so the work is findable from the issue.
-  The credit is a line of its own, `Credit: @<login>`: the release notes read
-  that line (`scripts/release-notes.mjs`), and only when a maintainer wrote it.
 - **Otherwise file one issue**, following `issue-create` for the labels (`v2`,
   exactly one type label, the server's `server-<name>` scope label where one
   applies) and the board card, with one difference: **board it as `Incoming`,
   with no milestone.** Harvesting preserves a fix; it does not approve it. The
   issue then goes through triage's approval pass like any other inflow.
   The issue states the problem in its own words (not "see the PR"), links the PR
-  as a prototype, and credits its author on a `Credit: @<login>` line.
+  as a prototype, and credits its author.
 - **A duplicate group** gets one issue, linking every PR in the group.
 
 ### Security fixes

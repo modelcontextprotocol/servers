@@ -1,9 +1,9 @@
 // Tests for scripts/release-notes.mjs (#5056): per-server bucketing (one
 // server, several, none), sections only for published packages, the
-// Repository catch-all dropping no PR, per-section Thanks with every exclusion
-// (maintainers by permission, bots, deleted accounts, PRs, other repos), the
-// maintainer-only `Credit:` line, keyword parsing, pagination, fail-fast at
-// every lookup, and that nothing is created without --draft. Run via
+// Repository catch-all dropping no PR, the release-wide Thanks section (laid
+// out as the Inspector's) with every exclusion (maintainers by permission,
+// bots, deleted accounts, PRs, other repos), keyword parsing, pagination,
+// fail-fast at every lookup, and that nothing is created without --draft. Run via
 // `npm run test:scripts`.
 
 import assert from "node:assert/strict";
@@ -14,7 +14,6 @@ import {
   assembleNotes,
   bucket,
   closingKeywordIssues,
-  creditLines,
   dirsTouched,
   formatKnownIssues,
   formatPackages,
@@ -259,26 +258,6 @@ test("closingKeywordIssues ignores keywords GitHub ignores: code, quotes, commen
   assert.deepEqual(closingKeywordIssues("Closes #1\n```\nCloses #2"), [1]);
 });
 
-test("creditLines reads `Credit:` lines only, outside code and quotes", () => {
-  assert.deepEqual(
-    creditLines(
-      [
-        "Credit: @alice",
-        "credit: @bob, @carol-x",
-        "Thanks to @dave for the idea", // a mention is not a credit
-        "> Credit: @erin",
-        "`Credit: @frank`",
-        "```",
-        "Credit: @gina",
-        "```",
-        "  Credit:@hank",
-      ].join("\n"),
-    ),
-    ["alice", "bob", "carol-x", "hank"],
-  );
-  assert.deepEqual(creditLines(null), []);
-});
-
 test("formatThanks orders by issue count, then name case-insensitively", () => {
   const reporters = new Map([
     ["zed", [5]],
@@ -289,7 +268,7 @@ test("formatThanks orders by issue count, then name case-insensitively", () => {
   assert.equal(
     formatThanks(reporters),
     [
-      "### Thanks for helping us improve",
+      "## Thanks for helping us improve",
       "",
       THANKS_LEAD_IN,
       "",
@@ -308,7 +287,7 @@ test("formatKnownIssues pluralizes and is omitted when empty", () => {
   assert.equal(formatKnownIssues(["a", "b"]), "## Known issues\n\na\n\nb");
 });
 
-test("assembleNotes: packages, sections, trailer, ledger, known issues", () => {
+test("assembleNotes: packages, sections, trailer, ledger, known issues, thanks", () => {
   assert.equal(
     assembleNotes({
       packages: "P",
@@ -317,8 +296,9 @@ test("assembleNotes: packages, sections, trailer, ledger, known issues", () => {
       mergeBranch: "mb",
       ledgerUrl: "https://l",
       knownIssues: ["K"],
+      thanks: "## Thanks for helping us improve\n\nX",
     }),
-    "P\n\nS1\n\nS2\n\nT\n\nRelease ledger: [mb](https://l)\n\n## Known issue\n\nK\n",
+    "P\n\nS1\n\nS2\n\nT\n\nRelease ledger: [mb](https://l)\n\n## Known issue\n\nK\n\n## Thanks for helping us improve\n\nX\n",
   );
   assert.equal(
     assembleNotes({
@@ -328,6 +308,7 @@ test("assembleNotes: packages, sections, trailer, ledger, known issues", () => {
       mergeBranch: "mb",
       ledgerUrl: "https://l",
       knownIssues: [],
+      thanks: "",
     }),
     "P\n\nRelease ledger: [mb](https://l)\n",
   );
@@ -347,9 +328,9 @@ function world({
     },
   },
   onRegistry = ["mcp-server-time"],
-  /** @type {Record<number, { files?: string[], body?: string, closing?: number[], pages?: Array<Array<number | object>> }>} */
+  /** @type {Record<number, { files?: string[], renamedFrom?: Record<string, string>, body?: string, closing?: number[], pages?: Array<Array<number | object>> }>} */
   pulls = {},
-  /** @type {Record<number, { __typename: string, author?: object | null, body?: string, comments?: object[], commentPages?: object[][] }>} */
+  /** @type {Record<number, object>} */
   issues = {},
   /** @type {Record<string, string>} */
   perms = {},
@@ -357,6 +338,8 @@ function world({
   failOn = undefined,
   compare = "identical",
   releases = ["2026.8.31"],
+  /** @type {string[]} */
+  tagRefs = [],
 } = {}) {
   /** @type {Array<{ cmd: string, args: string[], input?: string }>} */
   const calls = [];
@@ -447,30 +430,24 @@ function world({
           }),
         );
       }
-      const issue = issues[n] ?? null;
-      let node = issue;
-      if (issue?.__typename === "Issue") {
-        const pages = issue.commentPages ?? [issue.comments ?? []];
-        const hasNextPage = index + 1 < pages.length;
-        node = {
-          __typename: "Issue",
-          author: issue.author,
-          body: issue.body ?? "",
-          comments: {
-            pageInfo: {
-              hasNextPage,
-              endCursor: hasNextPage ? String(index + 1) : null,
-            },
-            nodes: pages[index],
-          },
-        };
-      }
       return ok(
-        JSON.stringify({ data: { repository: { issueOrPullRequest: node } } }),
+        JSON.stringify({
+          data: { repository: { issueOrPullRequest: issues[n] ?? null } },
+        }),
       );
     }
     const files = args[2]?.match(/pulls\/(\d+)\/files$/);
-    if (files) return ok((pulls[Number(files[1])].files ?? []).join("\n"));
+    if (files) {
+      // The --jq emits each file, then its rename source when it has one.
+      const { files: list = [], renamedFrom = {} } = pulls[Number(files[1])];
+      return ok(
+        list
+          .flatMap((f) => (renamedFrom[f] ? [f, renamedFrom[f]] : [f]))
+          .join("\n"),
+      );
+    }
+    if (args[1].includes("/git/matching-refs/tags/"))
+      return ok(tagRefs.join("\n"));
     if (args[1].endsWith("/releases/generate-notes")) return ok(generated);
     if (args[1].includes("/compare/")) return ok(compare);
     if (args[2] === `repos/${REPO}/releases`) return ok(releases.join("\n"));
@@ -497,11 +474,6 @@ const user = (/** @type {string} */ login, extra = {}) => ({
   author: { login, __typename: "User" },
   ...extra,
 });
-const said = (/** @type {string} */ login, /** @type {string} */ body) => ({
-  author: { login, __typename: "User" },
-  body,
-});
-
 /** @param {import("node:test").TestContext} t */
 function quiet(t) {
   /** @type {string[]} */
@@ -522,7 +494,7 @@ function sectionOf(/** @type {string} */ notes, /** @type {string} */ heading) {
   return notes.slice(start, next === -1 ? undefined : next);
 }
 
-test("notes: per-server sections with per-server Thanks, every PR placed", async (t) => {
+test("notes: per-server sections, every PR placed, one release-wide Thanks", async (t) => {
   const out = quiet(t);
   const deps = world({
     pulls: {
@@ -554,26 +526,42 @@ test("notes: per-server sections with per-server Thanks, every PR placed", async
     "## @modelcontextprotocol/server-memory 1.0.0",
     "## mcp-server-git 2.0.0",
     "## Repository",
+    "## Thanks for helping us improve",
   ]);
 
   const git = sectionOf(notes, "## mcp-server-git 2.0.0");
-  assert.match(git, /change 10 .*\n\* change 11 /);
-  assert.match(git, /\* @reporter \(#1, #2\)\n*$/);
+  assert.match(git, /change 10 .*\n\* change 11 [^\n]*\n*$/);
   const memory = sectionOf(
     notes,
     "## @modelcontextprotocol/server-memory 1.0.0",
   );
   assert.match(memory, /change 11/);
   assert.doesNotMatch(memory, /change 10/);
-  // The same reporter, credited per server with only that server's issues.
-  assert.match(memory, /\* @reporter \(#2\)\n*$/);
   const repo = sectionOf(notes, "## Repository");
-  assert.match(repo, /change 12[^\n]*\n\* change 13 /);
-  assert.match(repo, /\* @docs-person \(#3\)\n\* @reporter \(#4\)/);
-
   assert.match(
+    repo,
+    /change 12[^\n]*\n\* change 13 [^\n]*\n\n\*\*Full Changelog/,
+  );
+
+  // One Thanks section for the whole release, last, as the Inspector lays it
+  // out: each reporter once, with every issue of theirs across all servers.
+  assert.ok(
+    notes.endsWith(
+      [
+        "**Full Changelog**: https://example/compare",
+        "",
+        "Release ledger: [v2/chore/1-release-v2.0.0](https://l.example/x)",
+        "",
+        "## Thanks for helping us improve",
+        "",
+        THANKS_LEAD_IN,
+        "",
+        "* @reporter (#1, #2, #4)",
+        "* @docs-person (#3)",
+        "",
+      ].join("\n"),
+    ),
     notes,
-    /\*\*Full Changelog\*\*: https:\/\/example\/compare\n\nRelease ledger: \[v2\/chore\/1-release-v2\.0\.0\]\(https:\/\/l\.example\/x\)\n$/,
   );
   // Each PR's files, closing refs, each issue and each login: looked up once.
   const count = (/** @type {string} */ s) =>
@@ -633,50 +621,7 @@ test("Thanks excludes maintainers, bots, deleted accounts, PRs and other repos",
   assert.doesNotMatch(notes, /@maint|@bot|#5|#7/);
 });
 
-test("a maintainer's `Credit:` line credits an outside PR's author; anyone else's does not", async (t) => {
-  quiet(t);
-  const notes = await main(
-    BASE,
-    world({
-      pulls: {
-        10: {
-          files: ["src/git/a.py"],
-          body: "Closes #1\nCloses #2\nCloses #3",
-        },
-      },
-      issues: {
-        // Filed by a maintainer from a closed outside PR, crediting its author.
-        1: user("maint", { body: "Prototype: #900.\n\nCredit: @pr-author" }),
-        // Credited later, in a maintainer's comment, across comment pages.
-        2: user("reporter", {
-          commentPages: [
-            [said("someone", "+1")],
-            [said("maint", "Credit: @other-author, @maint")],
-          ],
-        }),
-        // A non-maintainer cannot add names.
-        3: user("reporter", {
-          body: "Credit: @sneaky",
-          comments: [said("reporter", "Credit: @sneaky2")],
-        }),
-      },
-      perms: {
-        maint: "admin",
-        reporter: "read",
-        someone: "read",
-        "pr-author": "read",
-        "other-author": "none",
-      },
-    }),
-  );
-  const git = sectionOf(notes, "## mcp-server-git 2.0.0");
-  assert.match(git, /\* @reporter \(#2, #3\)/);
-  assert.match(git, /\* @other-author \(#2\)/);
-  assert.match(git, /\* @pr-author \(#1\)/);
-  assert.doesNotMatch(git, /@maint|@sneaky|@someone/);
-});
-
-test("the Thanks subsection is left out when no community reporter remains", async (t) => {
+test("the Thanks section is left out when no community reporter remains", async (t) => {
   quiet(t);
   const notes = await main(
     BASE,
@@ -749,6 +694,7 @@ for (const [what, failOn] of [
   ["a permission lookup", "/permission"],
   ["the compare check", "/compare/"],
   ["the existing-release check", `repos/${REPO}/releases --jq`],
+  ["the existing-tag check", "matching-refs"],
 ]) {
   test(`a failed ${what} aborts with nothing created`, async (t) => {
     quiet(t);
@@ -937,4 +883,47 @@ test("--draft refuses when a Release or draft with that tag already exists", asy
     deps.spawn.calls.some((c) => c.args[1] === "create"),
     false,
   );
+});
+
+test("an existing milestone tag aborts in every mode, before notes are generated", async (t) => {
+  quiet(t);
+  for (const mode of [[], ["--draft"]]) {
+    const deps = world({
+      // A prefix match (v2.0.0-rc.1) is not the tag itself.
+      tagRefs: ["refs/tags/v2.0.0-rc.1", "refs/tags/v2.0.0"],
+    });
+    await assert.rejects(
+      main([...BASE, ...mode], deps),
+      /tag v2\.0\.0 already exists: GitHub would use its commit/,
+    );
+    assert.equal(
+      deps.spawn.calls.some(
+        (c) =>
+          c.args.join(" ").includes("generate-notes") || c.args[1] === "create",
+      ),
+      false,
+    );
+  }
+  const prefixOnly = world({ tagRefs: ["refs/tags/v2.0.0-rc.1"] });
+  await main(BASE, prefixOnly);
+});
+
+test("a file renamed out of a server's directory still places the PR there", async (t) => {
+  quiet(t);
+  const notes = await main(
+    BASE,
+    world({
+      pulls: {
+        10: {
+          files: ["docs/moved.md"],
+          renamedFrom: { "docs/moved.md": "src/git/old.md" },
+        },
+      },
+    }),
+  );
+  assert.match(
+    notes,
+    /## mcp-server-git 2\.0\.0\n\n### What's Changed\n\n\* change 10/,
+  );
+  assert.doesNotMatch(notes, /## Repository/);
 });
