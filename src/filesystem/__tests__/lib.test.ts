@@ -270,6 +270,30 @@ describe('Lib Functions', () => {
           process.cwd = originalCwd;
         }
       });
+
+      describe.skipIf(process.platform === 'win32')('Windows-style paths on POSIX hosts', () => {
+        it.each([
+          'C:\\Users\\me\\notes\\file.md',
+          'C:/Users/me/file.md',
+          'Z:\\',
+          'C:'
+        ])('rejects %s instead of treating it as a relative path', async (windowsPath) => {
+          await expect(validatePath(windowsPath))
+            .rejects.toThrow('Access denied - Windows-style path received on a POSIX host');
+        });
+
+        it('rejects before touching the filesystem', async () => {
+          await expect(validatePath('C:\\Users\\me\\notes\\file.md')).rejects.toThrow();
+          expect(mockFs.realpath).not.toHaveBeenCalled();
+        });
+      });
+
+      it('still resolves relative paths that merely contain a colon after the first character', async () => {
+        const colonPath = process.platform === 'win32' ? 'C:\\Users\\test\\notes\\file:C.md' : 'notes/file:C.md';
+        const result = await validatePath(colonPath);
+        const expectedBase = process.platform === 'win32' ? 'C:\\Users\\test' : '/home/user';
+        expect(result).toBe(path.resolve(expectedBase, colonPath));
+      });
     });
   });
 
