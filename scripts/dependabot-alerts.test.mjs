@@ -489,10 +489,9 @@ test("an unverified target is flagged in the body and the comment", () => {
   assert.match(body, /\*\*Choose a target first\.\*\*/);
   assert.ok(!body.includes("Raise the declared range**"));
   assert.ok(!body.includes("`>=2.0.0`"));
-  assert.match(
-    buildNewAdvisoryComment(narrowed, ["GHSA-b"]),
-    /no single listed patched version/,
-  );
+  const comment = buildNewAdvisoryComment(narrowed, ["GHSA-b"]);
+  assert.match(comment, /asks for a safe release to be found first/);
+  assert.ok(!comment.includes(`\`${narrowed.fixedIn}\``));
 });
 
 test("titles and labels name the bump and the server", () => {

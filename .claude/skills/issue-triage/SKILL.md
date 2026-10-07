@@ -309,6 +309,11 @@ issues the automation wrote, so the next run would file a duplicate beside it.
 Dispatch the sweep instead (`gh workflow run dependabot-alerts.yml`, or
 `dependency-refresh.yml` for a version bump) and point at the issue it files.
 
+⚠️ **Until the milestone merge carries the sweeps to `main`**, none of this
+applies yet: a workflow can only be dispatched or scheduled from the default
+branch, and `main` still has `dependabot.yml`. Leave Dependabot PRs open until
+then. The merge PR closes them, each with the pointer #5065 records.
+
 Not touched by triage:
 
 - **Maintainer-authored PRs.** List any that target `main` for their authors to

@@ -753,7 +753,7 @@ export function buildIssueBody(
     `| Vulnerable on \`${TARGET_BRANCH}\` | ${[...new Set(affected.map((e) => e.version))].map((v) => `\`${cell(v)}\``).join(", ") || "—"} |`,
     group.targetVerified === false
       ? `| Bump to | ⚠️ none found: ${cell(unverifiedReason(group))}. Pick a release outside every range listed |`
-      : `| Bump to | \`${cell(group.fixedIn)}\`, the lowest patched version below that is outside every range listed |`,
+      : `| Bump to | \`${cell(group.fixedIn)}\`: the lowest listed patched version that no range below covers |`,
     `| Scope | ${cell(group.scope)} |`,
     `| Highest severity | ${cell(group.severity)} |`,
     "",
@@ -827,7 +827,7 @@ export function buildNewAdvisoryComment(group, added) {
     .join("\n");
   return [
     buildCommentMarker(added),
-    `${added.length} new Dependabot ${added.length === 1 ? "advisory" : "advisories"} for \`${group.package}\`. The bump this issue asks for is now to \`${group.fixedIn}\`${group.targetVerified === false ? "; see the issue body, since no single listed patched version clears every advisory" : `, which clears ${added.length === 1 ? "it" : "them"} along with the rest`}.`,
+    `${added.length} new Dependabot ${added.length === 1 ? "advisory" : "advisories"} for \`${group.package}\`. ${group.targetVerified === false ? "No listed patched version clears every advisory now, so this issue asks for a safe release to be found first; see the body." : `The bump this issue asks for is now to \`${group.fixedIn}\`, which clears ${added.length === 1 ? "it" : "them"} along with the rest.`}`,
     "",
     "| GHSA | Severity | Summary |",
     "| --- | --- | --- |",
