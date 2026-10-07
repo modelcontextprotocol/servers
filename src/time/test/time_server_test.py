@@ -462,6 +462,52 @@ def test_convert_time(test_time, source_tz, time_str, target_tz, expected):
         assert result.time_difference == expected["time_difference"]
 
 
+def test_convert_time_flags_ambiguous_fall_back_time():
+    # America/New_York's DST fall-back in 2024 happens at 2:00 AM on Nov 3,
+    # when clocks go back to 1:00 AM -- so 1:30 AM occurs twice that day.
+    # Freeze at noon UTC (already past the local transition) so `now` in NY
+    # time also lands on Nov 3, the actual transition date.
+    with freeze_time("2024-11-03 12:00:00+00:00"):
+        time_server = TimeServer()
+        result = time_server.convert_time("America/New_York", "01:30", "Europe/London")
+
+    assert result.source.note is not None
+    assert "occurs twice" in result.source.note
+    assert "America/New_York" in result.source.note
+    # The earlier (fold=0) occurrence is used: -04:00 (EDT), not -05:00 (EST).
+    assert result.source.datetime == "2024-11-03T01:30:00-04:00"
+
+
+def test_convert_time_no_note_for_an_unambiguous_time_on_the_same_day():
+    with freeze_time("2024-11-03 12:00:00+00:00"):
+        time_server = TimeServer()
+        result = time_server.convert_time("America/New_York", "10:00", "Europe/London")
+
+    assert result.source.note is None
+
+
+def test_convert_time_no_note_for_a_timezone_without_the_transition():
+    # Same real moment, but a source timezone with no DST fall-back at all --
+    # the note must not fire just because *some* zone somewhere is ambiguous.
+    with freeze_time("2024-11-03 12:00:00+00:00"):
+        time_server = TimeServer()
+        result = time_server.convert_time("UTC", "01:30", "Europe/London")
+
+    assert result.source.note is None
+
+
+def test_convert_time_flags_ambiguous_time_in_a_different_zone_and_month():
+    # Europe/Warsaw's DST fall-back in 2024 is Oct 27, a different date and
+    # a different offset pair (+02:00 -> +01:00) than the US case above --
+    # confirms the check isn't hardcoded to one zone's transition.
+    with freeze_time("2024-10-27 12:00:00+00:00"):
+        time_server = TimeServer()
+        result = time_server.convert_time("Europe/Warsaw", "02:30", "UTC")
+
+    assert result.source.note is not None
+    assert result.source.datetime == "2024-10-27T02:30:00+02:00"
+
+
 def test_get_local_tz_with_override():
     """Test that timezone override works correctly."""
     result = get_local_tz("America/New_York")
