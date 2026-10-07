@@ -46,6 +46,15 @@ const sweepLabels = [
   { name: "dependencies" },
 ];
 
+test("every SDK group is an MCP-org upstream (the #5069 risk acceptance)", () => {
+  // The analysis job's residual credential channel is accepted only because
+  // these upstreams are trusted MCP-org SDKs. A group outside the org needs
+  // that decision taken again before it is added here.
+  for (const g of SDK_GROUPS) {
+    assert.match(g.repo, /^modelcontextprotocol\//, `${g.key}: ${g.repo}`);
+  }
+});
+
 test("markers round-trip", () => {
   const marker = buildMarker(group("python-sdk"), "2.3.0");
   assert.deepEqual(parseMarker(`${marker}\nbody`), {

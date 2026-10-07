@@ -249,6 +249,13 @@ projects: write`. A sweep issue arrives labeled `v2` + `chore` +
   analysis is scanned for credentials before it is written out and again before
   it is posted. `sdk-watch.test.mjs` pins each of these; keep them when editing
   the job.
+- **The analysis job's residual credential channel is an accepted risk, for
+  MCP-org upstreams only** (#5069). The model can read `ANTHROPIC_API_KEY`, and
+  its write-up is published, so an encoded key would pass the scans. The
+  maintainers accept that because every SDK the watch reads is an MCP-org SDK.
+  **An SDK group outside the `modelcontextprotocol` org needs that decision
+  taken again first** (federation, or a spend-capped CI key), and
+  `sdk-watch.test.mjs` fails until it is.
 
 ## Project status and direction
 

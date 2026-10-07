@@ -205,13 +205,15 @@ jobs:
           # copies its environment into the model's, so `ANTHROPIC_API_KEY` is
           # readable by a `Read` this job needs, and `analysis` is
           # model-controlled text this workflow publishes. The verbatim scans
-          # below catch the naive shape only. What makes that acceptable is what
-          # this job reads: both upstreams (`typescript-sdk`, `python-sdk`) are
-          # in this repository's own org, so their release notes are first-party
-          # content, and anyone able to plant an injection there already holds
-          # release rights here. Point this at an upstream outside the org and
-          # that judgement has to be re-opened: workload identity federation, or
-          # a dedicated CI-scoped key with a spend cap, is then the next step.
+          # below catch the naive shape only. The maintainers accepted that
+          # risk on #5069: every upstream this job reads (`typescript-sdk`,
+          # `python-sdk`) is an MCP-org SDK, and those are trusted. That holds
+          # even though GitHub-generated release notes list PR titles that
+          # outside contributors wrote, which the decision weighed. Point this
+          # at an upstream outside the MCP org and the decision has to be taken
+          # again first: workload identity federation, or a dedicated CI-scoped
+          # key with a spend cap, is then the next step.
+          # `sdk-watch.test.mjs` fails on an SDK group outside the org.
           claude_args: |
             --model claude-opus-5-5
             --max-turns 40
