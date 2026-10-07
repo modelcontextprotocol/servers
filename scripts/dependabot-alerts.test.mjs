@@ -34,6 +34,7 @@ import {
   parseClearedDate,
   parseCommentMarker,
   parseMarker,
+  pickTarget,
   scopedOverrideExample,
   splitOwner,
   toSemverRange,
@@ -349,6 +350,67 @@ test("narrowToApplicable keeps only advisories in range, and retargets", () => {
       { path: "gitpython", version: "3.1.62", topLevel: true },
     ]),
     null,
+  );
+});
+
+test("pickTarget names the lowest patched version outside every range", () => {
+  // Copilot's example: 2.0.0 is the highest fix, but the first range still
+  // covers it, and no listed fix clears both.
+  const tricky = pickTarget("npm", [
+    { ghsa: "A", range: "< 1.5.0 || >= 2.0.0, < 2.2.0", fixedIn: "1.5.0" },
+    { ghsa: "B", range: "< 2.0.0", fixedIn: "2.0.0" },
+  ]);
+  assert.deepEqual(tricky, {
+    fixedIn: "2.0.0",
+    verified: false,
+    stillOpen: ["A"],
+  });
+
+  // Nested ranges: the highest fix is the lowest safe one.
+  assert.deepEqual(
+    pickTarget("pip", [
+      { ghsa: "A", range: "<= 3.1.59", fixedIn: "3.1.60" },
+      { ghsa: "B", range: "<= 3.1.61", fixedIn: "3.1.62" },
+    ]),
+    { fixedIn: "3.1.62", verified: true, stillOpen: [] },
+  );
+
+  // Disjoint lines: a lower fix can clear everything.
+  assert.deepEqual(
+    pickTarget("npm", [
+      { ghsa: "A", range: "< 1.4.0", fixedIn: "1.4.0" },
+      { ghsa: "B", range: ">= 2.0.0, < 2.1.0", fixedIn: "2.1.0" },
+    ]),
+    { fixedIn: "1.4.0", verified: true, stillOpen: [] },
+  );
+
+  // An unreadable range cannot vouch for anything.
+  assert.equal(
+    pickTarget("npm", [{ ghsa: "A", range: "whenever", fixedIn: "1.0.0" }])
+      .verified,
+    false,
+  );
+});
+
+test("an unverified target is flagged in the body and the comment", () => {
+  const [group] = groupAlerts([
+    alert({
+      name: "x",
+      range: "< 1.5.0 || >= 2.0.0, < 2.2.0",
+      fixed: "1.5.0",
+      ghsa: "GHSA-a",
+    }),
+    alert({ name: "x", range: "< 2.0.0", fixed: "2.0.0", ghsa: "GHSA-b" }),
+  ]);
+  const { group: narrowed, affected } = narrowToApplicable(group, [
+    { path: "node_modules/x", version: "1.0.0", topLevel: true },
+  ]);
+  assert.equal(narrowed.targetVerified, false);
+  const body = buildIssueBody(narrowed, { affected, declarers: [] });
+  assert.match(body, /still in range of `GHSA-a`/);
+  assert.match(
+    buildNewAdvisoryComment(narrowed, ["GHSA-b"]),
+    /no single listed patched version/,
   );
 });
 

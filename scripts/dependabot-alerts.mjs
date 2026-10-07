@@ -366,14 +366,57 @@ export function groupKey(pkg, manifestPath) {
  * @returns {string}
  */
 export function highestVersion(ecosystem, versions) {
-  const compare =
-    ecosystem === "pip"
-      ? pep440Compare
-      : (a, b) =>
-          semver.valid(a) && semver.valid(b)
-            ? semver.compare(a, b)
-            : a.localeCompare(b);
-  return [...versions].sort(compare).at(-1);
+  return [...versions].sort(versionCompare(ecosystem)).at(-1);
+}
+
+/** The ecosystem's own ordering. */
+function versionCompare(ecosystem) {
+  return ecosystem === "pip"
+    ? pep440Compare
+    : (a, b) =>
+        semver.valid(a) && semver.valid(b)
+          ? semver.compare(a, b)
+          : a.localeCompare(b);
+}
+
+/**
+ * The version a grouped issue asks for: the LOWEST of the advisories' patched
+ * versions that falls outside every applicable range. The highest patched
+ * version is not enough on its own: one advisory's range can still cover
+ * another's fix (`<1.5.0 || >=2.0.0 <2.2.0` patched at 1.5.0, beside `<2.0.0`
+ * patched at 2.0.0, leaves 2.0.0 vulnerable). When no listed patched version
+ * clears them all, the highest is named and `verified` is false, and the body
+ * says so rather than claiming one bump clears everything.
+ *
+ * @param {string} ecosystem
+ * @param {Array<{fixedIn: string, range: string}>} advisories
+ * @returns {{fixedIn: string, verified: boolean, stillOpen: string[]}}
+ *   `stillOpen` names the advisories whose range still covers the target
+ */
+export function pickTarget(ecosystem, advisories) {
+  const covers = (version) =>
+    advisories.filter((a) => {
+      try {
+        return inRange(ecosystem, version, a.range);
+      } catch {
+        // A range that cannot be read cannot vouch for the target.
+        return true;
+      }
+    });
+  const candidates = [...new Set(advisories.map((a) => a.fixedIn))].sort(
+    versionCompare(ecosystem),
+  );
+  for (const candidate of candidates) {
+    if (covers(candidate).length === 0) {
+      return { fixedIn: candidate, verified: true, stillOpen: [] };
+    }
+  }
+  const highest = candidates.at(-1);
+  return {
+    fixedIn: highest,
+    verified: false,
+    stillOpen: covers(highest).map((a) => a.ghsa),
+  };
 }
 
 /** One advisory as it applies to one manifest. */
@@ -485,10 +528,11 @@ export function narrowToApplicable(group, entries) {
       advisories,
       ghsas: advisories.map((a) => a.ghsa),
       severity,
-      fixedIn: highestVersion(
-        group.ecosystem,
-        advisories.map((a) => a.fixedIn),
-      ),
+      ...(({ fixedIn, verified, stillOpen }) => ({
+        fixedIn,
+        targetVerified: verified,
+        targetStillOpen: stillOpen,
+      }))(pickTarget(group.ecosystem, advisories)),
     },
     affected,
   };
@@ -616,7 +660,9 @@ export function buildIssueBody(
     `| Package | \`${cell(group.package)}\` (${group.ecosystem}) |`,
     `| Manifest | \`${cell(group.manifestPath)}\` |`,
     `| Vulnerable on \`${TARGET_BRANCH}\` | ${[...new Set(affected.map((e) => e.version))].map((v) => `\`${cell(v)}\``).join(", ") || "—"} |`,
-    `| Bump to | \`${cell(group.fixedIn)}\`, the highest patched version below |`,
+    group.targetVerified === false
+      ? `| Bump to | \`${cell(group.fixedIn)}\` is the highest patched version below, but ⚠️ it is still in range of ${(group.targetStillOpen ?? []).map((g) => `\`${cell(g)}\``).join(", ")}: pick a release outside every range listed |`
+      : `| Bump to | \`${cell(group.fixedIn)}\`, the lowest patched version below that is outside every range listed |`,
     `| Scope | ${cell(group.scope)} |`,
     `| Highest severity | ${cell(group.severity)} |`,
     "",
@@ -690,7 +736,7 @@ export function buildNewAdvisoryComment(group, added) {
     .join("\n");
   return [
     buildCommentMarker(added),
-    `${added.length} new Dependabot ${added.length === 1 ? "advisory" : "advisories"} for \`${group.package}\`. The bump this issue asks for is now to \`${group.fixedIn}\`, which clears ${added.length === 1 ? "it" : "them"} along with the rest.`,
+    `${added.length} new Dependabot ${added.length === 1 ? "advisory" : "advisories"} for \`${group.package}\`. The bump this issue asks for is now to \`${group.fixedIn}\`${group.targetVerified === false ? "; see the issue body, since no single listed patched version clears every advisory" : `, which clears ${added.length === 1 ? "it" : "them"} along with the rest`}.`,
     "",
     "| GHSA | Severity | Summary |",
     "| --- | --- | --- |",

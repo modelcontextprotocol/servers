@@ -271,15 +271,19 @@ export function buildIssueTitle(state) {
 }
 
 /**
- * Labels: the sweep's, plus each server a row is in, unless the rows reach
- * every server (then the issue is repository-wide and takes none).
+ * Labels: the sweep's, plus each server with a copy that is BEHIND (a server
+ * already at the target has no work here), unless that is every server (then
+ * the issue is repository-wide and takes none).
  *
  * @param {NonNullable<ReturnType<typeof groupState>>} state
  */
 export function issueLabels(state) {
   const scopes = [
     ...new Set(
-      state.rows.map((r) => scopeLabel(`${r.where}/`)).filter(Boolean),
+      state.rows
+        .filter((r) => r.behind)
+        .map((r) => scopeLabel(`${r.where}/`))
+        .filter(Boolean),
     ),
   ].sort();
   return scopes.length === SERVERS.length

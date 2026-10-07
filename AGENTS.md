@@ -219,8 +219,10 @@ its reasoning; these are the rules.
   that closes it.
 - **Sweeps do not write the board.** `GITHUB_TOKEN` cannot hold `organization
 projects: write`. A sweep issue arrives labeled `v2` + `chore` +
-  `dependencies` (+ a `server-<name>` scope where it concerns one server) and
-  milestoned, and `issue-triage` pass 1 boards it in `Todo`. Boarding from the
+  `dependencies` (+ a `server-<name>` scope for each server it concerns) and
+  carries the open milestone with the nearest due date, so `issue-triage` pass
+  1 boards it in `Todo`. With no dated milestone open it is filed unmilestoned
+  and boarded in `Incoming`, like any unapproved issue. Boarding from the
   workflows waits on a GitHub App credential (#5061); do not add board-write
   code that reads a secret that does not exist.
 - **A sweep's marker counts only on an issue the automation wrote**: authored

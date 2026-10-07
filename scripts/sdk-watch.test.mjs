@@ -220,13 +220,28 @@ test("titles, labels and bodies", () => {
       "fetch",
       "git",
       "time",
-    ].map((s) => ({ where: `src/${s}` })),
+    ].map((s) => ({ where: `src/${s}`, behind: true })),
   };
   assert.deepEqual(issueLabels(everywhere), ["v2", "chore", "dependencies"]);
+  // Only servers that are behind are labeled.
+  const partly = groupState(
+    group("python-sdk"),
+    [
+      row("mcp", "src/fetch", "", "2.3.0"),
+      row("mcp", "src/time", "", "1.29.0"),
+    ],
+    { mcp: "2.3.0" },
+  );
+  assert.deepEqual(issueLabels(partly), [
+    "v2",
+    "chore",
+    "dependencies",
+    "server-time",
+  ]);
   assert.deepEqual(
     issueLabels({
       group: group("typescript-sdk-v1"),
-      rows: [{ where: "root" }],
+      rows: [{ where: "root", behind: true }],
     }),
     ["v2", "chore", "dependencies"],
   );

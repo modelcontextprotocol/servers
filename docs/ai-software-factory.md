@@ -27,9 +27,12 @@ work was tracked as #4858.
   It is not a tool bolted onto the repository. It is the repository's own
   contribution process, `AGENTS.md` plus the skills, loaded automatically by
   Claude Code, versioned and tested like code.
-- **Nothing happens without an issue.** Every PR closes one, every issue is on
-  the board, and the one thing that used to open PRs without an issue,
-  Dependabot, now files issues instead.
+- **Nothing happens without an issue.** In the ordinary flow every PR closes
+  one and every issue reaches the board, through `issue-create` or a triage
+  pass. The few exceptions are named in `AGENTS.md`: a security advisory's fix
+  (tracked by a private draft card), the milestone merge PR and the version PRs
+  (tied to their release issue). The one thing that used to open PRs with no
+  issue at all, Dependabot, now files issues instead.
 - **A gate strict enough to trust.** `npm run local:gate` runs every check CI
   runs, for both languages, before anything is pushed.
 
