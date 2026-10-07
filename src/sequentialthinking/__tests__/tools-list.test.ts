@@ -64,10 +64,12 @@ describe("sequentialthinking: initialize and tools/list", () => {
     });
   });
 
-  // SDK v2 removed the experimental tasks layer and no longer advertises
-  // `execution.taskSupport`; Part 5 (#4852) restores task semantics.
-  it.skip("forbids task-augmented execution", () => {
-    expect(tool.execution).toEqual({ taskSupport: "forbidden" });
+  // SDK 1.x advertised `execution: { taskSupport: "forbidden" }`. SDK v2
+  // removed the experimental tasks layer and advertises no `execution` at
+  // all; Part 5 (#4852) decides what the tool advertises under the tasks
+  // extension.
+  it("advertises no task-execution metadata", () => {
+    expect(tool.execution).toBeUndefined();
   });
 
   // #799: some clients cap a tool description at 1024 characters. This one is

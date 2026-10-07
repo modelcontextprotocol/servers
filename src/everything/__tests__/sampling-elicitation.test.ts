@@ -479,7 +479,8 @@ describe("trigger-url-elicitation", () => {
     expect(error).toBeInstanceOf(ProtocolError);
     const mcpError = error as ProtocolError;
     expect(mcpError.code).toBe(-32042);
-    // The SDK prefixes the code twice on the client side.
+    // SDK v2 passes the server's message through verbatim (SDK 1.x prefixed
+    // "MCP error -32042: " twice on the client side).
     expect(mcpError.message).toBe(
       "This request requires browser-based authorization.",
     );
