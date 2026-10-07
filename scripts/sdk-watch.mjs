@@ -72,6 +72,7 @@ import semver from "semver";
 import {
   compareVersions as pep440Compare,
   isPrerelease,
+  normalizeName,
   satisfies as pep440Satisfies,
 } from "./lib/pep440.mjs";
 import {
@@ -447,15 +448,22 @@ export function readInstalls(readFile, exists) {
       where: path.posix.dirname(file),
       lock: parseUvLock(readFile(file)),
     }));
+  // One row per locked version: a lock whose resolution forks (by platform
+  // or Python version) can hold several, and the oldest must not hide.
   const pypiRows = (pkg) =>
     uvLocks
       .filter(({ lock }) => lock.declared.has(pkg))
-      .map(({ where, lock }) => ({
-        name: pkg,
-        where,
-        declared: lock.declared.get(pkg),
-        installed: lock.packages.find((p) => p.name === pkg)?.version ?? null,
-      }));
+      .flatMap(({ where, lock }) => {
+        const versions = lock.packages
+          .filter((p) => normalizeName(p.name) === pkg)
+          .map((p) => p.version);
+        return (versions.length > 0 ? versions : [null]).map((installed) => ({
+          name: pkg,
+          where,
+          declared: lock.declared.get(pkg),
+          installed,
+        }));
+      });
 
   return {
     declaredByManifest,

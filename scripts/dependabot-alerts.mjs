@@ -511,21 +511,47 @@ export function issueLabels(group) {
  * needs its range raised, a nested or undeclared copy needs an `overrides`
  * pin, and both at once need both.
  */
+/**
+ * The manifests whose declared range resolves to this copy. A copy under
+ * another package's `node_modules` is nobody's declaration. A copy at the top
+ * of a workspace's own `node_modules` is that workspace's, and only if that
+ * workspace declares the package: the root declaring it says nothing about a
+ * copy the workspace could not share. The hoisted root copy serves every
+ * manifest that declares the package.
+ *
+ * @param {{path: string, topLevel: boolean}} entry
+ * @param {string[]} declarers every manifest that declares the package
+ * @returns {string[]}
+ */
+export function npmCopyDeclarers(entry, declarers) {
+  if (!entry.topLevel) return [];
+  const { owner } = splitOwner(entry.path);
+  return owner === ""
+    ? declarers
+    : declarers.filter((m) => m === `${owner}/package.json`);
+}
+
 function npmFix(group, { affected, declarers }) {
-  const declared = declarers.length > 0;
-  const isDeclaredCopy = (entry) => declared && entry.topLevel;
-  const direct = affected.some(isDeclaredCopy);
-  const transitive = affected.some((entry) => !isDeclaredCopy(entry));
+  const copyDeclarers = (entry) => npmCopyDeclarers(entry, declarers);
+  const raise = [...new Set(affected.flatMap(copyDeclarers))].sort();
+  const direct = raise.length > 0;
+  const nested = affected.filter((entry) => copyDeclarers(entry).length === 0);
+  const transitive = nested.length > 0;
+  // A package-wide override contradicting ANY declaration of the package is
+  // refused (`EOVERRIDE`), so the scoped form is needed whenever one exists,
+  // not only when the declared copy is itself vulnerable.
+  const scoped = declarers.length > 0;
+  const unscopable = nested.some((e) => overrideAncestors(e.path).length === 0);
   const steps = [];
   if (direct) {
     steps.push(
-      `**Raise the declared range** in ${declarers.map((m) => `\`${m}\``).join(", ")} so \`${group.package}\` can no longer resolve below \`${group.fixedIn}\`, keeping the operator each already uses.`,
+      `**Raise the declared range** in ${raise.map((m) => `\`${m}\``).join(", ")} so \`${group.package}\` can no longer resolve below \`${group.fixedIn}\`, keeping the operator each already uses.`,
     );
   }
   if (transitive) {
     steps.push(
-      direct
-        ? `**Add a parent-scoped [\`overrides\`](${DEPENDENCIES_DOC}) entry** in the root \`package.json\` for the nested copies below:\n\n\`\`\`json\n${scopedOverrideExample(affected, group)}\n\`\`\`\n\n   A package-wide \`"${group.package}": "${group.fixedIn}"\` would fail with \`EOVERRIDE\`, because a manifest also declares \`${group.package}\` directly. **Not** \`npm audit fix\`, which can resolve an advisory by silently downgrading.`
+      scoped
+        ? `**Add a parent-scoped [\`overrides\`](${DEPENDENCIES_DOC}) entry** in the root \`package.json\` for the nested copies below:\n\n\`\`\`json\n${scopedOverrideExample(nested, group)}\n\`\`\`\n\n${unscopable ? `   A copy at the top of a workspace's own \`node_modules\` names no parent in its path; \`npm explain ${group.package}\` shows which dependency pulls it in, to scope the entry under.\n\n` : ""}   A package-wide \`"${group.package}": "${group.fixedIn}"\` would fail with \`EOVERRIDE\`, because a manifest also declares \`${group.package}\` directly. **Not** \`npm audit fix\`, which can resolve an advisory by silently downgrading.`
         : `**Add an [\`overrides\`](${DEPENDENCIES_DOC}) entry** in the root \`package.json\` pinning \`${group.package}\` to \`>=${group.fixedIn}\`, for the copies below, which no declared range reaches. **Not** \`npm audit fix\`, which can resolve an advisory by silently downgrading.`,
     );
   }

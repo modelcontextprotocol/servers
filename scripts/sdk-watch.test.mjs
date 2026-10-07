@@ -323,6 +323,34 @@ test("readInstalls finds each declaration and the copy it resolves to", () => {
   assert.deepEqual(installs.rowsFor(group("typescript-sdk")), []);
 });
 
+test("readInstalls reports every locked version of a forked resolution", () => {
+  const forked = UV("1.29.0").replace(
+    '[[package]]\nname = "mcp-server-time"',
+    '[[package]]\nname = "mcp"\nversion = "1.27.0"\nsource = { registry = "https://pypi.org/simple" }\n\n[[package]]\nname = "mcp-server-time"',
+  );
+  const f = files({ "src/time/uv.lock": forked });
+  const installs = readInstalls(
+    (p) => f[p],
+    (p) => p in f,
+  );
+  assert.deepEqual(
+    installs.rowsFor(group("python-sdk")).map((r) => r.installed),
+    ["1.29.0", "1.27.0"],
+  );
+  const state = groupState(
+    group("python-sdk"),
+    installs.rowsFor(group("python-sdk")),
+    {
+      mcp: "1.29.0",
+    },
+  );
+  // The older fork is behind even though the first entry is current.
+  assert.deepEqual(
+    state.rows.map((r) => r.behind),
+    [false, true],
+  );
+});
+
 /** The registries, the tracker and the checkout, faked. */
 function fakeWorld(state = {}) {
   const calls = [];

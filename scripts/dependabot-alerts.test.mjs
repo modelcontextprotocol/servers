@@ -26,6 +26,7 @@ import {
   main,
   mergeGhsas,
   narrowToApplicable,
+  npmCopyDeclarers,
   npmDeclarers,
   npmLockEntries,
   overrideAncestors,
@@ -431,6 +432,32 @@ test("an npm body says which edit clears which copy", () => {
   assert.match(both, /EOVERRIDE/);
   // The pipe in the summary is escaped, so the table keeps its shape.
   assert.match(both, /fast-uri is \\\| bad/);
+});
+
+test("a workspace's own copy is direct only if that workspace declares it", () => {
+  const ws = { path: "src/filesystem/node_modules/diff", topLevel: true };
+  const hoisted = { path: "node_modules/diff", topLevel: true };
+  const nested = { path: "node_modules/a/node_modules/diff", topLevel: false };
+  assert.deepEqual(npmCopyDeclarers(ws, ["package.json"]), []);
+  assert.deepEqual(
+    npmCopyDeclarers(ws, ["package.json", "src/filesystem/package.json"]),
+    ["src/filesystem/package.json"],
+  );
+  assert.deepEqual(npmCopyDeclarers(hoisted, ["package.json"]), [
+    "package.json",
+  ]);
+  assert.deepEqual(npmCopyDeclarers(nested, ["package.json"]), []);
+
+  // The root declares `diff`; only the workspace's undeclared copy is
+  // vulnerable. The fix is the override, scoped, not the root's range.
+  const body = buildIssueBody(npmGroup("diff", "5.2.2"), {
+    affected: [{ ...ws, version: "5.0.0" }],
+    declarers: ["package.json"],
+  });
+  assert.ok(!body.includes("Raise the declared range"));
+  assert.match(body, /\*\*Add a parent-scoped/);
+  assert.match(body, /npm explain diff/);
+  assert.match(body, /EOVERRIDE/);
 });
 
 test("a pip body says whether to raise the bound or refresh the lock", () => {
