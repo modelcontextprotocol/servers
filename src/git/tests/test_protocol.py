@@ -17,7 +17,7 @@ from unittest import mock
 
 import git
 import pytest
-from mcp.shared.context import RequestContext
+from mcp.client.session import ClientRequestContext
 from mcp.types import ListRootsResult, Root
 from pydantic import FileUrl
 
@@ -63,10 +63,9 @@ async def test_initialize_reports_package_version_as_server_version(repo: git.Re
         "version": version("mcp-server-git"),
     }
     assert version("mcp") != version("mcp-server-git")
-    assert init["capabilities"] == {
-        "experimental": {},
-        "tools": {"listChanged": False},
-    }
+    # Behavior change in the SDK v2 port (#4851): v2 omits the empty
+    # `experimental: {}` object v1 always sent. It advertised nothing.
+    assert init["capabilities"] == {"tools": {"listChanged": False}}
 
 
 async def test_list_tools_matches_wire_snapshot():
@@ -381,7 +380,7 @@ async def test_git_add_file_starting_with_dash_is_a_path(repo: git.Repo):
 
 async def test_git_add_empty_list_is_rejected(repo: git.Repo):
     # #4763: `files: []` would run `git add --`, a no-op. The schema's
-    # minItems makes the SDK reject it before the tool runs.
+    # minItems makes call_tool reject it before the tool runs.
     root = root_of(repo)
     (root / "test.txt").write_text("edited\n", newline="\n")
     result = await call(None, "git_add", {"repo_path": str(root), "files": []})
@@ -1114,6 +1113,9 @@ async def test_restricted_server_unresolvable_repo_path_is_invalid_path(
 # --------------------------------------------------------------------------
 
 
+# The client side of this test offers Roots, which SDK v2 deprecates as of
+# 2026-07-28 (SEP-2577); the warning is about the test's client, not the server.
+@pytest.mark.filterwarnings("ignore::mcp.shared.exceptions.MCPDeprecationWarning")
 async def test_server_never_requests_roots(tmp_path: Path, repo: git.Repo):
     # The server ignores Roots entirely: it never sends roots/list, not even
     # after notifications/roots/list_changed, and a repository outside every
@@ -1123,7 +1125,7 @@ async def test_server_never_requests_roots(tmp_path: Path, repo: git.Repo):
     elsewhere.mkdir()
     calls: list[object] = []
 
-    async def list_roots(context: RequestContext[Any, Any]) -> ListRootsResult:
+    async def list_roots(context: ClientRequestContext) -> ListRootsResult:
         calls.append(context)
         return ListRootsResult(roots=[Root(uri=FileUrl(elsewhere.as_uri()))])
 

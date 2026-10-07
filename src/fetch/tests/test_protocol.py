@@ -22,7 +22,7 @@ from typing import Any
 import httpx
 import pytest
 from mcp import ClientSession
-from mcp.shared.exceptions import McpError
+from mcp.shared.exceptions import MCPError
 from mcp.types import INVALID_PARAMS, CallToolResult
 
 from mcp_server_fetch.server import (
@@ -52,7 +52,12 @@ with enough words to count as the main content of the page.</p>
 
 
 def wire(model: Any) -> dict[str, Any]:
-    return model.model_dump(by_alias=True, mode="json", exclude_none=True)
+    # exclude_unset: SDK v2 result models default fields the 2025-11-25 wire
+    # does not carry (resultType, ttlMs, cacheScope), so only what the server
+    # actually sent is compared.
+    return model.model_dump(
+        by_alias=True, mode="json", exclude_none=True, exclude_unset=True
+    )
 
 
 def text_of(result: CallToolResult) -> str:
@@ -193,7 +198,7 @@ async def test_call_with_only_url_applies_defaults(web: FakeWeb) -> None:
 async def test_schema_violations_are_rejected_by_the_sdk(
     web: FakeWeb, arguments: dict[str, Any], offending: str
 ) -> None:
-    # The SDK validates against inputSchema before the handler runs. The rest
+    # call_tool validates against inputSchema before the tool runs. The rest
     # of the message is jsonschema's wording, which varies by version.
     async with connect() as (session, _):
         result = await call(session, arguments)
@@ -206,7 +211,7 @@ async def test_schema_violations_are_rejected_by_the_sdk(
 
 @pytest.mark.parametrize("max_length", [1, 999999])
 async def test_max_length_bounds_are_inclusive(web: FakeWeb, max_length: int) -> None:
-    # #1624: the edges of the inclusive range pass both the SDK's schema check
+    # #1624: the edges of the inclusive range pass both the schema check
     # and Fetch's own validation, and the page is fetched.
     web.add(ROBOTS, plain("", status=404))
     web.add(PAGE, plain("hello"))
@@ -230,8 +235,8 @@ async def test_invalid_url_is_rejected_by_pydantic(web: FakeWeb, url: str) -> No
 
 
 async def test_unknown_tool_name_is_rejected_without_fetching(web: FakeWeb) -> None:
-    # The SDK skips schema validation for a tool it has not listed, so the
-    # name check in call_tool is what stops an unknown name from fetching.
+    # call_tool skips schema validation for a tool it has not listed, so the
+    # name check in run_tool is what stops an unknown name from fetching.
     web.add(ROBOTS, plain("", status=404))
     web.add(PAGE, plain("fetched anyway"))
     async with connect() as (session, _):
@@ -949,7 +954,7 @@ async def test_get_prompt_without_url_is_a_jsonrpc_error(
     web: FakeWeb, arguments: dict[str, str] | None
 ) -> None:
     async with connect() as (session, _):
-        with pytest.raises(McpError) as excinfo:
+        with pytest.raises(MCPError) as excinfo:
             await session.get_prompt("fetch", arguments)
     assert wire(excinfo.value.error) == {
         "code": INVALID_PARAMS,
@@ -966,7 +971,7 @@ async def test_get_prompt_with_unknown_name_is_a_jsonrpc_error(
     # whether or not a URL was given, and nothing is fetched.
     web.add(PAGE, plain("ok"))
     async with connect() as (session, _):
-        with pytest.raises(McpError) as excinfo:
+        with pytest.raises(MCPError) as excinfo:
             await session.get_prompt("nope", arguments)
     assert wire(excinfo.value.error) == {
         "code": INVALID_PARAMS,

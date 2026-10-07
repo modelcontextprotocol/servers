@@ -3,7 +3,7 @@
 #
 # Each test runs the real `serve()` coroutine with `stdio_server` swapped for
 # an in-memory stream pair, and talks to it with a real `ClientSession`. That
-# exercises what a client actually sees: the SDK's input validation, its
+# exercises what a client actually sees: the server's input validation, its
 # folding of handler exceptions into `isError` results, the advertised tool
 # schemas and the initialize handshake. The pure helpers in `server.py` are
 # covered directly in `test_server.py`.
@@ -54,7 +54,12 @@ def frozen_at(instant: str) -> Iterator[None]:
 
 def wire(model: BaseModel) -> Any:
     """Serialize an SDK model the way it travels over the wire."""
-    return model.model_dump(by_alias=True, mode="json", exclude_none=True)
+    # exclude_unset: SDK v2 result models default fields the 2025-11-25 wire
+    # does not carry (resultType, ttlMs, cacheScope), so only what the server
+    # actually sent is compared.
+    return model.model_dump(
+        by_alias=True, mode="json", exclude_none=True, exclude_unset=True
+    )
 
 
 @asynccontextmanager
@@ -131,7 +136,9 @@ async def test_initialize_reports_server_info_and_capabilities() -> None:
     }
     assert init["serverInfo"]["version"] != version("mcp")
     # Only tools are advertised; no resources, prompts or logging.
-    assert init["capabilities"] == {"experimental": {}, "tools": {"listChanged": False}}
+    # Behavior change in the SDK v2 port (#4851): v2 omits the empty
+    # `experimental: {}` object v1 always sent. It advertised nothing.
+    assert init["capabilities"] == {"tools": {"listChanged": False}}
     assert "instructions" not in init
 
 
@@ -467,7 +474,7 @@ async def test_get_current_time_does_not_default_to_the_local_timezone() -> None
 @pytest.mark.parametrize(
     "arguments,expected",
     [
-        # Rejected by the SDK's input validation against inputSchema, before
+        # Rejected by call_tool's input validation against inputSchema, before
         # the handler runs.
         ({}, error_result("Input validation error: 'timezone' is a required property")),
         (
@@ -478,7 +485,7 @@ async def test_get_current_time_does_not_default_to_the_local_timezone() -> None
             {"timezone": None},
             error_result("Input validation error: None is not of type 'string'"),
         ),
-        # Raised by the handler and folded into an error result by the SDK.
+        # Raised by the handler and folded into an error result by call_tool.
         ({"timezone": ""}, handler_error("Missing required argument: timezone")),
         (
             {"timezone": "Invalid/Timezone"},
@@ -817,7 +824,7 @@ async def test_convert_time_ignores_extra_arguments() -> None:
 @pytest.mark.parametrize(
     "arguments,expected",
     [
-        # Rejected by the SDK's input validation, before the handler runs. A
+        # Rejected by call_tool's input validation, before the handler runs. A
         # missing key never reaches the handler's own "Missing required
         # arguments" check, which is why that branch is marked unreachable.
         (
@@ -899,8 +906,8 @@ async def test_convert_time_checks_timezones_before_the_time_string() -> None:
 
 
 async def test_unknown_tool_is_an_error_result_not_a_protocol_error() -> None:
-    # The SDK skips validation for an unlisted tool (and logs a warning), then
-    # the handler's fallthrough raises, which the SDK folds into `isError`.
+    # call_tool skips validation for an unlisted tool, then the handler's
+    # fallthrough raises, which call_tool folds into `isError`.
     async with connected() as session:
         result = await call(session, "no_such_tool", {"timezone": "UTC"})
     assert result == handler_error("Unknown tool: no_such_tool")

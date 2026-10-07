@@ -2,9 +2,15 @@ import logging
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Optional
-from mcp.server import Server
+import jsonschema
+from mcp.server import Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
 from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ContentBlock,
+    ListToolsResult,
+    PaginatedRequestParams,
     TextContent,
     Tool,
     ToolAnnotations,
@@ -465,6 +471,13 @@ def git_branch(
     return branch_info
 
 
+def tool_error(message: str) -> CallToolResult:
+    """A tool call that failed, as an `isError` result the model can read."""
+    return CallToolResult(
+        content=[TextContent(type="text", text=message)], is_error=True
+    )
+
+
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
 
@@ -486,147 +499,148 @@ async def serve(repository: Path | None) -> None:
         repository = root
         logger.info(f"Using repository at {repository}")
 
-    server = Server("mcp-git", version=SERVER_VERSION)
+    tools = [
+        Tool(
+            name=GitTools.STATUS,
+            description="Shows the working tree status",
+            input_schema=GitStatus.model_json_schema(),
+            annotations=ToolAnnotations(
+                read_only_hint=True,
+                destructive_hint=False,
+                idempotent_hint=True,
+                open_world_hint=False,
+            ),
+        ),
+        Tool(
+            name=GitTools.DIFF_UNSTAGED,
+            description="Shows changes in the working directory that are not yet staged",
+            input_schema=GitDiffUnstaged.model_json_schema(),
+            annotations=ToolAnnotations(
+                read_only_hint=True,
+                destructive_hint=False,
+                idempotent_hint=True,
+                open_world_hint=False,
+            ),
+        ),
+        Tool(
+            name=GitTools.DIFF_STAGED,
+            description="Shows changes that are staged for commit",
+            input_schema=GitDiffStaged.model_json_schema(),
+            annotations=ToolAnnotations(
+                read_only_hint=True,
+                destructive_hint=False,
+                idempotent_hint=True,
+                open_world_hint=False,
+            ),
+        ),
+        Tool(
+            name=GitTools.DIFF,
+            description="Shows differences between branches or commits",
+            input_schema=GitDiff.model_json_schema(),
+            annotations=ToolAnnotations(
+                read_only_hint=True,
+                destructive_hint=False,
+                idempotent_hint=True,
+                open_world_hint=False,
+            ),
+        ),
+        Tool(
+            name=GitTools.COMMIT,
+            description="Records changes to the repository",
+            input_schema=GitCommit.model_json_schema(),
+            annotations=ToolAnnotations(
+                read_only_hint=False,
+                destructive_hint=False,
+                idempotent_hint=False,
+                open_world_hint=False,
+            ),
+        ),
+        Tool(
+            name=GitTools.ADD,
+            description="Adds file contents to the staging area",
+            input_schema=GitAdd.model_json_schema(),
+            annotations=ToolAnnotations(
+                read_only_hint=False,
+                destructive_hint=False,
+                idempotent_hint=True,
+                open_world_hint=False,
+            ),
+        ),
+        Tool(
+            name=GitTools.RESET,
+            description="Unstages all staged changes",
+            input_schema=GitReset.model_json_schema(),
+            annotations=ToolAnnotations(
+                read_only_hint=False,
+                destructive_hint=True,
+                idempotent_hint=True,
+                open_world_hint=False,
+            ),
+        ),
+        Tool(
+            name=GitTools.LOG,
+            description="Shows the commit logs",
+            input_schema=GitLog.model_json_schema(),
+            annotations=ToolAnnotations(
+                read_only_hint=True,
+                destructive_hint=False,
+                idempotent_hint=True,
+                open_world_hint=False,
+            ),
+        ),
+        Tool(
+            name=GitTools.CREATE_BRANCH,
+            description="Creates a new branch from an optional base branch",
+            input_schema=GitCreateBranch.model_json_schema(),
+            annotations=ToolAnnotations(
+                read_only_hint=False,
+                destructive_hint=False,
+                idempotent_hint=False,
+                open_world_hint=False,
+            ),
+        ),
+        Tool(
+            name=GitTools.CHECKOUT,
+            description="Switches branches",
+            input_schema=GitCheckout.model_json_schema(),
+            annotations=ToolAnnotations(
+                read_only_hint=False,
+                destructive_hint=False,
+                idempotent_hint=False,
+                open_world_hint=False,
+            ),
+        ),
+        Tool(
+            name=GitTools.SHOW,
+            description="Shows the contents of a commit, or of a file or directory given as <revision>:<path>",
+            input_schema=GitShow.model_json_schema(),
+            annotations=ToolAnnotations(
+                read_only_hint=True,
+                destructive_hint=False,
+                idempotent_hint=True,
+                open_world_hint=False,
+            ),
+        ),
+        Tool(
+            name=GitTools.BRANCH,
+            description="List Git branches",
+            input_schema=GitBranch.model_json_schema(),
+            annotations=ToolAnnotations(
+                read_only_hint=True,
+                destructive_hint=False,
+                idempotent_hint=True,
+                open_world_hint=False,
+            ),
+        ),
+    ]
+    schemas = {tool.name: tool.input_schema for tool in tools}
 
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
-            Tool(
-                name=GitTools.STATUS,
-                description="Shows the working tree status",
-                inputSchema=GitStatus.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.DIFF_UNSTAGED,
-                description="Shows changes in the working directory that are not yet staged",
-                inputSchema=GitDiffUnstaged.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.DIFF_STAGED,
-                description="Shows changes that are staged for commit",
-                inputSchema=GitDiffStaged.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.DIFF,
-                description="Shows differences between branches or commits",
-                inputSchema=GitDiff.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.COMMIT,
-                description="Records changes to the repository",
-                inputSchema=GitCommit.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=False,
-                    idempotentHint=False,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.ADD,
-                description="Adds file contents to the staging area",
-                inputSchema=GitAdd.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.RESET,
-                description="Unstages all staged changes",
-                inputSchema=GitReset.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=True,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.LOG,
-                description="Shows the commit logs",
-                inputSchema=GitLog.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.CREATE_BRANCH,
-                description="Creates a new branch from an optional base branch",
-                inputSchema=GitCreateBranch.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=False,
-                    idempotentHint=False,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.CHECKOUT,
-                description="Switches branches",
-                inputSchema=GitCheckout.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=False,
-                    destructiveHint=False,
-                    idempotentHint=False,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.SHOW,
-                description="Shows the contents of a commit, or of a file or directory given as <revision>:<path>",
-                inputSchema=GitShow.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-            Tool(
-                name=GitTools.BRANCH,
-                description="List Git branches",
-                inputSchema=GitBranch.model_json_schema(),
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
-            ),
-        ]
+    async def list_tools(
+        ctx: ServerRequestContext, params: PaginatedRequestParams | None
+    ) -> ListToolsResult:
+        return ListToolsResult(tools=tools)
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    async def run_tool(name: str, arguments: dict[str, Any]) -> list[ContentBlock]:
         # Reject an unknown tool before reading its arguments, so a call
         # without repo_path still reports "Unknown tool" (#4994).
         if name not in {tool.value for tool in GitTools}:
@@ -720,6 +734,30 @@ async def serve(repository: Path | None) -> None:
             case _:  # pragma: no cover
                 raise ValueError(f"Unknown tool: {name}")
 
+    async def call_tool(
+        ctx: ServerRequestContext, params: CallToolRequestParams
+    ) -> CallToolResult:
+        # SDK v2's low-level server neither validates arguments nor turns a
+        # handler exception into an isError result, both of which SDK v1 did.
+        # Both are done here, with v1's messages, so the wire is unchanged.
+        arguments = params.arguments or {}
+        schema = schemas.get(params.name)
+        if schema is not None:
+            try:
+                jsonschema.validate(instance=arguments, schema=schema)
+            except jsonschema.ValidationError as e:
+                return tool_error(f"Input validation error: {e.message}")
+        try:
+            return CallToolResult(content=await run_tool(params.name, arguments))
+        except Exception as e:
+            return tool_error(str(e))
+
+    server = Server(
+        "mcp-git",
+        version=SERVER_VERSION,
+        on_list_tools=list_tools,
+        on_call_tool=call_tool,
+    )
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, options)
