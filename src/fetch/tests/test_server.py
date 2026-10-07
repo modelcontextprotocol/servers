@@ -67,6 +67,43 @@ class TestExtractContentFromHtml:
         # readabilipy may extract different parts depending on the content
         assert "test paragraph" in result
 
+    def test_html_includes_document_title_when_omitted_from_article(self):
+        """Test that simplified markdown preserves the page title."""
+        html = """
+        <html>
+        <head><title>What’s new in 2.1.0 (Aug 30, 2023)</title></head>
+        <body>
+            <article>
+                <p>These are the release notes.</p>
+            </article>
+        </body>
+        </html>
+        """
+
+        result = extract_content_from_html(html)
+
+        assert result.startswith("# What’s new in 2.1.0 (Aug 30, 2023)")
+        assert "These are the release notes." in result
+
+    def test_html_does_not_duplicate_existing_title_heading(self):
+        """Test that a page title already present as the first heading is not duplicated."""
+        html = """
+        <html>
+        <head><title>Existing Title</title></head>
+        <body>
+            <article>
+                <h1>Existing Title</h1>
+                <p>Article body.</p>
+            </article>
+        </body>
+        </html>
+        """
+
+        result = extract_content_from_html(html)
+
+        assert result.count("# Existing Title") == 1
+        assert "Article body." in result
+
     def test_html_with_links(self):
         """Test that links are converted to markdown."""
         html = """
