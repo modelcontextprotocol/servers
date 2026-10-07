@@ -1,8 +1,37 @@
 import path from 'path';
 
 /**
+ * Checks if a path is a Windows UNC path (e.g. \\server\share).
+ */
+function isUNCPath(p: string): boolean {
+  return p.startsWith('\\\\') && !p.startsWith('\\\\?\\');
+}
+
+/**
+ * Normalizes a path, preserving UNC path prefixes on Windows.
+ *
+ * On Windows, path.resolve(path.normalize(uncPath)) can corrupt UNC paths
+ * by stripping a leading backslash, turning \\server\share into \server\share
+ * which path.resolve then interprets as drive-relative (e.g. C:\server\share).
+ * UNC paths are always absolute, so we normalize without path.resolve.
+ */
+function normalizePath(p: string): string {
+  if (isUNCPath(p)) {
+    // UNC paths are always absolute — normalize without resolve to avoid
+    // stripping the leading \\ prefix.
+    const normalized = path.normalize(p);
+    // Ensure the UNC prefix is preserved after normalization
+    if (!normalized.startsWith('\\\\')) {
+      return '\\' + normalized;
+    }
+    return normalized;
+  }
+  return path.resolve(path.normalize(p));
+}
+
+/**
  * Checks if an absolute path is within any of the allowed directories.
- * 
+ *
  * @param absolutePath - The absolute path to check (will be normalized)
  * @param allowedDirectories - Array of absolute allowed directory paths (will be normalized)
  * @returns true if the path is within an allowed directory, false otherwise
@@ -27,7 +56,7 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
   // Normalize the input path
   let normalizedPath: string;
   try {
-    normalizedPath = path.resolve(path.normalize(absolutePath));
+    normalizedPath = normalizePath(absolutePath);
   } catch {
     return false;
   }
@@ -51,7 +80,7 @@ export function isPathWithinAllowedDirectories(absolutePath: string, allowedDire
     // Normalize the allowed directory
     let normalizedDir: string;
     try {
-      normalizedDir = path.resolve(path.normalize(dir));
+      normalizedDir = normalizePath(dir);
     } catch {
       return false;
     }
