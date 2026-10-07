@@ -209,6 +209,40 @@ describe('KnowledgeGraphManager', () => {
       expect(alice?.observations).toHaveLength(3);
     });
 
+    it('should skip duplicate observations within a single batch', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: [] },
+      ]);
+
+      const results = await manager.addObservations([
+        { entityName: 'Alice', contents: ['likes coffee', 'likes coffee'] },
+      ]);
+
+      expect(results[0].addedObservations).toEqual(['likes coffee']);
+
+      const graph = await manager.readGraph();
+      const alice = graph.entities.find(e => e.name === 'Alice');
+      expect(alice?.observations).toEqual(['likes coffee']);
+    });
+
+    it('should skip duplicates spread across entries for the same entity', async () => {
+      await manager.createEntities([
+        { name: 'Alice', entityType: 'person', observations: [] },
+      ]);
+
+      const results = await manager.addObservations([
+        { entityName: 'Alice', contents: ['likes coffee'] },
+        { entityName: 'Alice', contents: ['likes coffee', 'has a dog'] },
+      ]);
+
+      expect(results[0].addedObservations).toEqual(['likes coffee']);
+      expect(results[1].addedObservations).toEqual(['has a dog']);
+
+      const graph = await manager.readGraph();
+      const alice = graph.entities.find(e => e.name === 'Alice');
+      expect(alice?.observations).toEqual(['likes coffee', 'has a dog']);
+    });
+
     it('should throw error for non-existent entity', async () => {
       await expect(async () => {
         await manager.addObservations([

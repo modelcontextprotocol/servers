@@ -250,7 +250,11 @@ export class KnowledgeGraphManager {
         if (!entity) {
           throw new Error(`Entity with name ${o.entityName} not found`);
         }
-        const newObservations = o.contents.filter(content => !entity.observations.includes(content));
+        const newObservations = o.contents.filter((content, index) =>
+          !entity.observations.includes(content) &&
+          // Also skip duplicates appearing earlier in this same batch
+          !o.contents.slice(0, index).includes(content)
+        );
         entity.observations.push(...newObservations);
         return { entityName: o.entityName, addedObservations: newObservations };
       });
