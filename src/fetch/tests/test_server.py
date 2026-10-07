@@ -10,6 +10,8 @@ from mcp_server_fetch.server import (
     check_may_autonomously_fetch_url,
     fetch_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
+    parse_fetch_args,
+    INVALID_PARAMS,
 )
 
 
@@ -183,6 +185,26 @@ class TestCheckMayAutonomouslyFetchUrl:
                     DEFAULT_USER_AGENT_AUTONOMOUS
                 )
 
+    @pytest.mark.asyncio
+    async def test_robots_fetch_has_timeout(self):
+        """Ensure robots.txt fetch includes explicit timeout."""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await check_may_autonomously_fetch_url(
+                "https://example.com/page",
+                DEFAULT_USER_AGENT_AUTONOMOUS
+            )
+
+            # Verify that get() was called with a timeout kwarg
+            assert mock_client.get.await_args.kwargs.get("timeout") == 15
+
 
 class TestFetchUrl:
     """Tests for fetch_url function."""
@@ -324,3 +346,11 @@ class TestFetchUrl:
 
             # Verify AsyncClient was called with proxy
             mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+
+
+class TestArgumentParsing:
+    def test_parse_fetch_args_maps_validation_error(self):
+        # Missing required field 'url' should raise INVALID_PARAMS via McpError
+        with pytest.raises(McpError) as exc:
+            parse_fetch_args({})
+        assert exc.value.data.code == INVALID_PARAMS
