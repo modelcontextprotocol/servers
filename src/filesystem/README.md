@@ -275,6 +275,30 @@ On Windows, use `cmd /c` to launch `npx`:
 }
 ```
 
+#### Windows paths
+
+In `claude_desktop_config.json`, write paths with spaces as plain JSON strings and escape backslashes — do not add shell quoting on top:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:\\Program Files\\My App\\Data",
+        "~/Documents"
+      ]
+    }
+  }
+}
+```
+
+If an entry does arrive wrapped in literal double/single quotes (`"C:\\Program Files"`), the server strips them, trims stray whitespace, expands a leading `~` to your home directory, and converts Git Bash/MSYS style paths (`/c/Users/name`) on Windows. Windows 8.3 short names (e.g. `PROGRA~1`) are resolved to their full paths during startup validation. Entries that still cannot be accessed are skipped with a warning naming the offending path.
+
 ## Usage with VS Code
 
 For quick installation, click the installation buttons below...
