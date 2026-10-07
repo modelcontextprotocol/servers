@@ -44,6 +44,7 @@
     "verify:dco": "node scripts/verify-dco.mjs",
     "smoke": "node scripts/smoke-servers.mjs",
     "pack:verify": "node scripts/pack-and-verify.mjs",
+    "release:notes": "node scripts/release-notes.mjs",
     "local:gate": "node scripts/gate-lease.mjs npm run local:gate:stages",
     "local:gate:stages": "npm run verify:install-fresh && npm run verify:dco && npm run validate && npm run coverage && npm run validate:py && npm run coverage:py && npm run verify:skills:cli && npm run smoke"
   },
@@ -57,11 +58,12 @@
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
     "@eslint/js": "^10.0.1",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/client": "^2.3.1",
     "eslint": "^10.11.0",
     "globals": "^17.12.0",
     "prettier": "3.8.4",
     "proper-lockfile": "^4.1.2",
+    "semver": "^7.8.4",
     "typescript-eslint": "^8.71.0",
     "yaml": "^2.9.0"
   },

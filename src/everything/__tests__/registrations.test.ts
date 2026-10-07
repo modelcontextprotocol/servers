@@ -3,7 +3,7 @@
 // imports they replace ran inside the 5 s test timeout, and a cold start
 // (transforming the whole tool tree) could take longer than that.
 import { describe, it, expect, vi } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { registerConditionalTools, registerTools } from "../tools/index.js";
 import { registerPrompts } from "../prompts/index.js";
 import { readInstructions, registerResources } from "../resources/index.js";
@@ -52,7 +52,7 @@ describe("Registration Index Files", () => {
     });
 
     it("should register conditional tools based on capabilities", () => {
-      // Server with all capabilities including experimental tasks API
+      // Server with all capabilities
       const mockServerWithCapabilities = {
         registerTool: vi.fn(),
         server: {
@@ -62,18 +62,13 @@ describe("Registration Index Files", () => {
             sampling: {},
           })),
         },
-        experimental: {
-          tasks: {
-            registerToolTask: vi.fn(),
-          },
-        },
       } as unknown as McpServer;
 
       registerConditionalTools(mockServerWithCapabilities);
 
       // Should register 4 conditional tools via registerTool when all capabilities
-      // are present. Task-based tools register via registerToolTask (counted separately),
-      // so they are not included in this registerTool count.
+      // are present. The task tools went with SDK v2's experimental tasks layer;
+      // Part 5 (#4852) brings them back.
       expect(mockServerWithCapabilities.registerTool).toHaveBeenCalledTimes(4);
 
       const registeredTools = vi
@@ -83,11 +78,6 @@ describe("Registration Index Files", () => {
       expect(registeredTools).toContain("trigger-elicitation-request");
       expect(registeredTools).toContain("trigger-url-elicitation");
       expect(registeredTools).toContain("trigger-sampling-request");
-
-      // Task-based tools are registered via experimental.tasks.registerToolTask
-      expect(
-        mockServerWithCapabilities.experimental.tasks.registerToolTask,
-      ).toHaveBeenCalled();
     });
 
     it("should not register conditional tools before capabilities are known", () => {
@@ -97,11 +87,6 @@ describe("Registration Index Files", () => {
         registerTool: vi.fn(),
         server: {
           getClientCapabilities: vi.fn(() => undefined),
-        },
-        experimental: {
-          tasks: {
-            registerToolTask: vi.fn(),
-          },
         },
       } as unknown as McpServer; // partial mock: McpServer's private members rule out a structural literal
 
@@ -115,11 +100,6 @@ describe("Registration Index Files", () => {
         registerTool: vi.fn(),
         server: {
           getClientCapabilities: vi.fn(() => ({})),
-        },
-        experimental: {
-          tasks: {
-            registerToolTask: vi.fn(),
-          },
         },
       } as unknown as McpServer;
 
@@ -139,11 +119,6 @@ describe("Registration Index Files", () => {
             elicitation: { url: {} },
             tasks: { requests: { elicitation: { create: {} } } },
           })),
-        },
-        experimental: {
-          tasks: {
-            registerToolTask: vi.fn(),
-          },
         },
       } as unknown as McpServer; // partial mock: McpServer's private members rule out a structural literal
 
@@ -202,22 +177,13 @@ describe("Registration Index Files", () => {
         server: {
           getClientCapabilities: vi.fn(() => capabilities),
         },
-        experimental: {
-          tasks: {
-            registerToolTask: vi.fn(),
-          },
-        },
       } as unknown as McpServer; // partial mock: McpServer's private members rule out a structural literal
 
       registerConditionalTools(mockServer);
 
-      const viaRegisterTool = vi
+      return vi
         .mocked(mockServer.registerTool)
         .mock.calls.map((call) => call[0]);
-      const viaRegisterToolTask = vi
-        .mocked(mockServer.experimental.tasks.registerToolTask)
-        .mock.calls.map((call) => call[0]);
-      return [...viaRegisterTool, ...viaRegisterToolTask];
     };
 
     // A tool is capability-gated if declaring the capabilities makes it appear.

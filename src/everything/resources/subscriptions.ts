@@ -1,8 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  SubscribeRequestSchema,
-  UnsubscribeRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/server";
 
 // Track subscriber session id lists by URI
 const subscriptions: Map<string, Set<string | undefined>> = new Map<
@@ -36,13 +32,13 @@ const subsUpdateIntervals: Map<string | undefined, NodeJS.Timeout | undefined> =
 export const setSubscriptionHandlers = (server: McpServer) => {
   // Set the subscription handler
   server.server.setRequestHandler(
-    SubscribeRequestSchema,
-    async (request, extra) => {
+    "resources/subscribe",
+    async (request, ctx) => {
       // Get the URI to subscribe to
       const { uri } = request.params;
 
       // Get the session id (can be undefined for stdio)
-      const sessionId = extra.sessionId as string;
+      const sessionId = ctx.sessionId as string;
 
       // Acknowledge the subscribe request
       await server.sendLoggingMessage(
@@ -67,13 +63,13 @@ export const setSubscriptionHandlers = (server: McpServer) => {
 
   // Set the unsubscription handler
   server.server.setRequestHandler(
-    UnsubscribeRequestSchema,
-    async (request, extra) => {
+    "resources/unsubscribe",
+    async (request, ctx) => {
       // Get the URI to subscribe to
       const { uri } = request.params;
 
       // Get the session id (can be undefined for stdio)
-      const sessionId = extra.sessionId as string;
+      const sessionId = ctx.sessionId as string;
 
       // Acknowledge the subscribe request
       await server.sendLoggingMessage(

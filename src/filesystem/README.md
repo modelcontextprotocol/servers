@@ -216,6 +216,10 @@ The mapping for filesystem tools is:
 
 > Note: `idempotentHint` and `destructiveHint` are meaningful only when `readOnlyHint` is `false`, as defined by the MCP spec. Every tool also sets `openWorldHint: false` — this server only accesses the local filesystem within its allowed directories, never an open or external world.
 
+## Requirements
+
+Node.js 20 or later, when the server runs through `npx` or from source.
+
 ## Usage with Claude Desktop
 Add this to your `claude_desktop_config.json`:
 

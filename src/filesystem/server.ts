@@ -4,12 +4,8 @@
 // lets the tests drive a real Client against it in-process over an in-memory
 // transport (#4854), and holding the allow-list in this closure rather than in
 // a module global lets two instances coexist in one process.
-
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  RootsListChangedNotificationSchema,
-  type Root,
-} from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import type { Root } from "@modelcontextprotocol/server";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
 import path from "path";
@@ -32,10 +28,11 @@ import {
 import { SERVER_VERSION } from "./version.js";
 
 // The JSON Schema dialect every advertised tool schema declares (#4841). The
-// SDK 1.x tools/list handler renders zod schemas with zod's draft-07 target and
-// stamps "$schema": draft-07 on each one, which validators that accept only
+// SDK 1.x tools/list handler rendered zod schemas with zod's draft-07 target and
+// stamped "$schema": draft-07 on each one, which validators that accept only
 // 2020-12 (the dialect MCP assumes for tool schemas) reject outright. Setting
-// $schema in the root object's zod metadata overrides that stamp. The schemas
+// $schema in the root object's zod metadata overrode that stamp. SDK v2 stamps
+// 2020-12 itself, so the label is now the SDK's default as well. The schemas
 // below use nothing whose draft-07 and 2020-12 renderings differ (no tuples),
 // so the label is the only change; server-tools.test.ts fails if a draft-07-only
 // keyword ever appears under it.
@@ -773,7 +770,7 @@ export function createServer(
 
   // Handles dynamic roots updates during runtime, when client sends "roots/list_changed" notification, server fetches the updated roots and replaces all allowed directories with the new roots.
   server.server.setNotificationHandler(
-    RootsListChangedNotificationSchema,
+    "notifications/roots/list_changed",
     async () => {
       try {
         // Request the updated roots list from the client

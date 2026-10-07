@@ -3,8 +3,8 @@ import {
   CompleteResourceTemplateCallback,
   McpServer,
   ResourceTemplate,
-} from "@modelcontextprotocol/sdk/server/mcp.js";
-import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
+  completable,
+} from "@modelcontextprotocol/server";
 
 // Resource types
 export const RESOURCE_TYPE_TEXT = "Text" as const;

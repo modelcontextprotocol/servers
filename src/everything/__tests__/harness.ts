@@ -17,22 +17,18 @@
  * runs the server's `cleanup(sessionId)` the way the HTTP transports do.
  */
 import { randomUUID } from "node:crypto";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { TaskStore } from "@modelcontextprotocol/sdk/experimental/tasks";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import type {
   ClientCapabilities,
   ContentBlock,
   ServerNotification,
-} from "@modelcontextprotocol/sdk/types.js";
+} from "@modelcontextprotocol/client";
 import { createServer } from "../server/index.js";
 
 /** Options for one in-process session. */
 export type ConnectOptions = {
   /** The capabilities the client declares in `initialize`. */
   capabilities?: ClientCapabilities;
-  /** A client-side task store, for servers that send task-augmented requests. */
-  taskStore?: TaskStore;
   /** Install request handlers on the client before it connects. */
   setup?: (client: Client) => void;
   /** The server transport's session id; `null` leaves it undefined. */
@@ -62,10 +58,7 @@ export async function connect(options: ConnectOptions = {}): Promise<Session> {
 
   const client = new Client(
     { name: "everything-test-client", version: "0.0.0" },
-    {
-      capabilities: options.capabilities ?? {},
-      ...(options.taskStore ? { taskStore: options.taskStore } : {}),
-    },
+    { capabilities: options.capabilities ?? {} },
   );
   const notifications: ServerNotification[] = [];
   client.fallbackNotificationHandler = async (notification) => {

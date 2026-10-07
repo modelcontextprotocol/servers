@@ -7,8 +7,8 @@
 // a real client, and call its shutdown handler directly; each app has its own
 // session map. `startStreamableHttpServer()` is what the launcher runs.
 
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { isJSONRPCRequest } from "@modelcontextprotocol/sdk/types.js";
+import { isJSONRPCRequest } from "@modelcontextprotocol/server";
+import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import express, { Express, Request, Response } from "express";
 import type { Server } from "node:http";
 import { createServer } from "../server/index.js";
@@ -84,9 +84,9 @@ export function createApp(): StreamableHttpApp {
   );
 
   // Map sessionId to server transport for each client
-  const transports: Map<string, StreamableHTTPServerTransport> = new Map<
+  const transports: Map<string, NodeStreamableHTTPServerTransport> = new Map<
     string,
-    StreamableHTTPServerTransport
+    NodeStreamableHTTPServerTransport
   >();
 
   // Handle POST requests for client messages
@@ -96,7 +96,7 @@ export function createApp(): StreamableHttpApp {
       // Check for existing session ID
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
-      let transport: StreamableHTTPServerTransport;
+      let transport: NodeStreamableHTTPServerTransport;
 
       if (sessionId && transports.has(sessionId)) {
         // Reuse existing transport
@@ -106,7 +106,7 @@ export function createApp(): StreamableHttpApp {
 
         // New initialization request
         const eventStore = new InMemoryEventStore();
-        transport = new StreamableHTTPServerTransport({
+        transport = new NodeStreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           eventStore, // Enable resumability
           onsessioninitialized: (sessionId: string) => {

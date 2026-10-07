@@ -140,7 +140,8 @@ this order:
    Servers listed in the README or the Registry are third-party; their reports
    go to their own maintainers.
 2. **Is the code path the server's, or an SDK's?** The TypeScript servers are
-   built on `@modelcontextprotocol/sdk`
+   built on the TypeScript SDK's v2 packages (`@modelcontextprotocol/server`,
+   `@modelcontextprotocol/node` and the frozen `@modelcontextprotocol/server-legacy`)
    ([typescript-sdk](https://github.com/modelcontextprotocol/typescript-sdk)),
    the Python servers on `mcp`
    ([python-sdk](https://github.com/modelcontextprotocol/python-sdk)). Transport

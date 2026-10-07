@@ -12,17 +12,99 @@
  *
  * Every wait in these tools is a `setTimeout` (one-second stages and polls),
  * so the tests fake `setTimeout` and advance the clock.
+ *
+ * SDK v2 removed the experimental tasks layer these tools and tests were
+ * built on (SEP-2663), so the three tools are gone and every test here is
+ * skipped until Part 5 (#4852) re-implements them on the
+ * `io.modelcontextprotocol/tasks` extension. The tests are kept, not deleted,
+ * as the record of the behavior Part 5 restores. The v1 client surface they
+ * drive (`client.experimental.tasks`, `InMemoryTaskStore`, task-returning
+ * request handlers) is typed by the stand-ins below so the bodies still
+ * compile; calling any of them throws.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { InMemoryTaskStore } from "@modelcontextprotocol/sdk/experimental/tasks";
-import {
-  CallToolResultSchema,
-  CreateMessageRequestSchema,
-  ElicitRequestSchema,
-  type ElicitRequest,
-  type ElicitResult,
-} from "@modelcontextprotocol/sdk/types.js";
+import type {
+  CallToolResult,
+  Client,
+  ElicitRequest,
+  ElicitResult,
+  GetTaskResult,
+} from "@modelcontextprotocol/client";
+import { CallToolResultSchema } from "@modelcontextprotocol/core";
 import { connect, contentOf, textOf, type Session } from "./harness.js";
+
+/** A task, as the v1 tasks API reported it. */
+type Task = GetTaskResult;
+
+/** One message of v1's `callToolStream`. */
+type TaskStreamMessage =
+  | { type: "taskCreated"; task: Task }
+  | { type: "taskStatus"; task: Task }
+  | { type: "result"; result: CallToolResult }
+  | { type: "error"; error: Error };
+
+const REMOVED =
+  "SDK v2 removed the experimental tasks API (SEP-2663); see #4852";
+
+/** Stand-in for v1's `client.experimental.tasks`. */
+function experimentalTasks(_client: Client): {
+  callToolStream: (
+    params: { name: string; arguments: Record<string, unknown> },
+    resultSchema: unknown,
+  ) => AsyncGenerator<TaskStreamMessage, void, unknown>;
+  listTasks: () => Promise<{ tasks: Task[] }>;
+  cancelTask: (taskId: string) => Promise<Task>;
+  getTask: (taskId: string) => Promise<Task>;
+} {
+  throw new Error(REMOVED);
+}
+
+/** Stand-in for v1's client-side `InMemoryTaskStore`. */
+class InMemoryTaskStore {
+  constructor() {
+    throw new Error(REMOVED);
+  }
+  createTask(
+    _params: { ttl?: number },
+    _requestId: number,
+    _request: unknown,
+  ): Promise<Task> {
+    throw new Error(REMOVED);
+  }
+  getTask(_taskId: string): Promise<Task | null> {
+    throw new Error(REMOVED);
+  }
+  storeTaskResult(
+    _taskId: string,
+    _status: "completed" | "failed",
+    _result: Record<string, unknown>,
+  ): Promise<void> {
+    throw new Error(REMOVED);
+  }
+  updateTaskStatus(
+    _taskId: string,
+    _status: Task["status"],
+    _statusMessage?: string,
+  ): Promise<void> {
+    throw new Error(REMOVED);
+  }
+}
+
+/**
+ * Stand-in for a v1 client request handler that answers a task-augmented
+ * request with a `CreateTaskResult`, which v2's typed handlers do not allow.
+ */
+function setTaskRequestHandler<
+  M extends "sampling/createMessage" | "elicitation/create",
+>(
+  _client: Client,
+  _method: M,
+  _handler: (request: {
+    params: { task?: { ttl?: number } };
+  }) => Promise<{ task: Task }>,
+): void {
+  throw new Error(REMOVED);
+}
 
 let session: Session | undefined;
 
@@ -65,7 +147,7 @@ describe("simulate-research-query", () => {
     await s.client.listTools(); // lets callToolStream see taskSupport
     return settle(
       collect(
-        s.client.experimental.tasks.callToolStream(
+        experimentalTasks(s.client).callToolStream(
           { name: "simulate-research-query", arguments: args },
           CallToolResultSchema,
         ),
@@ -85,7 +167,7 @@ describe("simulate-research-query", () => {
     return textOf(contentOf(last.result)[0]);
   }
 
-  it("creates a task that works through four stages and completes with a report", async () => {
+  it.skip("creates a task that works through four stages and completes with a report", async () => {
     session = await connect();
     const messages = await research({ topic: "tides" });
 
@@ -140,7 +222,7 @@ describe("simulate-research-query", () => {
     `);
   });
 
-  it("is rejected as a tool error when called without a task", async () => {
+  it.skip("is rejected as a tool error when called without a task", async () => {
     session = await connect();
     const result = await session.client.callTool({
       name: "simulate-research-query",
@@ -157,7 +239,7 @@ describe("simulate-research-query", () => {
     });
   });
 
-  it("ignores 'ambiguous' for a client without elicitation", async () => {
+  it.skip("ignores 'ambiguous' for a client without elicitation", async () => {
     session = await connect();
     const messages = await research({ topic: "python", ambiguous: true });
     expect(statusMessages(messages)).not.toContain(
@@ -174,7 +256,7 @@ describe("simulate-research-query", () => {
       session = await connect({
         capabilities: { elicitation: { form: {} } },
         setup: (client) =>
-          client.setRequestHandler(ElicitRequestSchema, async (req) => {
+          client.setRequestHandler("elicitation/create", async (req) => {
             asked.push(req.params);
             return answer(req);
           }),
@@ -182,7 +264,7 @@ describe("simulate-research-query", () => {
       return asked;
     }
 
-    it("asks for a clarification through tasks/result, then completes with it", async () => {
+    it.skip("asks for a clarification through tasks/result, then completes with it", async () => {
       const asked = await connectAnswering(() => ({
         action: "accept",
         content: { interpretation: "programming" },
@@ -221,7 +303,7 @@ describe("simulate-research-query", () => {
       );
     });
 
-    it("offers generic interpretations for other topics", async () => {
+    it.skip("offers generic interpretations for other topics", async () => {
       const asked = await connectAnswering(() => ({ action: "decline" }));
       await research({ topic: "Mercury", ambiguous: true });
       const params = asked[0];
@@ -236,7 +318,7 @@ describe("simulate-research-query", () => {
       );
     });
 
-    it.each([
+    it.skip.each([
       [{ action: "decline" }, "User declined - using default interpretation"],
       [{ action: "cancel" }, "User cancelled - using default interpretation"],
       [{ action: "accept", content: {} }, "User accepted without selection"],
@@ -253,7 +335,7 @@ describe("simulate-research-query", () => {
       },
     );
 
-    it("falls back to a default interpretation when the elicitation fails", async () => {
+    it.skip("falls back to a default interpretation when the elicitation fails", async () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       await connectAnswering(() => {
         throw new Error("no UI");
@@ -273,12 +355,12 @@ describe("simulate-research-query", () => {
     });
   });
 
-  it("lists its task, and stops working on it once the client cancels it", async () => {
+  it.skip("lists its task, and stops working on it once the client cancels it", async () => {
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     session = await connect();
     const { client } = session;
     await client.listTools();
-    const stream = client.experimental.tasks.callToolStream(
+    const stream = experimentalTasks(client).callToolStream(
       { name: "simulate-research-query", arguments: { topic: "tides" } },
       CallToolResultSchema,
     );
@@ -289,10 +371,10 @@ describe("simulate-research-query", () => {
     const { taskId } = first.value.task;
     await stream.return(undefined);
 
-    const { tasks } = await client.experimental.tasks.listTasks();
+    const { tasks } = await experimentalTasks(client).listTasks();
     expect(tasks.map((t) => t.taskId)).toContain(taskId);
 
-    await client.experimental.tasks.cancelTask(taskId);
+    await experimentalTasks(client).cancelTask(taskId);
     // The next stage's status update fails on the cancelled task; the
     // failure is logged, marking it failed fails too, and it stays cancelled.
     await vi.advanceTimersByTimeAsync(5000);
@@ -300,7 +382,7 @@ describe("simulate-research-query", () => {
       `Research task ${taskId} failed:`,
       expect.any(Error),
     );
-    expect(await client.experimental.tasks.getTask(taskId)).toMatchObject({
+    expect(await experimentalTasks(client).getTask(taskId)).toMatchObject({
       status: "cancelled",
       statusMessage: "Client cancelled task execution.",
     });
@@ -346,12 +428,11 @@ async function connectTaskClient(
         },
       },
     },
-    taskStore,
     setup: (client) => {
-      client.setRequestHandler(CreateMessageRequestSchema, async (req) =>
+      setTaskRequestHandler(client, "sampling/createMessage", async (req) =>
         createTask("sampling", req, req.params.task?.ttl),
       );
-      client.setRequestHandler(ElicitRequestSchema, async (req) =>
+      setTaskRequestHandler(client, "elicitation/create", async (req) =>
         createTask("elicitation", req, req.params.task?.ttl),
       );
     },
@@ -361,9 +442,12 @@ async function connectTaskClient(
 
 async function callAsync(name: string, args: Record<string, unknown> = {}) {
   const result = await settle(
-    session!.client.callTool({ name, arguments: args }, undefined, {
-      timeout: 3_600_000,
-    }),
+    session!.client.callTool(
+      { name, arguments: args },
+      {
+        timeout: 3_600_000,
+      },
+    ),
     700_000,
   );
   return contentOf(result).map(textOf);
@@ -381,7 +465,7 @@ const SAMPLE = {
 };
 
 describe("trigger-sampling-request-async", () => {
-  it("sends a task-augmented sampling request, polls the client's task, and returns its result", async () => {
+  it.skip("sends a task-augmented sampling request, polls the client's task, and returns its result", async () => {
     let created = "";
     const { taskStore } = await connectTaskClient((_method, taskId) => {
       created = taskId!;
@@ -408,7 +492,7 @@ describe("trigger-sampling-request-async", () => {
     );
   });
 
-  it("reports a failed client task with its status message", async () => {
+  it.skip("reports a failed client task with its status message", async () => {
     const { taskStore } = await connectTaskClient((_m, taskId) => {
       later(() =>
         taskStore.updateTaskStatus(taskId!, "failed", "model overloaded"),
@@ -422,7 +506,7 @@ describe("trigger-sampling-request-async", () => {
     );
   });
 
-  it("reports the status message of a client task that is already finished when it is created", async () => {
+  it.skip("reports the status message of a client task that is already finished when it is created", async () => {
     // A task that fails before it is returned is never polled, so its status
     // message comes from the CreateTaskResult.
     const { taskStore } = await connectTaskClient((_m, taskId) => {
@@ -436,7 +520,7 @@ describe("trigger-sampling-request-async", () => {
     );
   });
 
-  it("reports a cancelled client task with no message", async () => {
+  it.skip("reports a cancelled client task with no message", async () => {
     const { taskStore } = await connectTaskClient((_m, taskId) => {
       later(() => taskStore.updateTaskStatus(taskId!, "cancelled"));
     });
@@ -446,7 +530,7 @@ describe("trigger-sampling-request-async", () => {
     expect(text).toMatch(/^\[CANCELLED\] No message\n\nProgress:\n/);
   });
 
-  it("gives up after 60 polls of a task that never finishes", async () => {
+  it.skip("gives up after 60 polls of a task that never finishes", async () => {
     await connectTaskClient(() => {});
     const [text] = await callAsync("trigger-sampling-request-async", {
       prompt: "p",
@@ -459,7 +543,7 @@ describe("trigger-sampling-request-async", () => {
     );
   });
 
-  it("returns a synchronous answer from a client that ignores the task request", async () => {
+  it.skip("returns a synchronous answer from a client that ignores the task request", async () => {
     session = await connect({
       capabilities: {
         sampling: {},
@@ -481,7 +565,7 @@ describe("trigger-sampling-request-async", () => {
 });
 
 describe("trigger-elicitation-request-async", () => {
-  it("sends a task-augmented elicitation and summarizes the accepted answer", async () => {
+  it.skip("sends a task-augmented elicitation and summarizes the accepted answer", async () => {
     const asked: string[] = [];
     const { taskStore } = await connectTaskClient((method, taskId) => {
       asked.push(method);
@@ -505,7 +589,7 @@ describe("trigger-elicitation-request-async", () => {
     );
   });
 
-  it("summarizes an accepted answer with no fields", async () => {
+  it.skip("summarizes an accepted answer with no fields", async () => {
     const { taskStore } = await connectTaskClient((_m, taskId) => {
       later(() =>
         taskStore.storeTaskResult(taskId!, "completed", {
@@ -521,7 +605,7 @@ describe("trigger-elicitation-request-async", () => {
     ]);
   });
 
-  it.each([
+  it.skip.each([
     [
       "decline",
       "[DECLINED] User declined to provide the requested information.",
@@ -535,7 +619,7 @@ describe("trigger-elicitation-request-async", () => {
     expect(texts[0]).toBe(expected);
   });
 
-  it("reports only progress and the raw result for an answer of another shape", async () => {
+  it.skip("reports only progress and the raw result for an answer of another shape", async () => {
     const { taskStore } = await connectTaskClient((_m, taskId) => {
       later(() =>
         taskStore.storeTaskResult(taskId!, "completed", { action: "accept" }),
@@ -546,7 +630,7 @@ describe("trigger-elicitation-request-async", () => {
     expect(texts[0]).toMatch(/^\nProgress:\n/);
   });
 
-  it("logs the first poll, every tenth, and every status change while input is required", async () => {
+  it.skip("logs the first poll, every tenth, and every status change while input is required", async () => {
     let taskId = "";
     const { taskStore } = await connectTaskClient((_m, id) => {
       taskId = id!;
@@ -568,7 +652,7 @@ describe("trigger-elicitation-request-async", () => {
     expect(polls).toHaveLength(4);
   });
 
-  it("reports the status message of a client task that is already finished when it is created", async () => {
+  it.skip("reports the status message of a client task that is already finished when it is created", async () => {
     // A task that fails before it is returned is never polled, so its status
     // message comes from the CreateTaskResult.
     const { taskStore } = await connectTaskClient((_m, taskId) => {
@@ -582,7 +666,7 @@ describe("trigger-elicitation-request-async", () => {
     ]);
   });
 
-  it("reports a failed client task", async () => {
+  it.skip("reports a failed client task", async () => {
     const { taskStore } = await connectTaskClient((_m, taskId) => {
       later(() => taskStore.updateTaskStatus(taskId!, "failed"));
     });
@@ -597,7 +681,7 @@ describe("trigger-elicitation-request-async", () => {
     });
   }
 
-  it("gives up 5 seconds before the 10-minute TTL of a task that never finishes", async () => {
+  it.skip("gives up 5 seconds before the 10-minute TTL of a task that never finishes", async () => {
     fakeClock();
     // A client that keeps its task longer than the 10-minute TTL asked for.
     await connectTaskClient(() => {}, 60_000);
@@ -607,7 +691,7 @@ describe("trigger-elicitation-request-async", () => {
     );
   });
 
-  it("times out before a client that honors the 10-minute TTL expires the task", async () => {
+  it.skip("times out before a client that honors the 10-minute TTL expires the task", async () => {
     fakeClock();
     let created = "";
     const { taskStore } = await connectTaskClient((_m, taskId) => {
@@ -625,7 +709,7 @@ describe("trigger-elicitation-request-async", () => {
     expect((await taskStore.getTask(created))?.ttl).toBe(600000);
   });
 
-  it("times out without polling when its wait ends past the deadline", async () => {
+  it.skip("times out without polling when its wait ends past the deadline", async () => {
     // A timer that fires late: the first reading sets the deadline, and every
     // later one is already past it.
     let readings = 0;
@@ -641,7 +725,7 @@ describe("trigger-elicitation-request-async", () => {
     ]);
   });
 
-  it("returns a synchronous answer from a client that ignores the task request", async () => {
+  it.skip("returns a synchronous answer from a client that ignores the task request", async () => {
     session = await connect({
       capabilities: {
         elicitation: {},

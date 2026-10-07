@@ -12,8 +12,8 @@ import { realpathSync } from "fs";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { normalizePath, expandHome } from "./path-utils.js";
 import { createServer } from "./server.js";
 
