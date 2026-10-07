@@ -1,0 +1,63 @@
+{
+  "path": "/calendars",
+  "triggerAction": "\n      const tabs = document.querySelectorAll('[role=\"tab\"], .nav-item, button');\n      const target = [...tabs].find((t) => /week|month|day|list/i.test(t.textContent || ''));\n      if (target) target.click();\n      return { clicked: target?.textContent ?? null };\n    ",
+  "total": 4,
+  "byHost": {
+    "production.app-manifest.leadconnectorhq.com": 1,
+    "o176457.ingest.sentry.io": 1,
+    "www.google-analytics.com": 1,
+    "backend.leadconnectorhq.com": 1
+  },
+  "endpoints": [
+    "GET /latest/manifest.json",
+    "GET /localization/en-US/",
+    "POST /api/1723141/envelope/",
+    "POST /j/collect"
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://production.app-manifest.leadconnectorhq.com/latest/manifest.json",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787084851318,
+        "finishedAt": 1787084851323
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://o176457.ingest.sentry.io/api/1723141/envelope/?sentry_version=7&sentry_key=c67431ff70d6440fb529c2705792425f&sentry_client=sentry.javascript.vue%2F10.19.0",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": "{\"sent_at\":\"2026-08-18T20:27:32.279Z\",\"sdk\":{\"name\":\"sentry.javascript.vue\",\"version\":\"10.19.0\"}}\n{\"type\":\"session\"}\n{\"sid\":\"502e69390a614522b1da625af9d1da5b\",\"init\":true,\"started\":\"2026-08-18T20:27:32.278Z\",\"timestamp\":\"2026-08-18T20:27:32.279Z\",\"status\":\"ok\",\"errors\":0,\"attrs\":{\"release\":\"7e17e60958ddc78ea5feccd6a73278c1e45705be\",\"environment\":\"production\",\"user_agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36\"}}",
+      "timing": {
+        "startedAt": 1787084852320,
+        "finishedAt": 1787084852347
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://www.google-analytics.com/j/collect?v=1&_v=j102&a=837029506&t=pageview&_s=1&dl=https%3A%2F%2Fapp.leadconnectorhq.com%2Fcalendars&ul=en-us&sr=1440x900&vp=1440x900&_u=SACAAEABEAAAACAAI~&jid=&gjid=&cid=1937679849.1787084840&tid=UA-115177999-2&_gid=1121173055.1787084840&_slc=1&z=2051311996",
+      "resourceType": "xhr",
+      "status": null,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787084852320,
+        "finishedAt": null
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://backend.leadconnectorhq.com/localization/en-US/?module=common,smartList,contactDetail,copilot",
+      "resourceType": "xhr",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787084852330,
+        "finishedAt": 1787084852413
+      }
+    }
+  ]
+}

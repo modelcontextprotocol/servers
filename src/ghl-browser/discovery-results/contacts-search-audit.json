@@ -1,0 +1,100 @@
+{
+  "path": "/contacts/list",
+  "triggerAction": "\n      const inp = document.querySelector('input[placeholder*=\"Search\"], input[type=\"search\"], input[name=\"search\"]') || document.querySelector('main input');\n      if (inp) { inp.focus(); inp.value = 'test'; inp.dispatchEvent(new Event('input', {bubbles:true})); inp.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',code:'Enter',bubbles:true})); }\n      return { focused: !!inp };\n    ",
+  "total": 7,
+  "byHost": {
+    "production.app-manifest.leadconnectorhq.com": 1,
+    "o176457.ingest.sentry.io": 2,
+    "www.google-analytics.com": 1,
+    "backend.leadconnectorhq.com": 1,
+    "firebaseinstallations.googleapis.com": 1,
+    "firebaseremoteconfig.googleapis.com": 1
+  },
+  "endpoints": [
+    "GET /latest/manifest.json",
+    "GET /localization/en-US/",
+    "POST /api/1723141/envelope/",
+    "POST /j/collect",
+    "POST /v1/projects/highlevel-backend/installations",
+    "POST /v1/projects/highlevel-backend/namespaces/firebase:fetch"
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://production.app-manifest.leadconnectorhq.com/latest/manifest.json",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787084838208,
+        "finishedAt": 1787084838329
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://o176457.ingest.sentry.io/api/1723141/envelope/?sentry_version=7&sentry_key=c67431ff70d6440fb529c2705792425f&sentry_client=sentry.javascript.vue%2F10.19.0",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": "{\"sent_at\":\"2026-08-18T20:27:19.878Z\",\"sdk\":{\"name\":\"sentry.javascript.vue\",\"version\":\"10.19.0\"}}\n{\"type\":\"session\"}\n{\"sid\":\"e1d2332dcd044669b623d26b3d3db2e9\",\"init\":true,\"started\":\"2026-08-18T20:27:19.877Z\",\"timestamp\":\"2026-08-18T20:27:19.878Z\",\"status\":\"ok\",\"errors\":0,\"attrs\":{\"release\":\"7e17e60958ddc78ea5feccd6a73278c1e45705be\",\"environment\":\"production\",\"user_agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36\"}}",
+      "timing": {
+        "startedAt": 1787084839918,
+        "finishedAt": 1787084840053
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://www.google-analytics.com/j/collect?v=1&_v=j102&a=1199381103&t=pageview&_s=1&dl=https%3A%2F%2Fapp.leadconnectorhq.com%2Fcontacts%2Flist&ul=en-us&sr=1440x900&vp=1440x900&_u=aEBAAEABEAAAACAAI~&jid=441310357&gjid=175177208&cid=1937679849.1787084840&tid=UA-115177999-2&_gid=1121173055.1787084840&_r=1&_slc=1&z=2066592713",
+      "resourceType": "xhr",
+      "status": null,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787084839918,
+        "finishedAt": null
+      }
+    },
+    {
+      "method": "GET",
+      "url": "https://backend.leadconnectorhq.com/localization/en-US/?module=common,smartList,contactDetail,copilot",
+      "resourceType": "xhr",
+      "status": 200,
+      "requestBody": null,
+      "timing": {
+        "startedAt": 1787084839924,
+        "finishedAt": 1787084840105
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://firebaseinstallations.googleapis.com/v1/projects/highlevel-backend/installations",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": "{\"fid\":\"dlzsHNDksgeTReYOJ3VIEe\",\"authVersion\":\"FIS_v2\",\"appId\":\"1:439472444885:android:c48022009a58ffc7\",\"sdkVersion\":\"w:0.6.18\"}",
+      "timing": {
+        "startedAt": 1787084839939,
+        "finishedAt": 1787084840368
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://firebaseremoteconfig.googleapis.com/v1/projects/highlevel-backend/namespaces/firebase:fetch?key=AIzaSyB_w3vXmsI7WeQtrIOkjR6xTRVN5uOieiE",
+      "resourceType": "fetch",
+      "status": 200,
+      "requestBody": "{\"sdk_version\":\"11.10.0\",\"app_instance_id\":\"dlzsHNDksgeTReYOJ3VIEe\",\"app_instance_id_token\":\"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6IjE6NDM5NDcyNDQ0ODg1OmFuZHJvaWQ6YzQ4MDIyMDA5YTU4ZmZjNyIsImV4cCI6MTc4NzY4OTY0MSwiZmlkIjoiZGx6c0hORGtzZ2VUUmVZT0ozVklFZSIsInByb2plY3ROdW1iZXIiOjQzOTQ3MjQ0NDg4NX0.AB2LPV8wRAIge_0ZV9ygEC_ujRTuO2NwOQxoJSdolPATLT2eerPwB2UCIAKPa1tpenITGjjwTmjxI2NQ5YD7NU_F9bKJ-QAucMgX\",\"app_id\":\"1:439472444885:android:c48022009a58ffc7\",\"language_code\":\"en-US\"}",
+      "timing": {
+        "startedAt": 1787084840387,
+        "finishedAt": 1787084840576
+      }
+    },
+    {
+      "method": "POST",
+      "url": "https://o176457.ingest.sentry.io/api/1723141/envelope/?sentry_version=7&sentry_key=c67431ff70d6440fb529c2705792425f&sentry_client=sentry.javascript.vue%2F10.19.0",
+      "resourceType": "fetch",
+      "status": 429,
+      "requestBody": "{\"sdk\":{\"name\":\"sentry.javascript.vue\",\"version\":\"10.19.0\"}}\n{\"type\":\"trace_metric\",\"item_count\":1,\"content_type\":\"application/vnd.sentry.items.trace-metric+json\"}\n{\"items\":[{\"timestamp\":1787084839.932,\"trace_id\":\"0f104ac9c4b745b486b88b719011373a\",\"span_id\":\"9f172a6c5c10be12\",\"name\":\"webVitals.CLS\",\"type\":\"distribution\",\"unit\":\"MB\",\"value\":0,\"attributes\":{\"webVitalName\":{\"value\":\"CLS\",\"type\":\"string\"},\"webVitalValue\":{\"value\":0,\"type\":\"integer\"},\"webVitalDelta\":{\"value\":0,\"type\":\"integer\"},\"interactionId\":{\"value\":\"v5-1787084839928-5087010028894\",\"type\":\"string\"},\"navigationType\":{\"value\":\"navigate\",\"type\":\"string\"},\"routePath\":{\"value\":\"/\",\"type\":\"string\"},\"sentry.release\":{\"value\":\"7e17e60958ddc78ea5feccd6a73278c1e45705be\",\"type\":\"string\"},\"sentry.environment\":{\"value\":\"production\",\"type\":\"string\"},\"sentry.sdk.name\":{\"value\":\"sentry.javascript.vue\",\"type\":\"string\"},\"sentry.sdk.version\":{\"value\":\"10.19.0\",\"type\":\"string\"}}}]}",
+      "timing": {
+        "startedAt": 1787084844942,
+        "finishedAt": 1787084845009
+      }
+    }
+  ]
+}
