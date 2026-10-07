@@ -116,22 +116,19 @@ Additional examples of using the Claude Desktop as an MCP client might look like
       "command": "uvx",
       "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
     },
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
-      }
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
     },
-    "postgres": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+    "time": {
+      "command": "uvx",
+      "args": ["mcp-server-time", "--local-timezone=America/New_York"]
     }
   }
 }
 ```
 
-On Windows, apply the same wrapper to each `npx`-based entry above by changing `"command"` to `"cmd"` and prepending `"/c", "npx"` to the existing `args`. Leave `uvx` entries unchanged.
+On Windows, apply the same wrapper to each `npx`-based entry above by changing `"command"` to `"cmd"` and prepending `"/c", "npx"` to the existing `args`. Leave `uvx` entries such as `git`, `fetch`, and `time` unchanged.
 
 ## 🛠️ Creating Your Own Server
 
