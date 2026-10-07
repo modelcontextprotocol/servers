@@ -489,7 +489,12 @@ server.registerTool(
       entries.map(async (entry) => {
         const entryPath = path.join(validPath, entry.name);
         try {
-          const stats = await fs.stat(entryPath);
+          // Use lstat so a symlink is described by its own metadata rather than its
+          // target's. fs.stat follows symlinks, which would report the size/mtime of a
+          // file outside the allowed directories when an allowed directory contains a
+          // symlink pointing out of the sandbox. This matches list_directory and
+          // directory_tree, which classify entries from the (non-following) Dirent.
+          const stats = await fs.lstat(entryPath);
           return {
             name: entry.name,
             isDirectory: entry.isDirectory(),
