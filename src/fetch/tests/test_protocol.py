@@ -1016,7 +1016,12 @@ async def test_modern_era_is_not_served() -> None:
     # #4851: the SDK v2 port serves the 2025-11-25 handshake era only.
     # Server.run() would also open a 2026-07-28 connection for a request that
     # carries the per-request `_meta` envelope; adopting that era is #4853.
-    # Until then such a request is refused as it was on SDK v1.
+    # Until then such a request is refused as an unknown method.
+    #
+    # Behavior change in the SDK v2 port: SDK v1 answered every unknown
+    # method with -32602 "Invalid request parameters" (its request union
+    # failed to parse); SDK v2 answers -32601 "Method not found", the code
+    # JSON-RPC defines for it.
     discover = JSONRPCRequest(
         jsonrpc="2.0",
         id=1,

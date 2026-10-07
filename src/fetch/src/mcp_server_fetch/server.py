@@ -6,9 +6,9 @@
 #
 # Built on the MCP Python SDK v2's low-level `Server` (#4851). That SDK no
 # longer validates tool arguments or folds tool exceptions into `isError`
-# results, so `call_tool` does both with SDK v1's messages, and `serve()` runs
-# the legacy (2025-11-25) handshake loop only, keeping the wire as it was on v1.
-# Serving 2026-07-28 is #4853.
+# results, so `call_tool` does both with SDK v1's messages, keeping tool
+# results as they were on v1. `serve()` runs the legacy (2025-11-25) handshake
+# loop only; serving 2026-07-28 is #4853.
 
 import asyncio
 import ipaddress
@@ -488,7 +488,7 @@ Although originally you did not have internet access, and were advised to refuse
     ) -> CallToolResult:
         # SDK v2's low-level server neither validates arguments nor turns a
         # handler exception into an isError result, both of which SDK v1 did.
-        # Both are done here, with v1's messages, so the wire is unchanged.
+        # Both are done here, with v1's messages, so tool results are unchanged.
         arguments = params.arguments or {}
         if params.name == tool.name:
             try:
@@ -552,7 +552,7 @@ Although originally you did not have internet access, and were advised to refuse
         # Legacy era only. Server.run() would also serve 2026-07-28 (its
         # dual-era loop answers server/discover and per-request envelopes);
         # adopting that era is #4853, so this port (#4851) serves the
-        # handshake loop alone and keeps the wire unchanged.
+        # handshake loop alone, the only era it served on SDK v1.
         async with server.lifespan(server) as lifespan_state:
             await serve_loop(
                 server,
