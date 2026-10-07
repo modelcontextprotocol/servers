@@ -35,6 +35,7 @@ import {
   parseCommentMarker,
   parseMarker,
   pickTarget,
+  disjointCaution,
   unverifiedReason,
   scopedOverrideExample,
   splitOwner,
@@ -437,6 +438,42 @@ test("pickTarget never targets below an affected copy", () => {
       stillOpen: ["A"],
     },
   );
+});
+
+test("a vulnerable interval above the target is called out, and every fix is verified", () => {
+  const group = {
+    ecosystem: "npm",
+    fixedIn: "1.4.0",
+    targetVerified: true,
+    advisories: [
+      { ghsa: "A", range: "< 1.4.0", fixedIn: "1.4.0" },
+      { ghsa: "B", range: ">= 2.0.0, < 2.1.0", fixedIn: "2.1.0" },
+    ],
+  };
+  const [caution] = disjointCaution(group);
+  assert.match(caution, /`B` \(`>= 2\.0\.0, < 2\.1\.0`\)/);
+  assert.ok(!caution.includes("`A`"));
+  assert.deepEqual(
+    disjointCaution({ ...group, advisories: [group.advisories[0]] }),
+    [],
+  );
+  assert.equal(
+    disjointCaution({
+      ...group,
+      advisories: [
+        { ghsa: "C", range: "< 1.4.0 || >= 3.0.0, < 3.1.0", fixedIn: "1.4.0" },
+      ],
+    }).length,
+    2,
+  );
+  assert.deepEqual(disjointCaution({ ...group, targetVerified: false }), []);
+  const body = buildIssueBody(npmGroup("hono", "4.13.7"), {
+    affected: [
+      { path: "node_modules/hono", version: "4.12.0", topLevel: true },
+    ],
+    declarers: ["package.json"],
+  });
+  assert.match(body, /\*\*Then verify\*\*/);
 });
 
 test("an unverified target names the version it actually checked", () => {

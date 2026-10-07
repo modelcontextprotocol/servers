@@ -737,6 +737,9 @@ export function buildIssueBody(
       : []),
     ...steps.map((step, i) => (steps.length > 1 ? `${i + 1}. ${step}` : step)),
     "",
+    ...disjointCaution(group),
+    `**Then verify** before opening the PR: every locked copy must be outside every range in the Advisories table. \`node scripts/dependabot-alerts.mjs --dry-run\` against the branch should report this exposure cleared.`,
+    "",
     "| Vulnerable copy | Version |",
     "| --- | --- |",
     ...affected.map((e) => `| \`${cell(e.path)}\` | \`${cell(e.version)}\` |`),
@@ -770,6 +773,28 @@ export function buildIssueBody(
     "> [!NOTE]",
     `> The GHSA, CVE, severity, range and summary are the advisory's own, as Dependabot reports them. What this sweep verified against \`${TARGET_BRANCH}\` is the **installed versions and whether each advisory's range still matches them**: GitHub computes alerts from the default branch, so an alert is filed only after that re-check.`,
   ].join("\n");
+}
+
+/**
+ * A warning when a vulnerable interval sits ABOVE the target: an advisory
+ * patched later than the target, or a disjoint (`||`) range. A floor raised
+ * to the target alone would let a later resolve land in that interval, so the
+ * new range must also stay clear of it.
+ *
+ * @param {{ecosystem: string, fixedIn: string, targetVerified?: boolean, advisories: Array<{ghsa: string, range: string, fixedIn: string}>}} group
+ * @returns {string[]} lines to add, or none
+ */
+export function disjointCaution(group) {
+  if (group.targetVerified === false) return [];
+  const compare = versionCompare(group.ecosystem);
+  const above = group.advisories.filter(
+    (a) => a.range.includes("||") || compare(a.fixedIn, group.fixedIn) > 0,
+  );
+  if (above.length === 0) return [];
+  return [
+    `⚠️ **Keep the new range clear of the higher vulnerable interval** of ${above.map((a) => `\`${a.ghsa}\` (\`${a.range}\`)`).join(", ")}: a bare floor at \`${group.fixedIn}\` can later resolve into it. Cap the range below it, or raise the floor past it.`,
+    "",
+  ];
 }
 
 /**
