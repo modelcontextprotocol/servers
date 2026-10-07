@@ -36,13 +36,24 @@ def extract_content_from_html(html: str) -> str:
     ret = readabilipy.simple_json.simple_json_from_html_string(
         html, use_readability=True
     )
-    if not ret["content"]:
-        return "<error>Page failed to be simplified from HTML</error>"
-    content = markdownify.markdownify(
-        ret["content"],
-        heading_style=markdownify.ATX,
-    )
-    return content
+    content_html = ret.get("content", "")
+
+    # If Readability extracted very little compared to input,
+    # it likely stripped hidden SSR content — fall back to raw conversion.
+    # This handles streaming/SSR sites where content is injected hidden
+    # and Readability treats it as non-content.
+    if not content_html or len(content_html) < len(html) * 0.05:
+        content = markdownify.markdownify(
+            html,
+            heading_style=markdownify.ATX,
+        )
+    else:
+        content = markdownify.markdownify(
+            content_html,
+            heading_style=markdownify.ATX,
+        )
+
+    return content if content.strip() else "<error>Page failed to be simplified from HTML</error>"
 
 
 def get_robots_txt_url(url: str) -> str:
