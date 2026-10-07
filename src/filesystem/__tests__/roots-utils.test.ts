@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getValidRootDirectories } from '../roots-utils.js';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, realpathSync } from 'fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, realpathSync, symlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import type { Root } from '@modelcontextprotocol/sdk/types.js';
@@ -48,7 +48,7 @@ describe('getValidRootDirectories', () => {
     it('should normalize complex paths', async () => {
       const subDir = join(testDir1, 'subdir');
       mkdirSync(subDir);
-      
+
       const roots = [
         { uri: `file://${testDir1}/./subdir/../subdir`, name: 'Complex Path' }
       ];
@@ -57,6 +57,32 @@ describe('getValidRootDirectories', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toBe(subDir);
+    });
+
+    it('keeps both original and resolved forms for roots that resolve differently', async () => {
+      const realDir = join(testDir1, 'real-root');
+      const aliasDir = join(testDir1, 'alias-root');
+      mkdirSync(realDir);
+
+      try {
+        symlinkSync(realDir, aliasDir);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+          return;
+        }
+        throw error;
+      }
+
+      const roots: Root[] = [
+        { uri: `file://${aliasDir}`, name: 'Symlink Root' }
+      ];
+
+      const result = await getValidRootDirectories(roots);
+      const resolvedDir = realpathSync(aliasDir);
+
+      expect(result).toContain(aliasDir);
+      expect(result).toContain(resolvedDir);
+      expect(result).toHaveLength(2);
     });
   });
 
