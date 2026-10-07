@@ -470,6 +470,42 @@ test("titles and labels name the bump and the server", () => {
   ]);
 });
 
+test("npm labels come from the vulnerable copies, not the root lockfile", () => {
+  const npm = { manifestPath: "package-lock.json", ecosystem: "npm" };
+  const base = ["v2", "chore", "dependencies"];
+  // A hoisted copy one workspace declares.
+  assert.deepEqual(
+    issueLabels(npm, {
+      affected: [{ path: "node_modules/hono", topLevel: true }],
+      declarers: ["src/everything/package.json"],
+    }),
+    [...base, "server-everything"],
+  );
+  // A copy in a workspace's own node_modules, declared or not.
+  assert.deepEqual(
+    issueLabels(npm, {
+      affected: [{ path: "src/filesystem/node_modules/diff", topLevel: true }],
+      declarers: ["package.json"],
+    }),
+    [...base, "server-filesystem"],
+  );
+  // Declared by the root only, or by nobody: no server.
+  assert.deepEqual(
+    issueLabels(npm, {
+      affected: [{ path: "node_modules/semver", topLevel: true }],
+      declarers: ["package.json"],
+    }),
+    base,
+  );
+  assert.deepEqual(
+    issueLabels(npm, {
+      affected: [{ path: "node_modules/a/node_modules/x", topLevel: false }],
+      declarers: [],
+    }),
+    base,
+  );
+});
+
 function npmGroup(pkg, fixedIn, range = "< 99") {
   const [group] = groupAlerts([
     alert({ name: pkg, range, fixed: fixedIn, ghsa: "GHSA-x" }),

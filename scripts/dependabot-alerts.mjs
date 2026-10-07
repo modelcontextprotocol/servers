@@ -573,10 +573,33 @@ export function buildIssueTitle(group) {
   return `chore(deps): bump \`${group.package}\` to \`${group.fixedIn}\` in \`${group.manifestPath}\` (${n} ${n === 1 ? "advisory" : "advisories"})`;
 }
 
-/** Labels: the sweep's, plus the server's when the manifest is inside one. */
-export function issueLabels(group) {
-  const scope = scopeLabel(group.manifestPath);
-  return scope ? [...SWEEP_LABELS, scope] : [...SWEEP_LABELS];
+/**
+ * Labels: the sweep's, plus each server the vulnerable copies belong to.
+ *
+ * A pip lockfile lives inside one server, so its path names the scope. Every
+ * npm alert names the root `package-lock.json`, so the scope comes from the
+ * affected copies instead: a copy in a workspace's own `node_modules` is that
+ * workspace's, and a declared copy is each declaring workspace's. A copy only
+ * the root declares, or one no manifest declares, names no server.
+ *
+ * @param {{manifestPath: string, ecosystem?: string}} group
+ * @param {{affected?: Array<{path: string, topLevel: boolean}>, declarers?: string[]}} [probe]
+ * @returns {string[]}
+ */
+export function issueLabels(group, { affected = [], declarers = [] } = {}) {
+  const scopes =
+    group.ecosystem === "npm"
+      ? affected.flatMap((entry) => [
+          splitOwner(entry.path).owner,
+          ...npmCopyDeclarers(entry, declarers).map((m) =>
+            path.posix.dirname(m),
+          ),
+        ])
+      : [path.posix.dirname(group.manifestPath)];
+  const labels = [
+    ...new Set(scopes.map((dir) => scopeLabel(`${dir}/`)).filter(Boolean)),
+  ].sort();
+  return [...SWEEP_LABELS, ...labels];
 }
 
 /**
@@ -1113,7 +1136,7 @@ export function main({
     if (!existing) {
       const created = writer.create({
         title: buildIssueTitle(group),
-        labels: issueLabels(group),
+        labels: issueLabels(group, probe),
         milestone: milestoneOnce(),
         body: buildIssueBody(group, { ...probe, securityPrsOff }),
       });
