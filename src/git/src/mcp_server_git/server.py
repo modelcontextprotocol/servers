@@ -288,7 +288,7 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
     return branch_info
 
 
-async def serve(repository: Path | None) -> None:
+async def serve(repository: Path | None, allow_any_repository: bool = False) -> None:
     logger = logging.getLogger(__name__)
 
     if repository is not None:
@@ -298,6 +298,24 @@ async def serve(repository: Path | None) -> None:
         except git.InvalidGitRepositoryError:
             logger.error(f"{repository} is not a valid Git repository")
             return
+        allowed_repository: Path | None = repository
+    elif allow_any_repository:
+        allowed_repository = None
+        logger.warning(
+            "No --repository configured and --allow-any-repository was passed: "
+            "repo_path is unrestricted for every tool call."
+        )
+    else:
+        # Defense in depth: without an explicit --repository, restrict every
+        # tool call to the current working directory rather than leaving
+        # repo_path completely unrestricted (the previous default).
+        allowed_repository = Path.cwd()
+        logger.info(
+            f"No --repository configured; restricting repo_path to the current "
+            f"working directory ({allowed_repository}). Pass --repository to use "
+            f"a different directory, or --allow-any-repository to remove this "
+            f"restriction entirely."
+        )
 
     server = Server("mcp-git")
 
@@ -472,7 +490,7 @@ async def serve(repository: Path | None) -> None:
         repo_path = Path(arguments["repo_path"])
 
         # Validate repo_path is within allowed repository
-        validate_repo_path(repo_path, repository)
+        validate_repo_path(repo_path, allowed_repository)
 
         # For all commands, we need an existing repo
         repo = git.Repo(repo_path)
