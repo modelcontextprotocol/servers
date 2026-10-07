@@ -172,9 +172,10 @@ CLI) or **Server Settings → Protocol Era** (the web UI):
 | `modern` | Pins 2026-07-28 through `server/discover`, with no fallback |
 | `auto` | Probes `server/discover`, and falls back to `initialize` |
 
-⚠️ **Only the legacy era can be exercised against these servers today.** All
-seven are on a v1 SDK (`@modelcontextprotocol/sdk` 1.x, `mcp` 1.x), whose
-newest protocol version is 2025-11-25. None implements `server/discover`. So:
+⚠️ **Only the legacy era can be exercised against these servers today.** The
+Python servers are on `mcp` 1.x, whose newest protocol version is 2025-11-25.
+The TypeScript servers are on the TS SDK v2 packages (#4856) but still serve
+only the `initialize` handshake. None implements `server/discover`. So:
 
 - `--protocol-era modern` fails, by design, with `Version negotiation failed:
   the server did not offer pinned protocol version 2026-07-28 via
@@ -259,7 +260,7 @@ Claude Code, run this way, has no era switch and does not print the protocol
 version it negotiated. `/pr-flow` asks for the LLM client in both eras as well;
 where the client gives no way to choose, record the client and its version and
 say that the era could not be selected, rather than labelling the run with an
-era it was not shown to use. Against a v1-SDK server the connection is legacy
+era it was not shown to use. Against a server without modern-era support the connection is legacy
 whatever the client prefers, for the reason given under Protocol eras.
 
 ## What to write down
