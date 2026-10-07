@@ -1,0 +1,82 @@
+# Daily Dependabot alert sweep (#4874), replacing Dependabot's security-update
+# PRs. Ported from the MCP Inspector's workflow of the same name
+# (inspector#2233).
+#
+# Security-update PRs are a repo setting (`automated-security-fixes`) and are
+# switched off; the ALERTS stay on, and this workflow consumes them. It runs
+# `scripts/dependabot-alerts.mjs`, which files one issue per vulnerable
+# package per lockfile (npm's root `package-lock.json`, and each Python
+# server's `uv.lock`), and the fix is written by hand against `v2/main`:
+#
+#   alert -> this sweep -> issue (labeled, milestoned) -> issue-triage boards it -> maintainer PR -> v2/main
+#
+# A schedule, not an event handler: there is no `dependabot_alert` workflow
+# trigger, only a webhook.
+#
+# ⚠️ GitHub computes alerts from the DEFAULT branch (`main`), and we ship from
+# `v2/main`. So each alert is re-checked against `v2/main`'s own lockfile
+# (hence the `ref: v2/main` checkout) and skipped if it is already fixed
+# there. The converse is a blind spot: a vulnerable dependency introduced on
+# `v2/main` and not yet merged to `main` produces no alert at all.
+#
+# ⚠️ A scheduled workflow runs only from `main`, so this does nothing until a
+# milestone merge carries it there.
+#
+# `vulnerability-alerts: read` is the one non-default permission, and
+# `GITHUB_TOKEN` can hold it. Two things are out of that token's reach, and
+# the sweep degrades rather than fails on both:
+#
+#  * Reading back `automated-security-fixes` needs `administration: read`,
+#    which `permissions:` has no key for. Under this token the script reports
+#    that guard as UNVERIFIED; an explicit `enabled: true` still fails it.
+#  * Writing the card on the org project board needs `organization projects:
+#    write`. The issue arrives labeled and milestoned and `issue-triage`
+#    boards it in `Todo`. Boarding from here waits on a GitHub App (#5061);
+#    the Inspector's version reads a `PROJECT_TOKEN` that was never created,
+#    so its board code never ran (inspector#2547), which is why none is
+#    shipped here.
+name: Dependabot Alert Sweep
+
+on:
+  schedule:
+    - cron: "17 6 * * *" # 06:17 UTC daily; alerts are not minute-sensitive
+  workflow_dispatch:
+
+# The marker lookup is a read before a write, so two overlapping runs could
+# both file. The queued run waits and re-reads what the first one wrote.
+concurrency:
+  group: dependabot-alert-sweep
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  vulnerability-alerts: read
+
+jobs:
+  alert-sweep:
+    timeout-minutes: 15
+    if: github.repository_owner == 'modelcontextprotocol'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout v2/main
+        uses: actions/checkout@v6
+        with:
+          ref: v2/main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # The script reads every lockfile as text; its one dependency is
+      # `semver`. No lifecycle scripts: nothing here builds.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run the Dependabot alert sweep
+        run: node scripts/dependabot-alerts.mjs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
