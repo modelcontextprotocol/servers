@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
-import { isPathWithinAllowedDirectories } from '../path-validation.js';
+import { isPathWithin, isPathWithinAllowedDirectories } from '../path-validation.js';
 
 /**
  * Check if the current environment supports symlink creation
@@ -996,5 +996,95 @@ describe('Path Validation', () => {
       expect(targetContent).toBe('NEW CONTENT');
       expect(forbiddenContent).toBe('ORIGINAL CONTENT'); // Unchanged
     });
+  });
+});
+
+describe('isPathWithin - pure containment helper', () => {
+  // Platform-appropriate fixture root so these assertions run everywhere
+  const root = path.sep === '\\' ? 'C:\\allowed-root' : '/allowed-root';
+
+  it('allows exact root match and subdirectories', () => {
+    expect(isPathWithin([root], root)).toBe(true);
+    expect(isPathWithin([root], path.join(root, 'sub'))).toBe(true);
+    expect(isPathWithin([root], path.join(root, 'sub', 'file.txt'))).toBe(true);
+  });
+
+  it('denies traversal escapes judged by resolved location (any platform)', () => {
+    expect(isPathWithin([root], path.join(root, '..', 'escape'))).toBe(false);
+    expect(isPathWithin([root], path.join(root, 'a', '..', '..', 'escape'))).toBe(false);
+    // Deep traversal that lands back inside must still be allowed
+    expect(isPathWithin([root], path.join(root, 'a', 'b', '..', 'c', 'file.txt'))).toBe(true);
+  });
+
+  it('denies sibling directories sharing a name prefix (segment boundary)', () => {
+    expect(isPathWithin([root], root + '2')).toBe(false);
+    expect(isPathWithin([root], root + '-backup')).toBe(false);
+  });
+
+  it('rejects invalid inputs without throwing', () => {
+    expect(isPathWithin([], '/x')).toBe(false);
+    expect(isPathWithin(null as any, '/x')).toBe(false);
+    expect(isPathWithin(['/x'], '')).toBe(false);
+    expect(isPathWithin(['/x'], null as any)).toBe(false);
+    expect(isPathWithin(['/home/user/project'], '/home/user/project\x00/etc/passwd')).toBe(false);
+    expect(isPathWithin(['/home/user/project\x00'], '/home/user/project')).toBe(false);
+  });
+
+  it('handles file-system roots as allowed roots', () => {
+    if (path.sep === '/') {
+      expect(isPathWithin(['/'], '/etc/passwd')).toBe(true);
+    } else {
+      // Drive root: same drive allowed, different drive denied
+      expect(isPathWithin(['C:\\'], 'C:\\anything\\here')).toBe(true);
+      expect(isPathWithin(['C:\\'], 'D:\\other')).toBe(false);
+    }
+  });
+});
+
+describe('Case-insensitive containment on Windows (issue #470)', () => {
+  const isWin = process.platform === 'win32';
+
+  it('allows drive-letter case mismatches on Windows', () => {
+    if (!isWin) return;
+    const allowed = ['c:\\source'];
+    expect(isPathWithin(allowed, 'C:\\source\\file.md')).toBe(true);
+    expect(isPathWithin(allowed, 'c:\\source\\file.md')).toBe(true);
+
+    // Same decision through the legacy wrapper used by validate_path in lib.ts
+    expect(isPathWithinAllowedDirectories('C:\\source\\file.md', ['c:\\source'])).toBe(true);
+    expect(isPathWithinAllowedDirectories('c:\\source', ['C:\\source'])).toBe(true);
+  });
+
+  it('allows inner-component case mismatches on Windows', () => {
+    if (!isWin) return;
+    const allowed = ['C:\\Users\\ADITY\\Documents'];
+    expect(isPathWithin(allowed, 'C:\\users\\adity\\documents\\notes\\file.md')).toBe(true);
+    expect(isPathWithin(allowed, 'c:\\Users\\Adity\\Documents')).toBe(true);
+    expect(isPathWithin(allowed, 'C:\\USERS\\adity\\DOCUMENTS\\a\\b\\c.txt')).toBe(true);
+  });
+
+  it('still rejects case-folded siblings and other drives on Windows', () => {
+    if (!isWin) return;
+    const allowed = ['c:\\source'];
+    expect(isPathWithin(allowed, 'C:\\source2\\file.md')).toBe(false);
+    expect(isPathWithin(allowed, 'C:\\source-backup\\file.md')).toBe(false);
+    expect(isPathWithin(allowed, 'D:\\source\\file.md')).toBe(false);
+  });
+
+  it('denies traversal escapes even with case folding on Windows', () => {
+    if (!isWin) return;
+    const allowed = ['c:\\source'];
+    expect(isPathWithin(allowed, 'C:\\SOURCE\\..\\..\\Windows\\system32')).toBe(false);
+    expect(isPathWithin(allowed, 'c:\\source\\sub\\..\\..\\elsewhere\\secret.txt')).toBe(false);
+  });
+
+  it('keeps POSIX comparison byte-exact (case-sensitive)', () => {
+    if (isWin) return;
+    const allowed = ['/home/user/project'];
+    expect(isPathWithin(allowed, '/Home/user/project/file.md')).toBe(false);
+    expect(isPathWithin(allowed, '/home/user/PROJECT/file.md')).toBe(false);
+    expect(isPathWithin(allowed, '/HOME/USER/PROJECT')).toBe(false);
+    expect(isPathWithin(allowed, '/home/user/project/file.md')).toBe(true);
+    expect(isPathWithinAllowedDirectories('/Home/user/project', ['/home/user/project'])).toBe(false);
   });
 });
