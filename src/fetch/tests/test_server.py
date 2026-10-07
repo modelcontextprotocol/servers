@@ -9,8 +9,70 @@ from mcp_server_fetch.server import (
     get_robots_txt_url,
     check_may_autonomously_fetch_url,
     fetch_url,
+    Fetch,
     DEFAULT_USER_AGENT_AUTONOMOUS,
 )
+
+
+class TestFetchParamsNullHandling:
+    """Issue #2035: clients like LibreChat pass explicit null for optional params."""
+
+    def test_all_optional_params_omitted(self):
+        args = Fetch(url="https://example.com")
+        assert args.max_length == 5000
+        assert args.start_index == 0
+        assert args.raw is False
+
+    def test_explicit_null_max_length(self):
+        args = Fetch(url="https://example.com", max_length=None)
+        assert args.max_length == 5000
+
+    def test_explicit_null_start_index(self):
+        args = Fetch(url="https://example.com", start_index=None)
+        assert args.start_index == 0
+
+    def test_explicit_null_raw(self):
+        args = Fetch(url="https://example.com", raw=None)
+        assert args.raw is False
+
+    def test_all_nulls_together(self):
+        args = Fetch(
+            url="https://example.com",
+            max_length=None,
+            start_index=None,
+            raw=None,
+        )
+        assert args.max_length == 5000
+        assert args.start_index == 0
+        assert args.raw is False
+
+    def test_explicit_values_are_preserved(self):
+        args = Fetch(
+            url="https://example.com",
+            max_length=100,
+            start_index=50,
+            raw=True,
+        )
+        assert args.max_length == 100
+        assert args.start_index == 50
+        assert args.raw is True
+
+    def test_start_index_zero_preserved(self):
+        """Regression: `or`-coalescing would incorrectly fall through 0."""
+        args = Fetch(url="https://example.com", start_index=0)
+        assert args.start_index == 0
+
+    def test_raw_false_preserved(self):
+        """Regression: explicit False must stay False."""
+        args = Fetch(url="https://example.com", raw=False)
+        assert args.raw is False
+
+    def test_validators_still_apply(self):
+        """gt=0 on max_length must still reject invalid values after null handling."""
+        with pytest.raises(ValueError):
+            Fetch(url="https://example.com", max_length=0)
+        with pytest.raises(ValueError):
+            Fetch(url="https://example.com", start_index=-1)
 
 
 class TestGetRobotsTxtUrl:
