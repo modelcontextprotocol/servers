@@ -1217,5 +1217,199 @@ describe('Tools', () => {
         handler!({ name: 'test.gz', data: 'ftp://example.com/file.txt', outputType: 'resource' })
       ).rejects.toThrow('Unsupported URL protocol');
     });
+
+    it('should re-check GZIP_ALLOWED_DOMAINS on redirect targets', async () => {
+      vi.stubEnv('GZIP_ALLOWED_DOMAINS', 'allowed.example');
+      vi.resetModules();
+
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const href = String(input);
+        const redirect = init?.redirect ?? 'follow';
+        if (href === 'https://allowed.example/file') {
+          if (redirect === 'follow') {
+            // Pre-fix behavior would auto-follow into a non-allowed host.
+            return new Response('SECRET_FROM_PRIVATE_HOST', { status: 200 });
+          }
+          return new Response(null, {
+            status: 302,
+            headers: { Location: 'http://127.0.0.1/secret' },
+          });
+        }
+        if (href === 'http://127.0.0.1/secret') {
+          return new Response('SECRET_FROM_PRIVATE_HOST', { status: 200 });
+        }
+        throw new Error(`unexpected fetch: ${href}`);
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { registerGZipFileAsResourceTool: registerFresh } = await import(
+        '../tools/gzip-file-as-resource.js'
+      );
+
+      const mockServer = {
+        registerTool: vi.fn(),
+        registerResource: vi.fn(),
+      } as unknown as McpServer;
+
+      let handler: Function | null = null;
+      (mockServer.registerTool as any).mockImplementation(
+        (name: string, config: any, h: Function) => {
+          handler = h;
+        }
+      );
+
+      registerFresh(mockServer);
+
+      await expect(
+        handler!({
+          name: 'test.gz',
+          data: 'https://allowed.example/file',
+          outputType: 'resource',
+        })
+      ).rejects.toThrow('not in the allowed domains list');
+
+      const fetched = fetchMock.mock.calls.map((c) => String(c[0]));
+      expect(fetched).toEqual(['https://allowed.example/file']);
+      expect(fetched).not.toContain('http://127.0.0.1/secret');
+
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    });
+
+    it('re-checks the allowlist when redirect hops change address representation', async () => {
+      vi.stubEnv('GZIP_ALLOWED_DOMAINS', 'allowed.example');
+      vi.resetModules();
+
+      const redirect302 = (location: string) =>
+        new Response(null, { status: 302, headers: { Location: location } });
+
+      // Each scenario: an allowed start URL whose redirect chain ends at a
+      // destination that is not in GZIP_ALLOWED_DOMAINS. The representation
+      // changes per hop while the policy decision must not.
+      const scenarios: Array<{
+        name: string;
+        start: string;
+        hops: Record<string, string>;
+        forbiddenMarker: string;
+      }> = [
+        {
+          name: 'hostname to IPv4 literal',
+          start: 'https://allowed.example/to-ipv4',
+          hops: { 'https://allowed.example/to-ipv4': 'https://93.184.216.34/secret' },
+          forbiddenMarker: '93.184.216.34',
+        },
+        {
+          name: 'hostname to IPv6 literal',
+          start: 'https://allowed.example/to-ipv6',
+          hops: {
+            'https://allowed.example/to-ipv6':
+              'https://[2606:2800:220:1:248:1893:25c8:1946]/secret',
+          },
+          forbiddenMarker: '2606:2800',
+        },
+        {
+          name: 'repeated redirects across permitted then non-permitted hosts',
+          start: 'https://allowed.example/chain',
+          hops: {
+            'https://allowed.example/chain': 'https://allowed.example/hop2',
+            'https://allowed.example/hop2': 'http://169.254.169.254/latest/meta-data',
+          },
+          forbiddenMarker: '169.254.169.254',
+        },
+        {
+          name: 'relative Location followed by absolute cross-origin redirect',
+          start: 'https://allowed.example/rel',
+          hops: {
+            'https://allowed.example/rel': '/same-origin',
+            'https://allowed.example/same-origin': 'https://evil.example/steal',
+          },
+          forbiddenMarker: 'evil.example',
+        },
+        {
+          name: 'userinfo authority trick (allowed.example@evil.example)',
+          start: 'https://allowed.example/userinfo',
+          hops: {
+            'https://allowed.example/userinfo': 'https://allowed.example@evil.example/steal',
+          },
+          forbiddenMarker: 'evil.example',
+        },
+      ];
+
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const href = String(input);
+        const redirect = init?.redirect ?? 'follow';
+        for (const scenario of scenarios) {
+          const location = scenario.hops[href];
+          if (location !== undefined) {
+            if (redirect === 'follow') {
+              // Pre-fix behavior would auto-follow into the non-allowed host.
+              return new Response('SECRET_FROM_BYPASSED_HOST', { status: 200 });
+            }
+            return redirect302(location);
+          }
+        }
+        if (href === 'https://allowed.example/final') {
+          return new Response('PUBLIC_CONTENT', { status: 200 });
+        }
+        // Any fetch of a forbidden destination means the allowlist was bypassed.
+        return new Response('SECRET_FROM_BYPASSED_HOST', { status: 200 });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { registerGZipFileAsResourceTool: registerFresh } = await import(
+        '../tools/gzip-file-as-resource.js'
+      );
+
+      const mockServer = {
+        registerTool: vi.fn(),
+        registerResource: vi.fn(),
+      } as unknown as McpServer;
+
+      let handler: Function | null = null;
+      (mockServer.registerTool as any).mockImplementation(
+        (name: string, config: any, h: Function) => {
+          handler = h;
+        }
+      );
+
+      registerFresh(mockServer);
+
+      for (const scenario of scenarios) {
+        fetchMock.mockClear();
+        await expect(
+          handler!({
+            name: 'test.gz',
+            data: scenario.start,
+            outputType: 'resource',
+          })
+        ).rejects.toThrow('not in the allowed domains list');
+
+        const fetched = fetchMock.mock.calls.map((c) => String(c[0]));
+        expect(
+          fetched.some((u) => u.includes(scenario.forbiddenMarker)),
+          `${scenario.name}: forbidden destination must never be fetched`
+        ).toBe(false);
+      }
+
+      // Positive control: a relative redirect that stays on the allowed host
+      // must still succeed.
+      fetchMock.mockClear();
+      const okHops = scenarios[3].hops;
+      okHops['https://allowed.example/stay'] = '/final';
+      scenarios[3].hops = okHops;
+      await expect(
+        handler!({
+          name: 'test.gz',
+          data: 'https://allowed.example/stay',
+          outputType: 'resource',
+        })
+      ).resolves.toBeTruthy();
+      expect(
+        fetchMock.mock.calls.map((c) => String(c[0]))
+      ).toContain('https://allowed.example/final');
+
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    });
   });
 });

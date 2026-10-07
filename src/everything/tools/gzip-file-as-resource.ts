@@ -17,11 +17,18 @@ const GZIP_MAX_FETCH_TIME_MILLIS = Number(
   process.env.GZIP_MAX_FETCH_TIME_MILLIS ?? String(30 * 1000)
 );
 
+const MAX_REDIRECTS = 10;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
 // Comma-separated list of allowed domains. Empty means all domains are allowed.
-const GZIP_ALLOWED_DOMAINS = (process.env.GZIP_ALLOWED_DOMAINS ?? "")
-  .split(",")
-  .map((d) => d.trim().toLowerCase())
-  .filter((d) => d.length > 0);
+// Read at call time so operators (and tests) can set GZIP_ALLOWED_DOMAINS without
+// relying on module-load ordering.
+function getAllowedDomains(): string[] {
+  return (process.env.GZIP_ALLOWED_DOMAINS ?? "")
+    .split(",")
+    .map((d) => d.trim().toLowerCase())
+    .filter((d) => d.length > 0);
+}
 
 // Tool input schema
 const GZipFileAsResourceSchema = z.object({
@@ -126,6 +133,36 @@ export const registerGZipFileAsResourceTool = (server: McpServer) => {
 };
 
 /**
+ * Asserts that a URL uses an allowed protocol and, when configured, an allowed domain.
+ * Applied to the initial URL and every redirect hop so GZIP_ALLOWED_DOMAINS cannot be
+ * bypassed by an allowed host that redirects elsewhere.
+ */
+export function assertFetchUrlAllowed(url: URL): void {
+  if (
+    url.protocol !== "http:" &&
+    url.protocol !== "https:" &&
+    url.protocol !== "data:"
+  ) {
+    throw new Error(
+      `Unsupported URL protocol for ${url.href}. Only http, https, and data URLs are supported.`
+    );
+  }
+  const allowedDomains = getAllowedDomains();
+  if (
+    allowedDomains.length > 0 &&
+    (url.protocol === "http:" || url.protocol === "https:")
+  ) {
+    const domain = url.hostname.toLowerCase();
+    const domainAllowed = allowedDomains.some((allowedDomain) => {
+      return domain === allowedDomain || domain.endsWith(`.${allowedDomain}`);
+    });
+    if (!domainAllowed) {
+      throw new Error(`Domain ${domain} is not in the allowed domains list.`);
+    }
+  }
+}
+
+/**
  * Validates a given data URI to ensure it follows the appropriate protocols and rules.
  *
  * @param {string} dataUri - The data URI to validate. Must be an HTTP, HTTPS, or data protocol URL. If a domain is provided, it must match the allowed domains list if applicable.
@@ -133,30 +170,14 @@ export const registerGZipFileAsResourceTool = (server: McpServer) => {
  * @throws {Error} If the data URI does not use a supported protocol or does not meet allowed domains criteria.
  */
 function validateDataURI(dataUri: string): URL {
-  // Validate Inputs
-  const url = new URL(dataUri);
+  let url: URL;
   try {
-    if (
-      url.protocol !== "http:" &&
-      url.protocol !== "https:" &&
-      url.protocol !== "data:"
-    ) {
-      throw new Error(
-        `Unsupported URL protocol for ${dataUri}. Only http, https, and data URLs are supported.`
-      );
-    }
-    if (
-      GZIP_ALLOWED_DOMAINS.length > 0 &&
-      (url.protocol === "http:" || url.protocol === "https:")
-    ) {
-      const domain = url.hostname;
-      const domainAllowed = GZIP_ALLOWED_DOMAINS.some((allowedDomain) => {
-        return domain === allowedDomain || domain.endsWith(`.${allowedDomain}`);
-      });
-      if (!domainAllowed) {
-        throw new Error(`Domain ${domain} is not in the allowed domains list.`);
-      }
-    }
+    url = new URL(dataUri);
+  } catch {
+    throw new Error(`Error processing file ${dataUri}: Invalid URL`);
+  }
+  try {
+    assertFetchUrlAllowed(url);
   } catch (error) {
     throw new Error(
       `Error processing file ${dataUri}: ${
@@ -169,6 +190,7 @@ function validateDataURI(dataUri: string): URL {
 
 /**
  * Fetches data safely from a given URL while ensuring constraints on maximum byte size and timeout duration.
+ * Redirects are followed manually so each hop is re-checked against the same protocol/domain rules.
  *
  * @param {URL} url The URL to fetch data from.
  * @param {Object} options An object containing options for the fetch operation.
@@ -191,57 +213,87 @@ async function fetchSafely(
   );
 
   try {
-    // Fetch the data
-    const response = await fetch(url, { signal: controller.signal });
-    if (!response.body) {
-      throw new Error("No response body");
-    }
+    let current = url;
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      assertFetchUrlAllowed(current);
 
-    // Note: we can't trust the Content-Length header: a malicious or clumsy server could return much more data than advertised.
-    // We check it here for early bail-out, but we still need to monitor actual bytes read below.
-    const contentLengthHeader = response.headers.get("content-length");
-    if (contentLengthHeader != null) {
-      const contentLength = parseInt(contentLengthHeader, 10);
-      if (contentLength > maxBytes) {
-        throw new Error(
-          `Content-Length for ${url} exceeds max of ${maxBytes}: ${contentLength}`
-        );
-      }
-    }
+      const response = await fetch(current, {
+        signal: controller.signal,
+        redirect: "manual",
+      });
 
-    // Read the fetched data from the response body
-    const reader = response.body.getReader();
-    const chunks = [];
-    let totalSize = 0;
-
-    // Read chunks until done
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        totalSize += value.length;
-
-        if (totalSize > maxBytes) {
-          reader.cancel();
-          throw new Error(`Response from ${url} exceeds ${maxBytes} bytes`);
+      if (REDIRECT_STATUSES.has(response.status)) {
+        const location = response.headers.get("location");
+        if (!location) {
+          throw new Error(
+            `Redirect from ${current.href} missing Location header`
+          );
         }
-
-        chunks.push(value);
+        if (response.body) {
+          try {
+            await response.body.cancel();
+          } catch {
+            // ignore cancel errors
+          }
+        }
+        current = new URL(location, current);
+        continue;
       }
-    } finally {
-      reader.releaseLock();
+
+      if (!response.body) {
+        throw new Error("No response body");
+      }
+
+      // Note: we can't trust the Content-Length header: a malicious or clumsy server could return much more data than advertised.
+      // We check it here for early bail-out, but we still need to monitor actual bytes read below.
+      const contentLengthHeader = response.headers.get("content-length");
+      if (contentLengthHeader != null) {
+        const contentLength = parseInt(contentLengthHeader, 10);
+        if (contentLength > maxBytes) {
+          throw new Error(
+            `Content-Length for ${current.href} exceeds max of ${maxBytes}: ${contentLength}`
+          );
+        }
+      }
+
+      // Read the fetched data from the response body
+      const reader = response.body.getReader();
+      const chunks = [];
+      let totalSize = 0;
+
+      // Read chunks until done
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          totalSize += value.length;
+
+          if (totalSize > maxBytes) {
+            reader.cancel();
+            throw new Error(
+              `Response from ${current.href} exceeds ${maxBytes} bytes`
+            );
+          }
+
+          chunks.push(value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      // Combine chunks into a single buffer
+      const buffer = new Uint8Array(totalSize);
+      let offset = 0;
+      for (const chunk of chunks) {
+        buffer.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      return buffer.buffer;
     }
 
-    // Combine chunks into a single buffer
-    const buffer = new Uint8Array(totalSize);
-    let offset = 0;
-    for (const chunk of chunks) {
-      buffer.set(chunk, offset);
-      offset += chunk.length;
-    }
-
-    return buffer.buffer;
+    throw new Error(`Too many redirects fetching ${url.href}`);
   } finally {
     clearTimeout(timeout);
   }
