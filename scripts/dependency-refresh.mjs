@@ -44,7 +44,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { SHA_REF, parseUses } from "./lib/action-refs.mjs";
+import { EXACT_VERSION, SHA_REF, parseUses } from "./lib/action-refs.mjs";
 import {
   SERVERS,
   SWEEP_LABELS,
@@ -220,8 +220,13 @@ export function parseActionRefs(yaml) {
     if (!match) continue;
     const parsed = parseUses(match[1] ?? match[2] ?? match[3]);
     if (parsed === null) continue;
-    const comment = /#\s*(v?\d+(?:\.\d+){0,2})\s*$/.exec(line);
-    if (SHA_REF.test(parsed.ref) && comment) parsed.version = comment[1];
+    // Only an exact `# vX.Y.Z` ranks a SHA pin (`EXACT_VERSION`, the guard's
+    // own rule): `# v7` would compare at major precision and hide every patch
+    // release, so a coarse comment leaves the pin unranked, and listed.
+    const comment = /#\s*(\S+)\s*$/.exec(line)?.[1];
+    if (SHA_REF.test(parsed.ref) && comment && EXACT_VERSION.test(comment)) {
+      parsed.version = comment;
+    }
     refs.push(parsed);
   }
   return refs;

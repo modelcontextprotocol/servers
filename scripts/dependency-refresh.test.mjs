@@ -200,6 +200,7 @@ test("parseActionRefs reads tags, SHA pins with their release, and skips the res
       `  - uses: "actions/setup-node@v7"`,
       "  - uses: 'owner/repo/sub@v2' # a comment",
       `  - uses: actions/cache@${SHA}`,
+      `  - uses: actions/coarse@${SHA} # v7`,
       "  - uses: ./local-action",
       "  - uses: docker://alpine:3",
       "  - uses: no-ref",
@@ -212,8 +213,13 @@ test("parseActionRefs reads tags, SHA pins with their release, and skips the res
     { action: "actions/setup-node", ref: "v7" },
     { action: "owner/repo/sub", ref: "v2" },
     { action: "actions/cache", ref: SHA },
+    // `# v7` names no exact release, so it does not rank the pin.
+    { action: "actions/coarse", ref: SHA },
   ]);
-  assert.deepEqual(unrankedPins(refs), ["actions/cache@d23441a"]);
+  assert.deepEqual(unrankedPins(refs), [
+    "actions/cache@d23441a",
+    "actions/coarse@d23441a",
+  ]);
 });
 
 test("isActionStale compares at the precision the ref names", () => {

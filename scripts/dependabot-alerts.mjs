@@ -392,10 +392,12 @@ function versionCompare(ecosystem) {
  *
  * @param {string} ecosystem
  * @param {Array<{fixedIn: string, range: string}>} advisories
+ * @param {string[]} [installed] the affected copies' versions; the target is
+ *   never below the newest of them
  * @returns {{fixedIn: string, verified: boolean, stillOpen: string[]}}
  *   `stillOpen` names the advisories whose range still covers the target
  */
-export function pickTarget(ecosystem, advisories) {
+export function pickTarget(ecosystem, advisories, installed = []) {
   const covers = (version) =>
     advisories.filter((a) => {
       try {
@@ -405,9 +407,27 @@ export function pickTarget(ecosystem, advisories) {
         return true;
       }
     });
-  const candidates = [...new Set(advisories.map((a) => a.fixedIn))].sort(
-    versionCompare(ecosystem),
-  );
+  const compare = versionCompare(ecosystem);
+  // Never below an affected copy: a "bump" to an older version is a
+  // downgrade, and raising a floor to it leaves the newer copy in range.
+  const floor =
+    installed.length > 0 ? highestVersion(ecosystem, installed) : null;
+  const candidates = [...new Set(advisories.map((a) => a.fixedIn))]
+    .filter((c) => floor === null || compare(c, floor) >= 0)
+    .sort(compare);
+  if (candidates.length === 0) {
+    // Every listed fix is older than an affected copy: name the advisories
+    // that still cover the newest one.
+    return {
+      fixedIn: highestVersion(
+        ecosystem,
+        advisories.map((a) => a.fixedIn),
+      ),
+      verified: false,
+      stillOpen: covers(floor).map((a) => a.ghsa),
+    };
+  }
+
   for (const candidate of candidates) {
     if (covers(candidate).length === 0) {
       return { fixedIn: candidate, verified: true, stillOpen: [] };
@@ -535,7 +555,13 @@ export function narrowToApplicable(group, entries) {
         fixedIn,
         targetVerified: verified,
         targetStillOpen: stillOpen,
-      }))(pickTarget(group.ecosystem, advisories)),
+      }))(
+        pickTarget(
+          group.ecosystem,
+          advisories,
+          affected.map((e) => e.version),
+        ),
+      ),
     },
     affected,
   };

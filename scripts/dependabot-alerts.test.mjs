@@ -392,6 +392,30 @@ test("pickTarget names the lowest patched version outside every range", () => {
   );
 });
 
+test("pickTarget never targets below an affected copy", () => {
+  // Copilot's example: copies at 1.3.0 and 2.0.5. 1.4.0 clears every range,
+  // but is a downgrade for the 2.0.5 copy; 2.1.0 is the answer.
+  const advisories = [
+    { ghsa: "A", range: "< 1.4.0", fixedIn: "1.4.0" },
+    { ghsa: "B", range: ">= 2.0.0, < 2.1.0", fixedIn: "2.1.0" },
+  ];
+  assert.deepEqual(pickTarget("npm", advisories, ["1.3.0", "2.0.5"]), {
+    fixedIn: "2.1.0",
+    verified: true,
+    stillOpen: [],
+  });
+  // Every listed fix is older than an affected copy: unverified, naming the
+  // advisory that still covers the newest copy.
+  assert.deepEqual(
+    pickTarget(
+      "npm",
+      [{ ghsa: "A", range: "< 1.4.0 || >= 3.0.0, < 3.2.0", fixedIn: "1.4.0" }],
+      ["3.0.5"],
+    ),
+    { fixedIn: "1.4.0", verified: false, stillOpen: ["A"] },
+  );
+});
+
 test("an unverified target is flagged in the body and the comment", () => {
   const [group] = groupAlerts([
     alert({
