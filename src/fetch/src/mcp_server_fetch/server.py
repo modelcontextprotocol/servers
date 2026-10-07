@@ -1,3 +1,15 @@
+# The fetch MCP server: one `fetch` tool and one `fetch` prompt that retrieve a
+# URL and convert HTML to Markdown for a model. The network policy lives here
+# beside the handlers because every request path (tool, prompt and robots.txt
+# check) must go through it: the private-address guard on each request and
+# redirect hop, robots.txt for autonomous fetches, and proxy normalization.
+#
+# Built on the MCP Python SDK v2's low-level `Server` (#4851). That SDK no
+# longer validates tool arguments or folds tool exceptions into `isError`
+# results, so `call_tool` does both with SDK v1's messages, and `serve()` runs
+# the legacy (2025-11-25) handshake loop only, keeping the wire as it was on v1.
+# Serving 2026-07-28 is #4853.
+
 import asyncio
 import ipaddress
 import os

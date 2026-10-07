@@ -202,7 +202,7 @@ async def test_call_with_only_url_applies_defaults(web: FakeWeb) -> None:
         ({"url": PAGE, "raw": "yes"}, "'yes'"),
     ],
 )
-async def test_schema_violations_are_rejected_by_the_sdk(
+async def test_schema_violations_are_rejected_by_call_tool(
     web: FakeWeb, arguments: dict[str, Any], offending: str
 ) -> None:
     # call_tool validates against inputSchema before the tool runs. The rest

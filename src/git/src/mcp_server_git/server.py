@@ -1,3 +1,14 @@
+# The git MCP server: tools that read and change a Git repository through
+# GitPython. Repository confinement (`--repository`, `validate_repo_path`) and
+# the flag-injection guards live beside the handlers because every tool call
+# must pass them before any git command runs.
+#
+# Built on the MCP Python SDK v2's low-level `Server` (#4851). That SDK no
+# longer validates tool arguments or folds tool exceptions into `isError`
+# results, so `call_tool` does both with SDK v1's messages, and `serve()` runs
+# the legacy (2025-11-25) handshake loop only, keeping the wire as it was on v1.
+# Serving 2026-07-28 is #4853.
+
 import logging
 from importlib.metadata import version
 from pathlib import Path

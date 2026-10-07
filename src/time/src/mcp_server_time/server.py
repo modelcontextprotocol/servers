@@ -1,3 +1,13 @@
+# The time MCP server: `get_current_time` and `convert_time` over IANA
+# timezones, with the local timezone detected (or set with --local-timezone)
+# and named in the tool descriptions so a model can default to it.
+#
+# Built on the MCP Python SDK v2's low-level `Server` (#4851). That SDK no
+# longer validates tool arguments or folds tool exceptions into `isError`
+# results, so `call_tool` does both with SDK v1's messages, and `serve()` runs
+# the legacy (2025-11-25) handshake loop only, keeping the wire as it was on v1.
+# Serving 2026-07-28 is #4853.
+
 from datetime import datetime, timedelta
 from importlib.metadata import version
 from enum import Enum

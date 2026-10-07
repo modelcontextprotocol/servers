@@ -852,7 +852,7 @@ def test_git_log_date_filtering(test_repository):
     assert len(valid_result) == 1
 
 
-async def test_serve_run_does_not_raise_exceptions(tmp_path: Path):
+async def test_serve_loop_does_not_raise_exceptions(tmp_path: Path):
     """Verify that serve() runs the server loop without raise_exceptions=True.
 
     serve() drives SDK v2's legacy-only serve_loop rather than Server.run
