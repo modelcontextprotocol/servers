@@ -174,9 +174,9 @@ def git_log(repo: git.Repo, max_count: int = 10, start_timestamp: Optional[str] 
     for commit in commits:
         log.append(
             f"Commit: {commit.hexsha}\n"
-            f"Author: {commit.author}\n"
+            f"Author: {commit.author.name} <{commit.author.email}>\n"
             f"Date: {commit.authored_datetime}\n"
-            f"Message: {commit.message}\n"
+            f"Message: {commit.message.strip()}\n"
         )
     return log
 
