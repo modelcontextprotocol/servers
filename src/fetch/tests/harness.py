@@ -4,7 +4,7 @@ Two pieces:
 
 - ``connect(...)`` runs the real ``serve()`` in-process and yields an
   initialized ``ClientSession`` linked to it over in-memory streams, so tests
-  go through the SDK's validation and error mapping exactly as a client would.
+  go through the server's validation and error mapping exactly as a client would.
 - ``web`` replaces ``httpx.AsyncClient`` with one backed by an
   ``httpx.MockTransport``, so no test touches the network. It records every
   request and the keyword arguments each client was constructed with. It also

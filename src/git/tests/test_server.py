@@ -852,8 +852,12 @@ def test_git_log_date_filtering(test_repository):
     assert len(valid_result) == 1
 
 
-async def test_serve_run_does_not_raise_exceptions(tmp_path: Path):
-    """Verify that serve() runs server.run without raise_exceptions=True."""
+async def test_serve_loop_does_not_raise_exceptions(tmp_path: Path):
+    """Verify that serve() runs the server loop without raise_exceptions=True.
+
+    serve() drives SDK v2's legacy-only serve_loop rather than Server.run
+    (#4851), so that is what is patched.
+    """
     repo_path = tmp_path / "serve_test_repo"
     git.Repo.init(repo_path).close()
 
@@ -864,7 +868,7 @@ async def test_serve_run_does_not_raise_exceptions(tmp_path: Path):
         mock_stdio.return_value.__aexit__.return_value = None
 
         with mock.patch(
-            "mcp_server_git.server.Server.run", new_callable=mock.AsyncMock
+            "mcp_server_git.server.serve_loop", new_callable=mock.AsyncMock
         ) as mock_run:
             await serve(repo_path)
             mock_run.assert_awaited_once()

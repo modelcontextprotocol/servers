@@ -10,16 +10,24 @@ means changing that test.
 
 import json
 import re
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 from unittest import mock
+from unittest.mock import patch
 
+import anyio
 import git
 import pytest
-from mcp.shared.context import RequestContext
-from mcp.types import ListRootsResult, Root
+from mcp.client.session import ClientRequestContext
+from mcp.shared.memory import create_client_server_memory_streams
+from mcp.shared.message import SessionMessage
+from mcp.types import METHOD_NOT_FOUND, JSONRPCRequest, ListRootsResult, Root
 from pydantic import FileUrl
+
+from mcp_server_git.server import serve
 
 from conftest import connect, make_repo, text_result, wire
 
@@ -63,10 +71,9 @@ async def test_initialize_reports_package_version_as_server_version(repo: git.Re
         "version": version("mcp-server-git"),
     }
     assert version("mcp") != version("mcp-server-git")
-    assert init["capabilities"] == {
-        "experimental": {},
-        "tools": {"listChanged": False},
-    }
+    # Behavior change in the SDK v2 port (#4851): v2 omits the empty
+    # `experimental: {}` object v1 always sent. It advertised nothing.
+    assert init["capabilities"] == {"tools": {"listChanged": False}}
 
 
 async def test_list_tools_matches_wire_snapshot():
@@ -381,7 +388,7 @@ async def test_git_add_file_starting_with_dash_is_a_path(repo: git.Repo):
 
 async def test_git_add_empty_list_is_rejected(repo: git.Repo):
     # #4763: `files: []` would run `git add --`, a no-op. The schema's
-    # minItems makes the SDK reject it before the tool runs.
+    # minItems makes call_tool reject it before the tool runs.
     root = root_of(repo)
     (root / "test.txt").write_text("edited\n", newline="\n")
     result = await call(None, "git_add", {"repo_path": str(root), "files": []})
@@ -1114,6 +1121,9 @@ async def test_restricted_server_unresolvable_repo_path_is_invalid_path(
 # --------------------------------------------------------------------------
 
 
+# The client side of this test offers Roots, which SDK v2 deprecates as of
+# 2026-07-28 (SEP-2577); the warning is about the test's client, not the server.
+@pytest.mark.filterwarnings("ignore::mcp.shared.exceptions.MCPDeprecationWarning")
 async def test_server_never_requests_roots(tmp_path: Path, repo: git.Repo):
     # The server ignores Roots entirely: it never sends roots/list, not even
     # after notifications/roots/list_changed, and a repository outside every
@@ -1123,7 +1133,7 @@ async def test_server_never_requests_roots(tmp_path: Path, repo: git.Repo):
     elsewhere.mkdir()
     calls: list[object] = []
 
-    async def list_roots(context: RequestContext[Any, Any]) -> ListRootsResult:
+    async def list_roots(context: ClientRequestContext) -> ListRootsResult:
         calls.append(context)
         return ListRootsResult(roots=[Root(uri=FileUrl(elsewhere.as_uri()))])
 
@@ -1144,3 +1154,60 @@ async def test_server_without_client_roots_behaves_the_same(repo: git.Repo):
             await session.call_tool("git_status", {"repo_path": str(root_of(repo))})
         )
     assert result["isError"] is False
+
+
+# ---------------------------------------------------------------------------
+# Protocol era
+# ---------------------------------------------------------------------------
+
+
+async def test_modern_era_is_not_served() -> None:
+    # #4851: the SDK v2 port serves the 2025-11-25 handshake era only.
+    # Server.run() would also open a 2026-07-28 connection for a request that
+    # carries the per-request `_meta` envelope; adopting that era is #4853.
+    # Until then such a request is refused as an unknown method.
+    #
+    # Behavior change in the SDK v2 port: SDK v1 answered every unknown
+    # method with -32602 "Invalid request parameters" (its request union
+    # failed to parse); SDK v2 answers -32601 "Method not found", the code
+    # JSON-RPC defines for it.
+    discover = JSONRPCRequest(
+        jsonrpc="2.0",
+        id=1,
+        method="server/discover",
+        params={
+            "_meta": {
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                "io.modelcontextprotocol/clientInfo": {"name": "test", "version": "0"},
+                "io.modelcontextprotocol/clientCapabilities": {},
+            }
+        },
+    )
+    response: SessionMessage | Exception | None = None
+    async with create_client_server_memory_streams() as (
+        (client_read, client_write),
+        server_streams,
+    ):
+
+        @asynccontextmanager
+        async def fake_stdio_server() -> AsyncIterator[Any]:
+            yield server_streams
+
+        with patch("mcp_server_git.server.stdio_server", fake_stdio_server):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(serve, None)
+                await client_write.send(SessionMessage(discover))
+                with anyio.fail_after(5):
+                    response = await client_read.receive()
+                tg.cancel_scope.cancel()
+
+    assert isinstance(response, SessionMessage)
+    assert response.message.model_dump(by_alias=True, exclude_none=True) == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {
+            "code": METHOD_NOT_FOUND,
+            "message": "Method not found",
+            "data": "server/discover",
+        },
+    }

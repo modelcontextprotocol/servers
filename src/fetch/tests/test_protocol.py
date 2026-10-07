@@ -16,18 +16,25 @@ read as an endorsement of the behavior.
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from importlib.metadata import version
 from typing import Any
+from unittest.mock import patch
 
+import anyio
 import httpx
 import pytest
 from mcp import ClientSession
-from mcp.shared.exceptions import McpError
-from mcp.types import INVALID_PARAMS, CallToolResult
+from mcp.shared.exceptions import MCPError
+from mcp.shared.memory import create_client_server_memory_streams
+from mcp.shared.message import SessionMessage
+from mcp.types import INVALID_PARAMS, METHOD_NOT_FOUND, CallToolResult, JSONRPCRequest
 
 from mcp_server_fetch.server import (
     DEFAULT_USER_AGENT_AUTONOMOUS,
     DEFAULT_USER_AGENT_MANUAL,
+    serve,
 )
 
 from .harness import FakeWeb, connect
@@ -52,7 +59,12 @@ with enough words to count as the main content of the page.</p>
 
 
 def wire(model: Any) -> dict[str, Any]:
-    return model.model_dump(by_alias=True, mode="json", exclude_none=True)
+    # exclude_unset: SDK v2 result models default fields the 2025-11-25 wire
+    # does not carry (resultType, ttlMs, cacheScope), so only what the server
+    # actually sent is compared.
+    return model.model_dump(
+        by_alias=True, mode="json", exclude_none=True, exclude_unset=True
+    )
 
 
 def text_of(result: CallToolResult) -> str:
@@ -190,10 +202,10 @@ async def test_call_with_only_url_applies_defaults(web: FakeWeb) -> None:
         ({"url": PAGE, "raw": "yes"}, "'yes'"),
     ],
 )
-async def test_schema_violations_are_rejected_by_the_sdk(
+async def test_schema_violations_are_rejected_by_call_tool(
     web: FakeWeb, arguments: dict[str, Any], offending: str
 ) -> None:
-    # The SDK validates against inputSchema before the handler runs. The rest
+    # call_tool validates against inputSchema before the tool runs. The rest
     # of the message is jsonschema's wording, which varies by version.
     async with connect() as (session, _):
         result = await call(session, arguments)
@@ -206,7 +218,7 @@ async def test_schema_violations_are_rejected_by_the_sdk(
 
 @pytest.mark.parametrize("max_length", [1, 999999])
 async def test_max_length_bounds_are_inclusive(web: FakeWeb, max_length: int) -> None:
-    # #1624: the edges of the inclusive range pass both the SDK's schema check
+    # #1624: the edges of the inclusive range pass both the schema check
     # and Fetch's own validation, and the page is fetched.
     web.add(ROBOTS, plain("", status=404))
     web.add(PAGE, plain("hello"))
@@ -230,8 +242,8 @@ async def test_invalid_url_is_rejected_by_pydantic(web: FakeWeb, url: str) -> No
 
 
 async def test_unknown_tool_name_is_rejected_without_fetching(web: FakeWeb) -> None:
-    # The SDK skips schema validation for a tool it has not listed, so the
-    # name check in call_tool is what stops an unknown name from fetching.
+    # call_tool skips schema validation for a tool it has not listed, so the
+    # name check in run_tool is what stops an unknown name from fetching.
     web.add(ROBOTS, plain("", status=404))
     web.add(PAGE, plain("fetched anyway"))
     async with connect() as (session, _):
@@ -949,7 +961,7 @@ async def test_get_prompt_without_url_is_a_jsonrpc_error(
     web: FakeWeb, arguments: dict[str, str] | None
 ) -> None:
     async with connect() as (session, _):
-        with pytest.raises(McpError) as excinfo:
+        with pytest.raises(MCPError) as excinfo:
             await session.get_prompt("fetch", arguments)
     assert wire(excinfo.value.error) == {
         "code": INVALID_PARAMS,
@@ -966,7 +978,7 @@ async def test_get_prompt_with_unknown_name_is_a_jsonrpc_error(
     # whether or not a URL was given, and nothing is fetched.
     web.add(PAGE, plain("ok"))
     async with connect() as (session, _):
-        with pytest.raises(McpError) as excinfo:
+        with pytest.raises(MCPError) as excinfo:
             await session.get_prompt("nope", arguments)
     assert wire(excinfo.value.error) == {
         "code": INVALID_PARAMS,
@@ -993,3 +1005,60 @@ async def test_get_prompt_does_not_validate_the_url(
     assert data["messages"][0]["content"]["text"].startswith(
         "Failed to fetch not a url: UnsupportedProtocol("
     )
+
+
+# ---------------------------------------------------------------------------
+# Protocol era
+# ---------------------------------------------------------------------------
+
+
+async def test_modern_era_is_not_served() -> None:
+    # #4851: the SDK v2 port serves the 2025-11-25 handshake era only.
+    # Server.run() would also open a 2026-07-28 connection for a request that
+    # carries the per-request `_meta` envelope; adopting that era is #4853.
+    # Until then such a request is refused as an unknown method.
+    #
+    # Behavior change in the SDK v2 port: SDK v1 answered every unknown
+    # method with -32602 "Invalid request parameters" (its request union
+    # failed to parse); SDK v2 answers -32601 "Method not found", the code
+    # JSON-RPC defines for it.
+    discover = JSONRPCRequest(
+        jsonrpc="2.0",
+        id=1,
+        method="server/discover",
+        params={
+            "_meta": {
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                "io.modelcontextprotocol/clientInfo": {"name": "test", "version": "0"},
+                "io.modelcontextprotocol/clientCapabilities": {},
+            }
+        },
+    )
+    response: SessionMessage | Exception | None = None
+    async with create_client_server_memory_streams() as (
+        (client_read, client_write),
+        server_streams,
+    ):
+
+        @asynccontextmanager
+        async def fake_stdio_server() -> AsyncIterator[Any]:
+            yield server_streams
+
+        with patch("mcp_server_fetch.server.stdio_server", fake_stdio_server):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(serve)
+                await client_write.send(SessionMessage(discover))
+                with anyio.fail_after(5):
+                    response = await client_read.receive()
+                tg.cancel_scope.cancel()
+
+    assert isinstance(response, SessionMessage)
+    assert response.message.model_dump(by_alias=True, exclude_none=True) == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {
+            "code": METHOD_NOT_FOUND,
+            "message": "Method not found",
+            "data": "server/discover",
+        },
+    }

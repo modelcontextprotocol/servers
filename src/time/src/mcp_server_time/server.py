@@ -1,25 +1,39 @@
+# The time MCP server: `get_current_time` and `convert_time` over IANA
+# timezones, with the local timezone detected (or set with --local-timezone)
+# and named in the tool descriptions so a model can default to it.
+#
+# Built on the MCP Python SDK v2's low-level `Server` (#4851). That SDK no
+# longer validates tool arguments or folds tool exceptions into `isError`
+# results, so `call_tool` does both with SDK v1's messages, keeping tool
+# results as they were on v1. `serve()` runs the legacy (2025-11-25) handshake
+# loop only; serving 2026-07-28 is #4853.
+
 from datetime import datetime, timedelta
 from importlib.metadata import version
 from enum import Enum
 import json
 import sys
-from typing import Sequence
+from typing import Any
 
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from tzlocal import get_localzone_name  # ← returns "Europe/Paris", etc.
 
-from mcp.server import Server
+import jsonschema
+from mcp.server import Server, ServerRequestContext
+from mcp.server.runner import serve_loop
 from mcp.server.stdio import stdio_server
 from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ContentBlock,
+    ListToolsResult,
+    PaginatedRequestParams,
     Tool,
     ToolAnnotations,
     TextContent,
-    ImageContent,
-    EmbeddedResource,
-    ErrorData,
     INVALID_PARAMS,
 )
-from mcp.shared.exceptions import McpError
+from mcp.shared.exceptions import MCPError
 
 from pydantic import BaseModel
 
@@ -69,9 +83,7 @@ def get_zoneinfo(timezone_name: str) -> ZoneInfo:
     try:
         return ZoneInfo(timezone_name)
     except Exception as e:
-        raise McpError(
-            ErrorData(code=INVALID_PARAMS, message=f"Invalid timezone: {str(e)}")
-        )
+        raise MCPError(code=INVALID_PARAMS, message=f"Invalid timezone: {str(e)}")
 
 
 class TimeServer:
@@ -146,8 +158,14 @@ class TimeServer:
         )
 
 
+def tool_error(message: str) -> CallToolResult:
+    """A tool call that failed, as an `isError` result the model can read."""
+    return CallToolResult(
+        content=[TextContent(type="text", text=message)], is_error=True
+    )
+
+
 async def serve(local_timezone: str | None = None) -> None:
-    server = Server("mcp-time", version=SERVER_VERSION)
     time_server = TimeServer()
     if local_timezone:
         # Fail before the transport opens, with one line naming the bad value
@@ -163,64 +181,65 @@ async def serve(local_timezone: str | None = None) -> None:
             )
     local_tz = str(get_local_tz(local_timezone))
 
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        """List available time tools."""
-        return [
-            Tool(
-                name=TimeTools.GET_CURRENT_TIME.value,
-                description="Get current time in a specific timezone",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "timezone": {
-                            "type": "string",
-                            "description": f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no timezone provided by the user.",
-                        }
-                    },
-                    "required": ["timezone"],
+    tools = [
+        Tool(
+            name=TimeTools.GET_CURRENT_TIME.value,
+            description="Get current time in a specific timezone",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "timezone": {
+                        "type": "string",
+                        "description": f"IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no timezone provided by the user.",
+                    }
                 },
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
+                "required": ["timezone"],
+            },
+            annotations=ToolAnnotations(
+                read_only_hint=True,
+                destructive_hint=False,
+                idempotent_hint=True,
+                open_world_hint=False,
             ),
-            Tool(
-                name=TimeTools.CONVERT_TIME.value,
-                description="Convert time between timezones",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "source_timezone": {
-                            "type": "string",
-                            "description": f"Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no source timezone provided by the user.",
-                        },
-                        "time": {
-                            "type": "string",
-                            "description": "Time to convert in 24-hour format (HH:MM)",
-                        },
-                        "target_timezone": {
-                            "type": "string",
-                            "description": f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use '{local_tz}' as local timezone if no target timezone provided by the user.",
-                        },
+        ),
+        Tool(
+            name=TimeTools.CONVERT_TIME.value,
+            description="Convert time between timezones",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "source_timezone": {
+                        "type": "string",
+                        "description": f"Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use '{local_tz}' as local timezone if no source timezone provided by the user.",
                     },
-                    "required": ["source_timezone", "time", "target_timezone"],
+                    "time": {
+                        "type": "string",
+                        "description": "Time to convert in 24-hour format (HH:MM)",
+                    },
+                    "target_timezone": {
+                        "type": "string",
+                        "description": f"Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use '{local_tz}' as local timezone if no target timezone provided by the user.",
+                    },
                 },
-                annotations=ToolAnnotations(
-                    readOnlyHint=True,
-                    destructiveHint=False,
-                    idempotentHint=True,
-                    openWorldHint=False,
-                ),
+                "required": ["source_timezone", "time", "target_timezone"],
+            },
+            annotations=ToolAnnotations(
+                read_only_hint=True,
+                destructive_hint=False,
+                idempotent_hint=True,
+                open_world_hint=False,
             ),
-        ]
+        ),
+    ]
+    schemas = {tool.name: tool.input_schema for tool in tools}
 
-    @server.call_tool()
-    async def call_tool(
-        name: str, arguments: dict
-    ) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
+    async def list_tools(
+        ctx: ServerRequestContext, params: PaginatedRequestParams | None
+    ) -> ListToolsResult:
+        """List available time tools."""
+        return ListToolsResult(tools=tools)
+
+    def run_tool(name: str, arguments: dict[str, Any]) -> list[ContentBlock]:
         """Handle tool calls for time queries."""
         try:
             match name:
@@ -236,7 +255,7 @@ async def serve(local_timezone: str | None = None) -> None:
                         k in arguments
                         for k in ["source_timezone", "time", "target_timezone"]
                     ):
-                        raise ValueError(  # pragma: no cover  # unreachable: the SDK rejects a missing key against inputSchema first
+                        raise ValueError(  # pragma: no cover  # unreachable: call_tool rejects a missing key against inputSchema first
                             "Missing required arguments"
                         )
                     for key in ["source_timezone", "target_timezone"]:
@@ -258,6 +277,41 @@ async def serve(local_timezone: str | None = None) -> None:
         except Exception as e:
             raise ValueError(f"Error processing mcp-server-time query: {str(e)}")
 
+    async def call_tool(
+        ctx: ServerRequestContext, params: CallToolRequestParams
+    ) -> CallToolResult:
+        # SDK v2's low-level server neither validates arguments nor turns a
+        # handler exception into an isError result, both of which SDK v1 did.
+        # Both are done here, with v1's messages, so tool results are unchanged.
+        arguments = params.arguments or {}
+        schema = schemas.get(params.name)
+        if schema is not None:
+            try:
+                jsonschema.validate(instance=arguments, schema=schema)
+            except jsonschema.ValidationError as e:
+                return tool_error(f"Input validation error: {e.message}")
+        try:
+            return CallToolResult(content=run_tool(params.name, arguments))
+        except Exception as e:
+            return tool_error(str(e))
+
+    server = Server(
+        "mcp-time",
+        version=SERVER_VERSION,
+        on_list_tools=list_tools,
+        on_call_tool=call_tool,
+    )
     options = server.create_initialization_options()
     async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, options)
+        # Legacy era only. Server.run() would also serve 2026-07-28 (its
+        # dual-era loop answers server/discover and per-request envelopes);
+        # adopting that era is #4853, so this port (#4851) serves the
+        # handshake loop alone, the only era it served on SDK v1.
+        async with server.lifespan(server) as lifespan_state:
+            await serve_loop(
+                server,
+                read_stream,
+                write_stream,
+                lifespan_state=lifespan_state,
+                init_options=options,
+            )
