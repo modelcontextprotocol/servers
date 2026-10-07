@@ -21,12 +21,14 @@
 //     ranges, which `scripts/lib/pep440.mjs` reads. Any other ecosystem is
 //     reported and skipped: filing it properly means knowing how to fix it.
 //  3. **Alerts are per advisory, a fix is per bump.** Alerts are grouped by
-//     `(package, manifest)`, and the issue targets the HIGHEST patched version
-//     among the advisories that apply on `v2/main`: one bump to it clears all
-//     of them. This departs from the Inspector, which files one issue per
-//     patched version; against this repo's backlog that meant seven issues
-//     for `gitpython` in one lockfile and forty-odd in all, each a subset of
-//     the same edit. A pip package's name is PEP 503 normalized first:
+//     `(package, manifest)`, and the issue targets the LOWEST of the applying
+//     advisories' patched versions that is outside every applicable range, so
+//     one bump clears all of them (`pickTarget`). When no listed patched
+//     version does, the issue names the highest and flags it as still in range
+//     of the advisories it misses. This departs from the Inspector, which
+//     files one issue per patched version; against this repo's backlog that
+//     meant seven issues for `gitpython` in one lockfile and forty-odd in all,
+//     each a subset of the same edit. A pip package's name is PEP 503 normalized first:
 //     Dependabot reports `PyJWT` and `pyjwt` as separate alerts.
 //  4. **Alerts are computed from the default branch (`main`), and we ship from
 //     `v2/main`.** So each advisory's range is re-checked against `v2/main`'s
@@ -428,7 +430,8 @@ export function advisoryKey(pkg, manifestPath, ghsa) {
  * Collapse per-advisory alerts into one entry per `(package, manifest)`. An
  * alert with no patched version is skipped: there is nothing to bump to.
  * `fixedIn` here is the highest patched version across every advisory;
- * `narrowToApplicable` recomputes it over the ones that apply.
+ * `narrowToApplicable` replaces it with `pickTarget`'s choice over the ones
+ * that apply.
  *
  * @param {object[]} alerts raw `GET /repos/{o}/{r}/dependabot/alerts` entries
  */
