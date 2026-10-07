@@ -537,6 +537,18 @@ test("a forged marker from an outsider suppresses nothing", (t) => {
   assert.match(world.warnings.join("\n"), /"octocat"/);
 });
 
+test("a dry run previews the supersession note too", (t) => {
+  const world = fakeWorld({
+    issues: [sweepIssue(9, "python-sdk", "2.2.0")],
+    files: files({ "src/memory/package.json": "{}", "package.json": "{}" }),
+  });
+  run(world, { output: outputFile(t), dryRun: true });
+  assert.equal(writes(world.calls).length, 0);
+  const out = world.lines.join("\n");
+  assert.match(out, /would comment on #9/);
+  assert.match(out, /Superseded by #NEW/);
+});
+
 test("a newer release supersedes the open older issue, once", (t) => {
   const older = sweepIssue(9, "python-sdk", "2.2.0");
   const noTs = files({ "src/memory/package.json": "{}", "package.json": "{}" });

@@ -79,6 +79,20 @@ test("satisfies handles ==, !=, wildcards, ~= and the empty specifier", () => {
   assert.equal(satisfies("9.9", ""), true);
 });
 
+test("exclusive bounds follow PEP 440's pre- and post-release rules", () => {
+  assert.equal(satisfies("2.0rc1", "<2.0"), false);
+  assert.equal(satisfies("2.0.dev1", "<2.0"), false);
+  assert.equal(satisfies("1.9", "<2.0"), true);
+  assert.equal(satisfies("2.0a1", "<2.0rc1"), true);
+  assert.equal(satisfies("2.0.0rc1", "<2"), false);
+  assert.equal(satisfies("1.0.post1", ">1.0"), false);
+  assert.equal(satisfies("1.0.post2", ">1.0.post1"), true);
+  assert.equal(satisfies("1.0.1", ">1.0"), true);
+  // The inclusive forms are plain ordering.
+  assert.equal(satisfies("2.0rc1", "<=2.0"), true);
+  assert.equal(satisfies("1.0.post1", ">=1.0"), true);
+});
+
 test("satisfies throws instead of guessing", () => {
   assert.throws(() => satisfies("1.0", "about 1.0"), /specifier clause/);
   assert.throws(() => satisfies("1.0", "~=1"), /two release segments/);

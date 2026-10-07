@@ -138,13 +138,51 @@ function clauseMatches(version, clause) {
     );
   }
   const d = compareVersions(version, operand);
-  return op === "<"
-    ? d < 0
-    : op === "<="
-      ? d <= 0
-      : op === ">"
-        ? d > 0
-        : d >= 0;
+  if (op === "<") return d < 0 && !isPreOf(version, operand);
+  if (op === ">") return d > 0 && !isPostOf(version, operand);
+  return op === "<=" ? d <= 0 : d >= 0;
+}
+
+/** Same epoch and release, compared with trailing zeros ignored. */
+function sameRelease(a, b) {
+  return compareVersions(releaseOnly(a), releaseOnly(b)) === 0;
+}
+
+function releaseOnly(v) {
+  const { epoch, release } = parseVersion(v);
+  return `${epoch}!${release.join(".")}`;
+}
+
+/**
+ * PEP 440's exclusive `<V` "MUST NOT allow a pre-release of the specified
+ * version unless the specified version is itself a pre-release": `<2.0`
+ * excludes `2.0rc1`, which sorts below it.
+ */
+function isPreOf(version, operand) {
+  const v = parseVersion(version);
+  const o = parseVersion(operand);
+  return (
+    (v.pre !== null || v.dev !== null) &&
+    o.pre === null &&
+    o.dev === null &&
+    sameRelease(version, operand)
+  );
+}
+
+/**
+ * PEP 440's exclusive `>V` "MUST NOT allow a post-release of the given
+ * version unless V itself is a post release": `>1.0` excludes `1.0.post1`,
+ * which sorts above it.
+ */
+function isPostOf(version, operand) {
+  const v = parseVersion(version);
+  const o = parseVersion(operand);
+  return (
+    v.post !== null &&
+    o.post === null &&
+    sameRelease(version, operand) &&
+    JSON.stringify(v.pre) === JSON.stringify(o.pre)
+  );
 }
 
 /**

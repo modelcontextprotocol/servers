@@ -647,23 +647,27 @@ export function main({
           );
         }
 
-        // Any OPEN issue for an older target of this group is now stale. In a
-        // dry run there is no new number to point at.
-        if (number === null) continue;
+        // Any OPEN issue for an older target of this group is now stale. A
+        // dry run has no new number yet, so it previews the note with a
+        // placeholder, and nothing can have announced an issue that does not
+        // exist.
         for (const stale of forGroup) {
           if (stale.number === number || stale.state !== "OPEN") continue;
           if (compare(stale.marker.target, state.target) >= 0) continue;
-          const announced = issueComments(repo, stale.number, spawn).some(
-            (c) =>
-              isAutomationComment(c) &&
-              parseSupersededMarker(c.body) === String(number),
-          );
+          const announced =
+            number !== null &&
+            issueComments(repo, stale.number, spawn).some(
+              (c) =>
+                isAutomationComment(c) &&
+                parseSupersededMarker(c.body) === String(number),
+            );
           if (announced) continue;
+          const shown = number ?? "NEW";
           writer.comment(
             stale.number,
-            buildSupersededComment(number, state.target, stale.marker.target),
+            buildSupersededComment(shown, state.target, stale.marker.target),
           );
-          log(`${SWEEP}: noted that #${number} supersedes #${stale.number}`);
+          log(`${SWEEP}: noted that #${shown} supersedes #${stale.number}`);
         }
       } catch (error) {
         // One group's failure must not cost another group its issue.
