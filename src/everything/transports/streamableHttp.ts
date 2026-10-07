@@ -6,6 +6,7 @@ import express, { Request, Response } from "express";
 import { createServer } from "../server/index.js";
 import { randomUUID } from "node:crypto";
 import cors from "cors";
+import { closeActiveTransports } from "./streamableHttpShutdown.js";
 
 // Simple in-memory event store for SSE resumability
 class InMemoryEventStore implements EventStore {
@@ -225,15 +226,7 @@ process.on("SIGINT", async () => {
   console.log("Shutting down server...");
 
   // Close all active transports to properly clean up resources
-  for (const sessionId in transports) {
-    try {
-      console.log(`Closing transport for session ${sessionId}`);
-      await transports.get(sessionId)!.close();
-      transports.delete(sessionId);
-    } catch (error) {
-      console.log(`Error closing transport for session ${sessionId}:`, error);
-    }
-  }
+  await closeActiveTransports(transports);
 
   console.log("Server shutdown complete");
   process.exit(0);
