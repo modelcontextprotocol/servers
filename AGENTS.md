@@ -163,7 +163,9 @@ diagnosing a red stage is the `pre-push-gate` skill.
 A workflow job **holds a credential** when it can mint an OIDC token or push a
 package (`id-token: write`, `packages: write`), or is handed any secret other
 than `GITHUB_TOKEN`. Today that is `release.yml`'s publish jobs, `claude.yml`,
-and `sdk-watch.yml`'s `analyze` and `post` jobs (`ANTHROPIC_API_KEY`).
+and `sdk-watch.yml`'s `analyze` and `post` jobs (`ANTHROPIC_API_KEY`). Jobs
+that hold none can still need pinning under the rules below: `release.yml`'s
+build jobs and `sdk-watch.yml`'s `sweep`, whose outputs `analyze` reads.
 
 - **Every action in a credentialed job is pinned to a full commit SHA, with the
   release it was resolved from in a trailing comment**:
