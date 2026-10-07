@@ -20,6 +20,7 @@ test("parseVersion reads release, pre, post and dev segments", () => {
     pre: [0, 1],
     post: null,
     dev: null,
+    local: null,
   });
   assert.deepEqual(parseVersion("4.6.2.post1").post, 1);
   assert.deepEqual(parseVersion("1.0-1").post, 1);
@@ -99,6 +100,28 @@ test("prefix matching compares epochs too", () => {
   assert.equal(satisfies("2!1.4.5", "==1!1.4.*"), false);
   assert.equal(satisfies("1!1.4.5", "==1!1.4.*"), true);
   assert.equal(satisfies("1!1.4.5", "==1.4.*"), false);
+});
+
+test("local version labels order after the public version, and specifiers ignore them", () => {
+  assert.deepEqual(parseVersion("1.0+Vendor.1").local, ["vendor", 1]);
+  assert.ok(compareVersions("1.0+vendor.1", "1.0") > 0);
+  assert.ok(compareVersions("1.0+vendor.1", "1.0.post1") < 0);
+  assert.ok(compareVersions("1.0+2", "1.0+abc") > 0, "a number beats text");
+  assert.ok(
+    compareVersions("1.0+abc.2", "1.0+abc.10") < 0,
+    "numbers compare as numbers",
+  );
+  assert.ok(
+    compareVersions("1.0+abc.1.x", "1.0+abc.1") > 0,
+    "more segments sort later",
+  );
+  assert.equal(compareVersions("1.0+ABC", "1.0+abc"), 0);
+  assert.equal(satisfies("1.0+vendor.1", "==1.0"), true);
+  assert.equal(satisfies("1.0+vendor.1", "<=1.0"), true);
+  assert.equal(satisfies("1.0+vendor.1", ">1.0"), false);
+  assert.equal(satisfies("1.0+vendor.1", "==1.0+vendor.1"), true);
+  assert.equal(satisfies("1.0+vendor.2", "==1.0+vendor.1"), false);
+  assert.equal(satisfies("1.0+vendor.1", "===1.0+vendor.1"), true);
 });
 
 test("satisfies throws instead of guessing", () => {

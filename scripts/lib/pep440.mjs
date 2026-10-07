@@ -14,7 +14,7 @@
 // "could not determine", which leaves the issue alone.
 
 const VERSION_RE =
-  /^v?(?:(\d+)!)?(\d+(?:\.\d+)*)(?:[-_.]?(a|alpha|b|beta|c|rc|pre|preview)[-_.]?(\d*))?(?:-(\d+)|[-_.]?(?:post|rev|r)[-_.]?(\d*))?(?:[-_.]?dev[-_.]?(\d*))?(?:\+[a-z0-9]+(?:[-_.][a-z0-9]+)*)?$/i;
+  /^v?(?:(\d+)!)?(\d+(?:\.\d+)*)(?:[-_.]?(a|alpha|b|beta|c|rc|pre|preview)[-_.]?(\d*))?(?:-(\d+)|[-_.]?(?:post|rev|r)[-_.]?(\d*))?(?:[-_.]?dev[-_.]?(\d*))?(?:\+([a-z0-9]+(?:[-_.][a-z0-9]+)*))?$/i;
 
 const PRE_RANK = {
   a: 0,
@@ -29,14 +29,23 @@ const PRE_RANK = {
 
 /**
  * @param {string} version
- * @returns {{epoch: number, release: number[], pre: [number, number] | null, post: number | null, dev: number | null}}
+ * @returns {{epoch: number, release: number[], pre: [number, number] | null, post: number | null, dev: number | null, local: Array<number | string> | null}}
  * @throws on a version PEP 440 does not admit
  */
 export function parseVersion(version) {
   const match = VERSION_RE.exec(String(version).trim());
   if (!match) throw new Error(`not a PEP 440 version: "${version}"`);
-  const [, epoch, release, preKind, preNum, postImplicit, postNum, devNum] =
-    match;
+  const [
+    ,
+    epoch,
+    release,
+    preKind,
+    preNum,
+    postImplicit,
+    postNum,
+    devNum,
+    local,
+  ] = match;
   const post =
     postImplicit !== undefined
       ? Number(postImplicit)
@@ -51,7 +60,37 @@ export function parseVersion(version) {
       : null,
     post,
     dev: devNum !== undefined ? Number(devNum || 0) : null,
+    // Segments split on `.`, `-` or `_`: all digits compare as numbers, the
+    // rest case-insensitively as text.
+    local:
+      local === undefined
+        ? null
+        : local
+            .toLowerCase()
+            .split(/[-_.]/)
+            .map((seg) => (/^\d+$/.test(seg) ? Number(seg) : seg)),
   };
+}
+
+/**
+ * PEP 440 local-label ordering: a version with a label sorts after the same
+ * version without one; segment by segment a number beats text; and with a
+ * matching prefix, more segments sort later.
+ */
+function compareLocal(a, b) {
+  if (a === null || b === null) return a === b ? 0 : a === null ? -1 : 1;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    const [x, y] = [a[i], b[i]];
+    if (x === y) continue;
+    if (typeof x !== typeof y) return typeof x === "number" ? 1 : -1;
+    return x < y ? -1 : 1;
+  }
+  return a.length - b.length;
+}
+
+/** The public part of a version: everything before a `+local` label. */
+function publicVersion(version) {
+  return String(version).trim().replace(/\+.*$/, "");
 }
 
 /** Is this a pre-release or development release? */
@@ -76,6 +115,7 @@ function sortKey(v) {
         : [Infinity, 0];
   return {
     epoch: v.epoch,
+    local: v.local,
     release,
     rest: [...pre, v.post ?? -Infinity, v.dev ?? Infinity],
   };
@@ -97,7 +137,7 @@ export function compareVersions(a, b) {
   for (let i = 0; i < x.rest.length; i++) {
     if (x.rest[i] !== y.rest[i]) return x.rest[i] < y.rest[i] ? -1 : 1;
   }
-  return 0;
+  return compareLocal(x.local, y.local);
 }
 
 const CLAUSE_RE = /^(~=|===|==|!=|<=|>=|<|>|=)\s*(\S+)$/;
@@ -124,6 +164,14 @@ function clauseMatches(version, clause) {
   if (!match) throw new Error(`not a PEP 440 specifier clause: "${clause}"`);
   const [, op, operand] = match;
   if (op === "===") return String(version).trim() === operand;
+  // Specifiers match on the public version: a candidate's local label is
+  // ignored unless an equality operand names one itself (PEP 440, and what
+  // `packaging` does), so `<=1.0` admits `1.0+vendor.1`.
+  const keepLocal =
+    (op === "==" || op === "=" || op === "!=") &&
+    !operand.endsWith(".*") &&
+    parseVersion(operand).local !== null;
+  version = keepLocal ? String(version).trim() : publicVersion(version);
   if (op === "==" || op === "=" || op === "!=") {
     const equal = operand.endsWith(".*")
       ? prefixMatches(version, operand.slice(0, -2))
