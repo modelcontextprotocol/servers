@@ -100,6 +100,29 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
    - Returns: List of branches
 
+13. `git_worktree_list`
+   - List all git worktrees
+   - Inputs:
+     - `repo_path` (string): Path to the Git repository
+   - Returns: List of worktrees with their paths, commits, and branches
+
+14. `git_worktree_add`
+   - Create a new git worktree, optionally creating a new branch for it
+   - Inputs:
+     - `repo_path` (string): Path to the Git repository
+     - `worktree_path` (string): Path where the new worktree should be created
+     - `branch_name` (string, optional): Name of a new branch to create for the worktree. If not provided, a branch named after the path's last component is created
+     - `base_branch` (string, optional): The branch or commit to base the new worktree on. Defaults to HEAD
+   - Returns: Output of the git worktree add command
+
+15. `git_worktree_remove`
+   - Remove a git worktree
+   - Inputs:
+     - `repo_path` (string): Path to the Git repository
+     - `worktree_path` (string): Path of the worktree to remove
+     - `force` (boolean, optional): Force removal even if the worktree has modifications or untracked files (default: false)
+   - Returns: Output of the git worktree remove command
+
 ## Installation
 
 ### Using uv (recommended)

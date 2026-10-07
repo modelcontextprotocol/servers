@@ -15,6 +15,9 @@ from mcp_server_git.server import (
     git_log,
     git_create_branch,
     git_show,
+    git_worktree_list,
+    git_worktree_add,
+    git_worktree_remove,
     validate_repo_path,
     serve,
 )
@@ -588,3 +591,115 @@ def test_serve_run_does_not_raise_exceptions(tmp_path: Path):
                 assert kwargs.get("raise_exceptions") is not True
 
     anyio.run(_run)
+
+
+# Tests for git_worktree_list, git_worktree_add, git_worktree_remove
+
+def test_git_worktree_list_single(test_repository):
+    """A fresh repo has exactly one worktree (the main working tree)."""
+    result = git_worktree_list(test_repository)
+    assert test_repository.working_dir in result
+
+
+def test_git_worktree_add_and_list(test_repository, tmp_path):
+    """Adding a worktree should make it appear in the list."""
+    worktree_path = str(tmp_path / "wt-feature")
+    git_worktree_add(test_repository, worktree_path, branch_name="feature-wt")
+
+    listing = git_worktree_list(test_repository)
+    assert worktree_path in listing
+    assert "feature-wt" in listing
+
+
+def test_git_worktree_add_with_base_branch(test_repository, tmp_path):
+    """Adding a worktree with an explicit base branch should work."""
+    # Create a branch with a commit to use as base
+    test_repository.git.checkout("-b", "base-for-wt")
+    file_path = Path(test_repository.working_dir) / "base_wt.txt"
+    file_path.write_text("base content")
+    test_repository.index.add(["base_wt.txt"])
+    test_repository.index.commit("base wt commit")
+    test_repository.git.checkout(test_repository.active_branch.name)
+
+    worktree_path = str(tmp_path / "wt-from-base")
+    git_worktree_add(
+        test_repository,
+        worktree_path,
+        branch_name="derived-wt",
+        base_branch="base-for-wt",
+    )
+
+    listing = git_worktree_list(test_repository)
+    assert worktree_path in listing
+    assert "derived-wt" in listing
+
+
+def test_git_worktree_remove(test_repository, tmp_path):
+    """Removing a worktree should remove it from the list."""
+    worktree_path = str(tmp_path / "wt-remove-test")
+    git_worktree_add(test_repository, worktree_path, branch_name="remove-wt-branch")
+
+    listing_before = git_worktree_list(test_repository)
+    assert worktree_path in listing_before
+
+    result = git_worktree_remove(test_repository, worktree_path)
+    assert result == "" or "worktree" in result.lower() or result.strip() == ""
+
+    listing_after = git_worktree_list(test_repository)
+    assert worktree_path not in listing_after
+
+
+def test_git_worktree_remove_force(test_repository, tmp_path):
+    """Force removal should work even with modifications."""
+    worktree_path = str(tmp_path / "wt-force-test")
+    git_worktree_add(test_repository, worktree_path, branch_name="force-wt-branch")
+
+    # Make a modification in the worktree
+    wt_file = Path(worktree_path) / "test.txt"
+    wt_file.write_text("modified in worktree")
+
+    # Without force, this might fail; with force it should succeed
+    result = git_worktree_remove(test_repository, worktree_path, force=True)
+    assert result == "" or "worktree" in result.lower() or result.strip() == ""
+
+    listing = git_worktree_list(test_repository)
+    assert worktree_path not in listing
+
+
+def test_git_worktree_add_rejects_flag_injection(test_repository, tmp_path):
+    """git_worktree_add should reject paths/branches starting with '-'."""
+    with pytest.raises(BadName):
+        git_worktree_add(test_repository, "--output=/tmp/evil")
+
+    with pytest.raises(BadName):
+        git_worktree_add(
+            test_repository, str(tmp_path / "wt-ok"), branch_name="--exec=evil"
+        )
+
+    with pytest.raises(BadName):
+        git_worktree_add(
+            test_repository,
+            str(tmp_path / "wt-ok"),
+            branch_name="ok-branch",
+            base_branch="--track=evil",
+        )
+
+
+def test_git_worktree_remove_rejects_flag_injection(test_repository, tmp_path):
+    """git_worktree_remove should reject paths starting with '-'."""
+    with pytest.raises(BadName):
+        git_worktree_remove(test_repository, "--force")
+
+
+def test_git_worktree_add_default_branch(test_repository, tmp_path):
+    """Adding a worktree without a branch name creates a branch named after the path."""
+    worktree_path = str(tmp_path / "wt-default")
+    git_worktree_add(test_repository, worktree_path)
+
+    listing = git_worktree_list(test_repository)
+    assert worktree_path in listing
+    # git creates a branch named after the last path component
+    assert "wt-default" in listing
+
+    # Cleanup
+    git_worktree_remove(test_repository, worktree_path, force=True)

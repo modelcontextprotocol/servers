@@ -93,6 +93,47 @@ class GitBranch(BaseModel):
     )
 
 
+class GitWorktreeList(BaseModel):
+    repo_path: str = Field(
+        ...,
+        description="The path to the Git repository.",
+    )
+
+
+class GitWorktreeAdd(BaseModel):
+    repo_path: str = Field(
+        ...,
+        description="The path to the Git repository.",
+    )
+    worktree_path: str = Field(
+        ...,
+        description="The path where the new worktree should be created.",
+    )
+    branch_name: Optional[str] = Field(
+        None,
+        description="Name of a new branch to create for the worktree. If not provided, the worktree will be on the current HEAD (detached).",
+    )
+    base_branch: Optional[str] = Field(
+        None,
+        description="The branch or commit to base the new worktree on. Defaults to HEAD.",
+    )
+
+
+class GitWorktreeRemove(BaseModel):
+    repo_path: str = Field(
+        ...,
+        description="The path to the Git repository.",
+    )
+    worktree_path: str = Field(
+        ...,
+        description="The path of the worktree to remove.",
+    )
+    force: bool = Field(
+        False,
+        description="Force removal even if the worktree has modifications or untracked files.",
+    )
+
+
 class GitTools(str, Enum):
     STATUS = "git_status"
     DIFF_UNSTAGED = "git_diff_unstaged"
@@ -107,6 +148,9 @@ class GitTools(str, Enum):
     SHOW = "git_show"
 
     BRANCH = "git_branch"
+    WORKTREE_LIST = "git_worktree_list"
+    WORKTREE_ADD = "git_worktree_add"
+    WORKTREE_REMOVE = "git_worktree_remove"
 
 def git_status(repo: git.Repo) -> str:
     return repo.git.status()
@@ -288,6 +332,69 @@ def git_branch(repo: git.Repo, branch_type: str, contains: str | None = None, no
     return branch_info
 
 
+def git_worktree_list(repo: git.Repo) -> str:
+    """List all worktrees of the repository."""
+    return repo.git.worktree("list")
+
+
+def git_worktree_add(
+    repo: git.Repo,
+    worktree_path: str,
+    branch_name: str | None = None,
+    base_branch: str | None = None,
+) -> str:
+    """Create a new worktree.
+
+    Args:
+        repo: The main repository.
+        worktree_path: Path where the new worktree should be created.
+        branch_name: Optional name of a new branch to create for the worktree.
+        base_branch: Optional branch or commit to base the worktree on. Defaults to HEAD.
+
+    Returns:
+        The output of the git worktree add command.
+    """
+    # Defense in depth: reject paths/refs starting with '-' to prevent flag injection
+    if worktree_path.startswith("-"):
+        raise BadName(f"Invalid worktree_path: '{worktree_path}' - cannot start with '-'")
+    if branch_name and branch_name.startswith("-"):
+        raise BadName(f"Invalid branch_name: '{branch_name}' - cannot start with '-'")
+    if base_branch and base_branch.startswith("-"):
+        raise BadName(f"Invalid base_branch: '{base_branch}' - cannot start with '-'")
+
+    args = ["add"]
+    if branch_name:
+        args.extend(["-b", branch_name])
+    args.append(worktree_path)
+    if base_branch:
+        args.append(base_branch)
+
+    return repo.git.worktree(*args)
+
+
+def git_worktree_remove(repo: git.Repo, worktree_path: str, force: bool = False) -> str:
+    """Remove a worktree.
+
+    Args:
+        repo: The main repository.
+        worktree_path: Path of the worktree to remove.
+        force: Force removal even if the worktree has modifications or untracked files.
+
+    Returns:
+        The output of the git worktree remove command.
+    """
+    # Defense in depth: reject paths starting with '-' to prevent flag injection
+    if worktree_path.startswith("-"):
+        raise BadName(f"Invalid worktree_path: '{worktree_path}' - cannot start with '-'")
+
+    args = ["remove"]
+    if force:
+        args.append("--force")
+    args.append(worktree_path)
+
+    return repo.git.worktree(*args)
+
+
 async def serve(repository: Path | None) -> None:
     logger = logging.getLogger(__name__)
 
@@ -435,7 +542,40 @@ async def serve(repository: Path | None) -> None:
                     idempotentHint=True,
                     openWorldHint=False,
                 ),
-            )
+            ),
+            Tool(
+                name=GitTools.WORKTREE_LIST,
+                description="List all git worktrees",
+                inputSchema=GitWorktreeList.model_json_schema(),
+                annotations=ToolAnnotations(
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
+                ),
+            ),
+            Tool(
+                name=GitTools.WORKTREE_ADD,
+                description="Create a new git worktree, optionally creating a new branch for it",
+                inputSchema=GitWorktreeAdd.model_json_schema(),
+                annotations=ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=False,
+                    idempotentHint=False,
+                    openWorldHint=False,
+                ),
+            ),
+            Tool(
+                name=GitTools.WORKTREE_REMOVE,
+                description="Remove a git worktree, optionally forcing removal of modified worktrees",
+                inputSchema=GitWorktreeRemove.model_json_schema(),
+                annotations=ToolAnnotations(
+                    readOnlyHint=False,
+                    destructiveHint=True,
+                    idempotentHint=False,
+                    openWorldHint=False,
+                ),
+            ),
         ]
 
     async def list_repos() -> Sequence[str]:
@@ -575,6 +715,36 @@ async def serve(repository: Path | None) -> None:
                 return [TextContent(
                     type="text",
                     text=result
+                )]
+
+            case GitTools.WORKTREE_LIST:
+                result = git_worktree_list(repo)
+                return [TextContent(
+                    type="text",
+                    text=f"Worktrees:\n{result}"
+                )]
+
+            case GitTools.WORKTREE_ADD:
+                result = git_worktree_add(
+                    repo,
+                    arguments["worktree_path"],
+                    arguments.get("branch_name"),
+                    arguments.get("base_branch"),
+                )
+                return [TextContent(
+                    type="text",
+                    text=f"Worktree created:\n{result}"
+                )]
+
+            case GitTools.WORKTREE_REMOVE:
+                result = git_worktree_remove(
+                    repo,
+                    arguments["worktree_path"],
+                    arguments.get("force", False),
+                )
+                return [TextContent(
+                    type="text",
+                    text=f"Worktree removed:\n{result}"
                 )]
 
             case _:
