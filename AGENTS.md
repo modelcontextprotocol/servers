@@ -53,13 +53,16 @@ servers/
 ├── .claude/skills/            On-demand procedures (see the Skills index above)
 ├── .changeset/               Pending changesets for the TypeScript servers, and the changesets config
 ├── scripts/                  The pre-push gate (gate-lease, smoke-servers, validate-py, coverage-py), its guards (verify-*),
-│                             the skills tooling, and release tooling (npm-publish-guard, prepare-python-release,
-│                             pack-and-verify, release-manifest)
+│                             the skills tooling, release tooling (npm-publish-guard, prepare-python-release,
+│                             pack-and-verify, release-manifest), and the issue-filing sweeps (dependency-refresh,
+│                             dependabot-alerts, sdk-watch)
 ├── docs/                     Design documents; quality-gate.md is the gate's reference (stages, CI vs local, the lease);
-│                             contribution-model.md holds the outside-PR backlog plan
+│                             contribution-model.md holds the outside-PR backlog plan; ai-software-factory.md is the
+│                             overview of how the rules, skills, gates and sweeps fit together
 ├── .github/workflows/        typescript.yml, python.yml (per-package CI), release.yml (publishes on a GitHub Release),
 │                             version-packages.yml (the changesets PR), prepare-python-release.yml (the CalVer PR),
-│                             claude.yml (@claude mentions)
+│                             claude.yml (@claude mentions), and the scheduled sweeps that file issues:
+│                             dependency-refresh.yml, dependabot-alerts.yml, sdk-watch.yml
 ├── .github/ISSUE_TEMPLATE/   Bug and feature issue forms; config.yml routes security and new servers away
 ├── .github/pull_request_template.md   The "issues, not PRs" banner that turns outside PRs away
 ├── RELEASING.md              How packages are versioned and published, and how to recover a failed publish
@@ -159,8 +162,8 @@ diagnosing a red stage is the `pre-push-gate` skill.
 
 A workflow job **holds a credential** when it can mint an OIDC token or push a
 package (`id-token: write`, `packages: write`), or is handed any secret other
-than `GITHUB_TOKEN`. Today that is `release.yml`'s publish jobs and
-`claude.yml`.
+than `GITHUB_TOKEN`. Today that is `release.yml`'s publish jobs, `claude.yml`,
+and `sdk-watch.yml`'s `analyze` and `post` jobs (`ANTHROPIC_API_KEY`).
 
 - **Every action in a credentialed job is pinned to a full commit SHA, with the
   release it was resolved from in a trailing comment**:
@@ -188,6 +191,57 @@ than `GITHUB_TOKEN`. Today that is `release.yml`'s publish jobs and
 - **A Python dependency change updates that server's `uv.lock`** in the same
   commit (`uv lock`). CI installs with `--frozen` / `--locked` and fails on a
   stale lockfile.
+
+### Dependency updates are issue-driven
+
+**Dependabot opens no pull requests here, for version updates or security
+updates.** A Dependabot PR carries no `Closes #N` and no board card, so both
+halves are replaced by scheduled workflows that file **issues**, and a
+maintainer writes each fix by hand against `v2/main`. Each script's header holds
+its reasoning; these are the rules.
+
+| Sweep                                                       | Replaces                                                                   | Files                                                                                                                                                                                       | Cadence |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `dependency-refresh.yml` → `scripts/dependency-refresh.mjs` | `.github/dependabot.yml` (deleted)                                         | **One** tracking issue: `npm outdated` across the root and workspaces, each Python server's `uv lock --upgrade` dry run, and each workflow `uses:` ref against its action's highest release | Monthly |
+| `dependabot-alerts.yml` → `scripts/dependabot-alerts.mjs`   | Security-update PRs (the `automated-security-fixes` **repo setting**, off) | One issue per vulnerable package per lockfile (npm and pip), at the highest patched version of the advisories that apply                                                                    | Daily   |
+| `sdk-watch.yml` → `scripts/sdk-watch.mjs`                   | Nothing: SDK releases were watched by habit                                | One issue per MCP SDK group behind its registry (npm `@modelcontextprotocol/*`, PyPI `mcp`), plus a Claude analysis comment                                                                 | Nightly |
+
+- **Never re-add `.github/dependabot.yml` or switch `automated-security-fixes`
+  back on.** Keep Dependabot **alerts** on: the alert sweep consumes them. The
+  setting can be flipped in the UI with no commit, so the alert sweep reads it
+  back and fails on `enabled: true` (under the workflow's token it can only
+  report UNVERIFIED, since `administration: read` is not grantable).
+- **A sweep files an issue, never a PR, and never closes one.** When the work
+  goes away it rewrites the issue to say so; closing, and deciding whether the
+  card goes to Done or is deleted, stays a maintainer's act.
+- **Sweeps do not write the board.** `GITHUB_TOKEN` cannot hold `organization
+projects: write`. A sweep issue arrives labeled `v2` + `chore` +
+  `dependencies` (+ a `server-<name>` scope where it concerns one server) and
+  milestoned, and `issue-triage` pass 1 boards it in `Todo`. Boarding from the
+  workflows waits on a GitHub App credential (#5061); do not add board-write
+  code that reads a secret that does not exist.
+- **A sweep's marker counts only on an issue the automation wrote**: authored
+  by `github-actions` and labeled `chore` + `dependencies`. The repository is
+  public, so a marker alone proves nothing. `scripts/lib/sweep.mjs` holds the
+  rule; every sweep goes through it.
+- **Every sweep takes `--dry-run`**, which reads what it must and writes
+  nothing, printing each issue, edit and comment it would make with its labels
+  and milestone. Preview a sweep that way, never against the live tracker. Live
+  filing is covered by the script tests, with `gh` faked.
+- **Scheduled workflows run only from `main`.** A change to a sweep takes effect
+  at the next milestone merge, and each sweep checks `v2/main` out explicitly.
+- **Alerts are computed from `main`.** The alert sweep re-checks each range
+  against `v2/main`'s lockfile before filing. A vulnerable dependency added on
+  `v2/main` and not yet merged produces no alert at all.
+- **An SDK package a manifest declares must be in `SDK_GROUPS`**
+  (`scripts/sdk-watch.mjs`), or the SDK watch fails rather than leave it
+  unwatched.
+- **No model runs in a write-capable job.** `sdk-watch.yml`'s `analyze` job is
+  `contents: read` only, its model gets `--tools "Read,Grep,Glob"` and no Bash
+  at all, the release notes are fetched by a deterministic step, and the
+  analysis is scanned for credentials before it is written out and again before
+  it is posted. `sdk-watch.test.mjs` pins each of these; keep them when editing
+  the job.
 
 ## Project status and direction
 
@@ -267,12 +321,6 @@ every commit a pull request adds; one unsigned commit fails it. The repair
 work is invisible to the board. If there is no issue yet, create it first. This
 holds for a maintainer's own one-line fix as much as for a feature.
 
-- **Temporary exception: Dependabot PRs.** Dependabot still opens its own PRs
-  (weekly GitHub Actions bumps, and security-fix PRs), against `main`, with no
-  linked issue, no `v2` label and no checklist. They are exempt from the PR rules
-  in this file (issue link, base branch, labels, checklist, board) until the
-  change that replaces them with issue-filing sweeps lands and removes this
-  exception.
 - **Exception: a security advisory's fix, in its private fork.** A PR in the
   advisory's temporary private fork (`servers-ghsa-xxxx-yyyy-zzzz`) links no
   public issue, carries no labels, and is tracked by the advisory's `[GHSA-…]` draft

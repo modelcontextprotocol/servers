@@ -1,0 +1,69 @@
+# Monthly dependency sweep (#4874), replacing Dependabot's version-update PRs.
+# Ported from the MCP Inspector's workflow of the same name (inspector#2229).
+#
+# `.github/dependabot.yml` is deleted: it opened weekly Actions PRs with no
+# issue and no board card. This runs `scripts/dependency-refresh.mjs` against
+# `v2/main` once a month, and it files or updates ONE tracking issue listing
+# every outdated npm package (root and workspaces), every Python server whose
+# `uv.lock` would move, and every workflow `uses:` ref behind its action's
+# highest release. No PR is opened; a maintainer picks what to bump. The
+# script's header holds the reasoning.
+#
+# ⚠️ A scheduled workflow runs only from the DEFAULT branch (`main`), while we
+# ship from `v2/main`. So this does nothing until a milestone merge carries it
+# to `main`, and it checks `v2/main` out explicitly rather than reading the
+# branch it was launched from.
+#
+# `GITHUB_TOKEN` is enough: it reads milestones and public release feeds and
+# writes one issue (`issues: write`). It cannot write the org project board
+# (`organization projects: write` is not a permission a workflow token can
+# hold), so the issue arrives labeled and milestoned and `issue-triage`
+# boards it. Boarding from here waits on a GitHub App credential (#5061).
+name: Dependency Refresh
+
+on:
+  schedule:
+    - cron: "23 6 1 * *" # 06:23 UTC on the 1st of every month
+  workflow_dispatch:
+
+# The marker lookup is a read before a write, so two overlapping runs (a
+# dispatch on top of the schedule) could both file. The second waits instead.
+concurrency:
+  group: dependency-refresh
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  dependency-sweep:
+    timeout-minutes: 20
+    if: github.repository_owner == 'modelcontextprotocol'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout v2/main
+        uses: actions/checkout@v6
+        with:
+          ref: v2/main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # Each Python server's `.python-version` is fetched by uv as needed.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      # `npm outdated` reads the installed tree, so the workspaces install too.
+      # No lifecycle scripts: nothing here builds.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run the dependency sweep
+        run: node scripts/dependency-refresh.mjs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}

@@ -298,10 +298,16 @@ maintainer and not Dependabot**. A maintainer is an author whose role on this
 repository is `admin` or `maintain`; write access alone is not enough, which is
 the policy's point.
 
+**A Dependabot PR should not exist.** Dependency updates are issue-driven
+(`AGENTS.md`, Dependencies): `.github/dependabot.yml` is gone and security-update
+PRs are switched off, and three scheduled sweeps file issues instead. One that
+appears anyway means a config came back or the `automated-security-fixes`
+setting was switched on again. Close it with a pointer to the sweep issue that
+covers the same bump (filing one with `issue-create` if none does), and raise
+the cause with a maintainer.
+
 Not touched by triage:
 
-- **Dependabot PRs**, the temporary exception in `AGENTS.md`, until #4874
-  replaces them.
 - **Maintainer-authored PRs.** List any that target `main` for their authors to
   retarget or close; do nothing else with them.
 - **An outside PR an open issue already names as the thing to decide** (for
@@ -447,12 +453,13 @@ later edit.
 
 ### 5. Verify
 
-The pass is complete when every open PR is maintainer-authored, a Dependabot
-PR, or named in the report as left open by an issue that owns it; every closed
+The pass is complete when every open PR is maintainer-authored or named in the
+report as left open by an issue that owns it; every closed
 PR marked for harvest names an issue that links back to it; and every harvest
 issue carries `v2`, one type label, its scope label where one applies, and sits
 in `Incoming` with no milestone. Re-run step 1: every remaining line should be
-`maintainer`, `dependabot`, or a PR the report names.
+`maintainer`, or a PR the report names. A `dependabot` line is a PR to close
+(see above).
 
 ### README-only PRs: what `readme-pr-check.yml` did
 
