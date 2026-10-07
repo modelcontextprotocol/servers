@@ -1,9 +1,8 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  McpServer,
   CallToolResult,
   CreateMessageRequest,
-  CreateMessageResultSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+} from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 // Tool input schema
@@ -53,7 +52,7 @@ export const registerTriggerSamplingRequestTool = (server: McpServer) => {
     server.registerTool(
       name,
       config,
-      async (args, extra): Promise<CallToolResult> => {
+      async (args, ctx): Promise<CallToolResult> => {
         const validatedArgs = TriggerSamplingRequestSchema.parse(args);
         const { prompt, maxTokens } = validatedArgs;
 
@@ -77,10 +76,7 @@ export const registerTriggerSamplingRequestTool = (server: McpServer) => {
         };
 
         // Send the sampling request to the client
-        const result = await extra.sendRequest(
-          request,
-          CreateMessageResultSchema,
-        );
+        const result = await ctx.mcpReq.send(request);
 
         // Return the result to the client
         return {

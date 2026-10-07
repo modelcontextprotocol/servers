@@ -8,14 +8,12 @@ import fs from "fs/promises";
 import os from "os";
 import path from "path";
 import { vi } from "vitest";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import {
-  ListRootsRequestSchema,
-  type CallToolResult,
-  type ClientCapabilities,
-  type Root,
-} from "@modelcontextprotocol/sdk/types.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import type {
+  CallToolResult,
+  ClientCapabilities,
+  Root,
+} from "@modelcontextprotocol/client";
 import { createServer } from "../server.js";
 
 export interface Connected {
@@ -42,7 +40,7 @@ export async function connect(
   );
   const { listRoots } = options;
   if (options.capabilities?.roots && listRoots) {
-    client.setRequestHandler(ListRootsRequestSchema, async () => ({
+    client.setRequestHandler("roots/list", async () => ({
       roots: await listRoots(),
     }));
   }

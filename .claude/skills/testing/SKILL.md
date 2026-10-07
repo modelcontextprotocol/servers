@@ -83,7 +83,7 @@ Each `connect` returns the `client` and a `close()`; call `close()` in
 
 ```ts
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 import { connect, contentOf, textOf, type Session } from "./harness.js";
 
 describe("echo, over the protocol", () => {

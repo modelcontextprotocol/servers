@@ -5,7 +5,7 @@
 // unknown id before replaying).
 
 import { describe, it, expect } from "vitest";
-import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
+import type { JSONRPCMessage } from "@modelcontextprotocol/server";
 import { InMemoryEventStore } from "../transports/in-memory-event-store.js";
 
 const message = (method: string): JSONRPCMessage => ({

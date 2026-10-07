@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 
 /**
  * Register a prompt with arguments
@@ -10,10 +10,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
  */
 export const registerArgumentsPrompt = (server: McpServer) => {
   // Prompt arguments
-  const promptArgsSchema = {
+  const promptArgsSchema = z.object({
     city: z.string().describe("Name of the city"),
     state: z.string().describe("Name of the state").optional(),
-  };
+  });
 
   // Register the prompt
   server.registerPrompt(

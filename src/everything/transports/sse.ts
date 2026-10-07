@@ -5,7 +5,7 @@
 // test can serve it on a free port and drive it with a real client, and each
 // app has its own session map. `startSseServer()` is what the launcher runs.
 
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { SSEServerTransport } from "@modelcontextprotocol/server-legacy/sse";
 import express, { type Express, type Response } from "express";
 import type { Server } from "node:http";
 import { createServer } from "../server/index.js";

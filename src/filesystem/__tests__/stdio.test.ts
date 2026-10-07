@@ -3,7 +3,7 @@
 // usage text, the exit on no usable directory) and the real
 // StdioServerTransport over in-memory streams, writing raw JSON-RPC lines the
 // way a client process would. Absorbs the former startup-validation.test.ts,
-// which spawned the build. Pins #4206, #4207 and #4195 as they stand on SDK 1.x.
+// which spawned the build. Pins #4206, #4207 and #4195 as they stand today.
 
 import fs from "fs/promises";
 import os from "os";
@@ -11,7 +11,7 @@ import path from "path";
 import { PassThrough } from "node:stream";
 import { pathToFileURL } from "url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { isEntryPoint, main, resolveAllowedDirectories } from "../index.js";
 import { makeTempDir, quietStderr } from "./helpers.js";
 
@@ -203,7 +203,7 @@ describe("startup", () => {
 });
 
 describe("the stdio transport", () => {
-  // #4195: SDK 1.x does not enforce the lifecycle, so a request before
+  // #4195: the SDK does not enforce the lifecycle, so a request before
   // initialize is answered normally.
   it("answers tools/list before initialize (#4195)", async () => {
     await session.start([dir]);

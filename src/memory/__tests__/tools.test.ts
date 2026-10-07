@@ -1,14 +1,14 @@
 // Characterization tests for the memory server's nine tools, driven through
 // an SDK Client over an in-memory transport (#4854). They pin what a client
-// sees today on SDK 1.x: the advertised tool list, each tool's text and
+// sees today: the advertised tool list, each tool's text and
 // structured results, and the error results. A test that pins a known bug
 // cites its issue, so the PR that fixes it has a test to change.
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 import { call, connect, makeTempGraph, textOf } from "./helpers.js";
 import type { Connection } from "./helpers.js";
 
-const DRAFT_07 = "http://json-schema.org/draft-07/schema#";
+const DRAFT_07 = "https://json-schema.org/draft/2020-12/schema";
 
 // JSON Schema fragments as the SDK emits them. Output schemas close every
 // object with additionalProperties: false; input schemas leave them open.
@@ -86,7 +86,10 @@ const readAnnotations = {
   idempotentHint: true,
   openWorldHint: false,
 };
-const execution = { taskSupport: "forbidden" };
+// SDK 1.x advertised `execution: { taskSupport: "forbidden" }` on every tool;
+// SDK v2 removed the experimental tasks layer and no longer sends it. Part 5
+// (#4852) decides what a tool advertises under the tasks extension.
+const execution = undefined;
 
 const expectedTools = [
   {
@@ -386,19 +389,17 @@ describe("memory tools over the protocol", () => {
     });
 
     it("offers no prompts", async () => {
-      await expect(client.listPrompts()).rejects.toThrow(/Method not found/);
+      // A raw request: SDK v2's listPrompts() answers an empty list without
+      // asking a server that does not advertise prompts.
+      await expect(
+        client.request({ method: "prompts/list", params: {} }),
+      ).rejects.toThrow(/Method not found/);
     });
 
-    it("reports an unknown tool as a tool error", async () => {
-      const result = await call(client, "no_such_tool");
-      expect(result).toEqual({
-        content: [
-          {
-            type: "text",
-            text: "MCP error -32602: Tool no_such_tool not found",
-          },
-        ],
-        isError: true,
+    it("rejects an unknown tool with -32602", async () => {
+      await expect(call(client, "no_such_tool")).rejects.toMatchObject({
+        code: -32602,
+        message: "Tool no_such_tool not found",
       });
     });
   });
@@ -499,7 +500,7 @@ describe("memory tools over the protocol", () => {
         content: [
           {
             type: "text",
-            text: "MCP error -32602: Input validation error: Invalid arguments for tool create_entities: Invalid input: expected array, received undefined at entities",
+            text: "Input validation error: Invalid arguments for tool create_entities: entities: Invalid input: expected array, received undefined",
           },
         ],
         isError: true,
@@ -873,7 +874,7 @@ describe("memory tools over the protocol", () => {
         content: [
           {
             type: "text",
-            text: "MCP error -32602: Input validation error: Invalid arguments for tool search_nodes: Invalid input: expected string, received number at query",
+            text: "Input validation error: Invalid arguments for tool search_nodes: query: Invalid input: expected string, received number",
           },
         ],
         isError: true,
@@ -888,7 +889,7 @@ describe("memory tools over the protocol", () => {
         content: [
           {
             type: "text",
-            text: "MCP error -32602: Input validation error: Invalid arguments for tool search_nodes: Too big: expected string to have <=2048 characters at query",
+            text: "Input validation error: Invalid arguments for tool search_nodes: query: Too big: expected string to have <=2048 characters",
           },
         ],
         isError: true,

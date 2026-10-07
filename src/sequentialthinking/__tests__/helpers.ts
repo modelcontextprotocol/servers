@@ -7,8 +7,7 @@
 // and type changes alone.
 
 import { expect } from "vitest";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { createServer } from "../index.js";
 
 export const TOOL_NAME = "sequentialthinking";

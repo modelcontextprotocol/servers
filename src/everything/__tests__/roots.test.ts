@@ -6,10 +6,7 @@
  * all driven by a test client that answers the server's `roots/list`.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  ListRootsRequestSchema,
-  type Root,
-} from "@modelcontextprotocol/sdk/types.js";
+import type { Root } from "@modelcontextprotocol/server";
 import {
   connect,
   contentOf,
@@ -32,7 +29,7 @@ async function connectWithRoots(answer: () => Root[]) {
   const s = await connect({
     capabilities: { roots: { listChanged: true } },
     setup: (client) =>
-      client.setRequestHandler(ListRootsRequestSchema, async () => {
+      client.setRequestHandler("roots/list", async () => {
         requests++;
         return { roots: answer() };
       }),
@@ -110,7 +107,7 @@ describe("roots sync after initialize", () => {
     session = s;
     await vi.waitFor(() =>
       expect(errorSpy).toHaveBeenCalledWith(
-        `Failed to request roots from client ${s.sessionId}: MCP error -32603: no roots for you`,
+        `Failed to request roots from client ${s.sessionId}: no roots for you`,
       ),
     );
     expect(logData(s)).toEqual([]);

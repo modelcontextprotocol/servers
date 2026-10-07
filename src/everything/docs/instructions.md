@@ -23,8 +23,6 @@ Registered only if your client declared the capability shown. Otherwise they are
 - `trigger-sampling-request`: `sampling`
 - `trigger-elicitation-request`: `elicitation.form`, or `elicitation` with no mode
 - `trigger-url-elicitation`: `elicitation.url`
-- `trigger-sampling-request-async`: `sampling` and `tasks.requests.sampling.createMessage`
-- `trigger-elicitation-request-async`: form-mode `elicitation` and `tasks.requests.elicitation.create`
 
 ## Operational Patterns
 

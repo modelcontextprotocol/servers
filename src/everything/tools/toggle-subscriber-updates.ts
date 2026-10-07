@@ -1,5 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { McpServer, CallToolResult } from "@modelcontextprotocol/server";
 import {
   beginSimulatedResourceUpdates,
   stopSimulatedResourceUpdates,
@@ -41,8 +40,8 @@ export const registerToggleSubscriberUpdatesTool = (server: McpServer) => {
   server.registerTool(
     name,
     config,
-    async (_args, extra): Promise<CallToolResult> => {
-      const sessionId = extra?.sessionId;
+    async (_args, ctx): Promise<CallToolResult> => {
+      const sessionId = ctx?.sessionId;
 
       let response: string;
       if (clients.has(sessionId)) {

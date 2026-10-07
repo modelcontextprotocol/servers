@@ -84,7 +84,7 @@ describe("dynamic resource templates", () => {
   it("rejects a URI that matches no resource or template", async () => {
     await expect(
       session.client.readResource({ uri: "demo://resource/nowhere" }),
-    ).rejects.toThrow("Resource demo://resource/nowhere not found");
+    ).rejects.toThrow("Resource not found: demo://resource/nowhere");
   });
 });
 

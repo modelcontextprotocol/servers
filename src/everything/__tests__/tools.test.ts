@@ -44,7 +44,7 @@ describe("echo", () => {
     const result = await call("echo", {});
     expect(result.isError).toBe(true);
     expect(textOf(contentOf(result)[0])).toMatch(
-      /^MCP error -32602: Input validation error: Invalid arguments for tool echo/,
+      /^Input validation error: Invalid arguments for tool echo/,
     );
   });
 });
@@ -175,7 +175,6 @@ describe("trigger-long-running-operation", () => {
         name: "trigger-long-running-operation",
         arguments: { duration: 0.03, steps: 3 },
       },
-      undefined,
       { onprogress: (p) => progress.push(p) },
     );
     expect(textOf(contentOf(result)[0])).toBe(
@@ -308,11 +307,10 @@ describe("get-resource-reference", () => {
 });
 
 describe("an unknown tool", () => {
-  it("is reported as a tool error", async () => {
-    const result = await call("no-such-tool");
-    expect(result.isError).toBe(true);
-    expect(textOf(contentOf(result)[0])).toBe(
-      "MCP error -32602: Tool no-such-tool not found",
-    );
+  it("is rejected with -32602", async () => {
+    await expect(call("no-such-tool")).rejects.toMatchObject({
+      code: -32602,
+      message: "Tool no-such-tool not found",
+    });
   });
 });

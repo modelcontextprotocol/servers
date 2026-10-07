@@ -5,14 +5,9 @@
 // subscribable resource. createServer() builds a server over a graph file so
 // tests can run it in-process; main() connects it to stdio, and runs only
 // when this file is the process entry point, so importing it starts nothing.
-
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import {
-  SubscribeRequestSchema,
-  UnsubscribeRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import { McpServer } from "@modelcontextprotocol/server";
+import type { Transport } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { promises as fs, realpathSync } from "fs";
 import type { FileHandle } from "fs/promises";
@@ -773,14 +768,14 @@ export function createServer(memoryFilePath: string): McpServer {
       title: "Create Entities",
       description:
         "Create multiple new entities in the knowledge graph. An entity whose name already exists, or repeats an earlier entity in the same call, is skipped and its observations are not added; the result lists the skipped names in `skipped`. Use add_observations to add observations to an existing entity.",
-      inputSchema: {
+      inputSchema: z.object({
         entities: z.array(EntitySchema),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         entities: z.array(EntitySchema),
         // Present only when at least one requested entity was skipped.
         skipped: z.array(z.string()).optional(),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -820,12 +815,12 @@ export function createServer(memoryFilePath: string): McpServer {
       title: "Create Relations",
       description:
         "Create multiple new relations between entities in the knowledge graph. Relations should be in active voice",
-      inputSchema: {
+      inputSchema: z.object({
         relations: z.array(RelationSchema),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         relations: z.array(RelationSchema),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -852,7 +847,7 @@ export function createServer(memoryFilePath: string): McpServer {
       title: "Add Observations",
       description:
         "Add new observations to existing entities in the knowledge graph",
-      inputSchema: {
+      inputSchema: z.object({
         observations: z.array(
           z.object({
             entityName: z
@@ -863,15 +858,15 @@ export function createServer(memoryFilePath: string): McpServer {
               .describe("An array of observation contents to add"),
           }),
         ),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         results: z.array(
           z.object({
             entityName: z.string(),
             addedObservations: z.array(z.string()),
           }),
         ),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -898,15 +893,15 @@ export function createServer(memoryFilePath: string): McpServer {
       title: "Delete Entities",
       description:
         "Delete multiple entities and their associated relations from the knowledge graph",
-      inputSchema: {
+      inputSchema: z.object({
         entityNames: z
           .array(z.string())
           .describe("An array of entity names to delete"),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         success: z.boolean(),
         message: z.string(),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -936,7 +931,7 @@ export function createServer(memoryFilePath: string): McpServer {
       title: "Delete Observations",
       description:
         "Delete specific observations from entities in the knowledge graph",
-      inputSchema: {
+      inputSchema: z.object({
         deletions: z.array(
           z.object({
             entityName: z
@@ -947,11 +942,11 @@ export function createServer(memoryFilePath: string): McpServer {
               .describe("An array of observations to delete"),
           }),
         ),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         success: z.boolean(),
         message: z.string(),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -987,15 +982,15 @@ export function createServer(memoryFilePath: string): McpServer {
     {
       title: "Delete Relations",
       description: "Delete multiple relations from the knowledge graph",
-      inputSchema: {
+      inputSchema: z.object({
         relations: z
           .array(RelationSchema)
           .describe("An array of relations to delete"),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         success: z.boolean(),
         message: z.string(),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -1024,11 +1019,11 @@ export function createServer(memoryFilePath: string): McpServer {
     {
       title: "Read Graph",
       description: "Read the entire knowledge graph",
-      inputSchema: {},
-      outputSchema: {
+      inputSchema: z.object({}),
+      outputSchema: z.object({
         entities: z.array(EntitySchema),
         relations: z.array(RelationSchema),
-      },
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -1053,13 +1048,13 @@ export function createServer(memoryFilePath: string): McpServer {
     {
       title: "Search Nodes",
       description: "Search for nodes in the knowledge graph based on a query",
-      inputSchema: {
+      inputSchema: z.object({
         query: SearchNodesQuerySchema,
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         entities: z.array(EntitySchema),
         relations: z.array(RelationSchema),
-      },
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -1084,15 +1079,15 @@ export function createServer(memoryFilePath: string): McpServer {
     {
       title: "Open Nodes",
       description: "Open specific nodes in the knowledge graph by their names",
-      inputSchema: {
+      inputSchema: z.object({
         names: z
           .array(z.string())
           .describe("An array of entity names to retrieve"),
-      },
-      outputSchema: {
+      }),
+      outputSchema: z.object({
         entities: z.array(EntitySchema),
         relations: z.array(RelationSchema),
-      },
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -1151,11 +1146,11 @@ export function registerKnowledgeGraphSubscriptions(
   resourceSubscribers: Set<string>,
 ) {
   server.server.registerCapabilities({ resources: { subscribe: true } });
-  server.server.setRequestHandler(SubscribeRequestSchema, async (request) => {
+  server.server.setRequestHandler("resources/subscribe", async (request) => {
     resourceSubscribers.add(request.params.uri);
     return {};
   });
-  server.server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
+  server.server.setRequestHandler("resources/unsubscribe", async (request) => {
     resourceSubscribers.delete(request.params.uri);
     return {};
   });

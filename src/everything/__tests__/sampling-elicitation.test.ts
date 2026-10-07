@@ -7,16 +7,13 @@
  * server asked and what the tool then returned.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  CreateMessageRequestSchema,
-  ElicitRequestSchema,
-  ErrorCode,
-  McpError,
-  type ClientCapabilities,
-  type CreateMessageRequest,
-  type ElicitRequest,
-  type ElicitResult,
-} from "@modelcontextprotocol/sdk/types.js";
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
+import type {
+  ClientCapabilities,
+  CreateMessageRequest,
+  ElicitRequest,
+  ElicitResult,
+} from "@modelcontextprotocol/server";
 import { __resetIssuedErrorPathElicitations } from "../tools/trigger-url-elicitation.js";
 import {
   connect,
@@ -40,7 +37,7 @@ describe("trigger-sampling-request", () => {
     session = await connect({
       capabilities: { sampling: {} },
       setup: (client) =>
-        client.setRequestHandler(CreateMessageRequestSchema, async (req) => {
+        client.setRequestHandler("sampling/createMessage", async (req) => {
           asked.push(req.params);
           return {
             role: "assistant",
@@ -91,7 +88,7 @@ describe("trigger-sampling-request", () => {
     session = await connect({
       capabilities: { sampling: {} },
       setup: (client) =>
-        client.setRequestHandler(CreateMessageRequestSchema, async (req) => {
+        client.setRequestHandler("sampling/createMessage", async (req) => {
           maxTokens = req.params.maxTokens;
           return {
             role: "assistant",
@@ -111,8 +108,11 @@ describe("trigger-sampling-request", () => {
     session = await connect({
       capabilities: { sampling: {} },
       setup: (client) =>
-        client.setRequestHandler(CreateMessageRequestSchema, async () => {
-          throw new McpError(ErrorCode.InvalidRequest, "user rejected");
+        client.setRequestHandler("sampling/createMessage", async () => {
+          throw new ProtocolError(
+            ProtocolErrorCode.InvalidRequest,
+            "user rejected",
+          );
         }),
     });
     const result = await session.client.callTool({
@@ -125,7 +125,7 @@ describe("trigger-sampling-request", () => {
       content: [
         {
           type: "text",
-          text: "MCP error -32600: MCP error -32600: user rejected",
+          text: "user rejected",
         },
       ],
     });
@@ -143,7 +143,7 @@ async function connectElicitation(
     ...options,
     capabilities,
     setup: (client) =>
-      client.setRequestHandler(ElicitRequestSchema, async (req) => {
+      client.setRequestHandler("elicitation/create", async (req) => {
         asked.push(req.params);
         return answer(req);
       }),
@@ -476,12 +476,12 @@ describe("trigger-url-elicitation", () => {
     const { s, asked } = await connectElicitation(() => ({ action: "accept" }));
     session = s;
     const error = await errorPathRejection(s);
-    expect(error).toBeInstanceOf(McpError);
-    const mcpError = error as McpError;
+    expect(error).toBeInstanceOf(ProtocolError);
+    const mcpError = error as ProtocolError;
     expect(mcpError.code).toBe(-32042);
     // The SDK prefixes the code twice on the client side.
     expect(mcpError.message).toBe(
-      "MCP error -32042: MCP error -32042: This request requires browser-based authorization.",
+      "This request requires browser-based authorization.",
     );
     expect(mcpError.data).toEqual({
       elicitations: [
@@ -510,7 +510,7 @@ describe("trigger-url-elicitation", () => {
 
     // The one-shot marker was consumed, so a third call errors again.
     expect(await errorPathRejection(s, { elicitationId: "x" })).toBeInstanceOf(
-      McpError,
+      ProtocolError,
     );
   });
 
@@ -521,7 +521,7 @@ describe("trigger-url-elicitation", () => {
     // A different requested id is a different call: it errors.
     expect(
       await errorPathRejection(s, { elicitationId: "other" }),
-    ).toBeInstanceOf(McpError);
+    ).toBeInstanceOf(ProtocolError);
     // The original call (no requested id) is recognized as the retry.
     const retry = await callUrlTool(s, { errorPath: true });
     expect(retry.isError).toBeUndefined();

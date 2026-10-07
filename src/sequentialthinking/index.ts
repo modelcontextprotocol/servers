@@ -8,9 +8,9 @@
 
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import { McpServer } from "@modelcontextprotocol/server";
+import type { Transport } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { SequentialThinkingServer } from "./lib.js";
 import { SERVER_VERSION } from "./version.js";
@@ -100,7 +100,7 @@ You should:
 9. Repeat the process until satisfied with the solution
 10. Provide a single, ideally correct answer as the final output
 11. Only set nextThoughtNeeded to false when truly done and a satisfactory answer is reached`,
-      inputSchema: {
+      inputSchema: z.object({
         thought: z.string().describe("Your current thinking step"),
         nextThoughtNeeded: coercedBoolean.describe(
           "Whether another thought step is needed",
@@ -136,7 +136,7 @@ You should:
         needsMoreThoughts: coercedBoolean
           .optional()
           .describe("If more thoughts are needed"),
-      },
+      }),
       annotations: {
         // Every call appends to the server's in-memory thought history, and a
         // call with both branchFromThought and branchId also appends to that
@@ -146,13 +146,13 @@ You should:
         idempotentHint: false,
         openWorldHint: false,
       },
-      outputSchema: {
+      outputSchema: z.object({
         thoughtNumber: z.number(),
         totalThoughts: z.number(),
         nextThoughtNeeded: z.boolean(),
         branches: z.array(z.string()),
         thoughtHistoryLength: z.number(),
-      },
+      }),
     },
     async (args) => {
       const result = thinkingServer.processThought(args);
