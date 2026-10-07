@@ -88,3 +88,14 @@ export const syncRoots = async (server: McpServer, sessionId?: string) => {
     return roots.get(sessionId);
   }
 };
+
+/**
+ * Drop a session's cached roots list.
+ *
+ * `syncRoots` is the only writer of `roots`, and a session that disconnects
+ * without this leaves its entry there for the life of the process. Call it
+ * from the transport's `cleanup(sessionId)`.
+ */
+export const removeRootsSession = (sessionId?: string) => {
+  roots.delete(sessionId);
+};

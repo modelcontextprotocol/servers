@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createServer } from '../server/index.js';
+import { roots } from '../server/roots.js';
 
 describe('Server Factory', () => {
   describe('createServer', () => {
@@ -14,6 +15,18 @@ describe('Server Factory', () => {
       const { cleanup } = createServer();
 
       expect(typeof cleanup).toBe('function');
+    });
+
+    it('should drop a session from the roots cache on cleanup', () => {
+      const { cleanup } = createServer();
+      const sessionId = 'session-under-test';
+
+      roots.set(sessionId, [{ uri: 'file:///tmp', name: 'tmp' }]);
+      expect(roots.has(sessionId)).toBe(true);
+
+      cleanup(sessionId);
+
+      expect(roots.has(sessionId)).toBe(false);
     });
 
     it('should create an McpServer instance', () => {
