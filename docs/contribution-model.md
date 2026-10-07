@@ -65,10 +65,11 @@ doing in it is tracked by an issue.
 
 ### Not touched by the sweep
 
-- **Dependabot PRs.** They are the temporary exception in `AGENTS.md` and are
-  retired by
-  [#4874](https://github.com/modelcontextprotocol/servers/issues/4874), which
-  replaces them with issue-filing sweeps.
+- **Dependabot PRs.** They were a temporary exception in `AGENTS.md`, retired
+  by [#4874](https://github.com/modelcontextprotocol/servers/issues/4874),
+  which replaces them with issue-filing sweeps. Its PR records which sweep
+  takes over each Dependabot PR that was still open, and they are closed with
+  that pointer when it merges.
 - **Maintainer-authored PRs.** The policy does not close them. Their authors
   decide, one by one, whether each is retargeted at `v2/main` with an issue to
   close (as every PR must be) or closed. At the time of writing seven of the nine
@@ -156,8 +157,8 @@ servers, and the **Archived** pointer for a PR against a server that moved to
 
 The pass is complete when:
 
-- every open PR is maintainer-authored, a Dependabot PR, or named in the report
-  as left open by an issue that owns it;
+- every open PR is maintainer-authored, or named in the report as left open
+  by an issue that owns it;
 - every closed PR marked for harvest points, in its close comment, at an open or
   closed issue that links back to it;
 - every harvest issue carries `v2` and exactly one type label, plus its
