@@ -194,10 +194,10 @@ src/everything
     - `GET /sse` to establish an SSE connection per session.
     - `POST /message` for client messages.
   - Manages multiple connected clients via a transport map.
-  - Starts an `SSEServerTransport`, created the server via `createServer()`, and connects it to a new transport.
+  - Starts an `SSEServerTransport` (from the frozen `@modelcontextprotocol/server-legacy/sse` bridge), created the server via `createServer()`, and connects it to a new transport.
   - On server disconnect, calls `cleanup()` to remove any live intervals.
 - `streamableHttp.ts`
-  - Express server exposing a single `/mcp` endpoint for POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `StreamableHTTPServerTransport`.
+  - Express server exposing a single `/mcp` endpoint for POST (JSON‑RPC), GET (SSE stream), and DELETE (session termination) using `NodeStreamableHTTPServerTransport` from `@modelcontextprotocol/node`.
   - Uses an `InMemoryEventStore` for resumable sessions and tracks transports by `sessionId`.
   - Answers a request for an unknown or ended `Mcp-Session-Id` with `404 Not Found`, and closes every open session on `SIGINT`.
   - Connects a fresh server instance on initialization POST and reuses the transport for subsequent requests.
