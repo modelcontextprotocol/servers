@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -728,7 +728,7 @@ requires-dist = [
     { name = "httpx", extras = ["socks"], specifier = ">=0.27" },
     { name = "markdownify", specifier = ">=0.13.1" },
     { name = "mcp", specifier = ">=1.29.0,<2" },
-    { name = "protego", specifier = ">=0.3.1" },
+    { name = "protego", specifier = ">=0.6.2" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "readabilipy", specifier = ">=0.2.0" },
     { name = "requests", specifier = ">=2.32.3" },
@@ -772,11 +772,11 @@ wheels = [
 
 [[package]]
 name = "protego"
-version = "0.3.1"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8a/12/cab9fa77ff4e9e444a5eb5480db4b4f872c03aa079145804aa054be377bc/Protego-0.3.1.tar.gz", hash = "sha256:e94430d0d25cbbf239bc849d86c5e544fbde531fcccfa059953c7da344a1712c", size = 3246145, upload-time = "2024-04-05T10:08:54.884Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7a/d9/5026b9e75db1172f02441a84eaf42efb199b4cea14dda7651a620d1acd40/protego-0.7.0.tar.gz", hash = "sha256:2c032d9736a1f4f0c4318f3558353ae34da5cd038f1a5e064ded7548df315e5a", size = 3144321, upload-time = "2026-09-21T10:54:00.107Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/74/ef/ece78585a5a189d8cc2b4c2d2b92a0dc025f156a6501159b026472ebbedc/Protego-0.3.1-py2.py3-none-any.whl", hash = "sha256:2fbe8e9b7a7dbc5016a932b14c98d236aad4c29290bbe457b8d2779666ef7a41", size = 8474, upload-time = "2024-04-05T10:08:53.5Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/20/e4382a85e4cf4746d11746481f83360b990165725dd36ba73d55e029e6a9/protego-0.7.0-py3-none-any.whl", hash = "sha256:944638aaee608f6c83fcad442695f3f9381a60be8d5007248f46b00f201fa5fc", size = 13714, upload-time = "2026-09-21T10:53:58.812Z" },
 ]
 
 [[package]]
