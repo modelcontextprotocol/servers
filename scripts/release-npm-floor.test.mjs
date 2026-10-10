@@ -11,8 +11,12 @@
 // As in release-dist-tag.test.mjs, these tests read the step out of the
 // workflow file and run THAT, with `npm` on PATH replaced by a stub that
 // reports a chosen version. They also pin the job's shape: an exact Node
-// pin, the check ahead of the download and the publish, and no step that
-// installs a package.
+// pin, the check ahead of the download and the publish, no step that
+// installs a package, and the `./` that makes `npm publish` read the tarball
+// as a local file. Without it npm reads `release-artifact/x.tgz` as GitHub
+// `owner/repo` shorthand and tries to clone it over SSH: the MCP Inspector's
+// first release through the same split publish job failed exactly that way
+// (modelcontextprotocol/inspector#2551).
 //
 // The step's shell is bash, so those tests are skipped where there is none.
 // Run via `npm run test:scripts`.
@@ -159,4 +163,28 @@ test("publish-npm installs no package next to the OIDC credential", () => {
       `publish-npm step \`${step.name}\` installs or runs a fetched package`,
     );
   }
+});
+
+test("publish-npm hands npm the tarball as a ./ path, not a bare dir/file", () => {
+  const step = publishSteps().find((s) => s.name === "Publish package");
+  assert.ok(step, "publish-npm has no `Publish package` step");
+  const commands = step.run
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("#"))
+    .join("\n");
+  assert.match(
+    commands,
+    /^\s*set -- \.\/release-artifact\/\*\.tgz\s*$/m,
+    "the publish step must resolve the tarball as ./release-artifact/*.tgz",
+  );
+  assert.doesNotMatch(
+    commands,
+    /set -- release-artifact\//,
+    "a bare release-artifact/ path makes npm read the tarball as a GitHub repo",
+  );
+  assert.match(
+    commands,
+    /npm publish "\$1"/,
+    "npm publish must be given the ./ path resolved above",
+  );
 });
