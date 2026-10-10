@@ -98,6 +98,18 @@ def test_git_add_all_files(test_repository):
     assert "all_file.txt" in staged_files
     assert result == "Files staged successfully"
 
+def test_git_add_all_skips_git_directory(test_repository):
+    # Regression for #628: index.add walked into .git and staged its contents.
+    file_path = Path(test_repository.working_dir) / "all_file.txt"
+    file_path.write_text("adding all")
+
+    result = git_add(test_repository, ["."])
+
+    staged = [path for path, _stage in test_repository.index.entries]
+    assert "all_file.txt" in staged
+    assert not any(".git/" in path for path in staged)
+    assert result == "Files staged successfully"
+
 def test_git_add_specific_files(test_repository):
     file1 = Path(test_repository.working_dir) / "file1.txt"
     file2 = Path(test_repository.working_dir) / "file2.txt"
