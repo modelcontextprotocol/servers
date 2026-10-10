@@ -233,7 +233,9 @@ export async function validatePath(
   );
   if (!isAllowed) {
     throw new Error(
-      `Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(", ")}`,
+      allowedDirectories.length === 0
+        ? `Access denied - no allowed directories: the client exposes no valid roots (${absolute})`
+        : `Access denied - path outside allowed directories: ${absolute} not in ${allowedDirectories.join(", ")}`,
     );
   }
 
