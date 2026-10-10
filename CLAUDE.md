@@ -4,7 +4,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Project Overview
 
-Official MCP reference server implementations. This is an npm workspaces monorepo containing 7 servers (4 TypeScript, 3 Python) under `src/`. Each server is a standalone package published to npm or PyPI.
+Official MCP reference server implementations. This is an npm workspaces monorepo containing 6 servers (3 TypeScript, 3 Python) under `src/`. Each server is a standalone package published to npm or PyPI.
 
 ## Monorepo Structure
 
@@ -13,7 +13,6 @@ src/
   everything/          TS  @modelcontextprotocol/server-everything    (reference server, all MCP features)
   filesystem/          TS  @modelcontextprotocol/server-filesystem    (file operations with Roots access control)
   memory/              TS  @modelcontextprotocol/server-memory        (knowledge graph persistence)
-  sequentialthinking/  TS  @modelcontextprotocol/server-sequential-thinking  (step-by-step reasoning)
   fetch/               Py  mcp-server-fetch                           (web content fetching)
   git/                 Py  mcp-server-git                             (git repository operations)
   time/                Py  mcp-server-time                            (timezone queries and conversion)
