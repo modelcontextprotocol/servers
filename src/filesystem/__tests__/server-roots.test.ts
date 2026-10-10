@@ -541,6 +541,94 @@ describe("roots/list_changed", () => {
     );
   });
 
+  it("releases a call queued behind a runtime refresh that fails (#5101)", async () => {
+    await fs.writeFile(path.join(rootDir, "a.txt"), "a");
+    let calls = 0;
+    let failUpdate!: () => void;
+    const updateHeld = new Promise<void>((resolve) => (failUpdate = resolve));
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        calls += 1;
+        if (calls === 1) return [rootOf(rootDir)];
+        await updateHeld;
+        throw new Error("gone");
+      },
+    });
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([rootDir]),
+    );
+
+    await client.sendRootsListChanged();
+    await vi.waitFor(() => expect(calls).toBe(2));
+    // Queued while the refresh is still pending, before it fails.
+    let settled = false;
+    const pending = call(client, "list_directory", { path: rootDir }).then(
+      (result) => {
+        settled = true;
+        return result;
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(settled).toBe(false);
+
+    failUpdate();
+    const result = await pending;
+    expect(result.isError).toBeFalsy();
+    expect(textOf(result)).toBe("[FILE] a.txt");
+    expect(stderr).toHaveBeenCalledWith(
+      "Failed to request roots from client:",
+      expect.stringContaining("gone"),
+    );
+  });
+
+  // A client may announce a newer change while answering an older refresh's
+  // roots/list; the older refresh must not replace the newer one's barrier.
+  it("keeps the newest barrier when answering a refresh announces another change (#5101)", async () => {
+    let calls = 0;
+    let announce: () => Promise<void> = async () => {};
+    let releaseNewest!: () => void;
+    const newestHeld = new Promise<void>(
+      (resolve) => (releaseNewest = resolve),
+    );
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        calls += 1;
+        if (calls === 1) return [rootOf(rootDir)];
+        if (calls === 2) {
+          // Discarded on purpose: the server handles the notification on its
+          // own schedule, and the test waits for its roots/list instead.
+          void announce();
+          return [rootOf(rootDir)];
+        }
+        await newestHeld; // the newest change withdraws the root, slowly
+        return [];
+      },
+    });
+    announce = () => client.sendRootsListChanged();
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([rootDir]),
+    );
+
+    await client.sendRootsListChanged();
+    await vi.waitFor(() => expect(calls).toBe(3));
+    let settled = false;
+    const pending = call(client, "list_directory", { path: rootDir }).then(
+      (result) => {
+        settled = true;
+        return result;
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(settled).toBe(false);
+
+    releaseNewest();
+    expect(textOf(await pending)).toMatch(
+      /^Access denied - no allowed directories/,
+    );
+  });
+
   it("logs and keeps the current directories when the re-fetch fails", async () => {
     let fail = false;
     const { client } = await connectTracked([], {

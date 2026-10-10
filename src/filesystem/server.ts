@@ -194,10 +194,13 @@ export function createServer(
   // roots are being fetched is checked against the roots that come back rather
   // than the ones being replaced: the command-line directories while the
   // initial roots/list is outstanding (#3204), or a root the client has just
-  // withdrawn while a roots/list_changed refresh is (#5101). The initial load
-  // (oninitialized, which the SDK runs before any request sent after
-  // notifications/initialized) and every refresh replace it, and a waiting
-  // call follows each replacement until it stops changing (#5097).
+  // withdrawn while a roots/list_changed refresh is pending (#5101). The
+  // initial load (oninitialized, which the SDK runs before any request sent
+  // after notifications/initialized) and every refresh replace it, and a
+  // waiting call follows each replacement until it stops changing (#5097).
+  // Each one is installed before its roots/list is sent: a transport that
+  // delivers that request synchronously can let the client announce a newer
+  // change at once, and that newer barrier must not be overwritten by this one.
   let initialization: Promise<void> = Promise.resolve();
   const registerTool = server.registerTool.bind(server);
   server.registerTool = ((
@@ -810,7 +813,9 @@ export function createServer(
     RootsListChangedNotificationSchema,
     async () => {
       const generation = ++rootsGeneration;
-      const refresh = (async () => {
+      // Deferred a microtask, so the barrier below is installed before
+      // roots/list is sent (see `initialization` above).
+      const refresh = Promise.resolve().then(async () => {
         try {
           // Request the updated roots list from the client
           const response = await server.server.listRoots();
@@ -824,7 +829,7 @@ export function createServer(
             error instanceof Error ? error.message : String(error),
           );
         }
-      })();
+      });
       // Tool calls wait for this refresh, so none runs against a root the
       // client has just withdrawn while its answer is pending (#5101).
       initialization = refresh;
@@ -833,9 +838,10 @@ export function createServer(
   );
 
   // Handles post-initialization setup, specifically checking for and fetching
-  // MCP roots. Tool calls wait for it (see `initialization` above).
+  // MCP roots. Tool calls wait for it (see `initialization` above), which is
+  // installed before initialize() sends its roots/list.
   server.server.oninitialized = () => {
-    initialization = initialize();
+    initialization = Promise.resolve().then(initialize);
   };
 
   async function initialize(): Promise<void> {
