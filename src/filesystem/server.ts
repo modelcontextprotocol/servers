@@ -169,6 +169,11 @@ export function createServer(
   options: ServerOptions = {},
 ): McpServer {
   let allowedDirectories = [...initialAllowedDirectories];
+  // True once the client's roots have replaced the command-line directories.
+  // From then on a roots update replaces them even with none, so a client that
+  // withdraws its roots withdraws the server's access too (#5094). Until then an
+  // update with no valid roots keeps the command-line directories.
+  let rootsInForce = false;
 
   const server = new McpServer({
     name: "secure-filesystem-server",
@@ -760,8 +765,14 @@ export function createServer(
     const validatedRootDirs = await getValidRootDirectories(requestedRoots);
     if (validatedRootDirs.length > 0) {
       allowedDirectories = [...validatedRootDirs];
+      rootsInForce = true;
       console.error(
         `Updated allowed directories from MCP roots: ${validatedRootDirs.length} valid directories`,
+      );
+    } else if (rootsInForce) {
+      allowedDirectories = [];
+      console.error(
+        "No valid root directories provided by client; access revoked until it exposes a root again",
       );
     } else {
       console.error("No valid root directories provided by client");
