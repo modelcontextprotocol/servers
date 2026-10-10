@@ -490,8 +490,10 @@ describe("roots/list_changed", () => {
       ),
     );
 
-    releaseInitial();
+    // Asked while the initial roots/list is still unanswered: the failed update
+    // releases waiting calls instead of leaving them blocked on it.
     expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
+    releaseInitial();
   });
 
   it("logs and keeps the current directories when the re-fetch fails", async () => {
