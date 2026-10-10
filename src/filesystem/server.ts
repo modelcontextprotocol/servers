@@ -177,6 +177,12 @@ export function createServer(
   // withdraws its roots withdraws the server's access too (#5094). Until then an
   // update with no valid roots keeps the command-line directories.
   let rootsInForce = false;
+  // Each roots refresh (the initial load and every roots/list_changed) takes
+  // the next generation before it asks for roots. The SDK runs notification
+  // handlers without waiting for earlier ones, so answers can come back out of
+  // order; one is applied only if no newer refresh has started since, so a
+  // stale answer cannot undo a newer update, such as a revocation (#5097).
+  let rootsGeneration = 0;
 
   const server = new McpServer({
     name: "secure-filesystem-server",
@@ -190,6 +196,12 @@ export function createServer(
   // command-line directories (#3204). It is replaced in oninitialized, which
   // the SDK runs before any request sent after notifications/initialized.
   let initialization: Promise<void> = Promise.resolve();
+  // True from the initial roots/list until a refresh's answer has been
+  // applied or the newest refresh has failed. A roots/list_changed that
+  // overtakes the initial load while this holds replaces `initialization`, so
+  // waiting tool calls keep waiting for the refresh that will actually apply
+  // rather than running against the command-line directories (#5097).
+  let initialRootsPending = false;
   const registerTool = server.registerTool.bind(server);
   server.registerTool = ((
     name: string,
@@ -197,7 +209,11 @@ export function createServer(
     handler: (...args: unknown[]) => unknown,
   ) =>
     registerTool(name, config, (async (...args: unknown[]) => {
-      await initialization;
+      let awaited: Promise<void>;
+      do {
+        awaited = initialization;
+        await awaited;
+      } while (awaited !== initialization);
       return handler(...args);
     }) as never)) as typeof server.registerTool;
 
@@ -763,9 +779,19 @@ export function createServer(
     },
   );
 
-  // Updates allowed directories based on MCP client roots
-  async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
+  // Updates allowed directories based on MCP client roots, unless a newer
+  // refresh started after this one's `generation` was taken (#5097).
+  async function updateAllowedDirectoriesFromRoots(
+    requestedRoots: Root[],
+    generation: number,
+  ) {
     const validatedRootDirs = await getValidRootDirectories(requestedRoots);
+    if (generation !== rootsGeneration) {
+      console.error(
+        "Discarded a stale roots/list answer: a newer roots update has started",
+      );
+      return;
+    }
     if (validatedRootDirs.length > 0) {
       allowedDirectories = [...validatedRootDirs];
       rootsInForce = true;
@@ -786,19 +812,27 @@ export function createServer(
   server.server.setNotificationHandler(
     RootsListChangedNotificationSchema,
     async () => {
-      try {
-        // Request the updated roots list from the client
-        const response = await server.server.listRoots();
-        /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the implicit else cannot run */
-        if (response && "roots" in response) {
-          await updateAllowedDirectoriesFromRoots(response.roots);
+      const generation = ++rootsGeneration;
+      const refresh = (async () => {
+        try {
+          // Request the updated roots list from the client
+          const response = await server.server.listRoots();
+          /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the implicit else cannot run */
+          if (response && "roots" in response) {
+            await updateAllowedDirectoriesFromRoots(response.roots, generation);
+          }
+        } catch (error) {
+          console.error(
+            "Failed to request roots from client:",
+            error instanceof Error ? error.message : String(error),
+          );
+        } finally {
+          if (generation === rootsGeneration) initialRootsPending = false;
         }
-      } catch (error) {
-        console.error(
-          "Failed to request roots from client:",
-          error instanceof Error ? error.message : String(error),
-        );
-      }
+      })();
+      // Overtaking the initial load: tool calls wait for this refresh instead.
+      if (initialRootsPending) initialization = refresh;
+      await refresh;
     },
   );
 
@@ -812,11 +846,13 @@ export function createServer(
     const clientCapabilities = server.server.getClientCapabilities();
 
     if (clientCapabilities?.roots) {
+      const generation = ++rootsGeneration;
+      initialRootsPending = true;
       try {
         const response = await server.server.listRoots();
         /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the else cannot run */
         if (response && "roots" in response) {
-          await updateAllowedDirectoriesFromRoots(response.roots);
+          await updateAllowedDirectoriesFromRoots(response.roots, generation);
         } else {
           console.error(
             "Client returned no roots set, keeping current settings",
@@ -827,6 +863,8 @@ export function createServer(
           "Failed to request initial roots from client:",
           error instanceof Error ? error.message : String(error),
         );
+      } finally {
+        if (generation === rootsGeneration) initialRootsPending = false;
       }
     } else {
       if (allowedDirectories.length > 0) {
