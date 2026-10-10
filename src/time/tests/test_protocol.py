@@ -241,6 +241,7 @@ async def test_empty_local_timezone_override_is_treated_as_absent() -> None:
         "Not/AZone",  # unknown name: ZoneInfoNotFoundError
         "America",  # a tzdata directory, not a zone: OSError
         "../etc/passwd",  # outside TZPATH: ValueError
+        "europe/warsaw",  # not the exact key, on any filesystem (#5060)
     ],
 )
 async def test_invalid_local_timezone_fails_before_the_transport_opens(

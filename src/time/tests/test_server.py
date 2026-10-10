@@ -4,7 +4,12 @@ import pytest
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
-from mcp_server_time.server import TimeServer, get_local_tz
+from mcp_server_time.server import (
+    TimeServer,
+    get_local_tz,
+    get_zoneinfo,
+    known_timezones,
+)
 
 
 @pytest.mark.parametrize(
@@ -525,3 +530,17 @@ def test_get_local_tz_various_timezones(mock_get_localzone, timezone_name):
     result = get_local_tz()
     assert str(result) == timezone_name
     assert isinstance(result, ZoneInfo)
+
+
+def test_get_zoneinfo_rejects_a_key_the_tz_database_does_not_list():
+    # #5060: on a case-insensitive filesystem `ZoneInfo` resolves a key that
+    # is not an exact IANA name. Simulate that on any platform: `ZoneInfo`
+    # accepts "Europe/Warsaw", but the database's key list does not hold it.
+    without_warsaw = known_timezones() - {"Europe/Warsaw"}
+    with patch("mcp_server_time.server.known_timezones", return_value=without_warsaw):
+        with pytest.raises(
+            MCPError,
+            match="Invalid timezone: 'No time zone found with key Europe/Warsaw'",
+        ):
+            get_zoneinfo("Europe/Warsaw")
+    assert str(get_zoneinfo("Europe/Warsaw")) == "Europe/Warsaw"
