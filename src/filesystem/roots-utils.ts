@@ -8,17 +8,21 @@ import { fileURLToPath } from "url";
 /**
  * Converts a root URI to a normalized directory path with basic security validation.
  * @param rootUri - File URI (file://...) or plain directory path
- * @returns Promise resolving to validated path or null if invalid
+ * @returns Promise resolving to original and resolved paths, or null if invalid
  */
-async function parseRootUri(rootUri: string): Promise<string | null> {
+async function parseRootUri(rootUri: string): Promise<string[] | null> {
   try {
     const rawPath = rootUri.startsWith('file://') ? fileURLToPath(rootUri) : rootUri;
     const expandedPath = rawPath.startsWith('~/') || rawPath === '~' 
       ? path.join(os.homedir(), rawPath.slice(1)) 
       : rawPath;
     const absolutePath = path.resolve(expandedPath);
+    const normalizedOriginal = normalizePath(absolutePath);
     const resolvedPath = await fs.realpath(absolutePath);
-    return normalizePath(resolvedPath);
+    const normalizedResolved = normalizePath(resolvedPath);
+    return normalizedOriginal === normalizedResolved
+      ? [normalizedResolved]
+      : [normalizedOriginal, normalizedResolved];
   } catch {
     return null; // Path doesn't exist or other error
   }
@@ -53,23 +57,31 @@ export async function getValidRootDirectories(
   requestedRoots: readonly Root[]
 ): Promise<string[]> {
   const validatedDirectories: string[] = [];
+  const seenDirectories = new Set<string>();
   
   for (const requestedRoot of requestedRoots) {
-    const resolvedPath = await parseRootUri(requestedRoot.uri);
-    if (!resolvedPath) {
+    const rootPaths = await parseRootUri(requestedRoot.uri);
+    if (!rootPaths) {
       console.error(formatDirectoryError(requestedRoot.uri, undefined, 'invalid path or inaccessible'));
       continue;
     }
     
-    try {
-      const stats: Stats = await fs.stat(resolvedPath);
-      if (stats.isDirectory()) {
-        validatedDirectories.push(resolvedPath);
-      } else {
-        console.error(formatDirectoryError(resolvedPath, undefined, 'non-directory root'));
+    for (const rootPath of rootPaths) {
+      if (seenDirectories.has(rootPath)) {
+        continue;
       }
-    } catch (error) {
-      console.error(formatDirectoryError(resolvedPath, error));
+
+      try {
+        const stats: Stats = await fs.stat(rootPath);
+        if (stats.isDirectory()) {
+          validatedDirectories.push(rootPath);
+          seenDirectories.add(rootPath);
+        } else {
+          console.error(formatDirectoryError(rootPath, undefined, 'non-directory root'));
+        }
+      } catch (error) {
+        console.error(formatDirectoryError(rootPath, error));
+      }
     }
   }
   
