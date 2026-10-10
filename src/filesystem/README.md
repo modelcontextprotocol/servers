@@ -255,7 +255,7 @@ Note: all directories must be mounted to `/projects` by default.
 }
 ```
 
-On Windows, use `cmd /c` to launch `npx`:
+On Windows, use `cmd /c` to launch `npx`. Keep `npx` in the `args` list as shown below when Node.js is installed in the default `C:\Program Files\nodejs` directory:
 
 ```json
 {
