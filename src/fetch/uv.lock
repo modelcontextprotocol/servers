@@ -714,7 +714,7 @@ wheels = [
 
 [[package]]
 name = "mcp-server-fetch"
-version = "0.6.3"
+version = "2026.10.10"
 source = { editable = "." }
 dependencies = [
     { name = "httpx", extra = ["socks"] },
