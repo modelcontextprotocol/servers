@@ -568,5 +568,9 @@ ACTION=actions/checkout TAG=v6.1.0
 echo "uses: $ACTION@$(gh api "repos/$ACTION/commits/$TAG" --jq .sha) # $TAG"
 ```
 
-The same goes for the npm CLI the publish job installs (`npm@x.y.z` in
-`release.yml`): it is pinned exactly, and bumped deliberately.
+The same goes for the Node release the npm publish job runs (`node-version` in
+`publish-npm`, `release.yml`): it is pinned exactly, because its bundled npm is
+the CLI that publishes, and it stays on a release whose bundled npm is 11.5.1
+or later (the OIDC floor; the job checks it before publishing). Bump it
+deliberately, from a Node release whose npm version you have read in
+`https://nodejs.org/dist/index.json`.

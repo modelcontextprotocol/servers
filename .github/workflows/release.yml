@@ -213,18 +213,33 @@ jobs:
     steps:
       # No `cache: npm`: there is no checkout, so no lockfile to key it on, and
       # nothing here installs dependencies to cache.
+      # OIDC trusted publishing requires npm >= 11.5.1. Node 22 bundles npm
+      # 10.x, so this job runs Node 24, whose bundled npm meets the floor, and
+      # installs nothing: no package is fetched from the registry and run
+      # next to `id-token: write` (#5104). Pinned EXACTLY, not to a major: the
+      # runtime is the one thing this job trusts besides the pinned actions,
+      # and a range would let whatever 24.x is current at release time in.
+      # The build jobs keep Node 22; this job only reads a manifest and runs
+      # `npm publish` on the verified tarball.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: 24.21.0
           registry-url: "https://registry.npmjs.org"
 
-      # OIDC trusted publishing requires npm >= 11.5.1; Node 22's bundled npm
-      # is 10.x. Pinned EXACTLY, not to a range: this install runs in the job
-      # that holds `id-token: write`, so it is the one package this job
-      # trusts, and a range would let whatever 11.x is current at release time
-      # into it. `--ignore-scripts` keeps even its lifecycle scripts out.
-      - name: Install the pinned npm CLI (OIDC trusted publishing)
-        run: npm install -g --ignore-scripts npm@11.20.0
+      # Fails closed before anything is published if the bundled npm is ever
+      # below the OIDC floor (a different Node pin, or a runner override).
+      - name: Check the bundled npm supports OIDC trusted publishing
+        run: |
+          NPM_VERSION="$(npm --version)"
+          echo "node $(node --version), npm $NPM_VERSION"
+          node -e '
+            const [a, b, c] = process.argv[1].split(".").map(Number);
+            const ok = a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1)));
+            if (!ok) {
+              console.error("npm " + process.argv[1] + " is below 11.5.1, the floor for OIDC trusted publishing");
+              process.exit(1);
+            }
+          ' "$NPM_VERSION"
 
       - name: Download the artifact built by the build job
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
