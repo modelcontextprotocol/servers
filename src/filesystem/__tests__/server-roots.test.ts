@@ -345,6 +345,163 @@ describe("roots/list_changed", () => {
     expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
   });
 
+  // #5097: the answers to overlapping refreshes can arrive out of order; only
+  // the newest refresh's answer is applied, so a stale one cannot undo it.
+  it("applies the newest of two overlapping updates when their answers arrive out of order (#5097)", async () => {
+    let calls = 0;
+    let releaseStale!: () => void;
+    const staleHeld = new Promise<void>((resolve) => (releaseStale = resolve));
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        calls += 1;
+        if (calls === 1) return [rootOf(rootDir)]; // the initial load
+        if (calls === 2) {
+          await staleHeld; // the older update, answered last
+          return [rootOf(rootDir)];
+        }
+        return []; // the newer update withdraws the root
+      },
+    });
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([rootDir]),
+    );
+
+    await client.sendRootsListChanged();
+    await vi.waitFor(() => expect(calls).toBe(2));
+    await client.sendRootsListChanged();
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([]),
+    );
+
+    releaseStale();
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        "Discarded a stale roots/list answer: a newer roots update has started",
+      ),
+    );
+    expect(await allowedDirectoriesOf(client)).toEqual([]);
+  });
+
+  it("discards the initial answer when an update overtakes it (#5097)", async () => {
+    let calls = 0;
+    let releaseInitial!: () => void;
+    const initialHeld = new Promise<void>(
+      (resolve) => (releaseInitial = resolve),
+    );
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        calls += 1;
+        if (calls === 1) {
+          await initialHeld;
+          return [rootOf(rootDir)];
+        }
+        return [rootOf(cliDir)];
+      },
+    });
+    await vi.waitFor(() => expect(calls).toBe(1));
+    await client.sendRootsListChanged();
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        "Updated allowed directories from MCP roots: 1 valid directories",
+      ),
+    );
+
+    releaseInitial();
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        "Discarded a stale roots/list answer: a newer roots update has started",
+      ),
+    );
+    expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
+  });
+
+  // #5097: a call waiting for the initial roots must not be released by the
+  // stale initial answer; it waits for the update that overtook it.
+  it("holds waiting tool calls until the update that overtook the initial load applies (#5097)", async () => {
+    let calls = 0;
+    let releaseInitial!: () => void;
+    let releaseUpdate!: () => void;
+    const initialHeld = new Promise<void>(
+      (resolve) => (releaseInitial = resolve),
+    );
+    const updateHeld = new Promise<void>(
+      (resolve) => (releaseUpdate = resolve),
+    );
+    const { client } = await connectTracked([cliDir], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        calls += 1;
+        await (calls === 1 ? initialHeld : updateHeld);
+        return [rootOf(rootDir)];
+      },
+    });
+    await vi.waitFor(() => expect(calls).toBe(1));
+    await client.sendRootsListChanged();
+    await vi.waitFor(() => expect(calls).toBe(2));
+
+    releaseInitial();
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        "Discarded a stale roots/list answer: a newer roots update has started",
+      ),
+    );
+    // Asked before the update has answered: it must not run against the
+    // command-line directory in the meantime.
+    let settled = false;
+    const pending = call(client, "list_directory", { path: cliDir }).then(
+      (result) => {
+        settled = true;
+        return result;
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(settled).toBe(false);
+
+    releaseUpdate();
+    expect(textOf(await pending)).toMatch(/^Access denied/);
+    expect(await allowedDirectoriesOf(client)).toEqual([rootDir]);
+  });
+
+  it("releases waiting tool calls when the update that overtook the initial load fails (#5097)", async () => {
+    let calls = 0;
+    let releaseInitial!: () => void;
+    const initialHeld = new Promise<void>(
+      (resolve) => (releaseInitial = resolve),
+    );
+    const { client } = await connectTracked([cliDir], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        calls += 1;
+        if (calls === 1) {
+          await initialHeld;
+          return [rootOf(rootDir)];
+        }
+        throw new Error("gone");
+      },
+    });
+    await vi.waitFor(() => expect(calls).toBe(1));
+    await client.sendRootsListChanged();
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        "Failed to request roots from client:",
+        "gone",
+      ),
+    );
+
+    // Asked while the initial roots/list is still unanswered: the failed update
+    // releases waiting calls instead of leaving them blocked on it.
+    expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
+    // Let the stale initial answer finish before teardown removes its roots.
+    releaseInitial();
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        "Discarded a stale roots/list answer: a newer roots update has started",
+      ),
+    );
+  });
+
   it("logs and keeps the current directories when the re-fetch fails", async () => {
     let fail = false;
     const { client } = await connectTracked([], {
