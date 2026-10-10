@@ -417,6 +417,83 @@ describe("roots/list_changed", () => {
     expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
   });
 
+  // #5097: a call waiting for the initial roots must not be released by the
+  // stale initial answer; it waits for the update that overtook it.
+  it("holds waiting tool calls until the update that overtook the initial load applies (#5097)", async () => {
+    let calls = 0;
+    let releaseInitial!: () => void;
+    let releaseUpdate!: () => void;
+    const initialHeld = new Promise<void>(
+      (resolve) => (releaseInitial = resolve),
+    );
+    const updateHeld = new Promise<void>(
+      (resolve) => (releaseUpdate = resolve),
+    );
+    const { client } = await connectTracked([cliDir], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        calls += 1;
+        await (calls === 1 ? initialHeld : updateHeld);
+        return [rootOf(rootDir)];
+      },
+    });
+    await vi.waitFor(() => expect(calls).toBe(1));
+    await client.sendRootsListChanged();
+    await vi.waitFor(() => expect(calls).toBe(2));
+
+    releaseInitial();
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        "Discarded a stale roots/list answer: a newer roots update has started",
+      ),
+    );
+    // Asked before the update has answered: it must not run against the
+    // command-line directory in the meantime.
+    let settled = false;
+    const pending = call(client, "list_directory", { path: cliDir }).then(
+      (result) => {
+        settled = true;
+        return result;
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(settled).toBe(false);
+
+    releaseUpdate();
+    expect(textOf(await pending)).toMatch(/^Access denied/);
+    expect(await allowedDirectoriesOf(client)).toEqual([rootDir]);
+  });
+
+  it("releases waiting tool calls when the update that overtook the initial load fails (#5097)", async () => {
+    let calls = 0;
+    let releaseInitial!: () => void;
+    const initialHeld = new Promise<void>(
+      (resolve) => (releaseInitial = resolve),
+    );
+    const { client } = await connectTracked([cliDir], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        calls += 1;
+        if (calls === 1) {
+          await initialHeld;
+          return [rootOf(rootDir)];
+        }
+        throw new Error("gone");
+      },
+    });
+    await vi.waitFor(() => expect(calls).toBe(1));
+    await client.sendRootsListChanged();
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        "Failed to request roots from client:",
+        "gone",
+      ),
+    );
+
+    releaseInitial();
+    expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
+  });
+
   it("logs and keeps the current directories when the re-fetch fails", async () => {
     let fail = false;
     const { client } = await connectTracked([], {
