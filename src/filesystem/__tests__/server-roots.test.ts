@@ -584,7 +584,7 @@ describe("roots/list_changed", () => {
 
   // A client may announce a newer change while answering an older refresh's
   // roots/list; the older refresh must not replace the newer one's barrier.
-  it("keeps the newest barrier when answering a refresh announces another change (#5101)", async () => {
+  it("keeps the newest barrier when a client's roots/list answer announces another change (#5101)", async () => {
     let calls = 0;
     let announce: () => Promise<void> = async () => {};
     let releaseNewest!: () => void;
@@ -627,6 +627,37 @@ describe("roots/list_changed", () => {
     expect(textOf(await pending)).toMatch(
       /^Access denied - no allowed directories/,
     );
+  });
+
+  // An update handled before the deferred initial roots/list runs must still
+  // count as newer than the initial load (#5101).
+  it("applies an update announced right after initialize over the initial roots (#5101)", async () => {
+    let calls = 0;
+    let releaseInitial!: () => void;
+    const initialHeld = new Promise<void>(
+      (resolve) => (releaseInitial = resolve),
+    );
+    const conn = connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        calls += 1;
+        if (calls === 1) {
+          await initialHeld;
+          return [rootOf(rootDir)];
+        }
+        return [rootOf(cliDir)];
+      },
+    });
+    const { client } = await conn;
+    await client.sendRootsListChanged();
+    await vi.waitFor(() => expect(calls).toBe(2));
+    releaseInitial();
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        "Discarded a stale roots/list answer: a newer roots update has started",
+      ),
+    );
+    expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
   });
 
   it("logs and keeps the current directories when the re-fetch fails", async () => {

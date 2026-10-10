@@ -836,16 +836,18 @@ export function createServer(
 
   // Handles post-initialization setup, specifically checking for and fetching
   // MCP roots. Tool calls wait for it (see `initialization` above), which is
-  // installed before initialize() sends its roots/list.
+  // installed before initialize() sends its roots/list. The initial load claims
+  // its generation here, synchronously, so a roots/list_changed handled before
+  // the deferred request runs takes a newer one and is not discarded as stale.
   server.server.oninitialized = () => {
-    initialization = Promise.resolve().then(initialize);
+    const generation = ++rootsGeneration;
+    initialization = Promise.resolve().then(() => initialize(generation));
   };
 
-  async function initialize(): Promise<void> {
+  async function initialize(generation: number): Promise<void> {
     const clientCapabilities = server.server.getClientCapabilities();
 
     if (clientCapabilities?.roots) {
-      const generation = ++rootsGeneration;
       try {
         const response = await server.server.listRoots();
         /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the else cannot run */
