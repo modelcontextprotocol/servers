@@ -38,6 +38,9 @@ These servers aim to demonstrate MCP features and the official SDKs.
 
 The following reference servers are now archived and can be found at [servers-archived](https://github.com/modelcontextprotocol/servers-archived).
 
+> [!WARNING]
+> Archived servers are **unmaintained** and provide **no security guarantees**. Their npm packages may still install, but they are not supported by this repository. Prefer actively maintained servers from the [MCP Registry](https://registry.modelcontextprotocol.io/) (or the replacements noted below when available). See [SECURITY.md](SECURITY.md) for reporting guidance.
+
 - **[AWS KB Retrieval](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/aws-kb-retrieval-server)** - Retrieval from AWS Knowledge Base using Bedrock Agent Runtime.
 - **[Brave Search](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/brave-search)** - Web and local search using Brave's Search API. Has been replaced by the [official server](https://github.com/brave/brave-search-mcp-server) ([`@brave/brave-search-mcp-server`](https://www.npmjs.com/package/@brave/brave-search-mcp-server)).
 - **[EverArt](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/everart)** - AI image generation using various models.
@@ -116,22 +119,17 @@ Additional examples of using the Claude Desktop as an MCP client might look like
       "command": "uvx",
       "args": ["mcp-server-git", "--repository", "path/to/git/repo"]
     },
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>"
-      }
-    },
-    "postgres": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+    "time": {
+      "command": "uvx",
+      "args": ["mcp-server-time"]
     }
   }
 }
 ```
 
 On Windows, apply the same wrapper to each `npx`-based entry above by changing `"command"` to `"cmd"` and prepending `"/c", "npx"` to the existing `args`. Leave `uvx` entries unchanged.
+
+Do not configure archived packages such as `@modelcontextprotocol/server-github` or `@modelcontextprotocol/server-postgres` from new setups — see [Archived](#archived).
 
 ## 🛠️ Creating Your Own Server
 
