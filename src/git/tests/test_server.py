@@ -18,7 +18,6 @@ from mcp_server_git.server import (
     validate_repo_path,
     serve,
 )
-import shutil
 import unittest.mock as mock
 
 @pytest.fixture
@@ -32,7 +31,10 @@ def test_repository(tmp_path: Path):
 
     yield test_repo
 
-    shutil.rmtree(repo_path)
+    # Release GitPython's handles (cat-file processes, packs) so pytest can
+    # remove tmp_path; on Windows open handles and git's read-only object
+    # files make an explicit shutil.rmtree fail during teardown.
+    test_repo.close()
 
 def test_git_checkout_existing_branch(test_repository):
     test_repository.git.branch("test-branch")
