@@ -502,6 +502,45 @@ describe("roots/list_changed", () => {
     );
   });
 
+  // #5101: a call made while a runtime refresh is pending waits for it, so it
+  // cannot reach a root the client has just withdrawn.
+  it("holds tool calls while a runtime refresh is pending (#5101)", async () => {
+    let calls = 0;
+    let releaseUpdate!: () => void;
+    const updateHeld = new Promise<void>(
+      (resolve) => (releaseUpdate = resolve),
+    );
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: async () => {
+        calls += 1;
+        if (calls === 1) return [rootOf(rootDir)];
+        await updateHeld; // the withdrawal is answered slowly
+        return [];
+      },
+    });
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([rootDir]),
+    );
+
+    await client.sendRootsListChanged();
+    await vi.waitFor(() => expect(calls).toBe(2));
+    let settled = false;
+    const pending = call(client, "list_directory", { path: rootDir }).then(
+      (result) => {
+        settled = true;
+        return result;
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(settled).toBe(false);
+
+    releaseUpdate();
+    expect(textOf(await pending)).toMatch(
+      /^Access denied - no allowed directories/,
+    );
+  });
+
   it("logs and keeps the current directories when the re-fetch fails", async () => {
     let fail = false;
     const { client } = await connectTracked([], {

@@ -189,19 +189,16 @@ export function createServer(
     version: SERVER_VERSION,
   });
 
-  // Settles once the post-initialize setup (fetching the client's initial
-  // roots) has finished, successfully or not; it never rejects. Every tool call
-  // waits for it, so a call that arrives while the initial roots/list is still
-  // outstanding is checked against the client's roots rather than against the
-  // command-line directories (#3204). It is replaced in oninitialized, which
-  // the SDK runs before any request sent after notifications/initialized.
+  // Settles once the newest roots refresh has finished, successfully or not; it
+  // never rejects. Every tool call waits for it, so a call that arrives while
+  // roots are being fetched is checked against the roots that come back rather
+  // than the ones being replaced: the command-line directories while the
+  // initial roots/list is outstanding (#3204), or a root the client has just
+  // withdrawn while a roots/list_changed refresh is (#5101). The initial load
+  // (oninitialized, which the SDK runs before any request sent after
+  // notifications/initialized) and every refresh replace it, and a waiting
+  // call follows each replacement until it stops changing (#5097).
   let initialization: Promise<void> = Promise.resolve();
-  // True from the initial roots/list until a refresh's answer has been
-  // applied or the newest refresh has failed. A roots/list_changed that
-  // overtakes the initial load while this holds replaces `initialization`, so
-  // waiting tool calls keep waiting for the refresh that will actually apply
-  // rather than running against the command-line directories (#5097).
-  let initialRootsPending = false;
   const registerTool = server.registerTool.bind(server);
   server.registerTool = ((
     name: string,
@@ -826,12 +823,11 @@ export function createServer(
             "Failed to request roots from client:",
             error instanceof Error ? error.message : String(error),
           );
-        } finally {
-          if (generation === rootsGeneration) initialRootsPending = false;
         }
       })();
-      // Overtaking the initial load: tool calls wait for this refresh instead.
-      if (initialRootsPending) initialization = refresh;
+      // Tool calls wait for this refresh, so none runs against a root the
+      // client has just withdrawn while its answer is pending (#5101).
+      initialization = refresh;
       await refresh;
     },
   );
@@ -847,7 +843,6 @@ export function createServer(
 
     if (clientCapabilities?.roots) {
       const generation = ++rootsGeneration;
-      initialRootsPending = true;
       try {
         const response = await server.server.listRoots();
         /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the else cannot run */
@@ -863,8 +858,6 @@ export function createServer(
           "Failed to request initial roots from client:",
           error instanceof Error ? error.message : String(error),
         );
-      } finally {
-        if (generation === rootsGeneration) initialRootsPending = false;
       }
     } else {
       if (allowedDirectories.length > 0) {
