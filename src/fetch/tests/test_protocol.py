@@ -117,6 +117,13 @@ async def test_list_tools_wire_shape(web: FakeWeb) -> None:
     )
     assert "this tool now grants you internet access" in tool["description"]
     assert "outputSchema" not in tool
+    # #3572: the tool declares what it does, for clients' approval policies.
+    assert tool["annotations"] == {
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
     assert tool["inputSchema"] == {
         "description": "Parameters for fetching a URL.",
         "properties": {
