@@ -174,6 +174,12 @@ export function createServer(
   // withdraws its roots withdraws the server's access too (#5094). Until then an
   // update with no valid roots keeps the command-line directories.
   let rootsInForce = false;
+  // Each roots refresh (the initial load and every roots/list_changed) takes
+  // the next generation before it asks for roots. The SDK runs notification
+  // handlers without waiting for earlier ones, so answers can come back out of
+  // order; one is applied only if no newer refresh has started since, so a
+  // stale answer cannot undo a newer update, such as a revocation (#5097).
+  let rootsGeneration = 0;
 
   const server = new McpServer({
     name: "secure-filesystem-server",
@@ -760,9 +766,19 @@ export function createServer(
     },
   );
 
-  // Updates allowed directories based on MCP client roots
-  async function updateAllowedDirectoriesFromRoots(requestedRoots: Root[]) {
+  // Updates allowed directories based on MCP client roots, unless a newer
+  // refresh started after this one's `generation` was taken (#5097).
+  async function updateAllowedDirectoriesFromRoots(
+    requestedRoots: Root[],
+    generation: number,
+  ) {
     const validatedRootDirs = await getValidRootDirectories(requestedRoots);
+    if (generation !== rootsGeneration) {
+      console.error(
+        "Discarded a stale roots/list answer: a newer roots update has started",
+      );
+      return;
+    }
     if (validatedRootDirs.length > 0) {
       allowedDirectories = [...validatedRootDirs];
       rootsInForce = true;
@@ -783,12 +799,13 @@ export function createServer(
   server.server.setNotificationHandler(
     "notifications/roots/list_changed",
     async () => {
+      const generation = ++rootsGeneration;
       try {
         // Request the updated roots list from the client
         const response = await server.server.listRoots();
         /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the implicit else cannot run */
         if (response && "roots" in response) {
-          await updateAllowedDirectoriesFromRoots(response.roots);
+          await updateAllowedDirectoriesFromRoots(response.roots, generation);
         }
       } catch (error) {
         console.error(
@@ -809,11 +826,12 @@ export function createServer(
     const clientCapabilities = server.server.getClientCapabilities();
 
     if (clientCapabilities?.roots) {
+      const generation = ++rootsGeneration;
       try {
         const response = await server.server.listRoots();
         /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the else cannot run */
         if (response && "roots" in response) {
-          await updateAllowedDirectoriesFromRoots(response.roots);
+          await updateAllowedDirectoriesFromRoots(response.roots, generation);
         } else {
           console.error(
             "Client returned no roots set, keeping current settings",
