@@ -188,11 +188,17 @@ def git_create_branch(repo: git.Repo, branch_name: str, base_branch: str | None 
         raise BadName(f"Invalid base branch: '{base_branch}' - cannot start with '-'")
     if base_branch:
         base = repo.references[base_branch]
+        base_name = base.name
+    elif repo.head.is_detached:
+        # No active branch to start from; branch from the current commit.
+        base = repo.head.commit.hexsha
+        base_name = base
     else:
         base = repo.active_branch
+        base_name = base.name
 
     repo.create_head(branch_name, base)
-    return f"Created branch '{branch_name}' from '{base.name}'"
+    return f"Created branch '{branch_name}' from '{base_name}'"
 
 def git_checkout(repo: git.Repo, branch_name: str) -> str:
     # Defense in depth: reject branch names starting with '-' to prevent flag injection,

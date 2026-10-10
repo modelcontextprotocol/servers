@@ -255,6 +255,17 @@ def test_git_create_branch_from_base(test_repository):
 
     assert "Created branch 'derived-branch' from 'base-branch'" in result
 
+def test_git_create_branch_detached_head(test_repository):
+    # `git switch -c <name>` from a detached HEAD branches from the current commit.
+    detached_sha = test_repository.head.commit.hexsha
+    test_repository.git.checkout(detached_sha)
+    assert test_repository.head.is_detached
+
+    result = git_create_branch(test_repository, "rescued-branch")
+
+    assert "Created branch 'rescued-branch'" in result
+    assert test_repository.heads["rescued-branch"].commit.hexsha == detached_sha
+
 def test_git_show(test_repository):
     file_path = Path(test_repository.working_dir) / "show_test.txt"
     file_path.write_text("show content")
