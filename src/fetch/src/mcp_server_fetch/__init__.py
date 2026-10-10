@@ -16,9 +16,16 @@ def main():
         help="Ignore robots.txt restrictions",
     )
     parser.add_argument("--proxy-url", type=str, help="Proxy URL to use for requests")
+    parser.add_argument(
+        "--allowed-hosts",
+        type=str,
+        nargs="+",
+        metavar="HOST",
+        help="Only allow fetching these hosts (exact names like example.com or wildcards like *.example.com, which also covers example.com itself). Applies to the initial URL and every redirect hop. If omitted, all hosts are allowed.",
+    )
 
     args = parser.parse_args()
-    asyncio.run(serve(args.user_agent, args.ignore_robots_txt, args.proxy_url))
+    asyncio.run(serve(args.user_agent, args.ignore_robots_txt, args.proxy_url, allowed_hosts=args.allowed_hosts))
 
 
 if __name__ == "__main__":
