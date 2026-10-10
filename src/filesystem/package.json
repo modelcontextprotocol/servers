@@ -31,7 +31,7 @@
     "validate": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm run test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "diff": "^8.0.3",
     "glob": "^13.0.6",
     "minimatch": "^10.0.1",
