@@ -251,6 +251,100 @@ describe("roots/list_changed", () => {
     );
   });
 
+  // #5094: once the client's roots are in force, an update that leaves no
+  // valid root revokes access instead of keeping the previous directories.
+  it("revokes access when the client withdraws its last root (#5094)", async () => {
+    let roots = [rootOf(rootDir)];
+    const { client } = await connectTracked([cliDir], {
+      capabilities: ROOTS,
+      listRoots: () => roots,
+    });
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([rootDir]),
+    );
+
+    roots = [];
+    await client.sendRootsListChanged();
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([]),
+    );
+    expect(stderr).toHaveBeenCalledWith(
+      "No valid root directories provided by client; access revoked until it exposes a root again",
+    );
+    const result = await call(client, "list_directory", { path: rootDir });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(
+      /^Access denied - no allowed directories: the client exposes no valid roots/,
+    );
+    // The command-line directories do not come back either.
+    expect(
+      textOf(await call(client, "list_directory", { path: cliDir })),
+    ).toMatch(/^Access denied/);
+  });
+
+  it("revokes access when every remaining root is invalid (#5094)", async () => {
+    let roots = [rootOf(rootDir)];
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: () => roots,
+    });
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([rootDir]),
+    );
+
+    roots = [rootOf(path.join(rootDir, "gone"))];
+    await client.sendRootsListChanged();
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([]),
+    );
+  });
+
+  it("restores access when the client exposes a root again (#5094)", async () => {
+    let roots = [rootOf(rootDir)];
+    const { client } = await connectTracked([], {
+      capabilities: ROOTS,
+      listRoots: () => roots,
+    });
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([rootDir]),
+    );
+    roots = [];
+    await client.sendRootsListChanged();
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([]),
+    );
+
+    roots = [rootOf(rootDir)];
+    await client.sendRootsListChanged();
+    await vi.waitFor(async () =>
+      expect(await allowedDirectoriesOf(client)).toEqual([rootDir]),
+    );
+  });
+
+  it("keeps the command-line directories on an empty update before any root was in force", async () => {
+    let roots: Root[] = [];
+    const { client } = await connectTracked([cliDir], {
+      capabilities: ROOTS,
+      listRoots: () => roots,
+    });
+    await vi.waitFor(() =>
+      expect(stderr).toHaveBeenCalledWith(
+        "No valid root directories provided by client",
+      ),
+    );
+
+    roots = [];
+    await client.sendRootsListChanged();
+    await vi.waitFor(() =>
+      expect(
+        stderr.mock.calls.filter(
+          (c) => c[0] === "No valid root directories provided by client",
+        ),
+      ).toHaveLength(2),
+    );
+    expect(await allowedDirectoriesOf(client)).toEqual([cliDir]);
+  });
+
   it("logs and keeps the current directories when the re-fetch fails", async () => {
     let fail = false;
     const { client } = await connectTracked([], {

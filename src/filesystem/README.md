@@ -51,6 +51,7 @@ The server's directory access control follows this flow:
    - Tool calls that arrive before the initial roots are loaded wait for them, so they are checked against the client's roots
    - **On runtime updates**: Client can send `notifications/roots/list_changed`
    - Server requests updated roots and replaces allowed directories again
+   - Once the client's roots are in force, an update with no valid roots revokes access: every path is refused ("Access denied - no allowed directories") until the client exposes a root again. Before any root has been in force, such an update keeps the command-line directories
 
 4. **Fallback Behavior** (if client doesn't support roots)
    - Server continues using command-line directories only
