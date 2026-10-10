@@ -439,6 +439,28 @@ describe('Path Validation', () => {
         expect(isPathWithinAllowedDirectories('\\\\other\\share\\project', allowed)).toBe(false);
       }
     });
+
+    it('allows UNC path within allowed UNC directory', () => {
+      if (path.sep === '\\') {
+        const allowed = ['\\\\server\\share\\project'];
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\project\\subdir\\file.txt', allowed)).toBe(true);
+      }
+    });
+
+    it('blocks UNC path outside allowed UNC directory', () => {
+      if (path.sep === '\\') {
+        const allowed = ['\\\\server\\share\\project'];
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\other', allowed)).toBe(false);
+        expect(isPathWithinAllowedDirectories('\\\\other\\share\\project', allowed)).toBe(false);
+      }
+    });
+
+    it('allows exact UNC path match', () => {
+      if (path.sep === '\\') {
+        const allowed = ['\\\\server\\share\\project'];
+        expect(isPathWithinAllowedDirectories('\\\\server\\share\\project', allowed)).toBe(true);
+      }
+    });
   });
 
   describe('Symlink Tests', () => {
