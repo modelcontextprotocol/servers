@@ -761,6 +761,34 @@ describe('Lib Functions', () => {
         expect(mockFileHandle.close).toHaveBeenCalled();
       });
 
+      it.each([
+        ['LF', Buffer.from('line1\nline2\n')],
+        ['CRLF', Buffer.from('line1\r\nline2\r\n')],
+      ])('ignores a trailing %s newline when returning last lines', async (_, content) => {
+        mockFs.stat.mockResolvedValue({ size: content.length } as any);
+        const mockFileHandle = createMockFileHandle(content);
+        mockFs.open.mockResolvedValue(mockFileHandle);
+
+        const result = await tailFile('/test/file.txt', 1);
+
+        expect(result).toBe('line2');
+        expect(mockFileHandle.close).toHaveBeenCalled();
+      });
+
+      it('does not count a trailing newline toward the chunk limit', async () => {
+        const penultimateLine = 'a'.repeat(1020);
+        const content = Buffer.from(`start\n${penultimateLine}\nlast\n`);
+        const mockFileHandle = createMockFileHandle(content);
+
+        mockFs.stat.mockResolvedValue({ size: content.length } as any);
+        mockFs.open.mockResolvedValue(mockFileHandle);
+
+        const result = await tailFile('/test/file.txt', 2);
+
+        expect(result).toBe(`${penultimateLine}\nlast`);
+        expect(mockFileHandle.read).toHaveBeenCalledTimes(2);
+      });
+
       it('preserves UTF-8 characters split across chunk boundaries', async () => {
         const content = Buffer.concat([
           Buffer.from('discard\n'),
