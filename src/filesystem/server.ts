@@ -193,6 +193,12 @@ export function createServer(
   // command-line directories (#3204). It is replaced in oninitialized, which
   // the SDK runs before any request sent after notifications/initialized.
   let initialization: Promise<void> = Promise.resolve();
+  // True from the initial roots/list until a refresh's answer has been
+  // applied or the newest refresh has failed. A roots/list_changed that
+  // overtakes the initial load while this holds replaces `initialization`, so
+  // waiting tool calls keep waiting for the refresh that will actually apply
+  // rather than running against the command-line directories (#5097).
+  let initialRootsPending = false;
   const registerTool = server.registerTool.bind(server);
   server.registerTool = ((
     name: string,
@@ -200,7 +206,11 @@ export function createServer(
     handler: (...args: unknown[]) => unknown,
   ) =>
     registerTool(name, config, (async (...args: unknown[]) => {
-      await initialization;
+      let awaited: Promise<void>;
+      do {
+        awaited = initialization;
+        await awaited;
+      } while (awaited !== initialization);
       return handler(...args);
     }) as never)) as typeof server.registerTool;
 
@@ -800,19 +810,26 @@ export function createServer(
     "notifications/roots/list_changed",
     async () => {
       const generation = ++rootsGeneration;
-      try {
-        // Request the updated roots list from the client
-        const response = await server.server.listRoots();
-        /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the implicit else cannot run */
-        if (response && "roots" in response) {
-          await updateAllowedDirectoriesFromRoots(response.roots, generation);
+      const refresh = (async () => {
+        try {
+          // Request the updated roots list from the client
+          const response = await server.server.listRoots();
+          /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the implicit else cannot run */
+          if (response && "roots" in response) {
+            await updateAllowedDirectoriesFromRoots(response.roots, generation);
+          }
+        } catch (error) {
+          console.error(
+            "Failed to request roots from client:",
+            error instanceof Error ? error.message : String(error),
+          );
+        } finally {
+          if (generation === rootsGeneration) initialRootsPending = false;
         }
-      } catch (error) {
-        console.error(
-          "Failed to request roots from client:",
-          error instanceof Error ? error.message : String(error),
-        );
-      }
+      })();
+      // Overtaking the initial load: tool calls wait for this refresh instead.
+      if (initialRootsPending) initialization = refresh;
+      await refresh;
     },
   );
 
@@ -827,6 +844,7 @@ export function createServer(
 
     if (clientCapabilities?.roots) {
       const generation = ++rootsGeneration;
+      initialRootsPending = true;
       try {
         const response = await server.server.listRoots();
         /* v8 ignore else -- the SDK validates the roots/list result against ListRootsResultSchema, which requires roots, so the else cannot run */
@@ -842,6 +860,8 @@ export function createServer(
           "Failed to request initial roots from client:",
           error instanceof Error ? error.message : String(error),
         );
+      } finally {
+        if (generation === rootsGeneration) initialRootsPending = false;
       }
     } else {
       if (allowedDirectories.length > 0) {
