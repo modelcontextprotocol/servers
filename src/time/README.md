@@ -20,6 +20,8 @@ Requires MCP Python SDK 1.x (`mcp>=1.29.0,<2`). SDK 2.0 renamed APIs this server
     - `time` (string): Time in 24-hour format (HH:MM)
     - `target_timezone` (string): Target IANA timezone name
 
+A timezone name, here and in `--local-timezone`, must be an exact IANA key, case included: `Europe/Warsaw` is accepted and `europe/warsaw` is rejected on every platform, including macOS, whose case-insensitive filesystem would otherwise resolve it.
+
 ## Installation
 
 ### Using uv (recommended)

@@ -211,6 +211,11 @@ describe("memory persistence over the protocol", () => {
       // which is not the ENOENT that means "no graph yet".
       await fs.mkdir(filePath);
       const { client } = await open();
+      // Node 26 appends the path to the message; earlier versions do not
+      // (#5076). The server passes Node's message through either way.
+      const bare = "EISDIR: illegal operation on a directory, read";
+      const nodeMajor = Number(process.versions.node.split(".")[0]);
+      const expected = nodeMajor >= 26 ? `${bare} '${filePath}'` : bare;
 
       for (const [name, args] of [
         ["read_graph", {}],
@@ -220,9 +225,7 @@ describe("memory persistence over the protocol", () => {
       ] as const) {
         const result = await call(client, name, args);
         expect(result.isError).toBe(true);
-        expect(textOf(result)).toBe(
-          "EISDIR: illegal operation on a directory, read",
-        );
+        expect(textOf(result)).toBe(expected);
       }
       await expect(
         client.readResource({ uri: "memory://knowledge-graph" }),
