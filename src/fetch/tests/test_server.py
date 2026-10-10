@@ -1,5 +1,9 @@
 """Tests for the fetch MCP server."""
 
+import ipaddress
+import socket
+
+import httpx
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from mcp.shared.exceptions import McpError
@@ -9,8 +13,26 @@ from mcp_server_fetch.server import (
     get_robots_txt_url,
     check_may_autonomously_fetch_url,
     fetch_url,
+    _get_with_validation,
+    _is_blocked_ip,
+    _validate_url,
     DEFAULT_USER_AGENT_AUTONOMOUS,
 )
+
+
+@pytest.fixture(autouse=True)
+def _resolve_hosts_to_public_ip(monkeypatch):
+    """Resolve every hostname to a single public IP so tests stay hermetic.
+
+    The SSRF validation performs real hostname resolution; pinning the resolver
+    to a public address lets each URL pass ``_validate_url`` without touching
+    the network, while still exercising the real code path.
+    """
+
+    def fake_getaddrinfo(host, port):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 0))]
+
+    monkeypatch.setattr("socket.getaddrinfo", fake_getaddrinfo)
 
 
 class TestGetRobotsTxtUrl:
@@ -100,13 +122,14 @@ class TestCheckMayAutonomouslyFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             # Should not raise
             await check_may_autonomously_fetch_url(
-                "https://example.com/page",
-                DEFAULT_USER_AGENT_AUTONOMOUS
+                "https://example.com/page", DEFAULT_USER_AGENT_AUTONOMOUS
             )
 
     @pytest.mark.asyncio
@@ -118,13 +141,14 @@ class TestCheckMayAutonomouslyFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             with pytest.raises(McpError):
                 await check_may_autonomously_fetch_url(
-                    "https://example.com/page",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
+                    "https://example.com/page", DEFAULT_USER_AGENT_AUTONOMOUS
                 )
 
     @pytest.mark.asyncio
@@ -136,13 +160,14 @@ class TestCheckMayAutonomouslyFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             with pytest.raises(McpError):
                 await check_may_autonomously_fetch_url(
-                    "https://example.com/page",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
+                    "https://example.com/page", DEFAULT_USER_AGENT_AUTONOMOUS
                 )
 
     @pytest.mark.asyncio
@@ -155,13 +180,14 @@ class TestCheckMayAutonomouslyFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             # Should not raise
             await check_may_autonomously_fetch_url(
-                "https://example.com/page",
-                DEFAULT_USER_AGENT_AUTONOMOUS
+                "https://example.com/page", DEFAULT_USER_AGENT_AUTONOMOUS
             )
 
     @pytest.mark.asyncio
@@ -174,13 +200,14 @@ class TestCheckMayAutonomouslyFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             with pytest.raises(McpError):
                 await check_may_autonomously_fetch_url(
-                    "https://example.com/page",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
+                    "https://example.com/page", DEFAULT_USER_AGENT_AUTONOMOUS
                 )
 
 
@@ -207,12 +234,13 @@ class TestFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             content, prefix = await fetch_url(
-                "https://example.com/page",
-                DEFAULT_USER_AGENT_AUTONOMOUS
+                "https://example.com/page", DEFAULT_USER_AGENT_AUTONOMOUS
             )
 
             # HTML is processed, so we check it returns something
@@ -231,13 +259,15 @@ class TestFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             content, prefix = await fetch_url(
                 "https://example.com/page",
                 DEFAULT_USER_AGENT_AUTONOMOUS,
-                force_raw=True
+                force_raw=True,
             )
 
             assert content == html_content
@@ -255,12 +285,13 @@ class TestFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             content, prefix = await fetch_url(
-                "https://api.example.com/data",
-                DEFAULT_USER_AGENT_AUTONOMOUS
+                "https://api.example.com/data", DEFAULT_USER_AGENT_AUTONOMOUS
             )
 
             assert content == json_content
@@ -275,13 +306,14 @@ class TestFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             with pytest.raises(McpError):
                 await fetch_url(
-                    "https://example.com/notfound",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
+                    "https://example.com/notfound", DEFAULT_USER_AGENT_AUTONOMOUS
                 )
 
     @pytest.mark.asyncio
@@ -293,13 +325,14 @@ class TestFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             with pytest.raises(McpError):
                 await fetch_url(
-                    "https://example.com/error",
-                    DEFAULT_USER_AGENT_AUTONOMOUS
+                    "https://example.com/error", DEFAULT_USER_AGENT_AUTONOMOUS
                 )
 
     @pytest.mark.asyncio
@@ -313,14 +346,146 @@ class TestFetchUrl:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_class.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client
+            )
             mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
             await fetch_url(
                 "https://example.com/data",
                 DEFAULT_USER_AGENT_AUTONOMOUS,
-                proxy_url="http://proxy.example.com:8080"
+                proxy_url="http://proxy.example.com:8080",
             )
 
             # Verify AsyncClient was called with proxy
-            mock_client_class.assert_called_once_with(proxy="http://proxy.example.com:8080")
+            mock_client_class.assert_called_once_with(
+                proxy="http://proxy.example.com:8080"
+            )
+
+
+class TestIsBlockedIp:
+    """Unit tests for the blocked-address matcher."""
+
+    @pytest.mark.parametrize(
+        "ip_str",
+        [
+            "127.0.0.1",  # loopback
+            "0.0.0.0",  # this network
+            "10.0.0.1",  # RFC1918
+            "172.16.0.1",  # RFC1918
+            "192.168.1.5",  # RFC1918
+            "169.254.169.254",  # link-local / cloud metadata
+            "100.64.0.1",  # CGNAT
+            "198.18.0.1",  # benchmarking
+            "224.0.0.1",  # multicast
+            "::1",  # IPv6 loopback
+            "fc00::1",  # IPv6 unique-local
+            "fe80::1",  # IPv6 link-local
+            "::ffff:127.0.0.1",  # IPv4-mapped loopback
+        ],
+    )
+    def test_blocked(self, ip_str):
+        assert _is_blocked_ip(ipaddress.ip_address(ip_str)) is True
+
+    @pytest.mark.parametrize("ip_str", ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"])
+    def test_public_allowed(self, ip_str):
+        assert _is_blocked_ip(ipaddress.ip_address(ip_str)) is False
+
+
+class TestValidateUrl:
+    """Tests for SSRF / scheme validation of target URLs."""
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "file:///etc/passwd",
+            "ftp://example.com/file",
+            "data:text/plain,hello",
+            "gopher://example.com/",
+        ],
+    )
+    def test_non_http_scheme_rejected(self, url):
+        with pytest.raises(McpError):
+            _validate_url(url)
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://127.0.0.1/",
+            "http://10.0.0.1/",
+            "http://169.254.169.254/latest/meta-data/",
+            "https://192.168.1.5/",
+            "http://[::1]/",
+            "http://[fc00::1]/",
+            "http://[fe80::1]/",
+            "http://[::ffff:127.0.0.1]/",
+        ],
+    )
+    def test_literal_private_ip_rejected(self, url):
+        with pytest.raises(McpError):
+            _validate_url(url)
+
+    @pytest.mark.parametrize(
+        "url",
+        ["http://8.8.8.8/", "https://example.com/", "http://[2606:4700:4700::1111]/"],
+    )
+    def test_public_url_accepted(self, url):
+        # Hostname arms rely on the autouse fixture resolving to 8.8.8.8 (public).
+        _validate_url(url)  # should not raise
+
+    def test_hostname_resolving_to_private_is_rejected(self, monkeypatch):
+        def fake_getaddrinfo(host, port):
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 0)),
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 0)),
+            ]
+
+        monkeypatch.setattr("socket.getaddrinfo", fake_getaddrinfo)
+        # Fail-closed: a host that maps to *any* blocked address is rejected,
+        # even when a second A record points at a public IP.
+        with pytest.raises(McpError):
+            _validate_url("https://metadata.internal/latest/meta-data/")
+
+
+class _StubAsyncClient:
+    """Async client that yields a pre-scripted sequence of httpx responses."""
+
+    def __init__(self, responses):
+        self.responses = list(responses)
+
+    async def get(self, *args, **kwargs):
+        return self.responses.pop(0)
+
+
+class TestRedirectValidation:
+    """Redirect handling must validate every hop, not just the first URL."""
+
+    @pytest.mark.asyncio
+    async def test_redirect_into_private_network_is_blocked(self):
+        redirect = httpx.Response(
+            302, headers={"location": "http://169.254.169.254/latest/meta-data/"}
+        )
+        client = _StubAsyncClient([redirect])
+        # First hop (example.com -> public) is fine, but following the 302 into
+        # the metadata endpoint must be rejected before the request is issued.
+        with pytest.raises(McpError):
+            await _get_with_validation(client, "https://example.com/start", {})
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_public_url_is_followed(self):
+        redirect = httpx.Response(
+            302, headers={"location": "https://example.com/final"}
+        )
+        ok = httpx.Response(
+            200, request=httpx.Request("GET", "https://example.com/final")
+        )
+        client = _StubAsyncClient([redirect, ok])
+        response = await _get_with_validation(client, "https://example.com/start", {})
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_non_http_scheme_is_blocked(self):
+        redirect = httpx.Response(302, headers={"location": "file:///etc/passwd"})
+        client = _StubAsyncClient([redirect])
+        with pytest.raises(McpError):
+            await _get_with_validation(client, "https://example.com/start", {})
