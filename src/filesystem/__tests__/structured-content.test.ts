@@ -96,6 +96,24 @@ describe('structuredContent schema compliance', () => {
       // The content should contain directory listing info
       expect(structuredContent.content).toContain('[FILE]');
     });
+
+    // A dangling symlink is listed by readdir but `fs.stat` cannot resolve it,
+    // so this is the real path to a failing stat. Reporting the entry as size 0
+    // makes it indistinguishable from an empty file -- `formatSize` renders both
+    // as "0 B" -- and adds a fabricated 0 to the combined size.
+    it('should reject when an entry cannot be stat-ed rather than report it as 0 bytes', async () => {
+      await fs.symlink(path.join(testDir, 'no-such-target'), path.join(testDir, 'dangling'));
+
+      const result = await client.callTool({
+        name: 'list_directory_with_sizes',
+        arguments: { path: testDir }
+      });
+
+      expect(result.isError).toBe(true);
+      const content = (result.content as Array<{ type: string; text: string }>).map(c => c.text).join('\n');
+      expect(content).toMatch(/ENOENT|dangling/);
+      expect(content).not.toMatch(/dangling\s+0 B/);
+    });
   });
 
   describe('move_file', () => {
