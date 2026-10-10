@@ -31,14 +31,14 @@
     "validate": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm run test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22",
-    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.11",
     "shx": "^0.4.0",
     "typescript": "^5.8.2",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   }
 }
