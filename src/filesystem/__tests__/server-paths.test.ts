@@ -164,7 +164,7 @@ describe("relative paths", () => {
         path: "anything.txt",
       });
       expect(textOf(result)).toBe(
-        `Access denied - no allowed directories: the client's roots expose none (${path.resolve(process.cwd(), "anything.txt")})`,
+        `Access denied - no allowed directories: the client exposes no valid roots (${path.resolve(process.cwd(), "anything.txt")})`,
       );
     } finally {
       await empty.close();
